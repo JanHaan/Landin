@@ -1,0 +1,47 @@
+--  Shared build policy for every Landin bootstrap project.
+--
+--  One place owns the language version, the warning policy and the
+--  optimisation levels, so a project file never quietly disagrees with the
+--  canonical toolchain recorded in compiler/ada/TOOLCHAIN.md.
+
+abstract project Landin_Common is
+
+   type Build_Mode_Kind is ("debug", "release");
+   Build_Mode : Build_Mode_Kind := external ("LANDIN_BUILD_MODE", "debug");
+
+   --  The repository is one directory, but it may be built by more than one
+   --  host: the macOS development loop and the linux/amd64 container share
+   --  this checkout.  Object files from two hosts in one directory is a
+   --  build that fails in a confusing way, so each host gets its own tag.
+   Build_Tag := external ("LANDIN_BUILD_TAG", "local");
+
+   Build_Dir := "build/" & Build_Tag & "/" & Build_Mode;
+
+   --  Ada 2022, every warning on, warnings are errors, standard style
+   --  checks.  A compiler that tolerates its own warnings teaches nobody.
+   Common_Switches :=
+     ("-gnat2022", "-gnatwa", "-gnatwe", "-gnatyy", "-gnatW8", "-fno-common");
+
+   Debug_Switches   := ("-O0", "-g", "-gnata", "-gnatVa", "-fstack-check");
+   Release_Switches := ("-O2", "-g", "-gnatn");
+
+   Mode_Switches := Debug_Switches;
+
+   case Build_Mode is
+      when "debug"   => Mode_Switches := Debug_Switches;
+      when "release" => Mode_Switches := Release_Switches;
+   end case;
+
+   package Compiler is
+      for Default_Switches ("Ada") use Common_Switches & Mode_Switches;
+   end Compiler;
+
+   package Builder is
+      for Default_Switches ("Ada") use ("-j0");
+   end Builder;
+
+   package Binder is
+      for Default_Switches ("Ada") use ("-Es");
+   end Binder;
+
+end Landin_Common;

@@ -4,31 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-Landin is currently a language specification, not an implementation. There is no compiler, standard library, build system, dependency manifest, or executable prototype yet. The four prototype files are specification stress tests written as code sketches; they contain omissions such as `...` and are not standalone programs.
+Landin is a language specification whose bootstrap implementation has just started. There is no lexer, parser, checker, IR, backend, or standard library yet: `refine` reads a `.ldn` file and reports that no frontend is enabled. What does exist is the R0 chassis under `compiler/ada/` — an Ada 2022 GPRbuild project, the `refine` executable, source and diagnostic foundations, host adapters, target facts, stage seams, and a repository-owned test harness — plus shared fixtures under `compiler/tests/`. The four prototype files remain specification stress tests written as code sketches; they contain omissions such as `...` and are not standalone programs.
 
 ## Commands
 
 ```sh
-# Run every available mechanical check over the specification and prototypes
+# Run every available mechanical check over the specification, roadmap, and prototypes
 python3 check.py
 
 # Check one specification/prototype file (the narrowest supported test scope)
 python3 check.py prototype-2-parser.txt
+
+# Build the bootstrap compiler and run its own test program.  Both need the
+# pinned toolchain reachable; see compiler/ada/TOOLCHAIN.md.
+./scripts/build.sh
+./scripts/test.sh
+
+# Remove this host's build artefacts (--all removes every host's).
+./scripts/clean.sh
+
+# Run the same build and suite inside the pinned linux/amd64 image.
+# Needs Apple Container; see docs/environments.md.
+./scripts/linux-loop.sh
 ```
 
-`check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. There are currently no build, lint, typecheck, or runnable-test commands. Run the full command after documentation changes; targeted checking of an absolute `tour.txt` path does not run all citation checks.
+`check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.txt` path does not run all citation checks.
+
+`scripts/test.sh` builds and then runs `compiler/ada`'s test program; `scripts/linux-loop.sh` runs the same thing in the pinned Linux image. Those are the two runnable test commands. There is no separate lint or typecheck step: the pinned build treats every warning as an error and enforces GNAT style checks. Warnings are policy, not preference — do not silence one without a recorded reason.
+
+Staleness is decided by source checksums, not timestamps: `build.sh` rebuilds from clean when the manifest disagrees, because an edited-and-reverted file keeps a newer mtime than the object built from it and gprbuild would serve the stale object.
 
 ## Sources of truth
 
 Use the repository documents in this order:
 
 1. `tour.txt` is the normative language specification. Its four-digit construct IDs (`[NNNN]`) are stable citation anchors, spaced in increments of ten so new constructs can be inserted without renumbering existing decisions.
-2. `BACKLOG.md` is the sole list of unresolved work. Read it before proposing design changes; do not create a parallel TODO list in the tour or prototypes. Items cite tour constructs and prototype findings.
+2. `ROADMAP.md` is the sole durable work authority. It owns every open item, implementation dependency, phase, disposition, and completion gate. Do not create a parallel TODO list in the tour, prototypes, or issue files.
 3. `prototype-{1..4}-*.txt` are specification tests, not illustrative samples. Each deliberately stressed the design, and its ending findings record both obsolete wording and the resulting resolution.
-4. `handoff.md` summarizes the design principles, working process, and decisions that should not be reversed without new evidence.
-5. `check.py` enforces cheap textual invariants across the tour and prototypes. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
+4. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
+5. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the documents the R0 gate cites — including that the container recipe and `compiler/ada/TOOLCHAIN.md` pin the same toolchain. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
 
-`R§n` and `H§n` citations in the backlog refer to an external design archive; the tracked repository does not depend on that archive.
+`R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 
 ## Prototype coverage
 
@@ -41,13 +57,21 @@ The prototypes jointly define the implementation pressure on the specification:
 
 Repeated module names describe shared future subsystems, not separately checked source dependencies. Prototypes 1 and 4 cover the freestanding and hosted authority roots respectively; capabilities below those roots are passed as ordinary arguments.
 
-## Intended implementation architecture
+## Implementation architecture
 
-The planned compiler is whole-program and uses one flat, QBE-inspired intermediate representation. It will emit assembly and rely on platform assembler/linker tooling. Initial targets are arm64 and x86-64, followed by Cortex-M; C and LLVM backends are explicitly rejected design alternatives.
+The bootstrap compiler is a production-quality Ada 2022 implementation built with pinned GNAT/GPRbuild, minimal dependencies, no SPARK, and a custom compiler test harness. Its direct executable is `refine`, and Landin source files use the `.ldn` suffix. `compiler/ada/README.md` records the current package layout and what each package may and may not own; `compiler/ada/TOOLCHAIN.md` records the pinned versions and the warning policy; `compiler/tests/README.md` records the fixture format.
+
+Two rules already hold in the chassis and must keep holding. Every host effect the compiler needs goes through a `Landin.Platform` interface, so every driver and stage case runs against a fake filesystem; the cases that exercise the native adapter, run the recorded fixtures, or read the real fixture tree are the deliberate exceptions, and each one names the real host in its own comment. Nothing outside `Landin.Targets` may ask the host how wide a pointer is: a 32-bit target description stays 32-bit on a 64-bit host, and layout arithmetic counts target bytes in `Landin.Targets.Byte_Count` rather than in the host compiler's `Natural`.
+
+The compiler checks whole programs and may use private caches. Its verified target-neutral IR is allowed to evolve from implementation evidence rather than being frozen as one flat or serialized form. Landin retains its own native backends, which emit assembly for platform assembler/linker tooling. Target order is Linux x86-64, native macOS arm64, then emulator-first Cortex-M; C and LLVM remain rejected backend alternatives.
+
+Compiler stages are Ada packages behind tested seams so a future self-hosting roadmap may replace them incrementally. The current roadmap neither schedules self-hosting nor freezes a serialized cross-language stage protocol.
 
 `core/*` is reserved for the future standard library. `landin/compiler`, `landin/assembler`, and `landin/linker` are reserved toolchain modules. Package acquisition and arrangement of package roots belong to a separate companion tool rather than the compiler, and a program may contain only one version of a package name.
 
-Do not begin a front end by guessing through unresolved foundations. `BACKLOG.md` section A lists the blockers (grammar, raw storage, value layout, invalid packed encodings, guarantees, compiler-supplied conformances, evidence ABI, and diagnostics), while section F defines the implementation milestone and its amendment. The first milestone is a stable subset with useful diagnostics that can run a meaningful part of the parser prototype, not full-tour support.
+Implementation begins immediately rather than waiting for every unresolved foundation. `ROADMAP.md` assigns each question to the first vertical slice that needs it. R0 establishes the bootstrap chassis, R1 builds the executable language kernel and first Linux x86-64 path, and R2 settles the semantic and representation core from executable cases. R3, a complete derived parser program with useful diagnostics, evidence-table dispatch, and `any` but without specialization, is the first major compiler milestone.
+
+The roadmap ends at a feature-complete pre-v1 compiler/toolchain slice. Production claims, release versioning, package acquisition, competitive optimization, and self-hosting remain outside it. Do not change any version or release designation without explicit user approval, and do not assume SemVer.
 
 ## Design constraints
 
@@ -59,11 +83,11 @@ Changes must preserve the range from a 32 KB microcontroller to a hosted applica
 - Concepts and evidence tables support both static generics and `any` runtime dispatch; specialization is an optimization rather than the semantic basis.
 - There is no compile-time execution or macro system. Source generators belong in the future build design.
 
-Before reviving a previously rejected idea, read `BACKLOG.md` section D and `tour.txt`'s `WHAT WAS TRIED AND DROPPED` section.
+Before reviving a previously rejected idea, read `ROADMAP.md`'s inherited review register and `tour.txt`'s `WHAT WAS TRIED AND DROPPED` section.
 
 ## Editing the specification
 
-When changing a construct, trace its citations and reread all affected prototypes, including cross-prototype interactions, before running `python3 check.py`. Per-file reasoning has previously missed contradictions found only by comparing prototypes.
+When implementation requires a semantic change, update `tour.txt`, the affected prototype-derived tests, and `ROADMAP.md` together. Trace the construct's citations, reread all affected prototypes including cross-prototype interactions, and then run `python3 check.py`. Per-file reasoning has previously missed contradictions found only by comparing prototypes.
 
 Do not modernize obsolete syntax inside prototype finding sections (`Xn`, `Yn`, `Zn`, `Wn`) or the tour's `WHAT WAS TRIED AND DROPPED` section. Those passages intentionally preserve rejected wording next to its resolution, and `check.py` deliberately excludes them from some retired-spelling checks.
 
@@ -71,7 +95,7 @@ Do not modernize obsolete syntax inside prototype finding sections (`Xn`, `Yn`, 
 
 ### Issue tracker
 
-Issues and specs are tracked as local Markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+Disposable execution detail is tracked in local Markdown files under `.scratch/`; durable discoveries, dependencies, and dispositions must be returned to `ROADMAP.md`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

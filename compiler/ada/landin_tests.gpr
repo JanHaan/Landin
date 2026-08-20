@@ -1,0 +1,19 @@
+--  The repository-owned test harness.  No third-party test framework is
+--  used, and none is permitted: ROADMAP.md R0.20 excludes AUnit.
+
+with "landin_common.gpr";
+with "landin_lib.gpr";
+
+project Landin_Tests is
+
+   for Languages use ("Ada");
+   for Source_Dirs use ("tests/src");
+   for Main use ("landin_tests.adb");
+   for Object_Dir use Landin_Common.Build_Dir & "/tests-obj";
+   for Exec_Dir use Landin_Common.Build_Dir & "/bin";
+
+   package Compiler renames Landin_Common.Compiler;
+   package Builder  renames Landin_Common.Builder;
+   package Binder   renames Landin_Common.Binder;
+
+end Landin_Tests;

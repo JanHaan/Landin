@@ -1,0 +1,19 @@
+--  `refine` is the direct compiler executable.  It owns no semantics; it is
+--  the request/result boundary described by ROADMAP.md R0.50.
+
+with "landin_common.gpr";
+with "landin_lib.gpr";
+
+project Refine is
+
+   for Languages use ("Ada");
+   for Source_Dirs use ("src/main");
+   for Main use ("refine.adb");
+   for Object_Dir use Landin_Common.Build_Dir & "/refine-obj";
+   for Exec_Dir use Landin_Common.Build_Dir & "/bin";
+
+   package Compiler renames Landin_Common.Compiler;
+   package Builder  renames Landin_Common.Builder;
+   package Binder   renames Landin_Common.Binder;
+
+end Refine;

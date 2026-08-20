@@ -1,0 +1,66 @@
+#  The authoritative Linux x86-64 gate.
+#
+#  ROADMAP.md R0.70 makes native Linux x86-64 the authority for Linux
+#  behaviour, and the local Apple Container loop the convenience.  This
+#  manifest is that authority: builds.sr.ht runs it on real x86-64 hardware,
+#  with no translation between the compiler and the instruction set.
+#
+#  The pinned toolchain comes from environments/pins.sh, the same file the
+#  container recipe reads, and every archive is checksum-verified before it
+#  is unpacked.
+
+image: debian/stable
+
+packages:
+  - binutils
+  - ca-certificates
+  - curl
+  - libc6-dev
+  - python3
+
+environment:
+  LANDIN_TOOLCHAINS: /home/build/toolchains
+  LANDIN_BUILD_TAG: srht-x86-64
+
+tasks:
+  #  Recorded first, so a captured log names the compiler that produced it.
+  - toolchain: |
+      cd landin
+      . ./environments/pins.sh
+      landin_install_toolchain "$LANDIN_TOOLCHAINS" x86_64-linux
+      echo "LANDIN_GNAT_HOME=$LANDIN_TOOLCHAINS/gnat-$LANDIN_GNAT_VERSION" \
+        >> ~/.buildenv
+      echo "LANDIN_GPRBUILD_HOME=$LANDIN_TOOLCHAINS/gprbuild-$LANDIN_GPRBUILD_VERSION" \
+        >> ~/.buildenv
+      echo "export LANDIN_GNAT_HOME LANDIN_GPRBUILD_HOME" >> ~/.buildenv
+
+  - identify: |
+      cd landin
+      uname -a
+      ./scripts/toolchain.sh
+
+  #  From clean, because a gate that reports on somebody else's objects is
+  #  not a gate.
+  - build: |
+      cd landin
+      ./scripts/clean.sh --all
+      ./scripts/build.sh
+
+  - test: |
+      cd landin
+      ./scripts/test.sh
+
+  #  Release drops the assertions, so a rule that only holds with -gnata
+  #  shows up here rather than in a later surprise.
+  - release: |
+      cd landin
+      LANDIN_BUILD_MODE=release ./scripts/test.sh
+
+  - checks: |
+      cd landin
+      python3 check.py
+
+  #  The chassis must still refuse to claim a version.
+  - identity: |
+      cd landin
+      ./compiler/ada/build/srht-x86-64/debug/bin/refine --identify

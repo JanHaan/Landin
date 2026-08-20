@@ -1,0 +1,55 @@
+#  The local Linux loop for the Landin bootstrap compiler.
+#
+#  ROADMAP.md R0.70 makes this the convenient Linux loop and native Linux
+#  x86-64 the authority.  Nothing here may become the authority by accident,
+#  so the image is pinned as tightly as the archives it installs: a base
+#  image by digest, and the same GNAT and GPRbuild versions, with the same
+#  checksums, that compiler/ada/TOOLCHAIN.md records.
+
+FROM docker.io/library/debian@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241
+
+#  Only what the pinned toolchain needs to link a program and fetch itself.
+#  A build-essential here would install a second C toolchain, and then the
+#  question of which compiler produced a result would have two answers.
+RUN apt-get update \
+ && apt-get install --no-install-recommends --yes \
+        ca-certificates \
+        curl \
+        binutils \
+        libc6-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+ARG GNAT_VERSION=16.1.0-1
+ARG GPRBUILD_VERSION=26.0.0-1
+ARG GNAT_SHA256=9f74f58a827a2ad40dd84c72a413e75ea52888e0d8f7e252fba4d26762402703
+ARG GPRBUILD_SHA256=e3f27f2515ec04d963f6badade6595993b1c091ba15d1919a7c75aad1b7ed49b
+ARG RELEASES=https://github.com/alire-project/GNAT-FSF-builds/releases/download
+
+#  Verify before unpacking, every time.  An archive that does not match its
+#  recorded checksum is not a slower build, it is a different compiler.
+RUN set -eu; \
+    mkdir -p /opt/landin-toolchains; \
+    cd /tmp; \
+    curl -fsSL -o gnat.tar.gz \
+        "$RELEASES/gnat-$GNAT_VERSION/gnat-x86_64-linux-$GNAT_VERSION.tar.gz"; \
+    echo "$GNAT_SHA256  gnat.tar.gz" | sha256sum -c -; \
+    mkdir -p "/opt/landin-toolchains/gnat-$GNAT_VERSION"; \
+    tar xzf gnat.tar.gz -C "/opt/landin-toolchains/gnat-$GNAT_VERSION" \
+        --strip-components=1; \
+    curl -fsSL -o gprbuild.tar.gz \
+        "$RELEASES/gprbuild-$GPRBUILD_VERSION/gprbuild-x86_64-linux-$GPRBUILD_VERSION.tar.gz"; \
+    echo "$GPRBUILD_SHA256  gprbuild.tar.gz" | sha256sum -c -; \
+    mkdir -p "/opt/landin-toolchains/gprbuild-$GPRBUILD_VERSION"; \
+    tar xzf gprbuild.tar.gz \
+        -C "/opt/landin-toolchains/gprbuild-$GPRBUILD_VERSION" \
+        --strip-components=1; \
+    rm -f gnat.tar.gz gprbuild.tar.gz
+
+ENV LANDIN_GNAT_HOME=/opt/landin-toolchains/gnat-16.1.0-1
+ENV LANDIN_GPRBUILD_HOME=/opt/landin-toolchains/gprbuild-26.0.0-1
+ENV PATH=/opt/landin-toolchains/gnat-16.1.0-1/bin:/opt/landin-toolchains/gprbuild-26.0.0-1/bin:$PATH
+
+#  The repository is bind-mounted here by scripts/linux-loop.sh.
+WORKDIR /work
+
+CMD ["/bin/sh", "-c", "./scripts/toolchain.sh"]

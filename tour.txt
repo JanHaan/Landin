@@ -21,7 +21,9 @@ drift, and that is the numbering working rather than failing. Gaps of
 ten leave room. Sections carry titles and no numbers, because nothing
 cites a section. Refer to decisions by number.
 
-Everything still open is in BACKLOG.md, and not in a second list here.
+`tour.txt` is the normative language specification. Everything still
+open, every implementation dependency and every disposition is owned by
+ROADMAP.md, not by a second list here.
 ----------------------------------------------------------------------
 
 
@@ -341,10 +343,11 @@ mem.slice_from: (T: type, p: ptr mut u8, n: usize) -> (s: []mut T)
 --       to say uninitialised in a type, that shape is restricted to
 --       a T that has a zero image, and general uninitialised
 --       generic storage is not supported.
---       The eventual answer is a distinct raw-storage type — one
---       that tracks capacity apart from the initialised count and
---       admits one slot at a time — and its shape should come out
---       of container code rather than be guessed now — BACKLOG.md.
+--       The answer remains a distinct raw-storage type — one that
+--       tracks capacity apart from the initialised count and admits
+--       one slot at a time. Its exact operations and invariants are
+--       decided from executable container cases in ROADMAP.md at R3.20
+--       and R3.30, not guessed as a prerequisite to the first front end.
 
 
 ----------------------------------------------------------------------
@@ -889,8 +892,9 @@ end process
 --       use-after-consume check on one place. It is not ownership:
 --       the value is copyable, so a copy made before the sink is
 --       refused nothing, and consuming through both is not caught.
---       Making it ownership means values that cannot be copied,
---       which is parked with its condition in BACKLOG.md.
+--       Making it ownership means values that cannot be copied.
+--       Affine values remain parked with their resource-prototype
+--       trigger in ROADMAP.md's inherited review register.
 --       A place sunk out of an inout parameter must be assigned
 --       again before the function returns, or the caller would get
 --       its struct back with a dead field and nobody tracking it.
@@ -1560,9 +1564,10 @@ mut call_count: u32 = 0
 --       landin/assembler, landin/linker — which are available
 --       without an import, and that is why the bare names
 --       compiler, assembler and linker are taken.
---       [OPEN 1] Naming authority is deliberately left open. The
---       search path is project-first, so any collision can be
---       overridden locally and no dispute is fatal.
+--       Naming authority remains deliberately deferred to the companion
+--       tool and ecosystem successor in ROADMAP.md. The search path is
+--       project-first, so any collision can be overridden locally and
+--       no dispute is fatal.
 
 
 ----------------------------------------------------------------------
@@ -1609,18 +1614,21 @@ option log_level: u32 = 0
 THE TOOLCHAIN, C, AND THE MACHINE
 ----------------------------------------------------------------------
 
--- [1550] The machine, which had been decided and never written
---       here. Landin has its own backend: one flat intermediate
---       representation with QBE's IL as the model, assembly text
---       out, and the assembler and linker of the platform doing the
---       rest. arm64 and x86-64 first, Cortex-M after. The frame
---       pointer is always set up. The whole program is compiled
---       together [1480].
+-- [1550] Landin has its own native backends. A verified,
+--       target-neutral intermediate representation takes QBE's IL as a
+--       design influence without freezing one flat or serialised stage
+--       shape before implementation evidence exists. The compiler emits
+--       deterministic assembly text and relies on the assembler and
+--       linker of the platform. Linux x86-64 comes first, native macOS
+--       arm64 second, and emulator-first Cortex-M third. The frame
+--       pointer is always set up. The whole program is compiled together
+--       [1480], with optional private caches that do not create a stable
+--       separate-compilation interface.
 --       Not LLVM and not C: LLVM is a dependency larger than the
---       language and C loses the calling convention, the traps and
---       the debug information that the design spends its precision
---       on. The cost is owned deliberately — every target is work
---       that nobody else does.
+--       language and C loses the calling convention, the traps and the
+--       debug information that the design spends its precision on. The
+--       cost is owned deliberately — every target is work that nobody
+--       else does.
 
 -- [1560] Three builtin modules are the way to the tools. They are
 --       modules of the reserved landin package — landin/compiler
@@ -1847,10 +1855,11 @@ THE PRINCIPLES BEHIND THE DECISIONS
 --       taken before a sink is refused nothing [0910], and two
 --       arenas are indistinguishable [0860].
 --       That is a smaller claim than 'safe' and a larger one than
---       C's, and the table that would let a reader see exactly which
---       operation falls where does not exist yet — BACKLOG.md. Until it
---       does, read the claim as: deliberately unsafe, with static
---       help that is worth having.
+--       C's. The table that lets a reader see exactly which operation
+--       falls where does not exist yet; ROADMAP.md grows it alongside
+--       executable cases at R2.90 and closes the matrix at R7.40.
+--       Until then, read the claim as: deliberately unsafe, with
+--       static help that is worth having.
 --       Checks stay on by default. unchecked exists in the design
 --       [1120] and is not implemented first, because defining what
 --       an optimiser may then assume is a decision that should wait
@@ -1885,15 +1894,24 @@ no header parsing
 ----------------------------------------------------------------------
 WHAT IS STILL OPEN
 ----------------------------------------------------------------------
-BACKLOG.md, and not a second list here. It carries what blocks a
-compiler, what is needed before the language is usable, what is parked
-and under which condition it would come in, which positions have been
-argued against and kept on purpose, and the order to build in. Every
-item is traced back to the construct, prototype finding or review
-section it came from.
+ROADMAP.md, and not a second list here. This file remains the normative
+authority for language semantics; ROADMAP.md is the sole durable
+authority for open work, implementation dependencies, phase gates,
+dispositions and completion evidence. Every inherited item is traced to
+the construct, prototype finding or archived review section it came from.
 
-The largest single entry is the one worth naming here: there is no
-compiler. Everything above is design.
+There is no compiler yet, but implementation begins immediately rather
+than waiting for every unresolved foundation. R0 establishes the Ada
+bootstrap chassis and R1 the executable kernel on Linux x86-64. The first
+major compiler milestone is R3, a complete derived parser program with
+evidence-table dispatch and `any` but without specialization. Target work
+continues through native macOS arm64 and emulator-first Cortex-M.
+
+The endpoint is feature-complete pre-v1. Production status, release
+versioning, package acquisition, competitive optimization and
+self-hosting are outside this roadmap. A future roadmap may replace
+tested Ada stages incrementally; no self-hosting work or serialized
+cross-language stage protocol is scheduled now.
 
 
 ----------------------------------------------------------------------
