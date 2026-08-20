@@ -63,12 +63,15 @@ checked. Overflow traps and wrapping is a separate operator.
 
 **Generics** take the type as an ordinary compile-time parameter.
 Concepts are named requirement bundles with explicit conformances,
-declared anywhere, and a collision is simply an error. Generic code is
-a value plus evidence that its type satisfies a concept; `any C` is the
-same evidence with the type erased, which makes static generics and
-runtime dispatch one mechanism seen from two sides. The evidence table
-is the foundation and specialising is an optimisation weighed per
-instantiation against code size.
+declared anywhere, and a collision is simply an error. The inherited
+design also requires a closed, named set of representation-derived
+compiler-supplied conformances, beginning with `zeroable`; their exact
+interaction with explicit conformances is resolved from implementation
+evidence at R2. Generic code is a value plus evidence that its type
+satisfies a concept; `any C` is the same evidence with the type erased,
+which makes static generics and runtime dispatch one mechanism seen from
+two sides. The evidence table is the foundation and specialising is an
+optimisation weighed per instantiation against code size.
 
 **Capabilities** replace effects. An allocator, an Io, a diagnostics
 log, a peripheral handle are values a function is given, so a function
@@ -83,12 +86,19 @@ are expressions — a block has the value of its last expression, and
 `if`, `match`, `else` clauses and loops all follow from that one rule.
 Semicolons optional.
 
-**The machine** is its own backend: one flat intermediate
-representation with QBE's IL as the model, assembly text out, arm64 and
-x86-64 first, frame pointer always, whole program compiled together. Not
+**The machine** is served by Landin's own native backends. The bootstrap
+compiler is written in Ada 2022 with pinned GNAT/GPRbuild, minimal
+dependencies, no SPARK, and a custom test harness. It compiles whole
+programs, may keep private caches, and lowers through a verified,
+target-neutral internal IR that evolves from implementation evidence to
+assembly text for the platform assembler and linker. The frame pointer
+is always present. Linux x86-64 comes first, native macOS arm64 second, and emulator-first Cortex-M third. Not
 LLVM, which is a dependency larger than the language, and not C, which
-loses the calling convention, the traps and the debug information the
-design spends its precision on.
+loses the calling convention, traps and debug information the design
+spends its precision on. Ada package boundaries are tested seams for
+possible stage replacement under a future self-hosting roadmap;
+self-hosting is not part of the current roadmap and no cross-language
+stage protocol is frozen now.
 
 **Deliberately absent:** classes, inheritance, methods, runtime type
 information, exceptions, unwinding, garbage collection, reference
@@ -121,19 +131,18 @@ interface files, header parsing.
 
 ## How the work is done
 
-1. Catalogue the hard decisions first, then work through them one at a
-   time, deciding rather than deferring.
-2. Write prototypes. Let them find what talking cannot. Every one of
-   the four found things no amount of argument had.
-3. Fold the findings back into the specification, and keep the wording
-   that was wrong beside the resolution — a decision should be readable
-   back, not only its outcome.
-4. **Re-read the prototypes against every revision, and against each
-   other.** They are the test suite. Checking each file against the
-   current rules is not the same as checking the files against each
-   other, and both have caught real defects that the other missed.
-5. Run `check.py`. It found most of what the last several revisions
-   fixed.
+1. Start with the smallest executable vertical slice; do not require
+   unrelated language foundations to be settled first.
+2. Resolve language and architecture questions when the first slice
+   needs them, and record the decision, dependencies, evidence, and
+   disposition in `ROADMAP.md`.
+3. Turn the prototypes into derived positive and negative conformance
+   tests while preserving their historical finding sections.
+4. When implementation changes semantics, update `tour.txt`, the
+   affected prototype-derived tests, and `ROADMAP.md` together, then
+   reread the prototypes against the revision and against each other.
+5. Run `check.py`. Every new cheap invariant, and every defect it once
+   missed, belongs there.
 
 Two habits that produced most of the good outcomes, and that are worth
 keeping deliberately. **Disagreement gets argued out rather than
@@ -149,8 +158,8 @@ than the claim.
 
 Each of these has been argued against by an outside reader and kept on
 purpose. Reopening is allowed; doing it quietly is not, and doing it
-without new evidence is a waste. The reasons are in `BACKLOG.md`
-section D.
+without new evidence is a waste. The reasons and evidence required to
+reopen them are in `ROADMAP.md`'s inherited review register.
 
 - Integer indexing of `utf8` stays, at a linear scan, for ergonomics.
 - No weak conformances and no orphan rule yet.
@@ -173,18 +182,23 @@ exist and all their findings are worked in. Two outside reviews have
 been folded in, one of which reversed a decision made a day earlier and
 was right to.
 
-**There is no compiler.** `BACKLOG.md` section A is what has to be
-settled before a front end can be written without guessing — a
-normative grammar, raw storage as a type, value layout, what an invalid
-packed encoding does, the guarantee table, the evidence ABI,
-diagnostics. Section F is the order to build in.
+**There is no compiler yet.** `ROADMAP.md` is now the sole durable work
+authority. R0 establishes the Ada bootstrap chassis and test harness;
+R1 builds the executable language kernel and first Linux x86-64 path.
+Outstanding grammar, representation, ABI, guarantee, and diagnostic
+questions are settled by the first phase that needs them rather than
+forming one blanket front-end barrier.
 
-The first milestone is not full-tour support. It is a compiler that
-parses a stable subset, reports diagnostics worth reading, accepts the
-coherent examples, rejects the contradictory ones, and runs a
-meaningful part of the parser prototype. From there the implementation
-drives the design, which is the whole reason for stopping the design
-here.
+The first major compiler milestone is R3: a complete derived version of
+the parser prototype with useful diagnostics, evidence-table dispatch,
+and `any`, explicitly without specialization. Work then proceeds through
+the complete hosted Linux x86-64 path, native macOS arm64, and
+emulator-first Cortex-M.
+
+The endpoint is feature-complete pre-v1. Production claims, release
+versioning, package acquisition, competitive optimization, and
+self-hosting are outside this roadmap. A future self-hosting roadmap may
+replace tested Ada stages incrementally, but none is scheduled now.
 
 ---
 

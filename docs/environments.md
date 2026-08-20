@@ -1,0 +1,106 @@
+# Development and validation environments
+
+`ROADMAP.md` R0.70 owns this document. It records which environment produces
+which kind of evidence, and it deliberately names no CI provider: hosting is
+not selected yet, and every command below is an ordinary shell command.
+
+## The three environments
+
+| environment | role | status |
+|---|---|---|
+| native macOS arm64 | the development loop while writing the bootstrap | working |
+| Apple Container, `linux/amd64` under Rosetta | the local Linux loop | working |
+| builds.sr.ht, `debian/stable` on x86-64 hardware | the authoritative Linux gate | working |
+
+The gate runs from `.build.yml` on every push. It installs the pinned
+toolchain from `environments/pins.sh`, builds from clean, runs the suite in
+debug and in release, runs `check.py`, and prints `refine --identify` so that
+the no-version-claim rule is visible in the log rather than only in a test.
+
+Native macOS arm64 is a *development* loop at R0. It becomes a validated
+target of its own at R5, with its own compiler build, platform tools and
+debugger gate; a result produced here is not Linux evidence, and a Linux
+container is never Darwin evidence.
+
+QEMU full-system x86 is supplemental. It is not the daily loop and it is not
+the Linux gate.
+
+## Commands
+
+The same commands run in every environment:
+
+```sh
+export LANDIN_GNAT_HOME=...      # the pinned GNAT for this host
+export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild for this host
+
+./scripts/toolchain.sh
+./scripts/clean.sh
+./scripts/build.sh
+./scripts/test.sh
+```
+
+The local Linux loop runs the very same scripts inside the pinned image:
+
+```sh
+./scripts/linux-loop.sh              # build and run the suite in linux/amd64
+./scripts/linux-loop.sh sh -c '...'  # anything else, in the same environment
+```
+
+`environments/linux-amd64/Containerfile` pins its base image by digest and
+verifies both toolchain archives against the checksums in
+`environments/pins.sh` before unpacking either of them. That file is the one
+place a version or a checksum is written; `check.py` holds the recipe,
+`compiler/ada/TOOLCHAIN.md` and it to the same values. Objects are kept
+apart per host by `LANDIN_BUILD_TAG`, which `scripts/env.sh` defaults to
+`os-arch`: one checkout is built by two hosts, and `.ali` files from both in
+one directory is a build that fails confusingly.
+
+`scripts/toolchain.sh` prints the host, the build mode and the exact compiler
+and builder versions, and `build.sh` and `test.sh` print it before doing
+anything. A captured log therefore names its own toolchain, which is what
+R0.20 and R0.70 require of recorded evidence.
+
+## Recorded results
+
+| date | environment | toolchain | result |
+|---|---|---|---|
+| 2026-08-20 | macOS arm64 (Darwin 25.5.0, Apple M1 Pro) | GNAT 16.1.0, GPRbuild 26.0.0 (aarch64-apple-darwin) | clean build; debug and release |
+| 2026-08-20 | Apple Container 1.2.2, `linux/amd64` under Rosetta, Linux 6.18.15 | GNAT 16.1.0, GPRbuild 26.0.0 (x86_64-pc-linux-gnu) | build from an empty build directory; debug |
+
+Case and check counts move as the suite grows, so they are not recorded here;
+the run itself is the record, and `scripts/toolchain.sh` output heads every
+one. What is recorded is that each environment built from clean and finished
+with no failures, in the modes named.
+
+The two transcripts are byte-identical, which is the property worth having:
+the same cases in the same order with the same counts, on two hosts whose
+toolchains were built for different architectures.
+
+One caveat, recorded because it was seen: a single early run ended in an
+unhandled exception and a traceback, and it has not reproduced in thirty
+subsequent runs including four from a clean checkout. The exception was not
+captured, so there is nothing to diagnose from. What changed as a result is
+that `Landin.Testing.Run` now catches an exception from a case, reports it as
+that case's failure, and keeps running the rest; a defect that used to take
+the whole transcript with it now costs one line of it.
+
+## What each environment is authority for
+
+What the container does and does not settle is worth being exact about. It
+runs a real Linux kernel and a real x86-64 userspace, so it catches everything
+that depends on the operating system, the C library, the linker and the
+64-bit-little-endian layout of the target: the whole suite passing there is
+real evidence, and it is why the Linux checksums in
+`compiler/ada/TOOLCHAIN.md` are now verified rather than transcribed. What it
+does not do is execute x86-64 instructions on x86-64 hardware — Rosetta
+translates them — so once R1.80 emits machine code, instruction-level and
+timing-sensitive results from this loop are not authority. That distinction is
+why the roadmap named the native gate before there was any code to run in it,
+and it is why the gate now exists: from R1.80 onwards, `refine` emits
+instructions, and only the sourcehut job runs them on the hardware they were
+emitted for.
+
+Hosting is therefore no longer an open question: the repository lives on
+git.sr.ht and its CI is builds.sr.ht. `scripts/` stays provider-neutral —
+nothing in it names a provider — and `.build.yml` is the one file that does,
+which is what makes it replaceable.

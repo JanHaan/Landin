@@ -1,0 +1,3 @@
+class: unit
+summary: a report is ordered by source and span, not by the order stages ran
+targets: linux-x86-64, macos-arm64, synthetic-32

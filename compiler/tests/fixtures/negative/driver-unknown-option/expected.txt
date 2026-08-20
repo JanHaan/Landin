@@ -1,0 +1,2 @@
+error[L0002]: unknown option: --wat
+  --> <unknown source>
