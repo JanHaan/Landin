@@ -26,6 +26,10 @@ python3 check.py prototype-2-parser.txt
 # Run the same build and suite inside the pinned linux/amd64 image.
 # Needs Apple Container; see docs/environments.md.
 ./scripts/linux-loop.sh
+
+# Render every document as HTML, verify nothing was dropped, and package
+# it for pages.sr.ht.  --publish uploads it; see docs/site/README.md.
+./scripts/site.sh
 ```
 
 Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and from R1.80 onwards — when `refine` starts emitting instructions — it is the only environment that runs them on the hardware they were emitted for.
@@ -47,6 +51,8 @@ Use the repository documents in this order:
 5. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the documents the R0 gate cites — including that the container recipe and `compiler/ada/TOOLCHAIN.md` pin the same toolchain. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
 
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
+
+Every document above is also published as a reading copy at https://sinnfrei.srht.site, rendered by `docs/site/render_html.py`. The text files are the sources; the pages are generated and never edited by hand.
 
 ## Prototype coverage
 
