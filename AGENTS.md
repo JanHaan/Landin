@@ -28,6 +28,8 @@ python3 check.py prototype-2-parser.txt
 ./scripts/linux-loop.sh
 ```
 
+Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and from R1.80 onwards — when `refine` starts emitting instructions — it is the only environment that runs them on the hardware they were emitted for.
+
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.txt` path does not run all citation checks.
 
 `scripts/test.sh` builds and then runs `compiler/ada`'s test program; `scripts/linux-loop.sh` runs the same thing in the pinned Linux image. Those are the two runnable test commands. There is no separate lint or typecheck step: the pinned build treats every warning as an error and enforces GNAT style checks. Warnings are policy, not preference — do not silence one without a recorded reason.

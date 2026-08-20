@@ -13,8 +13,9 @@ One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
-**Status: specification 0.1.0. The compiler does not compile anything yet:
-the bootstrap chassis is built and tested, and the language frontend is next.**
+**Status: specification 0.1.0. The compiler does not compile anything yet.
+The bootstrap chassis is built, tested on three environments, and the
+language frontend is next.**
 
 ## What is here
 
@@ -91,9 +92,10 @@ real and tested.
 
 Implementation begins immediately rather than waiting for every design
 foundation to be settled in advance. `ROADMAP.md` starts with the Ada 2022
-bootstrap chassis at R0 — built, with native Linux validation still open —
-then builds an executable language kernel and the first Linux x86-64
-compile/assemble/link/run path at R1. Language and architecture questions are
+bootstrap chassis at R0, which is complete: it builds and passes its suite on
+macOS arm64, in a pinned `linux/amd64` container, and on x86-64 hardware in
+CI. R1 builds an executable language kernel and the first Linux x86-64
+compile/assemble/link/run path. Language and architecture questions are
 resolved when the first vertical slice needs them.
 
 The first major compiler milestone is R3: a complete derived version of the

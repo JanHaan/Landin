@@ -220,7 +220,7 @@ Exit evidence: contract tests exercise fake stages and at least one synthetic
 32-bit target description on the 64-bit development host.
 
 ### R0.70 — Establish development and validation environments
-Status: blocked
+Status: complete
 Depends on: R0.50, R0.60
 
 Make Apple Container with linux/amd64 under Rosetta the local Linux loop and a
@@ -236,7 +236,8 @@ captured with results.
 Both halves are done and recorded in `docs/environments.md`. The pinned
 container image builds the chassis and runs the suite with a transcript
 byte-identical to the macOS one, and `.build.yml` runs the same commands on
-x86-64 hardware at builds.sr.ht, from clean, in debug and release.
+x86-64 hardware at builds.sr.ht, from clean, in debug and release. Hosting
+was selected here: git.sr.ht for the repository, builds.sr.ht for the gate.
 
 ### R0 gate
 
@@ -246,17 +247,18 @@ x86-64 hardware at builds.sr.ht, from clean, in debug and release.
 - Stage and target seams have contract tests.
 - No source-level Landin compatibility or version claim has been made.
 
-The gate is not closed. R0.10 through R0.60 are complete. `docs/environments.md`
-records the environments and their captured results; `compiler/ada/README.md`
-records the package layout and ownership; `compiler/ada/TOOLCHAIN.md` records
-the pinned toolchain and the warning policy; `compiler/tests/README.md` records
-the fixture format. Between them: the pinned toolchain builds `refine` from a
-clean checkout on macOS arm64 and in the pinned linux/amd64 container, the
-harness passes in both with byte-identical transcripts in debug and release,
-the stage and target seams have contract tests including a synthetic 32-bit
-description, and the executable makes no version claim. The clause requiring
-native Linux x86-64 evidence is unmet because R0.70 is blocked on environment
-access, not on implementation work.
+The gate is closed. `docs/environments.md` records the environments and their
+captured results; `compiler/ada/README.md` records the package layout and
+ownership; `compiler/ada/TOOLCHAIN.md` records the pinned toolchain and the
+warning policy; `compiler/tests/README.md` records the fixture format. Between
+them: the pinned toolchain builds `refine` from a clean checkout on macOS
+arm64, in the pinned linux/amd64 container, and on x86-64 hardware at
+builds.sr.ht; the harness and its deterministic diagnostics pass in all three,
+in debug and in release; the stage and target seams have contract tests
+including a synthetic 32-bit description; and the executable makes no version
+claim, which the gate job prints rather than merely asserting.
+
+R0 is complete. R1 is next, and R1.10 is unblocked.
 
 ## R1 — Executable language kernel
 
