@@ -31,11 +31,12 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md",
                      "compiler/ada/README.md",
                      "compiler/ada/TOOLCHAIN.md",
                      "compiler/tests/README.md",
-                     "compiler/tests/harness-cases/README.md"]
+                     "compiler/tests/harness-cases/README.md",
+                     "docs/site/README.md"]
 
 #  Every word the language reserves. Kept here rather than imported from
-#  build_tour.py because the highlighter's set is about colour and this
-#  one is about legality, and they have drifted apart before.
+#  docs/site/render_html.py because the highlighter's set is about colour
+#  and this one is about legality, and they have drifted apart before.
 KEYWORDS = set("""
 type struct variant concept is end if then elsif else while do for in loop
 break continue when complete match defer undo begin unchecked return fail try

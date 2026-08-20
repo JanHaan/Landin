@@ -30,7 +30,7 @@ language frontend is next.**
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
 | `scripts/` | build, test, clean and toolchain commands. Provider-neutral, except `linux-loop.sh`, which drives Apple Container by name. |
 | `environments/` | the pinned `linux/amd64` image the local Linux loop builds. |
-| `docs/` | the environments that produce evidence, and the agent-facing notes. |
+| `docs/` | the environments that produce evidence, the agent-facing notes, and the site generator. |
 | `prototype-1-driver.txt` | a driver written from an ugly vendor SVD: GPIO, an interrupt-driven DMA UART, a vector table, and not one hand-written bitmask. |
 | `prototype-2-parser.txt` | a parser that recovers, because a real one must not stop at the first mistake. |
 | `prototype-3-containers.txt` | a generic container library: growing array, small vector, hash map, arena-backed tree. |
@@ -41,6 +41,17 @@ written to make the specification fail, each ends with the list of
 places where it did, and each keeps the wording that turned out wrong
 beside its resolution. Between them they have recorded forty-two
 findings, including several that reversed a decision.
+
+## Reading it online
+
+Every document here is published as a syntax-highlighted reading copy at
+**https://sinnfrei.srht.site** — the specification, the four prototypes, the
+roadmap, and the implementation notes. Every `[NNNN]` citation links to the
+construct it names, and hovering one shows what it says.
+
+```sh
+./scripts/site.sh --publish
+```
 
 ## Checking
 

@@ -2,3 +2,5 @@
 __pycache__/
 compiler/ada/build/
 .scratch/
+docs/site/site/
+docs/site/landin-site.tar.gz
