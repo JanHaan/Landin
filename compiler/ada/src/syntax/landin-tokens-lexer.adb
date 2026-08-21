@@ -247,6 +247,55 @@ package body Landin.Tokens.Lexer is
             and then Text (Position .. Position + Text_To_Match'Length - 1)
                      = Text_To_Match);
 
+      procedure Scan_Quoted;
+
+      --  The quote-delimited literals the tour describes and the kernel
+      --  refuses: text [0260], raw [0280] and character [0250]. Each is
+      --  read as one lexeme so [1830] can name the construct instead of
+      --  reporting a stray quote, and so enabling one later cannot change
+      --  how a file that never used it was read.
+      procedure Scan_Quoted is
+         First  : constant Natural := Position;
+         Opener : constant Character := Text (Position);
+         Quote  : constant String := """";
+         Three  : constant String := Quote & Quote & Quote;
+         Raw    : constant Boolean :=
+           Opener = '"' and then Ahead (Three);
+         Closer : constant String := (if Raw then Three else [Opener]);
+         Refused : constant Token_Kind :=
+           (if Raw then Raw_Literal
+            elsif Opener = '"' then Text_Literal
+            else Character_Literal);
+         Closed : Boolean := False;
+      begin
+         Position := Position + Closer'Length;
+
+         while Position <= Last loop
+            --  A text or character literal ends at its line [0260]; a raw
+            --  literal may span lines [0280].
+            exit when not Raw
+              and then (Text (Position) = LF or else Text (Position) = CR);
+
+            if Ahead (Closer) then
+               Position := Position + Closer'Length;
+               Closed := True;
+               exit;
+            end if;
+
+            Position := Position + 1;
+         end loop;
+
+         Emit (Refused, First, Position - 1);
+
+         if Closed then
+            Complain (Not_Enabled, First, Position - 1, Refused => Refused);
+         else
+            Complain (Unterminated_Literal, First, Position - 1,
+                      Opened  => Span (First, First),
+                      Refused => Refused);
+         end if;
+      end Scan_Quoted;
+
       procedure Scan_Comment;
 
       --  [1780]: the longest opener decides the form, and the form decides
@@ -321,6 +370,9 @@ package body Landin.Tokens.Lexer is
 
             elsif Ahead ("--") then
                Scan_Comment;
+
+            elsif Here = '"' or else Here = ''' then
+               Scan_Quoted;
 
             elsif Is_Digit (Here) then
                Scan_Integer;

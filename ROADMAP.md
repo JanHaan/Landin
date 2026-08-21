@@ -325,7 +325,7 @@ belongs to the work that enables a literal carrying escapes, and R4.10 owns
 the remaining hosted literal forms.
 
 ### R1.30 — Establish the diagnostic catalogue
-Status: planned
+Status: active
 Depends on: R0.40, R1.20
 
 Assign current diagnostic codes and required primary/secondary spans for the
