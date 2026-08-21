@@ -93,6 +93,8 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
 ./scripts/test.sh
 ```
 
+On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
+
 `refine --identify` will tell you what it is and admit that it has no
 frontend. Giving it a `.ldn` file gets you a diagnostic saying the same
 thing, with a span pointing into your file, which is more than nothing: the
