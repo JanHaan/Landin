@@ -1,0 +1,3 @@
+quiet: (m: i32) -> none =
+    return
+end quiet

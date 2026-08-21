@@ -60,6 +60,7 @@ RETIRED = {
 }
 
 BLOCK_ENDS = {"if", "while", "for", "loop", "match", "unchecked", "variant"}
+GRAMMAR_BANNER = "THE GRAMMAR OF THE ENABLED KERNEL"
 ROADMAP_PHASE = re.compile(r"^## (R[0-7]) — \S.*$")
 ROADMAP_WORK = re.compile(r"^### (R[0-7]\.([1-9]\d*)) — (\S.*)$")
 ROADMAP_GATE = re.compile(r"^### (R[0-7]) gate$")
@@ -135,19 +136,32 @@ STALE_BACKLOG_ALLOWLIST = {
 def sections(lines):
     """Split a file into (kind, first_line, lines).
 
-    Three kinds are read differently: 'code' is checked, 'findings' and
-    'changelog' quote the wording a decision retired and are not.
+    Four kinds are read differently. 'code' is checked. 'findings' and
+    'changelog' quote the wording a decision retired, on purpose. 'grammar'
+    is notation rather than Landin: a production reads 'type ::= ...', which
+    the keyword rule would otherwise report as a keyword standing where a
+    name belongs, and a nonterminal may share a name with a function the
+    tour declares elsewhere.
     """
     kind, start, buf = "code", 1, []
+    ruled = False
     for n, line in enumerate(lines, 1):
         s = line.strip()
+        banner = ruled and re.match(r"^[A-Z][A-Z ,'-]+$", s)
         if s.startswith("WHAT WAS TRIED AND DROPPED"):
             yield kind, start, buf
             kind, start, buf = "changelog", n, []
+        elif s.startswith(GRAMMAR_BANNER):
+            yield kind, start, buf
+            kind, start, buf = "grammar", n, []
+        elif banner and kind == "grammar":
+            yield kind, start, buf
+            kind, start, buf = "code", n, []
         elif re.match(r"^\[[XYZW]\]", s) or s.startswith("WHAT THIS ONE FOUND") \
                 or s.startswith("WHERE THE SPECIFICATION WAS SILENT"):
             yield kind, start, buf
             kind, start, buf = "findings", n, []
+        ruled = bool(re.match(r"^-{60,}$", s))
         buf.append(line)
     yield kind, start, buf
 
@@ -178,12 +192,16 @@ def check(path):
     all_lines = text.split("\n")
     #  Only the code section is checked. Findings and the changelog quote
     #  the wording that decisions retired, on purpose.
-    lines, offset = [], 0
-    for kind, start, chunk in sections(all_lines):
-        if kind == "code":
-            lines = chunk
-            offset = start - 1
-            break
+    chunks = [(start - 1, chunk) for kind, start, chunk in sections(all_lines)
+              if kind == "code"]
+    out = []
+    for offset, lines in chunks:
+        out += check_code(lines, offset)
+    return sorted(set(out))
+
+
+def check_code(lines, offset):
+    """The six cheap rules, over one stretch of code."""
     out = []
 
     #  1. a reserved word standing where a name belongs
@@ -260,6 +278,454 @@ def check(path):
             out.append((n, "'end %s' closes nothing of that name" % m.group(1)))
 
     return [(n + offset, why) for n, why in out]
+
+
+# --------------------------------------------------------------------------
+#  the grammar
+#
+#  tour.txt's grammar section is normative, and two rounds of reading it by
+#  hand found sixty-eight defects between them: a grammar argued over is a
+#  grammar that keeps being wrong in a new place.  So it is checked instead.
+#
+#  What is checked: every rule is defined and reachable, the notation uses
+#  only forms the notation paragraph describes, and -- the part that earns
+#  its keep -- every program a positive fixture carries is recognised by the
+#  productions, and every syntax negative is not.  The first draft claimed a
+#  token layer that made `mut x: u8` underivable; this catches that in a
+#  second rather than in a review.
+# --------------------------------------------------------------------------
+
+#  Rules the tokeniser owns.  The recogniser treats each as one token and
+#  does not expand it, because they read bytes rather than tokens.
+LEXICAL_RULES = {"space", "line_end", "comment", "line_comment",
+                 "doc_comment", "block_comment", "block_item", "identifier",
+                 "keyword", "literal", "integer", "decimal", "hex", "octal",
+                 "binary", "lower", "digit", "hex_digit", "octal_digit",
+                 "binary_digit"}
+
+#  Rule names the recogniser matches against a token kind rather than a
+#  spelling.
+TOKEN_KIND_RULES = {"identifier": "name", "integer": "integer",
+                    "literal": "literal"}
+
+PRODUCTION = re.compile(r"^([a-z_]+)\s+::=\s*(.*)$")
+NOTATION_WORD = re.compile(
+    r'\s*("(?:[^"\\]|\\.)*"'
+    r'|any byte(?: that begins neither "[^"]*" nor "[^"]*")?'
+    r'(?: except [a-z_]+)?'
+    r'|\.\.\.'
+    r'|[a-z_]+'
+    r'|[()|?*+])'
+)
+
+
+def grammar_section(text):
+    """The lines of the grammar section, or None when there is not one."""
+    lines = text.split("\n")
+    for n, line in enumerate(lines):
+        if line.strip() == GRAMMAR_BANNER:
+            for m in range(n + 2, len(lines)):
+                if re.match(r"^-{60,}$", lines[m]) and m + 1 < len(lines) \
+                        and re.match(r"^[A-Z][A-Z ,'-]+$", lines[m + 1].strip()):
+                    return n, lines[n:m]
+            return n, lines[n:]
+    return None, None
+
+
+def grammar_rules(section):
+    """Rule name -> right-hand side, joining continuation lines."""
+    rules, order, problems = {}, [], []
+    current = None
+    for n, line in enumerate(section, 1):
+        found = PRODUCTION.match(line)
+        if found:
+            name, rest = found.group(1), found.group(2)
+            if name in rules:
+                problems.append((n, "grammar rule %r is defined twice" % name))
+            rules[name] = rest
+            order.append((name, n))
+            current = name
+        elif current and re.match(r"^\s{2,}\S", line) \
+                and "::=" not in line and not line.lstrip().startswith("--"):
+            rules[current] += " " + line.strip()
+        else:
+            current = None
+    return rules, order, problems
+
+
+def unescape(text):
+    """A terminal spells bytes, so '\\t' in one is a tab."""
+    for written, byte in (("\\t", "\t"), ("\\n", "\n"), ("\\r", "\r"),
+                          ('\\"', '"'), ("\\\\", "\\")):
+        text = text.replace(written, byte)
+    return text
+
+
+class Notation:
+    """One right-hand side, read into alternatives of items."""
+
+    def __init__(self, name, text):
+        self.name = name
+        self.words = []
+        rest = text
+        while rest.strip():
+            found = NOTATION_WORD.match(rest)
+            if not found:
+                raise ValueError("cannot read %r" % rest.strip()[:40])
+            self.words.append(found.group(1))
+            rest = rest[found.end():]
+        self.at = 0
+
+    def parse(self):
+        node = self.alternation()
+        if self.at != len(self.words):
+            raise ValueError("trailing %r"
+                             % " ".join(self.words[self.at:])[:40])
+        return node
+
+    def alternation(self):
+        arms = [self.sequence()]
+        while self.at < len(self.words) and self.words[self.at] == "|":
+            self.at += 1
+            arms.append(self.sequence())
+        return ("alt", arms) if len(arms) > 1 else arms[0]
+
+    def sequence(self):
+        items = []
+        while self.at < len(self.words) \
+                and self.words[self.at] not in ("|", ")"):
+            items.append(self.item())
+        if not items:
+            raise ValueError("an empty alternative")
+        return ("seq", items)
+
+    def item(self):
+        word = self.words[self.at]
+        if word == "(":
+            self.at += 1
+            atom = self.alternation()
+            if self.at >= len(self.words) or self.words[self.at] != ")":
+                raise ValueError("an unclosed group")
+            self.at += 1
+        elif word.startswith('"'):
+            self.at += 1
+            atom = ("lit", unescape(word[1:-1]))
+            #  '"a" ... "z"' is a byte range, which the lexical layer reads.
+            if self.at + 1 < len(self.words) and self.words[self.at] == "...":
+                upper = self.words[self.at + 1]
+                self.at += 2
+                atom = ("range", word[1:-1], upper[1:-1])
+        elif word.startswith("any byte"):
+            self.at += 1
+            atom = ("byte", None)
+        else:
+            self.at += 1
+            atom = ("rule", word)
+
+        while self.at < len(self.words) and self.words[self.at] in "?*+":
+            atom = (self.words[self.at], atom)
+            self.at += 1
+        return atom
+
+
+def grammar_uses(node, into):
+    kind = node[0]
+    if kind == "rule":
+        into.add(node[1])
+    elif kind in ("alt", "seq"):
+        for child in node[1]:
+            grammar_uses(child, into)
+    elif kind in ("?", "*", "+"):
+        grammar_uses(node[1], into)
+
+
+def grammar_signs(trees):
+    """Every sign the productions spell."""
+    signs = set()
+
+    def walk(node):
+        kind = node[0]
+        #  A sign is punctuation.  A word, a name with digits in it like
+        #  u32, and an escape the lexical layer spells are all not.
+        if kind == "lit" and not re.match(r"^[\\A-Za-z0-9_]", node[1]):
+            signs.add(node[1])
+        elif kind in ("alt", "seq"):
+            for child in node[1]:
+                walk(child)
+        elif kind in ("?", "*", "+"):
+            walk(node[1])
+
+    for tree in trees.values():
+        walk(tree)
+    return signs
+
+
+def lexical_matches(trees, rule, text):
+    """Does one lexical rule derive exactly these bytes?
+
+    Without this the checker would take identifier on trust, and a rule
+    that admits a lone '_' as a name would pass while the prose said
+    otherwise -- which is what happened.
+    """
+    seen = {}
+
+    def item(node, at):
+        key = (id(node), at)
+        if key in seen:
+            return seen[key]
+        seen[key] = ()
+        kind = node[0]
+
+        if kind == "lit":
+            ends = ((at + len(node[1]),)
+                    if text.startswith(node[1], at) else ())
+        elif kind == "range":
+            ends = ((at + 1,) if at < len(text)
+                    and node[1] <= text[at] <= node[2] else ())
+        elif kind == "byte":
+            ends = (at + 1,) if at < len(text) else ()
+        elif kind == "rule":
+            ends = item(trees[node[1]], at) if node[1] in trees else ()
+        elif kind == "alt":
+            ends = tuple(sorted({e for arm in node[1] for e in item(arm, at)}))
+        elif kind == "seq":
+            reached = {at}
+            for child in node[1]:
+                following = set()
+                for position in reached:
+                    following |= set(item(child, position))
+                reached = following
+                if not reached:
+                    break
+            ends = tuple(sorted(reached))
+        elif kind == "?":
+            ends = tuple(sorted({at} | set(item(node[1], at))))
+        elif kind in ("*", "+"):
+            reached = set() if kind == "+" else {at}
+            frontier = {at}
+            while frontier:
+                following = set()
+                for position in frontier:
+                    for end in item(node[1], position):
+                        if end not in reached and end != position:
+                            following.add(end)
+                reached |= following
+                frontier = following
+            ends = tuple(sorted(reached))
+        else:
+            ends = ()
+
+        seen[key] = ends
+        return ends
+
+    return rule in trees and len(text) in item(trees[rule], 0)
+
+
+def landin_tokens(source, signs, trees=None):
+    """(kind, spelling) per token, or (None, complaint).
+
+    Written from the lexical rules rather than generated from them.  A
+    tokeniser generated from the grammar could not catch a grammar whose
+    lexical rules do not produce the tokens its upper rules need, which is
+    the defect this whole exercise exists to catch.
+    """
+    out, i, n = [], 0, len(source)
+    ordered = sorted(signs, key=len, reverse=True)
+
+    while i < n:
+        char = source[i]
+
+        #  Whitespace is whatever the space rule spells, so dropping a
+        #  byte from that rule is a change a fixture can notice.
+        if char in " \t\r\n":
+            if trees and not lexical_matches(trees, "space", char) \
+                    and not lexical_matches(trees, "line_end", char):
+                return None, "no rule spells the whitespace byte %r" % char
+            i += 1
+            continue
+
+        if source.startswith("--(", i):
+            depth, i = 1, i + 3
+            while i < n and depth:
+                if source.startswith("--(", i):
+                    depth, i = depth + 1, i + 3
+                elif source.startswith(")--", i):
+                    depth, i = depth - 1, i + 3
+                else:
+                    i += 1
+            if depth:
+                return None, "a block comment is never closed"
+            continue
+
+        if source.startswith("--", i):
+            while i < n and source[i] not in "\r\n":
+                i += 1
+            continue
+
+        if char.isdigit():
+            start = i
+            while i < n and (source[i].isalnum() or source[i] == "_"):
+                i += 1
+            run = source[start:i]
+            if trees and not lexical_matches(trees, "integer", run):
+                return None, "%r is not an integer the rules spell" % run
+            out.append(("integer", run))
+            continue
+
+        if char.islower() or char == "_":
+            start = i
+            while i < n and (source[i].islower() or source[i].isdigit()
+                             or source[i] == "_"):
+                i += 1
+            run = source[start:i]
+            #  The discard of [1020] is its own token: the identifier rule
+            #  deliberately refuses a lone '_', so nothing else would take
+            #  it.
+            if run == "_":
+                out.append(("sign", "_"))
+                continue
+            if trees and not lexical_matches(trees, "keyword", run) \
+                    and not lexical_matches(trees, "identifier", run):
+                return None, "%r is neither a keyword nor a name" % run
+            out.append(("word", run))
+            continue
+
+        for sign in ordered:
+            if source.startswith(sign, i):
+                out.append(("sign", sign))
+                i += len(sign)
+                break
+        else:
+            return None, "no rule spells %r" % char
+
+    return out, None
+
+
+def grammar_recognises(rules, trees, tokens, start="program"):
+    """Does the grammar derive exactly this token list?"""
+    reserved = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
+    seen = {}
+
+    def item(node, at):
+        key = (id(node), at)
+        if key in seen:
+            return seen[key]
+        seen[key] = ()
+        kind = node[0]
+
+        if kind == "lit":
+            ends = ()
+            if at < len(tokens) and tokens[at][1] == node[1]:
+                ends = (at + 1,)
+        elif kind == "byte":
+            ends = (at + 1,) if at < len(tokens) else ()
+        elif kind == "rule":
+            name = node[1]
+            if name in TOKEN_KIND_RULES:
+                ends = ()
+                if at < len(tokens):
+                    token_kind, text = tokens[at]
+                    wanted = TOKEN_KIND_RULES[name]
+                    if wanted == "name":
+                        ends = ((at + 1,) if token_kind == "word"
+                                and text not in reserved else ())
+                    elif wanted == "integer":
+                        ends = (at + 1,) if token_kind == "integer" else ()
+                    else:
+                        ends = ((at + 1,)
+                                if token_kind == "integer"
+                                or text in ("true", "false") else ())
+            elif name in LEXICAL_RULES:
+                ends = (at + 1,) if at < len(tokens) else ()
+            elif name in trees:
+                ends = item(trees[name], at)
+            else:
+                ends = ()
+        elif kind == "alt":
+            ends = tuple(sorted({e for arm in node[1] for e in item(arm, at)}))
+        elif kind == "seq":
+            reached = {at}
+            for child in node[1]:
+                following = set()
+                for position in reached:
+                    following |= set(item(child, position))
+                reached = following
+                if not reached:
+                    break
+            ends = tuple(sorted(reached))
+        elif kind == "?":
+            ends = tuple(sorted({at} | set(item(node[1], at))))
+        elif kind in ("*", "+"):
+            reached = set() if kind == "+" else {at}
+            frontier = {at}
+            while frontier:
+                following = set()
+                for position in frontier:
+                    for end in item(node[1], position):
+                        if end not in reached and end != position:
+                            following.add(end)
+                reached |= following
+                frontier = following
+            ends = tuple(sorted(reached))
+        else:
+            ends = ()
+
+        seen[key] = ends
+        return ends
+
+    return len(tokens) in item(trees[start], 0)
+
+
+def read_grammar(path):
+    """(rules, trees, problems) for one tour file."""
+    text = io.open(path, encoding="utf-8").read()
+    offset, section = grammar_section(text)
+    if section is None:
+        return {}, {}, []
+
+    rules, order, raw = grammar_rules(section)
+    out = [(n + offset, why) for n, why in raw]
+
+    trees = {}
+    for name, line in order:
+        try:
+            trees[name] = Notation(name, rules[name]).parse()
+        except ValueError as complaint:
+            out.append((line + offset, "grammar notation: %s" % complaint))
+
+    used = set()
+    for tree in trees.values():
+        grammar_uses(tree, used)
+    for name in sorted(used - set(trees) - LEXICAL_RULES):
+        out.append((offset + 1,
+                    "grammar rule %r is used and not defined" % name))
+
+    #  Stated in the prose of [1760] and easy to lose from the rule.
+    if "identifier" in trees:
+        if lexical_matches(trees, "identifier", "_"):
+            out.append((offset + 1, "the identifier rule admits a lone '_', "
+                                    "which is the discard of [1020]"))
+        if not lexical_matches(trees, "identifier", "a_name1"):
+            out.append((offset + 1,
+                        "the identifier rule refuses an ordinary name"))
+
+    if "program" not in trees:
+        out.append((offset + 1, "the grammar has no 'program' rule"))
+    else:
+        reachable = set()
+        frontier = {"program"} | (LEXICAL_RULES & set(trees))
+        while frontier:
+            name = frontier.pop()
+            if name in reachable or name not in trees:
+                continue
+            reachable.add(name)
+            names = set()
+            grammar_uses(trees[name], names)
+            frontier |= names - reachable
+        for name in sorted(set(trees) - reachable):
+            out.append((offset + 1, "grammar rule %r is unreachable" % name))
+
+    return rules, trees, sorted(set(out))
 
 
 def check_roadmap(path):
@@ -614,6 +1080,84 @@ def check_pinned_toolchain(full_run):
     return out
 
 
+def check_grammar_corpus(full_run):
+    """The grammar derives every positive fixture and no negative one.
+
+    This is the check that earns the rest of the grammar machinery: a
+    production that cannot derive real source, or a construct the kernel
+    should refuse and does not, fails here in a second rather than in a
+    review.  R1.40's parser has to agree with the same corpus, and a
+    disagreement between the two is a defect in one of them.
+    """
+    if not full_run:
+        return []
+
+    tour = os.path.join(ROOT, "tour.txt")
+    if not os.path.exists(tour):
+        return []
+
+    rules, trees, problems = read_grammar(tour)
+    out = [("tour.txt", n, why) for n, why in problems]
+    if not trees or "program" not in trees:
+        return out
+
+    signs = grammar_signs(trees)
+    fixtures = os.path.join(ROOT, "compiler/tests/fixtures")
+
+    for kind, must_derive in (("positive", True), ("negative", False)):
+        directory = os.path.join(fixtures, kind)
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            case = os.path.join(directory, name)
+            if not os.path.isdir(case):
+                continue
+            for source in sorted(f for f in os.listdir(case)
+                                 if f.endswith(".ldn")):
+                path = os.path.join(case, source)
+                where = "compiler/tests/fixtures/%s/%s/%s" % (kind, name,
+                                                             source)
+                text = io.open(path, encoding="utf-8").read()
+                tokens, complaint = landin_tokens(text, signs, trees)
+                derives = (tokens is not None
+                           and grammar_recognises(rules, trees, tokens))
+
+                if must_derive and not derives:
+                    out.append((where, 1,
+                                "the grammar does not derive this: %s"
+                                % (complaint or "no derivation")))
+                elif not must_derive and derives:
+                    out.append((where, 1,
+                                "the grammar derives this, and a negative "
+                                "fixture must not be derivable"))
+
+    #  R1.10 asks for every production traced to its constructs.  The
+    #  fixtures carry the citations, so the trace is checkable: a construct
+    #  in the grammar that no fixture names is a rule nothing pins.
+    cited = set()
+    for kind in ("positive", "negative"):
+        directory = os.path.join(fixtures, kind)
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            meta = os.path.join(directory, name, "fixture.meta")
+            if os.path.exists(meta):
+                cited |= set(re.findall(
+                    r"\[(\d{4})\]",
+                    io.open(meta, encoding="utf-8").read()))
+
+    section_text = "\n".join(grammar_section(
+        io.open(tour, encoding="utf-8").read())[1] or [])
+    for construct in sorted(set(re.findall(r"^-- \[(\d{4})\]",
+                                           section_text, re.M))):
+        if construct not in cited:
+            out.append(("tour.txt", 1,
+                        "grammar construct [%s] is named by no fixture"
+                        % construct))
+
+    return out
+
+
 def check_stale_backlog(paths, full_run):
     """No live document points at the retired work authority."""
     out = []
@@ -665,6 +1209,7 @@ def main(argv):
     stale_paths = LIVE_DOCS if full_run else paths
     extra += check_stale_backlog(stale_paths, full_run)
     extra += check_pinned_toolchain(full_run)
+    extra += check_grammar_corpus(full_run)
     for path, line, why in sorted(set(extra)):
         total += 1
         print("%-30s %5d  %s" % (path, line, why))

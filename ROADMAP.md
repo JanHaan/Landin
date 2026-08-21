@@ -267,7 +267,7 @@ not wait for raw storage, generics or Cortex-M, but it includes the minimum
 SysV/ELF ABI needed to run rather than calling verified IR an executable.
 
 ### R1.10 — Add the normative kernel grammar
-Status: planned
+Status: complete
 Depends on: R0.30
 
 Add lexical rules, the precedence table, and statement/expression productions
@@ -281,6 +281,15 @@ Exit evidence: every enabled production and precedence relation has positive,
 negative and ambiguity cases; constructs outside the kernel are explicitly
 not yet enabled rather than guessed.
 
+The grammar is `[1740]`–`[1830]`, and `check.py` reads it rather than trusting
+it: every rule defined and reachable, every `.ldn` under
+`compiler/tests/fixtures/positive` derivable, every one under `negative` not,
+and every construct named by a fixture. Thirty-seven positive and nineteen
+negative cases; nine of the negatives are constructs the tour describes and
+the kernel refuses by `[1830]`, and one is the multi-error file R1.40 needs.
+Two rounds of reading the grammar by hand found sixty-eight defects and still
+missed that a lone `_` parsed as a name, which is why the corpus exists.
+
 ### R1.20 — Implement lexical analysis
 Status: planned
 Depends on: R1.10, R0.40
@@ -289,10 +298,10 @@ Implement byte-oriented tokenization, literal validation, comments and unknown
 input recovery. Preserve source spans and never infer syntax from `check.py`'s
 keyword heuristics.
 
-Settle the line terminator here, normatively, in `tour.txt`. R0.40's line map
-accepts LF, CR LF and a lone CR so that a diagnostic never points at the wrong
-line, and says in its own comment that this is presentation rather than lexis.
-Confirming or narrowing it is this item's, and the map follows the decision.
+`[1750]` states the line terminator: LF, CR LF, or a CR not followed by LF,
+and a file need not end with one. That rule is R1.10's, because a terminator
+is a lexical rule; implementing and testing it is this item's, and R0.40's
+line map already keeps it.
 
 Exit evidence: the lexical corpus covers valid tokens, invalid escapes,
 unknown bytes, boundaries and deterministic recovery.

@@ -1,0 +1,4 @@
+f: () -> none =
+    loop do
+    end loop
+end f

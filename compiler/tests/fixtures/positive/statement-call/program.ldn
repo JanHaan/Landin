@@ -1,0 +1,8 @@
+quiet: (m: i32) -> none =
+    return
+end quiet
+
+use: () -> none =
+    quiet(1)
+    quiet(2)
+end use

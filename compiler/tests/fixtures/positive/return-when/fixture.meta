@@ -1,0 +1,4 @@
+class: positive
+summary: [1810] return takes a condition
+program: program.ldn
+targets: linux-x86-64, macos-arm64

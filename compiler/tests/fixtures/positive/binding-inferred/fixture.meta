@@ -1,0 +1,4 @@
+class: positive
+summary: [1790] the inferred form takes its type from the value
+program: program.ldn
+targets: linux-x86-64, macos-arm64

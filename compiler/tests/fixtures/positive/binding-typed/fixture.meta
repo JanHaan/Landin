@@ -1,0 +1,4 @@
+class: positive
+summary: [1790] a binding with a type and a value
+program: program.ldn
+targets: linux-x86-64, macos-arm64

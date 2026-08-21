@@ -1,0 +1,3 @@
+f: () -> (r: i32) ! not_found =
+    r = 1
+end f

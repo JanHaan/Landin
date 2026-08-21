@@ -56,9 +56,13 @@ Use the repository documents in this order:
 4. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
 5. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the documents the R0 gate cites — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
 
+`check.py` also checks the grammar in `tour.txt`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive` while refusing every one under `negative`. A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. Do not weaken a fixture to make a grammar change pass — the corpus is the agreement R1.40's parser has to meet.
+
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 
 Every document above is also published as a reading copy at https://sinnfrei.srht.site, rendered by `docs/site/render_html.py`. The text files are the sources; the pages are generated and never edited by hand.
+
+Syntax highlighting lives in `highlight/`, not in the site renderer. `highlight/landin_highlight.py` is the one token scanner every Landin highlighter renders — the pages as HTML spans, `highlight/landin_pygments.py` as Pygments tokens, and a TextMate and a tree-sitter grammar later. Add a keyword there rather than in a consumer, and keep it standard-library-only so the site keeps its no-dependency build. `check.py`'s own list of reserved words is deliberately separate: that one is about legality, this one about colour. See `highlight/README.md`.
 
 ## Prototype coverage
 

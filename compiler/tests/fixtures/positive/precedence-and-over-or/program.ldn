@@ -1,0 +1,1 @@
+f: (a: bool, b: bool, c: bool) -> (r: bool) = a or b and c end

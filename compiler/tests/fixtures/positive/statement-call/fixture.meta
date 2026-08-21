@@ -1,0 +1,4 @@
+class: positive
+summary: [1810] a call is a statement, so none-returning functions are reachable
+program: program.ldn
+targets: linux-x86-64, macos-arm64

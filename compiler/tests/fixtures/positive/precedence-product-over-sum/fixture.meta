@@ -1,0 +1,4 @@
+class: positive
+summary: [1820] product binds tighter than sum: 1 + 2 * 3 is 7, not 9
+program: program.ldn
+targets: linux-x86-64, macos-arm64

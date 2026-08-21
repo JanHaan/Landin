@@ -1795,6 +1795,217 @@ end panic_handler
 
 
 ----------------------------------------------------------------------
+THE GRAMMAR OF THE ENABLED KERNEL
+----------------------------------------------------------------------
+
+This section is the normative grammar, and it is deliberately partial. It
+covers the constructs the compiler enables today and nothing else, so that
+what a program may say and what the compiler will accept are the same
+sentence. It grows one slice at a time, and a construct described elsewhere
+in this tour but absent here is not enabled yet: the compiler says so by
+[1830] rather than guessing.
+
+The notation is ordinary: a name in lower case is a rule, a quoted word is
+itself, '?' is optional, '*' is none or more, '+' is one or more, '...'
+between two quoted bytes is every byte from one to the other, 'any byte' is
+exactly that, and parentheses group. Nothing here is a parser generator's
+input. The parser is hand written, and this is the agreement it is written
+against.
+
+The rules come in two layers, and the difference matters. The lexical layer
+reads bytes. identifier, keyword and literal each produce one token; space,
+line_end and comment produce no token at all and are discarded where they
+are found; the rest of that layer spells out part of one of those and
+produces nothing of its own. Every other rule reads the tokens that remain,
+and a quoted word or sign in one of them stands for the single token
+spelled that way. A token is as long as it can be, comments excepted, whose
+opener decides [1780]: 'inc' followed by 'x' with nothing between them is
+the one name 'incx', which is why [1750] says what separates two tokens.
+
+-- [1740] A program is declarations, in any order.
+--       Order inside a module does not matter [0130], so a file is a set of
+--       declarations rather than a sequence of them, and a name may be used
+--       above the line that introduces it. 'public' rides on a declaration
+--       and not on a statement [0090]: what a module exports is decided
+--       where the module is written, never inside a body.
+program     ::= declaration*
+declaration ::= "public"? (binding | function)
+
+-- [1750] A source file is bytes, a line ends three ways, and space
+--       separates tokens.
+--       A span in a diagnostic names a byte, and every later stage must be
+--       able to point at the same one, so the lexical rules are written
+--       over bytes. A line ends at LF, at CR followed by LF, or at a CR
+--       that is not followed by LF, and a file need not end with one at
+--       all. Text inside a literal or a comment may be any UTF-8 [0260];
+--       nothing outside them may be.
+--       Space is a space byte, a tab, a line end or a comment [1780], and
+--       any run of them may sit between two tokens. Two tokens whose
+--       spellings would run together into one longer token need at least
+--       one, which is the whole of the rule: 'mut x' is two tokens and
+--       'mutx' is one name. Otherwise space carries no meaning, and no
+--       rule below this layer mentions it.
+space       ::= " " | "\t" | line_end | comment
+line_end    ::= "\n" | "\r\n" | "\r"
+
+-- [1760] Identifiers are lower case, and no identifier is a keyword.
+--       Every name in the language has this one shape: types, functions,
+--       bindings and fields alike, which is why the tour never needs to say
+--       which case a thing is written in.
+--       Two rules narrow it. A word the keyword rule spells is that
+--       keyword and never a name, so 'if' is not available as a binding;
+--       that one is the tokeniser's. The other is in the rule itself: a
+--       name that starts with '_' needs something after it, so the lone
+--       '_' is the discard of [1020] and nothing may be called it. The
+--       kernel
+--       reserves seventeen words; the reserved set of the whole language is
+--       larger, and each word joins it with the construct that introduces
+--       it, so a program that avoids a construct never trips over its
+--       keyword. Type names are not among them: u32 and bool are ordinary
+--       declared names [0120] that the kernel happens to predeclare.
+identifier  ::= lower (lower | digit | "_")*
+              | "_" (lower | digit | "_")+
+lower       ::= "a" ... "z"
+digit       ::= "0" ... "9"
+keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
+              | "end" | "return" | "when" | "inc" | "dec" | "none"
+              | "true" | "false" | "and" | "or" | "not"
+
+-- [1770] The kernel's literals are integers and the two booleans.
+--       Integer literals are untyped and take the type of their context
+--       [0190], defaulting to i32 with none [0200]; the bases and the
+--       separator are [0220]'s. Floats [0210], characters [0250], text
+--       [0260] and raw literals [0280] are described in this tour and are
+--       not enabled yet.
+literal     ::= integer | "true" | "false"
+integer     ::= decimal | hex | octal | binary
+decimal     ::= digit (digit | "_")*
+hex         ::= "0x" hex_digit (hex_digit | "_")*
+octal       ::= "0o" octal_digit (octal_digit | "_")*
+binary      ::= "0b" binary_digit (binary_digit | "_")*
+hex_digit   ::= digit | "a" ... "f" | "A" ... "F"
+octal_digit ::= "0" ... "7"
+binary_digit ::= "0" | "1"
+
+-- [1780] A comment ends a token, and its opener says which kind it is.
+--       The three forms are [0010], [0020] and [0030], and their openers
+--       share a prefix, so length cannot tell them apart: the longest
+--       opener decides. '--(' opens a block comment, '---' a doc comment
+--       and '--' a line comment, and the form so chosen decides where the
+--       comment ends rather than the rule that a token is as long as it
+--       can be. A line or doc comment ends at the line end. A block
+--       comment ends at its own ')--', so it may sit between two tokens on
+--       one line, and it nests: a ')--' closing an inner one does not
+--       close it, which is why commenting out a region that already
+--       contains one is not a trap. One never closed runs to the end of
+--       the file and is reported there. A comment is space [1750], so it
+--       may appear wherever a space may.
+comment       ::= block_comment | doc_comment | line_comment
+block_comment ::= "--(" block_item* ")--"
+block_item    ::= block_comment
+                | any byte that begins neither "--(" nor ")--"
+doc_comment   ::= "---" (any byte except line_end)*
+line_comment  ::= "--" (any byte except line_end)*
+
+-- [1790] A binding names one thing, and says how much it may change.
+--       The full form, the inferred form and the mutable form are [0040],
+--       [0050] and [0060]; a binding with no value must be assigned before
+--       it is read [0080]. The kernel's types are the scalar names only:
+--       several names sharing one declaration [0100], types the program
+--       declares [0120], structs, variants and the rest of TYPES YOU
+--       DECLARE are not enabled yet.
+binding     ::= "mut"? identifier ":" type ("=" expression)?
+              | "mut"? identifier ":=" expression
+type        ::= "u8" | "u16" | "u32" | "u64"
+              | "i8" | "i16" | "i32" | "i64"
+              | "usize" | "isize" | "bool"
+
+-- [1800] A function is a value with a body, and its returns are named.
+--       '=' opens the body and 'end' closes it [0870]; a body that is one
+--       expression still takes an end, and the expression fills the named
+--       return [0880]; every named return must be assigned before the
+--       function returns [0930]. The error channel [0940], the parameter
+--       conventions [0900], multiple returns [0920], 'escaping' [0780],
+--       generic parameters [1290] and anonymous functions [1010] are all
+--       described in this tour and are not enabled yet: the kernel takes
+--       values in and hands one value or none back.
+--       A body is statements, or it is the one expression that fills the
+--       return. One token past a leading name decides between them: ':'
+--       opens a binding and '=' an assignment, and anything else means the
+--       body is that expression. A function returning none has no
+--       expression form, because there is no return for one to fill.
+function    ::= identifier ":" signature "=" body "end" identifier?
+signature   ::= "(" parameters? ")" "->" returns
+parameters  ::= parameter ("," parameter)*
+parameter   ::= identifier ":" type
+returns     ::= "(" identifier ":" type ")" | "none"
+body        ::= statement* | expression
+
+-- [1810] Statements do one thing each, and only exits carry 'when'.
+--       Assignment is a statement and never an expression [0390]; there is
+--       no '++', and 'inc' and 'dec' are statements too [0400]; discarding
+--       a result is written out [1020]; the one-line form of every
+--       construct is [1060]. 'when' rides on an exit and on nothing else,
+--       which is what keeps a conditional statement from having two
+--       spellings.
+--       'return' carries no value. A named return is assigned like any
+--       other place and 'return' leaves [0930], which is why the kernel
+--       needs no second way to say what a function hands back.
+--       A call is a statement as well as an expression, because a function
+--       returning none has nothing to bind and [1020] wants a result
+--       discarded on purpose rather than by omission. A call whose result
+--       is dropped that way is the one place the kernel accepts an
+--       expression standing alone.
+statement   ::= binding | assignment | increment | discard | call
+              | return | if
+assignment  ::= place "=" expression
+increment   ::= ("inc" | "dec") place
+discard     ::= "_" "=" expression
+return      ::= "return" ("when" expression)?
+if          ::= "if" expression "then" statement*
+                ("elsif" expression "then" statement*)*
+                ("else" statement*)?
+                "end" "if"
+place       ::= identifier
+
+-- [1820] Precedence, tightest first, and comparison does not chain.
+--       The operators are the ones OPERATORS already decided: [0290] for
+--       arithmetic, [0300] for the wrapping forms,
+--       [0330] for the bitwise set, [0320] for shifts, [0350] for
+--       comparison and [0340] for the logical words. Every binary level
+--       below is left associative, which the repetition in each rule is
+--       what says.
+--       Comparison takes at most one operator, so 'a < b < c' is not a
+--       sentence in this grammar rather than a fold: a chain that read
+--       left to right would compare a bool with a number, and [0310]
+--       refuses that anyway.
+--       Evaluation order is left to right and fixed [0410], so the table
+--       decides what binds, never what runs first.
+primary     ::= literal | identifier | call | "(" expression ")"
+call        ::= identifier "(" arguments? ")"
+arguments   ::= expression ("," expression)*
+unary       ::= ("-" | "~" | "not")* primary
+product     ::= unary (("*" | "/" | "%" | "*%") unary)*
+sum         ::= product (("+" | "-" | "+%" | "-%") product)*
+shift       ::= sum (("<<" | ">>") sum)*
+conjunction ::= shift ("&" shift)*
+exclusion   ::= conjunction ("^" conjunction)*
+alternation ::= exclusion ("|" exclusion)*
+comparison  ::= alternation (("==" | "<>" | "<" | "<=" | ">" | ">=")
+                             alternation)?
+logical_and ::= comparison ("and" comparison)*
+expression  ::= logical_and ("or" logical_and)*
+
+-- [1830] What is not enabled is refused, and named.
+--       A construct this tour describes and this grammar omits is not a
+--       guess the compiler gets to make. Meeting one is a diagnostic that
+--       names the construct and says which work enables it, so a program
+--       written against the whole tour fails with a list rather than with a
+--       parse error. The roadmap owns that list; this grammar owns what is
+--       already true.
+
+
+----------------------------------------------------------------------
 THE PRINCIPLES BEHIND THE DECISIONS
 ----------------------------------------------------------------------
 

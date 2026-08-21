@@ -1,0 +1,4 @@
+class: positive
+summary: [1740] public rides on a declaration
+program: program.ldn
+targets: linux-x86-64, macos-arm64

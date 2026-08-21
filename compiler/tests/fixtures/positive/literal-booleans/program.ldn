@@ -1,0 +1,2 @@
+yes: bool = true
+no: bool = false

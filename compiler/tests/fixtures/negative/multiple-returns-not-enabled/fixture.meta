@@ -1,0 +1,4 @@
+class: negative
+summary: [1830] multiple named returns are [0920] and not enabled
+program: program.ldn
+targets: linux-x86-64, macos-arm64

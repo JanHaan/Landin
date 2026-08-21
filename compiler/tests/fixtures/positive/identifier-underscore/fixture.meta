@@ -1,0 +1,4 @@
+class: positive
+summary: [1760] an underscore may lead or sit inside a name
+program: program.ldn
+targets: linux-x86-64, macos-arm64

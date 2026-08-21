@@ -1,0 +1,4 @@
+class: positive
+summary: [1810] inc and dec are statements, not operators
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,4 @@
+class: negative
+summary: [1830] floats are described by [0210] and not enabled; the report must name the construct and the work that enables it
+program: program.ldn
+targets: linux-x86-64, macos-arm64

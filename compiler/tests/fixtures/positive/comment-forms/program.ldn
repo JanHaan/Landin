@@ -1,0 +1,4 @@
+-- a line comment
+--- a doc comment
+--( a block --( nested )-- one )--
+f: () -> (r: i32) = 1 --( here )-- + 2 end
