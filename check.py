@@ -309,6 +309,15 @@ TOKEN_KIND_RULES = {"identifier": "name", "integer": "integer",
                     "literal": "literal"}
 
 PRODUCTION = re.compile(r"^([a-z_]+)\s+::=\s*(.*)$")
+
+#  Byte classes, spelled out.  Python's own predicates are about Unicode:
+#  'e' with an accent is lower case to str.islower and an Eastern Arabic
+#  numeral is a digit to str.isdigit, so a scanner built on them swallows a
+#  byte [1750] does not allow outside a comment and then blames the name it
+#  landed in.  A span that names the wrong bytes is worse than no span.
+LETTERS = frozenset("abcdefghijklmnopqrstuvwxyz")
+UPPER = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+DIGITS = frozenset("0123456789")
 NOTATION_WORD = re.compile(
     r'\s*("(?:[^"\\]|\\.)*"'
     r'|any byte(?: that begins neither "[^"]*" nor "[^"]*")?'
@@ -562,9 +571,10 @@ def landin_tokens(source, signs, trees=None):
                 i += 1
             continue
 
-        if char.isdigit():
+        if char in DIGITS:
             start = i
-            while i < n and (source[i].isalnum() or source[i] == "_"):
+            while i < n and (source[i] in DIGITS or source[i] in LETTERS
+                             or source[i] in UPPER or source[i] == "_"):
                 i += 1
             run = source[start:i]
             if trees and not lexical_matches(trees, "integer", run):
@@ -572,9 +582,9 @@ def landin_tokens(source, signs, trees=None):
             out.append(("integer", run))
             continue
 
-        if char.islower() or char == "_":
+        if char in LETTERS or char == "_":
             start = i
-            while i < n and (source[i].islower() or source[i].isdigit()
+            while i < n and (source[i] in LETTERS or source[i] in DIGITS
                              or source[i] == "_"):
                 i += 1
             run = source[start:i]
@@ -1104,6 +1114,18 @@ def check_grammar_corpus(full_run):
     signs = grammar_signs(trees)
     fixtures = os.path.join(ROOT, "compiler/tests/fixtures")
 
+    #  The corpus is read as bytes, and this is what says so.  Python's
+    #  text mode turns CR LF and a lone CR into LF, and a reader that did
+    #  that could not test the terminator rule [1750] states however many
+    #  fixtures were written for it.
+    witness = os.path.join(fixtures, "positive/line-ends-crlf/program.ldn")
+    if os.path.exists(witness):
+        if "\r" not in io.open(witness, "rb").read().decode("latin-1"):
+            out.append(("compiler/tests/fixtures/positive/line-ends-crlf"
+                        "/program.ldn", 1,
+                        "this fixture must carry a CR byte, and the corpus "
+                        "must be read as bytes to see it"))
+
     for kind, must_derive in (("positive", True), ("negative", False)):
         directory = os.path.join(fixtures, kind)
         if not os.path.isdir(directory):
@@ -1117,7 +1139,11 @@ def check_grammar_corpus(full_run):
                 path = os.path.join(case, source)
                 where = "compiler/tests/fixtures/%s/%s/%s" % (kind, name,
                                                              source)
-                text = io.open(path, encoding="utf-8").read()
+                #  Bytes, not text: Python's text mode turns CR LF and a
+                #  lone CR into LF, so a reader that used it could never
+                #  test the terminator rule [1750] stated, and its offsets
+                #  would be character offsets rather than byte offsets.
+                text = io.open(path, "rb").read().decode("latin-1")
                 tokens, complaint = landin_tokens(text, signs, trees)
                 derives = (tokens is not None
                            and grammar_recognises(rules, trees, tokens))
@@ -1130,6 +1156,23 @@ def check_grammar_corpus(full_run):
                     out.append((where, 1,
                                 "the grammar derives this, and a negative "
                                 "fixture must not be derivable"))
+
+                #  A fixture may pin the complaint as well as the refusal.
+                #  Refusing for the wrong reason means the wrong span, and
+                #  a span that names the wrong bytes is the defect.
+                meta = os.path.join(case, "fixture.meta")
+                if os.path.exists(meta):
+                    wanted = re.search(
+                        r"^lex: (.+)$",
+                        io.open(meta, encoding="utf-8").read(), re.M)
+                    if wanted:
+                        expected = wanted.group(1).encode().decode(
+                            "unicode_escape")
+                        if complaint != expected:
+                            out.append((where, 1,
+                                        "the scanner says %r and the "
+                                        "fixture expects %r"
+                                        % (complaint, expected)))
 
     #  R1.10 asks for every production traced to its constructs.  The
     #  fixtures carry the citations, so the trace is checkable: a construct

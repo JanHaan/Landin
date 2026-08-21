@@ -1,0 +1,4 @@
+class: positive
+summary: [1750] CR LF ends a line
+program: program.ldn
+targets: linux-x86-64, macos-arm64

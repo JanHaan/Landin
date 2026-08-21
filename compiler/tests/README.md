@@ -96,6 +96,21 @@ Two rounds of reading the grammar by hand found sixty-eight defects between
 them and still missed that a lone `_` parsed as a name. The corpus found
 that in a second.
 
+A negative fixture may add `lex: <complaint>` to pin why the scanner refused
+it, not merely that it did. Refusing for the wrong reason means the wrong
+span, and a span that names the wrong bytes is the defect rather than a
+detail of the message.
+
+Programs are read as bytes. Text mode would turn CR LF and a lone CR into
+LF, so the terminator rule `[1750]` states could not be tested however many
+fixtures were written for it; `positive/line-ends-crlf` carries a CR byte and
+the checker asserts it is still there when read.
+
+What the corpus cannot see, recorded so nobody assumes otherwise: it cannot
+tell CR LF read as one terminator from CR and LF read as two, because both
+produce the same tokens. The distinction belongs to the line map, and
+`Landin.Source`'s own case for it is what holds that.
+
 ## Derived programs
 
 The four prototype text files in the repository root stay exactly as they
