@@ -10,6 +10,7 @@ with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
 with Landin.Testing;
+with Landin.Tests.Catalogue_Suite;
 with Landin.Tests.Diagnostics_Suite;
 with Landin.Tests.Driver_Suite;
 with Landin.Tests.Fixture_Execution_Suite;
@@ -74,6 +75,7 @@ begin
       return;
    end if;
 
+   Landin.Tests.Catalogue_Suite.Register (Cases);
    Landin.Tests.Diagnostics_Suite.Register (Cases);
    Landin.Tests.Driver_Suite.Register (Cases);
    Landin.Tests.Fixture_Execution_Suite.Register (Cases);

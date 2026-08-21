@@ -140,6 +140,7 @@ package body Landin.Testing.Fixtures is
       Seen_Status  : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Lex     : Boolean := False;
+      Seen_Codes   : Boolean := False;
       Line_Number  : Natural := 0;
       First        : Integer := Content'First;
 
@@ -258,6 +259,13 @@ package body Landin.Testing.Fixtures is
                      end if;
                   end loop;
                end;
+
+            elsif Key = "codes" then
+               if Seen_Codes then
+                  Complain ("duplicate key: codes");
+                  return;
+               end if;
+               Seen_Codes := True;
 
             elsif Key = "lex" then
                if Seen_Lex then

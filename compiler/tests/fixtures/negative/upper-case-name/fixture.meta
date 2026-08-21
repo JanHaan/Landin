@@ -3,3 +3,4 @@ summary: [1760] identifiers are lower case, so an upper-case byte is not a name
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 lex: no rule spells 'X'
+codes: L0012

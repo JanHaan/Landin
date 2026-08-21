@@ -38,6 +38,7 @@ Fixture classes, and the directory each uses:
 | `status` | no | the exit status `refine` must produce (default 0) |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
+| `codes` | no | the diagnostic codes the report must carry, checked against the catalogue |
 | `targets` | no | comma-separated targets the fixture applies to |
 
 `targets` is checked against the targets `ROADMAP.md` names: `linux-x86-64`,
@@ -128,6 +129,18 @@ That is two independent implementations of one grammar, held to each other
 over every program in the corpus. The first thing it caught was real: the
 Ada scanner appended each file's tokens to the previous file's, because a
 limited `out` parameter is passed by reference and `Lex` had not cleared it.
+
+## diagnostics.catalogue
+
+`compiler/tests/diagnostics.catalogue` is generated: `python3 check.py
+--catalogue` writes it from `Landin.Diagnostics.Catalogue`, which is the only
+place in the compiler where a code is written. `check.py` regenerates it on
+every full run and fails if the committed copy is stale, and it refuses a code
+literal written anywhere else under `compiler/ada/src`.
+
+That check earned itself immediately: the driver had held `L0001` to `L0004`
+as literals since R0.50, and moving them into the catalogue was the first
+thing it demanded.
 
 ## Derived programs
 

@@ -1,4 +1,5 @@
 with Landin.Diagnostics;
+with Landin.Diagnostics.Catalogue;
 with Landin.Source;
 with Landin.Stages;
 with Landin.Targets;
@@ -9,13 +10,20 @@ package body Landin.Driver is
 
    LF : constant Character := Character'Val (10);
 
-   --  Codes the chassis itself can raise.  The catalogue proper belongs to
-   --  the frontend work in R1.30; these four exist because a driver that
-   --  cannot explain itself is not testable.
-   Code_No_Frontend    : constant Landin.Diagnostics.Code_String := "L0001";
-   Code_Unknown_Option : constant Landin.Diagnostics.Code_String := "L0002";
-   Code_Unreadable     : constant Landin.Diagnostics.Code_String := "L0003";
-   Code_Unknown_Target : constant Landin.Diagnostics.Code_String := "L0004";
+   --  The codes come from the catalogue, which is the only place in this
+   --  compiler where a code is written.  These four were literals here
+   --  until R1.30 built it, and check.py now refuses a code written
+   --  anywhere else.
+   package Rows renames Landin.Diagnostics.Catalogue;
+
+   Code_No_Frontend : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.No_Frontend);
+   Code_Unknown_Option : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Unknown_Option);
+   Code_Unreadable : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Unreadable_Source);
+   Code_Unknown_Target : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Unknown_Target);
 
    function Identity return String is
      ("refine - the Landin bootstrap compiler" & LF

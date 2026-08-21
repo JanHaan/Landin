@@ -44,6 +44,8 @@ replaced.
 | `Landin.Tokens.Lexer` | the scan, and the only construction of a token | know what a token means |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
+| `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
+| `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific dependency | grow a second host concern |
@@ -73,6 +75,8 @@ R1.40. The scanner exists and is held to the grammar: `check.py` compares
 `Landin.Tokens`' reserved words with the tour's own `keyword` production, and
 the harness lexes every program in the corpus and compares each token with
 what `check.py`'s independent tokeniser produced.
+
+A diagnostic code is written in exactly one place, `Landin.Diagnostics.Catalogue`, and `check.py` refuses a code literal anywhere else in `src/`. Each column of the catalogue is an exhaustive case over the code names, so a code with no row is a missing-case error rather than a warning. The catalogue holds no prose: `L0003` is raised with two sentences, for a source that is missing and one that cannot be read, because one rule was violated and the difference between them is wording. What a code requires of every occurrence -- a source, a non-empty span, how many secondary labels, how many notes -- is in the row, and `Landin.Diagnostics.Lexical` checks the row against the diagnostic it just built.
 
 `Landin.Tokens` knows two things the kernel grammar does not, both on
 purpose. A band of deferred lexemes -- `1.5`, `"text"`, `+=`, `!` -- is read
