@@ -588,6 +588,21 @@ def check_pinned_toolchain(full_run):
                         "%s %s is not pinned in environments/pins.sh"
                         % (name, value)))
 
+    #  The nix shell is a fourth place a version could be written, so it is
+    #  held to reading the pins instead of naming one.
+    flake = os.path.join(ROOT, "flake.nix")
+    if os.path.exists(flake):
+        flake_text = io.open(flake, encoding="utf-8").read()
+        if "environments/pins.sh" not in flake_text:
+            out.append((flake, 1, "flake.nix does not read "
+                                  "environments/pins.sh"))
+        for name, pattern in wanted.items():
+            found = re.search(pattern, recipe_text)
+            if found and '"%s"' % found.group(1) in flake_text:
+                out.append((flake, 1,
+                            "flake.nix names %s literally instead of "
+                            "reading it from environments/pins.sh" % name))
+
     return out
 
 

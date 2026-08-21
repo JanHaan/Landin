@@ -73,13 +73,14 @@ export LANDIN_GPRBUILD_HOME=/path/to/gprbuild-26.0.0-1
 Every command prints the toolchain identification first, so a captured log
 names its own compiler.
 
-## Keeping the two records together
+## Keeping the records together
 
-`environments/linux-amd64/Containerfile` pins the same versions and the same
-checksums as this file, because the container is where the Linux archives are
-actually verified. `check.py` compares the two on a full run: two files naming
-a compiler version is two chances to be wrong, and the one that drifts is the
-one nobody reads.
+`environments/pins.sh` is the one place a version or a checksum is written.
+The container recipe, the CI manifest and the nix shell all read it, and
+`check.py` compares this file against it on a full run — including that
+`flake.nix` reads the pins rather than naming a version of its own. Several
+files naming a compiler version is several chances to be wrong, and the one
+that drifts is the one nobody reads.
 
 ## Newer local toolchains
 
