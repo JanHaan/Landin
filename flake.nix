@@ -137,12 +137,12 @@
               url = "${releases}/gprbuild-${gprbuildVersion}/gprbuild-${system}-${gprbuildVersion}.tar.gz";
               sha256 = pin "LANDIN_GPRBUILD_SHA256_${suffix}";
             }).overrideAttrs (previous: {
-              nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
-
-              #  The archive embeds its compiler database, so merely copying
-              #  an extra description beside it would not activate that file.
-              #  This description recognizes the wrapper while taking the Ada
-              #  runtime path from the pinned compiler's own GCC report.
+              #  The archive ships the standard compiler database, and the
+              #  standard GNAT description reports the prefix the pinned
+              #  gnatls names -- the archive, not the wrapper -- so gprbuild
+              #  would build with a compiler that cannot link.  This
+              #  description recognizes the wrapper instead, while taking the
+              #  Ada runtime path from the pinned compiler's own GCC report.
               postInstall = (previous.postInstall or "") + ''
                 mkdir -p "$out/share/landin-gprconfig"
                 substitute \
@@ -154,11 +154,23 @@
                      <grep regexp="^COLLECT_GCC=(.*)/bin/gcc" group="1"></grep>'
               '';
 
+              #  The description has to be named on the command line, and
+              #  makeWrapper cannot be the one to name it: it runs the real
+              #  program with argv[0] still pointing at the wrapper script,
+              #  and gprbuild 26 dies with a segmentation fault when argv[0]
+              #  is not the executable that is running.  That is exactly the
+              #  crash this shell reported, so these wrappers exec the real
+              #  program under its own name.
               postFixup = (previous.postFixup or "") + ''
-                wrapProgram "$out/bin/gprbuild" \
-                  --add-flags "--db $out/share/landin-gprconfig"
-                wrapProgram "$out/bin/gprconfig" \
-                  --add-flags "--db $out/share/landin-gprconfig"
+                for tool in gprbuild gprconfig; do
+                  mv "$out/bin/$tool" "$out/bin/.$tool-real"
+                  printf '#!%s\nexec "%s" --db "%s" "$@"\n' \
+                    "${pkgs.runtimeShell}" \
+                    "$out/bin/.$tool-real" \
+                    "$out/share/landin-gprconfig" \
+                    > "$out/bin/$tool"
+                  chmod +x "$out/bin/$tool"
+                done
               '';
             });
         in

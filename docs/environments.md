@@ -109,6 +109,13 @@ It sets `LANDIN_BUILD_TAG=nix`, so its object files stay out of the ones the
 other environments leave in the same checkout. `python3` and `hut` come with
 it, so `check.py` and `scripts/site.sh` work in that shell too.
 
+Its Linux behaviour is not settled by the local container, and that is not a
+formality. The pinned gprbuild dies with a segmentation fault when argv[0]
+names something other than the executable that is running — which is exactly
+what nixpkgs' `makeWrapper` arranges — and under Rosetta the same store paths
+ran without complaint. Evidence about this shell therefore comes from nix on
+x86-64 hardware, running the same scripts as every other environment.
+
 It is a convenience for editing on a nix machine and carries no authority of
 its own: the table above is unchanged by it, and a result produced in it is
 not evidence for any of the three environments. `flake.lock` pins the nixpkgs
