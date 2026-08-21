@@ -161,7 +161,11 @@ package Landin.Tokens is
      (Malformed_Integer_Run,
       Not_Enabled,
       Unknown_Byte_Run,
-      Unterminated_Block_Comment);
+      Unterminated_Block_Comment,
+      Unterminated_Literal);
+
+   subtype Unterminated_Fault is Fault_Kind
+     range Unterminated_Block_Comment .. Unterminated_Literal;
 
    type Fault is private;
 
@@ -173,10 +177,12 @@ package Landin.Tokens is
    --  nests [1780], so this is the outermost opener while Where is the end
    --  of the file: those are the two places a reader looks.
    function Opened_At (Item : Fault) return Landin.Source.Span
-     with Pre => Kind (Item) = Unterminated_Block_Comment;
+     with Pre => Kind (Item) in Unterminated_Fault;
 
+   --  Which construct was refused. An unterminated literal is refused as
+   --  well as unclosed, so both kinds carry it.
    function Refused (Item : Fault) return Deferred_Kind
-     with Pre => Kind (Item) = Not_Enabled;
+     with Pre => Kind (Item) in Not_Enabled | Unterminated_Literal;
 
    ------------------------------------------------------------------
    --  Streams
