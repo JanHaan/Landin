@@ -2,3 +2,4 @@ class: negative
 summary: [1820] comparison takes at most one operator, and the report must say so rather than folding
 program: program.ldn
 targets: linux-x86-64, macos-arm64
+codes: L0106

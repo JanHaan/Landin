@@ -34,6 +34,12 @@ package Landin.Testing.Fixtures is
    function Expect  (Item : Fixture) return String;
    function Targets (Item : Fixture) return String;
 
+   --  The diagnostic codes the report must carry, comma separated, in the
+   --  order the report carries them.  An ordered list and not a set: two
+   --  refused constructs in one file are two reports, and a regression
+   --  that doubles a count is invisible to a set.
+   function Codes   (Item : Fixture) return String;
+
    --  The arguments `refine` is run with, and the status it must exit with.
    --  A fixture that records an expectation and no way to produce it is
    --  dead data, so `expect` without `args` is a reported fault.
@@ -86,6 +92,7 @@ private
       Expect  : Unbounded.Unbounded_String;
       Targets : Unbounded.Unbounded_String;
       Args    : Unbounded.Unbounded_String;
+      Codes   : Unbounded.Unbounded_String;
       Status  : Integer := 0;
       Stream  : Stream_Choice := Merged;
    end record;

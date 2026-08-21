@@ -4,7 +4,7 @@
 #  regenerate with python3 check.py --catalogue.
 #
 #  code   state    rule
-L0001  Live     a source was read and no frontend is wired to the driver
+L0001  Retired  a source was read and no frontend is wired to the driver
 L0002  Live     an option the driver does not define
 L0003  Live     a source that is missing or cannot be read
 L0004  Live     a target no description names
@@ -13,3 +13,15 @@ L0011  Live     [1770]: a digit outside the base the prefix selected
 L0012  Live     [1750]: a run of bytes no rule spells
 L0013  Live     [1780]: a block comment that is never closed
 L0014  Live     [0260]: a quoted literal that is never closed
+L0100  Live     [1760]: a name position holds something that is not a name
+L0101  Live     [1790]: a type position holds no type the kernel enables
+L0102  Live     [1820]: an expression was required and none begins here
+L0103  Live     [1810]: a terminal the production spells is absent
+L0104  Live     [1800]: a construct whose closing `end` never arrives
+L0105  Live     [0390]: assignment is a statement, never an expression
+L0106  Live     [1820]: comparison takes at most one operator
+L0107  Live     [1810]: `return` carries no value; assign the named return
+L0108  Live     [1740]: `public` rides on a declaration, not a statement
+L0109  Live     [1800]: the name on `end` is not the name declared
+L0110  Live     [1740]: a run of tokens beginning no declaration or statement
+L0111  Live     an implementation limit on how deeply a construct nests

@@ -14,8 +14,9 @@ Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
 **Status: specification 0.1.0. The compiler does not compile anything yet.
-The bootstrap chassis is built, tested on three environments, and the
-language frontend is next.**
+The bootstrap chassis is built and tested on three environments, and the
+frontend reads the language: `refine` scans and parses a `.ldn` file, says
+what it could not read, and says which work enables anything it refuses.**
 
 ## What is here
 
@@ -100,11 +101,11 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
 
 On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
 
-`refine --identify` will tell you what it is and admit that it has no
-frontend. Giving it a `.ldn` file gets you a diagnostic saying the same
-thing, with a span pointing into your file, which is more than nothing: the
-source, diagnostic, host, target and stage foundations underneath it are
-real and tested.
+`refine --identify` will tell you what it is. Giving it a `.ldn` file scans
+and parses it: a file the grammar derives produces nothing, and one it does
+not gets a report with a span, a caret and a note — and if what you wrote is a
+construct the tour describes and the kernel omits, the note names the
+paragraph that describes it and the roadmap item that enables it.
 
 ## What comes next
 

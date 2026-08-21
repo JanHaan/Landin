@@ -20,7 +20,7 @@ compiler/ada/
     diagnostics/        diagnostic transport and text rendering
     platform/           host adapters and their native implementations
     stages/             target facts and the stage/pipeline seams
-    syntax/             the tokens and the scan; the parser joins at R1.40
+    syntax/             the tokens, the scan, the syntax table and the parse
     driver/             the request/result boundary
     main/               the `refine` entry point
   tests/src/            the harness, the fakes and the suites
@@ -42,15 +42,21 @@ replaced.
 | `Landin.Source.Names` | identities for the byte runs a program names | know that a spelling is reserved |
 | `Landin.Tokens` | the lexical vocabulary, the token, the fault, the stream | render prose, assign a diagnostic code, or build a token |
 | `Landin.Tokens.Lexer` | the scan, and the only construction of a token | know what a token means |
+| `Landin.Syntax` | the node table, extents, anchors, origins, soundness | know that types or IR values exist, or hold a diagnostic |
+| `Landin.Syntax.Precedence` | [1820] as data: levels, operators, folds, first sets | contain a parsing decision |
+| `Landin.Syntax.Parser` | the parse, and the only construction of a tree | assign a diagnostic code, or read a byte |
+| `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
+| `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a roadmap item |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific dependency | grow a second host concern |
 | `Landin.Targets` | target facts and layout arithmetic | ask the host how wide a pointer is |
 | `Landin.Stages` | the compilation context, the stage interface, pipelines | know which stages exist |
+| `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep a tree, or decide reporting policy |
 | `Landin.Driver` | argument classification and the result | implement a language rule |
 | `Refine` | printing and the exit status | contain a decision |
 
@@ -69,12 +75,32 @@ when the roadmap needs a longer-lived process it will be revisited there.
 
 ## What is deliberately absent
 
-There is no parser, checker, IR or backend here yet. `refine` reads a `.ldn`
-file and reports `L0001`, because the frontend is not wired to it until
-R1.40. The scanner exists and is held to the grammar: `check.py` compares
-`Landin.Tokens`' reserved words with the tour's own `keyword` production, and
-the harness lexes every program in the corpus and compares each token with
-what `check.py`'s independent tokeniser produced.
+There is no checker, IR or backend here yet. What does exist is the whole
+frontend: `refine` scans and parses every `.ldn` file it is given, reports
+what neither could read, and produces nothing when a file is a program.
+`L0001` is retired -- the catalogue said it retires when the frontend is wired
+to the driver, and R1.40 is where that happened -- and its row stays so its
+number is never handed to another rule.
+
+Both halves are held to the grammar from both sides. `check.py` compares
+`Landin.Tokens`' reserved words with the tour's own `keyword` production,
+derives every positive program in the corpus from the grammar and refuses
+every negative one, and compares `Landin.Syntax.Precedence` with [1820]'s own
+levels, operators, fold and first sets. The harness lexes every program in the
+corpus and compares each token with what `check.py`'s independent tokeniser
+produced, parses every one and requires the same verdict `check.py` reached,
+and parses every truncation of every one to prove that a half-written file
+yields a tree and not a crash.
+
+`Landin.Syntax` is a flat table, not a pointer structure: a `Node_Id` is a
+dense integer, so R1.50's names, R1.60's types and R1.70's values each go in
+an array of their own rather than a map keyed on an access value. A child's
+index is lower than its parent's and a child's extent lies inside it, both as
+postconditions. A construct the parser could not read becomes an error node of
+the band it needed -- one per band, so a case over a band still covers the
+hole -- and `Is_Sound` propagates upward so that one syntax mistake does not
+become a cascade of type errors about a hole. Trees are dropped after parsing;
+where they live for a whole compilation is R1.50's question.
 
 A diagnostic code is written in exactly one place, `Landin.Diagnostics.Catalogue`, and `check.py` refuses a code literal anywhere else in `src/`. Each column of the catalogue is an exhaustive case over the code names, so a code with no row is a missing-case error rather than a warning. The catalogue holds no prose: `L0003` is raised with two sentences, for a source that is missing and one that cannot be read, because one rule was violated and the difference between them is wording. What a code requires of every occurrence -- a source, a non-empty span, how many secondary labels, how many notes -- is in the row, and `Landin.Diagnostics.Lexical` checks the row against the diagnostic it just built.
 

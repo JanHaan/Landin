@@ -26,6 +26,10 @@ package body Landin.Stages is
      return Landin.Source.Snapshot
      is (Context.Sources.Get (Id));
 
+   function Nth_Source (Context : Compilation; Index : Positive)
+     return Landin.Source.Source_Id
+     is (Context.Sources.Nth (Index));
+
    procedure Report
      (Context : in out Compilation; Item : Landin.Diagnostics.Diagnostic)
    is

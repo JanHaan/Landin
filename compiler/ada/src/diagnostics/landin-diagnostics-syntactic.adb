@@ -1,0 +1,66 @@
+package body Landin.Diagnostics.Syntactic is
+
+   package Rows renames Landin.Diagnostics.Catalogue;
+
+   use type Landin.Source.Byte_Offset;
+
+   procedure Report
+     (Item     : Failure;
+      Source   : Landin.Source.Source_Id;
+      Where    : Landin.Source.Span;
+      Message  : String;
+      Note     : String := "";
+      Related  : Landin.Source.Span := Landin.Source.Empty_Span;
+      Because  : String := "";
+      Refused  : Refused_Construct := Declared_Type;
+      Into     : in out Diagnostic_List)
+   is
+      Named : constant Rows.Code_Name := Code_For (Item);
+      Text  : constant Code_String := Rows.Code (Named);
+      Built : Diagnostic :=
+        Make (Code    => Text,
+              Level   => Rows.Level (Named),
+              Source  => Source,
+              Where   => Where,
+              Message => Message);
+   begin
+      --  [1830] promises two facts, so a refusal carries two notes and the
+      --  parser writes neither: the construct's paragraph and the work
+      --  that enables it both come out of tables above.
+      if Item = Construct_Not_Enabled then
+         Add_Note
+           (Built, "the tour describes it at " & Construct (Refused));
+         Add_Note
+           (Built,
+            "ROADMAP.md " & Enabled_By (Refused)
+            & " is where it is enabled");
+      elsif Note /= "" then
+         Add_Note (Built, Note);
+      end if;
+
+      if Because /= "" then
+         Add_Label (Built, Make_Label (Source, Related, Because));
+      end if;
+
+      --  The row this code carries is checked against the diagnostic just
+      --  built.  A code whose occurrences do not carry what it promises is
+      --  worse than no code at all, so this is a defect and not a warning.
+      if Rows.Required_Notes (Named) /= Note_Count (Built)
+        or else Rows.Required_Secondaries (Named) /= Label_Count (Built)
+      then
+         raise Compiler_Defect
+           with "the catalogue row for " & Text
+                & " and the diagnostic built for it disagree";
+      end if;
+
+      if Rows.Needs_Non_Empty_Span (Named)
+        and then Landin.Source.Length (Where) = 0
+      then
+         raise Compiler_Defect
+           with Text & " requires a span with bytes in it";
+      end if;
+
+      Append (Into, Built);
+   end Report;
+
+end Landin.Diagnostics.Syntactic;

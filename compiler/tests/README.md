@@ -38,8 +38,15 @@ Fixture classes, and the directory each uses:
 | `status` | no | the exit status `refine` must produce (default 0) |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
-| `codes` | no | the diagnostic codes the report must carry, checked against the catalogue |
+| `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order |
 | `targets` | no | comma-separated targets the fixture applies to |
+
+`codes` is an ordered list and not a set. Two refused constructs in one file
+are two reports, and a regression that doubles a count is invisible to a set,
+so `float-literal-not-enabled` names `L0010, L0010` -- once for the type and
+once for the literal. `check.py` holds every name in it to the catalogue, and
+refuses a negative fixture with a program that names none; the parser suite
+scans and parses the program and holds the report to the exact sequence.
 
 `targets` is checked against the targets `ROADMAP.md` names: `linux-x86-64`,
 `macos-arm64`, `cortex-m`, `synthetic-32`. A fixture may name a target the

@@ -40,7 +40,22 @@ package Landin.Diagnostics.Catalogue is
       Malformed_Integer,
       Unknown_Bytes,
       Unterminated_Comment,
-      Unterminated_Literal);
+      Unterminated_Literal,
+      --  The parser, assigned at R1.40. One per rule of the grammar the
+      --  parser can find broken, in the order the reader meets them:
+      --  what was required and absent, then what was present and refused.
+      Name_Expected,
+      Type_Expected,
+      Expression_Expected,
+      Token_Expected,
+      Unclosed_Construct,
+      Assignment_In_Expression,
+      Comparison_Chained,
+      Return_Carries_Value,
+      Public_On_Statement,
+      End_Name_Mismatch,
+      Stray_Token,
+      Nesting_Too_Deep);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -57,7 +72,19 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Integer     => "L0011",
             when Unknown_Bytes         => "L0012",
             when Unterminated_Comment  => "L0013",
-            when Unterminated_Literal  => "L0014");
+            when Unterminated_Literal  => "L0014",
+            when Name_Expected            => "L0100",
+            when Type_Expected            => "L0101",
+            when Expression_Expected      => "L0102",
+            when Token_Expected           => "L0103",
+            when Unclosed_Construct       => "L0104",
+            when Assignment_In_Expression => "L0105",
+            when Comparison_Chained       => "L0106",
+            when Return_Carries_Value     => "L0107",
+            when Public_On_Statement      => "L0108",
+            when End_Name_Mismatch        => "L0109",
+            when Stray_Token              => "L0110",
+            when Nesting_Too_Deep         => "L0111");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -69,11 +96,16 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Integer     => Error,
             when Unknown_Bytes         => Error,
             when Unterminated_Comment  => Error,
-            when Unterminated_Literal  => Error);
+            when Unterminated_Literal  => Error,
+            when Name_Expected .. Nesting_Too_Deep => Error);
 
    function State (Of_Code : Code_Name) return Disposition
      is (case Of_Code is
-            when No_Frontend           => Live,
+            --  Retired at R1.40: the frontend is wired to the
+            --  driver, so nothing raises this any more.  The row
+            --  stays so its number can never be handed to
+            --  another rule.
+            when No_Frontend           => Retired,
             when Unknown_Option        => Live,
             when Unreadable_Source     => Live,
             when Unknown_Target        => Live,
@@ -81,7 +113,8 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Integer     => Live,
             when Unknown_Bytes         => Live,
             when Unterminated_Comment  => Live,
-            when Unterminated_Literal  => Live);
+            when Unterminated_Literal  => Live,
+            when Name_Expected .. Nesting_Too_Deep => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
    --  user reads: the message at the raise site is what a user reads.
@@ -104,7 +137,32 @@ package Landin.Diagnostics.Catalogue is
             when Unterminated_Comment  =>
                "[1780]: a block comment that is never closed",
             when Unterminated_Literal  =>
-               "[0260]: a quoted literal that is never closed");
+               "[0260]: a quoted literal that is never closed",
+            when Name_Expected         =>
+               "[1760]: a name position holds something that is not a name",
+            when Type_Expected         =>
+               "[1790]: a type position holds no type the kernel enables",
+            when Expression_Expected   =>
+               "[1820]: an expression was required and none begins here",
+            when Token_Expected        =>
+               "[1810]: a terminal the production spells is absent",
+            when Unclosed_Construct    =>
+               "[1800]: a construct whose closing `end` never arrives",
+            when Assignment_In_Expression =>
+               "[0390]: assignment is a statement, never an expression",
+            when Comparison_Chained    =>
+               "[1820]: comparison takes at most one operator",
+            when Return_Carries_Value  =>
+               "[1810]: `return` carries no value; assign the named return",
+            when Public_On_Statement   =>
+               "[1740]: `public` rides on a declaration, not a statement",
+            when End_Name_Mismatch     =>
+               "[1800]: the name on `end` is not the name declared",
+            when Stray_Token           =>
+               "[1740]: a run of tokens beginning no declaration or"
+               & " statement",
+            when Nesting_Too_Deep      =>
+               "an implementation limit on how deeply a construct nests");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -125,7 +183,8 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,
             when Unterminated_Comment  => True,
-            when Unterminated_Literal  => True);
+            when Unterminated_Literal  => True,
+            when Name_Expected .. Nesting_Too_Deep => True);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -140,7 +199,9 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,
             when Unterminated_Comment  => False,
-            when Unterminated_Literal  => True);
+            when Unterminated_Literal  => True,
+            when Name_Expected .. Unclosed_Construct => False,
+            when Assignment_In_Expression .. Nesting_Too_Deep => True);
 
    --  How many secondary labels the diagnostic must carry. An unterminated
    --  block comment needs one: the end of the file is where it was noticed
@@ -149,6 +210,19 @@ package Landin.Diagnostics.Catalogue is
      is (case Of_Code is
             when Unterminated_Comment  => 1,
             when Unterminated_Literal  => 1,
+            --  Each of these is only readable next to a second place: the
+            --  opener that was never closed, the name that was declared,
+            --  the first comparison of a chain, the return it may not
+            --  carry a value for, the function the `public` is inside.
+            when Type_Expected         => 1,
+            when Expression_Expected   => 1,
+            when Token_Expected        => 1,
+            when Unclosed_Construct    => 1,
+            when Comparison_Chained    => 1,
+            when Return_Carries_Value  => 1,
+            when Public_On_Statement   => 1,
+            when End_Name_Mismatch     => 1,
+            when Nesting_Too_Deep      => 1,
             when others                => 0);
 
    --  How many notes. [1830] promises a diagnostic that names the construct
@@ -159,6 +233,7 @@ package Landin.Diagnostics.Catalogue is
             when Construct_Not_Enabled => 2,
             when Malformed_Integer     => 1,
             when Unknown_Bytes         => 1,
+            when Name_Expected .. Nesting_Too_Deep => 1,
             when others                => 0);
 
    function Count return Natural
