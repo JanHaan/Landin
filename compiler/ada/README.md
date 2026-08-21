@@ -20,6 +20,7 @@ compiler/ada/
     diagnostics/        diagnostic transport and text rendering
     platform/           host adapters and their native implementations
     stages/             target facts and the stage/pipeline seams
+    syntax/             the tokens and the scan; the parser joins at R1.40
     driver/             the request/result boundary
     main/               the `refine` entry point
   tests/src/            the harness, the fakes and the suites
@@ -38,6 +39,9 @@ replaced.
 | `Landin.Source` storage | heap-allocated text and line maps, never freed while the process lives | put a source file in an automatic object |
 | `Landin.Source.Sets` | a compilation's snapshots and their identities | acquire bytes from a host |
 | `Landin.Provenance` | origins and the declaration side table | know what a declaration means |
+| `Landin.Source.Names` | identities for the byte runs a program names | know that a spelling is reserved |
+| `Landin.Tokens` | the lexical vocabulary, the token, the fault, the stream | render prose, assign a diagnostic code, or build a token |
+| `Landin.Tokens.Lexer` | the scan, and the only construction of a token | know what a token means |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
@@ -63,10 +67,20 @@ when the roadmap needs a longer-lived process it will be revisited there.
 
 ## What is deliberately absent
 
-There is no lexer, parser, checker, IR or backend here yet. `refine` reads a
-`.ldn` file and reports `L0001`, because R1 is where the first executable
-kernel arrives. The chassis carries no keyword table, no grammar and no
-version designation.
+There is no parser, checker, IR or backend here yet. `refine` reads a `.ldn`
+file and reports `L0001`, because the frontend is not wired to it until
+R1.40. The scanner exists and is held to the grammar: `check.py` compares
+`Landin.Tokens`' reserved words with the tour's own `keyword` production, and
+the harness lexes every program in the corpus and compares each token with
+what `check.py`'s independent tokeniser produced.
+
+`Landin.Tokens` knows two things the kernel grammar does not, both on
+purpose. A band of deferred lexemes -- `1.5`, `"text"`, `+=`, `!` -- is read
+as one token each so that `[1830]` can refuse a construct by name instead of
+reporting a stray byte, and so that enabling one later cannot change how a
+file that never used it was read. Every deferred kind names the tour
+construct it belongs to, and `check.py` holds it to naming one that exists
+and to not being a lexeme the grammar already spells.
 
 The stage seam is one interface and one pipeline, contract-tested with fake
 stages. Named per-stage packages arrive as each stage is written, which is

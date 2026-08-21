@@ -291,7 +291,7 @@ Two rounds of reading the grammar by hand found sixty-eight defects and still
 missed that a lone `_` parsed as a name, which is why the corpus exists.
 
 ### R1.20 — Implement lexical analysis
-Status: active
+Status: complete
 Depends on: R1.10, R0.40
 
 Implement byte-oriented tokenization, literal validation, comments and unknown
@@ -306,6 +306,14 @@ line map already keeps it.
 Exit evidence: the lexical corpus covers valid tokens, unknown bytes,
 boundaries and deterministic recovery, and the Ada scanner agrees with the
 grammar on every program in `compiler/tests/fixtures`.
+
+`Landin.Tokens` holds the vocabulary and `Landin.Tokens.Lexer` is the only
+unit that can build a token; `Landin.Source.Names` interns identifiers so a
+later stage compares identities rather than bytes. The scanner is held to the
+grammar twice over: `check.py` compares its reserved words with the tour's own
+`keyword` production and every deferred lexeme with the construct it names,
+and the harness lexes all 65 corpus programs and compares each token with
+what `check.py`'s independent tokeniser produced.
 
 Invalid escapes are struck from this item's evidence, with the reason
 recorded rather than the clause quietly dropped: the kernel's only literals

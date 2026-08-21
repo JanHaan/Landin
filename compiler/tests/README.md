@@ -37,6 +37,7 @@ Fixture classes, and the directory each uses:
 | `args` | no | the arguments `refine` is run with |
 | `status` | no | the exit status `refine` must produce (default 0) |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
+| `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
 | `targets` | no | comma-separated targets the fixture applies to |
 
 `targets` is checked against the targets `ROADMAP.md` names: `linux-x86-64`,
@@ -110,6 +111,23 @@ What the corpus cannot see, recorded so nobody assumes otherwise: it cannot
 tell CR LF read as one terminator from CR and LF read as two, because both
 produce the same tokens. The distinction belongs to the line map, and
 `Landin.Source`'s own case for it is what holds that.
+
+## lexical.tokens
+
+`compiler/tests/lexical.tokens` is generated: `python3 check.py --tokens`
+writes it from `check.py`'s tokeniser, one line per token as `first last
+spelling`. The Ada harness reads it and compares every token with what
+`Landin.Tokens.Lexer` produced, and `check.py` regenerates it on every full
+run and fails if the committed copy is stale.
+
+Kinds are deliberately not in it. The two implementations have different
+kind vocabularies, and what a disagreement actually looks like is a boundary
+in a different place.
+
+That is two independent implementations of one grammar, held to each other
+over every program in the corpus. The first thing it caught was real: the
+Ada scanner appended each file's tokens to the previous file's, because a
+limited `out` parameter is passed by reference and `Lex` had not cleared it.
 
 ## Derived programs
 
