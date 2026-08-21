@@ -325,7 +325,7 @@ belongs to the work that enables a literal carrying escapes, and R4.10 owns
 the remaining hosted literal forms.
 
 ### R1.30 — Establish the diagnostic catalogue
-Status: active
+Status: complete
 Depends on: R0.40, R1.20
 
 Assign current diagnostic codes and required primary/secondary spans for the
@@ -340,8 +340,41 @@ owns every code after them.
 
 Sources: legacy A8; `R§P1.5`.
 
+`Landin.Diagnostics.Catalogue` is the catalogue and the only place in the
+compiler where a code is written; `check.py` refuses a code literal anywhere
+else under `compiler/ada/src`, which is how `L0001`-`L0004` stopped being
+literals in the driver. Each column is an exhaustive case over the code names,
+so a code with no row does not compile. The reading copy at
+`compiler/tests/diagnostics.catalogue` is generated from the table and checked
+fresh on every full run.
+
+Nine codes: the driver's four, and `L0010` for a construct the tour describes
+and `[1830]` refuses, `L0011` a digit outside its base, `L0012` bytes no rule
+spells, `L0013` an unclosed block comment, `L0014` an unclosed literal. One
+code for the refusal rather than one per deferred lexeme, because the question
+a user asks is what in their program is not enabled yet, and the construct is
+named in a note rather than in the number. Bands are reserved but unassigned:
+`L0100`-`L0199` for R1.40's syntax failures, `L0200`-`L0299` for R1.50's
+names, `L0300`-`L0399` for R1.60's types. A retired code keeps its row, so a
+number is never handed to a second rule.
+
+The catalogue holds no prose. `L0003` is raised with two sentences, for a
+source that is missing and one that cannot be read, because one rule was
+violated and the difference is wording; a code split for a wording reason is
+the worst use of a stable identifier. What a code requires of every
+occurrence -- a source, a non-empty span, how many secondary labels, how many
+notes -- is in the row, and `Landin.Diagnostics.Lexical` checks the row
+against the diagnostic it just built rather than trusting itself.
+
 Exit evidence: negative cases assert code and spans separately from prose
 rendering; terminal rendering has focused golden tests.
+
+Both hold. The catalogue suite asserts codes, spans, label counts and note
+counts with no prose in the assertion, and one golden case renders a refusal
+in full so that what a user sees cannot change unnoticed. Deferred with the
+reason recorded: a per-fixture `report:` file listing every diagnostic's code
+and spans waits for R1.40, because until a parser runs there is no program
+that produces more than one diagnostic worth ordering.
 
 ### R1.40 — Implement the recovering parser
 Status: planned

@@ -112,7 +112,10 @@ private
      (Index_Type => Positive, Element_Type => String);
 
    type Diagnostic is record
-      Code    : Code_String := "L0000";
+      --  Not a code, and deliberately not shaped like one: an unset code
+      --  is not a number the catalogue holds, and check.py refuses a code
+      --  literal written outside it.
+      Code    : Code_String := "?????";
       Level   : Severity    := Error;
       Primary : Label;
       Labels  : Label_Vectors.Vector;
