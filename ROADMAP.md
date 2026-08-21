@@ -377,16 +377,105 @@ and spans waits for R1.40, because until a parser runs there is no program
 that produces more than one diagnostic worth ordering.
 
 ### R1.40 — Implement the recovering parser
-Status: planned
+Status: complete
 Depends on: R1.20, R1.30
 
 Implement hand-written recursive descent and Pratt parsing, explicit recovery
 points and a syntax representation that preserves source provenance needed by
 semantics and debugging.
 
+`Landin.Syntax` is a flat table of nodes indexed by a dense `Node_Id`, not a
+pointer structure, and the reason is the four stages that read it. R1.50 wants
+to say which declaration a name resolves to, R1.60 what type an expression
+has, R1.70 which IR value a node produced, R4.60 where a node came from --
+and none of them may add a field to `Landin.Syntax`, which must not know that
+types or values exist. With a dense integer each of them says it in an array
+of its own, sized once and indexed in constant time. A tree of tagged records
+would have made those side tables maps keyed on access values, and an access
+value is not something a deterministic report can be ordered by.
+
+Two invariants come out of building the table bottom up, and both are
+postconditions rather than paragraphs: a child's index is lower than its
+parent's, so `1 .. Last_Node` is a post-order and a stage that only
+synthesises is one forward loop with no recursion and no work list; and a
+child's extent lies inside its parent's, because a parent's extent is the
+union of its own tokens and its children's. The parser suite walks every slot
+of every node of every corpus file, and of every truncation of one, which is
+what makes a debug build check them.
+
+A hole is a node. There are four -- one per band, so a case over a band still
+covers the hole instead of falling out of it -- and `Is_Sound` propagates
+upward, so R1.60 checks a subtree only when no descendant is a hole and one
+missing `then` does not become a cascade of type errors about a hole.
+
+[1820] is a table rather than ten procedures: `Landin.Syntax.Precedence`
+transcribes the levels, the operators, the fold and the first sets, and
+`check.py`'s `check_precedence_table` compares the transcription with the
+grammar it transcribes. That is the whole argument for the shape -- ten
+procedures are ten paraphrases and there is nothing to compare a paraphrase
+to. Seven mutations were tried from both sides (a level renamed, an operator
+moved between levels, the wrong level made non-associative, a prefix operator
+dropped, the discard dropped from a first set, an operator added to the tour,
+the comparison chain made repeatable) and each was reported.
+
+Recovery is a forward scan at declared boundaries, with four rules about a
+second failure inside an already-failed construct. A token no kernel rule
+spells is consumed as a leaf, or skipped and the requirement retried,
+silently, because the scanner already reported it. Reporting is monotone in
+token index, which kills same-position cascades. And an `end` that is not
+this construct's is left where it is for whatever construct needs it, so one
+missing `end` is one report rather than two. A refused construct closes
+itself -- `end loop` closes a loop -- so swallowing its own closer keeps one
+refusal from becoming three reports. No cap on diagnostics per file: a cap is
+reporting policy, the driver owns policy, and [0950] already refuses the
+smaller version of the idea. A nesting limit is different and is set here,
+because Storage_Error is not a diagnostic.
+
+`Landin.Diagnostics.Syntactic` owns the twelve new codes and the parser
+contains none, the same rule `Landin.Diagnostics.Lexical` already keeps. It
+also owns the other half of [1830]: [1760] reserves seventeen words, so
+`loop`, `while`, `for`, `match`, `defer`, `undo`, `try`, `fail`, `break` and
+`continue` all lex as ordinary identifiers and the scan cannot refuse one.
+Without a word table the compiler would say that `loop` is a name needing a
+colon, which is true and useless. `check.py`'s `check_refused_constructs`
+holds every spelling to a word the tour writes and not one the grammar
+reserves, every citation to a paragraph that exists, every named roadmap item
+to an item that exists, and the eleven scalar names to the grammar's own
+`type` rule.
+
+Two amendments, recorded rather than done quietly. `L0001` is retired: the
+catalogue said it retires when the frontend is wired to the driver, and this
+item is where `compiler/ada/README.md` said that wiring happens. An empty
+file is now accepted, because `program ::= declaration*` derives no
+declarations. And `struct-not-enabled`'s summary cited `[0670]`, the struct on
+the right of the `=`; the diagnostic cites `[0120]`, which is what [1790]
+itself names for "types the program declares", because the parser refuses at
+the type position and never reaches the value. The summary was corrected to
+match the rule that is actually broken.
+
+Trees are dropped after parsing. Nothing reads one yet, and where they live
+for a whole compilation is R1.50's question: a vector of a limited type is not
+a thing Ada has, so the answer is a real decision and wiring one in now would
+be guessing with a data structure.
+
 Exit evidence: malformed files produce multiple ordered diagnostics without a
 crash; recovery resumes at declared boundaries; every kernel production is
 covered.
+
+All three hold. Every one of the 42 positive programs in the corpus parses
+with no diagnostic and every one of the 23 negative programs is rejected,
+which is the same verdict `check.py` reaches from the grammar independently.
+Each negative fixture now names the exact ordered sequence of codes its report
+carries -- `several-independent-errors` carries three, from three separate
+mistakes -- and `check.py` refuses a negative fixture that names none, so a
+rejection whose shape nobody checked is no longer possible. The corpus is
+truncated at every byte of every file and each of the ~2,000 prefixes yields a
+tree whose invariants hold; that pass found a real defect on its first run, a
+code raised without the secondary label its catalogue row requires, which is
+now impossible because `Expect` no longer defaults those two parameters.
+Deferred with the reason recorded: `Landin.Syntax.Dump` exists and no fixture
+records a golden tree, because the corpus agreement above is a stronger claim
+than a dump nobody reads, and R1.70 will want the same file for its IR.
 
 ### R1.50 — Collect declarations and resolve names
 Status: planned

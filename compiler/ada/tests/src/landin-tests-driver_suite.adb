@@ -55,8 +55,8 @@ package body Landin.Tests.Driver_Suite is
         (Item, Contains (Text, "no release version is assigned"),
          "identity is version neutral");
       Landin.Testing.Check
-        (Item, Contains (Text, "language frontend: not enabled"),
-         "identity admits there is no frontend");
+        (Item, Contains (Text, "language frontend: scanner and parser"),
+         "identity names the frontend it has");
       Landin.Testing.Check
         (Item, not Contains (Text, "0."),
          "identity carries no version number");
@@ -101,16 +101,22 @@ package body Landin.Tests.Driver_Suite is
         (Item, Contains (Text, "absent.ldn"), "the path is named");
    end Missing_Sources_Are_Data;
 
-   procedure Sources_Report_The_Missing_Frontend
+   --  The frontend, reached the way a user reaches it.  The suites above
+   --  hold the scanner and the parser to the corpus; what this one asserts
+   --  is that the driver runs them, and that a syntax diagnostic renders
+   --  against the real source -- the snippet and the caret included,
+   --  because a span that is right and a caret that is not is still wrong.
+   procedure Sources_Are_Scanned_And_Parsed
      (Item : in out Landin.Testing.Context);
 
-   procedure Sources_Report_The_Missing_Frontend
+   procedure Sources_Are_Scanned_And_Parsed
      (Item : in out Landin.Testing.Context)
    is
-      Host   : Landin.Testing.Fakes.Fake_Filesystem;
+      LF   : constant Character := Character'Val (10);
+      Host : Landin.Testing.Fakes.Fake_Filesystem;
    begin
-      Host.Add_File ("main.ldn", "main: () -> none =" & Character'Val (10));
-      Host.Add_File ("empty.ldn", "");
+      Host.Add_File ("main.ldn", "if: u32 = 1" & LF);
+      Host.Add_File ("good.ldn", "n: u32 = 1" & LF);
 
       declare
          Result : constant Landin.Driver.Outcome :=
@@ -119,32 +125,46 @@ package body Landin.Tests.Driver_Suite is
       begin
          Landin.Testing.Check_Equal
            (Item, Result.Status, Landin.Driver.Status_Reported,
-            "reading a source without a frontend is reported");
+            "a file the grammar refuses is reported");
          Landin.Testing.Check
-           (Item, Contains (Text, "L0001"), "the no-frontend code is used");
+           (Item, Contains (Text, "L0100"),
+            "[1760]: a keyword is not available as a name");
          Landin.Testing.Check
            (Item, Contains (Text, "main.ldn:1:1"),
             "the report points into the source");
-         Landin.Testing.Check
-           (Item, Contains (Text, "ROADMAP.md R1"),
-            "the note says which work enables it");
 
-         --  The span is the file's first byte, so the caret lands under it
+         --  The span is the keyword itself, so the caret lands under it
          --  rather than somewhere convenient.
          Landin.Testing.Check
-           (Item, Contains (Text, "1 | main: () -> none ="),
+           (Item, Contains (Text, "1 | if: u32 = 1"),
             "the snippet is the source's first line");
          Landin.Testing.Check
-           (Item, Contains (Text, Character'Val (10) & "  | ^"),
+           (Item, Contains (Text, LF & "  | ^"),
             "and the caret is under its first byte");
       end;
-   end Sources_Report_The_Missing_Frontend;
 
-   --  An empty source has no first byte, and the span has to survive that.
-   procedure An_Empty_Source_Is_Reported
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Arguments_Of ("good.ldn"), Host);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "a file the grammar derives is accepted");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Result.Report), "",
+            "and nothing is reported about it");
+      end;
+   end Sources_Are_Scanned_And_Parsed;
+
+   --  An empty file has no first byte, and `program ::= declaration*`
+   --  [1740] derives none of them, so it is a program and it is accepted.
+   --  What is worth asserting is that the frontend ran over a file with no
+   --  bytes and said nothing, rather than pointing at a position that does
+   --  not exist.
+   procedure An_Empty_Source_Is_Accepted
      (Item : in out Landin.Testing.Context);
 
-   procedure An_Empty_Source_Is_Reported
+   procedure An_Empty_Source_Is_Accepted
      (Item : in out Landin.Testing.Context)
    is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
@@ -157,13 +177,12 @@ package body Landin.Tests.Driver_Suite is
          Text   : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
-           (Item, Result.Status, Landin.Driver.Status_Reported,
-            "an empty source is still reported");
-         Landin.Testing.Check
-           (Item, Contains (Text, "empty.ldn:1:1"),
-            "and it points at the position that does exist");
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "an empty file is a program with no declarations");
+         Landin.Testing.Check_Equal
+           (Item, Text, "", "and nothing is reported about it");
       end;
-   end An_Empty_Source_Is_Reported;
+   end An_Empty_Source_Is_Accepted;
 
    procedure Targets_Are_Selected_By_Name
      (Item : in out Landin.Testing.Context);
@@ -356,8 +375,8 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "missing sources are data",
          Missing_Sources_Are_Data'Access);
       Landin.Testing.Register
-        (Into, "driver", "sources report the missing frontend",
-         Sources_Report_The_Missing_Frontend'Access);
+        (Into, "driver", "sources are scanned and parsed",
+         Sources_Are_Scanned_And_Parsed'Access);
       Landin.Testing.Register
         (Into, "driver", "targets are selected by name",
          Targets_Are_Selected_By_Name'Access);
@@ -376,8 +395,8 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "exit statuses are fixed",
          Exit_Statuses_Are_Fixed'Access);
       Landin.Testing.Register
-        (Into, "driver", "an empty source is reported",
-         An_Empty_Source_Is_Reported'Access);
+        (Into, "driver", "an empty source is accepted",
+         An_Empty_Source_Is_Accepted'Access);
    end Register;
 
 end Landin.Tests.Driver_Suite;

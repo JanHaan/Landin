@@ -2,3 +2,4 @@ class: negative
 summary: [1760] a lone underscore is the discard, not a name
 program: program.ldn
 targets: linux-x86-64, macos-arm64
+codes: L0100

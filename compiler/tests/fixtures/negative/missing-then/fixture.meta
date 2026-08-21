@@ -2,3 +2,4 @@ class: negative
 summary: [1810] a branch needs its then
 program: program.ldn
 targets: linux-x86-64, macos-arm64
+codes: L0103

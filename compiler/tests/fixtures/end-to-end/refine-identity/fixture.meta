@@ -1,5 +1,5 @@
 class: end-to-end
-summary: refine reports a version-neutral identity and admits it has no frontend
+summary: refine reports a version-neutral identity and names the frontend it has
 expect: expected.txt
 targets: linux-x86-64, macos-arm64
 args: --identify

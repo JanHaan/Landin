@@ -1340,6 +1340,430 @@ def check_token_vocabulary(full_run):
     return out
 
 
+#  The lexical rules that produce exactly one token [1750], so a rule
+#  above the lexical layer may treat them as terminals.  `literal` is not
+#  among them: it is an alternation of three, and expanding it is what
+#  makes a first set comparable with Landin.Tokens.Is_Literal.
+TOKEN_PRODUCERS = frozenset(("identifier", "keyword", "integer"))
+
+
+def grammar_first(trees):
+    """rule -> (what it may begin with, whether it may be empty).
+
+    The items are ('lit', bytes) for a terminal the rule spells and
+    ('token', rule) for one of the four lexical rules that produce a token
+    of their own [1750].  Those four are terminals to every rule above the
+    lexical layer, which is what makes a first set comparable with a
+    predicate over token kinds.
+    """
+    first = {name: set() for name in trees}
+    empty = {name: False for name in trees}
+
+    def of(node):
+        kind = node[0]
+        if kind == "lit":
+            return {("lit", node[1])}, False
+        if kind in ("range", "byte"):
+            return {(kind,)}, False
+        if kind == "rule":
+            if node[1] in TOKEN_PRODUCERS:
+                return {("token", node[1])}, False
+            if node[1] in trees:
+                return set(first[node[1]]), empty[node[1]]
+            return {("rule", node[1])}, False
+        if kind == "alt":
+            items, nil = set(), False
+            for child in node[1]:
+                got, one = of(child)
+                items |= got
+                nil = nil or one
+            return items, nil
+        if kind == "seq":
+            items, nil = set(), True
+            for child in node[1]:
+                got, one = of(child)
+                items |= got
+                if not one:
+                    nil = False
+                    break
+            return items, nil
+        if kind in ("*", "?"):
+            got, _ = of(node[1])
+            return got, True
+        if kind == "+":
+            return of(node[1])
+        return set(), False
+
+    moving = True
+    while moving:
+        moving = False
+        for name, tree in trees.items():
+            got, nil = of(tree)
+            if got - first[name] or (nil and not empty[name]):
+                first[name] |= got
+                empty[name] = empty[name] or nil
+                moving = True
+    return first, empty
+
+
+def precedence_chain(rules):
+    """[1820] read as a chain: (rule, sub, operators, fold), loosest first.
+
+    Every binary level is written the same way -- one sub-level, then a
+    group of operators and that sub-level again, repeated -- and the only
+    thing that differs is the operator set and whether the repetition is
+    '*' or '?'.  Walking the chain down from `expression` is what turns
+    those rules into a table an implementation can be compared with.
+    """
+    chain = []
+    name = "expression"
+    seen = set()
+    while name in rules and name not in seen:
+        seen.add(name)
+        found = re.match(r"^([a-z_]+)\s*\((.*)\)\s*([*?])$",
+                         rules[name].strip())
+        if not found:
+            break
+        sub, inner, repeat = found.group(1), found.group(2), found.group(3)
+        if not re.search(r"\b%s\s*$" % re.escape(sub), inner):
+            break
+        chain.append((name, sub, re.findall(r'"([^"]*)"', inner), repeat))
+        name = sub
+    return chain, name
+
+
+def ada_level(rule):
+    """The enumeration literal a rule's level is named after."""
+    return "Level_" + "_".join(bit.capitalize() for bit in rule.split("_"))
+
+
+def check_precedence_table(full_run):
+    """Landin.Syntax.Precedence is a transcription of [1820], and checked.
+
+    Ten productions of one shape become one table and one loop, and the
+    whole argument for doing it that way is that a transcription can be
+    compared with its source while ten paraphrases cannot.  This is that
+    comparison: the same levels in the same order, the same operators at
+    each, the same fold, the same prefix set, and first sets that agree
+    with the grammar's own.
+    """
+    if not full_run:
+        return []
+
+    spec = os.path.join(ROOT,
+                        "compiler/ada/src/syntax/landin-syntax-precedence.ads")
+    tokens = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.ads")
+    signs = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.adb")
+    tour = os.path.join(ROOT, "tour.txt")
+    if not all(os.path.exists(f) for f in (spec, tokens, signs, tour)):
+        return []
+
+    where = "compiler/ada/src/syntax/landin-syntax-precedence.ads"
+    out = []
+    text = io.open(spec, encoding="utf-8").read()
+    rules, trees, problems = read_grammar(tour)
+    if problems:
+        return []
+
+    chain, tail = precedence_chain(rules)
+    if not chain:
+        return [(where, 1, "the tour's operator levels could not be read, "
+                           "so the table is unchecked")]
+
+    #  What a token kind spells, so a table over kinds can be compared with
+    #  a grammar over bytes.
+    spelling = dict(re.findall(r'when\s+([A-Za-z_]+)\s*=>\s*"([^"]+)",',
+                               io.open(signs, encoding="utf-8").read()))
+    token_text = io.open(tokens, encoding="utf-8").read()
+
+    def item_of(kind):
+        if kind == "Identifier":
+            return ("token", "identifier")
+        if kind == "Integer_Literal":
+            return ("token", "integer")
+        if kind.startswith("Kw_"):
+            return ("lit", kind[3:].lower())
+        if kind in spelling:
+            return ("lit", spelling[kind])
+        return ("kind", kind)
+
+    def body_of(source, name):
+        found = re.search(r"function %s \([^)]*\)\s*"
+                          r"return [A-Za-z_.]+\s*is \((.*?)\);"
+                          % name, source, re.S)
+        return found.group(1) if found else None
+
+    def kinds_in(body):
+        return set(re.findall(r"(?:Landin\.Tokens\.)?\b((?:Kw_[A-Za-z_]+)"
+                              r"|Identifier|Integer_Literal|Ampersand|Bar"
+                              r"|Caret|Equal_Equal|Greater_Greater|Greater_Equal"
+                              r"|Greater|Left_Paren|Less_Greater|Less_Equal"
+                              r"|Less_Less|Less|Minus_Percent|Minus|Percent"
+                              r"|Plus_Percent|Plus|Right_Paren|Slash"
+                              r"|Star_Percent|Star|Tilde|Underscore"
+                              r"|Colon_Equal|Colon|Comma|Minus_Greater)\b",
+                              body))
+
+    #  1.  The same levels, in the same order.
+    declared = re.search(r"type Level is\s*\((.*?)\);", text, re.S)
+    if not declared:
+        out.append((where, 1, "the Level enumeration could not be read"))
+        return out
+
+    levels = [n.strip() for n in re.sub(r"--[^\n]*", "", declared.group(1))
+              .replace("\n", " ").split(",") if n.strip()]
+    wanted = [ada_level(rule) for rule, _, _, _ in chain] \
+        + [ada_level(tail), "Level_Primary"]
+
+    if levels != wanted:
+        out.append((where, 1,
+                    "the levels are %s and the grammar's are %s"
+                    % (", ".join(levels), ", ".join(wanted))))
+
+    #  2.  The same operators at each level.
+    binary = body_of(text, "Binary_Level")
+    if binary is None:
+        out.append((where, 1, "Binary_Level could not be read"))
+    else:
+        table = {}
+        for piece in re.split(r"\n\s*when\b", "\n" + binary)[1:]:
+            head, arrow, value = piece.partition("=>")
+            if not arrow:
+                continue
+            level = value.strip().rstrip(",").rstrip(")").strip()
+            for kind in kinds_in(head):
+                table.setdefault(level, set()).add(item_of(kind))
+
+        for rule, _, operators, _ in chain:
+            level = ada_level(rule)
+            said = table.get(level, set())
+            meant = {("lit", op) for op in operators}
+            if said != meant:
+                out.append((
+                    where, 1,
+                    "%s spells %s and the grammar's %s spells %s"
+                    % (level,
+                       ", ".join(sorted(t for k, t in said if k == "lit"))
+                       or "nothing",
+                       rule, ", ".join(sorted(operators)))))
+
+    #  3.  The same fold.  [1820] writes comparison with '?' and every
+    #      other level with '*', and that is the whole of the rule.
+    fold = body_of(text, "Fold")
+    if fold is None:
+        out.append((where, 1, "Fold could not be read"))
+    else:
+        said = set(re.findall(r"when\s+(Level_[A-Za-z_]+)\s*=>\s*"
+                              r"Non_Associative", fold))
+        meant = {ada_level(rule) for rule, _, _, repeat in chain
+                 if repeat == "?"}
+        if said != meant:
+            out.append((where, 1,
+                        "the table folds %s non-associatively and the "
+                        "grammar folds %s"
+                        % (", ".join(sorted(said)) or "nothing",
+                           ", ".join(sorted(meant)) or "nothing")))
+
+    #  4.  The same prefix operators.
+    prefix_rule = rules.get(tail, "")
+    found = re.match(r"^\((.*)\)\s*\*\s*([a-z_]+)$", prefix_rule.strip())
+    prefix_body = body_of(text, "Is_Prefix")
+    if found and prefix_body is not None:
+        said = {t for k, t in (item_of(k) for k in kinds_in(prefix_body))
+                if k == "lit"}
+        meant = set(re.findall(r'"([^"]*)"', found.group(1)))
+        if said != meant:
+            out.append((where, 1,
+                        "Is_Prefix spells %s and the grammar's %s spells %s"
+                        % (", ".join(sorted(said)) or "nothing", tail,
+                           ", ".join(sorted(meant)))))
+    elif prefix_body is None:
+        out.append((where, 1, "Is_Prefix could not be read"))
+    else:
+        out.append((where, 1,
+                    "the grammar's %s rule is not a run of prefix "
+                    "operators over a primary" % tail))
+
+    #  5.  The first sets, which recovery depends on: a token that begins a
+    #      statement in the grammar and not here is a recovery bug that
+    #      would be blamed on the parser.
+    first, _ = grammar_first(trees)
+    literals = kinds_in(body_of(token_text, "Is_Literal") or "")
+    prefixes = kinds_in(prefix_body or "")
+
+    for name, rule in (("Begins_Expression", "expression"),
+                       ("Begins_Statement", "statement"),
+                       ("Begins_Declaration", "declaration")):
+        body = body_of(text, name)
+        if body is None:
+            out.append((where, 1, "%s could not be read" % name))
+            continue
+        kinds = kinds_in(body)
+        if "Is_Literal" in body:
+            kinds |= literals
+        if "Is_Prefix" in body:
+            kinds |= prefixes
+        said = {item_of(k) for k in kinds}
+        meant = {i for i in first.get(rule, set())
+                 if i[0] in ("lit", "token")}
+        if said != meant:
+            def shown(items):
+                return ", ".join(sorted(
+                    t if k == "lit" else "<%s>" % t for k, t in items))
+            out.append((where, 1,
+                        "%s admits %s and the grammar's %s begins with %s"
+                        % (name, shown(said) or "nothing", rule,
+                           shown(meant))))
+
+    return out
+
+
+def check_refused_constructs(full_run):
+    """The parser's refusal tables are the tour's, and the corpus is pinned.
+
+    [1760] reserves seventeen words, so `loop`, `match` and the rest lex as
+    ordinary identifiers and only the parser can meet them.  That makes the
+    parser a second authority on what the tour describes, which is one more
+    than this repository is willing to have: every spelling it refuses has
+    to be a word the tour writes and not one the grammar already spells,
+    and every construct it cites has to exist.
+
+    The eleven scalar names get the same treatment from the other side.
+    They are ordinary declared names the kernel predeclares [1760], not
+    keywords, so nothing in the scanner holds them to `type`; this does.
+    """
+    if not full_run:
+        return []
+
+    parser = os.path.join(ROOT,
+                          "compiler/ada/src/syntax/landin-syntax-parser.adb")
+    codes = os.path.join(
+        ROOT, "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads")
+    tour = os.path.join(ROOT, "tour.txt")
+    if not all(os.path.exists(f) for f in (parser, codes, tour)):
+        return []
+
+    out = []
+    parser_text = io.open(parser, encoding="utf-8").read()
+    codes_text = io.open(codes, encoding="utf-8").read()
+    tour_text = io.open(tour, encoding="utf-8").read()
+    rules, _, problems = read_grammar(tour)
+    if problems:
+        return []
+
+    #  Every construct the refusals cite, and whether the tour defines it.
+    defined = set(re.findall(r"^\s*(?:--\(|---|--) \[(\d{4})\]",
+                             tour_text, re.M))
+    cited = re.findall(r"when\s+([A-Za-z0-9_]+)\s*=>\s*\"\[(\d{4})\]\"",
+                       codes_text)
+    if not cited:
+        out.append((
+            "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads",
+            1, "no refused construct names a paragraph of the tour"))
+    for name, construct in cited:
+        if construct not in defined:
+            out.append((
+                "compiler/ada/src/diagnostics"
+                "/landin-diagnostics-syntactic.ads", 1,
+                "%s names [%s], which tour.txt does not define"
+                % (name, construct)))
+
+    #  Every refused construct names the work that enables it, and the
+    #  roadmap has to have that item.
+    roadmap = os.path.join(ROOT, "ROADMAP.md")
+    if os.path.exists(roadmap):
+        items = set(re.findall(r"^### (R\d+\.\d+)",
+                               io.open(roadmap, encoding="utf-8").read(),
+                               re.M))
+        for named in set(re.findall(r'=>\s*"(R\d+\.\d+)"', codes_text)):
+            if named not in items:
+                out.append((
+                    "compiler/ada/src/diagnostics"
+                    "/landin-diagnostics-syntactic.ads", 1,
+                    "%s is named as enabling work and ROADMAP.md has no "
+                    "such item" % named))
+
+    #  The spellings, read out of the parser's own tables.
+    def spellings(kind):
+        found = re.search(r"function Spelling \(Item : %s\) return String"
+                          r"\s*is \(case Item is(.*?)\);" % kind,
+                          parser_text, re.S)
+        if not found:
+            return None
+        return dict(
+            (m.group(1), m.group(2)) for m in
+            re.finditer(r"when\s+([A-Za-z0-9_]+)\s*=>\s*\"([^\"]*)\"",
+                        found.group(1)))
+
+    keywords = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
+    scalars = set(re.findall(r'"([a-z0-9]+)"', rules.get("type", "")))
+
+    words = spellings("Real_Word")
+    if words is None:
+        out.append(("compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+                    "the refused-word table could not be read"))
+    else:
+        for name, word in sorted(words.items()):
+            if word in keywords:
+                out.append((
+                    "compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+                    "%s refuses %r, which the grammar's keyword rule "
+                    "spells, so the scanner meets it first and this row "
+                    "is dead" % (name, word)))
+            elif not re.search(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])"
+                               % re.escape(word), tour_text):
+                out.append((
+                    "compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+                    "%s refuses %r, which tour.txt never writes"
+                    % (name, word)))
+
+    refused_types = spellings("Refused_Type")
+    if refused_types is None:
+        out.append(("compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+                    "the refused-type table could not be read"))
+    else:
+        for name, word in sorted(refused_types.items()):
+            if word in scalars:
+                out.append((
+                    "compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+                    "%s refuses %r, which the grammar's type rule spells"
+                    % (name, word)))
+
+    #  The eleven, exactly.  A twelfth here would be a type the grammar
+    #  does not have, and a missing one a type no program could name.
+    declared = spellings("Scalar_Name")
+    if declared is None:
+        out.append(("compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+                    "the scalar-type table could not be read"))
+    elif set(declared.values()) != scalars:
+        out.append((
+            "compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
+            "the parser's types are %s and the grammar's are %s"
+            % (", ".join(sorted(declared.values())),
+               ", ".join(sorted(scalars)))))
+
+    #  A negative fixture that names no codes is a rejection nobody
+    #  checked the shape of.
+    base = os.path.join(ROOT, "compiler/tests/fixtures/negative")
+    if os.path.isdir(base):
+        for name in sorted(os.listdir(base)):
+            meta = os.path.join(base, name, "fixture.meta")
+            if not os.path.exists(meta):
+                continue
+            text = io.open(meta, encoding="utf-8").read()
+            if not re.search(r"^program: ", text, re.M):
+                continue
+            named = re.search(r"^codes: (.*)$", text, re.M)
+            if not named or not named.group(1).strip():
+                out.append((
+                    "compiler/tests/fixtures/negative/%s/fixture.meta"
+                    % name, 1,
+                    "a negative fixture with a program must name the "
+                    "codes its report carries"))
+
+    return out
+
+
 def catalogue_rows():
     """The catalogue, read out of the Ada table that owns it."""
     spec = os.path.join(ROOT,
@@ -1350,25 +1774,58 @@ def catalogue_rows():
 
     text = io.open(spec, encoding="utf-8").read()
 
-    def column(name):
-        found = re.search(r"function %s \(Of_Code : Code_Name\)[^;]*?"
-                          r"is \(case Of_Code is(.*?)\);" % name, text, re.S)
-        if not found:
-            return {}
-        arms = {}
-        for kind, value in re.findall(
-                r"when\s+([A-Za-z_|\s]+?)\s*=>\s*([^,\n]+)",
-                found.group(1)):
-            for one in (k.strip() for k in kind.split("|")):
-                arms[one] = value.strip().rstrip(",").strip('"')
-        return arms
-
     names = re.search(r"type Code_Name is\s*\((.*?)\);", text, re.S)
     if not names:
         return None
 
     order = [n.strip() for n in re.sub(r"--[^\n]*", "", names.group(1))
              .replace("\n", " ").split(",") if n.strip()]
+
+    def choices(head):
+        """The code names one `when` stands for, ranges expanded.
+
+        A band of codes sharing a value is written as a range, because
+        twelve identical arms is twelve chances to mistype one.  The
+        reading copy has to see through that, or a whole band shows up as
+        unknown and nobody notices the column stopped being read.
+        """
+        out = []
+        for part in re.sub(r"--[^\n]*", "", head).split("|"):
+            part = part.strip()
+            if ".." in part:
+                low, _, high = (bit.strip() for bit in part.partition(".."))
+                if low in order and high in order:
+                    out.extend(order[order.index(low):order.index(high) + 1])
+            elif part:
+                out.append(part)
+        return out
+
+    def column(name):
+        found = re.search(r"function %s \(Of_Code : Code_Name\)[^;]*?"
+                          r"is \(case Of_Code is(.*?)\);" % name, text, re.S)
+        if not found:
+            return {}
+        arms = {}
+        #  Every arm begins a line, and a value may run over several with
+        #  `&`, so the arms are cut at the line each `when` starts and the
+        #  value is whatever follows the arrow.  Cutting on the bare word
+        #  would cut inside a string that happened to contain it.
+        for piece in re.split(r"\n\s*when\b", "\n" + found.group(1))[1:]:
+            head, arrow, value = piece.partition("=>")
+            if not arrow:
+                continue
+            value = value.strip().rstrip(";").strip().rstrip(")").strip()
+            value = value.rstrip(",").strip()
+            if '"' in value:
+                value = "".join(re.findall(r'"([^"]*)"', value))
+            else:
+                value = value.split("\n")[0].strip()
+            for one in choices(head):
+                arms[one] = value
+        return arms
+
+    def read(arms, name, fallback="?"):
+        return arms.get(name, arms.get("others", fallback))
 
     codes = column("Code")
     levels = column("Level")
@@ -1381,12 +1838,12 @@ def catalogue_rows():
     for name in order:
         rows.append(dict(
             name=name,
-            code=codes.get(name, "?"),
-            level=levels.get(name, "?"),
-            state=states.get(name, "?"),
-            rule=rules.get(name, "?"),
-            secondaries=secondaries.get(name, notes.get("others", "0")),
-            notes=notes.get(name, "0")))
+            code=read(codes, name),
+            level=read(levels, name),
+            state=read(states, name),
+            rule=read(rules, name),
+            secondaries=read(secondaries, name, "0"),
+            notes=read(notes, name, "0")))
     return rows
 
 
@@ -1565,6 +2022,8 @@ def main(argv):
     extra += check_pinned_toolchain(full_run)
     extra += check_grammar_corpus(full_run)
     extra += check_token_vocabulary(full_run)
+    extra += check_precedence_table(full_run)
+    extra += check_refused_constructs(full_run)
     extra += check_catalogue(full_run)
     for path, line, why in sorted(set(extra)):
         total += 1

@@ -2,3 +2,4 @@ class: negative
 summary: [1830] a file with several independent errors must report all of them, because stopping at the first hides the rest; this is the recovery case R1.40 needs
 program: program.ldn
 targets: linux-x86-64, macos-arm64
+codes: L0102, L0101, L0101

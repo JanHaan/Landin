@@ -2,3 +2,4 @@ class: negative
 summary: [0390] assignment is a statement and never an expression
 program: program.ldn
 targets: linux-x86-64, macos-arm64
+codes: L0105

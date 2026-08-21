@@ -31,6 +31,13 @@ package Landin.Stages is
    function Source (Context : Compilation; Id : Landin.Source.Source_Id)
      return Landin.Source.Snapshot;
 
+   --  Identity of the N'th source in the order it was added, so a stage
+   --  reads every source once, deterministically, without being handed the
+   --  set to copy or outlive.
+   function Nth_Source (Context : Compilation; Index : Positive)
+     return Landin.Source.Source_Id
+     with Pre => Index <= Source_Count (Context);
+
    procedure Report
      (Context : in out Compilation; Item : Landin.Diagnostics.Diagnostic);
 

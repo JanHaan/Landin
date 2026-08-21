@@ -1,4 +1,4 @@
 refine - the Landin bootstrap compiler
 no release version is assigned
-language frontend: not enabled
+language frontend: scanner and parser
 targets described: linux-x86-64, synthetic-32

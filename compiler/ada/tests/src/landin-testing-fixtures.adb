@@ -53,6 +53,9 @@ package body Landin.Testing.Fixtures is
    function Targets (Item : Fixture) return String
      is (Unbounded.To_String (Item.Targets));
 
+   function Codes (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Codes));
+
    function Args (Item : Fixture) return String
      is (Unbounded.To_String (Item.Args));
 
@@ -266,6 +269,7 @@ package body Landin.Testing.Fixtures is
                   return;
                end if;
                Seen_Codes := True;
+               Item.Codes := Unbounded.To_Unbounded_String (Value);
 
             elsif Key = "lex" then
                if Seen_Lex then
@@ -325,6 +329,7 @@ package body Landin.Testing.Fixtures is
                Expect  => Unbounded.Null_Unbounded_String,
                Targets => Unbounded.Null_Unbounded_String,
                Args    => Unbounded.Null_Unbounded_String,
+               Codes   => Unbounded.Null_Unbounded_String,
                Status  => 0,
                Stream  => Merged);
 

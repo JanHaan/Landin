@@ -2,6 +2,7 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Source;
 with Landin.Stages;
+with Landin.Stages.Syntax;
 with Landin.Targets;
 
 package body Landin.Driver is
@@ -16,8 +17,12 @@ package body Landin.Driver is
    --  anywhere else.
    package Rows renames Landin.Diagnostics.Catalogue;
 
-   Code_No_Frontend : constant Landin.Diagnostics.Code_String :=
-     Rows.Code (Rows.No_Frontend);
+   --  The syntax stage holds nothing, so one instance for the process is
+   --  right, and it has to outlive the access type that names it: a
+   --  Stage_Reference is a library-level access type by design, because a
+   --  pipeline must not be able to outlive a stage.
+   Frontend : aliased Landin.Stages.Syntax.Instance;
+
    Code_Unknown_Option : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Unknown_Option);
    Code_Unreadable : constant Landin.Diagnostics.Code_String :=
@@ -28,7 +33,7 @@ package body Landin.Driver is
    function Identity return String is
      ("refine - the Landin bootstrap compiler" & LF
       & "no release version is assigned" & LF
-      & "language frontend: not enabled" & LF
+      & "language frontend: scanner and parser" & LF
       & "targets described: linux-x86-64, synthetic-32" & LF);
 
    function Usage return String is
@@ -38,9 +43,9 @@ package body Landin.Driver is
       & "  --identify          print tool identity" & LF
       & "  --target=NAME       select a described target" & LF
       & LF
-      & "No language frontend is enabled yet, so a source file is read and"
+      & "A source file is scanned and parsed.  Nothing is checked or"
       & LF
-      & "reported rather than compiled." & LF);
+      & "compiled yet, so a file that parses produces no output." & LF);
 
    function Starts_With (Text : String; Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
@@ -161,26 +166,9 @@ package body Landin.Driver is
                         Id : constant Landin.Source.Source_Id :=
                           Landin.Stages.Add_Source
                             (Context, Path, Unbounded.To_String (Content));
-                        Snap : constant Landin.Source.Snapshot :=
-                          Landin.Stages.Source (Context, Id);
-                        Report : Landin.Diagnostics.Diagnostic :=
-                          Landin.Diagnostics.Make
-                            (Code    => Code_No_Frontend,
-                             Level   => Landin.Diagnostics.Error,
-                             Source  => Id,
-                             Where   =>
-                               (First => 0,
-                                Last  =>
-                                  Landin.Source.Byte_Offset'Min
-                                    (1, Landin.Source.Length (Snap))),
-                             Message =>
-                               "no language frontend is enabled yet");
+                        pragma Unreferenced (Id);
                      begin
-                        Landin.Diagnostics.Add_Note
-                          (Report,
-                           "ROADMAP.md R1 enables the first executable "
-                           & "kernel");
-                        Landin.Stages.Report (Context, Report);
+                        null;
                      end;
 
                   when Landin.Platform.Not_Found =>
@@ -193,6 +181,25 @@ package body Landin.Driver is
                end case;
             end;
          end loop;
+
+         --  Every source that was read is scanned and parsed together, as
+         --  one compilation: the language is checked whole, and a stage
+         --  that saw one file at a time could not be replaced later by one
+         --  that resolves a name across two.
+         if Landin.Stages.Source_Count (Context) > 0 then
+            declare
+               Line : Landin.Stages.Pipeline;
+               Ran  : Natural;
+            begin
+               Landin.Stages.Append (Line, Frontend'Access);
+               Ran := Landin.Stages.Run (Line, Context);
+
+               if Ran /= 1 then
+                  raise Compiler_Defect
+                    with "the syntax stage did not run";
+               end if;
+            end;
+         end if;
 
          --  A rejected target is not a selected target, so nothing is
          --  echoed on the failing path.
