@@ -2,10 +2,11 @@
 #  The pinned toolchain, in one place.
 #
 #  compiler/ada/TOOLCHAIN.md records these for a reader; this file is what
-#  the container recipe and the CI manifest use, so a version can only be
-#  changed in one place.  check.py compares all three on a full run: three
-#  files naming a compiler version is three chances to be wrong, and the one
-#  that drifts is the one nobody reads.
+#  the container recipe, the CI manifest and the nix shell use, so a version
+#  can only be changed in one place.  check.py compares them all on a full
+#  run -- including that flake.nix reads this file rather than naming a
+#  version of its own: every file naming a compiler version is another
+#  chance to be wrong, and the one that drifts is the one nobody reads.
 
 LANDIN_GNAT_VERSION=16.1.0-1
 LANDIN_GPRBUILD_VERSION=26.0.0-1

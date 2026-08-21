@@ -25,8 +25,15 @@ of pipes is worse than a build that stops.
 ./scripts/site.sh --publish    # and upload to pages.sr.ht
 ```
 
-Publishing needs [`hut`](https://sr.ht/~emersion/hut/) configured with a
-token that has the `PAGES:RW` scope. `LANDIN_PAGES_DOMAIN` overrides the
+The CI gate runs the second command itself, as its last task and only from
+`main`: every push that changes a document republishes the pages it is read
+on. `.build.yml` asks builds.sr.ht for a `pages.sr.ht/PAGES:RW` token for
+that one job, so no long-lived credential is stored anywhere. Publishing by
+hand is for a preview, or for putting the site back after something went out
+that should not have.
+
+Publishing by hand needs [`hut`](https://sr.ht/~emersion/hut/) configured
+with a token that has the `PAGES:RW` scope. `LANDIN_PAGES_DOMAIN` overrides the
 domain; `hut pages publish -s //some/path` moves the site into a
 subdirectory if the root is wanted for something else.
 

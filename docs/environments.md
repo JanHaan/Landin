@@ -17,6 +17,13 @@ toolchain from `environments/pins.sh`, builds from clean, runs the suite in
 debug and in release, runs `check.py`, and prints `refine --identify` so that
 the no-version-claim rule is visible in the log rather than only in a test.
 
+Last, and only from `main`, it renders the reading copies and publishes them
+to pages.sr.ht. That step produces no evidence and carries no authority: it
+runs after every check above has passed, so a red gate cannot put a page up,
+and a build with no secrets — a mailed patch has none — never reaches it. It
+is there because a page that moves only when somebody remembers to run
+`scripts/site.sh --publish` is a page that drifts from the document it reads.
+
 Native macOS arm64 is a *development* loop at R0. It becomes a validated
 target of its own at R5, with its own compiler build, platform tools and
 debugger gate; a result produced here is not Linux evidence, and a Linux
@@ -50,7 +57,8 @@ The local Linux loop runs the very same scripts inside the pinned image:
 verifies both toolchain archives against the checksums in
 `environments/pins.sh` before unpacking either of them. That file is the one
 place a version or a checksum is written; `check.py` holds the recipe,
-`compiler/ada/TOOLCHAIN.md` and it to the same values. Objects are kept
+`compiler/ada/TOOLCHAIN.md`, the CI manifest and the nix shell to the same
+values. Objects are kept
 apart per host by `LANDIN_BUILD_TAG`, which `scripts/env.sh` defaults to
 `os-arch`: one checkout is built by two hosts, and `.ali` files from both in
 one directory is a build that fails confusingly.
@@ -98,9 +106,14 @@ of writing nixpkgs carries GNAT 16.2.0 and GPRbuild 25.0.0, and the pin is
 GNAT 16.1.0 with GPRbuild 26.0.0.
 
 It sets `LANDIN_BUILD_TAG=nix`, so its object files stay out of the ones the
-other environments leave in the same checkout. It is a convenience for
-editing on a nix machine and carries no authority of its own: the table above
-is unchanged by it.
+other environments leave in the same checkout. `python3` and `hut` come with
+it, so `check.py` and `scripts/site.sh` work in that shell too.
+
+It is a convenience for editing on a nix machine and carries no authority of
+its own: the table above is unchanged by it, and a result produced in it is
+not evidence for any of the three environments. `flake.lock` pins the nixpkgs
+revision the shell is built from, but what it installs is decided by
+`environments/pins.sh` rather than by that revision.
 
 ## What each environment is authority for
 
