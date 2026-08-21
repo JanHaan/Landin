@@ -1,0 +1,4 @@
+class: positive
+summary: [1750] a file need not end with a terminator
+program: program.ldn
+targets: linux-x86-64, macos-arm64

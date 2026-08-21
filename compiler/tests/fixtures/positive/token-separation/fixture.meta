@@ -1,0 +1,4 @@
+class: positive
+summary: [1750] space separates tokens that would otherwise run together into one longer name
+program: program.ldn
+targets: linux-x86-64, macos-arm64

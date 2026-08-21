@@ -291,7 +291,7 @@ Two rounds of reading the grammar by hand found sixty-eight defects and still
 missed that a lone `_` parsed as a name, which is why the corpus exists.
 
 ### R1.20 — Implement lexical analysis
-Status: planned
+Status: active
 Depends on: R1.10, R0.40
 
 Implement byte-oriented tokenization, literal validation, comments and unknown
@@ -303,8 +303,18 @@ and a file need not end with one. That rule is R1.10's, because a terminator
 is a lexical rule; implementing and testing it is this item's, and R0.40's
 line map already keeps it.
 
-Exit evidence: the lexical corpus covers valid tokens, invalid escapes,
-unknown bytes, boundaries and deterministic recovery.
+Exit evidence: the lexical corpus covers valid tokens, unknown bytes,
+boundaries and deterministic recovery, and the Ada scanner agrees with the
+grammar on every program in `compiler/tests/fixtures`.
+
+Invalid escapes are struck from this item's evidence, with the reason
+recorded rather than the clause quietly dropped: the kernel's only literals
+are integers and the two booleans `[1770]`, and character, text and raw
+literals `[0250]` `[0260]` `[0280]` -- the only constructs that define an
+escape at all -- are refused by `[1830]`. No enabled rule reads a byte as an
+escape, so neither a valid nor an invalid one can be written. The clause
+belongs to the work that enables a literal carrying escapes, and R4.10 owns
+the remaining hosted literal forms.
 
 ### R1.30 — Establish the diagnostic catalogue
 Status: planned

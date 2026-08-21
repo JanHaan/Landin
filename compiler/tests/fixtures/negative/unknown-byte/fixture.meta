@@ -1,0 +1,5 @@
+class: negative
+summary: [1750] a byte no rule spells is reported where it sits, and the report must name the byte
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+lex: no rule spells ';'

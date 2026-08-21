@@ -1,0 +1,4 @@
+f: () -> none =
+    mut incx: u32 = 0
+    inc incx
+end f
