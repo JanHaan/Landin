@@ -1,0 +1,443 @@
+--  The scanner, and the agreement it has to keep.
+--
+--  The last case reads compiler/tests/lexical.tokens, which check.py wrote
+--  from its own tokeniser, and lexes every file it names.  Two
+--  implementations of one grammar, compared token for token: a boundary
+--  either side gets wrong shows up here, and check.py's own run says which
+--  side moved by refusing a stale dump.
+
+with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
+
+with Landin.Platform.Native;
+with Landin.Source.Names;
+with Landin.Source.Sets;
+with Landin.Source;
+with Landin.Tokens.Lexer;
+with Landin.Tokens;
+
+package body Landin.Tests.Lexer_Suite is
+
+   package Unbounded renames Ada.Strings.Unbounded;
+
+   use type Landin.Platform.Read_Status;
+   use type Landin.Source.Byte_Offset;
+   use type Landin.Tokens.Token_Kind;
+   use type Landin.Tokens.Integer_Base;
+   use type Landin.Tokens.Token_Index;
+   use type Landin.Tokens.Fault_Kind;
+
+   LF : constant Character := Character'Val (10);
+
+   --  Relative to compiler/ada, which is where the harness runs.
+   Corpus : constant String := "../tests";
+
+   ------------------------------------------------------------------
+   --  Lexing a string, without a filesystem
+   ------------------------------------------------------------------
+
+   procedure Lex_Text
+     (Text    : String;
+      Sources : in out Landin.Source.Sets.Source_Set;
+      Names   : in out Landin.Source.Names.Table;
+      Stream  : out Landin.Tokens.Token_Stream);
+
+   procedure Lex_Text
+     (Text    : String;
+      Sources : in out Landin.Source.Sets.Source_Set;
+      Names   : in out Landin.Source.Names.Table;
+      Stream  : out Landin.Tokens.Token_Stream)
+   is
+      Id : constant Landin.Source.Source_Id :=
+        Sources.Add ("probe.ldn", Text);
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+   end Lex_Text;
+
+   procedure Kinds_And_Spans (Item : in out Landin.Testing.Context);
+
+   procedure Kinds_And_Spans (Item : in out Landin.Testing.Context) is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+   begin
+      Lex_Text ("mut count: u32 = 0", Sources, Names, Stream);
+
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Tokens.Count (Stream)), 7,
+         "six tokens and the end of input");
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Kind (Stream, 1) = Landin.Tokens.Kw_Mut,
+         "a reserved word is not an identifier");
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Kind (Stream, 2) = Landin.Tokens.Identifier,
+         "a name is a name");
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Kind (Stream, 6)
+               = Landin.Tokens.Integer_Literal,
+         "a digit run is an integer");
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Kind (Stream, 7)
+               = Landin.Tokens.End_Of_Input,
+         "the stream ends with the end of input");
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Where (Stream, 2).First = 4
+               and then Landin.Tokens.Where (Stream, 2).Last = 9,
+         "the span of 'count' is its own bytes");
+   end Kinds_And_Spans;
+
+   --  [1750]: a token is as long as it can be, so these run together.
+   procedure Longest_Token_Wins (Item : in out Landin.Testing.Context);
+
+   procedure Longest_Token_Wins (Item : in out Landin.Testing.Context) is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Joined  : Landin.Tokens.Token_Stream;
+      Apart   : Landin.Tokens.Token_Stream;
+   begin
+      Lex_Text ("incx", Sources, Names, Joined);
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Kind (Joined, 1) = Landin.Tokens.Identifier,
+         "'incx' is one name, not 'inc' and 'x'");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Tokens.Count (Joined)), 2,
+         "and it is one token");
+
+      Lex_Text ("inc x", Sources, Names, Apart);
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Kind (Apart, 1) = Landin.Tokens.Kw_Inc,
+         "'inc x' is the keyword and a name");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Tokens.Count (Apart)), 3,
+         "which is two tokens");
+
+      --  The signs, longest first: '<=' is never '<' then '='.
+      declare
+         Signs : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("<= << <> := == -> +%", Sources, Names, Signs);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Signs, 1) = Landin.Tokens.Less_Equal
+            and then Landin.Tokens.Kind (Signs, 2) = Landin.Tokens.Less_Less
+            and then Landin.Tokens.Kind (Signs, 3)
+                     = Landin.Tokens.Less_Greater
+            and then Landin.Tokens.Kind (Signs, 4)
+                     = Landin.Tokens.Colon_Equal
+            and then Landin.Tokens.Kind (Signs, 5)
+                     = Landin.Tokens.Equal_Equal
+            and then Landin.Tokens.Kind (Signs, 6)
+                     = Landin.Tokens.Minus_Greater
+            and then Landin.Tokens.Kind (Signs, 7)
+                     = Landin.Tokens.Plus_Percent,
+            "every two-byte sign is one token");
+      end;
+   end Longest_Token_Wins;
+
+   --  [1780]: the opener decides the form, and a block comment nests.
+   procedure Comments_Are_Space (Item : in out Landin.Testing.Context);
+
+   procedure Comments_Are_Space (Item : in out Landin.Testing.Context) is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+   begin
+      Lex_Text ("a --( x --( y )-- z )-- b", Sources, Names, Stream);
+      Landin.Testing.Check_Equal
+        (Item, Natural (Landin.Tokens.Count (Stream)), 3,
+         "a nested block comment is space, however deep");
+
+      declare
+         Inline : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("1 --( here )-- + 2", Sources, Names, Inline);
+         Landin.Testing.Check_Equal
+           (Item, Natural (Landin.Tokens.Count (Inline)), 4,
+            "a block comment may sit between two tokens on one line");
+      end;
+
+      declare
+         Doc : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("--- a doc" & LF & "a: u32 = 1", Sources, Names, Doc);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Doc_Comment_Count (Doc), 1,
+            "a doc comment keeps its span for [0030] to attach later");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Doc), 0,
+            "and is not a fault");
+      end;
+
+      declare
+         Unclosed : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("--( never closed", Sources, Names, Unclosed);
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Unclosed), 1,
+            "a block comment never closed is one fault");
+         Landin.Testing.Check
+           (Item,
+            Landin.Tokens.Kind (Landin.Tokens.Nth_Fault (Unclosed, 1))
+            = Landin.Tokens.Unterminated_Block_Comment,
+            "and it says which fault it is");
+         Landin.Testing.Check
+           (Item,
+            Landin.Tokens.Opened_At
+              (Landin.Tokens.Nth_Fault (Unclosed, 1)).First = 0,
+            "and points at the opener as well as the end");
+      end;
+   end Comments_Are_Space;
+
+   --  [1770] gives each base its own digits, and [1830] refuses a float.
+   procedure Literals_And_Refusals (Item : in out Landin.Testing.Context);
+
+   procedure Literals_And_Refusals (Item : in out Landin.Testing.Context) is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+   begin
+      Lex_Text ("0xDEAD_BEEF 0o755 0b1010 1_000", Sources, Names, Stream);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Tokens.Fault_Count (Stream), 0,
+         "every base the kernel spells is accepted");
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Base (Landin.Tokens.Token_At (Stream, 1))
+               = Landin.Tokens.Hexadecimal,
+         "a base prefix is remembered");
+      Landin.Testing.Check
+        (Item,
+         Landin.Tokens.Digit_Span
+           (Landin.Tokens.Token_At (Stream, 1)).First = 2,
+         "and the digit span skips the prefix, so R1.60 need not");
+
+      declare
+         Wrong : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("0b102", Sources, Names, Wrong);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Wrong, 1)
+                  = Landin.Tokens.Malformed_Integer,
+            "a digit outside the base makes one wrong literal");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Tokens.Fault_Count (Wrong), 1,
+            "and one fault, not a literal and a stray digit");
+      end;
+
+      declare
+         Float_Text : Landin.Tokens.Token_Stream;
+      begin
+         Lex_Text ("ratio: f32 = 1.5", Sources, Names, Float_Text);
+         Landin.Testing.Check
+           (Item, Landin.Tokens.Kind (Float_Text, 5)
+                  = Landin.Tokens.Float_Literal,
+            "a float is one lexeme, so [1830] can refuse it by name");
+         Landin.Testing.Check
+           (Item,
+            Landin.Tokens.Refused (Landin.Tokens.Nth_Fault (Float_Text, 1))
+            = Landin.Tokens.Float_Literal,
+            "and the fault says which construct it was");
+         Landin.Testing.Check_Equal
+           (Item,
+            Landin.Tokens.Construct (Landin.Tokens.Float_Literal), "[0210]",
+            "which names the tour construct that describes it");
+      end;
+   end Literals_And_Refusals;
+
+   procedure Unknown_Bytes_Recover (Item : in out Landin.Testing.Context);
+
+   procedure Unknown_Bytes_Recover (Item : in out Landin.Testing.Context) is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+   begin
+      Lex_Text ("a: u32 = 1;" & LF & "b: u32 = 2", Sources, Names, Stream);
+      Landin.Testing.Check_Equal
+        (Item, Landin.Tokens.Fault_Count (Stream), 1,
+         "an unspellable byte is one fault");
+      Landin.Testing.Check
+        (Item, Landin.Tokens.Kind (Stream, 6)
+               = Landin.Tokens.Unknown_Bytes,
+         "and one token, so a parser has something in the hole");
+      Landin.Testing.Check
+        (Item,
+         Landin.Tokens.Kind (Stream, 7) = Landin.Tokens.Identifier,
+         "and the scan carries on at the next byte");
+
+      declare
+         Wanted : Landin.Tokens.Kind_Set :=
+           [others => False];
+      begin
+         Wanted (Landin.Tokens.End_Of_Input) := True;
+         Wanted (Landin.Tokens.Kw_End) := True;
+         Landin.Testing.Check
+           (Item,
+            Landin.Tokens.Skip_To (Stream, 1, Wanted)
+            = Landin.Tokens.Count (Stream),
+            "a forward scan for a recovery point always stops");
+      end;
+   end Unknown_Bytes_Recover;
+
+   ------------------------------------------------------------------
+   --  The agreement
+   ------------------------------------------------------------------
+
+   procedure Agrees_With_The_Corpus (Item : in out Landin.Testing.Context);
+
+   procedure Agrees_With_The_Corpus (Item : in out Landin.Testing.Context) is
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Dump    : Unbounded.Unbounded_String;
+      Status  : Landin.Platform.Read_Status;
+      Files   : Natural := 0;
+      Checked : Natural := 0;
+   begin
+      Host.Read_File (Corpus & "/lexical.tokens", Dump, Status);
+
+      if Status /= Landin.Platform.Read_Ok then
+         Landin.Testing.Fail
+           (Item, "compiler/tests/lexical.tokens is unreadable; "
+                  & "regenerate it with python3 check.py --tokens");
+         return;
+      end if;
+
+      declare
+         Text  : constant String := Unbounded.To_String (Dump);
+         First : Natural := Text'First;
+
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+         Index   : Landin.Tokens.Token_Index := 1;
+         Live    : Boolean := False;
+         Label   : Unbounded.Unbounded_String;
+      begin
+         for Scan in Text'Range loop
+            if Text (Scan) = LF then
+               declare
+                  Line : constant String := Text (First .. Scan - 1);
+               begin
+                  First := Scan + 1;
+
+                  if Line'Length = 0 or else Line (Line'First) = '#' then
+                     null;
+
+                  elsif Line'Length > 5
+                    and then Line (Line'First .. Line'First + 4) = "file "
+                  then
+                     declare
+                        Rest : constant String :=
+                          Line (Line'First + 5 .. Line'Last);
+                        Gap  : constant Natural :=
+                          Ada.Strings.Fixed.Index (Rest, " ");
+                        Name : constant String :=
+                          Rest (Rest'First .. Gap - 1);
+                        Kind : constant String :=
+                          Rest (Gap + 1 .. Rest'Last);
+                        Body_Text : Unbounded.Unbounded_String;
+                        Read : Landin.Platform.Read_Status;
+                     begin
+                        Files := Files + 1;
+                        Label := Unbounded.To_Unbounded_String (Name);
+                        Live := Kind'Length > 6
+                          and then Kind (Kind'First .. Kind'First + 5)
+                                   = "tokens";
+
+                        if Live then
+                           Host.Read_File
+                             (Corpus & "/fixtures/" & Name, Body_Text, Read);
+                           if Read /= Landin.Platform.Read_Ok then
+                              Landin.Testing.Fail
+                                (Item, Name & " is unreadable");
+                              Live := False;
+                           else
+                              Lex_Text (Unbounded.To_String (Body_Text),
+                                        Sources, Names, Stream);
+                              Index := 1;
+                           end if;
+                        end if;
+                     end;
+
+                  elsif Live and then Line (Line'First) = ' ' then
+                     declare
+                        Body_Line : constant String :=
+                          Ada.Strings.Fixed.Trim
+                            (Line, Ada.Strings.Both);
+                        One : constant Natural :=
+                          Ada.Strings.Fixed.Index (Body_Line, " ");
+                        Two : constant Natural :=
+                          Ada.Strings.Fixed.Index
+                            (Body_Line (One + 1 .. Body_Line'Last), " ");
+                        Want_First : constant Landin.Source.Byte_Offset :=
+                          Landin.Source.Byte_Offset'Value
+                            (Body_Line (Body_Line'First .. One - 1));
+                        Want_Last : constant Landin.Source.Byte_Offset :=
+                          Landin.Source.Byte_Offset'Value
+                            (Body_Line (One + 1 .. Two - 1));
+                     begin
+                        Checked := Checked + 1;
+
+                        if Index > Landin.Tokens.Count (Stream) then
+                           Landin.Testing.Fail
+                             (Item, Unbounded.To_String (Label)
+                              & ": the scanner ran out of tokens");
+                        else
+                           declare
+                              Got : constant Landin.Source.Span :=
+                                Landin.Tokens.Where (Stream, Index);
+                           begin
+                              if Got.First /= Want_First
+                                or else Got.Last /= Want_Last
+                              then
+                                 Landin.Testing.Fail
+                                   (Item, Unbounded.To_String (Label)
+                                    & ": token" & Landin.Tokens.Token_Index'
+                                        Image (Index)
+                                    & " spans"
+                                    & Landin.Source.Byte_Offset'Image
+                                        (Got.First)
+                                    & " .."
+                                    & Landin.Source.Byte_Offset'Image
+                                        (Got.Last)
+                                    & " and the dump says"
+                                    & Landin.Source.Byte_Offset'Image
+                                        (Want_First)
+                                    & " .."
+                                    & Landin.Source.Byte_Offset'Image
+                                        (Want_Last));
+                              end if;
+                           end;
+                           Index := Index + 1;
+                        end if;
+                     end;
+                  end if;
+               end;
+            end if;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, Files >= 60,
+            "the dump names the whole corpus");
+         Landin.Testing.Check
+           (Item, Checked >= 900,
+            "and the scanner was held to every token in it");
+      end;
+   end Agrees_With_The_Corpus;
+
+   procedure Register (Into : in out Landin.Testing.Registry) is
+   begin
+      Landin.Testing.Register
+        (Into, "lexer", "kinds and spans", Kinds_And_Spans'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "longest token wins", Longest_Token_Wins'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "comments are space", Comments_Are_Space'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "literals and refusals",
+         Literals_And_Refusals'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "unknown bytes recover",
+         Unknown_Bytes_Recover'Access);
+      Landin.Testing.Register
+        (Into, "lexer", "agrees with the corpus",
+         Agrees_With_The_Corpus'Access);
+   end Register;
+
+end Landin.Tests.Lexer_Suite;

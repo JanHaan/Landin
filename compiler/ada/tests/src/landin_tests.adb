@@ -15,6 +15,7 @@ with Landin.Tests.Driver_Suite;
 with Landin.Tests.Fixture_Execution_Suite;
 with Landin.Tests.Fixture_Suite;
 with Landin.Tests.Harness_Suite;
+with Landin.Tests.Lexer_Suite;
 with Landin.Tests.Platform_Suite;
 with Landin.Tests.Source_Suite;
 with Landin.Tests.Stages_Suite;
@@ -78,6 +79,7 @@ begin
    Landin.Tests.Fixture_Execution_Suite.Register (Cases);
    Landin.Tests.Fixture_Suite.Register (Cases);
    Landin.Tests.Harness_Suite.Register (Cases);
+   Landin.Tests.Lexer_Suite.Register (Cases);
    Landin.Tests.Platform_Suite.Register (Cases);
    Landin.Tests.Source_Suite.Register (Cases);
    Landin.Tests.Stages_Suite.Register (Cases);
