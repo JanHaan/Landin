@@ -77,11 +77,16 @@
 
               src = pkgs.fetchurl { inherit url sha256; };
 
-              nativeBuildInputs = lib.optionals pkgs.stdenv.isLinux [ pkgs.autoPatchelfHook ];
-              buildInputs = lib.optionals pkgs.stdenv.isLinux [
-                pkgs.stdenv.cc.cc.lib
-                pkgs.zlib
+              nativeBuildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+                pkgs.autoPatchelfHook
+              ];
+              buildInputs = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+                (lib.getLib pkgs.stdenv.cc.cc)
+                pkgs.expat
                 pkgs.ncurses
+                pkgs.xz
+                pkgs.zlib
+                pkgs.zstd
               ];
 
               dontConfigure = true;
@@ -96,19 +101,66 @@
               '';
             };
 
-          gnat = fromArchive {
-            pname = "landin-gnat";
-            version = gnatVersion;
-            url = "${releases}/gnat-${gnatVersion}/gnat-${system}-${gnatVersion}.tar.gz";
-            sha256 = pin "LANDIN_GNAT_SHA256_${suffix}";
+          gnatUnwrapped =
+            (fromArchive {
+              pname = "landin-gnat";
+              version = gnatVersion;
+              url = "${releases}/gnat-${gnatVersion}/gnat-${system}-${gnatVersion}.tar.gz";
+              sha256 = pin "LANDIN_GNAT_SHA256_${suffix}";
+            }).overrideAttrs (previous: {
+              #  GCC otherwise finds the archive's linker before the nixpkgs
+              #  wrapper that supplies libc, its start files and interpreter.
+              postPatch = (previous.postPatch or "") + ''
+                rm -f bin/ld */bin/ld
+              '';
+
+              passthru = (previous.passthru or { }) // {
+                langC = true;
+                langCC = false;
+                langFortran = false;
+                langAda = true;
+                isGNU = true;
+              };
+            });
+
+          #  This still executes the pinned compiler.  The wrapper gives that
+          #  compiler the target libraries and tools from the nix store.
+          gnat = pkgs.wrapCCWith {
+            cc = gnatUnwrapped;
+            isAlireGNAT = true;
           };
 
-          gprbuild = fromArchive {
-            pname = "landin-gprbuild";
-            version = gprbuildVersion;
-            url = "${releases}/gprbuild-${gprbuildVersion}/gprbuild-${system}-${gprbuildVersion}.tar.gz";
-            sha256 = pin "LANDIN_GPRBUILD_SHA256_${suffix}";
-          };
+          gprbuild =
+            (fromArchive {
+              pname = "landin-gprbuild";
+              version = gprbuildVersion;
+              url = "${releases}/gprbuild-${gprbuildVersion}/gprbuild-${system}-${gprbuildVersion}.tar.gz";
+              sha256 = pin "LANDIN_GPRBUILD_SHA256_${suffix}";
+            }).overrideAttrs (previous: {
+              nativeBuildInputs = (previous.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
+
+              #  The archive embeds its compiler database, so merely copying
+              #  an extra description beside it would not activate that file.
+              #  This description recognizes the wrapper while taking the Ada
+              #  runtime path from the pinned compiler's own GCC report.
+              postInstall = (previous.postInstall or "") + ''
+                mkdir -p "$out/share/landin-gprconfig"
+                substitute \
+                  ${inputs.nixpkgs}/pkgs/development/ada-modules/gprbuild/nixpkgs-gnat.xml \
+                  "$out/share/landin-gprconfig/nixpkgs-gnat.xml" \
+                  --replace-fail \
+                    '<external>readlink -n ''${PATH}/../nix-support/gprconfig-gnat-unwrapped</external>' \
+                    '<external>''${PREFIX}gcc -v</external>
+                     <grep regexp="^COLLECT_GCC=(.*)/bin/gcc" group="1"></grep>'
+              '';
+
+              postFixup = (previous.postFixup or "") + ''
+                wrapProgram "$out/bin/gprbuild" \
+                  --add-flags "--db $out/share/landin-gprconfig"
+                wrapProgram "$out/bin/gprconfig" \
+                  --add-flags "--db $out/share/landin-gprconfig"
+              '';
+            });
         in
         {
           default = pkgs.mkShell {
@@ -117,6 +169,13 @@
               gprbuild
               pkgs.python3 #  check.py and docs/site/render_html.py
               pkgs.hut #  scripts/site.sh --publish
+            ];
+
+            #  The Ada project asks GNAT for its stack checking.  GCC disables
+            #  that option, with a warning, if the wrapper also adds its
+            #  conflicting stack-clash protection.
+            hardeningDisable = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+              "stackclashprotection"
             ];
 
             #  The build tag keeps this shell's object files out of the
