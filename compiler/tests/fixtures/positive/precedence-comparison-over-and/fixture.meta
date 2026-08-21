@@ -1,0 +1,4 @@
+class: positive
+summary: [1820] comparison binds tighter than the logical words
+program: program.ldn
+targets: linux-x86-64, macos-arm64

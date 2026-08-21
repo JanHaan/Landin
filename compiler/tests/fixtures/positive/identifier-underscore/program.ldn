@@ -1,0 +1,2 @@
+_hidden: u32 = 1
+with_parts: u32 = 2

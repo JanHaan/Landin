@@ -1,0 +1,3 @@
+f: (inout x: i32) -> none =
+    return
+end f

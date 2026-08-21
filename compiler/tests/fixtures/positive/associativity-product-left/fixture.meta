@@ -1,0 +1,4 @@
+class: positive
+summary: [1820] product is left associative: 8 / 4 / 2 is 1, not 4
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,1 @@
+f: (a: i32, b: i32, c: i32) -> (r: bool) = a < b < c end

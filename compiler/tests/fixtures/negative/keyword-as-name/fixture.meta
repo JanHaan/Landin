@@ -1,0 +1,4 @@
+class: negative
+summary: [1760] a keyword is not available as a name, and the report must name the keyword
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,4 @@
+class: positive
+summary: [1790] a binding may carry no value
+program: program.ldn
+targets: linux-x86-64, macos-arm64

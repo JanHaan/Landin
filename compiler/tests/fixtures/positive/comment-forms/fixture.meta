@@ -1,0 +1,4 @@
+class: positive
+summary: [1780] every comment form, including one between two tokens on a line
+program: program.ldn
+targets: linux-x86-64, macos-arm64

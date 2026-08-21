@@ -1,0 +1,4 @@
+class: positive
+summary: [1820] the wrapping forms are their own operators
+program: program.ldn
+targets: linux-x86-64, macos-arm64

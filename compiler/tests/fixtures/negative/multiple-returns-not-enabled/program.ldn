@@ -1,0 +1,4 @@
+divide: (a: i32, b: i32) -> (q: i32, r: i32) =
+    q = a / b
+    r = a % b
+end divide

@@ -1,0 +1,4 @@
+class: negative
+summary: [1810] return carries no value; the named return is assigned instead
+program: program.ldn
+targets: linux-x86-64, macos-arm64

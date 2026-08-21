@@ -1,0 +1,1 @@
+triple_it: (x: i32) -> (r: i32) = x * 3 end

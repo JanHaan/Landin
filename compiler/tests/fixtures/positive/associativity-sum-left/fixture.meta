@@ -1,0 +1,4 @@
+class: positive
+summary: [1820] sum is left associative: 9 - 4 - 3 is 2, not 8
+program: program.ldn
+targets: linux-x86-64, macos-arm64

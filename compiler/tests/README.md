@@ -78,6 +78,24 @@ A class with no fixtures is the normal state early in the roadmap, and an
 empty class directory is not a fault. A fixture that records an expectation
 nobody runs is.
 
+## The grammar corpus
+
+A `.ldn` file under `positive/` must be derivable from the grammar in
+`tour.txt`; one under `negative/` must not. `check.py` enforces both on every
+full run, and it enforces that every construct in the grammar section is
+named by at least one fixture, so a production nothing pins is a reported
+fault rather than a quiet one.
+
+That is what makes the corpus useful before a compiler exists: the
+specification and its examples check each other. When R1.40's parser
+arrives, it has to agree with the same corpus, and a disagreement between
+the parser and the grammar is a defect in one of them rather than a matter
+of opinion.
+
+Two rounds of reading the grammar by hand found sixty-eight defects between
+them and still missed that a lone `_` parsed as a name. The corpus found
+that in a second.
+
 ## Derived programs
 
 The four prototype text files in the repository root stay exactly as they

@@ -1,0 +1,5 @@
+f: (x: i32) -> (r: i32) =
+    r = 0
+    return when x == 0
+    r = 1
+end f

@@ -1,0 +1,1 @@
+f: (x: i32) -> (r: bool) = x > 0 and x < 9 end

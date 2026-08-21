@@ -1,0 +1,4 @@
+class: positive
+summary: [1770] every base the kernel spells, in [0220]'s own spellings
+program: program.ldn
+targets: linux-x86-64, macos-arm64
