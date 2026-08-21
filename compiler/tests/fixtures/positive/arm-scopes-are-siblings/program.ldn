@@ -1,0 +1,10 @@
+f: (c: bool) -> (r: u32) =
+    r = 0
+    if c then
+        t: u32 = 1
+        r = t
+    else
+        t: u32 = 2
+        r = t
+    end if
+end f

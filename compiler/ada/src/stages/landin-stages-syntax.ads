@@ -7,11 +7,12 @@
 --  unreadable byte and a missing `then` says both things rather than
 --  stopping at the first.
 --
---  It keeps nothing.  A parse produces a tree and this stage drops it,
---  because nothing reads one yet and where trees live for a whole
---  compilation is a question R1.50 has to answer when it collects
---  declarations across files.  Wiring an answer in now would be guessing
---  with a data structure.
+--  It keeps nothing of its own.  The tree of each source goes into the
+--  compilation's forest and the identities it interned are the
+--  compilation's too, because both outlive this Run: the stage that
+--  resolves names runs after it returns, and a Name_Id in a tree names a
+--  spelling in one table.  The stage object holds nothing at all, which is
+--  what lets one library-level instance serve every compilation.
 
 package Landin.Stages.Syntax is
 

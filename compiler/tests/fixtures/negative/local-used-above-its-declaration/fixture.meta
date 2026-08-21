@@ -1,0 +1,5 @@
+class: negative
+summary: [1840] a statement run is a sequence, so a local is visible only to the statements after it
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0201

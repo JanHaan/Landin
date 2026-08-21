@@ -1,0 +1,5 @@
+class: negative
+summary: [1850] a signature is one scope, so two parameters may not share a name
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0200

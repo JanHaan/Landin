@@ -1,0 +1,3 @@
+f: (x: u32, x: u32) -> none =
+    return
+end f

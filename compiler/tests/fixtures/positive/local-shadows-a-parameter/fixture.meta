@@ -1,0 +1,4 @@
+class: positive
+summary: [1840] a body is a scope inside the signature, so a local may shadow a parameter
+program: program.ldn
+targets: linux-x86-64, macos-arm64

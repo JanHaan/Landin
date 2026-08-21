@@ -478,15 +478,102 @@ records a golden tree, because the corpus agreement above is a stronger claim
 than a dump nobody reads, and R1.70 will want the same file for its IR.
 
 ### R1.50 — Collect declarations and resolve names
-Status: planned
+Status: complete
 Depends on: R1.40
 
 Implement module-local declaration collection, forward references, scopes,
 shadowing and deterministic duplicate/unresolved-name diagnostics for the
 kernel.
 
+**This item needed normative text the tour did not have, and adding it is the
+first thing to read here.** [0130] and [0140] are two sentences -- order
+inside a module does not matter, an inner scope may shadow an outer name --
+and neither says which scopes exist, that two declarations of one name in one
+scope is an error, or that a name resolving to nothing is one. A rule about an
+inner scope means nothing until the inner ones are named, so three constructs
+were added to the kernel section: [1840] names the three scopes the grammar
+has and says which of them is ordered, [1850] refuses one name declared twice
+in one scope, and [1860] refuses a name that names nothing. Each cites the
+sentence it comes from. The duplicate rule was already repository policy
+before it was specification -- `check.py` has enforced "two declarations of
+one name in one module" as a textual invariant since R0, and `README.md`
+advertises it -- so [1850] wrote down what the checker already believed. A
+first attempt at this item attributed all three rules to [0130] and [0140]
+directly; an adversarial reading found that neither paragraph says any of
+them, which is what sent the work to the tour instead of to a citation.
+
+Where the trees live is answered, which R1.40 deferred. `Landin.Syntax.Forest`
+owns one heap-allocated tree per source and frees none, which is the decision
+`Landin.Source` already recorded for a snapshot's bytes and for the same
+reason: a compiler that frees a tree while a diagnostic still points into it
+has traded a leak for a dangling span. A `Tree` is limited with unknown
+discriminants, so an initialised allocator whose value is the parse is the one
+form Ada gives for building one somewhere that outlives the call.
+
+The compilation owns it, and three more tables with it: the interned names,
+the declaration sites, and the resolution. Two facts about the seam force
+that. `Run` takes `Item` as an `in` parameter of a limited interface, so a
+stage cannot keep anything in itself; and `Stage_Reference` is a library-level
+access type, so a stage object cannot be a local of one compilation either.
+The line that keeps `Landin.Stages` a seam is exact and is now written in its
+header: it may depend on a representation and may never depend on a stage.
+Ada enforces that for the specification only -- a parent's spec may not `with`
+its own child, and a parent's *body* may -- so the rule and not the compiler
+is what stops `landin-stages.adb` from building a default pipeline.
+
+A resolution is one array of `Declaration_Id` per compilation, one run per
+source, exactly as `Landin.Syntax` lays every node's children end to end.
+That is the flat tree's payoff arriving: a reference costs one addition and
+one index, with no map and no order that depends on where the host put an
+object. Lookup is hashed and never iterated, and the report order is the order
+the sources were added and then the order the declarations were written --
+which is what makes it source-stable rather than identity-stable.
+
+Two passes, because [1840] gives the kernel one unordered scope and two
+ordered kinds. Every module declaration of every file is collected before any
+body is walked, so a name may be used above the line that introduces it and
+across a file boundary; a local is declared when the walk reaches it, so a
+binding's own value is read before its name exists [0110]. One mechanism, two
+readings: what is in the table when a lookup runs is what that lookup can see,
+with no visibility flag anywhere.
+
+Two codes and not more. `L0200` a name declared twice in one scope, `L0201` a
+name declared in no visible scope. `L0200` is the first diagnostic in the
+compiler whose second label can point into another file, which is why
+`Landin.Diagnostics.Resolution` takes a `Landin.Provenance.Origin` rather than
+a span: until now a scan and a parse never crossed a file, so both places were
+always in one.
+
+`check.py` gained the classification a name-error fixture needs. A program
+refused for a reason of names is syntactically legal, so the grammar must
+derive it -- the opposite of what `negative/` used to mean. The stage is read
+out of `Landin.Diagnostics.Lexical` and `Landin.Diagnostics.Syntactic`, the two
+packages that turn a fault into a code, and never out of the number: the
+catalogue's header forbids reading a stage off a code, and `L0010` is the
+standing proof, raised by the scanner and by the parser both. A first attempt
+used the band arithmetic and was rejected for exactly that reason.
+
+Deferred with the reason recorded. [0080]'s "assigned before use" and [0930]'s
+"every named return assigned before the function returns" are R1.60's, not
+this item's: in `mut n: u32` then `x = n` the name resolves and what is missing
+is an assignment on some path, which is a merge over the arms and a reading of
+`return` as an exit. `public` [0090] is recorded on every declaration and
+consulted by nobody, because with one module and no importer there is nothing
+for it to mean until R3.10.
+
 Exit evidence: positive and negative fixtures prove order-independent module
 names and source-stable diagnostics.
+
+Both hold. Twelve fixtures were added, four positive and eight negative, and
+the corpus is now 46 positives and 31 negatives. A name is resolved across two
+files in either command-line order with the same result, a module name is used
+above the line that introduces it, a local shadows a parameter, and one name is
+declared in both arms of an `if` -- all accepted. A duplicate in a module, in a
+body, between two parameters and between a parameter and the named return; a
+name declared nowhere, one from another arm, one after the branch closes, and
+one used above its own declaration -- all refused, each with the exact ordered
+code sequence its fixture names, checked by running `Landin.Driver.Execute` the
+way a user runs it rather than by assembling the stages in a test.
 
 ### R1.60 — Check the executable kernel
 Status: planned

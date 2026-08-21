@@ -1,0 +1,342 @@
+with Landin.Diagnostics.Resolution;
+with Landin.Provenance;
+with Landin.Resolution;
+with Landin.Source.Names;
+with Landin.Source;
+with Landin.Syntax.Forest;
+with Landin.Syntax;
+
+package body Landin.Stages.Resolution is
+
+   package Names renames Landin.Diagnostics.Resolution;
+   package Syn renames Landin.Syntax;
+
+   use type Landin.Provenance.Declaration_Id;
+   use type Landin.Source.Names.Name_Id;
+   use type Landin.Syntax.Node_Id;
+   use type Landin.Syntax.Node_Kind;
+
+   overriding function Name (Item : Instance) return String is
+      pragma Unreferenced (Item);
+   begin
+      return "resolution";
+   end Name;
+
+   overriding procedure Run
+     (Item    : Instance;
+      Context : in out Compilation;
+      Outcome : out Stage_Outcome)
+   is
+      pragma Unreferenced (Item);
+
+      Spellings : constant not null access Landin.Source.Names.Table :=
+        Identities (Context);
+      Written   : constant not null access Landin.Provenance.Table :=
+        Sites (Context);
+      Trees     : constant not null access Landin.Syntax.Forest.Table :=
+        Landin.Stages.Trees (Context);
+      Meanings  : constant not null access Landin.Resolution.Table :=
+        Landin.Stages.Meanings (Context);
+
+      Found : Landin.Diagnostics.Diagnostic_List;
+
+      --  How a name is written, for the sentence a user reads.  The
+      --  resolver compares identities; only a message needs the bytes.
+      function Spelled (Of_Name : Landin.Source.Names.Name_Id) return String
+        is (Landin.Source.Names.Spelling (Spellings.all, Of_Name));
+
+      procedure Declare_One
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id);
+
+      procedure Resolve
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id);
+
+      procedure Walk_Block
+        (Of_Tree : Syn.Tree;
+         Block   : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id);
+
+      --  [1850]: one scope gives one name to one thing.  The first
+      --  declaration keeps the name, so every reference binds to one thing
+      --  and one duplicate is one report rather than a second entry every
+      --  later stage would have to choose between.
+      procedure Declare_One
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id)
+      is
+         Named : constant Landin.Source.Names.Name_Id :=
+           Syn.Name (Of_Tree, Node);
+      begin
+         --  A declaration whose name position the parser refused has no
+         --  identity, and there is nothing to declare or to collide with.
+         if Named = Landin.Source.Names.No_Name then
+            return;
+         end if;
+
+         declare
+            Earlier : constant Landin.Resolution.Declaration_Id :=
+              Landin.Resolution.Declared_Here (Meanings.all, Inside, Named);
+         begin
+            if Earlier /= Landin.Resolution.No_Declaration then
+               Names.Report
+                 (Item    => Names.Duplicate_Declaration,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Anchor (Of_Tree, Node),
+                  Message => "`" & Spelled (Named)
+                             & "` is declared twice in one scope",
+                  Note    => "[1850]: only an inner scope may shadow an"
+                             & " outer name, and these are one scope",
+                  Related => Landin.Provenance.Site
+                               (Written.all, Earlier),
+                  Because => "the declaration that keeps the name",
+                  Into    => Found);
+               return;
+            end if;
+
+            declare
+               Made : constant Landin.Resolution.Declaration_Id :=
+                 Landin.Resolution.Declare_Name
+                   (Meanings.all, Written.all, Of_Tree, Node, Inside);
+            begin
+               pragma Assert (Made /= Landin.Resolution.No_Declaration);
+            end;
+         end;
+      end Declare_One;
+
+      --  Every use of a name is a Name_Reference node, so resolution is a
+      --  walk looking for one kind rather than for identifiers in seven
+      --  positions.  A Type_Name is not a use: [1790] gives the kernel
+      --  eleven spellings and the parser already holds that node to them.
+      procedure Resolve
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id) is
+      begin
+         if Node = Syn.No_Node then
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node) = Syn.Type_Name then
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference then
+            declare
+               Named : constant Landin.Source.Names.Name_Id :=
+                 Syn.Name (Of_Tree, Node);
+               Meant : constant Landin.Resolution.Declaration_Id :=
+                 (if Named = Landin.Source.Names.No_Name
+                  then Landin.Resolution.No_Declaration
+                  else Landin.Resolution.Visible
+                         (Meanings.all, Inside, Named));
+            begin
+               if Meant = Landin.Resolution.No_Declaration then
+                  if Named /= Landin.Source.Names.No_Name then
+                     Names.Report
+                       (Item    => Names.Unresolved_Name,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Anchor (Of_Tree, Node),
+                        Message => "`" & Spelled (Named)
+                                   & "` is not declared in any scope this"
+                                   & " reaches",
+                        Note    => "[1860]: a name that is not in scope is"
+                                   & " a misspelling, not a new binding",
+                        Into    => Found);
+                  end if;
+               else
+                  Landin.Resolution.Bind
+                    (Meanings.all, Of_Tree, Node, Meant);
+               end if;
+            end;
+
+            return;
+         end if;
+
+         for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            Resolve (Of_Tree, Syn.Slot (Of_Tree, Node, Position), Inside);
+         end loop;
+      end Resolve;
+
+      --  [1840]: a statement run is ordered, so a local is visible to the
+      --  statements after it and not before, and its own value is read
+      --  before its name exists [0110].
+      procedure Walk_Block
+        (Of_Tree : Syn.Tree;
+         Block   : Syn.Node_Id;
+         Inside  : Landin.Resolution.Scope_Id) is
+      begin
+         for Index in 1 .. Syn.Statement_Count (Of_Tree, Block) loop
+            declare
+               Item : constant Syn.Node_Id :=
+                 Syn.Nth_Statement (Of_Tree, Block, Index);
+            begin
+               case Syn.Kind (Of_Tree, Item) is
+                  when Syn.Binding =>
+                     Resolve (Of_Tree, Syn.Value_Of (Of_Tree, Item),
+                              Inside);
+                     Declare_One (Of_Tree, Item, Inside);
+
+                  when Syn.If_Statement =>
+                     --  Each arm and the else are their own scope [1840],
+                     --  and siblings: a name declared in one arm is not
+                     --  visible in another.
+                     for Arm in 1 .. Syn.Arm_Count (Of_Tree, Item) loop
+                        declare
+                           This : constant Syn.Node_Id :=
+                             Syn.Nth_Arm (Of_Tree, Item, Arm);
+                        begin
+                           Resolve
+                             (Of_Tree,
+                              Syn.Condition_Of (Of_Tree, This), Inside);
+                           Walk_Block
+                             (Of_Tree, Syn.Body_Of (Of_Tree, This),
+                              Landin.Resolution.Open_Scope
+                                (Meanings.all, Landin.Resolution.Block,
+                                 Inside));
+                        end;
+                     end loop;
+
+                     if Syn.Else_Body (Of_Tree, Item) /= Syn.No_Node then
+                        Walk_Block
+                          (Of_Tree, Syn.Else_Body (Of_Tree, Item),
+                           Landin.Resolution.Open_Scope
+                             (Meanings.all, Landin.Resolution.Block,
+                              Inside));
+                     end if;
+
+                  when others =>
+                     Resolve (Of_Tree, Item, Inside);
+               end case;
+            end;
+         end loop;
+      end Walk_Block;
+
+   begin
+      Landin.Resolution.Prepare (Meanings.all, Trees.all);
+
+      --  Pass one: every module declaration of every file, before any body
+      --  is walked.  [1840]'s module is a set, so this is what lets a name
+      --  be used above the line that introduces it -- and across a file
+      --  boundary, because there is one module until [1410] arrives.
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Trees.all, Nth_Source (Context, Index));
+         begin
+            for Position in
+              1 .. Syn.Declaration_Count (Of_Tree.all)
+            loop
+               declare
+                  Node : constant Syn.Node_Id :=
+                    Syn.Nth_Declaration (Of_Tree.all, Position);
+               begin
+                  if Landin.Resolution.Declares
+                       (Syn.Kind (Of_Tree.all, Node))
+                  then
+                     Declare_One
+                       (Of_Tree.all, Node,
+                        Landin.Resolution.Program_Scope);
+                  end if;
+               end;
+            end loop;
+         end;
+      end loop;
+
+      --  Pass two: the bodies, in the same order, so the report is read
+      --  top to bottom of the file it is about.
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Trees.all, Nth_Source (Context, Index));
+         begin
+            for Position in
+              1 .. Syn.Declaration_Count (Of_Tree.all)
+            loop
+               declare
+                  Node : constant Syn.Node_Id :=
+                    Syn.Nth_Declaration (Of_Tree.all, Position);
+               begin
+                  case Syn.Kind (Of_Tree.all, Node) is
+                     when Syn.Binding =>
+                        --  A module binding's value is read in the module
+                        --  scope, which is the whole of it.
+                        Resolve
+                          (Of_Tree.all,
+                           Syn.Value_Of (Of_Tree.all, Node),
+                           Landin.Resolution.Program_Scope);
+
+                     when Syn.Function_Declaration =>
+                        declare
+                           Signature : constant
+                             Landin.Resolution.Scope_Id :=
+                               Landin.Resolution.Open_Scope
+                                 (Meanings.all,
+                                  Landin.Resolution.Signature,
+                                  Landin.Resolution.Program_Scope);
+                           Runs : constant Syn.Node_Id :=
+                             Syn.Body_Of (Of_Tree.all, Node);
+                        begin
+                           for Which in
+                             1 .. Syn.Parameter_Count (Of_Tree.all, Node)
+                           loop
+                              Declare_One
+                                (Of_Tree.all,
+                                 Syn.Nth_Parameter
+                                   (Of_Tree.all, Node, Which),
+                                 Signature);
+                           end loop;
+
+                           --  The named return is declared here and not in
+                           --  the body [1840]: the body assigns it like any
+                           --  other place [0930], and a parameter and a
+                           --  return may not share a name.
+                           if Syn.Return_Of (Of_Tree.all, Node)
+                              /= Syn.No_Node
+                           then
+                              Declare_One
+                                (Of_Tree.all,
+                                 Syn.Return_Of (Of_Tree.all, Node),
+                                 Signature);
+                           end if;
+
+                           --  [1800]'s expression body opens no scope,
+                           --  because an expression declares nothing.
+                           if Syn.Kind (Of_Tree.all, Runs) = Syn.Block then
+                              Walk_Block
+                                (Of_Tree.all, Runs,
+                                 Landin.Resolution.Open_Scope
+                                   (Meanings.all,
+                                    Landin.Resolution.Block, Signature));
+                           else
+                              Resolve (Of_Tree.all, Runs, Signature);
+                           end if;
+                        end;
+
+                     when others =>
+                        null;
+                  end case;
+               end;
+            end loop;
+         end;
+      end loop;
+
+      declare
+         Ordered : constant Landin.Diagnostics.Diagnostic_List :=
+           Landin.Diagnostics.Sorted (Found);
+      begin
+         for Position in 1 .. Landin.Diagnostics.Count (Ordered) loop
+            Report (Context, Landin.Diagnostics.Get (Ordered, Position));
+         end loop;
+      end;
+
+      Outcome := (if Failed (Context) then Stop else Continue);
+   end Run;
+
+end Landin.Stages.Resolution;
