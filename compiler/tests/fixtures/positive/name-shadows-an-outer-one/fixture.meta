@@ -1,0 +1,4 @@
+class: positive
+summary: [1840] and [0140] an inner scope may shadow an outer name, and nothing is said about it
+program: program.ldn
+targets: linux-x86-64, macos-arm64

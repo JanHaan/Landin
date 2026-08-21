@@ -1,0 +1,5 @@
+class: negative
+summary: [1850] one scope gives one name to one thing, and a module is one scope
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0200

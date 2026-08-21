@@ -1,0 +1,4 @@
+class: positive
+summary: [1840] a module is a set, so a name may be used above the line that introduces it
+program: program.ldn
+targets: linux-x86-64, macos-arm64

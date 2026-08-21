@@ -1,0 +1,4 @@
+class: positive
+summary: [1840] each arm of an if is its own scope, so one name may be declared in both
+program: program.ldn
+targets: linux-x86-64, macos-arm64

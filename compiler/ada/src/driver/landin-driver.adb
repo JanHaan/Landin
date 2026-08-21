@@ -2,6 +2,7 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Source;
 with Landin.Stages;
+with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
 
@@ -22,6 +23,7 @@ package body Landin.Driver is
    --  Stage_Reference is a library-level access type by design, because a
    --  pipeline must not be able to outlive a stage.
    Frontend : aliased Landin.Stages.Syntax.Instance;
+   Names    : aliased Landin.Stages.Resolution.Instance;
 
    Code_Unknown_Option : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Unknown_Option);
@@ -192,11 +194,16 @@ package body Landin.Driver is
                Ran  : Natural;
             begin
                Landin.Stages.Append (Line, Frontend'Access);
+               Landin.Stages.Append (Line, Names'Access);
                Ran := Landin.Stages.Run (Line, Context);
 
-               if Ran /= 1 then
+               --  Resolution runs only when the parse produced trees worth
+               --  reading: the syntax stage stops the pipeline on its own
+               --  failure, so a file with a missing `then` does not also
+               --  report every name the hole swallowed.
+               if Ran not in 1 .. 2 then
                   raise Compiler_Defect
-                    with "the syntax stage did not run";
+                    with "the frontend pipeline did not run";
                end if;
             end;
          end if;

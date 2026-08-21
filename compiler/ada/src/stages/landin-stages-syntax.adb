@@ -1,7 +1,6 @@
 with Landin.Diagnostics.Lexical;
 with Landin.Source;
-with Landin.Source.Names;
-with Landin.Syntax.Parser;
+with Landin.Syntax.Forest;
 with Landin.Tokens.Lexer;
 
 package body Landin.Stages.Syntax is
@@ -19,9 +18,17 @@ package body Landin.Stages.Syntax is
    is
       pragma Unreferenced (Item);
 
-      --  One table for the whole compilation: a name is the same name in
-      --  two files, which is what makes R1.50's comparison two integers.
-      Names : Landin.Source.Names.Table;
+      --  Both of these belong to the compilation and not to this Run.  The
+      --  identities because a Name_Id in a tree names a spelling in one
+      --  table and would name nothing once a per-Run table went out of
+      --  scope; the trees because the stage that resolves names runs after
+      --  this one returns.  The stage object itself is an `in` parameter of
+      --  a limited interface and holds nothing, which is what makes one
+      --  library-level instance right.
+      Names : constant not null access Landin.Source.Names.Table :=
+        Identities (Context);
+      Trees : constant not null access Landin.Syntax.Forest.Table :=
+        Landin.Stages.Trees (Context);
    begin
       for Index in 1 .. Source_Count (Context) loop
          declare
@@ -32,16 +39,13 @@ package body Landin.Stages.Syntax is
             Stream : Landin.Tokens.Token_Stream;
             Found  : Landin.Diagnostics.Diagnostic_List;
          begin
-            Landin.Tokens.Lexer.Lex (Snapshot, Names, Stream);
+            Landin.Tokens.Lexer.Lex (Snapshot, Names.all, Stream);
             Landin.Diagnostics.Lexical.Report (Stream, Found);
 
-            declare
-               Parsed : constant Landin.Syntax.Tree :=
-                 Landin.Syntax.Parser.Parse (Stream, Names, Found);
-               pragma Unreferenced (Parsed);
-            begin
-               null;
-            end;
+            --  One tree per source, in the order the sources were added,
+            --  which is the order the forest numbers them by.
+            Landin.Syntax.Forest.Add
+              (Trees.all, Stream, Names.all, Found);
 
             --  Sorted per source, appended in source order: a report is
             --  read top to bottom of the file it is about.

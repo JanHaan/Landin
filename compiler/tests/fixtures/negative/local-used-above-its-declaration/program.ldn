@@ -1,0 +1,4 @@
+f: () -> (r: u32) =
+    r = later
+    later: u32 = 1
+end f

@@ -3,6 +3,9 @@ with Ada.Strings.Unbounded;
 
 with Landin.Diagnostics.Lexical;
 with Landin.Diagnostics;
+with Landin.Driver;
+with Landin.Platform;
+with Landin.Testing.Fakes;
 with Landin.Platform.Native;
 with Landin.Source.Names;
 with Landin.Source.Sets;
@@ -30,6 +33,16 @@ package body Landin.Tests.Parser_Suite is
 
    function Contains (Text : String; Needle : String) return Boolean
      is (Ada.Strings.Fixed.Index (Text, Needle) /= 0);
+
+   --  Whether Whole begins with Part, comparing the rendered code lists as
+   --  bytes.  An empty Part is a prefix of anything, which is what a
+   --  fixture the parse says nothing about needs.
+   function Is_Prefix (Part : String; Whole : String) return Boolean
+     is (Part'Length = 0
+         or else (Part'Length <= Whole'Length
+                  and then Whole (Whole'First
+                                  .. Whole'First + Part'Length - 1)
+                           = Part));
 
    ------------------------------------------------------------------
 
@@ -199,20 +212,27 @@ package body Landin.Tests.Parser_Suite is
                               & " must say nothing");
                         else
                            Rejected := Rejected + 1;
-                           Landin.Testing.Check
-                             (Item, Total > 0,
-                              Fixtures.Name (Fixture)
-                              & ": the grammar refuses it, so the parser"
-                              & " must report something");
 
+                           --  The scan and the parse run before every
+                           --  other stage, so whatever they report is the
+                           --  front of the report a fixture pins.  A
+                           --  fixture refused for a reason of names parses
+                           --  cleanly and its prefix is empty, which is
+                           --  the whole of what this case may assert about
+                           --  it; the driver case below runs the rest.
                            if Fixtures.Codes (Fixture) /= "" then
                               Pinned := Pinned + 1;
-                              Landin.Testing.Check_Equal
-                                (Item, Unbounded.To_String (Codes),
-                                 Fixtures.Codes (Fixture),
+                              Landin.Testing.Check
+                                (Item,
+                                 Is_Prefix
+                                   (Unbounded.To_String (Codes),
+                                    Fixtures.Codes (Fixture)),
                                  Fixtures.Name (Fixture)
-                                 & ": the report carries the codes the"
-                                 & " fixture names");
+                                 & ": what the parse reports must begin"
+                                 & " the codes the fixture names, and "
+                                 & Unbounded.To_String (Codes)
+                                 & " does not begin "
+                                 & Fixtures.Codes (Fixture));
                            end if;
                         end if;
                      end;
@@ -355,6 +375,130 @@ package body Landin.Tests.Parser_Suite is
          "the report uses the nesting code");
    end Deep_Nesting_Is_Reported;
 
+   ------------------------------------------------------------------
+   --  The report, through the driver
+   ------------------------------------------------------------------
+
+   --  Every negative fixture names the exact ordered sequence of codes its
+   --  report carries, and this is what holds the compiler to it.  It runs
+   --  the whole frontend the way a user does -- Landin.Driver.Execute, with
+   --  the program in a fake filesystem -- because the sequence a fixture
+   --  pins is the sequence a user sees, and a case that assembled the
+   --  stages itself could agree with the fixture while the driver did not.
+   procedure Reports_Carry_The_Pinned_Codes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Reports_Carry_The_Pinned_Codes
+     (Item : in out Landin.Testing.Context)
+   is
+      Real      : Landin.Platform.Native.Native_Filesystem;
+      Catalogue : Fixtures.Catalogue;
+      Pinned    : Natural := 0;
+
+      function Arguments_Of (First : String)
+        return Landin.Platform.Path_List;
+
+      --  The codes a rendered report carries, in the order it carries
+      --  them.  Read out of the bytes rather than out of a list, because
+      --  what a fixture pins is what a reader sees.
+      function Codes_In (Text : String) return String;
+
+      function Arguments_Of (First : String)
+        return Landin.Platform.Path_List
+      is
+         Made : Landin.Platform.Path_List;
+      begin
+         Made.Append (First);
+         return Made;
+      end Arguments_Of;
+
+      function Codes_In (Text : String) return String is
+         Found : Unbounded.Unbounded_String;
+         Mark  : constant String := "error[";
+      begin
+         for Start in Text'Range loop
+            if Start + Mark'Length + 5 <= Text'Last
+              and then Text (Start .. Start + Mark'Length - 1) = Mark
+              and then Text (Start + Mark'Length + 5) = ']'
+            then
+               if Unbounded.Length (Found) > 0 then
+                  Unbounded.Append (Found, ", ");
+               end if;
+
+               Unbounded.Append
+                 (Found,
+                  Text (Start + Mark'Length
+                        .. Start + Mark'Length + 4));
+            end if;
+         end loop;
+
+         return Unbounded.To_String (Found);
+      end Codes_In;
+   begin
+      Fixtures.Discover (Catalogue, Corpus, Real);
+
+      for Index in 1 .. Fixtures.Count (Catalogue) loop
+         declare
+            Fixture : constant Fixtures.Fixture :=
+              Fixtures.Nth (Catalogue, Index);
+            Class   : constant Fixtures.Fixture_Class :=
+              Fixtures.Class (Fixture);
+         begin
+            if Class = Fixtures.Negative_Program
+              and then Fixtures.Program (Fixture) /= ""
+              and then Fixtures.Codes (Fixture) /= ""
+            then
+               declare
+                  Path : constant String :=
+                    Corpus & "/" & Fixtures.Class_Directory (Class) & "/"
+                    & Fixtures.Name (Fixture) & "/"
+                    & Fixtures.Program (Fixture);
+                  Content : Unbounded.Unbounded_String;
+                  Status  : Landin.Platform.Read_Status;
+               begin
+                  Real.Read_File (Path, Content, Status);
+
+                  if Status /= Landin.Platform.Read_Ok then
+                     Landin.Testing.Fail (Item, Path & " is unreadable");
+                  else
+                     declare
+                        Host : Landin.Testing.Fakes.Fake_Filesystem;
+                     begin
+                        Host.Add_File
+                          ("program.ldn", Unbounded.To_String (Content));
+
+                        declare
+                           Ran : constant Landin.Driver.Outcome :=
+                             Landin.Driver.Execute
+                               (Arguments_Of ("program.ldn"), Host);
+                        begin
+                           Pinned := Pinned + 1;
+                           Landin.Testing.Check_Equal
+                             (Item,
+                              Codes_In
+                                (Unbounded.To_String (Ran.Report)),
+                              Fixtures.Codes (Fixture),
+                              Fixtures.Name (Fixture)
+                              & ": the report carries the codes the"
+                              & " fixture names");
+                           Landin.Testing.Check_Equal
+                             (Item, Ran.Status,
+                              Landin.Driver.Status_Reported,
+                              Fixtures.Name (Fixture)
+                              & ": a rejected program exits reported");
+                        end;
+                     end;
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+
+      Landin.Testing.Check
+        (Item, Pinned >= 24,
+         "every negative fixture that names codes was run");
+   end Reports_Carry_The_Pinned_Codes;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -366,6 +510,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "deep nesting is reported",
          Deep_Nesting_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "parser", "reports carry the pinned codes",
+         Reports_Carry_The_Pinned_Codes'Access);
    end Register;
 
 end Landin.Tests.Parser_Suite;

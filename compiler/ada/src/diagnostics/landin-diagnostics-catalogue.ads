@@ -22,7 +22,7 @@
 --     L0001-L0009  the driver and the chassis
 --     L0010-L0099  lexical, and the refusal of what is not enabled
 --     L0100-L0199  reserved for R1.40's syntax failures
---     L0200-L0299  reserved for R1.50's name failures
+--     L0200-L0299  name resolution, assigned at R1.50
 --     L0300-L0399  reserved for R1.60's type failures
 
 package Landin.Diagnostics.Catalogue is
@@ -55,7 +55,11 @@ package Landin.Diagnostics.Catalogue is
       Public_On_Statement,
       End_Name_Mismatch,
       Stray_Token,
-      Nesting_Too_Deep);
+      Nesting_Too_Deep,
+      --  The resolver, assigned at R1.50.  Two rules and not more: a name
+      --  declared twice in one scope, and a name used and never declared.
+      Duplicate_Declaration,
+      Unresolved_Name);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -84,7 +88,9 @@ package Landin.Diagnostics.Catalogue is
             when Public_On_Statement      => "L0108",
             when End_Name_Mismatch        => "L0109",
             when Stray_Token              => "L0110",
-            when Nesting_Too_Deep         => "L0111");
+            when Nesting_Too_Deep         => "L0111",
+            when Duplicate_Declaration    => "L0200",
+            when Unresolved_Name          => "L0201");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -97,7 +103,9 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Bytes         => Error,
             when Unterminated_Comment  => Error,
             when Unterminated_Literal  => Error,
-            when Name_Expected .. Nesting_Too_Deep => Error);
+            when Name_Expected .. Nesting_Too_Deep => Error,
+            when Duplicate_Declaration => Error,
+            when Unresolved_Name       => Error);
 
    function State (Of_Code : Code_Name) return Disposition
      is (case Of_Code is
@@ -114,7 +122,9 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Bytes         => Live,
             when Unterminated_Comment  => Live,
             when Unterminated_Literal  => Live,
-            when Name_Expected .. Nesting_Too_Deep => Live);
+            when Name_Expected .. Nesting_Too_Deep => Live,
+            when Duplicate_Declaration => Live,
+            when Unresolved_Name       => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
    --  user reads: the message at the raise site is what a user reads.
@@ -162,7 +172,11 @@ package Landin.Diagnostics.Catalogue is
                "[1740]: a run of tokens beginning no declaration or"
                & " statement",
             when Nesting_Too_Deep      =>
-               "an implementation limit on how deeply a construct nests");
+               "an implementation limit on how deeply a construct nests",
+            when Duplicate_Declaration =>
+               "[1850]: one scope gives one name to one thing",
+            when Unresolved_Name       =>
+               "[1860]: a name used and declared in no visible scope");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -184,7 +198,9 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Bytes         => True,
             when Unterminated_Comment  => True,
             when Unterminated_Literal  => True,
-            when Name_Expected .. Nesting_Too_Deep => True);
+            when Name_Expected .. Nesting_Too_Deep => True,
+            when Duplicate_Declaration => True,
+            when Unresolved_Name       => True);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -201,7 +217,11 @@ package Landin.Diagnostics.Catalogue is
             when Unterminated_Comment  => False,
             when Unterminated_Literal  => True,
             when Name_Expected .. Unclosed_Construct => False,
-            when Assignment_In_Expression .. Nesting_Too_Deep => True);
+            when Assignment_In_Expression .. Nesting_Too_Deep => True,
+            --  A name that is duplicated or unknown is written down: there
+            --  is a lexeme to point at, and it is the name itself.
+            when Duplicate_Declaration => True,
+            when Unresolved_Name       => True);
 
    --  How many secondary labels the diagnostic must carry. An unterminated
    --  block comment needs one: the end of the file is where it was noticed
@@ -223,6 +243,11 @@ package Landin.Diagnostics.Catalogue is
             when Public_On_Statement   => 1,
             when End_Name_Mismatch     => 1,
             when Nesting_Too_Deep      => 1,
+            --  The earlier declaration, which is the whole complaint and
+            --  may be in another file.  An unresolved name has no second
+            --  place by definition, which is why it asks for none.
+            when Duplicate_Declaration => 1,
+            when Unresolved_Name       => 0,
             when others                => 0);
 
    --  How many notes. [1830] promises a diagnostic that names the construct
@@ -234,6 +259,8 @@ package Landin.Diagnostics.Catalogue is
             when Malformed_Integer     => 1,
             when Unknown_Bytes         => 1,
             when Name_Expected .. Nesting_Too_Deep => 1,
+            when Duplicate_Declaration => 1,
+            when Unresolved_Name       => 1,
             when others                => 0);
 
    function Count return Natural

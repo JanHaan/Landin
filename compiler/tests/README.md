@@ -41,6 +41,16 @@ Fixture classes, and the directory each uses:
 | `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order |
 | `targets` | no | comma-separated targets the fixture applies to |
 
+`codes` also says which stage refused the fixture, and that is what decides
+whether the grammar must derive its program. The frontend refuses what the
+grammar cannot derive, so a fixture whose first code the scan or the parse can
+raise must not derive; a later stage refuses source that parsed, so a fixture
+whose first code belongs to one of those must derive exactly as a positive
+fixture does. `check.py` reads which codes the frontend raises out of
+`Landin.Diagnostics.Lexical` and `Landin.Diagnostics.Syntactic` rather than out
+of the number, because the catalogue's own header forbids reading a stage off a
+code -- `L0010` is raised by the scanner and by the parser both.
+
 `codes` is an ordered list and not a set. Two refused constructs in one file
 are two reports, and a regression that doubles a count is invisible to a set,
 so `float-literal-not-enabled` names `L0010, L0010` -- once for the type and

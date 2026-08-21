@@ -2004,6 +2004,46 @@ expression  ::= logical_and ("or" logical_and)*
 --       parse error. The roadmap owns that list; this grammar owns what is
 --       already true.
 
+-- [1840] The kernel's scopes, outermost first.
+--       [0130] and [0140] are two sentences about scopes and this
+--       grammar has to say which scopes it has, because a rule about
+--       an inner scope means nothing until the inner ones are named.
+--         module     every file compiled together. There is one, until
+--                    [1410]'s directories arrive.
+--         signature  a function's parameters and its named return
+--                    [1800]. The named return is a place the body
+--                    assigns [0930], so it is declared here and not in
+--                    the body, and a parameter and a return may not
+--                    share a name.
+--         body       what a function runs, and one for each arm of an
+--                    `if` and for its `else` [1810]. A statement run is
+--                    a block and a block is what scopes [1090], so a
+--                    name declared in one arm is not visible in another
+--                    and not after the branch closes.
+--       [1800]'s expression body opens no scope, because an expression
+--       declares nothing.
+--       Order matters in a body and does not in a module. [0130]'s set
+--       is a set of declarations, so a module name may be used above
+--       the line that introduces it; [1810]'s statement* is a sequence,
+--       so a local is visible to the statements after it and its own
+--       value is read before its name exists [0110].
+
+-- [1850] One scope gives one name to one thing.
+--       Two declarations of one name in one scope leave nothing to
+--       choose between them: [0130] says order inside a module does not
+--       matter, so neither is first, and [0140] licenses shadowing
+--       between an inner scope and an outer one and not within one. So
+--       it is refused, and the report names both places.
+--       Shadowing is not this. An inner scope may shadow an outer name
+--       [0140] and nothing is said about it, because a rule that
+--       permits something does not also warn about it.
+
+-- [1860] A name that names nothing is refused.
+--       There is no implicit declaration in this language: a name that
+--       is not in scope is a misspelling and not a new binding [1250].
+--       The report names the use, because the use is where the mistake
+--       is and the declaration that was meant is not there to point at.
+
 
 ----------------------------------------------------------------------
 THE PRINCIPLES BEHIND THE DECISIONS

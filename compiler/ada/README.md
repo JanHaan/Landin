@@ -21,6 +21,7 @@ compiler/ada/
     platform/           host adapters and their native implementations
     stages/             target facts and the stage/pipeline seams
     syntax/             the tokens, the scan, the syntax table and the parse
+    resolution/         declarations, scopes and what each name means
     driver/             the request/result boundary
     main/               the `refine` entry point
   tests/src/            the harness, the fakes and the suites
@@ -46,17 +47,21 @@ replaced.
 | `Landin.Syntax.Precedence` | [1820] as data: levels, operators, folds, first sets | contain a parsing decision |
 | `Landin.Syntax.Parser` | the parse, and the only construction of a tree | assign a diagnostic code, or read a byte |
 | `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
+| `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and never freed | hand out a tree that can be copied or written to |
+| `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a roadmap item |
+| `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific dependency | grow a second host concern |
 | `Landin.Targets` | target facts and layout arithmetic | ask the host how wide a pointer is |
-| `Landin.Stages` | the compilation context, the stage interface, pipelines | know which stages exist |
-| `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep a tree, or decide reporting policy |
+| `Landin.Stages` | the compilation context, the stage interface, pipelines, and everything a stage builds that outlives it | know which stages exist, or which order they run in |
+| `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
+| `Landin.Stages.Resolution` | the order the trees are walked in | own the resolution table, or a code |
 | `Landin.Driver` | argument classification and the result | implement a language rule |
 | `Refine` | printing and the exit status | contain a decision |
 
@@ -71,13 +76,33 @@ A snapshot's bytes and line map are allocated once and not freed. A
 compilation owns its sources for as long as it exists, the process is short,
 and a compiler that frees source text while a diagnostic still points into it
 has traded a leak for a dangling span. That is a decision, not an oversight;
-when the roadmap needs a longer-lived process it will be revisited there.
+when the roadmap needs a longer-lived process it will be revisited there. R1.50
+extends it to the trees for the same reason, and to the four tables a
+compilation now owns.
+
+A compilation owns everything a stage builds that outlives the stage that built
+it: the interned identities, the declaration sites, the trees, and what every
+name in them means. Two facts about the seam decide that it has to be there
+rather than in a stage. `Run` takes `Item` as an `in` parameter of a limited
+interface, so a stage cannot keep anything in itself; and `Stage_Reference` is a
+library-level access type, so a stage object cannot be a local of one
+compilation either -- `Append (Line, Local'Access)` on a local instance is
+rejected as "non-local pointer cannot point to local object". The price is that
+`Landin.Stages` gains one `with` clause per representation as the roadmap adds
+them. The line that keeps it a seam is exact: this package may depend on a
+representation and may never depend on a stage. Ada enforces that for the
+specification only -- a parent's spec may not `with` its own child -- and a
+parent's *body* may, so `landin-stages.adb` growing a `with
+Landin.Stages.Syntax` to build a default pipeline is how the rule would
+actually be broken. Nothing but the rule stops it, and `Landin.Driver` is
+what owns the pipeline.
 
 ## What is deliberately absent
 
 There is no checker, IR or backend here yet. What does exist is the whole
-frontend: `refine` scans and parses every `.ldn` file it is given, reports
-what neither could read, and produces nothing when a file is a program.
+frontend: `refine` scans and parses every `.ldn` file it is given, resolves
+every name in them as one module, reports what none of the three could read,
+and produces nothing when a file is a program.
 `L0001` is retired -- the catalogue said it retires when the frontend is wired
 to the driver, and R1.40 is where that happened -- and its row stays so its
 number is never handed to another rule.
@@ -94,13 +119,20 @@ yields a tree and not a crash.
 
 `Landin.Syntax` is a flat table, not a pointer structure: a `Node_Id` is a
 dense integer, so R1.50's names, R1.60's types and R1.70's values each go in
-an array of their own rather than a map keyed on an access value. A child's
+an array of their own rather than a map keyed on an access value. R1.50 is the
+first to take that up, and it does it once for the whole compilation: one array
+of `Declaration_Id` with one run per source and a first index, which is what
+`Landin.Syntax` already does with a node's children. A child's
 index is lower than its parent's and a child's extent lies inside it, both as
 postconditions. A construct the parser could not read becomes an error node of
 the band it needed -- one per band, so a case over a band still covers the
 hole -- and `Is_Sound` propagates upward so that one syntax mistake does not
-become a cascade of type errors about a hole. Trees are dropped after parsing;
-where they live for a whole compilation is R1.50's question.
+become a cascade of type errors about a hole. Trees live in the compilation's
+`Landin.Syntax.Forest`, one per source and none freed, which is R1.50's answer
+to where they live: a tree cannot be an element of a container, because it is
+limited with unknown discriminants, and an initialised allocator whose value is
+the parse is the one form Ada gives for building one where it will outlive the
+call.
 
 A diagnostic code is written in exactly one place, `Landin.Diagnostics.Catalogue`, and `check.py` refuses a code literal anywhere else in `src/`. Each column of the catalogue is an exhaustive case over the code names, so a code with no row is a missing-case error rather than a warning. The catalogue holds no prose: `L0003` is raised with two sentences, for a source that is missing and one that cannot be read, because one rule was violated and the difference between them is wording. What a code requires of every occurrence -- a source, a non-empty span, how many secondary labels, how many notes -- is in the row, and `Landin.Diagnostics.Lexical` checks the row against the diagnostic it just built.
 

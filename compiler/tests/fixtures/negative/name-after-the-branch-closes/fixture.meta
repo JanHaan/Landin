@@ -1,0 +1,5 @@
+class: negative
+summary: [1840] a name declared in an arm is not visible after the branch closes
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0201

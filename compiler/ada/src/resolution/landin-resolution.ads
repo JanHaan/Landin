@@ -1,0 +1,415 @@
+--  What every name in a program means.
+--
+--  `tour.txt` [1840] is the authority: the scopes this grammar has, which
+--  of them is ordered and which is a set, and where a named return is
+--  declared.  It exists because [0130] and [0140] are two sentences about
+--  scopes -- order inside a module does not matter, an inner scope may
+--  shadow an outer name -- and a rule about an inner scope means nothing
+--  until the inner ones are named.  R1.50 needed them named, so the tour
+--  names them.  This package is [1840] made addressable, for the
+--  constructs [1740]-[1820] enable and no others.
+--
+--  Three shapes, and each one is here for a reason that is not taste.
+--
+--  A declared thing is a Landin.Provenance.Declaration_Id and not an
+--  identity of this package's own.  R1.60 will want a type per
+--  declaration, R1.70 an IR value per declaration and R4.60 a debug entry
+--  per declaration, and each of those is an array indexed by that number.
+--  Whoever owns the numbering is depended on by all four, so it has to be
+--  the package that knows nothing: Landin.Provenance holds where a
+--  declaration is written and refuses to know what one means.  That is the
+--  same layering Node_Id already has -- the dense integer lives with the
+--  representation and the meanings live in side tables -- and it makes
+--  R1.50 the first real writer of a table R0.40 built for it.
+--
+--  A resolution is one array of Declaration_Id per compilation, laid out
+--  as one run per source with a first index, exactly as Landin.Syntax puts
+--  every node's children end to end and gives each node a first slot.  A
+--  Node_Id is dense inside its tree and a Source_Id is dense inside its
+--  compilation, so a reference costs one addition and one index, with no
+--  map, no hashing, and no order that depends on where the host put an
+--  object.  What it costs is one Declaration_Id for every node rather than
+--  for every name: about four bytes a node, of which only the
+--  Name_Reference nodes are ever non-zero.  The alternative is a map keyed
+--  on a node, which is the thing the flat tree exists to avoid.
+--
+--  A scope is a parent link and a sort, and visibility is the search order
+--  rather than a rule applied to a result: Visible walks outward from the
+--  scope it was given, so [0140]'s shadowing is what the loop does first.
+--  Sequential visibility inside a body needs no field either.  What is in
+--  this table when a reference is resolved is what is visible to it, so
+--  [1840]'s unordered module is collecting every module declaration before
+--  any body is walked, and its ordered body is declaring a local when the
+--  walk reaches it.  One mechanism, two readings.
+--
+--  What this package does not do.  It resolves no type name: [1790] gives
+--  the kernel eleven scalar spellings, and Landin.Syntax.Parser already
+--  holds a Type_Name node to exactly those -- check.py compares that table
+--  with the tour's own `type` rule -- so a second table here would be a
+--  second authority on a question the tour has already answered once.
+--  When R2.20 lets a program declare a type, a type position becomes a
+--  reference like any other and nothing above changes.
+--
+--  It also holds no diagnostic.  A duplicate is a lookup that found
+--  something and an unresolved name is one that did not; the codes belong
+--  to Landin.Diagnostics.Resolution, and this package's contracts say
+--  which of the two happened without spelling either.
+
+private with Ada.Containers.Hashed_Maps;
+private with Ada.Containers.Vectors;
+
+with Landin.Provenance;
+with Landin.Source;
+with Landin.Source.Names;
+with Landin.Syntax;
+with Landin.Syntax.Forest;
+
+package Landin.Resolution is
+
+   use type Landin.Provenance.Declaration_Id;
+   use type Landin.Source.Names.Name_Id;
+   use type Landin.Source.Source_Id;
+   use type Landin.Syntax.Node_Id;
+   use type Landin.Syntax.Node_Kind;
+
+   ------------------------------------------------------------------
+   --  Identities
+   ------------------------------------------------------------------
+
+   subtype Declaration_Id is Landin.Provenance.Declaration_Id;
+
+   No_Declaration : constant Declaration_Id :=
+     Landin.Provenance.No_Declaration;
+
+   --  [1840]'s three, and no others.  The module is one scope for the whole
+   --  compilation, because a file is a set of declarations and there are no
+   --  modules until [1410]'s directories arrive; the signature holds the
+   --  parameters and the named return; a block is a statement run, which is
+   --  a function's body, an arm of an `if`, or an `else`.
+   type Scope_Sort is (Program, Signature, Block);
+
+   --  Visible and an ordinary integer, the same bargain Node_Id and
+   --  Declaration_Id already struck: a caller can invent one, which is
+   --  what Holds is for.
+   type Scope_Id is range 0 .. Integer'Last;
+
+   No_Scope : constant Scope_Id := 0;
+
+   --  Opened by Prepare, so there is exactly one and nobody has to
+   --  remember to make it.
+   Program_Scope : constant Scope_Id := 1;
+
+   --  What a declaration declares.  Derived from the node and the scope
+   --  when it is recorded, never asked again: [1790]'s binding is one rule
+   --  used by [1740] and by [1810], and which of the two it is, is which
+   --  scope it is in.
+   type Declaration_Sort is
+     (Module_Function, Module_Binding, Parameter, Named_Return,
+      Local_Binding);
+
+   --  The kinds of node that declare a name.  Not Has_Name: that answers
+   --  for a Name_Reference and a Type_Name too, and neither declares
+   --  anything.
+   function Declares (Of_Kind : Landin.Syntax.Node_Kind) return Boolean
+     is (Of_Kind in Landin.Syntax.Function_Declaration
+                    | Landin.Syntax.Binding
+                    | Landin.Syntax.Parameter
+                    | Landin.Syntax.Named_Return);
+
+   type Table is tagged limited private;
+
+   ------------------------------------------------------------------
+   --  Building
+   ------------------------------------------------------------------
+
+   function Is_Prepared (Of_Table : Table) return Boolean;
+
+   --  How many nodes this table has room for in that source's tree, which
+   --  is how many that tree had when Prepare read the forest.
+   function Node_Limit
+     (Of_Table : Table; Id : Landin.Source.Source_Id) return Natural
+     with Pre => Is_Prepared (Of_Table);
+
+   --  True when this table was sized for that very tree, so a table
+   --  prepared from another forest is a contract failure rather than an
+   --  index that happens to be in range.
+   function Covers (Of_Table : Table; Of_Tree : Landin.Syntax.Tree)
+     return Boolean
+     with Pre => Is_Prepared (Of_Table);
+
+   --  Sizes the per-node run of every tree once, and opens [1740]'s one
+   --  scope.  Once, because the forest is complete when the parse is: a
+   --  table that grew as trees arrived would be a table whose size depends
+   --  on when it was asked.
+   procedure Prepare
+     (Into : in out Table; Trees : Landin.Syntax.Forest.Table)
+     with Pre  => not Is_Prepared (Into),
+          Post => Is_Prepared (Into)
+                  and then Holds (Into, Program_Scope)
+                  and then Sort_Of (Into, Program_Scope) = Program
+                  and then Declaration_Count (Into) = 0;
+
+   ------------------------------------------------------------------
+   --  Scopes
+   ------------------------------------------------------------------
+
+   function Scope_Count (Of_Table : Table) return Natural;
+
+   function Holds (Of_Table : Table; Scope : Scope_Id) return Boolean
+     is (Scope /= No_Scope and then Natural (Scope) <= Scope_Count
+                                                         (Of_Table));
+
+   function Sort_Of (Of_Table : Table; Scope : Scope_Id) return Scope_Sort
+     with Pre => Holds (Of_Table, Scope);
+
+   function Enclosing (Of_Table : Table; Scope : Scope_Id) return Scope_Id
+     with Pre  => Holds (Of_Table, Scope),
+          Post => Enclosing'Result < Scope;
+
+   --  A scope inside another.  Program is not openable: [1740] gives the
+   --  compilation one and Prepare made it.
+   function Open_Scope
+     (Into : in out Table; Sort : Scope_Sort; Inside : Scope_Id)
+     return Scope_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Sort /= Program
+                  and then Holds (Into, Inside),
+          Post => Scope_Count (Into) = Scope_Count (Into)'Old + 1
+                  and then Holds (Into, Open_Scope'Result)
+                  and then Enclosing (Into, Open_Scope'Result) = Inside
+                  and then Sort_Of (Into, Open_Scope'Result) = Sort;
+
+   ------------------------------------------------------------------
+   --  Declarations
+   ------------------------------------------------------------------
+
+   function Declaration_Count (Of_Table : Table) return Natural;
+
+   function Contains (Of_Table : Table; Id : Declaration_Id) return Boolean
+     is (Id /= No_Declaration
+         and then Natural (Id) <= Declaration_Count (Of_Table));
+
+   function Name_Of (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Source.Names.Name_Id
+     with Pre => Contains (Of_Table, Id);
+
+   function Sort_Of (Of_Table : Table; Id : Declaration_Id)
+     return Declaration_Sort
+     with Pre => Contains (Of_Table, Id);
+
+   function Scope_Of (Of_Table : Table; Id : Declaration_Id)
+     return Scope_Id
+     with Pre  => Contains (Of_Table, Id),
+          Post => Holds (Of_Table, Scope_Of'Result);
+
+   --  Which tree and which node declared it, so R1.60 can read the type
+   --  the declaration was written with.  The source is here as well as in
+   --  the site table because a Node_Id names nothing without its tree;
+   --  the two cannot disagree, because Declare_Name writes both from one
+   --  node.
+   function Source_Of (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Source.Source_Id
+     with Pre  => Contains (Of_Table, Id),
+          Post => Source_Of'Result /= Landin.Source.No_Source;
+
+   function Node_Of (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Syntax.Node_Id
+     with Pre  => Contains (Of_Table, Id),
+          Post => Node_Of'Result /= Landin.Syntax.No_Node;
+
+   --  `public` as [1740] wrote it, carried so that R3.10 has it without
+   --  reading the tree again.  Always False below the program scope: the
+   --  parser refused the word on a statement and said so.
+   function Is_Public (Of_Table : Table; Id : Declaration_Id)
+     return Boolean
+     with Pre => Contains (Of_Table, Id);
+
+   --  What this scope itself gives that name, so a duplicate is something
+   --  found rather than two lists compared, and No_Declaration otherwise.
+   function Declared_Here
+     (Of_Table : Table;
+      Scope    : Scope_Id;
+      Name     : Landin.Source.Names.Name_Id) return Declaration_Id
+     with Pre  => Is_Prepared (Of_Table) and then Holds (Of_Table, Scope),
+          Post => Declared_Here'Result = No_Declaration
+                  or else (Contains (Of_Table, Declared_Here'Result)
+                           and then Scope_Of
+                                      (Of_Table, Declared_Here'Result)
+                                    = Scope
+                           and then Name_Of
+                                      (Of_Table, Declared_Here'Result)
+                                    = Name);
+
+   --  What this scope or an enclosing one gives that name.  Innermost
+   --  first: [0140] is the order of the search and not a rule applied to
+   --  its result.
+   function Visible
+     (Of_Table : Table;
+      Scope    : Scope_Id;
+      Name     : Landin.Source.Names.Name_Id) return Declaration_Id
+     with Pre  => Is_Prepared (Of_Table) and then Holds (Of_Table, Scope),
+          Post => Visible'Result = No_Declaration
+                  or else (Contains (Of_Table, Visible'Result)
+                           and then Name_Of (Of_Table, Visible'Result)
+                                    = Name);
+
+   --  Records one declaration and returns its identity.  It takes the node
+   --  that declares it rather than the parts of one, so the name, the
+   --  place and the export cannot disagree with the tree it came from.
+   --
+   --  Sites gets the anchor and not the extent, because Landin.Syntax
+   --  promises that a declaration's anchor is where its name is written,
+   --  and that is the span both a duplicate report and R4.60 point at.
+   --
+   --  A name already declared in this scope is refused by contract rather
+   --  than recorded twice.  That is the recovery as well as the rule: the
+   --  first declaration keeps the name, every reference binds to it, and
+   --  one duplicate produces one report instead of a second scope entry
+   --  that later stages would have to choose between.
+   function Declare_Name
+     (Into    : in out Table;
+      Sites   : in out Landin.Provenance.Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Inside  : Scope_Id) return Declaration_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Holds (Into, Inside)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Declares (Landin.Syntax.Kind (Of_Tree, Node))
+                  and then Declared_Here
+                             (Into, Inside,
+                              Landin.Syntax.Name (Of_Tree, Node))
+                           = No_Declaration,
+          Post => Declaration_Count (Into)
+                    = Declaration_Count (Into)'Old + 1
+                  and then Contains (Into, Declare_Name'Result)
+                  and then Scope_Of (Into, Declare_Name'Result) = Inside
+                  and then Node_Of (Into, Declare_Name'Result) = Node
+                  and then Source_Of (Into, Declare_Name'Result)
+                           = Landin.Syntax.Source_Of (Of_Tree)
+                  and then Name_Of (Into, Declare_Name'Result)
+                           = Landin.Syntax.Name (Of_Tree, Node)
+                  and then Declared_Here
+                             (Into, Inside,
+                              Landin.Syntax.Name (Of_Tree, Node))
+                           = Declare_Name'Result
+                  and then Landin.Provenance.Contains
+                             (Sites, Declare_Name'Result);
+
+   ------------------------------------------------------------------
+   --  What a reference means
+   ------------------------------------------------------------------
+
+   --  Three answers and no fourth.  Unresolved is a value and not an
+   --  absence, for the reason an unreadable construct is an Error node and
+   --  not a gap: the program is data, and R1.60 has to be able to decline
+   --  to type a node without re-deciding what kind of node it was.  One
+   --  number meaning both "not a name" and "not found" is how a missing
+   --  name becomes a cascade.
+   --
+   --  Derived rather than stored, which is what Landin.Syntax.Has_Name
+   --  already does with the neighbouring question: the array holds one
+   --  Declaration_Id per node, and the verdict is that number read next to
+   --  the node's kind.
+   type Verdict is (Not_A_Reference, Unresolved, Bound);
+
+   function Verdict_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Verdict
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Bound_To
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Declaration_Id
+     with Pre  => Is_Prepared (Of_Table)
+                  and then Covers (Of_Table, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Verdict_Of (Of_Table, Of_Tree, Node) = Bound,
+          Post => Contains (Of_Table, Bound_To'Result);
+
+   --  Says what one reference means.  Once: a second Bind on the same node
+   --  is a contract failure, because a name that resolved twice is a
+   --  resolver that walked a node twice.
+   procedure Bind
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      To      : Declaration_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Landin.Syntax.Kind (Of_Tree, Node)
+                           = Landin.Syntax.Name_Reference
+                  and then Contains (Into, To)
+                  and then Verdict_Of (Into, Of_Tree, Node) = Unresolved,
+          Post => Verdict_Of (Into, Of_Tree, Node) = Bound
+                  and then Bound_To (Into, Of_Tree, Node) = To;
+
+private
+
+   type Declaration is record
+      Sort   : Declaration_Sort            := Local_Binding;
+      Name   : Landin.Source.Names.Name_Id := Landin.Source.Names.No_Name;
+      Scope  : Scope_Id                    := No_Scope;
+      Source : Landin.Source.Source_Id     := Landin.Source.No_Source;
+      Node   : Landin.Syntax.Node_Id       := Landin.Syntax.No_Node;
+      Public : Boolean                     := False;
+   end record;
+
+   package Declaration_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Declaration);
+
+   type Scope is record
+      Sort      : Scope_Sort := Program;
+      Enclosing : Scope_Id   := No_Scope;
+   end record;
+
+   package Scope_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Scope);
+
+   --  One run per source, end to end in one vector, which is what
+   --  Landin.Syntax does with a node's children.  First is where node 1 of
+   --  that source's tree sits, so a reference is one addition.
+   type Run is record
+      First : Natural := 0;
+      Count : Natural := 0;
+   end record;
+
+   package Run_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Run);
+
+   package Binding_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Declaration_Id);
+
+   --  Lookup is hashed and never iterated.  Landin.Source.Names publishes
+   --  Hash for exactly this and states the other half of the rule: report
+   --  order is never identity order.  Every report this stage's caller
+   --  raises is built by walking a tree or the declaration vector, both of
+   --  which are in an order the input decided.
+   type Key is record
+      Scope : Scope_Id;
+      Name  : Landin.Source.Names.Name_Id;
+   end record;
+
+   function Hash (Item : Key) return Ada.Containers.Hash_Type;
+
+   package Key_Maps is new Ada.Containers.Hashed_Maps
+     (Key_Type        => Key,
+      Element_Type    => Declaration_Id,
+      Hash            => Hash,
+      Equivalent_Keys => "=");
+
+   type Table is tagged limited record
+      Ready        : Boolean := False;
+      Declarations : Declaration_Vectors.Vector;
+      Scopes       : Scope_Vectors.Vector;
+      Runs         : Run_Vectors.Vector;
+      Bound        : Binding_Vectors.Vector;
+      Index        : Key_Maps.Map;
+   end record;
+
+end Landin.Resolution;

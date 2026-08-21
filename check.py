@@ -1140,6 +1140,41 @@ def token_dump():
     return "\n".join(lines) + "\n"
 
 
+def frontend_codes():
+    """The code strings the scan and the parse can raise.
+
+    Read from Landin.Diagnostics.Lexical and Landin.Diagnostics.Syntactic,
+    the only two packages that turn a scanner fault or a parse failure into
+    a code, and never from the number: the catalogue's own header forbids
+    reading a stage off a code, because "a code is a name, not an address",
+    and L0010 is the standing proof, raised by the scanner today and by the
+    parser since R1.40.
+    """
+    rows = catalogue_rows()
+    if rows is None:
+        return set()
+    by_name = {row["name"]: row["code"] for row in rows}
+
+    out = set()
+    for path in ("compiler/ada/src/diagnostics"
+                 "/landin-diagnostics-lexical.adb",
+                 "compiler/ada/src/diagnostics"
+                 "/landin-diagnostics-syntactic.ads"):
+        full = os.path.join(ROOT, path)
+        if not os.path.exists(full):
+            continue
+        found = re.search(r"function Code_For[^;]*?is \(case .*?\);",
+                          io.open(full, encoding="utf-8").read(), re.S)
+        if not found:
+            continue
+        for name in re.findall(r"(?:Rows|Catalogue)\.([A-Za-z0-9_]+)",
+                               found.group(0)):
+            if name in by_name:
+                out.add(by_name[name])
+    return out
+
+
+
 def check_grammar_corpus(full_run):
     """The grammar derives every positive fixture and no negative one.
 
@@ -1176,7 +1211,14 @@ def check_grammar_corpus(full_run):
                         "this fixture must carry a CR byte, and the corpus "
                         "must be read as bytes to see it"))
 
-    for kind, must_derive in (("positive", True), ("negative", False)):
+    #  Which codes the scan and the parse can raise.  Empty means the two
+    #  packages could not be read, and then nothing is reclassified below:
+    #  failing closed keeps a corpus check from getting quietly weaker.
+    frontend = frontend_codes()
+
+
+    for kind, default_derive in (("positive", True),
+                                 ("negative", False)):
         directory = os.path.join(fixtures, kind)
         if not os.path.isdir(directory):
             continue
@@ -1184,6 +1226,25 @@ def check_grammar_corpus(full_run):
             case = os.path.join(directory, name)
             if not os.path.isdir(case):
                 continue
+
+            #  A negative fixture's `codes:` says which stage refused it,
+            #  and that decides whether the grammar must derive it.  The
+            #  frontend refuses what the grammar cannot derive; a later
+            #  stage refuses source that parsed, so the grammar must derive
+            #  that exactly as it derives a positive fixture.  Reading it
+            #  out of `codes:` rather than a second key leaves the two
+            #  nothing to disagree about.
+            must_derive = default_derive
+            meta = os.path.join(case, "fixture.meta")
+            if kind == "negative" and frontend and os.path.exists(meta):
+                named = re.search(
+                    r"^codes: (.+)$",
+                    io.open(meta, encoding="utf-8").read(), re.M)
+                if named:
+                    first = named.group(1).split(",", 1)[0].strip()
+                    if first and first not in frontend:
+                        must_derive = True
+
             for source in sorted(f for f in os.listdir(case)
                                  if f.endswith(".ldn")):
                 path = os.path.join(case, source)

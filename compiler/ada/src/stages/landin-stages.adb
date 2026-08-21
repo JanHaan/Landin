@@ -7,7 +7,11 @@ package body Landin.Stages is
    is
    begin
       return Result : Compilation do
-         Result.Facts := For_Target;
+         Result.Facts   := For_Target;
+         Result.Named   := new Landin.Source.Names.Table;
+         Result.Written := new Landin.Provenance.Table;
+         Result.Parsed  := new Landin.Syntax.Forest.Table;
+         Result.Meant   := new Landin.Resolution.Table;
       end return;
    end Create;
 
@@ -29,6 +33,22 @@ package body Landin.Stages is
    function Nth_Source (Context : Compilation; Index : Positive)
      return Landin.Source.Source_Id
      is (Context.Sources.Nth (Index));
+
+   function Identities (Context : in out Compilation)
+     return not null access Landin.Source.Names.Table
+     is (Context.Named);
+
+   function Sites (Context : in out Compilation)
+     return not null access Landin.Provenance.Table
+     is (Context.Written);
+
+   function Trees (Context : in out Compilation)
+     return not null access Landin.Syntax.Forest.Table
+     is (Context.Parsed);
+
+   function Meanings (Context : in out Compilation)
+     return not null access Landin.Resolution.Table
+     is (Context.Meant);
 
    procedure Report
      (Context : in out Compilation; Item : Landin.Diagnostics.Diagnostic)
