@@ -8,6 +8,11 @@
 #  The pinned toolchain comes from environments/pins.sh, the same file the
 #  container recipe reads, and every archive is checksum-verified before it
 #  is unpacked.
+#
+#  It also publishes the reading copies, last and only from main.  That is a
+#  convenience and not part of the gate's authority: it produces no evidence,
+#  and it runs only after every check above has passed, so a red gate cannot
+#  put a page up.
 
 image: debian/stable
 
@@ -15,8 +20,14 @@ packages:
   - binutils
   - ca-certificates
   - curl
+  #  hut publishes the reading copies; see the pages task.
+  - hut
   - libc6-dev
   - python3
+
+#  A token for one thing, generated for this job and gone with it: hut may
+#  replace the contents of the pages site and nothing else.
+oauth: pages.sr.ht/PAGES:RW
 
 environment:
   LANDIN_TOOLCHAINS: /home/build/toolchains
@@ -64,3 +75,18 @@ tasks:
   - identity: |
       cd landin
       ./compiler/ada/build/srht-x86-64/debug/bin/refine --identify
+
+  #  Render, verify and publish https://sinnfrei.srht.site.  The pages used
+  #  to move only when somebody remembered to run scripts/site.sh --publish,
+  #  which is how documentation and its reading copy drift apart.
+  #
+  #  Only from main, so a branch cannot replace the published site, and so a
+  #  build submitted without secrets -- a mailed patch has none, and hut
+  #  would have no token -- never reaches this task at all.
+  - pages: |
+      cd landin
+      if [ "${GIT_REF:-}" != "refs/heads/main" ]; then
+          echo "landin: ${GIT_REF:-no ref} is not main; not publishing"
+          exit 0
+      fi
+      ./scripts/site.sh --publish

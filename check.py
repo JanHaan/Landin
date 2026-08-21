@@ -545,10 +545,13 @@ def check_citations(paths):
 
 
 def check_pinned_toolchain(full_run):
-    """The container recipe and the toolchain record must pin one toolchain.
+    """Every file that installs or records the toolchain must name one.
 
-    Two files naming a compiler version is two chances to be wrong, and the
-    one that drifts is the one nobody reads.
+    The recipe pins it, compiler/ada/TOOLCHAIN.md records it for a reader,
+    and environments/pins.sh is the one place a value is written; the nix
+    shell and the CI manifest read that file rather than repeating it. Every
+    file naming a compiler version is another chance to be wrong, and the one
+    that drifts is the one nobody reads.
     """
     if not full_run:
         return []
@@ -588,20 +591,25 @@ def check_pinned_toolchain(full_run):
                         "%s %s is not pinned in environments/pins.sh"
                         % (name, value)))
 
-    #  The nix shell is a fourth place a version could be written, so it is
-    #  held to reading the pins instead of naming one.
-    flake = os.path.join(ROOT, "flake.nix")
-    if os.path.exists(flake):
-        flake_text = io.open(flake, encoding="utf-8").read()
-        if "environments/pins.sh" not in flake_text:
-            out.append((flake, 1, "flake.nix does not read "
-                                  "environments/pins.sh"))
+    #  The nix shell and the CI manifest each install the toolchain
+    #  themselves, so each is a further place a version could be written.
+    #  Both are held to reading the pins rather than naming one: a build that
+    #  fetches a different compiler than the recipe does is not a slower
+    #  build, it is a different compiler.
+    for relative in ("flake.nix", ".build.yml"):
+        path = os.path.join(ROOT, relative)
+        if not os.path.exists(path):
+            continue
+        text = io.open(path, encoding="utf-8").read()
+        if "environments/pins.sh" not in text:
+            out.append((path, 1, "%s does not read environments/pins.sh"
+                                 % relative))
         for name, pattern in wanted.items():
             found = re.search(pattern, recipe_text)
-            if found and '"%s"' % found.group(1) in flake_text:
-                out.append((flake, 1,
-                            "flake.nix names %s literally instead of "
-                            "reading it from environments/pins.sh" % name))
+            if found and found.group(1) in text:
+                out.append((path, 1,
+                            "%s names %s literally instead of reading it "
+                            "from environments/pins.sh" % (relative, name)))
 
     return out
 

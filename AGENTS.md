@@ -28,11 +28,17 @@ python3 check.py prototype-2-parser.txt
 ./scripts/linux-loop.sh
 
 # Render every document as HTML, verify nothing was dropped, and package
-# it for pages.sr.ht.  --publish uploads it; see docs/site/README.md.
+# it for pages.sr.ht.  --publish uploads it, which the CI gate also does on
+# every push to main; see docs/site/README.md.
 ./scripts/site.sh
+
+# On a nix machine, a shell holding the pinned toolchain, python3 and hut.
+# It reads environments/pins.sh and tags its objects `nix`, so it does not
+# collide with the other environments; see docs/environments.md.
+nix develop
 ```
 
-Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and from R1.80 onwards — when `refine` starts emitting instructions — it is the only environment that runs them on the hardware they were emitted for.
+Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and from R1.80 onwards — when `refine` starts emitting instructions — it is the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches https://sinnfrei.srht.site by being pushed, not by anyone running `scripts/site.sh --publish`.
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.txt` path does not run all citation checks.
 
@@ -48,7 +54,7 @@ Use the repository documents in this order:
 2. `ROADMAP.md` is the sole durable work authority. It owns every open item, implementation dependency, phase, disposition, and completion gate. Do not create a parallel TODO list in the tour, prototypes, or issue files.
 3. `prototype-{1..4}-*.txt` are specification tests, not illustrative samples. Each deliberately stressed the design, and its ending findings record both obsolete wording and the resulting resolution.
 4. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
-5. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the documents the R0 gate cites — including that the container recipe and `compiler/ada/TOOLCHAIN.md` pin the same toolchain. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
+5. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the documents the R0 gate cites — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
 
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 

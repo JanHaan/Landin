@@ -29,7 +29,8 @@ language frontend is next.**
 | `compiler/ada/` | the Ada 2022 bootstrap compiler. Today: the chassis, `refine`, and its own test harness. |
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
 | `scripts/` | build, test, clean and toolchain commands. Provider-neutral, except `linux-loop.sh`, which drives Apple Container by name. |
-| `environments/` | the pinned `linux/amd64` image the local Linux loop builds. |
+| `environments/` | the pinned `linux/amd64` image the local Linux loop builds, and `pins.sh`, the one place a toolchain version or checksum is written. |
+| `flake.nix` | `nix develop`, for people who work that way: a shell holding the same pinned toolchain, read from `environments/pins.sh` rather than from nixpkgs. |
 | `docs/` | the environments that produce evidence, the agent-facing notes, and the site generator. |
 | `prototype-1-driver.txt` | a driver written from an ugly vendor SVD: GPIO, an interrupt-driven DMA UART, a vector table, and not one hand-written bitmask. |
 | `prototype-2-parser.txt` | a parser that recovers, because a real one must not stop at the first mistake. |
@@ -49,8 +50,12 @@ Every document here is published as a syntax-highlighted reading copy at
 roadmap, and the implementation notes. Every `[NNNN]` citation links to the
 construct it names, and hovering one shows what it says.
 
+The CI gate republishes it as its last task on every push to `main`, so the
+pages read what the repository says. To render or publish it by hand:
+
 ```sh
-./scripts/site.sh --publish
+./scripts/site.sh              # render, verify, package
+./scripts/site.sh --publish    # and upload
 ```
 
 ## Checking
