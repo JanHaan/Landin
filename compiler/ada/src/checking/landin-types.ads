@@ -1,6 +1,6 @@
 --  The language's types.
 --
---  `tour.txt` [1790] is the authority: the kernel's types are the eleven
+--  `spec.md` [1790] is the authority: the kernel's types are the eleven
 --  scalar names and nothing else.  This package is that rule made
 --  addressable, and it is meant to be the only place in the compiler where
 --  the eleven are written down, which is what lets `check.py` keep
@@ -62,7 +62,7 @@ package Landin.Types is
       No_Value,
       Untyped_Integer,
       --  [1790]'s eleven, in the order the grammar writes them, so that a
-      --  reader can check the column against tour.txt by running down it.
+      --  reader can check the column against spec.md by running down it.
       U8, U16, U32, U64,
       I8, I16, I32, I64,
       Usize, Isize,

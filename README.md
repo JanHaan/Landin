@@ -24,7 +24,7 @@ which work enables anything it refuses.**
 | file | what it is |
 |---|---|
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
-| `tour.txt` | the specification, written as a numbered "learn X in Y minutes". The source of truth for the language. |
+| `tour.md` | the specification, written as a numbered "learn X in Y minutes". The source of truth for the language. |
 | `ROADMAP.md` | the sole durable authority for open work, implementation dependencies, phase gates, and dispositions. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the specification, roadmap, and prototypes. Run it after touching any of them. |
@@ -34,10 +34,10 @@ which work enables anything it refuses.**
 | `environments/` | the pinned `linux/amd64` image the local Linux loop builds, and `pins.sh`, the one place a toolchain version or checksum is written. |
 | `flake.nix` | `nix develop`, for people who work that way: a shell holding the same pinned toolchain, read from `environments/pins.sh` rather than from nixpkgs. |
 | `docs/` | the environments that produce evidence, the agent-facing notes, and the site generator. |
-| `prototype-1-driver.txt` | a driver written from an ugly vendor SVD: GPIO, an interrupt-driven DMA UART, a vector table, and not one hand-written bitmask. |
-| `prototype-2-parser.txt` | a parser that recovers, because a real one must not stop at the first mistake. |
-| `prototype-3-containers.txt` | a generic container library: growing array, small vector, hash map, arena-backed tree. |
-| `prototype-4-app.txt` | a hosted application whose shape is decided by its command line, so it cannot be written without runtime dispatch. |
+| `prototype-1-driver.md` | a driver written from an ugly vendor SVD: GPIO, an interrupt-driven DMA UART, a vector table, and not one hand-written bitmask. |
+| `prototype-2-parser.md` | a parser that recovers, because a real one must not stop at the first mistake. |
+| `prototype-3-containers.md` | a generic container library: growing array, small vector, hash map, arena-backed tree. |
+| `prototype-4-app.md` | a hosted application whose shape is decided by its command line, so it cannot be written without runtime dispatch. |
 
 The prototypes are not illustrations. They are the test suite: each was
 written to make the specification fail, each ends with the list of

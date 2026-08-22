@@ -20,7 +20,7 @@ package body Landin.Source is
    --
    --  This is presentation, not lexis.  Which byte sequences a Landin
    --  source may use to end a line is R1.20's to state normatively in
-   --  tour.txt; until it does, the line map is deliberately generous so
+   --  tour.md; until it does, the line map is deliberately generous so
    --  that a diagnostic never points at the wrong line.
    ---------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
-----------------------------------------------------------------------
-LANDIN PROTOTYPE 1 — A DRIVER FROM A VENDOR SVD
-----------------------------------------------------------------------
+## LANDIN PROTOTYPE 1 — A DRIVER FROM A VENDOR SVD
+
+```landin
 Current with specification 0.1.0. Its own findings X1-X9 are all
 resolved below. No compiler exists, so this is read as a
 specification test: every line is meant to follow a rule that is
@@ -9,14 +9,14 @@ the end under [X].
 
 The target is a Cortex-M0 class part. GPIO, a timer, and a UART that
 receives by DMA and signals completion from an interrupt handler.
-----------------------------------------------------------------------
+```
 
+---
 
-----------------------------------------------------------------------
-chip/vendor/gpio  —  generated from the SVD
-----------------------------------------------------------------------
+## chip/vendor/gpio  —  generated from the SVD
 
---- How a pin is driven. The encoding is the datasheet's, not ours.
+How a pin is driven. The encoding is the datasheet's, not ours.
+```landin
 public input:     atom
 public output:    atom
 public alternate: atom
@@ -29,9 +29,11 @@ public push_pull:  atom
 public open_drain: atom
 
 public out_type: type = (push_pull = 0 | open_drain = 1)
---       One bit, because that is the smallest width that holds the
---       largest encoding. No base type is written.
+```
+One bit, because that is the smallest width that holds the
+largest encoding. No base type is written.
 
+```landin
 public low:    atom
 public medium: atom
 public high:   atom
@@ -40,13 +42,17 @@ public very_high: atom
 public out_speed: type = (low = 0 | medium = 1
                           | high = 2 | very_high = 3)
 
---- Sixteen pins per port, two bits each, filling the register.
+```
+Sixteen pins per port, two bits each, filling the register.
+```landin
 public moder: type = layout(packed) struct
     pins: [16]pin_mode at 0..31
 end moder
---       An array as a packed field: sixteen elements of two bits
---       fill the range exactly, and element zero takes the low bits.
+```
+An array as a packed field: sixteen elements of two bits
+fill the range exactly, and element zero takes the low bits.
 
+```landin
 public otyper: type = layout(packed) struct
     pins: [16]out_type at 0..15
 end otyper
@@ -55,8 +61,10 @@ public ospeedr: type = layout(packed) struct
     pins: [16]out_speed at 0..31
 end ospeedr
 
---- Alternate function selection: sixteen pins, four bits each,
---- split across two registers by the hardware.
+```
+Alternate function selection: sixteen pins, four bits each,
+split across two registers by the hardware.
+```landin
 public afr_low: type = layout(packed) struct
     pins: [8]u4 at 0..31
 end afr_low
@@ -65,17 +73,21 @@ public afr_high: type = layout(packed) struct
     pins: [8]u4 at 0..31
 end afr_high
 
---- The output data register is sixteen independent bits addressed by
---- number, which is an array of bool and not a set of atoms. A set
---- earns its place when the members mean something; a numbered bank
---- of lines means nothing beyond its number.
+```
+The output data register is sixteen independent bits addressed by
+number, which is an array of bool and not a set of atoms. A set
+earns its place when the members mean something; a numbered bank
+of lines means nothing beyond its number.
+```landin
 public odr: type = layout(packed) struct
     pins: [16]bool at 0..15
 end odr
 
---- The peripheral itself: one struct of registers, laid out at the
---- offsets the SVD gives, which is what layout(c) with explicit
---- field order buys us.
+```
+The peripheral itself: one struct of registers, laid out at the
+offsets the SVD gives, which is what layout(c) with explicit
+field order buys us.
+```landin
 public port: type = layout(c) struct
     mode:      register(moder,   read: normal, write: normal,
                                  reset: 0x0000_0000)
@@ -104,18 +116,20 @@ end port
 public gpioa: volatile ptr mut port = ptr(0x4002_0000)
 public gpiob: volatile ptr mut port = ptr(0x4002_0400)
 
+```
 
-----------------------------------------------------------------------
-chip/vendor/dma  —  generated from the SVD
-----------------------------------------------------------------------
+## chip/vendor/dma  —  generated from the SVD
 
+```landin
 public transfer_complete: atom
 public half_transfer:     atom
 public transfer_error:    atom
 
---- A union used as a set carries its encodings, because for a set
---- the encoding is the bit number. Without them the bit assignment
---- would hang on declaration order.
+```
+A union used as a set carries its encodings, because for a set
+the encoding is the bit number. Without them the bit assignment
+would hang on declaration order.
+```landin
 public dma_event: type = (transfer_complete = 0
                           | half_transfer    = 1
                           | transfer_error   = 2)
@@ -133,11 +147,13 @@ public stream_config: type = layout(packed) struct
     mem_inc:    bool           at 10
     interrupts: set(dma_event) at 1..3
 end stream_config
---       Bits 4, 5, 9 and everything from 11 upward are claimed by
---       nobody, so they are reserved by that fact: they cannot be
---       named, they survive a read-modify-write untouched, and they
---       do not appear in completion.
+```
+Bits 4, 5, 9 and everything from 11 upward are claimed by
+nobody, so they are reserved by that fact: they cannot be
+named, they survive a read-modify-write untouched, and they
+do not appear in completion.
 
+```landin
 public stream: type = layout(c) struct
     config:    register(stream_config, read: normal, write: normal,
                                        reset: 0x0000_0000)
@@ -160,11 +176,11 @@ end controller
 
 public dma1: volatile ptr mut controller = ptr(0x4002_6000)
 
+```
 
-----------------------------------------------------------------------
-drivers/uart  —  written by hand, against the generated modules
-----------------------------------------------------------------------
+## drivers/uart  —  written by hand, against the generated modules
 
+```landin
 import chip/vendor/gpio
 import chip/vendor/dma
 import chip/vendor/usart
@@ -174,9 +190,11 @@ public busy:          atom
 public bad_baud:      atom
 public buffer_too_big: atom
 
---- A receive buffer that DMA writes into. Because the hardware keeps
---- writing after the call that started it returns, handing it over is
---- an escaping use, and the origin rule then does the work for us.
+```
+A receive buffer that DMA writes into. Because the hardware keeps
+writing after the call that started it returns, handing it over is
+an escaping use, and the origin rule then does the work for us.
+```landin
 public rx: type = struct
     port:   volatile ptr mut usart.device
     stream: volatile ptr mut dma.stream
@@ -184,16 +202,23 @@ public rx: type = struct
     head:   usize
 end rx
 
---- Baud is a range subtype, so a nonsense value is a compile error
---- when it is known and a trap when it is not.
+```
+Baud is a range subtype, so a nonsense value is a compile error
+when it is known and a trap when it is not.
+```landin
 public baud_rate: type = u32 range 1_200..12_000_000
 
-----------------------------------------------------------------------
---- Pin setup. Every write is a whole register: read it, change the
---- local copy, write it back. Writing a single field through a
---- volatile pointer is forbidden, and this is what that forces.
-----------------------------------------------------------------------
+```
 
+---
+
+Pin setup. Every write is a whole register: read it, change the
+local copy, write it back. Writing a single field through a
+volatile pointer is forbidden, and this is what that forces.
+
+---
+
+```landin
 configure_pin: (p: volatile ptr mut gpio.port, n: usize,
                 mode: gpio.pin_mode, af: u4) -> none =
     mut m := p.val.mode
@@ -215,12 +240,17 @@ configure_pin: (p: volatile ptr mut gpio.port, n: usize,
     end if
 end configure_pin
 
-----------------------------------------------------------------------
---- Bringing the receiver up. The buffer is a parameter, marked
---- escaping because the stream keeps writing into it long after this
---- function has returned.
-----------------------------------------------------------------------
+```
 
+---
+
+Bringing the receiver up. The buffer is a parameter, marked
+escaping because the stream keeps writing into it long after this
+function has returned.
+
+---
+
+```landin
 public buffer_empty: atom
 
 public open: (port: volatile ptr mut usart.device,
@@ -240,8 +270,10 @@ public open: (port: volatile ptr mut usart.device,
     divisor := try usart.divisor_for(rate)
     port.val.brr = divisor
 
-    --  A whole configuration value, built locally and written once.
-    --  Every bit not named here is reserved and stays as it was.
+```
+A whole configuration value, built locally and written once.
+Every bit not named here is reserved and stays as it was.
+```landin
     mut cfg: dma.stream_config = (
         enable:     false,
         dir:        dma.peripheral_to_memory,
@@ -262,11 +294,16 @@ public open: (port: volatile ptr mut usart.device,
     r = rx(port: port, stream: stream, buf: buf, head: 0)
 end open
 
-----------------------------------------------------------------------
---- Reading what the hardware has delivered. The DMA counter runs
---- down, so the write position is the far end minus what is left.
-----------------------------------------------------------------------
+```
 
+---
+
+Reading what the hardware has delivered. The DMA counter runs
+down, so the write position is the far end minus what is left.
+
+---
+
+```landin
 public available: (in r: rx) -> (n: usize) =
     remaining := usize(r.stream.val.count)
     tail := lenof r.buf - remaining
@@ -291,12 +328,17 @@ public read: (inout r: rx, out_buf: []mut u8) -> (n: usize) =
     r.head = (r.head + n) % lenof r.buf
 end read
 
-----------------------------------------------------------------------
---- The interrupt handler. It follows the C ABI through the interrupt
---- convention, it has an empty error set because there is nobody to
---- fail to, and it is placed in the vector table by address.
-----------------------------------------------------------------------
+```
 
+---
+
+The interrupt handler. It follows the C ABI through the interrupt
+convention, it has an empty error set because there is nobody to
+fail to, and it is placed in the vector table by address.
+
+---
+
+```landin
 mut rx_events: u32 = 0
 
 public extern(interrupt) dma1_stream5_handler: () -> none =
@@ -307,13 +349,18 @@ public extern(interrupt) dma1_stream5_handler: () -> none =
     end if
 end dma1_stream5_handler
 
-----------------------------------------------------------------------
---- A critical section, because the handler and the main loop share
---- rx_events. On this part there is no load-exclusive instruction, so
---- the only way is to mask interrupts; defer puts them back on every
---- path out of the block.
-----------------------------------------------------------------------
+```
 
+---
+
+A critical section, because the handler and the main loop share
+rx_events. On this part there is no load-exclusive instruction, so
+the only way is to mask interrupts; defer puts them back on every
+path out of the block.
+
+---
+
+```landin
 public take_events: () -> (n: u32) =
     scope: begin
         prev := cpu.disable_interrupts()
@@ -324,18 +371,20 @@ public take_events: () -> (n: u32) =
     end scope
 end take_events
 
+```
 
-----------------------------------------------------------------------
-app  —  freestanding, no main
-----------------------------------------------------------------------
+## app  —  freestanding, no main
 
+```landin
 import drivers/uart
 import chip/vendor/gpio
 import chip/vendor/dma
 import chip/vendor/usart
 
---- Static storage, so the buffer outlives every frame and may be
---- handed to hardware.
+```
+Static storage, so the buffer outlives every frame and may be
+handed to hardware.
+```landin
 mut rx_storage: [256]u8 = zeroed
 
 start: () -> noreturn =
@@ -362,26 +411,30 @@ start: () -> noreturn =
     end loop
 end start
 
---- What the escape rule rejects, and the reason the prototype was
---- worth writing:
----
----   bad_start: () -> noreturn =
----       mut local: [256]u8 = zeroed
----       c := uart.open(..., local[0..<256])   -- error
----       ...
----   end bad_start
----
---- open takes its buffer as escaping, so the argument must outlive
---- the call. local has frame origin. The compiler refuses, and the
---- bug it refuses is the one that would have shown up as corrupted
---- memory hours later, on a device with no debugger attached.
+```
+What the escape rule rejects, and the reason the prototype was
+worth writing:
 
+bad_start: () -> noreturn =
+mut local: [256]u8 = zeroed
+c := uart.open(..., local[0..<256])   -- error
+...
+end bad_start
+
+open takes its buffer as escaping, so the argument must outlive
+the call. local has frame origin. The compiler refuses, and the
+bug it refuses is the one that would have shown up as corrupted
+memory hours later, on a device with no debugger attached.
+
+```landin
 default_handler: () -> none = loop do end loop end default_handler
 
---- A function type is an ordinary type and a function an ordinary
---- value of it, so the table holds them directly. The first word is
---- the initial stack pointer, which is not a handler, so the table
---- is a struct rather than one array.
+```
+A function type is an ordinary type and a function an ordinary
+value of it, so the table holds them directly. The first word is
+the initial stack pointer, which is not a handler, so the table
+is a struct rather than one array.
+```landin
 handler: type = () -> none
 
 vector_table: type = layout(c) struct
@@ -397,16 +450,22 @@ vectors: vector_table = (
     rest:      [of default_handler]
 )
 
+```
 
-----------------------------------------------------------------------
+---
+
+```landin
 [X] WHERE THE SPECIFICATION WAS SILENT
 The resolutions below cite the pre-release revisions this
 specification passed through, 0.0.1 to 0.0.17, on the way to 0.1.0.
 They are kept because when one thing was settled relative to another
 still carries information.
 
-----------------------------------------------------------------------
+```
 
+---
+
+```landin
 X1  RESOLVED in the tour. An encoded union leaves out its base type
     and takes the smallest width that holds its largest encoding, so
     a two-value union is one bit and u1 is not missed.
@@ -464,4 +523,6 @@ X9  RESOLVED at 0.0.12: reachability from something kept is what
     extern(interrupt) does not imply it, because a calling
     convention is what the program means and keep is an instruction
     to the toolchain — two things [0760] separated on purpose.
-----------------------------------------------------------------------
+```
+
+---

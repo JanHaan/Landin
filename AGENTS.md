@@ -13,7 +13,7 @@ Landin is a language specification whose bootstrap implementation has a complete
 python3 check.py
 
 # Check one specification/prototype file (the narrowest supported test scope)
-python3 check.py prototype-2-parser.txt
+python3 check.py prototype-2-parser.md
 
 # Build the bootstrap compiler and run its own test program.  Both need the
 # pinned toolchain reachable; see compiler/ada/TOOLCHAIN.md.
@@ -40,7 +40,7 @@ nix develop
 
 Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and from R1.80 onwards — when `refine` starts emitting instructions — it is the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches https://sinnfrei.srht.site by being pushed, not by anyone running `scripts/site.sh --publish`.
 
-`check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.txt` path does not run all citation checks.
+`check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
 
 `scripts/test.sh` builds and then runs `compiler/ada`'s test program; `scripts/linux-loop.sh` runs the same thing in the pinned Linux image. Those are the two runnable test commands. There is no separate lint or typecheck step: the pinned build treats every warning as an error and enforces GNAT style checks. Warnings are policy, not preference — do not silence one without a recorded reason.
 
@@ -50,13 +50,13 @@ Staleness is decided by source checksums, not timestamps: `build.sh` rebuilds fr
 
 Use the repository documents in this order:
 
-1. `tour.txt` is the normative language specification. Its four-digit construct IDs (`[NNNN]`) are stable citation anchors, spaced in increments of ten so new constructs can be inserted without renumbering existing decisions.
+1. `tour.md` is the normative language specification. Its four-digit construct IDs (`[NNNN]`) are stable citation anchors, spaced in increments of ten so new constructs can be inserted without renumbering existing decisions.
 2. `ROADMAP.md` is the sole durable work authority. It owns every open item, implementation dependency, phase, disposition, and completion gate. Do not create a parallel TODO list in the tour, prototypes, or issue files.
 3. `prototype-{1..4}-*.txt` are specification tests, not illustrative samples. Each deliberately stressed the design, and its ending findings record both obsolete wording and the resulting resolution.
 4. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
 5. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the documents the R0 gate cites — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
 
-`check.py` also checks the grammar in `tour.txt`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
+`check.py` also checks the grammar in `tour.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
 
 A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` is raised by both the scanner and the parser.
 
@@ -105,11 +105,11 @@ Changes must preserve the range from a 32 KB microcontroller to a hosted applica
 - Concepts and evidence tables support both static generics and `any` runtime dispatch; specialization is an optimization rather than the semantic basis.
 - There is no compile-time execution or macro system. Source generators belong in the future build design.
 
-Before reviving a previously rejected idea, read `ROADMAP.md`'s inherited review register and `tour.txt`'s `WHAT WAS TRIED AND DROPPED` section.
+Before reviving a previously rejected idea, read `ROADMAP.md`'s inherited review register and `tour.md`'s `WHAT WAS TRIED AND DROPPED` section.
 
 ## Editing the specification
 
-When implementation requires a semantic change, update `tour.txt`, the affected prototype-derived tests, and `ROADMAP.md` together. Trace the construct's citations, reread all affected prototypes including cross-prototype interactions, and then run `python3 check.py`. Per-file reasoning has previously missed contradictions found only by comparing prototypes.
+When implementation requires a semantic change, update `tour.md`, the affected prototype-derived tests, and `ROADMAP.md` together. Trace the construct's citations, reread all affected prototypes including cross-prototype interactions, and then run `python3 check.py`. Per-file reasoning has previously missed contradictions found only by comparing prototypes.
 
 Do not modernize obsolete syntax inside prototype finding sections (`Xn`, `Yn`, `Zn`, `Wn`) or the tour's `WHAT WAS TRIED AND DROPPED` section. Those passages intentionally preserve rejected wording next to its resolution, and `check.py` deliberately excludes them from some retired-spelling checks.
 

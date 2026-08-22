@@ -1,6 +1,6 @@
 --  The target-neutral intermediate representation.
 --
---  `tour.txt` [1550] is the authority for its existence -- "a verified,
+--  `tour.md` [1550] is the authority for its existence -- "a verified,
 --  target-neutral intermediate representation takes QBE's IL as a design
 --  influence without freezing one flat or serialised stage shape before
 --  implementation evidence exists" -- and [1740]-[1940] is the authority

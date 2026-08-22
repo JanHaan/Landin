@@ -2,7 +2,7 @@
 
 ## Authority and scope
 
-`tour.txt` is the normative language specification. This file is the sole
+`tour.md` is the normative language specification. This file is the sole
 durable authority for open work, implementation dependencies, phases,
 dispositions and completion gates. The prototype text files remain
 specification stress tests and design records. Derived executable programs
@@ -21,7 +21,7 @@ architecture question is resolved when the first slice needs it, not by a
 separate prerequisite review. Legacy A1–A8 were blanket prerequisites to
 writing any front end; this roadmap explicitly supersedes that blanket barrier
 and assigns each question to the first executable slice that needs it. A
-semantic change updates `tour.txt`, affected prototype-derived tests, this
+semantic change updates `tour.md`, affected prototype-derived tests, this
 roadmap, guarantee coverage and diagnostics together. Source syntax may change
 throughout this pre-v1 roadmap. Diagnostic codes remain stable; an exceptional
 code change requires an explicit synchronized update to the specification,
@@ -90,9 +90,9 @@ but phases are claimed in order. There are no dates, estimates or release
 versions in this roadmap.
 
 A rejected normative construct must first be removed or explicitly deferred
-in `tour.txt`; the roadmap cannot overrule the specification. A transferred
+in `tour.md`; the roadmap cannot overrule the specification. A transferred
 item names a successor roadmap and cannot satisfy a still-normative in-scope
-capability. Historical finding sections and `tour.txt`'s WHAT WAS TRIED AND
+capability. Historical finding sections and `tour.md`'s WHAT WAS TRIED AND
 DROPPED section retain rejected wording.
 
 ## Successor roadmaps
@@ -271,7 +271,7 @@ Status: complete
 Depends on: R0.30
 
 Add lexical rules, the precedence table, and statement/expression productions
-for the enabled kernel to `tour.txt`, which remains the normative grammar
+for the enabled kernel to `tour.md`, which remains the normative grammar
 home. A machine-readable inventory may be derived from it but never becomes a
 second independent grammar. Trace every production to constructs and fixtures.
 
@@ -729,7 +729,7 @@ the real driver; the construct matrix has no unexplained kernel row.
 
 ### R1 gate
 
-- The enabled grammar is normative in `tour.txt`.
+- The enabled grammar is normative in `tour.md`.
 - Recovery produces multiple useful diagnostics.
 - A real `.ldn` program compiles, links and runs on native Linux x86-64.
 - Unrelated representation and freestanding questions remain owned by later
@@ -903,7 +903,7 @@ Depends on: R3.20, R2.10
 
 Specify and implement raw storage with separate capacity and initialized count,
 one-slot admission and release of initialized values only. Fold the resulting
-semantics into `tour.txt` and the guarantee matrix.
+semantics into `tour.md` and the guarantee matrix.
 
 Sources: legacy A2; `[0510]`, Z8.
 
@@ -1289,7 +1289,7 @@ Status: planned
 Depends on: R5.50, R6.100
 
 Complete the construct-matrix inventory for every current `[NNNN]`. For every
-construct still normative in `tour.txt`, record its implementation state,
+construct still normative in `tour.md`, record its implementation state,
 applicable targets and the work item owning any open row. A rejection or
 transfer first amends the tour so the roadmap never overrides the specification.
 
@@ -1325,7 +1325,7 @@ Depends on: R2.90, R7.20, R7.30
 Close construct, grammar, guarantee, diagnostic, conformance/evidence,
 prototype-derivation and target-applicability matrices.
 
-Exit evidence: `tour.txt` contains lexical, precedence, statement and expression
+Exit evidence: `tour.md` contains lexical, precedence, statement and expression
 grammar for every still-normative construct; no matrix contains a gap, stale
 test, unowned target or contradictory disposition.
 

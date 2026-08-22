@@ -1,7 +1,7 @@
 --  The vocabulary a Landin program is written in, and the result of reading
 --  one file of it.
 --
---  `tour.txt` [1740]-[1830] is the authority. Its lexical layer says that
+--  `spec.md` [1740]-[1830] is the authority. Its lexical layer says that
 --  identifier, keyword and literal each produce one token and that space and
 --  comments produce none, and Token_Kind is that division made enumerable:
 --  one literal per reserved word, one per sign. A hand-written parser then
