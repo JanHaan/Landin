@@ -127,7 +127,8 @@ number is never handed to another rule.
 Both halves are held to the grammar from both sides. `check.py` compares
 `Landin.Tokens`' reserved words with the tour's own `keyword` production,
 derives every positive program in the corpus from the grammar and refuses
-every negative one, and compares `Landin.Syntax.Precedence` with [1820]'s own
+every negative one the frontend rejects, and compares
+`Landin.Syntax.Precedence` with [1820]'s own
 levels, operators, fold and first sets. The harness lexes every program in the
 corpus and compares each token with what `check.py`'s independent tokeniser
 produced, parses every one and requires the same verdict `check.py` reached,

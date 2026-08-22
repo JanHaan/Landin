@@ -1,0 +1,4 @@
+class: positive
+summary: [1940] a module value folds, and a fold its type holds is a value
+program: program.ldn
+targets: linux-x86-64, macos-arm64

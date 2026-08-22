@@ -609,6 +609,33 @@ file positive/local-shadows-a-parameter/program.ldn tokens 24
   49 50 x
   51 54 end
   55 56 f
+file positive/module-fold-that-fits/program.ldn tokens 26
+  0 3 sum
+  3 4 :
+  5 7 u8
+  8 9 =
+  10 13 200
+  14 15 +
+  16 18 55
+  19 26 product
+  26 27 :
+  28 31 i32
+  32 33 =
+  34 35 6
+  36 37 *
+  38 39 7
+  40 48 borrowed
+  48 49 :
+  50 53 u32
+  54 55 =
+  56 64 sum_base
+  65 66 +
+  67 75 sum_base
+  76 84 sum_base
+  84 85 :
+  86 89 u32
+  90 91 =
+  92 93 9
 file positive/module-value-from-another/program.ldn tokens 12
   0 7 doubled
   7 8 :
@@ -1485,6 +1512,14 @@ file negative/missing-then/program.ldn tokens 25
   61 63 if
   64 67 end
   68 69 f
+file negative/module-fold-no-type-holds/program.ldn tokens 7
+  0 4 over
+  4 5 :
+  6 8 u8
+  9 10 =
+  11 14 200
+  15 16 +
+  17 20 100
 file negative/module-value-from-a-call/program.ldn tokens 19
   0 5 seven
   5 6 :

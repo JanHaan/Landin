@@ -661,6 +661,21 @@ also have made its fixture unwritable, because `check_grammar_corpus` requires
 a frontend-code fixture *not* to derive and this one does -- which an
 adversarial reading caught before it was written.
 
+One defect, found by R1.70's design and fixed under this item's number
+because it is this item's rule that was incomplete. `over: u8 = 200 + 100`
+was accepted. Inside a body that is right -- [0300] says overflow traps, and
+narrowing [1880]'s folding rule to leave it to the trap was correct. At module
+level it is wrong, and the reason is the interaction of two rules that are
+each correct alone: [1460] says nothing runs before the entry point, so a
+module value has no moment in which to trap and no value to stand for it. So
+[1940] gained the rule, and a module value's operators are folded and refused
+when no type holds the answer. Folding needs a signed value where a literal's
+`Magnitude` is unsigned -- `x: i32 = 1 - 2` is negative -- so `Landin.Types`
+gained `Folded`, bounded by `u64`'s span and its negation for `Magnitude`'s
+reason. The bitwise and shift levels are deliberately not folded: their answer
+depends on a width, and a width belongs to a target. Division by zero is not
+folded either, for the same reason a module value cannot trap.
+
 Exit evidence: each enabled construct has acceptance and rejection cases; no
 host integer width leaks into target semantics.
 
@@ -677,7 +692,7 @@ the parser's table; three mutations were tried from both sides and each was
 reported. 78 cases, 1671 checks.
 
 ### R1.70 — Implement target-neutral IR and verification
-Status: planned
+Status: active
 Depends on: R1.60, R0.60
 
 Introduce the smallest evolvable target-neutral IR, preserving source
