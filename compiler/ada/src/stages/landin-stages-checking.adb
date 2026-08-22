@@ -1039,9 +1039,13 @@ package body Landin.Stages.Checking is
                                   <= Ty.Folded'Last / abs Left;
 
                when Syn.Divide | Syn.Remainder =>
-                  --  [0290] leaves division by zero to the machine, and a
-                  --  module value has no machine to leave it to, so the
-                  --  fold declines rather than dividing.
+                  --  Declining rather than dividing, because there is
+                  --  nothing to divide by.  Check_Operands is what turns
+                  --  this into a diagnostic: [1950] refuses a divisor the
+                  --  compiler knows is zero, and at module level [1940]'s
+                  --  whole fold is what knowing means.  Before that rule
+                  --  existed the decline was silent, and `d: u32 = 7 / 0`
+                  --  was accepted.
                   Fits := Right /= 0;
 
                when others =>
@@ -1225,6 +1229,209 @@ package body Landin.Stages.Checking is
             Landin.Checking.Refuse (Types.all, Of_Tree, Value);
          end if;
       end Check_Module_Fold;
+
+      ------------------------------------------------------------
+      --  [1950]: an operand the operation cannot take
+      ------------------------------------------------------------
+
+      --  What [1880] calls known inside a body: a literal, or a unary
+      --  minus over one, and nothing else.  Deliberately not Fold, which
+      --  is [1940]'s and reaches through a module binding.  [1950] says
+      --  the two knowns are different on purpose, and the difference is
+      --  what keeps a program's legality still while an implementation
+      --  gets better at folding -- D7's objection, asked about a value
+      --  rather than about a condition.
+      procedure Known_Literal
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Value   : out Ty.Folded;
+         Known   : out Boolean);
+
+      procedure Known_Literal
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Value   : out Ty.Folded;
+         Known   : out Boolean) is
+      begin
+         Value := 0;
+         Known := False;
+
+         if Node = Syn.No_Node
+           or else not Syn.Is_Sound (Of_Tree, Node)
+         then
+            return;
+         end if;
+
+         case Syn.Kind (Of_Tree, Node) is
+            when Syn.Integer_Literal =>
+               declare
+                  Snap : constant Landin.Source.Snapshot :=
+                    Source (Context, Syn.Source_Of (Of_Tree));
+                  Text : constant String :=
+                    Landin.Source.Slice
+                      (Snap, Syn.Digit_Span (Of_Tree, Node));
+                  Held       : Ty.Magnitude;
+                  Overflowed : Boolean;
+               begin
+                  Ty.Evaluate
+                    (Text, Syn.Base (Of_Tree, Node), Held, Overflowed);
+
+                  if not Overflowed then
+                     Value := Ty.Folded (Held);
+                     Known := True;
+                  end if;
+               end;
+
+            when Syn.Negation =>
+               declare
+                  Under : Ty.Folded;
+               begin
+                  Known_Literal
+                    (Of_Tree, Syn.Operand_Of (Of_Tree, Node),
+                     Under, Known);
+
+                  if Known then
+                     Value := -Under;
+                  end if;
+               end;
+
+            when others =>
+               null;
+         end case;
+      end Known_Literal;
+
+      --  Whether [1880] or anything before it has already refused any part
+      --  of this operand.  Recursive rather than a look at the root: a
+      --  literal out of range is refused where the literal is, and a unary
+      --  minus over it keeps the type it correctly had.
+      function Refused_Already
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Refused_Already
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+      begin
+         if Node = Syn.No_Node
+           or else not Syn.Is_Sound (Of_Tree, Node)
+         then
+            return True;
+         end if;
+
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+            = Ty.Ill_Typed
+         then
+            return True;
+         end if;
+
+         for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            if Refused_Already
+                 (Of_Tree, Syn.Slot (Of_Tree, Node, Position))
+            then
+               return True;
+            end if;
+         end loop;
+
+         return False;
+      end Refused_Already;
+
+      --  The walk.  Whole_Fold picks which paragraph decides what known
+      --  means -- [1940]'s fold for a module value, [1880]'s literal
+      --  inside a body -- and nothing else about the two differs.
+      procedure Check_Operands
+        (Of_Tree    : Syn.Tree;
+         Node       : Syn.Node_Id;
+         Whole_Fold : Boolean);
+
+      procedure Check_Operands
+        (Of_Tree    : Syn.Tree;
+         Node       : Syn.Node_Id;
+         Whole_Fold : Boolean)
+      is
+         Amount : Ty.Folded;
+         Known  : Boolean;
+      begin
+         if Node = Syn.No_Node
+           or else not Syn.Is_Sound (Of_Tree, Node)
+         then
+            return;
+         end if;
+
+         for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+            Check_Operands
+              (Of_Tree, Syn.Slot (Of_Tree, Node, Position), Whole_Fold);
+         end loop;
+
+         if Syn.Kind (Of_Tree, Node) not in
+              Syn.Divide | Syn.Remainder | Syn.Shift_Left | Syn.Shift_Right
+         then
+            return;
+         end if;
+
+         declare
+            Right : constant Syn.Node_Id := Syn.Right_Of (Of_Tree, Node);
+         begin
+            if Right = Syn.No_Node
+              or else not Syn.Is_Sound (Of_Tree, Right)
+            then
+               return;
+            end if;
+
+            --  Already refused, and one mistake earns one diagnostic.
+            --  `x: u8` shifted by -1 is [1880]'s refusal of a literal no
+            --  u8 holds, and saying so twice would name two faults where
+            --  a reader made one.  The whole operand and not its root:
+            --  [1880] refuses the literal inside the unary minus, so the
+            --  minus above it is still holding a settled type.
+            if Refused_Already (Of_Tree, Right) then
+               return;
+            end if;
+
+            if Whole_Fold then
+               Fold (Of_Tree, Right, 0, Amount, Known);
+            else
+               Known_Literal (Of_Tree, Right, Amount, Known);
+            end if;
+
+            if not Known then
+               return;
+            end if;
+
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.Divide | Syn.Remainder =>
+                  if Amount /= 0 then
+                     return;
+                  end if;
+
+                  Bad.Report
+                    (Item    => Bad.Impossible_Operand,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Right),
+                     Message => "this divisor is zero, and there is no"
+                                & " quotient for it to produce",
+                     Note    => "[1950]: an operand the operation cannot"
+                                & " take is refused where the compiler"
+                                & " knows it",
+                     Into    => Found);
+
+               when others =>
+                  if Amount >= 0 then
+                     return;
+                  end if;
+
+                  Bad.Report
+                    (Item    => Bad.Impossible_Operand,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Right),
+                     Message => "this shift amount is negative, and"
+                                & " [0320] gives a shift one form only",
+                     Note    => "[1950]: an operand the operation cannot"
+                                & " take is refused where the compiler"
+                                & " knows it",
+                     Into    => Found);
+            end case;
+
+            Landin.Checking.Refuse (Types.all, Of_Tree, Right);
+         end;
+      end Check_Operands;
 
       ------------------------------------------------------------
       --  [1910]: assigned before it is read
@@ -1585,6 +1792,10 @@ package body Landin.Stages.Checking is
                         Check_Statement
                           (Of_Tree.all, Node, Ty.Not_Typed);
                         Check_Module_Fold (Of_Tree.all, Node);
+                        Check_Operands
+                          (Of_Tree.all,
+                           Syn.Value_Of (Of_Tree.all, Node),
+                           Whole_Fold => True);
 
                      when Syn.Function_Declaration =>
                         declare
@@ -1637,6 +1848,12 @@ package body Landin.Stages.Checking is
                                   else Syn.Origin (Of_Tree.all, Result)),
                                  "the return this fills");
                            end if;
+
+                           --  [1950], after the body is typed, so that an
+                           --  operand already refused earns no second
+                           --  diagnostic.
+                           Check_Operands
+                             (Of_Tree.all, Runs, Whole_Fold => False);
                         end;
 
                      when others =>

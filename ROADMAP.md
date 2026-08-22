@@ -715,7 +715,9 @@ when no type holds the answer. Folding needs a signed value where a literal's
 gained `Folded`, bounded by `u64`'s span and its negation for `Magnitude`'s
 reason. The bitwise and shift levels are deliberately not folded: their answer
 depends on a width, and a width belongs to a target. Division by zero is not
-folded either, for the same reason a module value cannot trap.
+folded either, for the same reason a module value cannot trap -- and at
+R1.70 that turned out to be a hole rather than a decision, because
+declining was silent. [1950] closes it.
 
 Exit evidence: each enabled construct has acceptance and rejection cases; no
 host integer width leaks into target semantics.
@@ -771,22 +773,42 @@ all; `L0400`-`L0499` stays unassigned. `landin.ads` states the rule the
 argument rests on: "A source program must never be able to raise it: an
 ill-formed program is data, not an exception."
 
-Two language questions surfaced here and belong to R1.80, which is the first
-item that has to emit an instruction for either. Neither is answered yet and
-neither may be answered by guessing.
+Two language questions surfaced here and are now answered, in [1950] and in
+D8 and D9. Both were the user's to decide and neither was guessed; what the
+decision rested on was measured rather than recalled, on this repository's
+own first three targets.
 
-- **[0320] does not say what a shift by a negative amount does.** It says
-  shifts fill with zeros beyond the width for any amount and that a signed
-  `>>` keeps its sign, and [1890] makes the amount the left operand's type --
-  so `f: (x: i8) -> (r: i8) = x << -1 end f` is accepted today and has no
-  defined meaning. x86-64 masks a shift count and AArch64 masks it
-  differently, so the answer cannot be left to the machine.
-- **[0290] does not say what division by zero does.** It says integer
-  division truncates toward zero and the remainder takes the sign of the
-  dividend, and nothing else. R1.80 must emit an `IDIV` whose behaviour on a
-  zero divisor -- a hardware fault, a trap call, or a defined value -- no
-  sentence of the specification decides. The module-value fold declines to
-  fold it for the same reason, which is recorded under R1.60.
+| | shift amount, over-wide or negative | a zero divisor |
+|---|---|---|
+| x86-64 | masks the count to 5 bits, 6 at 64-bit | `IDIV` raises a hardware fault |
+| AArch64 | masks the same way | `SDIV` answers 0, silently |
+| Cortex-M0 | takes the low 8 bits and saturates: >= 32 gives 0 | no divide instruction exists at all |
+
+The first two rows disagree with [0320], which fills with zeros beyond the
+width for any amount, so `refine` already owes a guard on both of R1.80's and
+R5.30's targets for an ordinary over-wide shift -- and a negative amount
+therefore costs no code generation that was not already owed. The division
+rows disagree with each other, which is what rules out leaving a zero divisor
+to the machine: one program would mean two things.
+
+- **[0320] did not say what a shift by a negative amount does.** [1950] now
+  does, and D9 records the three alternatives with the measurement that
+  argues against each. D6 is what makes a negative amount writable, so the
+  check exists only where the left operand is signed.
+- **[0290] did not say what division by zero does.** [1950] now does, and D8
+  records it. `%` goes with `/`, because the divisor is the same operand.
+
+Both take [0310]'s shape rather than a new one: refused where the compiler
+knows the operand, trapped where it does not, and refused at module level
+always, since [1460] leaves no moment there in which to trap. Emitting the
+trap is R1.80's; refusing the known operand is done, as `L0306`.
+
+Closed with it, and found by writing the rule rather than by the rule
+itself: `d: u32 = 7 / 0` was accepted. [1940] already said a module value is
+folded and a fold no type holds is refused, and overflow was caught by it,
+but a zero divisor set the fold to *not known* and the refusal only fired on
+known-and-does-not-fit. A quotient that does not exist is a stronger case
+than a sum that does not fit, and it was the one getting through.
 
 Exit evidence: malformed-IR tests are rejected; round-trip textual dumps are
 canonical test artifacts but not stable public interfaces.
@@ -818,7 +840,7 @@ the real driver; the construct matrix has no unexplained kernel row.
 
 ### R1 gate
 
-- The enabled grammar is normative in `tour.md`.
+- The enabled grammar is normative in `spec.md`.
 - Recovery produces multiple useful diagnostics.
 - A real `.ldn` program compiles, links and runs on native Linux x86-64.
 - Unrelated representation and freestanding questions remain owned by later

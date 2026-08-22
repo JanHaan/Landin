@@ -7,12 +7,22 @@
 --  against that code's row before it leaves, and the stage that found the
 --  fault therefore contains no code at all.
 --
---  Six rules, each with its own paragraph in the tour, because none of
---  them could be read out of the older ones.  [1880] says where a literal's
---  type comes from and that a value the type does not hold is refused;
---  [1890] says what each operator takes and gives; [1900] says what may be
---  written; [1910] says a name must be assigned by every path that reaches
---  a read; [1920] says what a call means and what a name may be used as.
+--  Seven rules, each with its own paragraph in the specification, because
+--  none of them could be read out of the older ones.  [1880] says where a
+--  literal's type comes from and that a value the type does not hold is
+--  refused; [1890] says what each operator takes and gives; [1900] says
+--  what may be written; [1910] says a name must be assigned by every path
+--  that reaches a read; [1920] says what a call means and what a name may
+--  be used as; and [1950] says which operand an operation cannot take.
+--
+--  Impossible_Operand is the operand half of what Literal_Out_Of_Range is
+--  the result half of, and the two must not be merged.  A literal out of
+--  range is a good operation whose answer the type does not hold, which
+--  [1880] leaves to the trap inside a body; an impossible operand is a
+--  divisor of zero or a negative shift amount, where [1950] says there is
+--  no operation to perform at all.  One is about a result and the other
+--  about an input, and a reader told the wrong one looks in the wrong
+--  place.
 --
 --  Unsupported_Use is the checker's half of [1830], and it is separate from
 --  Landin.Diagnostics.Syntactic's Construct_Not_Enabled for a reason of
@@ -43,7 +53,8 @@ package Landin.Diagnostics.Checking is
       Not_Definitely_Assigned,
       Immutable_Target,
       Unsupported_Use,
-      Not_Known_At_Compile_Time);
+      Not_Known_At_Compile_Time,
+      Impossible_Operand);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -59,7 +70,9 @@ package Landin.Diagnostics.Checking is
             when Unsupported_Use      =>
                Catalogue.Unsupported_Use,
             when Not_Known_At_Compile_Time =>
-               Catalogue.Not_Known_At_Compile_Time);
+               Catalogue.Not_Known_At_Compile_Time,
+            when Impossible_Operand   =>
+               Catalogue.Impossible_Operand);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

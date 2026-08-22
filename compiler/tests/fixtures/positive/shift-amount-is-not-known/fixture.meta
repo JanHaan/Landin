@@ -1,0 +1,4 @@
+class: positive
+summary: [1950] an amount the compiler does not know is left to the trap; [0320] still fills with zeros beyond the width for a known one
+program: program.ldn
+targets: linux-x86-64, macos-arm64
