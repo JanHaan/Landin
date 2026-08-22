@@ -160,6 +160,10 @@ NAMED_FILE_ALLOWLIST = frozenset((
     "map.md",
     "0001-event-sourced-orders.md",
     "0002-postgres-for-write-model.md",
+    #  The external design archive, named to contrast it with the current
+    #  handoff.md in the same sentence.  AGENTS.md already says the tracked
+    #  repository does not depend on that archive.
+    "HANDOFF.md",
 ))
 
 STALE_BACKLOG_ALLOWLIST = {
@@ -2147,8 +2151,33 @@ def check_catalogue(full_run):
     return out
 
 
+def present(relative):
+    """Whether a repository-relative path exists, case included.
+
+    os.path.exists asks the host, and a case-insensitive host answers yes
+    for `HANDOFF.md` when the file is `handoff.md`.  That is how a
+    reference that reads correctly on macOS failed the Linux gate.  The
+    directory listing is the authority instead, which is the same rule
+    Landin.Targets keeps one level down: do not ask the host a question
+    whose answer is a fact about the host.
+    """
+    here = ROOT
+    #  `./scripts/build.sh` is how a document writes a command, and it
+    #  names the same file as `scripts/build.sh`.
+    parts = os.path.normpath(relative).split("/")
+    if parts[:1] == [".."]:
+        return False
+    for step in parts[:-1]:
+        if not os.path.isdir(os.path.join(here, step)):
+            return False
+        if step not in os.listdir(here):
+            return False
+        here = os.path.join(here, step)
+    return parts[-1] in os.listdir(here)
+
+
 def basenames():
-    """Every tracked file's bare name, for a reference that omits a path."""
+    """Every file's bare name, for a reference that omits a path."""
     global _BASENAMES
     if _BASENAMES is None:
         _BASENAMES = set()
@@ -2211,13 +2240,14 @@ def check_named_files(full_run):
                 target = found.group(1)
                 if target in NAMED_FILE_ALLOWLIST:
                     continue
-                if os.path.exists(os.path.join(ROOT, target)):
+                if present(target):
                     continue
                 #  A bare name may sit next to the file that mentions it,
                 #  or anywhere in the tree: ROADMAP.md names Ada units by
                 #  their file name and not by their path.
-                if os.path.exists(os.path.join(os.path.dirname(path),
-                                               target)):
+                beside = os.path.relpath(
+                    os.path.join(os.path.dirname(path), target), ROOT)
+                if not beside.startswith("..") and present(beside):
                     continue
                 if "/" not in target and target in basenames():
                     continue
