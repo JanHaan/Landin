@@ -1,11 +1,28 @@
-## THE GRAMMAR OF THE ENABLED KERNEL
+# THE LANDIN SPECIFICATION
 
-This section is the normative grammar, and it is deliberately partial. It
-covers the constructs the compiler enables today and nothing else, so that
-what a program may say and what the compiler will accept are the same
-sentence. It grows one slice at a time, and a construct described elsewhere
-in this tour but absent here is not enabled yet: the compiler says so by
+This is the normative document. `tour.md` explains the language and this
+says what it is; where the two could be read differently, this one decides.
+It is deliberately partial and it grows one slice at a time, so it says what
+is true today rather than what is intended.
+
+Two things are in here and the difference matters.
+
+**The grammar of the enabled kernel** covers the constructs the compiler
+enables today and nothing else, so that what a program may say and what the
+compiler will accept are the same sentence. A construct `tour.md` describes
+and this grammar omits is not enabled yet, and the compiler says so by
 [1830] rather than guessing.
+
+**The rules the tour left unsaid** are everything from [1840] on. They are
+not about the kernel and they will not be deleted as it grows: that a
+comparison yields a bool, that an immutable binding may not be written, that
+a name must be assigned before it is read. The tour teaches by example and a
+tutorial omits what a reader supplies for themselves, so each of these was
+found by an implementation needing a rule and finding none. Each cites the
+sentence it derives from, and the ones that were a decision rather than a
+transcription are named as decisions in the register at the end.
+
+## THE GRAMMAR OF THE ENABLED KERNEL
 
 The notation is ordinary: a name in lower case is a rule, a quoted word is
 itself, '?' is optional, '*' is none or more, '+' is one or more, '...'
@@ -259,18 +276,12 @@ The kernel's scopes, outermost first.
 [0130] and [0140] are two sentences about scopes and this
 grammar has to say which scopes it has, because a rule about
 an inner scope means nothing until the inner ones are named.
-  module     every file compiled together. There is one, until
-             [1410]'s directories arrive.
-  signature  a function's parameters and its named return
-             [1800]. The named return is a place the body
-             assigns [0930], so it is declared here and not in
-             the body, and a parameter and a return may not
-             share a name.
-  body       what a function runs, and one for each arm of an
-             `if` and for its `else` [1810]. A statement run is
-             a block and a block is what scopes [1090], so a
-             name declared in one arm is not visible in another
-             and not after the branch closes.
+| scope | what it holds |
+|---|---|
+| module | every file compiled together. There is one, until [1410]'s directories arrive. |
+| signature | a function's parameters and its named return [1800]. The named return is a place the body assigns [0930], so it is declared here and not in the body, and a parameter and a return may not share a name. |
+| body | what a function runs, and one for each arm of an `if` and for its `else` [1810]. A statement run is a block and a block is what scopes [1090], so a name declared in one arm is not visible in another and not after the branch closes. |
+
 [1800]'s expression body opens no scope, because an expression
 declares nothing.
 Order matters in a body and does not in a module. [0130]'s set
@@ -307,11 +318,13 @@ says what one of them holds, so nothing yet says whether a
 u8 may be given 300. [0150] puts the width in the name,
 [0160] takes usize and isize from the machine and [0180]
 gives bool its two values; written out, that is:
-  u8 u16 u32 u64      every unsigned value of that many bits
-  i8 i16 i32 i64      every signed one, two's complement
-  usize isize         the same pair, at the target's pointer
-                      width [0160]
-  bool                false and true [0180]
+| type | what it holds |
+|---|---|
+| `u8` `u16` `u32` `u64` | every unsigned value of that many bits |
+| `i8` `i16` `i32` `i64` | every signed one, two's complement |
+| `usize` `isize` | the same pair, at the target's pointer width [0160] |
+| `bool` | false and true [0180] |
+
 Two's complement is not a new decision. [0300]'s wrapping
 forms have to wrap somewhere and [0320]'s '>>' keeps a sign,
 and neither means anything without it.
@@ -333,15 +346,16 @@ its context and is checked at that point, and [0200] says it
 is i32 with none. Neither says what a context is, and a
 checker cannot ask for one until they are listed. In the
 kernel these positions give a literal a type:
-  a binding's declared type [1790]
-  the type of the place an assignment writes [1810]
-  the type of the parameter an argument fills [1800]
-  the named return's type, for an expression body [0880]
-  the other operand's type, for a binary operator
-  a unary operator's own context, handed on [1820]
-  a branch's condition and an exit's 'when', both of which
-    want a bool [1050] [0970] and so give an integer literal
-    a context it cannot take
+- a binding's declared type [1790]
+- the type of the place an assignment writes [1810]
+- the type of the parameter an argument fills [1800]
+- the named return's type, for an expression body [0880]
+- the other operand's type, for a binary operator
+- a unary operator's own context, handed on [1820]
+- a branch's condition and an exit's 'when', both of which
+  want a bool [1050] [0970] and so give an integer literal
+  a context it cannot take
+
 and two give none: the inferred form [0050] and a discard
 [1020], where [0200]'s i32 is what is left.
 A context reaches inward through [1820]'s arithmetic,
@@ -366,18 +380,15 @@ What each operator takes and what it gives.
 binary operator takes two operands of one type, because
 [0310] converts nothing and there is nowhere else for a
 second type to go.
-  + - * / %, and [0300]'s +% -% *%
-             one integer type, and that type back [0290]
-  & ^ |, and the unary ~
-             one integer type, and that type back [0330]
-  << >>      an integer shifted by an integer of that same
-             type, and that type back [0320]. The amount is
-             not bounded by the width: [0320] fills with
-             zeros beyond it for any amount.
-  == <> < <= > >=
-             one type on both sides, and a bool back [0350]
-  and or not bool, and a bool back [0340]
-  unary -    one integer type, and that type back
+| operator | takes, and gives back |
+|---|---|
+| `+` `-` `*` `/` `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
+| `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330] |
+| `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: [0320] fills with zeros beyond it for any amount. |
+| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350] |
+| `and` `or` `not` | bool, and a bool back [0340] |
+| unary `-` | one integer type, and that type back |
+
 So an integer has no logical words and a bool has no
 arithmetic and no bitwise set: 'and' is what [0340] gave a
 bool and '&' is what [0330] gave an integer, and neither
@@ -394,17 +405,13 @@ the exit is.
 What may be written, and what may not.
 [1810]'s place is a name, and of the four kinds of name the
 kernel has, two may be written and two may not.
-  a mutable binding [0060]     may be
-  a named return               may be: [0930] says it must
-                               be, and [1840] declares it
-                               as a place for that reason
-  an immutable binding         may not: [0040] makes it
-                               immutable and [0450] says it
-                               protects the value it holds
-  a parameter                  may not: the unmarked
-                               convention is [0900]'s 'in',
-                               which is the promise not to
-                               change the value
+| name | written? |
+|---|---|
+| a mutable binding [0060] | may be |
+| a named return | may be: [0930] says it must be, and [1840] declares it as a place for that reason |
+| an immutable binding | may not: [0040] makes it immutable and [0450] says it protects the value it holds |
+| a parameter | may not: the unmarked convention is [0900]'s 'in', which is the promise not to change the value |
+
 A function is not a place at all.
 The value's type is the place's type [0310], and the report
 names the place as well as the value, because which of the
@@ -491,3 +498,139 @@ first, exactly as [1850] found with two declarations of one
 name. So it is refused, and the report names the declaration
 the chain came back to, because that is the one place in it
 the reader is standing.
+
+## THE DECISIONS THIS DOCUMENT TOOK
+
+A rule above is one of two things, and a reader cannot tell them apart by
+reading it: a transcription of something `tour.md` already decided, or a
+decision taken because the tour said nothing and an implementation could not
+proceed without one. Seven were decisions. They are listed here with what
+the tour said before, what was chosen, and what a competent reader could
+have chosen instead — because a decision written in the same voice as a
+transcription looks like it was always there, and [1050] was missed twice by
+a reader who assumed exactly that.
+
+A decision leaves this register when something closes it: a program that
+cannot be written, a target that cannot be reached, or a paragraph of the
+tour that turns out to have settled it after all. None has yet.
+
+### D1 — A named return lives in the signature scope
+
+**The tour said** that a named return is assigned like any other place and
+that `return` leaves [1810], and that every named return must be assigned
+before the function returns [0930]. Neither says which scope declares it.
+
+**Chosen:** the signature's, beside the parameters [1840]. So
+`f: (r: u32) -> (r: u32)` is one name declared twice in one scope, and the
+body can assign the return from inside any arm.
+
+**The alternative:** the body's scope. Then a parameter and a return could
+share a name, and the body would shadow the return rather than assign it.
+
+**Pinned by** `negative/return-shares-a-parameter-name`.
+
+### D2 — Each arm of an `if` is its own scope
+
+**The tour said** nothing. [0140] permits an inner scope to shadow an outer
+name and [1090] says a bare block is for scoping, but a bare block is not in
+the kernel and no paragraph says an arm opens a scope. The sentence that now
+says so is in [1840] and was written here.
+
+**Chosen:** every arm and the `else` is a scope, and they are siblings. A
+name declared in one arm is not visible in another, nor after the branch
+closes.
+
+**The alternative:** one scope for the whole body, so a binding in an arm
+outlives it. Defensible, and it is what a language without block scoping
+would do — but then two arms could not use the same local name, which is the
+commonest thing a branch does.
+
+**Pinned by** `positive/arm-scopes-are-siblings`,
+`negative/name-from-another-arm`, `negative/name-after-the-branch-closes`.
+
+### D3 — Signed integers are two's complement
+
+**The tour said** nothing: the word complement appears nowhere in it. [0300]
+gives wrapping operators and [0320] gives a sign-keeping `>>`, and neither
+means anything without a representation.
+
+**Chosen:** two's complement, stated in [1870]. So `i8` holds -128 and not
+-127, and `-128` is writable.
+
+**The alternative:** leaving it to the target. Then `i8 = -128` would be a
+program whose legality depended on the machine, which [0310]'s refusal of
+implicit conversion exists to prevent.
+
+**Pinned by** `positive/literal-at-the-widest-value`,
+`negative/literal-below-its-type`.
+
+### D4 — `usize` is a distinct type from `u64`
+
+**The tour said** only that `usize` and `isize` are pointer-width integers
+[0160]. It does not say whether that makes `usize` a name for `u64` on a
+machine whose pointer is eight bytes wide.
+
+**Chosen:** distinct, on every target [1870]. Adding a `usize` to a `u64` is
+refused everywhere.
+
+**The alternative:** the same type where the widths agree. That is what a C
+programmer expects, and it costs this: a program would compile on
+`linux-x86-64` and be refused on a 32-bit target for a reason no paragraph
+of the specification could state.
+
+**Pinned by** `negative/usize-is-not-u64`.
+
+### D5 — A typed sibling gives an untyped literal its type
+
+**The tour said** that an integer literal takes the type of its context and
+is checked at that point [0190], and that with no context it is `i32`
+[0200]. It never says what a context is. That list is in [1880] and was
+written here.
+
+**Chosen:** eight positions give a literal a type, and one of them is the
+other operand of a binary operator. So in `x + 1` with `x: u8`, the `1` is a
+`u8`.
+
+**The alternative:** only a declared type is a context. Then `x + 1` would
+make the `1` an `i32` by [0200] and immediately refuse it against `x`, so
+every literal in an expression would need a conversion the kernel does not
+have. This is the decision with the least room in it, and it is still a
+decision.
+
+**Pinned by** `positive/literal-takes-a-sibling-type`.
+
+### D6 — A shift's right operand takes the left operand's type
+
+**The tour said** that shifts fill with zeros beyond the width for any
+amount, and that a signed `>>` keeps its sign [0320]. It says nothing about
+the amount's type.
+
+**Chosen:** the same type as the value being shifted [1890]. So shifting a
+`u8` by 300 is refused, because 300 is not a `u8`, while shifting it by 40
+is accepted and yields zero.
+
+**The alternative:** any integer type for the amount, or one fixed type such
+as `usize` for every shift. Either would accept `x << 300` and produce zero,
+which is what [0320] says an over-wide amount does — so this decision makes
+the specification's own example the boundary case rather than the rule.
+
+**Pinned by** `negative/shift-amount-takes-the-left-type`.
+
+### D7 — No condition is believed
+
+**The tour said** that a binding declared with no value must be assigned
+before use [0080] and that every named return must be assigned before the
+function returns [0930]. Neither says what a checker may conclude from a
+condition.
+
+**Chosen:** nothing [1910]. `if true then r = 1 end if` leaves `r`
+unassigned, and a branch with no `else` contributes a path that changes
+nothing.
+
+**The alternative:** fold constant conditions and believe them. It accepts
+more real programs, and it makes a program's legality depend on how clever
+the compiler's folding is — so adding an optimisation would change what
+compiles.
+
+**Pinned by** `positive/assigned-on-every-path`,
+`negative/assigned-on-one-path-only`, `negative/condition-is-not-believed`.
