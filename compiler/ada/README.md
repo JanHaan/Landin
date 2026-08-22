@@ -22,6 +22,8 @@ compiler/ada/
     stages/             target facts and the stage/pipeline seams
     syntax/             the tokens, the scan, the syntax table and the parse
     resolution/         declarations, scopes and what each name means
+    checking/           the language's types, and what each node has
+    checking/           the language's types, and what each node has
     driver/             the request/result boundary
     main/               the `refine` entry point
   tests/src/            the harness, the fakes and the suites
@@ -49,12 +51,15 @@ replaced.
 | `Landin.Syntax.Dump` | a canonical text for a tree | be a stable interface or a serialisation |
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and never freed | hand out a tree that can be copied or written to |
 | `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
+| `Landin.Types` | the eleven types, and each one's width against a target | hold a machine fact of its own, or ask the host for one |
+| `Landin.Checking` | what type every node and every declaration has | decide a rule, or hold a width |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a roadmap item |
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
+| `Landin.Diagnostics.Checking` | turning a type that does not agree into a diagnostic | invent a code, a construct, or a roadmap item |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific dependency | grow a second host concern |
@@ -62,6 +67,7 @@ replaced.
 | `Landin.Stages` | the compilation context, the stage interface, pipelines, and everything a stage builds that outlives it | know which stages exist, or which order they run in |
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
 | `Landin.Stages.Resolution` | the order the trees are walked in | own the resolution table, or a code |
+| `Landin.Stages.Checking` | the three type passes and the assignment walk | own a table, a code, or a width |
 | `Landin.Driver` | argument classification and the result | implement a language rule |
 | `Refine` | printing and the exit status | contain a decision |
 
@@ -99,10 +105,21 @@ what owns the pipeline.
 
 ## What is deliberately absent
 
-There is no checker, IR or backend here yet. What does exist is the whole
-frontend: `refine` scans and parses every `.ldn` file it is given, resolves
-every name in them as one module, reports what none of the three could read,
-and produces nothing when a file is a program.
+There is no IR or backend here yet. What does exist is the whole frontend:
+`refine` scans and parses every `.ldn` file it is given, resolves every name
+in them as one module, checks the type of everything and that every name is
+assigned before it is read, reports what none of the four could read, and
+produces nothing when a file is a program.
+
+A width is a function of a type and a target description, never a property of
+either alone, and `Landin.Types.Width` is the only place one is formed.
+`usize` is [0160]'s pointer-width integer, so it is as wide as
+`Landin.Targets.Pointer_Width` says and no wider -- which is how a 32-bit
+target description stays 32-bit on a 64-bit host. A literal's value is held in
+`Landin.Types.Magnitude`, whose bound is written out as `2 ** 64 - 1` because
+that is a fact about `u64`; a host width leaking in would be
+`Long_Long_Integer`, whose range is a fact about the machine running the
+compiler.
 `L0001` is retired -- the catalogue said it retires when the frontend is wired
 to the driver, and R1.40 is where that happened -- and its row stays so its
 number is never handed to another rule.

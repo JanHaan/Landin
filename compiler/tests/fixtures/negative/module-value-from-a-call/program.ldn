@@ -1,0 +1,2 @@
+seven: () -> (r: u32) = 7 end seven
+value := seven()

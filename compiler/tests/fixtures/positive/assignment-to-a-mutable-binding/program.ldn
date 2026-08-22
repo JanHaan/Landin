@@ -1,0 +1,6 @@
+f: () -> (r: u32) =
+    mut total: u32 = 0
+    total = 1
+    inc total
+    r = total
+end f

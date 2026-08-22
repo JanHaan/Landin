@@ -1,0 +1,5 @@
+class: negative
+summary: [1880] a unary minus is part of the value the range check reads, and -129 is no i8
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0300

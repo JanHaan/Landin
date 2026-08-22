@@ -1,0 +1,2 @@
+doubled: u32 = base + base
+base: u32 = 7

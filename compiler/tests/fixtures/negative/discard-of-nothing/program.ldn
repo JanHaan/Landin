@@ -1,0 +1,4 @@
+quiet: () -> none = return end quiet
+f: () -> none =
+    _ = quiet()
+end f
