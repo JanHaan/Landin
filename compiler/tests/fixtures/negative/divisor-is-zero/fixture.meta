@@ -1,0 +1,5 @@
+class: negative
+summary: [1950] a divisor the compiler knows is zero has no quotient to produce, and a module value has no moment in which to trap [1940]
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0306

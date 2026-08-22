@@ -499,12 +499,56 @@ name. So it is refused, and the report names the declaration
 the chain came back to, because that is the one place in it
 the reader is standing.
 
+### [1950] An operand an operation cannot take
+
+An operand an operation cannot take.
+[1890] says every binary operator takes two operands of one
+type and gives that type back, and for three of them a
+value of the right type is still not one the operation can
+use. No paragraph of the tour says what any of the three
+does.
+| the operation | the operand it cannot take |
+|---|---|
+| `/` `%` | a divisor of zero [0290] |
+| `<<` `>>` | a negative amount [0320] |
+
+This is not [0300]'s question, and the difference decides
+both answers. An overflow is a good operation whose result
+the type does not hold, which is why [1880] leaves it to
+the trap inside a body. Here the operand is what is wrong
+and there is no operation to perform at all, which is the
+case [0310] already answered for 'u8(300)': known when the
+compiler reads it, it is refused; otherwise it traps.
+Known is [1880]'s and [1940]'s and nothing besides -- inside
+a body a literal, or a unary minus over one; at module
+level the whole of [1940]'s fold. So 'x / 0' is refused and
+'x / y' traps, and which of the two a program gets does not
+move when an implementation gets better at folding, which
+is the objection D7 raised against believing a condition.
+A negative amount is writable only where the left operand
+is signed, because [1890] gives the amount that type. No
+unsigned shift carries this check, on any target.
+At module level a trap is not available at all. [1460] says
+nothing runs before the entry point, so a module value
+whose divisor is zero has no moment in which to trap and no
+value to stand for it, exactly as [1940] found for a sum no
+type holds. Both are refused there.
+The lowest value of a signed type over -1 is not in the
+table, and is not a third rule. Its quotient is the case
+[0300] already covers: that type does not hold it, and
+[1890] gives '/' no wrapping form to opt out with. Its
+remainder is 0, which the type does hold, so nothing traps
+and the machines that fault on it anyway are R1.80's and
+R5.30's to know about.
+The report names the operand and not the operator, because
+the zero and the negative amount are what a reader changes.
+
 ## THE DECISIONS THIS DOCUMENT TOOK
 
 A rule above is one of two things, and a reader cannot tell them apart by
 reading it: a transcription of something `tour.md` already decided, or a
 decision taken because the tour said nothing and an implementation could not
-proceed without one. Seven were decisions. They are listed here with what
+proceed without one. Nine were decisions. They are listed here with what
 the tour said before, what was chosen, and what a competent reader could
 have chosen instead — because a decision written in the same voice as a
 transcription looks like it was always there, and [1050] was missed twice by
@@ -634,3 +678,49 @@ compiles.
 
 **Pinned by** `positive/assigned-on-every-path`,
 `negative/assigned-on-one-path-only`, `negative/condition-is-not-believed`.
+
+### D8 — A zero divisor is refused when it is known, and traps when it is not
+
+**The tour said** that integer division truncates toward zero and that the
+remainder takes the sign of the dividend [0290], and nothing else. It does
+not say what a zero divisor does, and [0300] does not reach it: a quotient
+that does not exist is not a result that overflowed.
+
+**Chosen:** [0310]'s shape, in [1950]. Refused where the compiler knows the
+divisor, trapped where it does not, and refused at module level always.
+`%` goes with `/`, because the divisor is the same operand.
+
+**The alternative:** a defined value, which is the only other thing on
+offer. AArch64's `SDIV` answers 0 and x86-64's `IDIV` raises a hardware
+fault, both measured — so R1.80's target and R5.30's already disagree, and
+adopting either would make one program mean two things or make the other
+target pay for a value nobody asked for. Leaving it to the machine is the
+same alternative D4 refused, in the same words.
+
+**Pinned by** `negative/divisor-is-zero`, `negative/remainder-by-zero`,
+`negative/divisor-is-zero-in-a-body`, `positive/divisor-is-not-known`.
+
+### D9 — A negative shift amount is refused when it is known, and traps when it is not
+
+**The tour said** that shifts fill with zeros beyond the width for any
+amount and that a signed `>>` keeps its sign, and that there is one form
+only [0320]. It says nothing about a negative amount, and D6 is what makes
+one writable: the amount takes the left operand's type, so a signed left
+operand admits a negative one.
+
+**Chosen:** the same shape as D8, in [1950], so that the two operands no
+operation can take are one rule and not two.
+
+**The alternative:** three, and each is some language's answer. Read the
+amount as unsigned, so -1 is beyond the width and [0320] already says the
+answer is zero — which is exactly what Cortex-M0 does, measured, and it
+turns a likely bug into a silent zero. Reverse the direction, which is
+Swift's answer, and which [0320]'s "One form only" is the sentence against.
+Or mask the amount to the width, which is what x86-64, AArch64, Java and C#
+all do, measured on the first two — but [0320] has already declined masking
+for over-wide amounts, since it says they fill with zeros rather than wrap
+around, so masking here would make one operator answer two ways.
+
+**Pinned by** `negative/shift-amount-is-negative`,
+`negative/shift-amount-is-negative-in-a-body`,
+`positive/shift-amount-is-not-known`.

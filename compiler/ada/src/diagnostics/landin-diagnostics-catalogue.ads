@@ -63,13 +63,16 @@ package Landin.Diagnostics.Catalogue is
       --  The checker, assigned at R1.60.  Five rules: a literal no type
       --  holds, two types that must agree and do not, a name read before
       --  it is assigned, a place that may not be written, and a name used
-      --  in a way the kernel does not enable.
+      --  in a way the kernel does not enable.  Impossible_Operand joined
+      --  them at R1.70, where [1950] was written: it is the operand half
+      --  of what Literal_Out_Of_Range is the result half of.
       Literal_Out_Of_Range,
       Type_Mismatch,
       Not_Definitely_Assigned,
       Immutable_Target,
       Unsupported_Use,
-      Not_Known_At_Compile_Time);
+      Not_Known_At_Compile_Time,
+      Impossible_Operand);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -106,7 +109,8 @@ package Landin.Diagnostics.Catalogue is
             when Not_Definitely_Assigned  => "L0302",
             when Immutable_Target         => "L0303",
             when Unsupported_Use          => "L0304",
-            when Not_Known_At_Compile_Time => "L0305");
+            when Not_Known_At_Compile_Time => "L0305",
+            when Impossible_Operand        => "L0306");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -122,7 +126,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Error,
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
-            when Literal_Out_Of_Range .. Not_Known_At_Compile_Time => Error);
+            when Literal_Out_Of_Range .. Impossible_Operand => Error);
 
    function State (Of_Code : Code_Name) return Disposition
      is (case Of_Code is
@@ -142,7 +146,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Live,
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
-            when Literal_Out_Of_Range .. Not_Known_At_Compile_Time => Live);
+            when Literal_Out_Of_Range .. Impossible_Operand => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
    --  user reads: the message at the raise site is what a user reads.
@@ -208,7 +212,10 @@ package Landin.Diagnostics.Catalogue is
                "[1920]: a name used in a way the kernel does not enable",
             when Not_Known_At_Compile_Time =>
                "[1940]: a module value the compiler cannot know when it"
-               & " reads it");
+               & " reads it",
+            when Impossible_Operand    =>
+               "[1950]: an operand the operation cannot take, where the"
+               & " compiler knows it");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -233,7 +240,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => True,
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
-            when Literal_Out_Of_Range .. Not_Known_At_Compile_Time => True);
+            when Literal_Out_Of_Range .. Impossible_Operand => True);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -256,7 +263,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
             --  Every one of these points at something a program wrote.
-            when Literal_Out_Of_Range .. Not_Known_At_Compile_Time =>
+            when Literal_Out_Of_Range .. Impossible_Operand =>
                True);
 
    --  How many secondary labels the diagnostic must carry. An unterminated
@@ -295,6 +302,10 @@ package Landin.Diagnostics.Catalogue is
             when Literal_Out_Of_Range  => 0,
             when Unsupported_Use       => 0,
             when Not_Known_At_Compile_Time => 0,
+            --  The operand is written down and is the only place to
+            --  point at: [1950] says the report names it and not the
+            --  operator, so there is no second place to carry.
+            when Impossible_Operand    => 0,
             when others                => 0);
 
    --  How many notes. [1830] promises a diagnostic that names the construct
@@ -316,6 +327,7 @@ package Landin.Diagnostics.Catalogue is
             --  construct this is, and which work enables it.
             when Unsupported_Use       => 2,
             when Not_Known_At_Compile_Time => 1,
+            when Impossible_Operand    => 1,
             when others                => 0);
 
    function Count return Natural

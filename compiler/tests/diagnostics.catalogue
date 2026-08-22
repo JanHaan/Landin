@@ -33,3 +33,4 @@ L0302  Live     [1910]: a name read on a path that does not assign it
 L0303  Live     [1900]: a place that may not be written
 L0304  Live     [1920]: a name used in a way the kernel does not enable
 L0305  Live     [1940]: a module value the compiler cannot know when it reads it
+L0306  Live     [1950]: an operand the operation cannot take, where the compiler knows it
