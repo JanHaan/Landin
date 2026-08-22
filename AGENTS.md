@@ -79,6 +79,16 @@ in a table.
 
 Every document above is also published as a reading copy at https://sinnfrei.srht.site, rendered by `docs/site/render_html.py`. The text files are the sources; the pages are generated and never edited by hand.
 
+The mark lives in `assets/`, not in the site renderer. `assets/icon.svg` is
+the drawing — `701` as a path, so no renderer needs Futura — and
+`assets/landin_icon.py` is every rendering of it: the light, dark, contrast,
+`currentColor`, monochrome and `prefers-color-scheme` variants, the inline
+fragment, and the `data:` URL a page carries. Its four colours are the
+site's own, and `check.py` holds them to the stylesheet in
+`docs/site/render_html.py` and to the drawing's own attributes. Add a
+variant there rather than in a consumer, and keep it standard-library-only
+so the site keeps its no-dependency build. See `assets/README.md`.
+
 Syntax highlighting lives in `highlight/`, not in the site renderer. `highlight/landin_highlight.py` is the one token scanner every Landin highlighter renders — the pages as HTML spans, `highlight/landin_pygments.py` as Pygments tokens, and a TextMate and a tree-sitter grammar later. Add a keyword there rather than in a consumer, and keep it standard-library-only so the site keeps its no-dependency build. `check.py`'s own list of reserved words is deliberately separate: that one is about legality, this one about colour. See `highlight/README.md`.
 
 ## Prototype coverage

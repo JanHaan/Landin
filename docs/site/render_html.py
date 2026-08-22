@@ -83,6 +83,27 @@ sys.path.insert(0, str(HERE.parents[1] / "highlight"))
 
 from landin_highlight import Scanner, collect_symbols  # noqa: E402
 
+#  Nor is the icon.  It lives in assets/, one drawing that the
+#  favicon, the top bar and anything else wanting a mark are
+#  renderings of; a page carries it as a data URL so that a page
+#  is still one file.
+
+sys.path.insert(0, str(HERE.parents[1] / "assets"))
+
+import landin_icon  # noqa: E402
+
+#  Both icons travel in the page.  The pages have no external references
+#  at all, and a favicon fetched from a second file would be the first
+#  one: a page that is mailed, or opened from disk, keeps its mark.
+#  `mask-icon` is Safari's pinned tab, which wants the mark alone with no
+#  plate around it and colours the shape itself.
+
+ICON_LINKS = "\n".join([
+    '<link rel="icon" href="%s">' % landin_icon.data_uri("auto"),
+    '<link rel="mask-icon" href="%s" color="%s">'
+    % (landin_icon.data_uri("mono", crop=True), landin_icon.ACCENT),
+])
+
 CITE = re.compile(r"\[((?:\d{4})|(?:[XYZW]\d+))\]")
 
 
@@ -499,7 +520,12 @@ header.bar{
 header.bar .brand{
   font-weight:700; letter-spacing:.16em; font-size:.72rem; text-transform:uppercase;
   color:var(--accent); text-decoration:none; white-space:nowrap;
+  display:inline-flex; align-items:center; gap:.5rem;
 }
+/*  The mark is assets/icon.svg inlined, taking the colour of the word
+    beside it, which is how it follows the theme without a second drawing
+    and without a request.  */
+header.bar .brand svg{height:.82rem; width:auto; fill:currentColor; display:block}
 header.bar .where{
   font-size:.74rem; color:var(--ink-faint); letter-spacing:.06em;
   text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -546,6 +572,19 @@ main{padding:2.2rem 2.4rem 6rem; min-width:0; max-width:64rem}
 
 /* ---- hero ---- */
 .hero{border-bottom:1px solid var(--rule); padding-bottom:1.6rem; margin-bottom:.6rem}
+/*  The front door wears the plated icon.  It is the same drawing the tab
+    carries, at the one size where the plate is worth having.  */
+.hero .logo{
+  float:right; width:5.5rem; height:5.5rem; margin:0 0 1rem 1.4rem;
+  border:1px solid var(--rule); border-radius:1.2rem;
+}
+/*  Inline, so the stylesheet can reach into it: the drawing carries the
+    light colours as attributes for anything that renders it alone, and
+    here the page's own two variables win and it follows the theme.  */
+.hero .logo rect{fill:var(--panel)}
+.hero .logo path{fill:var(--accent)}
+.hero.wide::after{content:""; display:block; clear:both}
+@media (max-width:560px){ .hero .logo{width:3.6rem; height:3.6rem; border-radius:.8rem} }
 .hero .kind{font-size:.7rem; letter-spacing:.16em; text-transform:uppercase; color:var(--accent)}
 .hero h1{
   margin:.5rem 0 .9rem; font-size:clamp(1.5rem, 1.1rem + 1.6vw, 2.1rem);
@@ -930,7 +969,7 @@ def artifact_page(panels, nav):
     return f"""<title>Landin — the specification, highlighted</title>
 <style>{CSS}{ARTIFACT_CSS}</style>
 <header class="bar">
-  <span class="brand">Landin</span>
+  <span class="brand">{landin_icon.inline("mark")}<span>Landin</span></span>
   <span class="where" id="where"></span>
   <span class="grow"></span>
   <button id="menu" type="button" aria-label="documents and sections">menu</button>
@@ -1579,7 +1618,7 @@ def nav_html(docs, current, sections):
     return "\n".join(out)
 
 
-def page(title, kind, heading, hero, body, nav, docname):
+def page(title, kind, heading, hero, body, nav, docname, logo=False):
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1587,11 +1626,12 @@ def page(title, kind, heading, hero, body, nav, docname):
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>{esc(title)}</title>
+{ICON_LINKS}
 <style>{CSS}{GUIDE_CSS}</style>
 </head>
 <body>
 <header class="bar">
-  <a class="brand" href="index.html">Landin</a>
+  <a class="brand" href="index.html">{landin_icon.inline("mark")}<span>Landin</span></a>
   <span class="where" id="where">{esc(kind)}</span>
   <span class="grow"></span>
   <button id="menu" type="button" aria-label="sections">menu</button>
@@ -1602,7 +1642,8 @@ def page(title, kind, heading, hero, body, nav, docname):
 {nav}
 </nav>
 <main>
-<div class="hero">
+<div class="hero{' wide' if logo else ''}">
+  {landin_icon.inline("light", classes="logo") if logo else ''}
   <div class="kind">{esc(kind)}</div>
   <h1>{esc(heading)}</h1>
   {hero}
@@ -1646,7 +1687,7 @@ def index_page(docs, pitch, counts):
             "compile anything yet; the bootstrap chassis is built and "
             "tested.</p>")
     return page("Landin — the specification and the work", "contents",
-                "Landin", hero, body, nav, "the repository")
+                "Landin", hero, body, nav, "the repository", logo=True)
 
 
 # --------------------------------------------------------------------------
