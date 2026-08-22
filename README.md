@@ -24,7 +24,8 @@ which work enables anything it refuses.**
 | file | what it is |
 |---|---|
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
-| `tour.md` | the specification, written as a numbered "learn X in Y minutes". The source of truth for the language. |
+| `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
+| `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
 | `ROADMAP.md` | the sole durable authority for open work, implementation dependencies, phase gates, and dispositions. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the specification, roadmap, and prototypes. Run it after touching any of them. |

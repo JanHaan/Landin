@@ -50,17 +50,30 @@ Staleness is decided by source checksums, not timestamps: `build.sh` rebuilds fr
 
 Use the repository documents in this order:
 
-1. `tour.md` is the normative language specification. Its four-digit construct IDs (`[NNNN]`) are stable citation anchors, spaced in increments of ten so new constructs can be inserted without renumbering existing decisions.
-2. `ROADMAP.md` is the sole durable work authority. It owns every open item, implementation dependency, phase, disposition, and completion gate. Do not create a parallel TODO list in the tour, prototypes, or issue files.
-3. `prototype-{1..4}-*.txt` are specification tests, not illustrative samples. Each deliberately stressed the design, and its ending findings record both obsolete wording and the resulting resolution.
-4. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
-5. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the documents the R0 gate cites — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
+1. `spec.md` is the normative specification. It holds the grammar of the enabled kernel, [1740]-[1830], which covers what the compiler accepts today and shrinks as the language grows; the rules the tour left unsaid, [1840] onward, which are permanent; and a register naming every rule that was a decision rather than a transcription, with the alternative and the fixture that pins it. Where `spec.md` and `tour.md` could be read differently, `spec.md` decides.
+2. `tour.md` explains the language, [0010]-[1730]. It teaches by example, which is why it omits what a reader supplies for themselves — every implementation item so far has found more of what it left unsaid, and the answer is to write the rule into `spec.md` rather than to attribute one to a paragraph that does not state it. Its four-digit construct IDs (`[NNNN]`) are stable citation anchors, spaced in increments of ten so new constructs can be inserted without renumbering existing decisions, and no ID is defined in both documents.
+3. `ROADMAP.md` is the sole durable work authority. It owns every open item, implementation dependency, phase, disposition, and completion gate. Do not create a parallel TODO list in the specification, the tour, the prototypes, or issue files.
+4. `prototype-{1..4}-*.md` are specification tests, not illustrative samples. Each deliberately stressed the design, and its ending findings record both obsolete wording and the resulting resolution.
+5. `handoff.md` summarizes the inherited design principles and decisions that should not be reversed without new evidence.
+6. `check.py` enforces cheap textual invariants across the specification, roadmap, prototypes, and the documents the R0 gate cites — including that the container recipe, `compiler/ada/TOOLCHAIN.md` and `flake.nix` pin the same toolchain, the flake by reading `environments/pins.sh` rather than naming a version of its own. Extend it when a new mechanically checkable invariant is introduced or when it misses a textual defect.
 
-`check.py` also checks the grammar in `tour.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
+`check.py` also checks the grammar in `spec.md`: it reads the productions, holds every rule to being defined and reachable, and derives every `.ldn` under `compiler/tests/fixtures/positive`. A negative fixture is held to being *underivable* only when the frontend is what refuses it: one a later stage refuses is legal source and must derive, which its `codes:` is what says (see below). A grammar change that breaks a fixture, or a fixture the grammar cannot derive, fails there. Do not weaken a fixture to make a grammar change pass — the corpus is the agreement the parser has to meet, and the parser suite requires the same verdict from the other side.
 
 A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` is raised by both the scanner and the parser.
 
 Four tables in the compiler are transcriptions of the grammar rather than paraphrases of it, and `check.py` compares each with its source. `Landin.Tokens`' reserved words must be the tour's own `keyword` production. `Landin.Syntax.Precedence` must have [1820]'s levels in [1820]'s order, with the same operators at each, the same fold, the same prefix set and first sets that agree with the grammar's own. And the parser's refusal tables — the words [1760] does not reserve, so only the parser can meet them, and the eleven scalar type names — must spell words the tour writes, cite paragraphs that exist, and name roadmap items that exist. And `Landin.Types` spells the eleven scalar names a second time, because it is the package that maps each onto a machine width; both it and the parser are held to the tour's own `type` rule and to each other. Add a level, an operator, a refused construct or a type in one place and the check says which other place disagrees.
+
+The five documents are Markdown, and the form carries invariants rather than
+being a style. A construct is `### [NNNN] Title` at column 0 and nothing else
+is; a citation is inline and can never be mistaken for a definition, which in
+the `.txt` form it could — 33 lines looked like definitions and were
+citations, and 16 real definitions sat indented inside one example, which is
+how [1050] was missed twice. A Landin example is a fenced block tagged
+`landin`, a production is tagged `landin-grammar`, and an untagged fence is a
+fault: what a block *is* is stated rather than guessed, and the heuristic it
+replaced accepted 114 lines of English as code. Prose is never indented four
+spaces, because Markdown reads that as a code block — an aligned list belongs
+in a table.
 
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 
