@@ -1,6 +1,6 @@
 --  The syntax representation.
 --
---  `tour.txt` [1740]-[1830] is the authority, and this is that grammar made
+--  `spec.md` [1740]-[1830] is the authority, and this is that grammar made
 --  addressable.  A parse produces one Tree per source file: a dense table of
 --  nodes, each node a kind, an extent, an anchor and a run of slots naming
 --  its children.  It is a table and not a pointer structure on purpose, and

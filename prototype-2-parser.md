@@ -1,6 +1,6 @@
-----------------------------------------------------------------------
-LANDIN PROTOTYPE 2 — A PARSER FULL OF RECOVERABLE ERRORS
-----------------------------------------------------------------------
+## LANDIN PROTOTYPE 2 — A PARSER FULL OF RECOVERABLE ERRORS
+
+```landin
 Current with specification 0.1.0. Its own findings Y1-Y7 are all
 resolved below.
 
@@ -15,23 +15,20 @@ The answer this prototype argues for: a diagnostics log is a
 capability. A function that was given one can report; a function that
 was not, cannot. No effect system, no global error list, just an
 argument — which is principle [1680] doing real work.
-----------------------------------------------------------------------
+```
 
+---
 
-----------------------------------------------------------------------
-core/text  —  the parts this file leans on
-----------------------------------------------------------------------
+## core/text  —  the parts this file leans on
 
---  utf8       distinct []u8
---  position   an opaque byte offset into a utf8
---  utf8 is indexable (Idx: position, Item: []u8, get: ...)
---  utf8 is iterable  (Cur: position, Item: u32, ...)
+utf8       distinct []u8
+position   an opaque byte offset into a utf8
+utf8 is indexable (Idx: position, Item: []u8, get: ...)
+utf8 is iterable  (Cur: position, Item: u32, ...)
 
+## config/diag  —  the diagnostics log
 
-----------------------------------------------------------------------
-config/diag  —  the diagnostics log
-----------------------------------------------------------------------
-
+```landin
 import core/io
 import core/text
 
@@ -43,22 +40,26 @@ public entry: type = struct
     what:  utf8
 end entry
 
---- A concept and not a type, for the reason prototype 4 later found
---- out the hard way about Io: a concrete type means nothing else can
---- be put in its place, and then a test cannot collect what a run
---- reported. It also took a type parameter out of every function that
---- reports, since none of them has to name the log's capacity any
---- more.
+```
+A concept and not a type, for the reason prototype 4 later found
+out the hard way about Io: a concrete type means nothing else can
+be put in its place, and then a test cannot collect what a run
+reported. It also took a type parameter out of every function that
+reports, since none of them has to name the log's capacity any
+more.
+```landin
 public log: type = concept (D: type)
     note:   (inout d: D, where: text.position, kind: severity,
              what: utf8) -> none
     failed: (d: D) -> (yes: bool)
 end log
 
---- One implementation: a fixed-capacity list, because this runs in a
---- place where an unbounded one would be the wrong shape. Overflow is
---- not an error: past the limit it counts and stops storing, since
---- the twentieth message helps nobody.
+```
+One implementation: a fixed-capacity list, because this runs in a
+place where an unbounded one would be the wrong shape. Overflow is
+not an error: past the limit it counts and stops storing, since
+the twentieth message helps nobody.
+```landin
 public bounded: type (N: fixed u32) = struct
     notes:   [N]entry
     stored:  usize
@@ -85,9 +86,14 @@ bounded_failed: (d: bounded(N), N: fixed u32) -> (yes: bool) =
     end for
 end bounded_failed
 
---- A constructor and not zeroed: severity is a named value set, and
---- [0540] does not let one of those be written as zeroed, nor an
---- aggregate holding one. So the empty note has to be spelt.
+```
+A constructor and not zeroed: severity is a named value set, and
+
+### [0540] does not let one of those be written as zeroed
+
+does not let one of those be written as zeroed, nor an
+aggregate holding one. So the empty note has to be spelt.
+```landin
 blank: entry = (where: text.nowhere, kind: warning, what: "")
 
 public new_log: (fixed N: u32) -> (d: bounded(N)) =
@@ -97,9 +103,11 @@ end new_log
 (N: fixed u32) bounded(N) is log (note: bounded_note,
                                   failed: bounded_failed)
 
---- And a second one, so the concept is doing work rather than
---- posturing: print them as they arrive, for a tool that has
---- somewhere to print to.
+```
+And a second one, so the concept is doing work rather than
+posturing: print them as they arrive, for a tool that has
+somewhere to print to.
+```landin
 public streaming: type = struct
     where_to: io.file
     count:    u32
@@ -113,11 +121,11 @@ stream_failed: (d: streaming) -> (yes: bool) = d.count > 0 end
 
 streaming is log (note: stream_note, failed: stream_failed)
 
+```
 
-----------------------------------------------------------------------
-config/lex
-----------------------------------------------------------------------
+## config/lex
 
+```landin
 import core/text
 
 public ident:    atom
@@ -148,9 +156,11 @@ public open: (src: utf8) -> (l: lexer) =
     lexer(src: src, pos: text.first(src))
 end open
 
---- No error channel here at all. A character the lexer does not know
---- becomes a bad_char token and the file goes on. Lexing is one of
---- the places where failing is simply the wrong answer.
+```
+No error channel here at all. A character the lexer does not know
+becomes a bad_char token and the file goes on. Lexing is one of
+the places where failing is simply the wrong answer.
+```landin
 public next: (inout l: lexer) -> (t: token) =
     skip_blanks(l)
     start := l.pos
@@ -180,19 +190,21 @@ public next: (inout l: lexer) -> (t: token) =
     end match
 end next
 
+```
 
-----------------------------------------------------------------------
-config/parse
-----------------------------------------------------------------------
+## config/parse
 
+```landin
 import core/text
 import core/arena
 import config/lex
 import config/diag
 
---- These are the failures that end the parse. There are exactly two,
---- and neither is a syntax mistake: syntax mistakes are reported and
---- recovered from. That distinction is the whole design.
+```
+These are the failures that end the parse. There are exactly two,
+and neither is a syntax mistake: syntax mistakes are reported and
+recovered from. That distinction is the whole design.
+```landin
 public out_of_memory: atom
 public too_deep:      atom
 
@@ -213,13 +225,18 @@ end parser
 
 max_depth: u32 = 32
 
-----------------------------------------------------------------------
---- Recovery. When a statement is broken, throw tokens away until the
---- next thing that is certainly a boundary, and carry on from there.
---- This is why the log exists: the mistake is recorded, the parse
---- keeps its place.
-----------------------------------------------------------------------
+```
 
+---
+
+Recovery. When a statement is broken, throw tokens away until the
+next thing that is certainly a boundary, and carry on from there.
+This is why the log exists: the mistake is recorded, the parse
+keeps its place.
+
+---
+
+```landin
 recover_to_boundary: (inout p: parser) -> none =
     loop do
         break when p.look.what == lex.newline
@@ -240,11 +257,16 @@ expect: (inout p: parser, inout d: any diag.log,
     end if
 end expect
 
-----------------------------------------------------------------------
---- One entry. It returns whether it produced something, rather than
---- failing, because a broken entry must not end the file.
-----------------------------------------------------------------------
+```
 
+---
+
+One entry. It returns whether it produced something, rather than
+failing, because a broken entry must not end the file.
+
+---
+
+```landin
 parse_entry: (inout p: parser, inout d: any diag.log,
               inout a: arena)
               -> (v: ptr mut value_kind, got: bool)
@@ -287,10 +309,12 @@ parse_entry: (inout p: parser, inout d: any diag.log,
         lex.lbrace: begin
             fail too_deep when p.depth >= max_depth
             inc p.depth
-            --- defer and not a plain dec: the try below can leave,
-            --- and the caller recovers from too_deep and carries on,
-            --- so a depth that was not put back would leak upward
-            --- and every later group would look too deep.
+```
+defer and not a plain dec: the try below can leave,
+and the caller recovers from too_deep and carries on,
+so a depth that was not put back would leak upward
+and every later group would look too deep.
+```landin
             defer dec p.depth
             items := try parse_group(p, d, a)
             v.val.body = group_value(items: items)
@@ -304,12 +328,17 @@ parse_entry: (inout p: parser, inout d: any diag.log,
     end match
 end parse_entry
 
-----------------------------------------------------------------------
---- The whole file. Note that it does not fail on a syntax mistake:
---- it returns whatever it managed to build, and the caller asks the
---- log whether the result is trustworthy.
-----------------------------------------------------------------------
+```
 
+---
+
+The whole file. Note that it does not fail on a syntax mistake:
+it returns whatever it managed to build, and the caller asks the
+log whether the result is trustworthy.
+
+---
+
+```landin
 public parse_file: (src: utf8, inout d: any diag.log, inout a: arena)
                     -> (items: []mut ptr mut value_kind)
                     ! out_of_memory | too_deep =
@@ -340,19 +369,21 @@ public parse_file: (src: utf8, inout d: any diag.log, inout a: arena)
     items = vec.used(list)
 end parse_file
 
+```
 
-----------------------------------------------------------------------
-app  —  hosted, and the shape of a whole run
-----------------------------------------------------------------------
+## app  —  hosted, and the shape of a whole run
 
+```landin
 import core/io
 import config/parse
 import config/diag
 
---- The world is a parameter, not a module member: naming it 'io'
---- here would shadow the module of the same name and every call in
---- the body would read a field of the parameter instead. arena is
---- built in, so there is nothing to import for it.
+```
+The world is a parameter, not a module member: naming it 'io'
+here would shadow the module of the same name and every call in
+the body would read a field of the parameter instead. arena is
+built in, so there is nothing to import for it.
+```landin
 run: (inout w: any io.world, path: utf8) -> (code: i32) =
     code = 0
 
@@ -375,8 +406,10 @@ run: (inout w: any io.world, path: utf8) -> (code: i32) =
             return
         end parse_file
 
-        --- Both views of one value: the concept for reporting, the
-        --- concrete type for reading back what was stored.
+```
+Both views of one value: the concept for reporting, the
+concrete type for reading back what was stored.
+```landin
         for i in 0..<notes.stored do
             n := notes.notes[i]
             io.write_line(w, format_note(scratch, src, n))
@@ -395,23 +428,25 @@ run: (inout w: any io.world, path: utf8) -> (code: i32) =
     end scratch
 end run
 
---- What the scratch arena does here is worth spelling out. Every
---- string the parser cut out of the source, every node it built and
---- every formatted message live in it, and not one of them is freed
---- by name. The block ends and all of it is gone at once. Because
---- the arena is a block, the compiler knows its extent exactly, so
---- items and src cannot leave: they have frame origin, and returning
---- them would be refused.
+```
+What the scratch arena does here is worth spelling out. Every
+string the parser cut out of the source, every node it built and
+every formatted message live in it, and not one of them is freed
+by name. The block ends and all of it is gone at once. Because
+the arena is a block, the compiler knows its extent exactly, so
+items and src cannot leave: they have frame origin, and returning
+them would be refused.
 
+---
 
-----------------------------------------------------------------------
-WHAT THIS ONE FOUND
+## WHAT THIS ONE FOUND
+
 The resolutions below cite the pre-release revisions this
 specification passed through, 0.0.1 to 0.0.17, on the way to 0.1.0.
 They are kept because when one thing was settled relative to another
 still carries information.
 
-----------------------------------------------------------------------
+---
 
 Y1  RESOLVED at 0.0.12, written into the tour at [0950] with a
     sharper test than this file had. The question is whether the
@@ -472,4 +507,5 @@ Y7  RESOLVED at 0.0.7: writing through a pointer is p.val = x, and
     into it through v.val.name works, but the tour never shows a
     pointer being written through, only read. The spelling p.val = x
     should appear somewhere.
-----------------------------------------------------------------------
+
+---

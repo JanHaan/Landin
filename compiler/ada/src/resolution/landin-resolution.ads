@@ -1,6 +1,6 @@
 --  What every name in a program means.
 --
---  `tour.txt` [1840] is the authority: the scopes this grammar has, which
+--  `spec.md` [1840] is the authority: the scopes this grammar has, which
 --  of them is ordered and which is a set, and where a named return is
 --  declared.  It exists because [0130] and [0140] are two sentences about
 --  scopes -- order inside a module does not matter, an inner scope may

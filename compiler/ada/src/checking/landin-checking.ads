@@ -1,6 +1,6 @@
 --  What type everything in a program has.
 --
---  `tour.txt` [1790] gives the kernel eleven types, [0190] says an integer
+--  `spec.md` [1790] gives the kernel eleven types, [0190] says an integer
 --  literal takes the type of its context, [0200] says what it takes when
 --  there is no context, and [0310] says there is no implicit conversion
 --  between any two of them.  Landin.Types is those rules made addressable;

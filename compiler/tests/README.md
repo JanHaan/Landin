@@ -100,7 +100,7 @@ nobody runs is.
 ## The grammar corpus
 
 A `.ldn` file under `positive/` must be derivable from the grammar in
-`tour.txt`; one under `negative/` must not. `check.py` enforces both on every
+`tour.md`; one under `negative/` must not. `check.py` enforces both on every
 full run, and it enforces that every construct in the grammar section is
 named by at least one fixture, so a production nothing pins is a reported
 fault rather than a quiet one.

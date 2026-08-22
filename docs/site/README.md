@@ -8,15 +8,19 @@ are the specification; these pages are a reading of them.
 
 | kind | sources | how it is read |
 |---|---|---|
-| the tour | `tour.txt` | as a literate document: every `[NNNN]` construct becomes a block holding its prose and the code that follows, and every citation becomes a link to the construct it names |
+| the tour | `tour.md` | as a literate document: every `[NNNN]` construct becomes a block holding its prose and the code that follows, and every citation becomes a link to the construct it names |
 | the prototypes | `prototype-{1..4}-*.txt` | as listings, because in those the code is the argument, with the closing findings pulled out as entries |
 | the guides | the Markdown documents named in `GUIDES` | as ordinary prose, with `[NNNN]` citations linked into the tour and links between documents rewritten to the pages they name |
 
-Nothing here is a parser. The highlighter is a token scanner with a symbol
-table collected from the document itself, and the Markdown reader covers the
-subset the repository uses. It refuses a construct it does not recognise
-rather than passing it through as text, because a table that renders as a row
-of pipes is worse than a build that stops.
+Nothing here is a parser, and the highlighting is not written here. It comes
+from [`highlight/landin_highlight.py`](../../highlight/README.md), the one
+scanner the Pygments lexer reads as well, so the pages cannot colour the
+language differently from every other tool that highlights it; this file
+turns the classes it emits into spans and links the citations in comments.
+The Markdown reader covers the subset the repository uses, and refuses a
+construct it does not recognise rather than passing it through as text,
+because a table that renders as a row of pipes is worse than a build that
+stops.
 
 ## Building and publishing
 
@@ -53,4 +57,6 @@ than going up. `scripts/site.sh` always passes it.
 The pages have no external references at all: the stylesheet, the script and
 the highlighting are inlined, so one file can be opened from disk, mailed, or
 served as it is. There is no build system, no asset pipeline, and no
-dependency beyond the Python standard library.
+dependency beyond the Python standard library — the shared scanner is a file
+in this repository, not a package, and Pygments is a dependency of the lexer
+that wraps it rather than of anything the pages need.

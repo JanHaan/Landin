@@ -5,3 +5,5 @@ compiler/ada/build/
 docs/site/site/
 docs/site/landin-site.tar.gz
 .claude/worktrees/
+highlight/build/
+*.egg-info/

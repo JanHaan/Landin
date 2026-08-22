@@ -138,7 +138,7 @@ interface files, header parsing.
    disposition in `ROADMAP.md`.
 3. Turn the prototypes into derived positive and negative conformance
    tests while preserving their historical finding sections.
-4. When implementation changes semantics, update `tour.txt`, the
+4. When implementation changes semantics, update `tour.md`, the
    affected prototype-derived tests, and `ROADMAP.md` together, then
    reread the prototypes against the revision and against each other.
 5. Run `check.py`. Every new cheap invariant, and every defect it once

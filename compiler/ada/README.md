@@ -1,7 +1,7 @@
 # The Ada bootstrap compiler
 
 This directory holds the bootstrap implementation described by `ROADMAP.md`.
-It is a real compiler under construction, not a prototype: `tour.txt` remains
+It is a real compiler under construction, not a prototype: `tour.md` remains
 the normative language specification, and nothing here may quietly decide
 language semantics.
 

@@ -21,14 +21,18 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 #  The normative document, named once.  Every check that reads it goes
 #  through this, so a rename is one edit rather than nine -- and so that a
 #  check cannot quietly look for a file that is no longer there.
-TOUR_NAME = "tour.txt"
+#  The two normative documents.  SPEC holds the grammar of the enabled
+#  kernel and the rules the tour left unsaid; TOUR explains the language.
+#  A construct is defined in exactly one of them.
+SPEC_NAME = "spec.md"
+TOUR_NAME = "tour.md"
 
 def absent(paths):
     """A file a check needs and cannot find, reported rather than skipped.
 
     Every check that reads a document used to return no faults when the
     document was not there.  That is the worst possible answer: renaming
-    tour.txt made four checks vacuous and the run still said `all clean`,
+    tour.md made four checks vacuous and the run still said `all clean`,
     which was proved by appending a bogus production and seeing it pass.
     A check that cannot do its job says so.
     """
@@ -37,9 +41,10 @@ def absent(paths):
             for f in paths if not os.path.exists(f)]
 
 
-LANGUAGE_FILES = [TOUR_NAME, "prototype-1-driver.txt",
-                  "prototype-2-parser.txt", "prototype-3-containers.txt",
-                  "prototype-4-app.txt"]
+LANGUAGE_FILES = [SPEC_NAME, TOUR_NAME, "prototype-1-driver.md",
+                  "prototype-2-parser.md",
+                  "prototype-3-containers.md",
+                  "prototype-4-app.md"]
 ROADMAP = "ROADMAP.md"
 FILES = LANGUAGE_FILES + [ROADMAP]
 LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md",
@@ -139,49 +144,70 @@ MIGRATION_OWNER_NAMES = (
     "Language evolution", "Release readiness", "Roadmap-wide process",
 )
 PROTOTYPE_FINDINGS = {
-    "X": "prototype-1-driver.txt",
-    "Y": "prototype-2-parser.txt",
-    "Z": "prototype-3-containers.txt",
-    "W": "prototype-4-app.txt",
+    "X": "prototype-1-driver.md",
+    "Y": "prototype-2-parser.md",
+    "Z": "prototype-3-containers.md",
+    "W": "prototype-4-app.md",
 }
+#  Names that are deliberately not files here: an example in prose, a
+#  path inside a container, or a file a reader is told to create.
+NAMED_FILE_ALLOWLIST = frozenset((
+    "BACKLOG.md",              # the retired work authority, named to refuse it
+    "CONTEXT.md",              # a file docs/agents/domain.md tells you to write
+    "unit/stray.txt",          # a harness case named relative to its own tree
+    #  Names docs/agents/domain.md uses as examples of what to write.
+    "CONTEXT-MAP.md",
+    "map.md",
+    "0001-event-sourced-orders.md",
+    "0002-postgres-for-write-model.md",
+))
+
 STALE_BACKLOG_ALLOWLIST = {
-    ("prototype-3-containers.txt",
-     "--- other thing, and they are parked with a condition in BACKLOG.md."),
-    ("prototype-4-app.txt",
-     "--- other thing, and they are parked with a condition in BACKLOG.md. And"),
+    ("prototype-3-containers.md",
+     "other thing, and they are parked with a condition in BACKLOG.md."),
+    ("prototype-4-app.md",
+     "other thing, and they are parked with a condition in BACKLOG.md. And"),
 }
 
 
 def sections(lines):
-    """Split a file into (kind, first_line, lines).
+    """Split a file into (kind, first_line, lines), by fence rather than
+    by guess.
 
-    Four kinds are read differently. 'code' is checked. 'findings' and
-    'changelog' quote the wording a decision retired, on purpose. 'grammar'
-    is notation rather than Landin: a production reads 'type ::= ...', which
-    the keyword rule would otherwise report as a keyword standing where a
-    name belongs, and a nonterminal may share a name with a function the
-    tour declares elsewhere.
+    A fenced block says what it is, so nothing has to be inferred.  The
+    tag is the kind: `landin` is checked, `landin-grammar` is notation
+    rather than Landin, and prose is not code at all.  In the .txt form
+    this was four heuristics over a document where a production and a
+    paragraph both began at column 0; measured against the tour's prose
+    with its comment prefix stripped, the code heuristic accepted 114
+    lines of English.
     """
-    kind, start, buf = "code", 1, []
-    ruled = False
+    kind, start, buf = "prose", 1, []
+    findings = False
     for n, line in enumerate(lines, 1):
         s = line.strip()
-        banner = ruled and re.match(r"^[A-Z][A-Z ,'-]+$", s)
-        if s.startswith("WHAT WAS TRIED AND DROPPED"):
+        fence = re.match(r"^```(\S*)\s*$", s)
+
+        if s.startswith("## WHAT THIS ONE FOUND") \
+                or s.startswith("## WHERE THE SPECIFICATION WAS SILENT") \
+                or s.startswith("## WHAT WAS TRIED AND DROPPED"):
             yield kind, start, buf
-            kind, start, buf = "changelog", n, []
-        elif s.startswith(GRAMMAR_BANNER):
-            yield kind, start, buf
-            kind, start, buf = "grammar", n, []
-        elif banner and kind == "grammar":
-            yield kind, start, buf
-            kind, start, buf = "code", n, []
-        elif re.match(r"^\[[XYZW]\]", s) or s.startswith("WHAT THIS ONE FOUND") \
-                or s.startswith("WHERE THE SPECIFICATION WAS SILENT"):
-            yield kind, start, buf
-            kind, start, buf = "findings", n, []
-        ruled = bool(re.match(r"^-{60,}$", s))
+            kind, start, buf, findings = "findings", n, [], True
+            buf.append(line)
+            continue
+
+        if fence:
+            tag = fence.group(1)
+            if kind in ("prose", "findings"):
+                yield kind, start, buf
+                kind, start, buf = (tag or "text"), n, []
+            else:
+                yield kind, start, buf
+                kind, start, buf = ("findings" if findings else "prose"), n, []
+            continue
+
         buf.append(line)
+
     yield kind, start, buf
 
 
@@ -191,19 +217,12 @@ def module_banner(line):
 
 
 def looks_like_code(line):
-    """Prose and code share these files, and no parser is available."""
+    """Kept only for the harness-case reader, which is not a document.
+
+    A fenced block says what it is, so nothing in a document needs this.
+    """
     s = line.strip()
-    if not s or s.startswith("--") or s.startswith("=") or s.startswith("["):
-        return False
-    if re.match(r"^[XYZW]\d", s):            # a findings entry
-        return False
-    if re.match(r"^[A-Z]", s) or s.endswith("."):   # a sentence
-        return False
-    #  A statement need not contain ':', '=' or '(' — 'inc n', 'break',
-    #  'return' and friends do not, and skipping them was a hole.
-    if re.match(r"^(inc|dec|break|continue|return|fail|try|defer|undo|_)\b", s):
-        return True
-    return bool(re.search(r"[:=(]|^end\b", s))
+    return bool(s) and not s.startswith("--")
 
 
 def check(path):
@@ -302,7 +321,7 @@ def check_code(lines, offset):
 # --------------------------------------------------------------------------
 #  the grammar
 #
-#  tour.txt's grammar section is normative, and two rounds of reading it by
+#  tour.md's grammar section is normative, and two rounds of reading it by
 #  hand found sixty-eight defects between them: a grammar argued over is a
 #  grammar that keeps being wrong in a new place.  So it is checked instead.
 #
@@ -348,16 +367,29 @@ NOTATION_WORD = re.compile(
 
 
 def grammar_section(text):
-    """The lines of the grammar section, or None when there is not one."""
-    lines = text.split("\n")
-    for n, line in enumerate(lines):
-        if line.strip() == GRAMMAR_BANNER:
-            for m in range(n + 2, len(lines)):
-                if re.match(r"^-{60,}$", lines[m]) and m + 1 < len(lines) \
-                        and re.match(r"^[A-Z][A-Z ,'-]+$", lines[m + 1].strip()):
-                    return n, lines[n:m]
-            return n, lines[n:]
-    return None, None
+    """Every `landin-grammar` fence, and where the first one starts.
+
+    In the .txt form this found a banner and read to the next one, which
+    meant the section's prose and its productions shared a region and were
+    told apart by looking for `::=`.  A tagged fence says which is which.
+    """
+    lines = text.splitlines()
+    out, offset, inside = [], None, False
+    for n, line in enumerate(lines, 1):
+        fence = re.match(r"^```(\S*)\s*$", line.strip())
+        if fence:
+            if inside:
+                inside = False
+            elif fence.group(1) == "landin-grammar":
+                inside = True
+                if offset is None:
+                    offset = n
+            continue
+        if inside:
+            out.append(line)
+    if offset is None:
+        return None, None
+    return offset, out
 
 
 def grammar_rules(section):
@@ -973,11 +1005,29 @@ def check_roadmap(path):
     return sorted(set(out))
 
 
+def construct_ids():
+    """Every construct id either document defines.
+
+    A construct lives in exactly one of them and a consumer does not care
+    which, so this is the answer every "does [NNNN] exist" question wants.
+    Reading one document was right when there was one; it is now a way to
+    report a live citation as undefined.
+    """
+    out = set()
+    for name in (SPEC_NAME, TOUR_NAME):
+        path = os.path.join(ROOT, name)
+        if os.path.exists(path):
+            out |= set(re.findall(r"^### \[(\d{4})\] ",
+                                  io.open(path, encoding="utf-8").read(),
+                                  re.M))
+    return out
+
+
 def construct_definitions(path):
     text = io.open(path, encoding="utf-8").read()
     definitions = collections.defaultdict(list)
     for n, line in enumerate(text.splitlines(), 1):
-        match = re.match(r"^\s*(?:--\(|---|--) \[(\d{4})\]", line)
+        match = re.match(r"^### \[(\d{4})\] ", line)
         if match:
             definitions[match.group(1)].append((path, n))
     return definitions
@@ -1005,7 +1055,15 @@ def check_citations(paths):
     for path in citation_paths:
         selected.setdefault(os.path.basename(path), path)
     tour_path = selected.get(TOUR_NAME, os.path.join(ROOT, TOUR_NAME))
+    spec_path = selected.get(SPEC_NAME, os.path.join(ROOT, SPEC_NAME))
+
+    #  A construct is defined in exactly one of the two documents, and a
+    #  citation resolves in either.  Merging the two dictionaries is also
+    #  what makes "defined twice" catch an id defined in both, which is
+    #  the invariant the split newly needs and nothing else states.
     constructs = construct_definitions(tour_path)
+    for construct, locations in construct_definitions(spec_path).items():
+        constructs.setdefault(construct, []).extend(locations)
 
     needs_findings = ROADMAP in selected
     if needs_findings:
@@ -1224,13 +1282,13 @@ def check_grammar_corpus(full_run):
     if not full_run:
         return []
 
-    tour = os.path.join(ROOT, TOUR_NAME)
+    tour = os.path.join(ROOT, SPEC_NAME)
     missing = absent((tour,))
     if missing:
         return missing
 
     rules, trees, problems = read_grammar(tour)
-    out = [(TOUR_NAME, n, why) for n, why in problems]
+    out = [(SPEC_NAME, n, why) for n, why in problems]
     if not trees or "program" not in trees:
         return out
 
@@ -1349,7 +1407,7 @@ def check_grammar_corpus(full_run):
     for construct in sorted(set(re.findall(r"^-- \[(\d{4})\]",
                                            section_text, re.M))):
         if construct not in cited:
-            out.append((TOUR_NAME, 1,
+            out.append((SPEC_NAME, 1,
                         "grammar construct [%s] is named by no fixture"
                         % construct))
 
@@ -1377,7 +1435,7 @@ def check_token_vocabulary(full_run):
     Landin.Tokens names two things the grammar does not: the seventeen
     reserved words, which must be exactly the grammar's own, and a band of
     deferred lexemes the kernel refuses by [1830], each of which must name
-    a construct tour.txt actually defines.  Without this the scanner would
+    a construct spec.md actually defines.  Without this the scanner would
     be a second lexical authority, which is one more than this repository
     is willing to have.
     """
@@ -1386,7 +1444,7 @@ def check_token_vocabulary(full_run):
 
     spec = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.ads")
     body = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.adb")
-    tour = os.path.join(ROOT, TOUR_NAME)
+    tour = os.path.join(ROOT, SPEC_NAME)
     missing = absent((spec, body, tour))
     if missing:
         return missing
@@ -1415,9 +1473,7 @@ def check_token_vocabulary(full_run):
             % (missing or "none", extra or "none")))
 
     #  Every deferred lexeme names a construct, and the construct exists.
-    constructs = set(re.findall(r"^\s*(?:--\(|---|--) \[(\d{4})\]",
-                                io.open(tour, encoding="utf-8").read(),
-                                re.M))
+    constructs = construct_ids()
     arms = re.findall(r"when\s+([A-Za-z_]+)\s*=>\s*\"\[(\d{4})\]\"",
                       body_text)
     if not arms:
@@ -1427,7 +1483,7 @@ def check_token_vocabulary(full_run):
         if construct not in constructs:
             out.append((
                 "compiler/ada/src/syntax/landin-tokens.adb", 1,
-                "%s names [%s], which tour.txt does not define"
+                "%s names [%s], which neither document defines"
                 % (kind, construct)))
 
     #  A deferred lexeme is one the grammar does NOT spell.  If the grammar
@@ -1560,7 +1616,7 @@ def check_precedence_table(full_run):
                         "compiler/ada/src/syntax/landin-syntax-precedence.ads")
     tokens = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.ads")
     signs = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.adb")
-    tour = os.path.join(ROOT, TOUR_NAME)
+    tour = os.path.join(ROOT, SPEC_NAME)
     missing = absent((spec, tokens, signs, tour))
     if missing:
         return missing
@@ -1746,7 +1802,7 @@ def check_refused_constructs(full_run):
                           "compiler/ada/src/syntax/landin-syntax-parser.adb")
     codes = os.path.join(
         ROOT, "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads")
-    tour = os.path.join(ROOT, TOUR_NAME)
+    tour = os.path.join(ROOT, SPEC_NAME)
     missing = absent((parser, codes, tour))
     if missing:
         return missing
@@ -1754,14 +1810,20 @@ def check_refused_constructs(full_run):
     out = []
     parser_text = io.open(parser, encoding="utf-8").read()
     codes_text = io.open(codes, encoding="utf-8").read()
-    tour_text = io.open(tour, encoding="utf-8").read()
+    #  Both documents, because a word the parser refuses is written where
+    #  the language is explained and not where the kernel is specified:
+    #  `loop` and `match` are in the tour and the spec omits them by
+    #  design, which is the whole reason the parser has to name them.
+    tour_text = "\n".join(
+        io.open(os.path.join(ROOT, name), encoding="utf-8").read()
+        for name in (SPEC_NAME, TOUR_NAME)
+        if os.path.exists(os.path.join(ROOT, name)))
     rules, _, problems = read_grammar(tour)
     if problems:
         return []
 
     #  Every construct the refusals cite, and whether the tour defines it.
-    defined = set(re.findall(r"^\s*(?:--\(|---|--) \[(\d{4})\]",
-                             tour_text, re.M))
+    defined = construct_ids()
     cited = re.findall(r"when\s+([A-Za-z0-9_]+)\s*=>\s*\"\[(\d{4})\]\"",
                        codes_text)
     if not cited:
@@ -1773,7 +1835,7 @@ def check_refused_constructs(full_run):
             out.append((
                 "compiler/ada/src/diagnostics"
                 "/landin-diagnostics-syntactic.ads", 1,
-                "%s names [%s], which tour.txt does not define"
+                "%s names [%s], which neither document defines"
                 % (name, construct)))
 
     #  Every refused construct names the work that enables it, and the
@@ -1822,7 +1884,7 @@ def check_refused_constructs(full_run):
                                % re.escape(word), tour_text):
                 out.append((
                     "compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
-                    "%s refuses %r, which tour.txt never writes"
+                    "%s refuses %r, which neither document writes"
                     % (name, word)))
 
     refused_types = spellings("Refused_Type")
@@ -2085,6 +2147,86 @@ def check_catalogue(full_run):
     return out
 
 
+def basenames():
+    """Every tracked file's bare name, for a reference that omits a path."""
+    global _BASENAMES
+    if _BASENAMES is None:
+        _BASENAMES = set()
+        for here, dirs, files in os.walk(ROOT):
+            dirs[:] = [d for d in dirs
+                       if d not in (".git", "build", ".scratch", ".claude")]
+            _BASENAMES |= set(files)
+    return _BASENAMES
+
+
+_BASENAMES = None
+
+
+def check_named_files(full_run):
+    """A document or source file that names another names one that exists.
+
+    The move from .txt to Markdown had to change 60 references across 21
+    files, and a missed one is invisible: a header citing `tour.md` reads
+    perfectly and points at nothing.  So every repository-relative
+    filename a live document or an Ada source mentions has to resolve.
+    Written after the rename rather than before it, because that is when
+    the cost of not having it was obvious.
+    """
+    if not full_run:
+        return []
+
+    out = []
+    #  `.ldn` is deliberately absent: a Landin file named in a comment is
+    #  almost always an example program a case builds, not a file here.
+    named = re.compile(
+        r"(?<![\w/.-])((?:[A-Za-z0-9_./-]+/)?[A-Za-z0-9_-]+"
+        r"\.(?:md|txt|py|sh|adb|ads|gpr|yml|nix|toml))(?![\w])")
+
+    #  The documents, plus the compiler's own headers, which cite the
+    #  specification constantly.
+    roots = list(LIVE_DOCS)
+    for directory in ("compiler/ada/src", "compiler/ada/tests/src"):
+        base = os.path.join(ROOT, directory)
+        for here, _, files in os.walk(base):
+            for name in sorted(files):
+                if name.endswith((".ads", ".adb")):
+                    roots.append(os.path.relpath(
+                        os.path.join(here, name), ROOT))
+
+    for relative in roots:
+        path = os.path.join(ROOT, relative)
+        if not os.path.exists(path):
+            continue
+        ada = relative.endswith((".ads", ".adb"))
+        for n, line in enumerate(
+                io.open(path, encoding="utf-8").read().splitlines(), 1):
+            #  In Ada only a comment names a file as a reference; a name in
+            #  a string literal is data a test hands to the compiler.
+            if ada:
+                comment = line.find("--")
+                if comment == -1:
+                    continue
+                line = line[comment:]
+            for found in named.finditer(line):
+                target = found.group(1)
+                if target in NAMED_FILE_ALLOWLIST:
+                    continue
+                if os.path.exists(os.path.join(ROOT, target)):
+                    continue
+                #  A bare name may sit next to the file that mentions it,
+                #  or anywhere in the tree: ROADMAP.md names Ada units by
+                #  their file name and not by their path.
+                if os.path.exists(os.path.join(os.path.dirname(path),
+                                               target)):
+                    continue
+                if "/" not in target and target in basenames():
+                    continue
+                out.append((relative, n,
+                            "this names %s, which is not in the repository"
+                            % target))
+    return out
+
+
 def check_stale_backlog(paths, full_run):
     """No live document points at the retired work authority."""
     out = []
@@ -2160,6 +2302,7 @@ def main(argv):
     extra += check_token_vocabulary(full_run)
     extra += check_precedence_table(full_run)
     extra += check_refused_constructs(full_run)
+    extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
     for path, line, why in sorted(set(extra)):
         total += 1

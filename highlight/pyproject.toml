@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "landin-pygments"
+#  Not a release designation.  ROADMAP.md decides when this package has a
+#  version to claim; until then the number says only that it is unreleased.
+version = "0.0.0"
+description = "A Pygments lexer for the Landin language"
+requires-python = ">=3.9"
+dependencies = ["Pygments>=2.14"]
+
+#  landin_highlight is shipped alongside the lexer rather than vendored
+#  into it: docs/site/render_html.py imports the same file from the
+#  repository, and there is only ever one of it.
+[tool.setuptools]
+py-modules = ["landin_highlight", "landin_pygments"]
+
+[project.entry-points."pygments.lexers"]
+landin = "landin_pygments:LandinLexer"

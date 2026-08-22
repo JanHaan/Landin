@@ -1,6 +1,6 @@
-----------------------------------------------------------------------
-LANDIN PROTOTYPE 3 — A GENERIC CONTAINER LIBRARY
-----------------------------------------------------------------------
+## LANDIN PROTOTYPE 3 — A GENERIC CONTAINER LIBRARY
+
+```landin
 Current with specification 0.1.0. Its own findings Z1-Z19 are all
 resolved below.
 
@@ -32,65 +32,73 @@ without deciding them, and both follow the tour rather than inventing:
 
 Where a spelling had to be invented, the line is marked [Zn] and the
 question is written out at the end.
-----------------------------------------------------------------------
+```
 
+---
 
-----------------------------------------------------------------------
-core/mem  —  allocation as a capability
-----------------------------------------------------------------------
+## core/mem  —  allocation as a capability
 
+```landin
 public out_of_memory: atom
 
---- The concept is the one from the tour at [1360], unchanged. Note
---- what it settles for everybody: the error set of alloc is concrete.
---- A concept entry is reached through a table, and [0960] forbids an
---- inferred set where the set must be concrete, so an allocator that
---- wanted an error of its own could not have one. Out of memory is
---- out of memory, so that is the right answer here — but it is a
---- general constraint on concept design that nobody has stated. [Z9]
+```
+The concept is the one from the tour at [1360], unchanged. Note
+what it settles for everybody: the error set of alloc is concrete.
+A concept entry is reached through a table, and [0960] forbids an
+inferred set where the set must be concrete, so an allocator that
+wanted an error of its own could not have one. Out of memory is
+out of memory, so that is the right answer here — but it is a
+general constraint on concept design that nobody has stated. [Z9]
+```landin
 public allocator: type = concept (A: type)
     alloc: (inout a: A, size: usize, alignment: usize) -> (p: ptr mut u8) ! out_of_memory
     free:  (inout a: A, p: ptr mut u8, size: usize) -> none
 end allocator
 
---- Three primitives every allocator needs and that the language does
---- not name. They are the system-tool layer of [0490], so belonging to
---- core and nowhere else is defensible — but core has to be able to
---- say them, and that privilege should be written down rather than
---- assumed. [Z3]
+```
+Three primitives every allocator needs and that the language does
+not name. They are the system-tool layer of [0490], so belonging to
+core and nowhere else is defensible — but core has to be able to
+say them, and that privilege should be written down rather than
+assumed. [Z3]
+```landin
 public offset:     (p: ptr mut u8, n: usize) -> (q: ptr mut u8) = ... end
 public base_of:    (T: type, s: []mut T) -> (p: ptr mut u8) = ... end
 public slice_from: (T: type, p: ptr mut u8, n: usize) -> (s: []mut T) = ... end
 
---- slice_from is where the honesty runs out, and it is worth being
---- plain about it. It hands back a []T over storage holding no T at
---- all. The language has no word for uninitialised memory: bindings
---- must be assigned before use, nothing says that about the elements
---- of a slice, and requiring T to have a zero image would rule out
---- list(ptr node), which is exactly what the tree below needs. So the
---- containers carry the invariant themselves — vec by its len, map by
---- its state array. slice_from is where the promise is made rather
---- than checked, which is [1730] with the check missing. [Z8]
+```
+slice_from is where the honesty runs out, and it is worth being
+plain about it. It hands back a []T over storage holding no T at
+all. The language has no word for uninitialised memory: bindings
+must be assigned before use, nothing says that about the elements
+of a slice, and requiring T to have a zero image would rule out
+list(ptr node), which is exactly what the tree below needs. So the
+containers carry the invariant themselves — vec by its len, map by
+its state array. slice_from is where the promise is made rather
+than checked, which is [1730] with the check missing. [Z8]
 
+```landin
 public align_up: (v: usize, a: usize) -> (r: usize) =
     r = (v + a - 1) / a * a
 end align_up
 
+```
 
-----------------------------------------------------------------------
-core/mem  —  a bump allocator over borrowed storage
-----------------------------------------------------------------------
+## core/mem  —  a bump allocator over borrowed storage
 
+```landin
 public bump: type = struct
     base: ptr mut u8
     size: usize
     used: usize
 end bump
 
---- escaping, for a real reason: the bump keeps the buffer long after
---- this call returns, so the caller has to prove the buffer outlives
---- it. A buffer on the stack of a function that returns the bump is
---- refused, and that is the bug this rule exists for.
+```
+escaping, for a real reason: the bump keeps the buffer long after
+this call returns, so the caller has to prove the buffer outlives
+it. A buffer on the stack of a function that returns the bump is
+refused, and that is the bug this rule exists for.
+```landin
 public bump_over: (escaping buf: []mut u8) -> (b: bump) =
     b = (base: base_of(buf), size: lenof buf, used: 0)
 end bump_over
@@ -104,24 +112,26 @@ bump_alloc: (inout a: bump, size: usize, alignment: usize)
     a.used = off + size
 end bump_alloc
 
---- A bump frees nothing. The signature still takes the size, because
---- the concept says so and a general allocator needs it.
+```
+A bump frees nothing. The signature still takes the size, because
+the concept says so and a general allocator needs it.
+```landin
 bump_free: (inout a: bump, p: ptr mut u8, size: usize) -> none = ... end
 
 bump is allocator (alloc: bump_alloc, free: bump_free)
 
+```
 
-----------------------------------------------------------------------
-core/mem  —  an allocator that fails on purpose
-----------------------------------------------------------------------
+## core/mem  —  an allocator that fails on purpose
 
---- This is the payoff of [1360] that almost nobody gets in C: the
---- out-of-memory path of every container below is reachable from a
---- test, by handing it this instead of the real one.
----
---- It is also the first type taking a constrained type parameter. The
---- tour has list: type (T: type) and it has a constrained parameter
---- on a function, but never the two together. [Z2]
+This is the payoff of [1360] that almost nobody gets in C: the
+out-of-memory path of every container below is reachable from a
+test, by handing it this instead of the real one.
+
+It is also the first type taking a constrained type parameter. The
+tour has list: type (T: type) and it has a constrained parameter
+on a function, but never the two together. [Z2]
+```landin
 public counted: type (A: type is allocator) = struct
     inner: ptr A
     left:  u32
@@ -136,8 +146,10 @@ counted_alloc: (A: type is allocator, inout c: counted(A),
                 size: usize, alignment: usize) -> (p: ptr mut u8) ! out_of_memory =
     fail out_of_memory when c.left == 0
     dec c.left
-    --- Passing a pointer target where an inout is wanted. Surely
-    --- intended, never shown. [Z12]
+```
+Passing a pointer target where an inout is wanted. Surely
+intended, never shown. [Z12]
+```landin
     p = try A.alloc(c.inner.val, size, alignment)
 end counted_alloc
 
@@ -146,58 +158,64 @@ counted_free: (A: type is allocator, inout c: counted(A),
     A.free(c.inner.val, p, size)
 end counted_free
 
---- And here is the hole this file kept walking into. The line means
---- "for any A satisfying allocator, counted(A) satisfies allocator",
---- and there is nowhere to put the "for any A". Written with a prefix
---- binder, which is invented. [Z1]
+```
+And here is the hole this file kept walking into. The line means
+"for any A satisfying allocator, counted(A) satisfies allocator",
+and there is nowhere to put the "for any A". Written with a prefix
+binder, which is invented. [Z1]
+```landin
 (A: type is allocator) counted(A) is allocator
     (alloc: counted_alloc, free: counted_free)
 
+```
 
-----------------------------------------------------------------------
-core/mem  —  slices from an allocator
-----------------------------------------------------------------------
+## core/mem  —  slices from an allocator
 
---- sizeof and alignof applied to a type parameter. Specialised they
---- are constants; compiled once against a table they are not, so the
---- evidence has to carry the size and the alignment of the type as
---- well as the concept's functions. [1310] describes the table as
---- holding the functions and says nothing about layout. Without this
---- no generic container can allocate at all. [Z4]
+sizeof and alignof applied to a type parameter. Specialised they
+are constants; compiled once against a table they are not, so the
+evidence has to carry the size and the alignment of the type as
+well as the concept's functions. [1310] describes the table as
+holding the functions and says nothing about layout. Without this
+no generic container can allocate at all. [Z4]
+```landin
 public new_slice: (T: type, A: type is allocator, inout a: A, n: usize)
                   -> (s: []mut T) ! out_of_memory =
     raw := try A.alloc(a, n * sizeof T, alignof T)
     s   = slice_from(T: T, p: raw, n: n)
 end new_slice
 
---- sink, and it earns its place: after drop_slice the place the
---- caller named is dead, so the obvious use-after-free is refused and
---- it costs nothing at run time.
---- What it is not is ownership. A slice descriptor is a copyable
---- value: copy it first and the copy is refused nothing, so freeing
---- through both is a double free this does not catch. sink is a
---- use-after-consume check on one place. Affine values would be the
---- other thing, and they are parked with a condition in BACKLOG.md.
---- The catch: every caller below passes a struct field rather than a
---- binding, and what sink means for a field is not stated. [Z13]
+```
+sink, and it earns its place: after drop_slice the place the
+caller named is dead, so the obvious use-after-free is refused and
+it costs nothing at run time.
+What it is not is ownership. A slice descriptor is a copyable
+value: copy it first and the copy is refused nothing, so freeing
+through both is a double free this does not catch. sink is a
+use-after-consume check on one place. Affine values would be the
+other thing, and they are parked with a condition in BACKLOG.md.
+The catch: every caller below passes a struct field rather than a
+binding, and what sink means for a field is not stated. [Z13]
+```landin
 public drop_slice: (T: type, A: type is allocator, inout a: A, sink s: []mut T)
                    -> none =
     return when lenof s == 0
     A.free(a, base_of(s), lenof s * sizeof T)
 end drop_slice
 
+```
 
-----------------------------------------------------------------------
-core/vec  —  a growing array
-----------------------------------------------------------------------
+## core/vec  —  a growing array
 
+```landin
 import core/mem
 
 public empty: atom
 
---- The capacity is the length of the slice; len is how much of it
---- holds real values. Elements at and above len are the storage that
---- slice_from made a promise about and nobody has written yet.
+```
+The capacity is the length of the slice; len is how much of it
+holds real values. Elements at and above len are the storage that
+slice_from made a promise about and nobody has written yet.
+```landin
 public list: type (T: type) = struct
     items: []mut T
     len:   usize
@@ -211,13 +229,15 @@ grown: (cap: usize) -> (n: usize) =
     n = if cap == 0 then 8 else cap * 2 end if
 end grown
 
---- The allocator is threaded, not stored, and the reason turned out
---- sharper than the visibility argument that was made for it. If list
---- stored its allocator it would be list(T, A), so a list in an arena
---- and a list on the heap would be different types and no function
---- could take both. Threading keeps the type parameterised by T
---- alone. The price is one more argument at every mutating call,
---- which is what the code below reads like: judge it there. [Z10]
+```
+The allocator is threaded, not stored, and the reason turned out
+sharper than the visibility argument that was made for it. If list
+stored its allocator it would be list(T, A), so a list in an arena
+and a list on the heap would be different types and no function
+could take both. Threading keeps the type parameterised by T
+alone. The price is one more argument at every mutating call,
+which is what the code below reads like: judge it there. [Z10]
+```landin
 public reserve: (T: type, A: type is allocator,
                  inout l: list(T), inout a: A, want: usize)
                 -> none ! out_of_memory =
@@ -230,12 +250,14 @@ public reserve: (T: type, A: type is allocator,
     l.items = fresh
 end reserve
 
---- escaping on v reads oddly until T is taken seriously. For T = u32
---- it says nothing: [0840] already has it that a value holding no
---- references is unconstrained, so the obligation is vacuous and the
---- caller proves nothing. For T = ptr node it is exactly right, since
---- the list keeps what v refers to. One word covers both, because the
---- origin travels with the type. [Z6]
+```
+escaping on v reads oddly until T is taken seriously. For T = u32
+it says nothing: [0840] already has it that a value holding no
+references is unconstrained, so the obligation is vacuous and the
+caller proves nothing. For T = ptr node it is exactly right, since
+the list keeps what v refers to. One word covers both, because the
+origin travels with the type. [Z6]
+```landin
 public push: (T: type, A: type is allocator,
               inout l: list(T), inout a: A, escaping v: T)
              -> none ! out_of_memory =
@@ -252,13 +274,15 @@ public pop: (T: type, inout l: list(T)) -> (v: T) ! empty =
     v = l.items[l.len]
 end pop
 
---- One accessor, since 0.1.0. It hands out the widest permission the
---- storage has, and a caller who wants less writes
---- 'xs: []i32 = vec.used(l)' and relaxes it by [0440]. The pair of
---- accessors that every language with deep const ends up needing is
---- not needed here. The from clause says the one thing the signature
---- could not otherwise: the list has to hold still while the view is
---- alive.
+```
+One accessor, since 0.1.0. It hands out the widest permission the
+storage has, and a caller who wants less writes
+'xs: []i32 = vec.used(l)' and relaxes it by [0440]. The pair of
+accessors that every language with deep const ends up needing is
+not needed here. The from clause says the one thing the signature
+could not otherwise: the list has to hold still while the view is
+alive.
+```landin
 public used: (T: type, l: list(T)) -> (s: []mut T from l) =
     s = l.items[0..<l.len]
 end used
@@ -270,10 +294,12 @@ public release: (T: type, A: type is allocator, inout l: list(T), inout a: A)
     l.len   = 0
 end release
 
---- The four entries of iterable, and the same missing quantifier as
---- before. The cursor is an index rather than a pointer, so nothing
---- can move under the traversal, at the price of one bounds check the
---- compiler can hoist. [Z1]
+```
+The four entries of iterable, and the same missing quantifier as
+before. The cursor is an index rather than a pointer, so nothing
+can move under the traversal, at the price of one bounds check the
+compiler can hoist. [Z1]
+```landin
 list_first:  (T: type, s: list(T)) -> (c: usize)   = 0 end
 list_at_end: (T: type, s: list(T), c: usize) -> (yes: bool) = c >= s.len end
 list_item:   (T: type, s: list(T), c: usize) -> (v: T)      = s.items[c] end
@@ -283,21 +309,29 @@ list_next:   (T: type, s: list(T), c: usize) -> (c2: usize) = c + 1 end
                                first:  list_first, at_end: list_at_end,
                                item:   list_item,  next:   list_next)
 
+```
 
-----------------------------------------------------------------------
-core/small  —  inline capacity, spilling
-----------------------------------------------------------------------
+## core/small  —  inline capacity, spilling
 
+```landin
 import core/mem
 
---- A fixed value parameter on a type. [1520] gives one on a function
---- and [1350] a type parameter on a type; a small vector is the
---- ordinary shape that wants both. [Z2]
---- Restricted to a T with a zero image, and that restriction is the
---- honest form of [Z8]: the inline slots have to hold something and
---- [0540] gives no honest value for a T without one. So
---- small(ptr node, 4) does not exist until a raw-storage type does
---- [0510].
+```
+A fixed value parameter on a type. [1520] gives one on a function
+and [1350] a type parameter on a type; a small vector is the
+ordinary shape that wants both. [Z2]
+Restricted to a T with a zero image, and that restriction is the
+honest form of [Z8]: the inline slots have to hold something and
+
+### [0540] gives no honest value for a T without one
+
+gives no honest value for a T without one. So
+small(ptr node, 4) does not exist until a raw-storage type does
+
+### [0510] 
+
+.
+```landin
 public small: type (T: type is zeroable, fixed N: u32) = struct
     len: usize
     store: variant
@@ -309,16 +343,21 @@ end small
 public new_small: (T: type is zeroable, fixed N: u32) -> (s: small(T, N)) =
     s = (len: 0, store: inline(buf: zeroed))
 end new_small
---- zeroed is honest now, because T is constrained to have a zero
---- image. What that costs is that the shape does not exist for the T
---- which wanted it most. [Z8]
+```
+zeroed is honest now, because T is constrained to have a zero
+image. What that costs is that the shape does not exist for the T
+which wanted it most. [Z8]
 
---- The match bindings are inout, which is invented. [1210] shows
---- bindings being read, and whether a binding aliases the payload or
---- copies it is nowhere stated. For a [N]T payload the difference is
---- a whole array copy. The mechanism to reuse is obvious, since in,
---- inout and sink are already the parameter conventions, which is
---- [1710]'s "an existing mechanism expresses it" exactly. [Z7]
+The match bindings are inout, which is invented. [1210] shows
+bindings being read, and whether a binding aliases the payload or
+copies it is nowhere stated. For a [N]T payload the difference is
+a whole array copy. The mechanism to reuse is obvious, since in,
+inout and sink are already the parameter conventions, which is
+
+### [1710] 's "an existing mechanism expresses it" exactly
+
+'s "an existing mechanism expresses it" exactly. [Z7]
+```landin
 public push_small: (T: type is zeroable, fixed N: u32, A: type is allocator,
                     inout s: small(T, N), inout a: A, escaping v: T)
                    -> none ! out_of_memory =
@@ -350,12 +389,14 @@ public push_small: (T: type is zeroable, fixed N: u32, A: type is allocator,
             inc s.len
     end match
 end push_small
---- The inline arm assigns to s.store while buf is still bound out of
---- it. That is the borrow rule of [0830] at point blank range: the
---- write invalidates the binding. Here it happens to be the last use,
---- but the rule is written about locals and a match binding is not
---- obviously one. [Z7]
+```
+The inline arm assigns to s.store while buf is still bound out of
+it. That is the borrow rule of [0830] at point blank range: the
+write invalidates the binding. Here it happens to be the last use,
+but the rule is written about locals and a match binding is not
+obviously one. [Z7]
 
+```landin
 public small_used: (T: type is zeroable, fixed N: u32,
                    s: small(T, N)) -> (v: []mut T from s) =
     v = match s.store
@@ -363,18 +404,17 @@ public small_used: (T: type is zeroable, fixed N: u32,
             spilled (heap): heap[0..<s.len]
         end match
 end small_used
---- A match as an expression, from [1080]. Both arms yield []T, and the
---- inline arm yields a slice into the small vector itself — which is
---- exactly what the from clause has to say, or the caller could spill
---- the vector while holding the view. The other half of the question
---- stays with [Z7]: if an in binding copies the payload rather than
---- aliasing it, this slice points into a copy that is already gone.
+```
+A match as an expression, from [1080]. Both arms yield []T, and the
+inline arm yields a slice into the small vector itself — which is
+exactly what the from clause has to say, or the caller could spill
+the vector while holding the view. The other half of the question
+stays with [Z7]: if an in binding copies the payload rather than
+aliasing it, this slice points into a copy that is already gone.
 
+## core/map  —  open addressing, without null
 
-----------------------------------------------------------------------
-core/map  —  open addressing, without null
-----------------------------------------------------------------------
-
+```landin
 import core/mem
 
 public missing: atom
@@ -383,20 +423,24 @@ public equatable: type = concept (K: type)
     eq: (a: K, b: K) -> (yes: bool)
 end equatable
 
---- A composed concept, per [1340]. A type conforming to hashable needs
---- its own equatable conformance as well: the composed declaration
---- supplies only what it adds. The tour states that rule and then
---- shows button is widget supplying only focus, with no sign of the
---- drawable and clickable conformances it must also have. [Z11]
+```
+A composed concept, per [1340]. A type conforming to hashable needs
+its own equatable conformance as well: the composed declaration
+supplies only what it adds. The tour states that rule and then
+shows button is widget supplying only focus, with no sign of the
+drawable and clickable conformances it must also have. [Z11]
+```landin
 public hashable: type = concept (K: type) is equatable
     hash: (k: K) -> (h: u64)
 end hashable
 
---- No null, so no key value can mean empty, and a sentinel key would
---- be a lie for K = ptr node in any case. A parallel state array is
---- what a good implementation does anyway, for the probe's cache
---- behaviour, so the missing null pushed the design the right way
---- without anybody arguing about it.
+```
+No null, so no key value can mean empty, and a sentinel key would
+be a lie for K = ptr node in any case. A parallel state array is
+what a good implementation does anyway, for the probe's cache
+behaviour, so the missing null pushed the design the right way
+without anybody arguing about it.
+```landin
 slot_free: atom
 slot_used: atom
 slot_dead: atom
@@ -414,12 +458,14 @@ public new_map: (K: type is hashable, V: type) -> (m: map(K, V)) =
     m = (state: [], keys: [], vals: [], len: 0, dead: 0)
 end new_map
 
---- hash returns u64 and the index is usize, which is u32 on the small
---- target. usize(K.hash(k)) would compile and then trap in the field
---- on any key wider than a byte or two, so the reduction has to
---- happen in u64 first. No implicit conversion caught a portability
---- bug that C would truncate silently and Rust would wrap silently,
---- and it caught it while reading rather than while running.
+```
+hash returns u64 and the index is usize, which is u32 on the small
+target. usize(K.hash(k)) would compile and then trap in the field
+on any key wider than a byte or two, so the reduction has to
+happen in u64 first. No implicit conversion caught a portability
+bug that C would truncate silently and Rust would wrap silently,
+and it caught it while reading rather than while running.
+```landin
 index_of: (K: type is hashable, k: K, n: usize) -> (i: usize) =
     i = usize(K.hash(k) % u64(n))
 end index_of
@@ -441,15 +487,19 @@ public get: (K: type is hashable, V: type, m: map(K, V), k: K)
     fail missing
 end get
 
---- Grow at three quarters and count tombstones, so a map that is
---- churned rather than filled still rehashes.
+```
+Grow at three quarters and count tombstones, so a map that is
+churned rather than filled still rehashes.
+```landin
 crowded: (K: type is hashable, V: type, m: map(K, V)) -> (yes: bool) =
     yes = (m.len + m.dead + 1) * 4 > lenof m.state * 3
 end crowded
 
---- place never allocates and never fails, because the caller has
---- already made room. That is why it can be called from inside
---- rehash without the cleanup problem below repeating.
+```
+place never allocates and never fails, because the caller has
+already made room. That is why it can be called from inside
+rehash without the cleanup problem below repeating.
+```landin
 place: (K: type is hashable, V: type, inout m: map(K, V),
         escaping k: K, escaping v: V) -> none =
     n     := lenof m.state
@@ -474,11 +524,13 @@ place: (K: type is hashable, V: type, inout m: map(K, V),
     end loop
 end place
 
---- Three allocations that can each fail, and the cleanup is
---- triangular: the second failing frees one, the third failing frees
---- two. None of that is written here. undo entries are registered
---- where control reaches them, so the triangle comes out of the order
---- rather than out of the text. [Z19]
+```
+Three allocations that can each fail, and the cleanup is
+triangular: the second failing frees one, the third failing frees
+two. None of that is written here. undo entries are registered
+where control reaches them, so the triangle comes out of the order
+rather than out of the text. [Z19]
+```landin
 rehash: (K: type is hashable, V: type, A: type is allocator,
          inout m: map(K, V), inout a: A, want: usize)
         -> none ! out_of_memory =
@@ -495,9 +547,11 @@ rehash: (K: type is hashable, V: type, A: type is allocator,
     old_keys  := m.keys
     old_vals  := m.vals
 
-    --- Committed from here, and nothing fallible follows, which is
-    --- the discipline undo asks for: an entry cannot be called off,
-    --- so a failure after the handover would free what m now owns.
+```
+Committed from here, and nothing fallible follows, which is
+the discipline undo asks for: an entry cannot be called off,
+so a failure after the handover would free what m now owns.
+```landin
     m.state = ns
     m.keys  = nk
     m.vals  = nv
@@ -555,24 +609,31 @@ public release_map: (K: type is hashable, V: type, A: type is allocator,
     m = new_map(K: K, V: V)
 end release_map
 
+```
 
-----------------------------------------------------------------------
-core/tree  —  arenas and indices, the idiom under test
-----------------------------------------------------------------------
+## core/tree  —  arenas and indices, the idiom under test
 
+```landin
 import core/mem
 import core/vec
 
 public no_such_node: atom
 
---- A handle, not a pointer. u32 rather than usize, because halving
---- the width of every edge is the reason for doing this at all.
+```
+A handle, not a pointer. u32 rather than usize, because halving
+the width of every edge is the reason for doing this at all.
+```landin
 public node_id: type = distinct u32
 
---- A variant case with no payload, written bare. It is an atom, and
---- [1700] holds that atoms are the same idea wherever they appear, so
---- this ought to need no decision — but every variant in the tour
---- carries a payload, so the spelling has never appeared. [Z14]
+```
+A variant case with no payload, written bare. It is an atom, and
+
+### [1700] holds that atoms are the same idea wherever they appear
+
+holds that atoms are the same idea wherever they appear, so
+this ought to need no decision — but every variant in the tour
+carries a payload, so the spelling has never appeared. [Z14]
+```landin
 public node: type = struct
     name: utf8
     kind: variant
@@ -581,13 +642,15 @@ public node: type = struct
     end kind
 end node
 
---- The whole tree is one list. Every edge is an index into it, so no
---- node refers to another node and the structure has exactly one
---- origin: whatever backs the list. It can be moved, copied, written
---- to flash and read back, and [0860]'s complaint about pointers
---- travelling through struct fields does not apply, because there are
---- none. This is the first time the idiom the language keeps
---- recommending has been written out, and it holds up.
+```
+The whole tree is one list. Every edge is an index into it, so no
+node refers to another node and the structure has exactly one
+origin: whatever backs the list. It can be moved, copied, written
+to flash and read back, and [0860]'s complaint about pointers
+travelling through struct fields does not apply, because there are
+none. This is the first time the idiom the language keeps
+recommending has been written out, and it holds up.
+```landin
 public tree: type = struct
     nodes: vec.list(node)
 end tree
@@ -602,10 +665,12 @@ public add_leaf: (A: type is allocator, inout t: tree, inout a: A, name: utf8)
     try vec.push(t.nodes, a, (name: name, kind: leaf))
 end add_leaf
 
---- Children are contiguous, so a branch is a first index and a count.
---- That only works if the children were added together, which is the
---- usual discipline for this representation and better said out loud
---- than discovered.
+```
+Children are contiguous, so a branch is a first index and a count.
+That only works if the children were added together, which is the
+usual discipline for this representation and better said out loud
+than discovered.
+```landin
 public add_branch: (A: type is allocator, inout t: tree, inout a: A,
                     name: utf8, first: node_id, count: u32)
                    -> (id: node_id) ! out_of_memory =
@@ -619,8 +684,10 @@ public get: (t: tree, id: node_id) -> (n: node) ! no_such_node =
     n = t.nodes.items[usize(u32(id))]
 end get
 
---- Recursion over indices. No pointer is ever formed, so nothing here
---- can dangle and nothing needs an origin.
+```
+Recursion over indices. No pointer is ever formed, so nothing here
+can dangle and nothing needs an origin.
+```landin
 public count_leaves: (t: tree, id: node_id) -> (n: u32) ! no_such_node =
     this := try get(t, id)
     n = match this.kind
@@ -635,24 +702,25 @@ public count_leaves: (t: tree, id: node_id) -> (n: u32) ! no_such_node =
                 end
         end match
 end count_leaves
---- A match arm whose value takes several statements has to open a
---- bare block to get one. That is [1080] working as designed, and it
---- reads heavily. Worth watching before deciding it needs anything.
+```
+A match arm whose value takes several statements has to open a
+bare block to get one. That is [1080] working as designed, and it
+reads heavily. Worth watching before deciding it needs anything.
 
+## app  —  using all of it
 
-----------------------------------------------------------------------
-app  —  using all of it
-----------------------------------------------------------------------
-
+```landin
 import core/mem
 import core/vec
 import core/map
 import core/tree
 import core/sort (sort, ordered)
 
---- Hashing is one of the few places where wrapping is the point, and
---- the language makes it say so: a plain * would trap here on the
---- first key big enough to overflow the multiply.
+```
+Hashing is one of the few places where wrapping is the point, and
+the language makes it say so: a plain * would trap here on the
+first key big enough to overflow the multiply.
+```landin
 hash_u32: (k: u32) -> (h: u64) = u64(k) *% 0x9E37_79B9_7F4A_7C15 end
 eq_u32:   (a: u32, b: u32) -> (yes: bool) = a == b end
 
@@ -662,30 +730,38 @@ u32 is map.hashable  (hash: hash_u32)
 less_i32: (a: i32, b: i32) -> (yes: bool) = a < b end
 i32 is ordered (less: less_i32)
 
---- Sixty-four kilobytes of static storage, one bump allocator over
---- it, and nothing else in this program allocates anywhere. On the
---- small target that is the whole memory story, and it is legible in
---- four lines.
+```
+Sixty-four kilobytes of static storage, one bump allocator over
+it, and nothing else in this program allocates anywhere. On the
+small target that is the whole memory story, and it is legible in
+four lines.
+```landin
 mut pool: [64 * 1024]u8 = zeroed
 
 run: () -> none ! out_of_memory =
     mut a := mem.bump_over(pool[0..<lenof pool])
 
-    --- A list, filled and sorted with the generic sort from [1290].
+```
+A list, filled and sorted with the generic sort from [1290].
+```landin
     mut numbers := vec.new_list(T: i32)
     for k in 0..<20 do
         try vec.push(numbers, a, 20 - i32(k))
     end for
     sort(vec.used(numbers))
 
-    --- A map from those to their squares.
+```
+A map from those to their squares.
+```landin
     mut squares := map.new_map(K: u32, V: u32)
     for n in numbers do
         try map.insert(squares, a, u32(n), u32(n) * u32(n))
     end for
     nine := map.get(squares, 3) else 0
 
-    --- A tree: three leaves under one branch.
+```
+A tree: three leaves under one branch.
+```landin
     mut t := tree.new_tree()
     first := try tree.add_leaf(t, a, "a")
     _      = try tree.add_leaf(t, a, "b")
@@ -696,26 +772,34 @@ run: () -> none ! out_of_memory =
     report(nine, total)
 end run
 
---- What generics cannot do, from [1400]: one list holding values of
---- different types. The list is generic in exactly one type, and that
---- type is the two-word pair. drawable and canvas are the tour's,
---- from [1340].
+```
+What generics cannot do, from [1400]: one list holding values of
+different types. The list is generic in exactly one type, and that
+type is the two-word pair. drawable and canvas are the tour's,
+from [1340].
+```landin
 draw_all: (items: vec.list(any drawable), target: ptr canvas) -> none =
     for w in items do
         w.draw(target)
     end for
 end draw_all
 
+```
 
-----------------------------------------------------------------------
+---
+
+```landin
 [Z] WHAT THIS ONE FOUND
 The resolutions below cite the pre-release revisions this
 specification passed through, 0.0.1 to 0.0.17, on the way to 0.1.0.
 They are kept because when one thing was settled relative to another
 still carries information.
 
-----------------------------------------------------------------------
+```
 
+---
+
+```landin
 Nineteen, which is more than the first two prototypes together, and
 that is the expected shape: a driver uses the language's edges and a
 container library uses its middle. Four of them mattered more than the
@@ -981,4 +1065,6 @@ Z19 RESOLVED at 0.0.11 as undo, and the argument moved twice on the
 
     rehash makes three allocations that can each fail; the second
     failing has to free one, the third has to free two.
-----------------------------------------------------------------------
+```
+
+---

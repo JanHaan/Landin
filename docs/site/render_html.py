@@ -2,7 +2,7 @@
 """Render the Landin specification and prototypes as syntax-highlighted HTML.
 
     python3 render_html.py                  every document, into site/
-    python3 render_html.py tour.txt         one of them
+    python3 render_html.py tour.md         one of them
     python3 render_html.py --verify         and check that nothing was dropped
     python3 render_html.py --from ../landin read the text files from elsewhere
     python3 render_html.py --artifact       all five on one page, as a fragment
@@ -12,9 +12,10 @@ The pages are single files with no external references: the stylesheet,
 the script and the highlighting are all inlined, so one file can be
 opened from disk, mailed, or served as it is.
 
-Nothing here is a parser. The highlighter is a token scanner with a small
-symbol table collected from the document itself, and the document parser
-knows the shape the specification is written in:
+Nothing here is a parser. The highlighting is not even here: it comes from
+highlight/landin_highlight.py, the one scanner every Landin highlighter is
+a rendering of, and this file only turns its classes into spans. What this
+file knows is the shape the specification is written in:
 
     ----------------------------------------------------------------------
     SECTION TITLE
@@ -44,23 +45,27 @@ SITE = HERE / "site"
 VERSION_LINE = "specification 0.1.0"
 
 DOCS = [
-    dict(key="tour", src="tour.txt", out="tour.html", kind="tour",
+    dict(key="spec", src="spec.md", out="spec.html", kind="document",
+         nav="the specification", group="the specification",
+         blurb="The grammar of the enabled kernel, and the rules the tour "
+               "left unsaid. Normative."),
+    dict(key="tour", src="tour.md", out="tour.html", kind="document",
          nav="the tour", group="the specification",
          blurb="The normative specification, as a numbered tour. "
                "Every construct keeps its number."),
-    dict(key="p1", group="the prototypes", src="prototype-1-driver.txt", out="prototype-1.html", kind="prototype",
+    dict(key="p1", group="the prototypes", src="prototype-1-driver.md", out="prototype-1.html", kind="document",
          nav="prototype 1 — driver",
          blurb="A driver from an ugly vendor SVD: GPIO, an interrupt-driven "
                "DMA UART, a vector table, and not one hand-written bitmask."),
-    dict(key="p2", group="the prototypes", src="prototype-2-parser.txt", out="prototype-2.html", kind="prototype",
+    dict(key="p2", group="the prototypes", src="prototype-2-parser.md", out="prototype-2.html", kind="document",
          nav="prototype 2 — parser",
          blurb="A parser that recovers, because a real one must not stop at "
                "the first mistake."),
-    dict(key="p3", group="the prototypes", src="prototype-3-containers.txt", out="prototype-3.html", kind="prototype",
+    dict(key="p3", group="the prototypes", src="prototype-3-containers.md", out="prototype-3.html", kind="document",
          nav="prototype 3 — containers",
          blurb="A generic container library: growing array, small vector, "
                "hash map, arena-backed tree."),
-    dict(key="p4", group="the prototypes", src="prototype-4-app.txt", out="prototype-4.html", kind="prototype",
+    dict(key="p4", group="the prototypes", src="prototype-4-app.md", out="prototype-4.html", kind="document",
          nav="prototype 4 — application",
          blurb="A hosted application whose shape is decided by its command "
                "line, so it cannot be written without runtime dispatch."),
@@ -69,64 +74,16 @@ DOCS = [
 # --------------------------------------------------------------------------
 # the language
 # --------------------------------------------------------------------------
+#
+#  The scanner is not here.  It lives in highlight/, where the Pygments
+#  lexer reads the same file, so that a keyword added once is a keyword
+#  everywhere rather than in whichever copy was edited last.
 
-KEYWORDS = {
-    # declarations and types
-    "type", "struct", "variant", "concept", "is", "distinct", "range", "set",
-    "register", "layout", "atom", "soa", "option",
-    # control
-    "if", "then", "elsif", "else", "end", "while", "do", "for", "in", "loop",
-    "break", "continue", "when", "complete", "match", "return", "fail", "try",
-    "with", "begin", "unchecked", "defer", "undo", "arena",
-    # operators spelled as words
-    "and", "or", "not",
-    # memory and queries
-    "ptr", "addr", "sizeof", "alignof", "lenof", "inc", "dec", "any",
-    # conventions and attributes
-    "mut", "public", "volatile", "align", "link", "extern", "big", "little",
-    "escaping", "caller", "fixed", "inout", "sink", "from", "of", "at",
-    # modules
-    "import", "as",
-}
+sys.path.insert(0, str(HERE.parents[1] / "highlight"))
 
-TYPES = {
-    "u8", "u16", "u32", "u64", "u128", "i8", "i16", "i32", "i64", "i128",
-    "usize", "isize", "f16", "f32", "f64", "bool", "utf8", "utf16", "cstring",
-}
-
-# u4, u12, u23 — any width, for the packed fields of [0730]
-WIDTH = re.compile(r"^[ui](?:[1-9][0-9]{0,2}|0)$")
-
-CONSTANTS = {"true", "false", "zeroed", "none", "noreturn"}
-
-# the three reserved toolchain modules of [1560]
-BUILTIN_MODULES = {"compiler", "assembler", "linker"}
-
-TOKEN = re.compile(
-    r"""
-      (?P<rawq>\"{3,})
-    | (?P<doc>---.*)
-    | (?P<bopen>--\()
-    | (?P<bclose>\)--)
-    | (?P<comment>--.*)
-    | (?P<string>"(?:[^"\\\n]|\\.)*")
-    | (?P<char>'(?:[^'\\\n]|\\.)')
-    | (?P<number>
-          0[xX][0-9A-Fa-f_]+(?:\.[0-9A-Fa-f_]+)?(?:[pP][-+]?[0-9]+)?
-        | 0[bB][01_]+
-        | 0[oO][0-7_]+
-        | [0-9][0-9_]*(?:\.(?!\.)[0-9_]+)?(?:[eE][-+]?[0-9]+)?
-      )
-    | (?P<word>[A-Za-z_][A-Za-z0-9_]*)
-    | (?P<op>[-+*/%<>=!&|^~:.,;()\[\]{}?@$#\\]+)
-    | (?P<space>\s+)
-    """,
-    re.VERBOSE,
-)
+from landin_highlight import Scanner, collect_symbols  # noqa: E402
 
 CITE = re.compile(r"\[((?:\d{4})|(?:[XYZW]\d+))\]")
-
-DECL_AFTER = re.compile(r"""^\s*(?:,\s*[A-Za-z_]\w*\s*)*:(?!=)|^\s*:=""")
 
 
 def cite_links(escaped: str, links) -> str:
@@ -139,206 +96,29 @@ def cite_links(escaped: str, links) -> str:
     return CITE.sub(one, escaped)
 
 
-class Highlighter:
-    """A line-at-a-time token scanner for Landin source.
+class Highlighter(Scanner):
+    """The shared scanner, rendered as HTML.
 
-    It carries the state a line cannot decide on its own — block comment
-    depth and an open raw literal — and a symbol table of the type and atom
-    names the document declares, so that a name the file introduced reads
-    the same everywhere it is used.
+    The classes it emits become span classes, and the two comment classes
+    have their citations linked as well, so a construct named in a comment
+    reaches the construct it names.
     """
 
     def __init__(self, types=(), atoms=(), links=lambda ref: None):
-        self.types = set(types)
-        self.atoms = set(atoms)
+        super().__init__(types, atoms)
         self.links = links
-        self.depth = 0        # --( nesting
-        self.raw = None       # open raw literal delimiter
 
-    # -- pieces ----------------------------------------------------------
-    def _span(self, cls, text):
-        return f'<span class="{cls}">{html.escape(text)}</span>'
-
-    def _comment(self, cls, text):
-        return f'<span class="{cls}">{cite_links(html.escape(text), self.links)}</span>'
-
-    def word_class(self, word, before, after):
-        if word in KEYWORDS:
-            return "k"
-        if word in TYPES or WIDTH.match(word):
-            return "t"
-        if word in CONSTANTS:
-            return "v"
-        if word in BUILTIN_MODULES:
-            return "b"
-        if word in self.types:
-            return "t"
-        if word in self.atoms:
-            return "v"
-        if after.startswith("("):
-            return "f"
-        if before.rstrip().endswith("."):
-            return "s"
-        if DECL_AFTER.match(after) and self._statement_start(before):
-            return "d"
-        return None
-
-    @staticmethod
-    def _statement_start(before) -> bool:
-        """True when nothing but keywords and punctuation precedes the word."""
-        for tok in re.findall(r"[A-Za-z_]\w*|\S", before):
-            if tok in KEYWORDS or tok in BUILTIN_MODULES:
-                continue
-            if not re.match(r"[A-Za-z_]", tok):
-                continue
-            return False
-        return True
-
-    # -- one line --------------------------------------------------------
     def line(self, text: str) -> str:
         out = []
-        pos = 0
-
-        if self.raw is not None:
-            hit = text.find(self.raw)
-            if hit < 0:
-                return self._span("q", text)
-            pos = hit + len(self.raw)
-            out.append(self._span("q", text[:pos]))
-            self.raw = None
-
-        while pos < len(text):
-            if self.depth > 0:
-                close = text.find(")--", pos)
-                nest = text.find("--(", pos)
-                if nest >= 0 and (close < 0 or nest < close):
-                    self.depth += 1
-                    out.append(self._comment("c", text[pos:nest + 3]))
-                    pos = nest + 3
-                    continue
-                if close < 0:
-                    out.append(self._comment("c", text[pos:]))
-                    return "".join(out)
-                self.depth -= 1
-                out.append(self._comment("c", text[pos:close + 3]))
-                pos = close + 3
-                continue
-
-            m = TOKEN.match(text, pos)
-            if not m:
-                out.append(html.escape(text[pos]))
-                pos += 1
-                continue
-
-            kind = m.lastgroup
-            body = m.group()
-            if kind == "rawq":
-                rest = text[m.end():]
-                closer = rest.find(body)
-                if closer < 0:
-                    self.raw = body
-                    out.append(self._span("q", text[pos:]))
-                    return "".join(out)
-                end = m.end() + closer + len(body)
-                out.append(self._span("q", text[pos:end]))
-                pos = end
-            elif kind == "doc":
-                out.append(self._comment("cd", body))
-                pos = m.end()
-            elif kind == "comment":
-                out.append(self._comment("c", body))
-                pos = m.end()
-            elif kind == "bopen":
-                self.depth = 1
-                out.append(self._comment("c", body))
-                pos = m.end()
-            elif kind == "bclose":
-                out.append(self._comment("c", body))
-                pos = m.end()
-            elif kind in ("string", "char"):
-                out.append(self._span("q", body))
-                pos = m.end()
-            elif kind == "number":
-                out.append(self._span("n", body))
-                pos = m.end()
-            elif kind == "word":
-                cls = self.word_class(body, text[:pos], text[m.end():])
-                out.append(self._span(cls, body) if cls else html.escape(body))
-                pos = m.end()
-            elif kind == "op":
-                out.append(self._span("o", body))
-                pos = m.end()
-            else:
-                out.append(html.escape(body))
-                pos = m.end()
-
+        for cls, body in self.scan(text):
+            body = html.escape(body)
+            if cls in ("c", "cd"):
+                body = cite_links(body, self.links)
+            out.append(f'<span class="{cls}">{body}</span>' if cls else body)
         return "".join(out)
 
     def block(self, lines) -> str:
         return "\n".join(self.line(l) for l in lines)
-
-    def known_only(self, text: str) -> bool:
-        """True when a fragment holds nothing but language words and symbols.
-
-        This is what tells the attribute list of [0760] from an English
-        sentence in the same indented position.
-        """
-        seen = False
-        for m in TOKEN.finditer(text):
-            kind = m.lastgroup
-            if kind == "space":
-                continue
-            seen = True
-            if kind == "word":
-                w = m.group()
-                if not (w in KEYWORDS or w in TYPES or WIDTH.match(w)
-                        or w in CONSTANTS or w in BUILTIN_MODULES
-                        or w in self.types or w in self.atoms):
-                    return False
-            elif kind in ("doc", "comment", "bopen", "bclose"):
-                return False
-        return seen
-
-
-# --------------------------------------------------------------------------
-# the symbol table: names the document declares
-# --------------------------------------------------------------------------
-
-DECL_TYPE = re.compile(r"^\s*(?:public\s+)?([a-z_]\w*)\s*:\s*type\b")
-DECL_ATOM = re.compile(r"^\s*(?:public\s+)?([a-z_][\w,\s]*?)\s*:\s*atom\b")
-DECL_ENUM = re.compile(r"^\s*(?:public\s+)?[a-z_]\w*\s*:\s*type\s*=\s*(.*)$")
-NAMED_VAL = re.compile(r"\(?\s*([a-z_]\w*)\s*=\s*(?:0[xX][0-9A-Fa-f_]+|\d)")
-
-
-def collect_symbols(lines):
-    """Type and atom names, so a name the file declares reads as one."""
-    types, atoms = set(), set()
-    for line in lines:
-        if line.lstrip().startswith("--"):
-            body = line.lstrip()[2:].lstrip("-( ")
-            if not re.match(r"^\[?\d{0,4}\]?\s*[a-z_]\w*\s*:\s*(type|atom)\b", body):
-                continue
-            line = body
-        m = DECL_TYPE.match(line)
-        if m:
-            types.add(m.group(1))
-        m = DECL_ATOM.match(line)
-        if m:
-            for name in m.group(1).split(","):
-                name = name.strip()
-                if re.fullmatch(r"[a-z_]\w*", name):
-                    atoms.add(name)
-        m = DECL_ENUM.match(line)
-        if m:
-            rhs = m.group(1)
-            if "|" in rhs or "=" in rhs:
-                for name in NAMED_VAL.findall(rhs):
-                    atoms.add(name)
-                if "|" in rhs and "=" not in rhs:
-                    for name in re.findall(r"[a-z_]\w*", rhs):
-                        if name not in KEYWORDS:
-                            atoms.add(name)
-    return types - KEYWORDS - TYPES, atoms - KEYWORDS - TYPES - CONSTANTS
 
 
 # --------------------------------------------------------------------------
@@ -1548,7 +1328,11 @@ GUIDE_CSS = """
 .cards h3.group:first-child{margin-top:0}
 """
 
-FENCE = re.compile(r"^```(\w*)\s*$")
+#  A hyphen is not \w, and the documents tag a fence `landin-grammar`.
+#  With \w the opener never matched, so the CLOSING fence opened a block
+#  that swallowed the next heading -- which showed up as every other
+#  construct in spec.md losing its anchor.
+FENCE = re.compile(r"^```([\w-]*)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 BULLET = re.compile(r"^[-*]\s+(.*)$")
 NUMBER = re.compile(r"^\d+\.\s+(.*)$")
@@ -1712,7 +1496,12 @@ def render_guide_blocks(blocks, links, targets, hl):
         if kind == "para":
             out.append(f"<p>{inline(payload[0], links, targets)}</p>")
         elif kind == "sub":
-            out.append(f'<h3 class="sub" id="{slug(payload)}">'
+            #  A construct heading is `[NNNN] title`, and its anchor is the
+            #  id alone: 872 citations outside the documents link to
+            #  `tour.html#0190`, and slugging the whole title would break
+            #  every one of them.
+            found = re.match(r"^\[(\d{4})\]", payload)
+            out.append(f'<h3 class="sub" id="{found.group(1) if found else slug(payload)}">'
                        f"{inline(payload, links, targets)}</h3>")
         elif kind == "quote":
             out.append(f"<blockquote>{inline(payload[0], links, targets)}"
@@ -1879,7 +1668,12 @@ def verify(src: Path, out: Path):
     times than it went in means a line went missing.
     """
     from collections import Counter
-    want = Counter(WORD.findall(src.read_text()))
+
+    #  A fence's info string names the language of the block; it is markup
+    #  and not content, so it is not on the page and must not be counted as
+    #  missing from it.  `landin` appears 145 times in the tour as a tag.
+    text = re.sub(r"(?m)^```\S*$", "```", src.read_text())
+    want = Counter(WORD.findall(text))
     # inside a listing a span sits between the halves of one name, so tags
     # go without a space there and with one everywhere else
     #  A link's target lives in an attribute rather than in the text, and
@@ -1946,48 +1740,47 @@ def main(argv):
     counts = {}
     dangling = []
 
-    for d in docs:
-        front, sections = loaded[d["src"]]
-        text_lines = (source / d["src"]).read_text().split("\n")
-        symbols = collect_symbols(text_lines)
+    #  Every document is Markdown, so all of them render through the one
+    #  reader and the tour- and prototype-specific ones are gone.  A
+    #  construct's page is where it is DEFINED, read off the headings
+    #  rather than assumed: the kernel's rules moved to spec.md and 872
+    #  citations outside the documents name the construct and not the file.
+    construct_page, finding_page = {}, {}
+    for entry in DOCS:
+        held = (source / entry["src"]).read_text()
+        for found in re.findall(r"^### \[(\d{4})\] ", held, re.M):
+            construct_page[found] = entry["out"]
+        for found in re.findall(r"^([XYZW]\d+)\s", held, re.M):
+            finding_page[found] = entry["out"]
 
-        if d["kind"] == "tour":
-            def links(ref, _ids=tour_ids):
-                if ref in _ids:
-                    return f"#{ref}"
+    link_targets = guide_targets(DOCS + GUIDES)
+
+    for d in docs:
+        text = (source / d["src"]).read_text()
+        symbols = collect_symbols(text.split("\n"))
+
+        def links(ref, _here=d["out"]):
+            where = construct_page.get(ref) or finding_page.get(ref)
+            if where is None:
                 if ref.isdigit() and ref.endswith("0"):
                     dangling.append(ref)
                 return None
-            body, nav_sections, ids = render_tour_sections(sections, links, symbols)
-            counts[d["out"]] = (f"{len(ids)} constructs in "
-                                f"{len(nav_sections)} sections")
-        else:
-            findings = set()
-            for sec in sections:
-                if is_findings(sec["body"]):
-                    findings = {e["id"] for e in parse_findings(sec["body"])[1]}
+            return f"#{ref}" if where == _here else f"{where}#{ref}"
 
-            def links(ref, _f=findings, _ids=tour_ids):
-                if ref in _f:
-                    return f"#{ref}"
-                if ref in _ids:
-                    return f"tour.html#{ref}"
-                if not ref.isdigit() or ref.endswith("0"):
-                    dangling.append(ref)
-                return None
-            body, nav_sections = render_prototype_sections(sections, links, symbols)
-            modules = len(nav_sections) - (1 if findings else 0)
-            counts[d["out"]] = (f"{modules} modules, {len(findings)} findings")
-
-        hero = render_plain(parse_plain(front["body"]), links)
+        title, hero, body, nav_sections = render_guide(
+            text, links, link_targets,
+            Highlighter(*symbols, links=links))
         nav = nav_html(DOCS + GUIDES, d["out"], nav_sections)
-        out = page(f"Landin — {front['title'].title()}", d["nav"],
-                   front["title"], hero, body, nav, d["src"])
+        out = page(f"Landin — {title or d['nav']}", d["nav"],
+                   title or d["nav"], hero, body, nav, d["src"])
         (SITE / d["out"]).write_text(out)
+        counts[d["out"]] = (
+            "%d constructs in %d sections"
+            % (sum(1 for c, w in construct_page.items() if w == d["out"]),
+               len(nav_sections)))
         print(f"{SITE.name}/{d['out']:<20} {len(out) // 1024:4d} KB  "
               f"{len(nav_sections)} sections")
 
-    guide_link_targets = guide_targets(DOCS + GUIDES)
     guide_symbols = collect_symbols(
         (source / DOCS[0]["src"]).read_text().split("\n"))
 
@@ -2000,7 +1793,7 @@ def main(argv):
             return None
 
         title, hero, body, nav_sections = render_guide(
-            text, links, guide_link_targets,
+            text, links, link_targets,
             Highlighter(*guide_symbols, links=links))
         nav = nav_html(DOCS + GUIDES, g["out"], nav_sections)
         out = page(f"Landin — {title}", g["nav"], title or g["nav"],
@@ -2031,7 +1824,7 @@ def main(argv):
 
 def run_audit(loaded, tour_ids):
     """Print how the tour's prose lines were classified, and what was skipped."""
-    front, sections = loaded["tour.txt"]
+    front, sections = loaded["tour.md"]
     samples, paras, breaks = 0, 0, 0
     for sec in sections:
         style = section_style(sec["title"], sec["body"])

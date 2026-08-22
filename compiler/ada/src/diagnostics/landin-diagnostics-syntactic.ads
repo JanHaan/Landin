@@ -108,7 +108,7 @@ package Landin.Diagnostics.Syntactic is
       Type_Parameter);
 
    --  Where the tour describes it.  Ordered by construct so that a reader
-   --  can check the column against tour.txt by running down it, and
+   --  can check the column against tour.md by running down it, and
    --  check.py does exactly that.
    function Construct (Item : Refused_Construct)
      return Landin.Tokens.Construct_Reference

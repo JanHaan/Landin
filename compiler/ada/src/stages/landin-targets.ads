@@ -56,7 +56,7 @@ package Landin.Targets is
 
    function Byte_Order (Facts : Target_Facts) return Endianness;
 
-   --  Always true, and asked rather than assumed: `tour.txt` [1550] says
+   --  Always true, and asked rather than assumed: `tour.md` [1550] says
    --  the frame pointer is always set up, so a target that answered
    --  otherwise would be a target the roadmap has not agreed to.
    function Frame_Pointer (Facts : Target_Facts) return Boolean;
