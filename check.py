@@ -2191,6 +2191,63 @@ def basenames():
 _BASENAMES = None
 
 
+def check_comment_forms(full_run):
+    """The tour shows every comment form the grammar spells.
+
+    The three comment openers are demonstrated in the tour by being
+    written: the marker of [0010] IS a line comment, and [0020] is a block
+    comment containing a nested one.  A conversion that treated those
+    markers as markup rather than as content destroyed the whole section
+    and every word survived, because `--(`, `)--` and `---` are
+    punctuation and the check that gated the conversion counted words.
+
+    So the openers the grammar spells are held to appearing literally in a
+    Landin block in the tour.  Narrow on purpose: this is not a general
+    claim that every construct is demonstrated, it is the one place where
+    the demonstration is punctuation and nothing else was watching it.
+    """
+    if not full_run:
+        return []
+
+    spec = os.path.join(ROOT, SPEC_NAME)
+    tour = os.path.join(ROOT, TOUR_NAME)
+    missing = absent((spec, tour))
+    if missing:
+        return missing
+
+    rules, _, problems = read_grammar(spec)
+    if problems:
+        return []
+
+    #  Every sign the comment rules spell, from the grammar itself.
+    spelled = set()
+    for name, rule in rules.items():
+        if "comment" in name:
+            spelled |= {sign for sign in re.findall(r'"([^"]+)"', rule)
+                        if sign and not sign[0].isalnum()
+                        and not sign.startswith("\\")}
+
+    if not spelled:
+        return [(SPEC_NAME, 1,
+                 "the comment rules spell no opener, so nothing is checked")]
+
+    shown = set()
+    inside = False
+    for line in io.open(tour, encoding="utf-8").read().splitlines():
+        fence = re.match(r"^```(\S*)\s*$", line.strip())
+        if fence:
+            inside = fence.group(1).startswith("landin") if not inside else False
+            continue
+        if inside:
+            for sign in spelled:
+                if sign in line:
+                    shown.add(sign)
+
+    return [(TOUR_NAME, 1,
+             "the grammar spells %r and the tour never shows one" % sign)
+            for sign in sorted(spelled - shown)]
+
+
 def check_named_files(full_run):
     """A document or source file that names another names one that exists.
 
@@ -2332,6 +2389,7 @@ def main(argv):
     extra += check_token_vocabulary(full_run)
     extra += check_precedence_table(full_run)
     extra += check_refused_constructs(full_run)
+    extra += check_comment_forms(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
     for path, line, why in sorted(set(extra)):

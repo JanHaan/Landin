@@ -28,22 +28,28 @@ ROADMAP.md, not by a second list here.
 
 ## COMMENTS
 
+These three are shown by being written, so each is kept exactly as it
+appears in a program: the marker is the comment.
+
 ### [0010] Line comment, to end of line
 
-Line comment, to end of line.
-
-### [0020] Block comment
-
-Block comment. Nests properly.
-so this inner one is fine )--
 ```landin
-)--
-
+-- [0010] Line comment, to end of line.
 ```
 
-### [0030] Doc comment
+### [0020] Block comment. Nests properly
 
-Doc comment. Attaches to the declaration that follows.
+```landin
+--( [0020] Block comment. Nests properly.
+    --( so this inner one is fine )--
+)--
+```
+
+### [0030] Doc comment. Attaches to the declaration that follows
+
+```landin
+--- [0030] Doc comment. Attaches to the declaration that follows.
+```
 
 ## DECLARATIONS
 
@@ -2670,3 +2676,18 @@ what it refused.
   the condition that would bring them in, and with sink honestly
   described in the meantime as a use-after-consume check on one
   place rather than as ownership [0910].
+- async and await, and the stackless coroutines under them, refused
+  before either was built. Concurrency is not a property of a
+  function here; it is a capability the caller hands down, so the
+  same code blocks or does not depending on the Io it was given
+  [1660]. One implementation of that Io ships first and it blocks,
+  which is a scheduler not yet written rather than a limit in the
+  language. Stackless is the refusal proper: cutting a function
+  into a state machine is a compiler project of its own, and it
+  colours every function type that reaches one — the same
+  objection that removed the ambient environment above [1680].
+  Stackful fibres are the route to take instead, and the design
+  already pays for them: the frame pointer is always present, the
+  callee-saved discipline is explicit, and nothing rides in a
+  reserved register.
+

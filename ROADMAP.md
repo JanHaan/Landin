@@ -1370,6 +1370,45 @@ successor, and repository authority documents agree on the endpoint.
 - Every durable item has an explicit terminal disposition.
 - The result remains pre-v1, unreleased and not self-hosted.
 
+## The concurrency execution model
+
+Legacy B1 and R6.30 own the concurrency *memory* model: races, orderings,
+volatile access, interrupt visibility, DMA. They do not own the execution
+model. This section records it, because a settled position that is written
+nowhere reads as an open question and gets reopened.
+
+Concurrency is not a property of a function. It is a capability — an Io the
+caller hands down, an ordinary parameter like an allocator, minted at the
+entry point `[1660]` and enforced below it `[1680]`. The same code blocks or
+does not depending on the Io it was given, so no keyword, no second calling
+convention and no colored function type is needed to say it. The refusal
+this replaces is recorded in `tour.md` under WHAT WAS TRIED AND DROPPED.
+
+Three positions follow from that. None of them is a work item here, and none
+of them may be satisfied by inventing one.
+
+- **One Io implementation, and it blocks.** Signatures and the `core/*`
+  slice are concurrency-capable from the hosted I/O work at R3.50 onward
+  without any scheduler existing. Nothing in this roadmap builds a second
+  implementation, and nothing in it may assume one.
+- **Stackless coroutines are a non-goal.** Cutting functions into state
+  machines is a compiler project of its own, and it puts the property into
+  every function type that reaches one — the same coloring the ambient
+  environment was removed to avoid. This is a refusal, not a park: no
+  trigger reopens it, only a decision to reverse it.
+- **Stackful fibres are the route to explore, and the backend keeps them
+  reachable on purpose.** This one is a direction rather than a park. The
+  intended answer to concurrency beyond blocking is a stack switch, not a
+  compiler rewrite, and from R1.80 onward a backend decision that forecloses
+  switching stacks is a defect in that backend rather than a trade-off.
+  The conditions it needs are already held for other reasons: the frame
+  pointer is always present, the callee-saved discipline is explicit, and no
+  capability rides in a reserved register. The exploration itself belongs to
+  the Language evolution successor roadmap. Its trigger is the first derived
+  program that needs two things in flight at once; the case to design
+  against is a single-core freestanding target, where the honest answer to a
+  request for concurrency is that there is none.
+
 ## Inherited review register and migration parity
 
 This appendix preserves all 32 legacy backlog entries exactly once. It records
