@@ -964,14 +964,18 @@ end packet
 Attributes are prefix words, from a closed set. Arguments
 are always parenthesised. Closed value sets are atoms;
 arbitrary linker names stay strings.
-  mut public volatile align(n) layout(c|optimal|packed)
+```text
+mut public volatile align(n) layout(c|optimal|packed)
+```
 and 'at' for a bit position, which is why a field or an
 entry cannot be called that — the same goes for 'from',
 'of', 'with' and 'align' itself.
-  big little escaping caller fixed option
-  link(section: "...", symbol: "...", keep, weak,
-       inline, noinline)
-  extern(c|interrupt|naked|...)
+```text
+big little escaping caller fixed option
+link(section: "...", symbol: "...", keep, weak,
+     inline, noinline)
+extern(c|interrupt|naked|...)
+```
 packed folded into layout, naked into extern, option implies
 fixed, and the five toolchain words became one attribute with
 named arguments. Register access is data now, not keywords.
@@ -1198,12 +1202,12 @@ halt_it: () -> noreturn = loop do end loop end halt_it
 Three parameter conventions, and they are about the value
 you were handed — never about what it points at, which the
 type says by [0450].
-  in     I will not change the value. The default, unmarked.
-  inout  I may replace it, exclusively, and the change comes
-         back. Implies mut.
-  sink   consumed. The place the caller named is dead
-         afterwards — see [0910], since a place is not
-         always a binding.
+| convention | what it promises |
+|---|---|
+| `in` | I will not change the value. The default, unmarked. |
+| `inout` | I may replace it, exclusively, and the change comes back. Implies mut. |
+| `sink` | consumed. The place the caller named is dead afterwards — see [0910], since a place is not always a binding. |
+
 So a function that writes registers through a pointer it
 will never re-point takes it as 'in' and the pointer type
 carries the mut. That reads as what it does, which the older
@@ -2255,10 +2259,12 @@ modules of the reserved landin package — landin/compiler
 and its siblings — and are in scope without an import,
 which is why their bare names are not available to anyone
 else.
-  compiler   target, word size, byte order, build mode,
-             and the atomic and vector intrinsics
-  assembler  inline assembly
-  linker     libraries, sections, entry
+| module | what it reaches |
+|---|---|
+| `compiler` | target, word size, byte order, build mode, and the atomic and vector intrinsics |
+| `assembler` | inline assembly |
+| `linker` | libraries, sections, entry |
+
 Their calls are builtin, take only fixed arguments, and
 cannot be written by hand.
 Where the line runs: something is builtin when the compiler
@@ -2510,12 +2516,13 @@ because there is nothing left for it to be.
 
 How a new feature earns its place. When a program cannot
 be written cleanly, in order:
-  can an existing mechanism express it?      then a library
-  can the compiler work it out itself?       then no syntax
-  must the programmer say it, and does
-    saying it generalise or remove another
-    mechanism?                               then a candidate
-  does it only solve this one case?          then not yet
+| ask, in order | then |
+|---|---|
+| can an existing mechanism express it? | a library |
+| can the compiler work it out itself? | no syntax |
+| must the programmer say it, and does saying it generalise or remove another mechanism? | a candidate |
+| does it only solve this one case? | not yet |
+
 A new mechanism should let two old ones leave the building.
 
 ### [1720] What the language claims, at this version, plainly
@@ -2594,72 +2601,72 @@ built, and then taken out again — because a reader who does not know
 that will propose it back, and because a design is partly defined by
 what it refused.
 
-an ambient environment, carried in a register, holding the allocator
-    and the diagnostics and the Io — Odin's context. Designed in
-    full, then removed. Once the argument was that every property it
-    needed made it visible anyway, the only thing left was its
-    implicit flow, and that was the thing worth losing. It became an
-    ordinary parameter and the ABI lost a reserved register [1680].
-compile-time execution, refused twice. It would have given generics,
-    macros and configuration from one mechanism, and it costs an
-    interpreter inside the compiler. The accepted price is that
-    generated tables and vendor bindings come from generator
-    programs [1540].
-witness tables as the only story, then monomorphisation as the only
-    story: both refused. The table is the foundation and specialising
-    is an optimisation weighed per instantiation [1310].
-cost annotations on a conformance, and the concepts that went with
-    them. Removed entirely: how finely a concept distinguishes what
-    an operation costs is a library's business, and no language
-    guarantee should rest on how clever an optimiser happens to be
-    [1270].
-a concept for ranges. A range is an ordinary value satisfying
-    iterable, and left-exclusive forms went with it [0360].
-a second type with the shape of a fixed array and different
-    operator rules. Fixed arrays are the vector type [0590].
-transposed collections, designed and deferred: they touch aliasing,
-    generics, slicing, addr, layout, debug information and the
-    optimiser at once, and no program has yet needed one [0620].
-weak conformances, built and removed. Libraries would declare
-    weakly and applications override strongly, which worked — and
-    meant an application could quietly change the behaviour of
-    generic code inside a library. A collision is simply an error
-    [1280].
-labels on if and match, removed; they earn their place on loops and
-    bare blocks only [1180].
-errdefer, refused, and then arrived at from the other side. A
-    cancellable defer was tried first and dropped, because the
-    cancel always sits where the block succeeds and is hand-made
-    bookkeeping for a question the exit already answers. defer with
-    an argument was dropped because it reads as a call. What went in
-    is undo, its own word, because to defer is to do it later and
-    this may never be done at all [1110].
-read-only reference types spelled as a second form of every
-    reference — considered twice and refused both times, then
-    arrived at anyway from the other end. What was refused was deep
-    const with an implicit widening; what went in is permission in
-    the type with one stated relaxation, and it removed two
-    mechanisms rather than adding one [0430].
-permission derived from where a reference came from, which lasted
-    one version. It rescued the register case and could not express
-    the commonest signature in a driver, so it was replaced by
-    permission in the type [0430].
-inferred derivation for the from clause, refused with a
-    counterexample rather than an argument: mechanically an
-    allocator's result does come out of the allocator, so inference
-    forbids a second live allocation [0790].
-braces, which were never a decision. They crept into two register
-    examples and a set literal and were taken out again; the
-    language has none [0730].
-a keyword for the compile-time assertion. The collision with the
-    ordinary assertion was resolved by subtraction: it is
-    compiler.assert now, a builtin call like the rest, and the
-    language has one keyword fewer [1510].
-sets as a kind of their own, with a literal, three operators and a
-    membership operator, all of which were designed and then not
-    needed: set(X) generates a packed struct of bool, so membership
-    is a field read [0730].
-affine values, which cannot be copied. Not refused — parked, with
-    the condition that would bring them in, and with sink honestly
-    described in the meantime as a use-after-consume check on one
-    place rather than as ownership [0910].
+- an ambient environment, carried in a register, holding the allocator
+  and the diagnostics and the Io — Odin's context. Designed in
+  full, then removed. Once the argument was that every property it
+  needed made it visible anyway, the only thing left was its
+  implicit flow, and that was the thing worth losing. It became an
+  ordinary parameter and the ABI lost a reserved register [1680].
+- compile-time execution, refused twice. It would have given generics,
+  macros and configuration from one mechanism, and it costs an
+  interpreter inside the compiler. The accepted price is that
+  generated tables and vendor bindings come from generator
+  programs [1540].
+- witness tables as the only story, then monomorphisation as the only
+  story: both refused. The table is the foundation and specialising
+  is an optimisation weighed per instantiation [1310].
+- cost annotations on a conformance, and the concepts that went with
+  them. Removed entirely: how finely a concept distinguishes what
+  an operation costs is a library's business, and no language
+  guarantee should rest on how clever an optimiser happens to be
+  [1270].
+- a concept for ranges. A range is an ordinary value satisfying
+  iterable, and left-exclusive forms went with it [0360].
+- a second type with the shape of a fixed array and different
+  operator rules. Fixed arrays are the vector type [0590].
+- transposed collections, designed and deferred: they touch aliasing,
+  generics, slicing, addr, layout, debug information and the
+  optimiser at once, and no program has yet needed one [0620].
+- weak conformances, built and removed. Libraries would declare
+  weakly and applications override strongly, which worked — and
+  meant an application could quietly change the behaviour of
+  generic code inside a library. A collision is simply an error
+  [1280].
+- labels on if and match, removed; they earn their place on loops and
+  bare blocks only [1180].
+- errdefer, refused, and then arrived at from the other side. A
+  cancellable defer was tried first and dropped, because the
+  cancel always sits where the block succeeds and is hand-made
+  bookkeeping for a question the exit already answers. defer with
+  an argument was dropped because it reads as a call. What went in
+  is undo, its own word, because to defer is to do it later and
+  this may never be done at all [1110].
+- read-only reference types spelled as a second form of every
+  reference — considered twice and refused both times, then
+  arrived at anyway from the other end. What was refused was deep
+  const with an implicit widening; what went in is permission in
+  the type with one stated relaxation, and it removed two
+  mechanisms rather than adding one [0430].
+- permission derived from where a reference came from, which lasted
+  one version. It rescued the register case and could not express
+  the commonest signature in a driver, so it was replaced by
+  permission in the type [0430].
+- inferred derivation for the from clause, refused with a
+  counterexample rather than an argument: mechanically an
+  allocator's result does come out of the allocator, so inference
+  forbids a second live allocation [0790].
+- braces, which were never a decision. They crept into two register
+  examples and a set literal and were taken out again; the
+  language has none [0730].
+- a keyword for the compile-time assertion. The collision with the
+  ordinary assertion was resolved by subtraction: it is
+  compiler.assert now, a builtin call like the rest, and the
+  language has one keyword fewer [1510].
+- sets as a kind of their own, with a literal, three operators and a
+  membership operator, all of which were designed and then not
+  needed: set(X) generates a packed struct of bool, so membership
+  is a field read [0730].
+- affine values, which cannot be copied. Not refused — parked, with
+  the condition that would bring them in, and with sink honestly
+  described in the meantime as a use-after-consume check on one
+  place rather than as ownership [0910].

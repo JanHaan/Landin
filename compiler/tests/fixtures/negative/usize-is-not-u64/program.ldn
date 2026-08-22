@@ -1,0 +1,3 @@
+f: (a: u64, b: usize) -> (r: u64) =
+    r = a + b
+end f
