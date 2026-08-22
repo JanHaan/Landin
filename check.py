@@ -18,7 +18,26 @@ import sys
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
-LANGUAGE_FILES = ["tour.txt", "prototype-1-driver.txt",
+#  The normative document, named once.  Every check that reads it goes
+#  through this, so a rename is one edit rather than nine -- and so that a
+#  check cannot quietly look for a file that is no longer there.
+TOUR_NAME = "tour.txt"
+
+def absent(paths):
+    """A file a check needs and cannot find, reported rather than skipped.
+
+    Every check that reads a document used to return no faults when the
+    document was not there.  That is the worst possible answer: renaming
+    tour.txt made four checks vacuous and the run still said `all clean`,
+    which was proved by appending a bogus production and seeing it pass.
+    A check that cannot do its job says so.
+    """
+    return [(os.path.relpath(f, ROOT), 1,
+             "this file is needed by a check and is not here")
+            for f in paths if not os.path.exists(f)]
+
+
+LANGUAGE_FILES = [TOUR_NAME, "prototype-1-driver.txt",
                   "prototype-2-parser.txt", "prototype-3-containers.txt",
                   "prototype-4-app.txt"]
 ROADMAP = "ROADMAP.md"
@@ -703,6 +722,19 @@ def read_grammar(path):
         except ValueError as complaint:
             out.append((line + offset, "grammar notation: %s" % complaint))
 
+    #  A line that spells `::=` is a production and has to parse as one.
+    #  PRODUCTION only matches a lower-case name, so `GARBAGE ::= nonsense`
+    #  added to the grammar was silently ignored and the run said `all
+    #  clean` -- proved by doing it.  This is deliberately narrow: in this
+    #  section prose sits at column 0 too, and nothing but `::=`
+    #  distinguishes the two, which is one of the reasons the documents are
+    #  moving to a form where a rule and a paragraph are different things.
+    for n, line in enumerate(section, 1):
+        if "::=" in line and not PRODUCTION.match(line):
+            out.append((n + offset,
+                        "this spells ::= and is not a production: %r"
+                        % line.strip()[:44]))
+
     used = set()
     for tree in trees.values():
         grammar_uses(tree, used)
@@ -972,7 +1004,7 @@ def check_citations(paths):
     selected = {}
     for path in citation_paths:
         selected.setdefault(os.path.basename(path), path)
-    tour_path = selected.get("tour.txt", os.path.join(ROOT, "tour.txt"))
+    tour_path = selected.get(TOUR_NAME, os.path.join(ROOT, TOUR_NAME))
     constructs = construct_definitions(tour_path)
 
     needs_findings = ROADMAP in selected
@@ -1099,7 +1131,7 @@ def token_dump():
     different kind vocabularies, and a boundary difference is what a
     disagreement actually looks like.
     """
-    tour = os.path.join(ROOT, "tour.txt")
+    tour = os.path.join(ROOT, TOUR_NAME)
     rules, trees, problems = read_grammar(tour)
     if problems or "program" not in trees:
         return None
@@ -1162,7 +1194,12 @@ def frontend_codes():
                  "/landin-diagnostics-syntactic.ads"):
         full = os.path.join(ROOT, path)
         if not os.path.exists(full):
-            continue
+            #  Empty rather than partial.  A smaller set here silently
+            #  reclassifies fixtures, and check_grammar_corpus reads this
+            #  set to decide whether the grammar must derive a negative
+            #  program: half an answer is worse than none, and none makes
+            #  it fail closed.
+            return set()
         found = re.search(r"function Code_For[^;]*?is \(case .*?\);",
                           io.open(full, encoding="utf-8").read(), re.S)
         if not found:
@@ -1187,12 +1224,13 @@ def check_grammar_corpus(full_run):
     if not full_run:
         return []
 
-    tour = os.path.join(ROOT, "tour.txt")
-    if not os.path.exists(tour):
-        return []
+    tour = os.path.join(ROOT, TOUR_NAME)
+    missing = absent((tour,))
+    if missing:
+        return missing
 
     rules, trees, problems = read_grammar(tour)
-    out = [("tour.txt", n, why) for n, why in problems]
+    out = [(TOUR_NAME, n, why) for n, why in problems]
     if not trees or "program" not in trees:
         return out
 
@@ -1213,8 +1251,14 @@ def check_grammar_corpus(full_run):
 
     #  Which codes the scan and the parse can raise.  Empty means the two
     #  packages could not be read, and then nothing is reclassified below:
-    #  failing closed keeps a corpus check from getting quietly weaker.
+    #  failing closed keeps a corpus check from getting quietly weaker --
+    #  and saying so keeps it from being quiet about that too.
     frontend = frontend_codes()
+    out.extend(absent(
+      (os.path.join(ROOT, "compiler/ada/src/diagnostics"
+                          "/landin-diagnostics-lexical.adb"),
+       os.path.join(ROOT, "compiler/ada/src/diagnostics"
+                          "/landin-diagnostics-syntactic.ads"))))
 
 
     for kind, default_derive in (("positive", True),
@@ -1305,7 +1349,7 @@ def check_grammar_corpus(full_run):
     for construct in sorted(set(re.findall(r"^-- \[(\d{4})\]",
                                            section_text, re.M))):
         if construct not in cited:
-            out.append(("tour.txt", 1,
+            out.append((TOUR_NAME, 1,
                         "grammar construct [%s] is named by no fixture"
                         % construct))
 
@@ -1342,9 +1386,10 @@ def check_token_vocabulary(full_run):
 
     spec = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.ads")
     body = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.adb")
-    tour = os.path.join(ROOT, "tour.txt")
-    if not all(os.path.exists(f) for f in (spec, body, tour)):
-        return []
+    tour = os.path.join(ROOT, TOUR_NAME)
+    missing = absent((spec, body, tour))
+    if missing:
+        return missing
 
     out = []
     spec_text = io.open(spec, encoding="utf-8").read()
@@ -1515,9 +1560,10 @@ def check_precedence_table(full_run):
                         "compiler/ada/src/syntax/landin-syntax-precedence.ads")
     tokens = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.ads")
     signs = os.path.join(ROOT, "compiler/ada/src/syntax/landin-tokens.adb")
-    tour = os.path.join(ROOT, "tour.txt")
-    if not all(os.path.exists(f) for f in (spec, tokens, signs, tour)):
-        return []
+    tour = os.path.join(ROOT, TOUR_NAME)
+    missing = absent((spec, tokens, signs, tour))
+    if missing:
+        return missing
 
     where = "compiler/ada/src/syntax/landin-syntax-precedence.ads"
     out = []
@@ -1700,9 +1746,10 @@ def check_refused_constructs(full_run):
                           "compiler/ada/src/syntax/landin-syntax-parser.adb")
     codes = os.path.join(
         ROOT, "compiler/ada/src/diagnostics/landin-diagnostics-syntactic.ads")
-    tour = os.path.join(ROOT, "tour.txt")
-    if not all(os.path.exists(f) for f in (parser, codes, tour)):
-        return []
+    tour = os.path.join(ROOT, TOUR_NAME)
+    missing = absent((parser, codes, tour))
+    if missing:
+        return missing
 
     out = []
     parser_text = io.open(parser, encoding="utf-8").read()
@@ -1808,6 +1855,7 @@ def check_refused_constructs(full_run):
     #  one rule is one more than the repository allows to drift, so both
     #  are held to the tour and to each other.
     types = os.path.join(ROOT, "compiler/ada/src/checking/landin-types.ads")
+    out.extend(absent((types,)))
     if os.path.exists(types):
         found = re.search(r"function Spelling \(Item : Scalar_Name\)"
                           r"[^;]*?is \(case Item is(.*?)\);",
