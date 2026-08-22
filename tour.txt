@@ -2044,6 +2044,176 @@ expression  ::= logical_and ("or" logical_and)*
 --       The report names the use, because the use is where the mistake
 --       is and the declaration that was meant is not there to point at.
 
+-- [1870] The kernel's types, and what each of them holds.
+--       [1790] gives the kernel eleven spellings and nothing that
+--       says what one of them holds, so nothing yet says whether a
+--       u8 may be given 300. [0150] puts the width in the name,
+--       [0160] takes usize and isize from the machine and [0180]
+--       gives bool its two values; written out, that is:
+--         u8 u16 u32 u64      every unsigned value of that many bits
+--         i8 i16 i32 i64      every signed one, two's complement
+--         usize isize         the same pair, at the target's pointer
+--                             width [0160]
+--         bool                false and true [0180]
+--       Two's complement is not a new decision. [0300]'s wrapping
+--       forms have to wrap somewhere and [0320]'s '>>' keeps a sign,
+--       and neither means anything without it.
+--       Each of the eleven is its own type. usize is not u64 on a
+--       machine whose pointer is eight bytes wide, because if it
+--       were, [0310] would refuse a program on one target and accept
+--       it on another for a reason no paragraph here could state.
+--       [1510]'s 'sizeof usize == 8' asks what a machine does; it
+--       does not say two names are one type.
+--       u128 and i128 [0150], the packed widths [0730] and the
+--       floats [0170] are described in this tour and are not enabled
+--       yet.
+
+-- [1880] Where a literal's type comes from, and what a context is.
+--       [0190] says an integer literal is untyped, takes the type of
+--       its context and is checked at that point, and [0200] says it
+--       is i32 with none. Neither says what a context is, and a
+--       checker cannot ask for one until they are listed. In the
+--       kernel these positions give a literal a type:
+--         a binding's declared type [1790]
+--         the type of the place an assignment writes [1810]
+--         the type of the parameter an argument fills [1800]
+--         the named return's type, for an expression body [0880]
+--         the other operand's type, for a binary operator
+--         a unary operator's own context, handed on [1820]
+--         a branch's condition and an exit's 'when', both of which
+--           want a bool [1050] [0970] and so give an integer literal
+--           a context it cannot take
+--       and two give none: the inferred form [0050] and a discard
+--       [1020], where [0200]'s i32 is what is left.
+--       A context reaches inward through [1820]'s arithmetic,
+--       bitwise, shift and unary levels and stops at a comparison
+--       and at the logical words. What those give back is a bool
+--       [1890] and a bool says nothing about what was compared, so
+--       'r: bool = 1 | 2 == 3' compares two i32 by [0200] and not
+--       two bools.
+--       A literal whose value the type does not hold is refused
+--       [0190], and the report names the literal.
+--       A unary minus over a literal is part of the value that check
+--       reads, which is what makes 'i8 = -128' the smallest i8
+--       rather than 128 refused and then negated. Nothing else is
+--       folded: 'u8 = 200 + 100' is two literals a u8 holds and a
+--       sum it does not, and [0300] says that traps rather than that
+--       it is refused here.
+
+-- [1890] What each operator takes and what it gives.
+--       [1820] settled what binds; this settles what agrees. Every
+--       binary operator takes two operands of one type, because
+--       [0310] converts nothing and there is nowhere else for a
+--       second type to go.
+--         + - * / %, and [0300]'s +% -% *%
+--                    one integer type, and that type back [0290]
+--         & ^ |, and the unary ~
+--                    one integer type, and that type back [0330]
+--         << >>      an integer shifted by an integer of that same
+--                    type, and that type back [0320]. The amount is
+--                    not bounded by the width: [0320] fills with
+--                    zeros beyond it for any amount.
+--         == <> < <= > >=
+--                    one type on both sides, and a bool back [0350]
+--         and or not bool, and a bool back [0340]
+--         unary -    one integer type, and that type back
+--       So an integer has no logical words and a bool has no
+--       arithmetic and no bitwise set: 'and' is what [0340] gave a
+--       bool and '&' is what [0330] gave an integer, and neither
+--       reaches across. [1820] already read the comparison rule this
+--       way when it said a chain would compare a bool with a number
+--       and that [0310] refuses it.
+--       Two positions want a bool and are not operators: a branch's
+--       condition, which [1050] already says must be one, and an
+--       exit's 'when' [0970], which is the same question asked where
+--       the exit is.
+
+-- [1900] What may be written, and what may not.
+--       [1810]'s place is a name, and of the four kinds of name the
+--       kernel has, two may be written and two may not.
+--         a mutable binding [0060]     may be
+--         a named return               may be: [0930] says it must
+--                                      be, and [1840] declares it
+--                                      as a place for that reason
+--         an immutable binding         may not: [0040] makes it
+--                                      immutable and [0450] says it
+--                                      protects the value it holds
+--         a parameter                  may not: the unmarked
+--                                      convention is [0900]'s 'in',
+--                                      which is the promise not to
+--                                      change the value
+--       A function is not a place at all.
+--       The value's type is the place's type [0310], and the report
+--       names the place as well as the value, because which of the
+--       two is wrong is the reader's to decide.
+--       'inc' and 'dec' say what 'x += 1' says [0400], so each wants
+--       a place that may be written and an integer type.
+
+-- [1910] Assigned before it is read.
+--       [0080] says a binding declared with no value must be
+--       assigned before use and [0930] says every named return must
+--       be assigned before the function returns. In a body those are
+--       one question and this is its shape: at every read of a name,
+--       at every 'return', and where a body ends, the name has to
+--       have been assigned by every path that arrives there.
+--       No condition is believed. A name assigned in one arm of an
+--       'if' and not in another is not assigned after it, and 'if
+--       true then r = 1 end if' leaves r unassigned, because a
+--       checker that read the condition to decide this would be
+--       running the program in order to check it.
+--       'return when' is a return [1810], so what the function hands
+--       back is assigned above it and not below.
+--       A module binding is not this. [1460] says a value at module
+--       level is known when the compiler reads it, so one written
+--       with no value has no such value, and it is the read that is
+--       refused rather than the declaration.
+
+-- [1920] What a call means.
+--       [0980] gives no parameter a default value, so a call names
+--       every parameter exactly once and in order, and [1820]'s
+--       argument list is positional only. Each argument has its
+--       parameter's type [0310], and the call has the type of the
+--       named return.
+--       A call of a function returning none has no type. It is a
+--       statement [1810] and nothing else: nothing binds it, no
+--       argument is one, and [1930] cannot discard it, because there
+--       is no result there to discard.
+--       A callee is a function. A name bound to a binding is not
+--       one, and a function's own name anywhere but in front of the
+--       '(' is a value of a function type [1000], which [1790]'s
+--       'type' rule does not spell: [1830] refuses it and names it.
+--       A scalar type name in front of the '(' is [0700]'s
+--       conversion, which [0310] describes and this grammar omits,
+--       so [1830] refuses that by name too. It is not a misspelling
+--       and must not be reported as one.
+
+-- [1930] What may be discarded.
+--       [1020] says a result is discarded on purpose or not at all,
+--       and [1810] writes that '_' '=' expression. Anything with a
+--       type may be thrown away, including a value nobody computed
+--       for the purpose: '_ = 1 + 2' is a discard of an i32 by
+--       [0200], because a rule about wasted work is a rule about
+--       people and this one is about types.
+--       What may not is a call of a function returning none [1920].
+--       Discarding is for a result, and that call has none.
+
+-- [1940] A module value is known when the compiler reads it.
+--       [1460] says values at module level must be known at compile
+--       time and that nothing runs before the entry point, and the
+--       kernel's version of known is short: a literal, 'true',
+--       'false', an operator of [1820] applied to those, and a name
+--       bound to a module binding whose value is known. Not a call.
+--       There is no compile-time execution in this language, so a
+--       call is not a value the compiler holds, and [1830] refuses
+--       it as the construct it is rather than as a type error.
+--       [0130] makes a module a set, so one module value may name
+--       another written below it. A chain of them that comes back to
+--       where it began names nothing at all: no member of it is
+--       first, exactly as [1850] found with two declarations of one
+--       name. So it is refused, and the report names the declaration
+--       the chain came back to, because that is the one place in it
+--       the reader is standing.
+
 
 ----------------------------------------------------------------------
 THE PRINCIPLES BEHIND THE DECISIONS

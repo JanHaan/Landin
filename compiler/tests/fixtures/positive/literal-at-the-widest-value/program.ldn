@@ -1,0 +1,2 @@
+widest: u8 = 255
+smallest: i8 = -128

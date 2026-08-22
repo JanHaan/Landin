@@ -2,6 +2,7 @@ with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.Source;
 with Landin.Stages;
+with Landin.Stages.Checking;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
@@ -24,6 +25,7 @@ package body Landin.Driver is
    --  pipeline must not be able to outlive a stage.
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
+   Checker  : aliased Landin.Stages.Checking.Instance;
 
    Code_Unknown_Option : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Unknown_Option);
@@ -35,7 +37,7 @@ package body Landin.Driver is
    function Identity return String is
      ("refine - the Landin bootstrap compiler" & LF
       & "no release version is assigned" & LF
-      & "language frontend: scanner and parser" & LF
+      & "language frontend: scanner, parser, names, types" & LF
       & "targets described: linux-x86-64, synthetic-32" & LF);
 
    function Usage return String is
@@ -45,9 +47,11 @@ package body Landin.Driver is
       & "  --identify          print tool identity" & LF
       & "  --target=NAME       select a described target" & LF
       & LF
-      & "A source file is scanned and parsed.  Nothing is checked or"
+      & "Source files are scanned, parsed, resolved and checked as one"
       & LF
-      & "compiled yet, so a file that parses produces no output." & LF);
+      & "module.  Nothing is compiled yet, so a program that is accepted"
+      & LF
+      & "produces no output." & LF);
 
    function Starts_With (Text : String; Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
@@ -195,13 +199,15 @@ package body Landin.Driver is
             begin
                Landin.Stages.Append (Line, Frontend'Access);
                Landin.Stages.Append (Line, Names'Access);
+               Landin.Stages.Append (Line, Checker'Access);
                Ran := Landin.Stages.Run (Line, Context);
 
-               --  Resolution runs only when the parse produced trees worth
-               --  reading: the syntax stage stops the pipeline on its own
-               --  failure, so a file with a missing `then` does not also
-               --  report every name the hole swallowed.
-               if Ran not in 1 .. 2 then
+               --  Each stage runs only when the one before it produced
+               --  something worth reading: a stage stops the pipeline on
+               --  its own failure, so a file with a missing `then` does not
+               --  also report every name the hole swallowed, and one with
+               --  an unknown name does not also report its type.
+               if Ran not in 1 .. 3 then
                   raise Compiler_Defect
                     with "the frontend pipeline did not run";
                end if;

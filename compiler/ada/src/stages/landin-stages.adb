@@ -12,6 +12,7 @@ package body Landin.Stages is
          Result.Written := new Landin.Provenance.Table;
          Result.Parsed  := new Landin.Syntax.Forest.Table;
          Result.Meant   := new Landin.Resolution.Table;
+         Result.Typed   := new Landin.Checking.Table;
       end return;
    end Create;
 
@@ -49,6 +50,10 @@ package body Landin.Stages is
    function Meanings (Context : in out Compilation)
      return not null access Landin.Resolution.Table
      is (Context.Meant);
+
+   function Types (Context : in out Compilation)
+     return not null access Landin.Checking.Table
+     is (Context.Typed);
 
    procedure Report
      (Context : in out Compilation; Item : Landin.Diagnostics.Diagnostic)

@@ -1,0 +1,4 @@
+class: positive
+summary: [1890] a comparison takes one type on both sides and gives a bool back
+program: program.ldn
+targets: linux-x86-64, macos-arm64

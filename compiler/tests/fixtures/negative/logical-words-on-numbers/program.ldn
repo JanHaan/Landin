@@ -1,0 +1,1 @@
+f: (a: u32, b: u32) -> (r: bool) = a and b end f

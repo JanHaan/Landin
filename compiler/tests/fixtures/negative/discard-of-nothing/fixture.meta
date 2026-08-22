@@ -1,0 +1,5 @@
+class: negative
+summary: [1930] discarding is for a result, and a call of a function returning none has none
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301

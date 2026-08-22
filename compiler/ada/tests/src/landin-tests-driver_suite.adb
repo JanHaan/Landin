@@ -55,7 +55,9 @@ package body Landin.Tests.Driver_Suite is
         (Item, Contains (Text, "no release version is assigned"),
          "identity is version neutral");
       Landin.Testing.Check
-        (Item, Contains (Text, "language frontend: scanner and parser"),
+        (Item,
+         Contains
+           (Text, "language frontend: scanner, parser, names, types"),
          "identity names the frontend it has");
       Landin.Testing.Check
         (Item, not Contains (Text, "0."),

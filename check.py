@@ -1803,6 +1803,33 @@ def check_refused_constructs(full_run):
             % (", ".join(sorted(declared.values())),
                ", ".join(sorted(scalars)))))
 
+    #  Landin.Types spells the eleven a second time, because it is the
+    #  package that maps each onto a machine width.  Two transcriptions of
+    #  one rule is one more than the repository allows to drift, so both
+    #  are held to the tour and to each other.
+    types = os.path.join(ROOT, "compiler/ada/src/checking/landin-types.ads")
+    if os.path.exists(types):
+        found = re.search(r"function Spelling \(Item : Scalar_Name\)"
+                          r"[^;]*?is \(case Item is(.*?)\);",
+                          io.open(types, encoding="utf-8").read(), re.S)
+        if not found:
+            out.append(("compiler/ada/src/checking/landin-types.ads", 1,
+                        "the type table could not be read"))
+        else:
+            spelled = set(re.findall(r'=>\s*"([a-z0-9]+)"', found.group(1)))
+            if spelled != scalars:
+                out.append((
+                    "compiler/ada/src/checking/landin-types.ads", 1,
+                    "Landin.Types spells %s and the grammar's type rule "
+                    "spells %s"
+                    % (", ".join(sorted(spelled)) or "nothing",
+                       ", ".join(sorted(scalars)))))
+            elif declared is not None \
+                    and spelled != set(declared.values()):
+                out.append((
+                    "compiler/ada/src/checking/landin-types.ads", 1,
+                    "Landin.Types and the parser spell different types"))
+
     #  A negative fixture that names no codes is a rejection nobody
     #  checked the shape of.
     base = os.path.join(ROOT, "compiler/tests/fixtures/negative")

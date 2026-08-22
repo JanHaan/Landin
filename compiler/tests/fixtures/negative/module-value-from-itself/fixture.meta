@@ -1,0 +1,5 @@
+class: negative
+summary: [1940] a chain of module values that comes back to where it began names nothing at all
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0305

@@ -36,6 +36,7 @@
 
 with Ada.Containers.Vectors;
 
+with Landin.Checking;
 with Landin.Diagnostics;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -97,6 +98,10 @@ package Landin.Stages is
    function Meanings (Context : in out Compilation)
      return not null access Landin.Resolution.Table;
 
+   --  What type every node and every declaration has.
+   function Types (Context : in out Compilation)
+     return not null access Landin.Checking.Table;
+
    procedure Report
      (Context : in out Compilation; Item : Landin.Diagnostics.Diagnostic);
 
@@ -154,6 +159,7 @@ private
    type Sites_Access      is access Landin.Provenance.Table;
    type Forest_Access     is access Landin.Syntax.Forest.Table;
    type Resolution_Access is access Landin.Resolution.Table;
+   type Checking_Access   is access Landin.Checking.Table;
 
    type Compilation is limited record
       Facts   : Landin.Targets.Target_Facts;
@@ -163,6 +169,7 @@ private
       Written : Sites_Access      := null;
       Parsed  : Forest_Access     := null;
       Meant   : Resolution_Access := null;
+      Typed   : Checking_Access   := null;
    end record;
 
 end Landin.Stages;

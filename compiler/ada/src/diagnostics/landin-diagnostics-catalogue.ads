@@ -23,7 +23,7 @@
 --     L0010-L0099  lexical, and the refusal of what is not enabled
 --     L0100-L0199  reserved for R1.40's syntax failures
 --     L0200-L0299  name resolution, assigned at R1.50
---     L0300-L0399  reserved for R1.60's type failures
+--     L0300-L0399  types and definite assignment, assigned at R1.60
 
 package Landin.Diagnostics.Catalogue is
 
@@ -59,7 +59,17 @@ package Landin.Diagnostics.Catalogue is
       --  The resolver, assigned at R1.50.  Two rules and not more: a name
       --  declared twice in one scope, and a name used and never declared.
       Duplicate_Declaration,
-      Unresolved_Name);
+      Unresolved_Name,
+      --  The checker, assigned at R1.60.  Five rules: a literal no type
+      --  holds, two types that must agree and do not, a name read before
+      --  it is assigned, a place that may not be written, and a name used
+      --  in a way the kernel does not enable.
+      Literal_Out_Of_Range,
+      Type_Mismatch,
+      Not_Definitely_Assigned,
+      Immutable_Target,
+      Unsupported_Use,
+      Not_Known_At_Compile_Time);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -90,7 +100,13 @@ package Landin.Diagnostics.Catalogue is
             when Stray_Token              => "L0110",
             when Nesting_Too_Deep         => "L0111",
             when Duplicate_Declaration    => "L0200",
-            when Unresolved_Name          => "L0201");
+            when Unresolved_Name          => "L0201",
+            when Literal_Out_Of_Range     => "L0300",
+            when Type_Mismatch            => "L0301",
+            when Not_Definitely_Assigned  => "L0302",
+            when Immutable_Target         => "L0303",
+            when Unsupported_Use          => "L0304",
+            when Not_Known_At_Compile_Time => "L0305");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -105,7 +121,8 @@ package Landin.Diagnostics.Catalogue is
             when Unterminated_Literal  => Error,
             when Name_Expected .. Nesting_Too_Deep => Error,
             when Duplicate_Declaration => Error,
-            when Unresolved_Name       => Error);
+            when Unresolved_Name       => Error,
+            when Literal_Out_Of_Range .. Not_Known_At_Compile_Time => Error);
 
    function State (Of_Code : Code_Name) return Disposition
      is (case Of_Code is
@@ -124,7 +141,8 @@ package Landin.Diagnostics.Catalogue is
             when Unterminated_Literal  => Live,
             when Name_Expected .. Nesting_Too_Deep => Live,
             when Duplicate_Declaration => Live,
-            when Unresolved_Name       => Live);
+            when Unresolved_Name       => Live,
+            when Literal_Out_Of_Range .. Not_Known_At_Compile_Time => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
    --  user reads: the message at the raise site is what a user reads.
@@ -176,7 +194,21 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration =>
                "[1850]: one scope gives one name to one thing",
             when Unresolved_Name       =>
-               "[1860]: a name used and declared in no visible scope");
+               "[1860]: a name used and declared in no visible scope",
+            when Literal_Out_Of_Range  =>
+               "[1880]: a literal whose value its context's type does not"
+               & " hold",
+            when Type_Mismatch         =>
+               "[1890]: two types that must agree and do not",
+            when Not_Definitely_Assigned =>
+               "[1910]: a name read on a path that does not assign it",
+            when Immutable_Target      =>
+               "[1900]: a place that may not be written",
+            when Unsupported_Use       =>
+               "[1920]: a name used in a way the kernel does not enable",
+            when Not_Known_At_Compile_Time =>
+               "[1940]: a module value the compiler cannot know when it"
+               & " reads it");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -200,7 +232,8 @@ package Landin.Diagnostics.Catalogue is
             when Unterminated_Literal  => True,
             when Name_Expected .. Nesting_Too_Deep => True,
             when Duplicate_Declaration => True,
-            when Unresolved_Name       => True);
+            when Unresolved_Name       => True,
+            when Literal_Out_Of_Range .. Not_Known_At_Compile_Time => True);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -221,7 +254,10 @@ package Landin.Diagnostics.Catalogue is
             --  A name that is duplicated or unknown is written down: there
             --  is a lexeme to point at, and it is the name itself.
             when Duplicate_Declaration => True,
-            when Unresolved_Name       => True);
+            when Unresolved_Name       => True,
+            --  Every one of these points at something a program wrote.
+            when Literal_Out_Of_Range .. Not_Known_At_Compile_Time =>
+               True);
 
    --  How many secondary labels the diagnostic must carry. An unterminated
    --  block comment needs one: the end of the file is where it was noticed
@@ -248,6 +284,17 @@ package Landin.Diagnostics.Catalogue is
             --  place by definition, which is why it asks for none.
             when Duplicate_Declaration => 1,
             when Unresolved_Name       => 0,
+            --  A mismatch is only readable next to the place that stated
+            --  the requirement, and an unwritable place next to its
+            --  declaration.  A literal out of range has no second place:
+            --  the type it did not fit is named in the sentence, because
+            --  a defaulted literal [0200] has no annotation to point at.
+            when Type_Mismatch         => 1,
+            when Immutable_Target      => 1,
+            when Not_Definitely_Assigned => 1,
+            when Literal_Out_Of_Range  => 0,
+            when Unsupported_Use       => 0,
+            when Not_Known_At_Compile_Time => 0,
             when others                => 0);
 
    --  How many notes. [1830] promises a diagnostic that names the construct
@@ -261,6 +308,14 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => 1,
             when Duplicate_Declaration => 1,
             when Unresolved_Name       => 1,
+            when Literal_Out_Of_Range  => 1,
+            when Type_Mismatch         => 1,
+            when Not_Definitely_Assigned => 1,
+            when Immutable_Target      => 1,
+            --  [1830]'s two facts, the same two L0010 carries: which
+            --  construct this is, and which work enables it.
+            when Unsupported_Use       => 2,
+            when Not_Known_At_Compile_Time => 1,
             when others                => 0);
 
    function Count return Natural

@@ -576,15 +576,105 @@ code sequence its fixture names, checked by running `Landin.Driver.Execute` the
 way a user runs it rather than by assembling the stages in a test.
 
 ### R1.60 — Check the executable kernel
-Status: planned
+Status: complete
 Depends on: R1.50
 
 Implement the minimum static types, constants, functions, scalar operations,
 branches and returns needed by the first native program. Reject unsupported
 constructs explicitly.
 
+**This item needed eight new normative constructs, and that is the largest
+thing in it.** R1.50 found the tour silent on scopes; R1.60 found it silent on
+almost the whole of typing. [0310] says there is no implicit conversion and
+[0290], [0330], [0340] and [0350] list the operators, but nothing said that
+two operands of a binary operator must share a type, what the result type is,
+that a comparison yields a bool, or that `and` takes one. Nothing forbade
+assigning an immutable binding: [0040] says "immutable by default" and states
+a property, exactly as [0130] stated one before [1850] had to state the
+refusal. Nothing said what a call must match, what may be discarded, or --
+sharpest of all -- what "the type of its context" in [0190] actually means,
+which a checker cannot ask for until the positions are listed.
+
+So [1870] says what each of the eleven types holds, [1880] lists every
+position that gives a literal a type, [1890] says what each operator takes
+and gives, [1900] says what may be written, [1910] says a name must be
+assigned by every path that reaches a read, [1920] says what a call means,
+[1930] what may be discarded, and [1940] that a module value is one the
+compiler knows when it reads it. Each cites the sentence it derives from.
+
+Two things the tour already said were missed on the first reading and found by
+an adversarial one, and both are recorded here because they are the kind of
+mistake this process exists to catch. [1050] states "the condition, which must
+be bool" -- it sits indented inside a code example, so a scan anchored at
+column 0 does not see it, and the whole grammar section is written that way.
+And [1460] states "Values at module level must be known at compile time.
+Nothing runs before the entry point", which is [1940]'s source and settles
+`k := f()` without any new text. Two drafted rules were struck as a result.
+
+Two rules were narrowed rather than adopted as drafted. [1880] first folded
+every all-literal operator before the range check; that would make
+`u8 = 200 + 100` a static error, and [0300] says overflow *traps*. So only a
+unary minus folds, which is the one case that is forced -- without it
+`i8 = -128` is unwritable, because `integer` [1770] spells no sign and `-` is
+an operator [1820]. And [1940] first promised a report naming every
+declaration a cycle runs through; a diagnostic carries an exact number of
+labels by contract, so it names the one the chain came back to.
+
+Nothing asks the host how wide anything is. A width is a function of a type
+*and* a `Landin.Targets.Target_Facts`, formed only in `Landin.Types.Width`, so
+`usize` is as wide as a description says and a 32-bit target stays 32-bit on a
+64-bit host. A literal's value lives in `Landin.Types.Magnitude`, whose bound
+is written out as `2 ** 64 - 1`: that is a fact about `u64`, where
+`Long_Long_Integer` would have been a fact about the machine running the
+compiler -- the same move `Landin.Targets.Byte_Count` already made and states
+its reason for. `Fits` builds `2 ** Usable - 1` one bit at a time, because
+forming it directly is one past `Magnitude'Last` in exactly the `u64` case it
+exists to answer. Sign is separate from magnitude because the grammar
+separates them, so no signed 65-bit type is ever needed.
+
+R1.50's entry guessed that R1.60 would be "the pass that gets to be a forward
+loop". That is true of a pass that only synthesises, and typing is not one:
+[0190] makes a literal's type come from its context, so information flows from
+a parent into a subtree a forward loop has already passed. The honest shape is
+three passes and a fourth walk. Pass one settles every declaration that writes
+its type down, over every tree, before any body is read, because [1840]'s
+module scope is a set and crosses files. Pass two infers [1790]'s `:=` form on
+demand with `Underway` marking what is already being asked, which is the whole
+of the cycle check. Pass three reads the bodies. Inside an expression the walk
+is two mutually recursive halves -- a node is either asked what type it has or
+required to have one -- because that second half is the only way a literal
+ever gets a type at all. What the flat table still buys is the answer: one
+array indexed by `Node_Id`, no map anywhere.
+
+[1910] is its own walk, and R1.50 deferred it here by name. One Boolean per
+declaration, copied at a branch and merged after it, with the merge being
+`and` over every path that does not exit. No condition is believed, so
+`if true then r = 1 end if` leaves `r` unassigned and a branch with no `else`
+contributes a path that changes nothing. A `return when` is a return whose
+flow below is reachable, which is why [1810] says only exits carry `when`.
+
+Six codes, `L0300`-`L0305`. `L0304` is the checker's half of [1830] and is
+separate from the parser's `L0010` for a reason of information rather than of
+stage: `u8(x)` is a perfectly good `call` production, and what makes it
+[0700]'s conversion is what `u8` turned out to name. Reusing `L0010` would
+also have made its fixture unwritable, because `check_grammar_corpus` requires
+a frontend-code fixture *not* to derive and this one does -- which an
+adversarial reading caught before it was written.
+
 Exit evidence: each enabled construct has acceptance and rejection cases; no
 host integer width leaks into target semantics.
+
+Both hold. Twenty-two fixtures were added, eight positive and thirteen
+negative, and the corpus is now 54 positives and 44 negatives; every new
+construct [1870]-[1940] is named by both an acceptance and a rejection case,
+which `check.py` enforces by refusing a grammar construct no fixture names.
+Two coverage gaps an adversarial reading found are closed: no fixture anywhere
+assigned a mutable *binding* before now, and `function-parameters` was being
+counted as the acceptance case for a call's arity while containing no call.
+`Landin.Types` spells the eleven a second time because it owns the mapping to
+a machine width, so `check.py` holds it to the tour's own `type` rule and to
+the parser's table; three mutations were tried from both sides and each was
+reported. 78 cases, 1671 checks.
 
 ### R1.70 — Implement target-neutral IR and verification
 Status: planned
