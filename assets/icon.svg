@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"
+     width="256" height="256" role="img" aria-label="Landin">
+  <title>Landin</title>
+
+  <!--  The mark is 701 set in Futura Bold, converted to a path because
+        Futura is a font Apple ships and nobody else does: as text this
+        drawing was one face on this Mac and whatever the fallback chose
+        on the Linux gate, which is to say it was not one drawing.  As a
+        path it needs no font, no shape-inside, and no Inkscape.
+
+        The two colours are the site's own paper and accent, and
+        assets/landin_icon.py recolours them for every other variant.
+        Change one here and check.py says which other place disagrees.  -->
+
+  <rect class="plate" x="0" y="0" width="256" height="256" rx="56"
+        fill="#f7f6f2"/>
+  <path class="mark" fill="#a03526"
+        d="M 74.236 106.046 L 41.383 106.046 L 41.383 88.733 L 105.942 88.733
+           L 60.886 167.371 L 38.358 167.371 Z M 126.279 127.948
+           Q 126.279 133.163 127.218 137.439 Q 128.156 141.715 129.825 144.844
+           Q 131.598 147.973 133.997 149.746 Q 136.396 151.414 139.42 151.414
+           Q 142.341 151.414 144.739 149.746 Q 147.242 147.973 148.911 144.844
+           Q 150.58 141.715 151.519 137.439 Q 152.457 133.163 152.457 127.948
+           Q 152.457 122.837 151.519 118.561 Q 150.58 114.181 148.911 111.156
+           Q 147.242 108.028 144.739 106.359 Q 142.341 104.586 139.42 104.586
+           Q 136.396 104.586 133.997 106.359 Q 131.598 108.028 129.825 111.156
+           Q 128.156 114.181 127.218 118.561 Q 126.279 122.837 126.279 127.948
+           Z M 106.046 127.948 Q 106.046 118.561 108.445 110.948
+           Q 110.948 103.23 115.328 97.807 Q 119.813 92.383 125.862 89.463
+           Q 132.015 86.438 139.42 86.438 Q 146.721 86.438 152.874 89.463
+           Q 159.028 92.383 163.408 97.807 Q 167.789 103.23 170.187 110.948
+           Q 172.69 118.561 172.69 127.948 Q 172.69 137.334 170.187 145.052
+           Q 167.789 152.666 163.408 158.194 Q 159.028 163.617 152.874 166.641
+           Q 146.721 169.562 139.42 169.562 Q 132.015 169.562 125.862 166.641
+           Q 119.813 163.617 115.328 158.194 Q 110.948 152.666 108.445 145.052
+           Q 106.046 137.334 106.046 127.948 Z M 197.2 106.046
+           L 185.727 106.046 L 185.727 88.733 L 217.642 88.733
+           L 217.642 167.371 L 197.2 167.371 Z"/>
+</svg>

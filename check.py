@@ -2191,6 +2191,97 @@ def basenames():
 _BASENAMES = None
 
 
+def check_icon(full_run):
+    """The mark wears the site's own colours, and only one file says which.
+
+    `assets/icon.svg` is the drawing, `assets/landin_icon.py` is every
+    rendering of it, and `docs/site/render_html.py` holds the stylesheet
+    those renderings have to match: a favicon in a red the page does not
+    use is not a smaller mistake than a wrong word, it is one nobody
+    notices.  Four values, held to the two `:root` blocks that define them
+    and to the drawing's own presentation attributes.
+    """
+    if not full_run:
+        return []
+
+    drawing = os.path.join(ROOT, "assets/icon.svg")
+    module = os.path.join(ROOT, "assets/landin_icon.py")
+    site = os.path.join(ROOT, "docs/site/render_html.py")
+    for path in (drawing, module, site):
+        if not os.path.exists(path):
+            return []
+
+    out = []
+    svg = io.open(drawing, encoding="utf-8").read()
+    code = io.open(module, encoding="utf-8").read()
+    css = io.open(site, encoding="utf-8").read()
+
+    #  The stylesheet's light values are the first :root, its dark ones the
+    #  forced [data-theme="dark"] block; the media-query copy repeats them
+    #  and is not read twice.
+    blocks = {
+        "light": re.search(r":root\{(.*?)\n\}", css, re.S),
+        "dark": re.search(r':root\[data-theme="dark"\]\{(.*?)\n\}',
+                          css, re.S),
+    }
+    theme = {}
+    for mode, found in blocks.items():
+        if not found:
+            out.append((site, 1, "the %s :root block cannot be read, so the "
+                                 "icon's colours cannot be checked" % mode))
+            continue
+        for name in ("bg", "accent"):
+            value = re.search(r"--%s:(#[0-9a-f]{6})" % name, found.group(1))
+            if value:
+                theme[(mode, name)] = value.group(1)
+
+    #  Each constant, the stylesheet variable it copies, and the name a
+    #  reader will look for when one of them moves.
+    for constant, key in (("PAPER", ("light", "bg")),
+                          ("INK", ("dark", "bg")),
+                          ("ACCENT", ("light", "accent")),
+                          ("ACCENT_DARK", ("dark", "accent"))):
+        found = re.search(r"^%s = \"(#[0-9a-f]{6})\"" % constant, code, re.M)
+        if not found:
+            out.append((module, 1, "%s is not a colour this check can read"
+                                   % constant))
+            continue
+        if key in theme and found.group(1) != theme[key]:
+            out.append((module, 1,
+                        "%s is %s but --%s in the %s stylesheet is %s"
+                        % (constant, found.group(1), key[1], key[0],
+                           theme[key])))
+
+    #  The drawing carries the light pair as presentation attributes so it
+    #  renders alone; those two are the same two.
+    for element, constant in (("plate", "PAPER"), ("mark", "ACCENT")):
+        found = re.search(r'class="%s"[^>]*?\sfill="(#[0-9a-f]{6})"'
+                          % element, svg, re.S)
+        wanted = re.search(r'^%s = "(#[0-9a-f]{6})"' % constant, code, re.M)
+        if not found:
+            out.append((drawing, 1,
+                        "the %s has no fill for landin_icon.py to read"
+                        % element))
+        elif wanted and found.group(1) != wanted.group(1):
+            out.append((drawing, 1, "the %s is %s but %s is %s"
+                                    % (element, found.group(1), constant,
+                                       wanted.group(1))))
+
+    #  A drawing whose text was never converted is a drawing that renders
+    #  in whatever face the host happens to have, which on the Linux gate
+    #  is not the one it was drawn in.
+    drawn = re.sub(r"<!--.*?-->", "", svg, flags=re.S)
+    if re.search(r"<text\b|shape-inside|font-family", drawn):
+        out.append((drawing, 1, "the mark is still text: convert it to a "
+                                "path so it does not need a font"))
+
+    #  The pages have no external references, so the icon travels in them.
+    if "ICON_LINKS" not in css or 'rel="icon"' not in css:
+        out.append((site, 1, "the pages carry no favicon"))
+
+    return out
+
+
 def check_comment_forms(full_run):
     """The tour shows every comment form the grammar spells.
 
@@ -2390,6 +2481,7 @@ def main(argv):
     extra += check_precedence_table(full_run)
     extra += check_refused_constructs(full_run)
     extra += check_comment_forms(full_run)
+    extra += check_icon(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
     for path, line, why in sorted(set(extra)):
