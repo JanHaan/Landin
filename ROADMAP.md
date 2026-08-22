@@ -95,6 +95,47 @@ item names a successor roadmap and cannot satisfy a still-normative in-scope
 capability. Historical finding sections and `tour.md`'s WHAT WAS TRIED AND
 DROPPED section retain rejected wording.
 
+## The specification documents
+
+Recorded here because it changed the authority order, and because the reason
+it was needed is a fact about the project rather than about a document.
+
+The tour was a tutorial that had been declared a specification. It teaches
+by example, and a tutorial omits what a reader supplies for themselves, so
+three roadmap items in a row found it silent on rules their implementation
+could not proceed without: three constructs added at R1.50, eight at R1.60.
+Each was written into a section titled "THE GRAMMAR OF THE ENABLED KERNEL",
+which says of itself that it covers the constructs the compiler enables
+today -- so permanent rules were accumulating in a container defined as
+temporary, and that section had doubled in two items.
+
+So the documents split. `spec.md` is normative and holds the grammar of the
+enabled kernel, which shrinks as the language grows, plus the rules the tour
+left unsaid, which do not, plus the register below. `tour.md` explains,
+[0010]-[1730]. No construct was renumbered and no id is defined in both.
+
+Seven of the eighteen rules added at R1.50 and R1.60 were decisions rather
+than transcriptions, and in the tour's voice a decision is indistinguishable
+from a rule that was always there -- which is how [1050], "the condition,
+which must be bool", was missed twice by a reader who assumed the surrounding
+text was settled. `spec.md` ends with a register naming each: what the tour
+said before, what was chosen, the alternative a competent reader could have
+chosen, and the fixture that pins it. Writing it found three of the seven
+unpinned, and those fixtures now exist. A decision leaves the register when
+something closes it: a program that cannot be written, a target that cannot
+be reached, or a paragraph that turns out to have settled it.
+
+All five documents are Markdown, because the `.txt` form could not tell a
+rule from an example. A heading is a definition and a fenced block is an
+example, and neither can be mistaken for the other; `AGENTS.md` records the
+invariants the form carries.
+
+The rule going forward, so this does not recur: a construct is written only
+where two competent implementers reading the specification would disagree. A
+forced consequence gets a comment in the code citing what forces it, and a
+decision gets a register entry. Half of what was added at R1.50 and R1.60 was
+a forced consequence and should have been the former.
+
 ## Successor roadmaps
 
 - **Scale and self-hosting:** stable separate compilation and interface files,
@@ -698,6 +739,54 @@ Depends on: R1.60, R0.60
 Introduce the smallest evolvable target-neutral IR, preserving source
 locations, lexical scopes, declared types and stable value identity. Verify
 control flow, value definitions, types and call shapes before lowering.
+
+`Landin.IR` is landed: basic blocks with an explicit terminator, and the
+shape is forced rather than chosen. A structured IR would be `Landin.Syntax`
+plus `Landin.Checking` under new names and R1.80 would still have to
+linearise it, and "exactly one terminator, in last position" is a property a
+tree cannot violate and therefore cannot test -- which would make this item's
+own exit evidence vacuous. Blocks are forced by the kernel and not deferred
+to loops: [0410] makes `and` and `or` short-circuit, observably, so the
+logical words are control flow and `Opcode` has no `Logical_And` and no
+`Logical_Or`. No phi and no block parameter, and that is a fact about the
+kernel: [1840] says a name declared in one arm is not visible in another and
+[1080]'s branch-as-an-expression is not enabled, so nothing crosses a merge.
+Operands are block-local, which makes the value-definition rule one
+comparison instead of a dominance relation and is the same invariant
+`Landin.Syntax` states as `Slot'Result < Id`. A value's identity is the
+position of the instruction that defines it, so "exactly one definition" is
+the shape of the table rather than a rule to verify. The builder's
+preconditions are structural only -- a wrong-arity call and a mid-block
+terminator are buildable on purpose, because a precondition there would make
+malformed IR unconstructible and so untestable.
+
+Still open in this item: the lowering pass, the verifier, and the textual
+dump. Nothing calls `Landin.IR` yet.
+
+Settled while designing it, and recorded because it changes what the verifier
+is: malformed IR cannot be caused by a source program, since the frontend
+refuses every ill-formed program before lowering runs. So a verifier failure
+is a `Landin.Compiler_Defect` and this item assigns no diagnostic code at
+all; `L0400`-`L0499` stays unassigned. `landin.ads` states the rule the
+argument rests on: "A source program must never be able to raise it: an
+ill-formed program is data, not an exception."
+
+Two language questions surfaced here and belong to R1.80, which is the first
+item that has to emit an instruction for either. Neither is answered yet and
+neither may be answered by guessing.
+
+- **[0320] does not say what a shift by a negative amount does.** It says
+  shifts fill with zeros beyond the width for any amount and that a signed
+  `>>` keeps its sign, and [1890] makes the amount the left operand's type --
+  so `f: (x: i8) -> (r: i8) = x << -1 end f` is accepted today and has no
+  defined meaning. x86-64 masks a shift count and AArch64 masks it
+  differently, so the answer cannot be left to the machine.
+- **[0290] does not say what division by zero does.** It says integer
+  division truncates toward zero and the remainder takes the sign of the
+  dividend, and nothing else. R1.80 must emit an `IDIV` whose behaviour on a
+  zero divisor -- a hardware fault, a trap call, or a defined value -- no
+  sentence of the specification decides. The module-value fold declines to
+  fold it for the same reason, which is recorded under R1.60.
 
 Exit evidence: malformed-IR tests are rejected; round-trip textual dumps are
 canonical test artifacts but not stable public interfaces.
