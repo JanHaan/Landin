@@ -7,8 +7,10 @@
 --  serialised protocol now.
 --
 --  A compilation also owns everything the stages build that outlives the
---  stage that built it, and R1.50 is where that became four things rather
---  than one.  Run takes Item as an `in` parameter of a limited interface,
+--  stage that built it, and R1.50 is where that became more than one: the
+--  interned names, the declaration sites, the trees and what every name in
+--  them means, with R1.60 adding what type everything has.  Run takes Item
+--  as an `in` parameter of a limited interface,
 --  so a stage cannot keep anything in itself; a Stage_Reference is a
 --  library-level access type, so a stage object cannot be a local of one
 --  compilation either.  Between them those two facts say where a tree can

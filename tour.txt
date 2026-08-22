@@ -2206,6 +2206,13 @@ expression  ::= logical_and ("or" logical_and)*
 --       There is no compile-time execution in this language, so a
 --       call is not a value the compiler holds, and [1830] refuses
 --       it as the construct it is rather than as a type error.
+--       An operator in a module value is folded, and a fold no type
+--       holds is refused. [0300]'s trap has nowhere to happen here:
+--       [1460] says nothing runs before the entry point, so a module
+--       value that overflows has no moment in which to trap and no
+--       value to stand for it. Inside a body the same expression
+--       traps [0300] and is not this, which is the one place the two
+--       readings of one sum come apart.
 --       [0130] makes a module a set, so one module value may name
 --       another written below it. A chain of them that comes back to
 --       where it began names nothing at all: no member of it is

@@ -60,6 +60,22 @@ package body Landin.Types is
       return Value <= Bound + 1;
    end Fits;
 
+   -------------
+   --  Holds  --
+   -------------
+
+   function Holds
+     (Value : Folded;
+      Item  : Integer_Name;
+      Facts : Landin.Targets.Target_Facts) return Boolean is
+   begin
+      if Value < 0 then
+         return Fits (Magnitude (-Value), Item, Facts, Negated => True);
+      end if;
+
+      return Fits (Magnitude (Value), Item, Facts, Negated => False);
+   end Holds;
+
    ----------------
    --  Evaluate  --
    ----------------

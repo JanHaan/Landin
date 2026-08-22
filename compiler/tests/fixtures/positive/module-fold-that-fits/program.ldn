@@ -1,0 +1,4 @@
+sum: u8 = 200 + 55
+product: i32 = 6 * 7
+borrowed: u32 = sum_base + sum_base
+sum_base: u32 = 9

@@ -169,6 +169,27 @@ package Landin.Types is
       Negated : Boolean) return Boolean
      with Pre => Width (Item, Facts) <= Landin.Targets.Bit_Width (Widest);
 
+   --  A value a module-level fold can hold, signed and symmetric about
+   --  zero at the width of the widest enabled type.  [1940] needs it and
+   --  Magnitude cannot serve: `x: i32 = 1 - 2` is negative, and Magnitude
+   --  is unsigned because a *literal* never is.
+   --
+   --  The bound is written out for Magnitude's reason.  It comes from u64,
+   --  the widest type the kernel enables, and from the negation of it, so
+   --  a host that cannot represent it fails to build rather than silently
+   --  truncating.  A host width leaking in would be Long_Long_Integer.
+   type Folded is range -(2 ** 64 - 1) .. 2 ** 64 - 1;
+
+   --  Whether a folded value is one of that type's, which is [1940]'s
+   --  refusal made answerable.  Separate from Fits because a fold has a
+   --  sign of its own rather than a unary minus standing over it.
+   function Holds
+     (Value : Folded;
+      Item  : Integer_Name;
+      Facts : Landin.Targets.Target_Facts) return Boolean
+     with Pre => Width (Item, Facts)
+                 <= Landin.Targets.Bit_Width (Widest);
+
    --  The value of an integer literal's digits [1770], separators and all
    --  [0220].  Overflowed is an answer and not an exception because it is
    --  foreseeable: 18446744073709551616 is something a program can be
