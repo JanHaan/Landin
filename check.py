@@ -2223,6 +2223,46 @@ def basenames():
 _BASENAMES = None
 
 
+def check_borrowed_icons(full_run):
+    """The borrowed icons are named, explained, and only used if defined.
+
+    `assets/icons.py` holds shapes copied from Lucide and sourcehut, and
+    the reason each one is there.  Two things can drift: an icon added to
+    the set without a word about what it is for, and a consumer asking
+    for one that was never defined.  The second would stop a render --
+    icons.py refuses an unknown name -- so this catches the first, and
+    catches the second before a render has to.
+    """
+    if not full_run:
+        return []
+
+    module = os.path.join(ROOT, "assets/icons.py")
+    site = os.path.join(ROOT, "docs/site/render_html.py")
+    for path in (module, site):
+        if not os.path.exists(path):
+            return []
+
+    text = io.open(module, encoding="utf-8").read()
+    defined = set(re.findall(r'^    "([a-z-]+)": \(', text, re.M))
+    explained = set(re.findall(r'^    "([a-z-]+)": "', text, re.M))
+    out = []
+    for name in sorted(defined - explained):
+        out.append(("assets/icons.py", 1,
+                    "the %s icon is drawn and not explained; give it a "
+                    "line in WHY" % name))
+    for name in sorted(explained - defined):
+        out.append(("assets/icons.py", 1,
+                    "WHY names %s, which is not in ICONS" % name))
+
+    used = set(re.findall(r'icons\.use\("([a-z-]+)"', 
+                          io.open(site, encoding="utf-8").read()))
+    for name in sorted(used - defined):
+        out.append(("docs/site/render_html.py", 1,
+                    "asks for the %s icon, which assets/icons.py does not "
+                    "define" % name))
+    return out
+
+
 def check_icon(full_run):
     """The mark wears the site's own colours, and only one file says which.
 
@@ -2618,6 +2658,7 @@ def main(argv):
     extra += check_unfenced_code(full_run)
     extra += check_table_shape(full_run)
     extra += check_icon(full_run)
+    extra += check_borrowed_icons(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
     for path, line, why in sorted(set(extra)):

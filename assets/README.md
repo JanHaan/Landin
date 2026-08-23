@@ -1,6 +1,6 @@
 # The mark
 
-One drawing, several renderings. `icon.svg` holds the geometry and the
+One drawing, several renderings, and a few borrowed ones beside it. `icon.svg` holds the geometry and the
 site's own two colours, and everything that shows a Landin mark is a
 rendering of that file rather than another copy of it that drifts away —
 the same arrangement as [`highlight/`](../highlight/README.md), for the
@@ -9,6 +9,7 @@ same reason.
 | artifact | is | state |
 |---|---|---|
 | `icon.svg` | the drawing: a plate, the mark, and the light palette as presentation attributes | here |
+| `icons.py` | the small icons around the mark: six from Lucide (ISC) and sourcehut's ring (CC0), copied in as shapes with their notices | here |
 | `landin_icon.py` | every rendering of it — the variants, the inline fragment, the `data:` URL, and the raster: a scanline fill and a PNG encoder, standard library only | here |
 | `docs/site/render_html.py` | the reading copies: the favicon, Safari's pinned tab, the top bar, the front page, the social card | imports the module |
 | `og.png`, `apple-touch-icon.png` | rastered by `card()` at render time, never committed | generated |
