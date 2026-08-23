@@ -799,7 +799,36 @@ block: the value, or D10's zero where there is none, and a `Leave` carrying
 it. Nothing about it is special-cased -- it is `Lower_Expression` over the
 same machinery a body uses, which is what keeps the logical case free.
 
-Still open in this item: the verifier and the textual dump.
+The verifier has landed with it. `Landin.IR.Verifier` is a child of the IR,
+because two of its rules read the private part: an item's four runs and a
+call's operand run have to partition their vectors, and no public function
+can see a run. Those two run first, since a wrong base makes `Nth_Value`
+raise before any later rule could speak. `Landin.Stages.Lowering` verifies
+every Unit it builds, in every build mode, so all 58 positive fixtures are
+verified by the fixture suite rather than by a probe.
+
+What it does not check is as deliberate as what it does, and the package
+header says which is which. Nothing whose violation the table's shape
+already forbids -- "every value has exactly one definition" is what a
+`Value_Id` *is*, and a test for it could not fail. Nothing that belongs to
+someone else -- whether a `Number` fits its type needs a width and a width
+is `Landin.Targets`'; whether a `Scope_Id` names a real scope is R1.50's and
+asking again would be the second authority the IR's header refuses.
+
+One rule was written and then dropped, which is worth recording because it
+was this item's own reasoning that produced it. `Datum_Has_Control_Flow`
+followed from the folding plan above; when that plan was reversed the rule
+became a verifier that refuses what the lowering correctly builds, and it
+would have raised `Compiler_Defect` on `k: bool = true and false`. That is
+the shape of mistake this design is most exposed to: because a failure is a
+defect and not a diagnostic, a *wrong* rule is a crash on a legal program
+rather than a red test.
+
+`Landin.Tests.Verifier_Suite` builds fifteen malformed shapes the builder
+accepts and asserts the exact fault for each. All fifteen were run against a
+verifier stubbed to find nothing and all fifteen failed there.
+
+Still open in this item: the textual dump.
 
 Two defects in `landin-ir.adb`, found by designing the verifier and fixed
 here. Both corrupted a Unit silently in a release build, and neither could

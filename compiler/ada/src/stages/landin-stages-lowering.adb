@@ -1,5 +1,6 @@
 with Landin.Checking;
 with Landin.IR;
+with Landin.IR.Verifier;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -945,6 +946,13 @@ package body Landin.Stages.Lowering is
             end loop;
          end;
       end loop;
+
+      --  Every Unit this stage builds, in every build mode.  A failure
+      --  is a Landin.Compiler_Defect and never a diagnostic: the
+      --  frontend refused every ill-formed program and this stage
+      --  refused to run on a refused one, so nothing a program can say
+      --  reaches here.
+      Landin.IR.Verifier.Verify (Unit.all);
 
       Outcome := Continue;
    end Run;
