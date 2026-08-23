@@ -20,6 +20,7 @@ with Landin.Tests.IR_Suite;
 with Landin.Tests.Lexer_Suite;
 with Landin.Tests.Parser_Suite;
 with Landin.Tests.Platform_Suite;
+with Landin.Tests.Resolution_Suite;
 with Landin.Tests.Source_Suite;
 with Landin.Tests.Stages_Suite;
 with Landin.Tests.Targets_Suite;
@@ -54,6 +55,7 @@ procedure Landin_Tests is
       "ir               ",
       "parser           ",
       "platform         ",
+      "resolution       ",
       "source           ",
       "stages           ",
       "targets          "];
@@ -89,6 +91,7 @@ begin
    Landin.Tests.Lexer_Suite.Register (Cases);
    Landin.Tests.Parser_Suite.Register (Cases);
    Landin.Tests.Platform_Suite.Register (Cases);
+   Landin.Tests.Resolution_Suite.Register (Cases);
    Landin.Tests.Source_Suite.Register (Cases);
    Landin.Tests.Stages_Suite.Register (Cases);
    Landin.Tests.Targets_Suite.Register (Cases);

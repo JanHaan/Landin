@@ -44,6 +44,7 @@ package body Landin.Resolution is
       --  a reference until something says so, which is the third answer
       --  Verdict already gives without storing it.
       Into.Bound.Append (No_Declaration, Ada.Containers.Count_Type (Next));
+      Into.Opened.Append (No_Scope, Ada.Containers.Count_Type (Next));
 
       --  [1740] gives the compilation one scope and this is it.
       Into.Scopes.Append (Scope'(Sort => Program, Enclosing => No_Scope));
@@ -242,6 +243,22 @@ package body Landin.Resolution is
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Declaration_Id
      is (Of_Table.Bound.Element (Slot (Of_Table, Of_Tree, Node)));
+
+   function Scope_At
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Scope_Id
+     is (Of_Table.Opened.Element (Slot (Of_Table, Of_Tree, Node)));
+
+   procedure Record_Scope
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Opened  : Scope_Id)
+   is
+   begin
+      Into.Opened.Replace_Element (Slot (Into, Of_Tree, Node), Opened);
+   end Record_Scope;
 
    procedure Bind
      (Into    : in out Table;

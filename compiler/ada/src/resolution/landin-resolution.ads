@@ -331,6 +331,43 @@ package Landin.Resolution is
                   and then Verdict_Of (Of_Table, Of_Tree, Node) = Bound,
           Post => Contains (Of_Table, Bound_To'Result);
 
+   --  Which scope a node opened, or No_Scope for the nodes that open none
+   --  -- which is nearly all of them.  [1840] gives the kernel three sorts
+   --  of scope and only four kinds of node open one: a function's
+   --  signature and its body, an arm, and an `else`.
+   --
+   --  It is here and not worked out again by a later stage, and that is
+   --  the point of it.  R1.70's lowering has to give every block a scope,
+   --  and Landin.IR's header says why it may not derive one: "a scope tree
+   --  here would be a second authority on a question R1.50 answered once".
+   --  Rebuilding it is also the easy thing to get quietly wrong -- an
+   --  arm's blocks landing in the function's body scope reads correctly
+   --  and breaks [1840]'s sibling rule, which is what
+   --  `positive/arm-scopes-are-siblings` exists to catch.  R4.60 wants the
+   --  same answer, to say which instructions a scope covers.
+   function Scope_At
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Scope_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   --  Says a node opened a scope.  Once, for Bind's reason: a node that
+   --  opened two scopes is a resolver that walked it twice.
+   procedure Record_Scope
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Opened  : Scope_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Opened)
+                  and then Opened /= Program_Scope
+                  and then Scope_At (Into, Of_Tree, Node) = No_Scope,
+          Post => Scope_At (Into, Of_Tree, Node) = Opened;
+
    --  Says what one reference means.  Once: a second Bind on the same node
    --  is a contract failure, because a name that resolved twice is a
    --  resolver that walked a node twice.
@@ -385,6 +422,11 @@ private
    package Binding_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Declaration_Id);
 
+   --  The same run per source that Bound uses, so one addition answers
+   --  both and no second index exists to disagree.
+   package Opened_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Scope_Id);
+
    --  Lookup is hashed and never iterated.  Landin.Source.Names publishes
    --  Hash for exactly this and states the other half of the rule: report
    --  order is never identity order.  Every report this stage's caller
@@ -409,6 +451,7 @@ private
       Scopes       : Scope_Vectors.Vector;
       Runs         : Run_Vectors.Vector;
       Bound        : Binding_Vectors.Vector;
+      Opened       : Opened_Vectors.Vector;
       Index        : Key_Maps.Map;
    end record;
 
