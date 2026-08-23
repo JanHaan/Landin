@@ -322,15 +322,9 @@ and [1350] a type parameter on a type; a small vector is the
 ordinary shape that wants both. [Z2]
 Restricted to a T with a zero image, and that restriction is the
 honest form of [Z8]: the inline slots have to hold something and
-
-### [0540] gives no honest value for a T without one
-
-gives no honest value for a T without one. So
+[0540] gives no honest value for a T without one. So
 small(ptr node, 4) does not exist until a raw-storage type does
-
-### [0510] 
-
-.
+[0510].
 ```landin
 public small: type (T: type is zeroable, fixed N: u32) = struct
     len: usize
@@ -353,10 +347,7 @@ bindings being read, and whether a binding aliases the payload or
 copies it is nowhere stated. For a [N]T payload the difference is
 a whole array copy. The mechanism to reuse is obvious, since in,
 inout and sink are already the parameter conventions, which is
-
-### [1710] 's "an existing mechanism expresses it" exactly
-
-'s "an existing mechanism expresses it" exactly. [Z7]
+[1710]'s "an existing mechanism expresses it" exactly. [Z7]
 ```landin
 public push_small: (T: type is zeroable, fixed N: u32, A: type is allocator,
                     inout s: small(T, N), inout a: A, escaping v: T)
@@ -627,10 +618,7 @@ public node_id: type = distinct u32
 
 ```
 A variant case with no payload, written bare. It is an atom, and
-
-### [1700] holds that atoms are the same idea wherever they appear
-
-holds that atoms are the same idea wherever they appear, so
+[1700] holds that atoms are the same idea wherever they appear, so
 this ought to need no decision — but every variant in the tour
 carries a payload, so the spelling has never appeared. [Z14]
 ```landin

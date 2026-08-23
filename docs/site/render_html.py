@@ -43,6 +43,7 @@ HERE = Path(__file__).resolve().parent
 SITE = HERE / "site"
 
 VERSION_LINE = "specification 0.1.0"
+REPO = "https://git.sr.ht/~sinnfrei/landin"
 
 DOCS = [
     dict(key="spec", src="spec.md", out="spec.html", kind="document",
@@ -801,16 +802,26 @@ JS = """
     sections.forEach(function(s){ io.observe(s); });
   }
 
-  /* filter */
+  /* filter
+
+     What a page is made of differs: the tour and the specification are
+     constructs, a prototype is its findings, the front page is cards, and
+     a guide is only its sections.  The filter takes the first of those it
+     actually finds, so the box does something on every page rather than
+     on two of them. */
   var find=document.getElementById('find'), count=document.getElementById('found');
-  document.querySelectorAll('.item, .finding').forEach(function(u){
-    u.dataset.text=(u.textContent||'').toLowerCase();
-  });
+  var UNITS=['.item, .finding', '.route, .card, figure.shown', 'main section'];
   function scope(){ return document.querySelector('.doc.on') || document; }
+  function pick(here){
+    for(var i=0;i<UNITS.length;i++){
+      var l=[].slice.call(here.querySelectorAll(UNITS[i]));
+      if(l.length) return {sel:UNITS[i], list:l};
+    }
+    return {sel:'', list:[]};
+  }
   function filter(){
-    var here=scope();
-    var units=[].slice.call(here.querySelectorAll('.item, .finding'));
-    var secs=[].slice.call(here.querySelectorAll('section'));
+    var here=scope(), chosen=pick(here), units=chosen.list;
+    var secs=[].slice.call(here.querySelectorAll('main section'));
     var q=find.value.trim().toLowerCase();
     if(!q){
       units.forEach(function(u){ u.classList.remove('hide'); });
@@ -819,13 +830,20 @@ JS = """
     }
     var hits=0;
     units.forEach(function(u){
+      if(!u.dataset.text) u.dataset.text=(u.textContent||'').toLowerCase();
       var ok=u.dataset.text.indexOf(q)>=0 || (u.id||'').indexOf(q)===0;
       u.classList.toggle('hide',!ok); if(ok) hits++;
     });
-    secs.forEach(function(s){
-      var any=s.querySelector('.item:not(.hide), .finding:not(.hide)');
-      s.classList.toggle('hide', !any && s.querySelector('.item, .finding'));
-    });
+    /*  A section that held units and now shows none goes too -- unless the
+        sections are themselves what is being filtered. */
+    if(chosen.sel && chosen.sel.indexOf('section')<0){
+      var vis=chosen.sel.split(',').map(function(x){
+        return x.trim()+':not(.hide)'; }).join(',');
+      secs.forEach(function(s){
+        s.classList.toggle('hide', !s.querySelector(vis)
+                                   && !!s.querySelector(chosen.sel));
+      });
+    }
     count.textContent=hits+(hits===1?' match':' matches');
   }
   window.landinFilter=filter;
@@ -1026,7 +1044,8 @@ def build_artifact(source, out_path):
             f'<h1>{esc(front["title"])}</h1>{hero}</div>\n{body}\n'
             f'<footer>Generated from <code>{esc(d["src"])}</code> by '
             f'<code>render_html.py</code>. The text file is the specification; '
-            f'this page is a reading of it.</footer>\n</div>')
+            f'this page is a reading of it. The repository is at '
+            f'<a href="{REPO}">git.sr.ht/~sinnfrei/landin</a>.</footer>\n</div>')
 
     out_path.write_text(artifact_page("\n".join(panels), artifact_nav(DOCS, groups)))
     return out_path
@@ -1048,8 +1067,18 @@ def slug(title):
 
 
 def listing(code_html, cont=False):
+    return listing_of(f"<pre>{code_html}</pre>", cont)
+
+
+def listing_of(pre_html, cont=False):
+    """The frame around a listing whose <pre> is already built.
+
+    A <pre> may not contain a <pre>, and render_sample returns one of its
+    own; wrapping that in another produced markup no parser is obliged to
+    read the same way.
+    """
     klass = "listing cont" if cont else "listing"
-    return (f'<div class="{klass}"><pre>{code_html}</pre>'
+    return (f'<div class="{klass}">{pre_html}'
             f'<button class="copy" type="button">copy</button></div>')
 
 
@@ -1366,6 +1395,12 @@ GUIDE_CSS = """
   margin:18px 0 2px}
 .cards h3.group:first-child{margin-top:0}
 
+header.bar .src{
+  font-size:.8rem; color:var(--ink-soft); text-decoration:none;
+  padding:.2rem .45rem; border:1px solid var(--rule); border-radius:5px;
+}
+header.bar .src:hover{color:var(--accent); border-color:var(--accent-soft)}
+
 /* ---- the front page ---- */
 .hero p.status{
   margin-top:1rem; padding-left:.9rem; border-left:2px solid var(--accent-soft);
@@ -1561,6 +1596,7 @@ def parse_guide(text):
 
 def render_guide_blocks(blocks, links, targets, hl):
     out = []
+    open_item = False
     for kind, payload in blocks:
         if kind == "para":
             out.append(f"<p>{inline(payload[0], links, targets)}</p>")
@@ -1569,9 +1605,22 @@ def render_guide_blocks(blocks, links, targets, hl):
             #  id alone: 872 citations outside the documents link to
             #  `tour.html#0190`, and slugging the whole title would break
             #  every one of them.
+            #
+            #  The id sits on a wrapper rather than on the heading, and the
+            #  prose and code that follow sit inside it, because a construct
+            #  is the thing a reader filters for and the thing a citation
+            #  quotes.  With the id on a bare <h3> the filter had nothing to
+            #  hide and the hover preview had no paragraph to read.
             found = re.match(r"^\[(\d{4})\]", payload)
-            out.append(f'<h3 class="sub" id="{found.group(1) if found else slug(payload)}">'
-                       f"{inline(payload, links, targets)}</h3>")
+            if found:
+                if open_item:
+                    out.append("</div>")
+                out.append(f'<div class="item" id="{found.group(1)}">')
+                open_item = True
+                out.append(f'<h3 class="sub">{inline(payload, links, targets)}</h3>')
+            else:
+                out.append(f'<h3 class="sub" id="{slug(payload)}">'
+                           f"{inline(payload, links, targets)}</h3>")
         elif kind == "quote":
             out.append(f"<blockquote>{inline(payload[0], links, targets)}"
                        "</blockquote>")
@@ -1586,12 +1635,14 @@ def render_guide_blocks(blocks, links, targets, hl):
         elif kind == "code":
             language, body = payload
             if language in ("ldn", "landin"):
-                out.append(listing(render_sample(body, hl, links)))
+                out.append(listing_of(render_sample(body, hl, links)))
             else:
                 text = "\n".join(body)
                 out.append(f'<div class="listing"><pre>{esc(text)}</pre></div>')
         else:
             raise SystemExit(f"render_html: unknown guide block {kind!r}")
+    if open_item:
+        out.append("</div>")
     return "\n".join(out)
 
 
@@ -1664,6 +1715,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False):
   <a class="brand" href="index.html">{landin_icon.inline("mark")}<span>Landin</span></a>
   <span class="where" id="where">{esc(kind)}</span>
   <span class="grow"></span>
+  <a class="src" href="{REPO}">source</a>
   <button id="menu" type="button" aria-label="sections">menu</button>
   <button id="theme" type="button" aria-label="light or dark">theme</button>
 </header>
@@ -1683,6 +1735,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False):
 Generated from <code>{esc(docname)}</code> by <code>render_html.py</code>.
 The text file is the specification; this page is a reading of it.
 Regenerate with <code>python3 render_html.py</code>.
+The repository is at <a href="{REPO}">git.sr.ht/~sinnfrei/landin</a>.
 </footer>
 </main>
 </div>
@@ -1799,19 +1852,23 @@ def index_page(docs, counts, intro, status, samples, symbols, total=0):
     #  Three ways in, because the documents answer different questions and
     #  a reader who starts in the wrong one finds it slow going.
     routes = [
-        ("tour.html", "I want to learn the language",
+        ("tour.html", "learn the language",
          "The tour teaches it in numbered constructs, from comments to "
          "runtime dispatch. Start at the top and read down."),
-        ("spec.html", "I want to know what is decided",
+        ("spec.html", "see what is decided",
          "The specification is normative: the grammar of the kernel the "
          "compiler accepts today, the rules the tour left unsaid, and why "
          "each decision went the way it did."),
-        ("handoff.html", "I want to understand the design",
+        ("handoff.html", "understand the design",
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
-        ("roadmap.html", "I want to know what is left",
+        ("roadmap.html", "see what is left",
          "The roadmap owns every open item, dependency and gate. It is the "
          "only place work is tracked."),
+        (REPO, "read the source",
+         "The repository: these documents, the Ada bootstrap compiler, the "
+         "fixtures, and the build. Everything on this site is generated "
+         "from it."),
     ]
     cards = "".join(
         f'<a class="route" href="{href}"><strong>{esc(head)}</strong>'
