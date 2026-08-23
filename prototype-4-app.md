@@ -1,4 +1,4 @@
-## LANDIN PROTOTYPE 4 — A HOSTED APPLICATION
+# Landin prototype 4 — a hosted application
 
 ```landin
 Current with specification 0.1.0. Its own findings W1-W7 are all

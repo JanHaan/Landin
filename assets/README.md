@@ -9,9 +9,10 @@ same reason.
 | artifact | is | state |
 |---|---|---|
 | `icon.svg` | the drawing: a plate, the mark, and the light palette as presentation attributes | here |
-| `landin_icon.py` | every rendering of it — the variants, the inline fragment, the `data:` URL; standard library only | here |
-| `docs/site/render_html.py` | the reading copies: the favicon, Safari's pinned tab, the top bar, the front page | imports the module |
-| an `apple-touch-icon`, a `.ico`, a README badge | a raster export away, when something needs one | not needed yet |
+| `landin_icon.py` | every rendering of it — the variants, the inline fragment, the `data:` URL, and the raster: a scanline fill and a PNG encoder, standard library only | here |
+| `docs/site/render_html.py` | the reading copies: the favicon, Safari's pinned tab, the top bar, the front page, the social card | imports the module |
+| `og.png`, `apple-touch-icon.png` | rastered by `card()` at render time, never committed | generated |
+| a `.ico`, a README badge | the same call at another size | not needed yet |
 
 The mark is `701` set in Futura Bold, converted to a path. As text it was
 Futura on a Mac and whatever the fallback chose on the Linux gate, which
