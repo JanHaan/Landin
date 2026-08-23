@@ -795,6 +795,34 @@ that only a precondition had refused.
 of its three cases was run against the unfixed body and each failed there,
 which is the only evidence that a regression test regresses.
 
+What a module value can be, surveyed against the compiler rather than
+guessed, because the lowering has to lower every one of them. Eight forms
+were run and all eight are accepted today. Six lower without argument: a
+comparison, `not`, a bitwise operator and a shift all have opcodes, and
+`x: u8 = 200 + 100 - 100` folds at `Folded` width and is a legal program
+whose intermediate never exists at run time -- a verifier that constant
+folded a datum in the instruction's own type would refuse it, which is a
+trap worth naming here.
+
+Two do not, and each needed something.
+
+- **`k: bool = true and false` has no opcode to lower to.** [0410] makes the
+  logical words short-circuit, so `Landin.IR` deliberately has no
+  `Logical_And` and no `Logical_Or` and lowers them to control flow -- and a
+  datum has no control flow, because [1460] says its body never runs. The
+  lowering therefore folds the logical level inside a datum, which is not a
+  decision but a consequence: [1940] already says a module value's operators
+  are folded, and [1940] admits no call, so a module value has no side
+  effect for a short circuit to protect. Folding needs the comparison level
+  under it, since `(1 < 2) and (3 < 4)` is the general case.
+- **`later: i32` has no value to describe.** Reading one was accepted too --
+  `r = later` compiles, and [1910] excludes module bindings from its walk by
+  name, so nothing catches it. Settled as D10: it holds zero, false for a
+  bool. The alternatives are recorded there.
+
+Neither was reachable from reading the source; both came out of running the
+eight forms through `refine`.
+
 Settled while designing it, and recorded because it changes what the verifier
 is: malformed IR cannot be caused by a source program, since the frontend
 refuses every ill-formed program before lowering runs. So a verifier failure
