@@ -76,6 +76,39 @@ procedure Landin_Tests is
    end Trimmed;
 
 begin
+   --  Recording writes the artefact and runs no case, so a run that
+   --  recorded can never be mistaken for a run that passed.  Chosen only
+   --  by an argument a human typed: no environment variable, and nothing
+   --  that rewrites a golden because it did not match.
+   if Ada.Command_Line.Argument_Count = 1
+     and then Ada.Command_Line.Argument (1) = "--record"
+   then
+      declare
+         Path  : constant String := "../tests/lowering.ir";
+         Wrote : Boolean;
+      begin
+         if not Ada.Directories.Exists (Marker) then
+            Text_IO.Put_Line
+              (Text_IO.Standard_Error,
+               "landin_tests --record must be run from compiler/ada");
+            Ada.Command_Line.Set_Exit_Status (2);
+            return;
+         end if;
+
+         Landin.Tests.Lowering_Suite.Record_Artefact (Path, Wrote);
+
+         if Wrote then
+            Text_IO.Put_Line ("wrote compiler/tests/lowering.ir");
+         else
+            Text_IO.Put_Line
+              (Text_IO.Standard_Error, "could not write " & Path);
+            Ada.Command_Line.Set_Exit_Status (1);
+         end if;
+      end;
+
+      return;
+   end if;
+
    if not Ada.Directories.Exists (Marker) then
       Text_IO.Put_Line
         (Text_IO.Standard_Error,

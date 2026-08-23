@@ -828,7 +828,43 @@ rather than a red test.
 accepts and asserts the exact fault for each. All fifteen were run against a
 verifier stubbed to find nothing and all fifteen failed there.
 
-Still open in this item: the textual dump.
+The textual dump has landed with it, and R1.70 is complete.
+`Landin.IR.Dump` renders a Unit as one line per item, slot, block and
+instruction; `compiler/tests/lowering.ir` is every positive fixture
+rendered, written by `./scripts/test.sh --record` and compared by the
+suite. 811 lines, longest line 78 columns.
+
+Three things about it are decisions rather than transcriptions, and each is
+argued in `landin-ir-dump.ads` rather than assumed.
+
+- **No origin is printed.** Every instruction carries one, and a byte offset
+  in a golden moves when a comment above it is edited, so every
+  documentation change would rewrite the artefact and the diff would stop
+  meaning anything. Measured: inserting one comment line changes 27 of the
+  28 lines of the *syntax* dump — which is right, because spans are what a
+  tree is — and none of this one. What R4.60 needs pinned is that an
+  instruction is attributed to the right token, and that is a case about one
+  program rather than a column in every line of a corpus-wide file.
+- **"Round trip" is read as regenerate and compare.** It cannot mean parse
+  back: `Landin.IR`'s header forecloses a reader, because one would be both
+  a second constructor of an IR and the first half of the serialised stage
+  protocol R0.60 refused to freeze. Whether that is what this item's exit
+  sentence meant is R1.90's to settle when it closes the corpus.
+- **Recording is a mode of the test program**, `--record`, which writes the
+  file and runs no case. `check.py` generates the other two artefacts
+  because it owns their sources; it owns nothing here, since producing this
+  one means running four compiler stages. The consequence is written into
+  `compiler/tests/README.md`: this is the one recorded artefact `check.py`
+  will not tell you is stale.
+
+Left open rather than answered: whether a Unit is target-independent.
+Nothing target-shaped is in the table, but *acceptance* is
+target-dependent, and no document says whether two targets could produce
+two Units for one accepted program. The artefact pins `linux-x86-64` in its
+banner rather than assuming the invariant; R2.10 is where it becomes real.
+
+Exit evidence: malformed-IR tests are rejected; round-trip textual dumps are
+canonical test artifacts but not stable public interfaces.
 
 Two defects in `landin-ir.adb`, found by designing the verifier and fixed
 here. Both corrupted a Unit silently in a release build, and neither could
@@ -941,9 +977,6 @@ folded and a fold no type holds is refused, and overflow was caught by it,
 but a zero divisor set the fold to *not known* and the refusal only fired on
 known-and-does-not-fit. A quotient that does not exist is a stronger case
 than a sum that does not fit, and it was the one getting through.
-
-Exit evidence: malformed-IR tests are rejected; round-trip textual dumps are
-canonical test artifacts but not stable public interfaces.
 
 ### R1.80 — Implement the minimal Linux x86-64 native path
 Status: planned
