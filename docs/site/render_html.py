@@ -312,7 +312,7 @@ header.bar button, header.bar .src{
   font:inherit; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
   color:var(--ink-soft); background:var(--panel); cursor:pointer;
   text-decoration:none; border:1px solid var(--rule); border-radius:5px;
-  padding:.3rem .55rem;
+  padding:.3rem .55rem; white-space:nowrap;
 }
 header.bar button:hover, header.bar .src:hover{
   color:var(--ink); border-color:var(--ink-faint);
@@ -530,7 +530,7 @@ nav.side a.sect .num{
     z-index:35; display:none;
   }
   nav.side.open{display:block}
-  #menu{display:inline-block}
+  #menu{display:inline-flex}
   main{padding:1.5rem 1.1rem 5rem}
 }
 @media print{
