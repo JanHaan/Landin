@@ -794,11 +794,12 @@ satisfied and nothing to notice. `Add_Argument` opens its own run now, and
 `Emit_Call` no longer takes a base at creation, which is the same sentence
 as the first two fixes. The case that pins it fails against the old body.
 
-Still open in this item: **a datum's value block**, the verifier, and the
-textual dump. A `Binding` gets its item -- a routine that reads one needs it
-for `Load_Datum` -- and not yet its block, so a datum currently has none.
-Closing it needs the logical fold described above and D10's zero, and both
-are decided; only the code is owed.
+A datum's value block has landed with it. A `Binding` gets its item and its
+block: the value, or D10's zero where there is none, and a `Leave` carrying
+it. Nothing about it is special-cased -- it is `Lower_Expression` over the
+same machinery a body uses, which is what keeps the logical case free.
+
+Still open in this item: the verifier and the textual dump.
 
 Two defects in `landin-ir.adb`, found by designing the verifier and fixed
 here. Both corrupted a Unit silently in a release build, and neither could
@@ -843,13 +844,22 @@ Two do not, and each needed something.
 
 - **`k: bool = true and false` has no opcode to lower to.** [0410] makes the
   logical words short-circuit, so `Landin.IR` deliberately has no
-  `Logical_And` and no `Logical_Or` and lowers them to control flow -- and a
-  datum has no control flow, because [1460] says its body never runs. The
-  lowering therefore folds the logical level inside a datum, which is not a
-  decision but a consequence: [1940] already says a module value's operators
-  are folded, and [1940] admits no call, so a module value has no side
-  effect for a short circuit to protect. Folding needs the comparison level
-  under it, since `(1 < 2) and (3 < 4)` is the general case.
+  `Logical_And` and no `Logical_Or`. This item first recorded that the
+  lowering would fold the logical level inside a datum. That was wrong, and
+  the correction is worth keeping rather than quietly replacing. Folding the
+  logical level needs the comparison level under it, and
+  `k: bool = (1 << 2) < 8 and true` is accepted -- measured, not supposed --
+  so it needs the bitwise and shift levels too, and those need a width. That
+  is a second constant folder beside the checker's, over the whole of
+  [1820], and two authorities on one question is what this compiler refuses
+  everywhere else: it is the argument `Landin.IR`'s header makes against
+  holding a scope tree, and the one D4 makes against two spellings of one
+  type. So a datum gets the blocks a body would, from the same
+  `Lower_Short_Circuit`, and no new evaluator exists to disagree with the
+  checker. What it costs is that R1.80 reads a datum's block instead of one
+  folded constant -- which it had to do regardless, because [1940]'s fold
+  stops at the arithmetic level and the header already said the bitwise and
+  shift levels arrive as instructions.
 - **`later: i32` has no value to describe.** Reading one was accepted too --
   `r = later` compiles, and [1910] excludes module bindings from its walk by
   name, so nothing catches it. Settled as D10: it holds zero, false for a

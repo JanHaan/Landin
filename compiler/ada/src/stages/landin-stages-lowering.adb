@@ -797,6 +797,59 @@ package body Landin.Stages.Lowering is
          Filling := IR.No_Item;
       end Lower_Routine;
 
+      ------------------------------------------------------------
+      --  [1940]: a module value
+      ------------------------------------------------------------
+
+      --  A datum's block describes its value.  [1460] says nothing runs
+      --  before the entry point, so this is not code and R1.80 reads it
+      --  rather than executing it.
+      procedure Lower_Datum (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      procedure Lower_Datum (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      is
+         Src : constant Landin.Source.Source_Id := Syn.Source_Of (Of_Tree);
+         Site : constant Landin.Provenance.Origin :=
+           Site_Of (Of_Tree, Node);
+         Id : constant Res.Declaration_Id := Declaration_At (Src, Node);
+         Held : constant Ty.Type_Kind :=
+           Landin.Checking.Type_Of (Types.all, Id);
+         Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree, Node);
+         Answer : IR.Value_Id;
+      begin
+         if Held not in Ty.Scalar_Name then
+            raise Landin.Compiler_Defect with
+              "a module binding reached the lowering with no scalar type";
+         end if;
+
+         Filling := IR.Item_For (Unit.all, Id);
+         Slots := No_Slots;
+
+         --  [1840]: a module value is read in the module scope, and
+         --  [1800]'s expression body is the only other thing that opens
+         --  none.  So the block carries the scope the resolver read it in.
+         Open (Fresh (Of_Tree, Node, Res.Program_Scope));
+
+         if Value = Syn.No_Node then
+            --  D10: a binding with no value holds zero, false for a bool.
+            if Held = Ty.Bool then
+               Answer :=
+                 IR.Emit_Truth (Unit.all, Filling, False, Site);
+            else
+               Answer :=
+                 IR.Emit_Number
+                   (Unit.all, Filling, Held, 0, False, Site);
+            end if;
+         else
+            Answer := Lower_Expression (Of_Tree, Value, Res.Program_Scope);
+         end if;
+
+         IR.Emit_Leave (Unit.all, Filling, Answer, Site);
+         IR.Leave_Block (Unit.all, Filling);
+         Current := IR.No_Block;
+         Filling := IR.No_Item;
+      end Lower_Datum;
+
    begin
       --  Nothing that was refused is lowered, and this stage says so
       --  itself rather than trusting the order it was queued in.  R1.70
@@ -878,11 +931,16 @@ package body Landin.Stages.Lowering is
                   Node : constant Syn.Node_Id :=
                     Syn.Nth_Declaration (Of_Tree.all, Which);
                begin
-                  if Syn.Kind (Of_Tree.all, Node)
-                     = Syn.Function_Declaration
-                  then
-                     Lower_Routine (Of_Tree.all, Node);
-                  end if;
+                  case Syn.Kind (Of_Tree.all, Node) is
+                     when Syn.Function_Declaration =>
+                        Lower_Routine (Of_Tree.all, Node);
+
+                     when Syn.Binding =>
+                        Lower_Datum (Of_Tree.all, Node);
+
+                     when others =>
+                        null;
+                  end case;
                end;
             end loop;
          end;
