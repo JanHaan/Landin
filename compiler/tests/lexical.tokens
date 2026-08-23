@@ -262,6 +262,32 @@ file positive/discard-of-a-value/program.ldn tokens 14
   28 29 2
   30 33 end
   34 35 f
+file positive/divisor-is-not-known/program.ldn tokens 25
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 x
+  5 6 :
+  7 10 u32
+  10 11 ,
+  12 13 y
+  13 14 :
+  15 18 u32
+  18 19 )
+  20 22 ->
+  23 24 (
+  24 25 r
+  25 26 :
+  27 30 u32
+  30 31 )
+  32 33 =
+  38 39 r
+  40 41 =
+  42 43 x
+  44 45 /
+  46 47 y
+  48 51 end
+  52 53 f
 file positive/function-end-unnamed/program.ldn tokens 13
   0 3 one
   3 4 :
@@ -609,6 +635,51 @@ file positive/local-shadows-a-parameter/program.ldn tokens 24
   49 50 x
   51 54 end
   55 56 f
+file positive/module-binding-with-no-value-reads-zero/program.ldn tokens 44
+  0 5 later
+  5 6 :
+  7 10 i32
+  11 14 mut
+  15 22 counter
+  22 23 :
+  24 27 u32
+  29 46 read_before_write
+  46 47 :
+  48 49 (
+  49 50 )
+  51 53 ->
+  54 55 (
+  55 56 r
+  56 57 :
+  58 61 i32
+  61 62 )
+  63 64 =
+  69 70 r
+  71 72 =
+  73 78 later
+  79 82 end
+  83 100 read_before_write
+  102 110 count_up
+  110 111 :
+  112 113 (
+  113 114 )
+  115 117 ->
+  118 119 (
+  119 120 r
+  120 121 :
+  122 125 u32
+  125 126 )
+  127 128 =
+  133 140 counter
+  141 142 =
+  143 150 counter
+  151 152 +
+  153 154 1
+  159 160 r
+  161 162 =
+  163 170 counter
+  171 174 end
+  175 183 count_up
 file positive/module-fold-that-fits/program.ldn tokens 26
   0 3 sum
   3 4 :
@@ -924,6 +995,37 @@ file positive/return-when/program.ldn tokens 27
   67 68 1
   69 72 end
   73 74 f
+file positive/shift-amount-is-not-known/program.ldn tokens 30
+  0 1 g
+  1 2 :
+  3 4 (
+  4 5 x
+  5 6 :
+  7 10 i32
+  10 11 ,
+  12 13 s
+  13 14 :
+  15 18 i32
+  18 19 )
+  20 22 ->
+  23 24 (
+  24 25 r
+  25 26 :
+  27 30 i32
+  30 31 )
+  32 33 =
+  38 39 r
+  40 41 =
+  42 43 x
+  44 46 <<
+  47 48 s
+  53 54 r
+  55 56 =
+  57 58 x
+  59 61 <<
+  62 64 40
+  65 68 end
+  69 70 g
 file positive/space-forms/program.ldn tokens 19
   0 1 f
   1 2 :
@@ -1247,6 +1349,28 @@ file negative/chained-comparison/program.ldn tokens 28
   49 50 <
   51 52 c
   53 56 end
+file negative/condition-is-not-believed/program.ldn tokens 21
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 10 (
+  10 11 r
+  11 12 :
+  13 16 u32
+  16 17 )
+  18 19 =
+  24 26 if
+  27 31 true
+  32 36 then
+  45 46 r
+  47 48 =
+  49 50 1
+  55 58 end
+  59 61 if
+  62 65 end
+  66 67 f
 file negative/convention-not-enabled/program.ldn tokens 14
   0 1 f
   1 2 :
@@ -1287,6 +1411,36 @@ file negative/discard-of-nothing/program.ldn tokens 24
   67 68 )
   69 72 end
   73 74 f
+file negative/divisor-is-zero/program.ldn tokens 7
+  0 8 quotient
+  8 9 :
+  10 13 u32
+  14 15 =
+  16 17 7
+  18 19 /
+  20 21 0
+file negative/divisor-is-zero-in-a-body/program.ldn tokens 21
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 x
+  5 6 :
+  7 10 u32
+  10 11 )
+  12 14 ->
+  15 16 (
+  16 17 r
+  17 18 :
+  19 22 u32
+  22 23 )
+  24 25 =
+  30 31 r
+  32 33 =
+  34 35 x
+  36 37 /
+  38 39 0
+  40 43 end
+  44 45 f
 file negative/duplicate-in-a-body/program.ldn tokens 19
   0 1 f
   1 2 :
@@ -1724,6 +1878,14 @@ file negative/read-before-it-is-assigned/program.ldn tokens 19
   43 48 later
   49 52 end
   53 54 f
+file negative/remainder-by-zero/program.ldn tokens 7
+  0 9 left_over
+  9 10 :
+  11 14 u32
+  15 16 =
+  17 18 7
+  19 20 %
+  21 22 0
 file negative/return-shares-a-parameter-name/program.ldn tokens 19
   0 1 f
   1 2 :
@@ -1777,6 +1939,60 @@ file negative/several-independent-errors/program.ldn tokens 16
   41 47 fourth
   47 48 :
   49 50 4
+file negative/shift-amount-is-negative/program.ldn tokens 8
+  0 7 shifted
+  7 8 :
+  9 12 i32
+  13 14 =
+  15 16 1
+  17 19 <<
+  20 21 -
+  21 22 1
+file negative/shift-amount-is-negative-in-a-body/program.ldn tokens 22
+  0 1 g
+  1 2 :
+  3 4 (
+  4 5 x
+  5 6 :
+  7 10 i16
+  10 11 )
+  12 14 ->
+  15 16 (
+  16 17 r
+  17 18 :
+  19 22 i16
+  22 23 )
+  24 25 =
+  30 31 r
+  32 33 =
+  34 35 x
+  36 38 >>
+  39 40 -
+  40 41 3
+  42 45 end
+  46 47 g
+file negative/shift-amount-takes-the-left-type/program.ldn tokens 21
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 x
+  5 6 :
+  7 9 u8
+  9 10 )
+  11 13 ->
+  14 15 (
+  15 16 r
+  16 17 :
+  18 20 u8
+  20 21 )
+  22 23 =
+  28 29 r
+  30 31 =
+  32 33 x
+  34 36 <<
+  37 40 300
+  41 44 end
+  45 46 f
 file negative/struct-not-enabled/program.ldn tokens 13
   0 5 point
   5 6 :
@@ -1801,3 +2017,29 @@ file negative/underscore-as-name/program.ldn tokens 5
   9 10 1
 file negative/unknown-byte/program.ldn refused no rule spells ';'
 file negative/upper-case-name/program.ldn refused no rule spells 'X'
+file negative/usize-is-not-u64/program.ldn tokens 25
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 a
+  5 6 :
+  7 10 u64
+  10 11 ,
+  12 13 b
+  13 14 :
+  15 20 usize
+  20 21 )
+  22 24 ->
+  25 26 (
+  26 27 r
+  27 28 :
+  29 32 u64
+  32 33 )
+  34 35 =
+  40 41 r
+  42 43 =
+  44 45 a
+  46 47 +
+  48 49 b
+  50 53 end
+  54 55 f

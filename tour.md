@@ -20,9 +20,13 @@ drift, and that is the numbering working rather than failing. Gaps of
 ten leave room. Sections carry titles and no numbers, because nothing
 cites a section. Refer to decisions by number.
 
-`tour.md` is the normative language specification. Everything still
-open, every implementation dependency and every disposition is owned by
-ROADMAP.md, not by a second list here.
+This file explains the language and does not decide it. `spec.md` is the
+normative document: it holds the grammar of the kernel the compiler
+enables today, the rules this file left unsaid, and the register of
+decisions taken while implementing them. Where the two could be read
+differently, `spec.md` decides. Everything still open, every
+implementation dependency and every disposition is owned by ROADMAP.md,
+not by a second list here.
 
 ---
 
@@ -2577,8 +2581,9 @@ no header parsing
 
 ## WHAT IS STILL OPEN
 
-ROADMAP.md, and not a second list here. This file remains the normative
-authority for language semantics; ROADMAP.md is the sole durable
+ROADMAP.md, and not a second list here. `spec.md` is the normative
+authority for language semantics and this file explains them; ROADMAP.md
+is the sole durable
 authority for open work, implementation dependencies, phase gates,
 dispositions and completion evidence. Every inherited item is traced to
 the construct, prototype finding or archived review section it came from.
