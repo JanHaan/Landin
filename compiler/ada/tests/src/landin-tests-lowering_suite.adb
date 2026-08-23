@@ -360,6 +360,102 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Call_Carries_Its_Arguments;
 
+   ------------------------------------------------------------------
+
+   procedure A_Module_Value_Becomes_A_Datum
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Value_Becomes_A_Datum
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      --  D10: the second holds zero, because [1460] leaves no moment at
+      --  module level in which anything could assign it.
+      Lower (Work, "limit: u32 = 4096" & LF & "later: i32" & LF, Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Item_Count (Unit), 2, "two items");
+         Landin.Testing.Check
+           (Item, IR.Kind_Of (Unit, 1) = IR.Datum
+                  and then IR.Kind_Of (Unit, 2) = IR.Datum,
+            "a module binding is a datum");
+
+         --  A value and a leave, both times: the block describes the
+         --  value and [1460] says it never runs.
+         Landin.Testing.Check_Equal
+           (Item, IR.Block_Count (Unit, 1), 1, "the datum has one block");
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 1), 2, "a number and a leave");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 1, 1) = IR.Number, "the value");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 1, 2) = IR.Leave, "and the leave");
+
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 2), 2,
+            "the valueless binding got a value too");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 2, 1) = IR.Number,
+            "D10's zero is a number like any other");
+
+         Check_Terminators (Item, Unit, "two datums");
+      end;
+   end A_Module_Value_Becomes_A_Datum;
+
+   ------------------------------------------------------------------
+
+   procedure A_Logical_Module_Value_Becomes_Blocks
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Logical_Module_Value_Becomes_Blocks
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      --  [1940] admits an operator of [1820] over literals, and [0410]
+      --  makes the logical words short-circuit, so a module value can
+      --  contain the one construct Landin.IR has no opcode for.  It gets
+      --  the same blocks a body would: the alternative was a second
+      --  constant folder beside the checker's, over the whole operator
+      --  set including the widths, and two authorities on one question is
+      --  what this compiler refuses everywhere else.
+      Lower (Work, "k: bool = true and false" & LF, Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Branches : Natural := 0;
+      begin
+         Landin.Testing.Check
+           (Item, IR.Block_Count (Unit, 1) = 3,
+            "the short circuit gave the datum its blocks");
+
+         for V in 1 .. IR.Value_Count (Unit, 1) loop
+            if IR.Op_Of (Unit, 1, IR.Value_Id (V)) = IR.Branch then
+               Branches := Branches + 1;
+            end if;
+         end loop;
+
+         Landin.Testing.Check_Equal
+           (Item, Branches, 1, "one branch");
+
+         Check_Terminators (Item, Unit, "a logical module value");
+      end;
+   end A_Logical_Module_Value_Becomes_Blocks;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -377,6 +473,12 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a call carries its arguments",
          A_Call_Carries_Its_Arguments'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a module value becomes a datum",
+         A_Module_Value_Becomes_A_Datum'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a logical module value becomes blocks",
+         A_Logical_Module_Value_Becomes_Blocks'Access);
    end Register;
 
 end Landin.Tests.Lowering_Suite;
