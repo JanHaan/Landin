@@ -1,4 +1,4 @@
-## LEARN LANDIN IN Y MINUTES
+# Learn Landin in Y minutes
 
 Ada, but small. Zig, but sweeter. One systems language from 32KB to
 32TB. Move fast, keep the pointers, and let the compiler tell you when

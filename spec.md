@@ -1,4 +1,4 @@
-# THE LANDIN SPECIFICATION
+# The Landin specification
 
 This is the normative document. `tour.md` explains the language and this
 says what it is; where the two could be read differently, this one decides.

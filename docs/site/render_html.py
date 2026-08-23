@@ -35,6 +35,7 @@ their closing findings pulled out as entries.
 from __future__ import annotations
 
 import html
+import json
 import re
 import sys
 from pathlib import Path
@@ -44,6 +45,11 @@ SITE = HERE / "site"
 
 VERSION_LINE = "specification 0.1.0"
 REPO = "https://git.sr.ht/~sinnfrei/landin"
+#  The canonical host.  pages.sr.ht serves 701.dev as well and
+#  cannot redirect between the two, so every page says which of
+#  them it wants to be found at.
+SITE_URL = "https://www.701.dev"
+OG_IMAGE = "og.png"
 
 DOCS = [
     dict(key="spec", src="spec.md", out="spec.html", kind="document",
@@ -99,10 +105,16 @@ import landin_icon  # noqa: E402
 #  `mask-icon` is Safari's pinned tab, which wants the mark alone with no
 #  plate around it and colours the shape itself.
 
+#  The favicon stays a data: URL -- it follows the reader's light or dark
+#  setting through a media query, which a file would too, but this one
+#  costs no request.  The pinned-tab mark is a file because Safari has
+#  never accepted a data: URL for one, so as a data: URL it simply did
+#  not appear.
 ICON_LINKS = "\n".join([
     '<link rel="icon" href="%s">' % landin_icon.data_uri("auto"),
-    '<link rel="mask-icon" href="%s" color="%s">'
-    % (landin_icon.data_uri("mono", crop=True), landin_icon.ACCENT),
+    '<link rel="mask-icon" href="/icon-mono.svg" color="%s">'
+    % landin_icon.ACCENT,
+    '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
 ])
 
 CITE = re.compile(r"\[((?:\d{4})|(?:[XYZW]\d+))\]")
@@ -703,7 +715,13 @@ footer{
 }
 footer code{font-size:.9em; color:var(--ink-soft)}
 .hide{display:none !important}
+/*  The body uppercases every section heading, so the list of them does
+    too: the documents write their own titles in three different cases --
+    THE GRAMMAR OF THE ENABLED KERNEL, chip/vendor/gpio, Canonical
+    release -- and untransformed they read as three different lists.  */
 nav.side a.sect{display:flex; gap:.55rem; align-items:baseline}
+nav.side a.sect span:last-child{text-transform:uppercase; letter-spacing:.04em;
+  font-size:.8rem}
 nav.side a.sect .num{
   font-size:.66rem; color:var(--ink-faint); min-width:1.5rem;
   text-align:right; font-variant-numeric:tabular-nums;
@@ -1443,6 +1461,7 @@ NUMBER = re.compile(r"^\d+\.\s+(.*)$")
 ROW = re.compile(r"^\|(.*)\|\s*$")
 TABLE_RULE = re.compile(r"^\|[\s:|-]+\|\s*$")
 QUOTE = re.compile(r"^>\s?(.*)$")
+RULE_LINE = re.compile(r"^-{3,}\s*$")
 CODE_SPAN = re.compile(r"`([^`]+)`")
 BOLD = re.compile(r"\*\*([^*]+)\*\*")
 MD_LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
@@ -1524,6 +1543,13 @@ def parse_guide(text):
 
         if heading:
             block("sub", heading.group(2).strip())
+            index += 1
+            continue
+
+        #  A rule divides; it does not say anything.  Rendered as prose it
+        #  put a literal '---' on the page 40 times across six documents,
+        #  and the sections it divides already carry a rule of their own.
+        if RULE_LINE.match(line):
             index += 1
             continue
 
@@ -1699,7 +1725,35 @@ def nav_html(docs, current, sections):
     return "\n".join(out)
 
 
-def page(title, kind, heading, hero, body, nav, docname, logo=False):
+def social(title, description, out):
+    """What a crawler and a chat window are given.
+
+    The description is the document's own blurb from DOCS or GUIDES, so
+    the sentence a search result shows is the one the contents page shows
+    and there is no third place to keep it up to date.
+    """
+    where = f"{SITE_URL}/" + ("" if out == "index.html" else out)
+    tags = [f'<link rel="canonical" href="{where}">']
+    if description:
+        tags.append(f'<meta name="description" content="{esc(description)}">')
+    tags += [
+        '<meta property="og:type" content="website">',
+        f'<meta property="og:site_name" content="Landin">',
+        f'<meta property="og:title" content="{esc(title)}">',
+        f'<meta property="og:url" content="{where}">',
+        f'<meta property="og:image" content="{SITE_URL}/{OG_IMAGE}">',
+        '<meta property="og:image:width" content="1200">',
+        '<meta property="og:image:height" content="630">',
+        '<meta property="og:image:alt" content="701, the Landin mark">',
+        '<meta name="twitter:card" content="summary_large_image">',
+    ]
+    if description:
+        tags.append(f'<meta property="og:description" content="{esc(description)}">')
+    return "\n".join(tags)
+
+
+def page(title, kind, heading, hero, body, nav, docname, logo=False,
+         out="index.html", description="", extra=""):
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1707,6 +1761,8 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False):
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
 <title>{esc(title)}</title>
+{social(title, description, out)}
+{extra}
 {ICON_LINKS}
 <style>{CSS}{GUIDE_CSS}</style>
 </head>
@@ -1761,9 +1817,9 @@ def tour_intro(text):
     """The paragraphs the tour opens with, before its first construct."""
     body = []
     for line in text.split("\n"):
-        if line.startswith("### ") or line.startswith("---"):
+        if line.startswith("### ") or RULE_LINE.match(line):
             break
-        if line.startswith("## "):
+        if line.startswith("#"):
             continue
         body.append(line)
     paras, run = [], []
@@ -1812,6 +1868,55 @@ def landing_samples(text, ids=LANDING_IDS):
             code.pop()
         found[m.group(1)] = (m.group(2), code)
     return [(i, *found[i]) for i in ids if i in found]
+
+
+def write_resources(docs):
+    """The files a crawler asks for, and the card a chat window shows.
+
+    A sitemap is worth more here than on most sites: almost nothing links
+    in yet, so there is little for a crawler to follow.  It is generated
+    with the pages rather than kept beside them, because a hand-written
+    list of fifteen files is a list that goes stale on the sixteenth.
+    """
+    pages = ["index.html"] + [d["out"] for d in docs]
+    urls = "".join(
+        "<url><loc>%s/%s</loc></url>"
+        % (SITE_URL, "" if out == "index.html" else out)
+        for out in pages)
+    (SITE / "sitemap.xml").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + urls + "</urlset>\n")
+
+    (SITE / "robots.txt").write_text(
+        "User-agent: *\nAllow: /\n"
+        f"Sitemap: {SITE_URL}/sitemap.xml\n")
+
+    (SITE / OG_IMAGE).write_bytes(landin_icon.card())
+
+    #  Safari's pinned tab wants a file, and iOS wants a raster.
+    (SITE / "icon-mono.svg").write_text(
+        landin_icon.svg("mono", crop=True) + "\n")
+    (SITE / "apple-touch-icon.png").write_bytes(
+        landin_icon.card(180, 180, share=0.62))
+
+    return ["sitemap.xml", "robots.txt", OG_IMAGE,
+            "icon-mono.svg", "apple-touch-icon.png"]
+
+
+def tab_title(title, nav):
+    """What the tab, the bookmark and the search result say.
+
+    The distinctive words go first, and the name is not said twice: the
+    documents that carry it in their own title -- "Landin prototype 1" --
+    would otherwise be listed as "Landin - Landin prototype 1".
+    """
+    t = (title or "").strip()
+    if not t or t.lower() == "landin":
+        return f"Landin — {nav}"
+    if "landin" in t.lower():
+        return t
+    return f"{t} — Landin"
 
 
 def index_page(docs, counts, intro, status, samples, symbols, total=0):
@@ -1900,9 +2005,30 @@ def index_page(docs, counts, intro, status, samples, symbols, total=0):
         ("what-it-looks-like", "what it looks like", 0),
         ("start-here", "start here", 0),
         ("every-document", "every document", 0)])
+    #  What a search result and a chat preview say about the front page.
+    #  Two sentences, because that is what is shown before it is cut.
+    #  Under 160 characters, because that is where a search result is cut.
+    summary = ("A systems programming language and its compiler, built from "
+               "scratch: one way of writing code from a 32 KB "
+               "microcontroller to a hosted application. "
+               + VERSION_LINE.capitalize() + ".")
+    ld = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "Landin",
+        "description": summary,
+        "url": SITE_URL + "/",
+        "codeRepository": REPO,
+        "programmingLanguage": {"@type": "ComputerLanguage", "name": "Ada"},
+        "about": {"@type": "ComputerLanguage", "name": "Landin"},
+        "image": f"{SITE_URL}/{OG_IMAGE}",
+    }
+    extra = ('<script type="application/ld+json">'
+             + json.dumps(ld, ensure_ascii=False) + "</script>")
     return page("Landin — a systems language from 32 KB to 32 TB",
                 VERSION_LINE, "Landin", hero, chr(10).join(body), nav,
-                "the repository", logo=True)
+                "the repository", logo=True, out="index.html",
+                description=summary, extra=extra)
 
 
 # --------------------------------------------------------------------------
@@ -2027,8 +2153,9 @@ def main(argv):
             text, links, link_targets,
             Highlighter(*symbols, links=links))
         nav = nav_html(DOCS + GUIDES, d["out"], nav_sections)
-        out = page(f"Landin — {title or d['nav']}", d["nav"],
-                   title or d["nav"], hero, body, nav, d["src"])
+        out = page(tab_title(title, d["nav"]), d["nav"],
+                   title or d["nav"], hero, body, nav, d["src"],
+                   out=d["out"], description=d["blurb"])
         (SITE / d["out"]).write_text(out)
         counts[d["out"]] = (
             "%d constructs in %d sections"
@@ -2052,8 +2179,9 @@ def main(argv):
             text, links, link_targets,
             Highlighter(*guide_symbols, links=links))
         nav = nav_html(DOCS + GUIDES, g["out"], nav_sections)
-        out = page(f"Landin — {title}", g["nav"], title or g["nav"],
-                   hero, body, nav, g["src"])
+        out = page(tab_title(title, g["nav"]), g["nav"], title or g["nav"],
+                   hero, body, nav, g["src"],
+                   out=g["out"], description=g["blurb"])
         (SITE / g["out"]).write_text(out)
         counts[g["out"]] = f"{len(nav_sections)} sections"
         print(f"{SITE.name}/{g['out']:<20} {len(out) // 1024:4d} KB  "
@@ -2077,6 +2205,8 @@ def main(argv):
                        total=len(re.findall(r"(?m)^### \[\d{4}\]",
                                             tour_text))))
         print(f"{SITE.name}/index.html")
+        for name in write_resources(DOCS + GUIDES):
+            print(f"{SITE.name}/{name}")
     if dangling:
         print(f"warning: {len(set(dangling))} citations point nowhere: "
               f"{', '.join(sorted(set(dangling)))}")

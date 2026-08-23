@@ -1,4 +1,4 @@
-## LANDIN PROTOTYPE 2 — A PARSER FULL OF RECOVERABLE ERRORS
+# Landin prototype 2 — a parser full of recoverable errors
 
 ```landin
 Current with specification 0.1.0. Its own findings Y1-Y7 are all

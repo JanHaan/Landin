@@ -1,4 +1,4 @@
-## LANDIN PROTOTYPE 3 — A GENERIC CONTAINER LIBRARY
+# Landin prototype 3 — a generic container library
 
 ```landin
 Current with specification 0.1.0. Its own findings Z1-Z19 are all

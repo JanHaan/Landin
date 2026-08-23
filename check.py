@@ -1069,6 +1069,7 @@ def check_citations(paths):
     for construct, locations in construct_definitions(spec_path).items():
         constructs.setdefault(construct, []).extend(locations)
 
+    out_prototype = []
     needs_findings = ROADMAP in selected
     if needs_findings:
         prototype_paths = {
@@ -1079,7 +1080,26 @@ def check_citations(paths):
     else:
         findings = {}
 
-    out = []
+    #  A construct is defined in spec.md or tour.md and nowhere else.  A
+    #  prototype cites them, and a citation is inline: one that reaches
+    #  column 0 behind a '### ' has stopped being a citation and become a
+    #  second definition of an id that already has one.  Five of those sat
+    #  in the prototypes unnoticed, because the two documents were the
+    #  only places this ever read.
+    for path in citation_paths:
+        if os.path.basename(path) not in PROTOTYPE_FINDINGS.values():
+            continue
+        text = io.open(path, encoding="utf-8").read()
+        for n, line in enumerate(text.splitlines(), 1):
+            match = re.match(r"^### \[(\d{4})\]", line)
+            if match:
+                constructs.setdefault(match.group(1), []).append((path, n))
+                out_prototype.append(
+                    (path, n, "[%s] is defined here; a construct belongs to "
+                              "%s or %s and a prototype only cites one"
+                     % (match.group(1), TOUR_NAME, SPEC_NAME)))
+
+    out = list(out_prototype)
     for construct, locations in constructs.items():
         if len(locations) > 1:
             path, line = locations[1]

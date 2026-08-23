@@ -1,4 +1,4 @@
-## LANDIN PROTOTYPE 1 — A DRIVER FROM A VENDOR SVD
+# Landin prototype 1 — a driver from a vendor SVD
 
 ```landin
 Current with specification 0.1.0. Its own findings X1-X9 are all
