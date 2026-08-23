@@ -3,6 +3,7 @@ with Landin.Diagnostics.Catalogue;
 with Landin.Source;
 with Landin.Stages;
 with Landin.Stages.Checking;
+with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
@@ -26,6 +27,7 @@ package body Landin.Driver is
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
    Checker  : aliased Landin.Stages.Checking.Instance;
+   Lowerer  : aliased Landin.Stages.Lowering.Instance;
 
    Code_Unknown_Option : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Unknown_Option);
@@ -38,6 +40,7 @@ package body Landin.Driver is
      ("refine - the Landin bootstrap compiler" & LF
       & "no release version is assigned" & LF
       & "language frontend: scanner, parser, names, types" & LF
+      & "target-neutral IR: lowered, not yet emitted" & LF
       & "targets described: linux-x86-64, synthetic-32" & LF);
 
    function Usage return String is
@@ -200,14 +203,18 @@ package body Landin.Driver is
                Landin.Stages.Append (Line, Frontend'Access);
                Landin.Stages.Append (Line, Names'Access);
                Landin.Stages.Append (Line, Checker'Access);
+               Landin.Stages.Append (Line, Lowerer'Access);
                Ran := Landin.Stages.Run (Line, Context);
 
                --  Each stage runs only when the one before it produced
                --  something worth reading: a stage stops the pipeline on
                --  its own failure, so a file with a missing `then` does not
                --  also report every name the hole swallowed, and one with
-               --  an unknown name does not also report its type.
-               if Ran not in 1 .. 3 then
+               --  an unknown name does not also report its type.  Four
+               --  since R1.70: the lowering is the last, and it refuses to
+               --  run on a refused program itself rather than relying on
+               --  being queued after the checker.
+               if Ran not in 1 .. 4 then
                   raise Compiler_Defect
                     with "the frontend pipeline did not run";
                end if;

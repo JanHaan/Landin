@@ -18,6 +18,7 @@ with Landin.Tests.Fixture_Suite;
 with Landin.Tests.Harness_Suite;
 with Landin.Tests.IR_Suite;
 with Landin.Tests.Lexer_Suite;
+with Landin.Tests.Lowering_Suite;
 with Landin.Tests.Parser_Suite;
 with Landin.Tests.Platform_Suite;
 with Landin.Tests.Resolution_Suite;
@@ -53,6 +54,7 @@ procedure Landin_Tests is
       "fixtures         ",
       "harness          ",
       "ir               ",
+      "lowering         ",
       "parser           ",
       "platform         ",
       "resolution       ",
@@ -89,6 +91,7 @@ begin
    Landin.Tests.Harness_Suite.Register (Cases);
    Landin.Tests.IR_Suite.Register (Cases);
    Landin.Tests.Lexer_Suite.Register (Cases);
+   Landin.Tests.Lowering_Suite.Register (Cases);
    Landin.Tests.Parser_Suite.Register (Cases);
    Landin.Tests.Platform_Suite.Register (Cases);
    Landin.Tests.Resolution_Suite.Register (Cases);

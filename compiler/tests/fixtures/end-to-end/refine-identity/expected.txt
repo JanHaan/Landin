@@ -1,4 +1,5 @@
 refine - the Landin bootstrap compiler
 no release version is assigned
 language frontend: scanner, parser, names, types
+target-neutral IR: lowered, not yet emitted
 targets described: linux-x86-64, synthetic-32
