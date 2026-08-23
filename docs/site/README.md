@@ -31,7 +31,9 @@ cannot take a `data:` URL.
 The Markdown reader covers the subset the repository uses, and refuses a
 construct it does not recognise rather than passing it through as text,
 because a table that renders as a row of pipes is worse than a build that
-stops.
+stops. So it stops on a fence that is never closed, a table row whose cell
+count does not match its header, and a nested list — each of which it used to
+absorb silently, losing structure that no word count could miss.
 
 ## Building and publishing
 
@@ -62,10 +64,22 @@ history. `docs/site/site/` and the tarball are ignored.
 
 ## Verification
 
-`--verify` reduces both the source and the page to a multiset of words and
-reports anything that comes out short, counting link targets as well as
-visible text. A page that quietly lost a paragraph fails the build rather
-than going up. `scripts/site.sh` always passes it.
+`--verify` reduces the source and the page to a multiset of words and reports
+anything that comes out short, counting link targets as well as visible text.
+A page that quietly lost a paragraph fails the build rather than going up.
+`scripts/site.sh` always passes it.
+
+It reads the document's own region — `<main>` without the navigation, the bar
+or the footer. Over the whole page it counted the furniture as content: the
+sidebar names all fifteen documents and repeats every section title, so a
+heading deleted from the body still balanced against the copy of it in the
+navigation. It reported every word present while 79 citations had gone inert.
+
+The front page holds no document, so it is checked against the pieces it is
+built from instead: the tour's opening prose, the README's status line and the
+three constructs it shows. Each of those readers now fails loudly rather than
+returning nothing, because a blank section is exactly what a word count cannot
+see.
 
 ## What a page carries, and what it fetches
 
