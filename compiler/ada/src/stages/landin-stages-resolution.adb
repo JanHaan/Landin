@@ -193,20 +193,37 @@ package body Landin.Stages.Resolution is
                            Resolve
                              (Of_Tree,
                               Syn.Condition_Of (Of_Tree, This), Inside);
-                           Walk_Block
-                             (Of_Tree, Syn.Body_Of (Of_Tree, This),
-                              Landin.Resolution.Open_Scope
-                                (Meanings.all, Landin.Resolution.Block,
-                                 Inside));
+
+                           declare
+                              Runs : constant Syn.Node_Id :=
+                                Syn.Body_Of (Of_Tree, This);
+                              Arm_Scope : constant
+                                Landin.Resolution.Scope_Id :=
+                                  Landin.Resolution.Open_Scope
+                                    (Meanings.all,
+                                     Landin.Resolution.Block, Inside);
+                           begin
+                              Landin.Resolution.Record_Scope
+                                (Meanings.all, Of_Tree, Runs, Arm_Scope);
+                              Walk_Block (Of_Tree, Runs, Arm_Scope);
+                           end;
                         end;
                      end loop;
 
                      if Syn.Else_Body (Of_Tree, Item) /= Syn.No_Node then
-                        Walk_Block
-                          (Of_Tree, Syn.Else_Body (Of_Tree, Item),
-                           Landin.Resolution.Open_Scope
-                             (Meanings.all, Landin.Resolution.Block,
-                              Inside));
+                        declare
+                           Runs : constant Syn.Node_Id :=
+                             Syn.Else_Body (Of_Tree, Item);
+                           Otherwise : constant
+                             Landin.Resolution.Scope_Id :=
+                               Landin.Resolution.Open_Scope
+                                 (Meanings.all,
+                                  Landin.Resolution.Block, Inside);
+                        begin
+                           Landin.Resolution.Record_Scope
+                             (Meanings.all, Of_Tree, Runs, Otherwise);
+                           Walk_Block (Of_Tree, Runs, Otherwise);
+                        end;
                      end if;
 
                   when others =>
@@ -283,6 +300,9 @@ package body Landin.Stages.Resolution is
                            Runs : constant Syn.Node_Id :=
                              Syn.Body_Of (Of_Tree.all, Node);
                         begin
+                           Landin.Resolution.Record_Scope
+                             (Meanings.all, Of_Tree.all, Node, Signature);
+
                            for Which in
                              1 .. Syn.Parameter_Count (Of_Tree.all, Node)
                            loop
@@ -309,11 +329,20 @@ package body Landin.Stages.Resolution is
                            --  [1800]'s expression body opens no scope,
                            --  because an expression declares nothing.
                            if Syn.Kind (Of_Tree.all, Runs) = Syn.Block then
-                              Walk_Block
-                                (Of_Tree.all, Runs,
-                                 Landin.Resolution.Open_Scope
-                                   (Meanings.all,
-                                    Landin.Resolution.Block, Signature));
+                              declare
+                                 Body_Scope : constant
+                                   Landin.Resolution.Scope_Id :=
+                                     Landin.Resolution.Open_Scope
+                                       (Meanings.all,
+                                        Landin.Resolution.Block,
+                                        Signature);
+                              begin
+                                 Landin.Resolution.Record_Scope
+                                   (Meanings.all, Of_Tree.all, Runs,
+                                    Body_Scope);
+                                 Walk_Block
+                                   (Of_Tree.all, Runs, Body_Scope);
+                              end;
                            else
                               Resolve (Of_Tree.all, Runs, Signature);
                            end if;
