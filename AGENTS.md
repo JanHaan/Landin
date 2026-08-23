@@ -89,6 +89,19 @@ site's own, and `check.py` holds them to the stylesheet in
 variant there rather than in a consumer, and keep it standard-library-only
 so the site keeps its no-dependency build. See `assets/README.md`.
 
+The two faces the pages are set in live in `assets/fonts/`, not in the
+site renderer. Each family is vendored as the subset webfont package its
+source delivers — `Nunito Sans` under the OFL, `MonoLisaCode` under a
+foundry EULA — and `assets/fonts.py` is every rendering of them: the
+`@font-face` block a page carries, the `--ui` and `--mono` stacks, and the
+list of files copied beside the pages. It reads each family's own
+stylesheet rather than transcribing eighty `unicode-range` lists, and
+`check.py` holds every character of every rendered document to falling
+inside a vendored subset of both families, because a range nobody covers
+is a paragraph in a fallback face that no word count can see. Add a family
+there rather than in a consumer, keep it standard-library-only, and do not
+trim the subsets to today's documents. See `assets/fonts/README.md`.
+
 Syntax highlighting lives in `highlight/`, not in the site renderer. `highlight/landin_highlight.py` is the one token scanner every Landin highlighter renders — the pages as HTML spans, `highlight/landin_pygments.py` as Pygments tokens, and a TextMate and a tree-sitter grammar later. Add a keyword there rather than in a consumer, and keep it standard-library-only so the site keeps its no-dependency build. `check.py`'s own list of reserved words is deliberately separate: that one is about legality, this one about colour. See `highlight/README.md`.
 
 ## Prototype coverage
