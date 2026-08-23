@@ -5,8 +5,6 @@
     python3 render_html.py tour.md         one of them
     python3 render_html.py --verify         and check that nothing was dropped
     python3 render_html.py --from ../landin read the text files from elsewhere
-    python3 render_html.py --artifact       all five on one page, as a fragment
-    python3 render_html.py --audit          how every prose line was classified
 
 The pages are single files with no external references: the stylesheet,
 the script and the highlighting are all inlined, so one file can be
@@ -112,9 +110,9 @@ import landin_icon  # noqa: E402
 #  not appear.
 ICON_LINKS = "\n".join([
     '<link rel="icon" href="%s">' % landin_icon.data_uri("auto"),
-    '<link rel="mask-icon" href="/icon-mono.svg" color="%s">'
+    '<link rel="mask-icon" href="icon-mono.svg" color="%s">'
     % landin_icon.ACCENT,
-    '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+    '<link rel="apple-touch-icon" href="apple-touch-icon.png">',
 ])
 
 CITE = re.compile(r"\[((?:\d{4})|(?:[XYZW]\d+))\]")
@@ -159,92 +157,10 @@ class Highlighter(Scanner):
 # document shape: rule / title / rule, then a body
 # --------------------------------------------------------------------------
 
-RULE = re.compile(r"^-{20,}\s*$")
-
-
-def split_sections(text):
-    """Split a document into its front matter and its sections.
-
-    Three things are written with rules across the page and they have to be
-    told apart. A section header is a rule, a title, and a rule. A banner is
-    a rule, a block of comment lines, and a rule — the prototypes use those
-    to divide one module into parts, and they belong to the body. A lone
-    rule with nothing but blank lines after it closes what came before.
-    """
-    lines = text.split("\n")
-    sections = []
-    cur = None
-    i = 0
-    while i < len(lines):
-        if not RULE.match(lines[i]):
-            if cur is not None:
-                cur["body"].append(lines[i])
-            i += 1
-            continue
-
-        j = i + 1
-        while j < len(lines) and not RULE.match(lines[j]):
-            j += 1
-        band = [b for b in lines[i + 1:j] if b.strip()]
-        if j >= len(lines) or not band:
-            i = j                       # a closing rule; the next one decides
-            continue
-        if band[0].lstrip().startswith("--"):
-            if cur is not None:         # a banner inside a body, kept whole
-                cur["body"].extend(lines[i:j + 1])
-            i = j + 1
-            continue
-        cur = dict(title=band[0].strip(), note=band[1:], body=[])
-        sections.append(cur)
-        i = j + 1
-
-    front = sections.pop(0) if sections else dict(title="", note=[], body=[])
-    return front, sections
-
-
-def split_banners(body):
-    """A prototype body, as listings and the banners that divide them."""
-    out, run = [], []
-
-    def flush():
-        while run and not run[0].strip():
-            run.pop(0)
-        while run and not run[-1].strip():
-            run.pop()
-        if run:
-            out.append(("code", [l.rstrip() for l in run]))
-        run.clear()
-
-    i = 0
-    while i < len(body):
-        if RULE.match(body[i]):
-            j = i + 1
-            while j < len(body) and not RULE.match(body[j]):
-                j += 1
-            text = [b.strip().lstrip("-").strip() for b in body[i + 1:j] if b.strip()]
-            flush()
-            if text:
-                out.append(("banner", " ".join(text)))
-            i = j + 1
-            continue
-        run.append(body[i])
-        i += 1
-    flush()
-    return out
-
 
 # --------------------------------------------------------------------------
 # the tour: numbered constructs, their prose, and the code under them
 # --------------------------------------------------------------------------
-
-ITEM = re.compile(r"^(\s*)-- \[(\d{4})\](?: (.*)|)$")
-CONT = re.compile(r"^(\s*)--( {2,})(\S.*)$")
-CODE_ITEM = re.compile(r"^\s*(?:--\(|---|--) \[(\d{4})\]")
-
-PROSE_INDENT = 7          # -- and seven spaces, under the [NNNN]
-PROSE_CONT_SPACE = 5      # less than that is a comment inside code
-FILL_COLUMN = 70          # the width the file is hand-wrapped to
-SENTENCE_END = re.compile(r"[.?]$")
 
 
 def sample_like(text: str) -> bool:
@@ -258,210 +174,12 @@ def sample_like(text: str) -> bool:
     return False
 
 
-def parse_tour_body(body):
-    """A section body becomes constructs, each holding prose and code.
-
-    A construct opens at '-- [NNNN]'. Its prose continues on any line whose
-    first characters are '--' followed by enough space to sit under the
-    number, even across an intervening listing, which is how a construct
-    that shows code and then keeps talking is written. A '--' with less
-    space than that is a comment inside code and stays there. Everything
-    else is code, and belongs to the construct it follows; code before the
-    first construct is the section's own preamble.
-    """
-    items = [dict(id=None, children=[], anchors=[])]
-    prose = []      # (pad, text, source line length)
-    opening = None  # the run that starts with the '-- [NNNN]' line itself
-    code = []
-    blanks = []
-
-    def flush_prose():
-        nonlocal prose
-        if not prose:
-            return
-        para, pre = [], []
-
-        def close_para():
-            if para:
-                items[-1]["children"].append(("p", " ".join(para)))
-                para.clear()
-
-        def close_pre():
-            if pre:
-                strip = min(len(l) - len(l.lstrip()) for l in pre if l.strip())
-                items[-1]["children"].append(
-                    ("pre", [l[strip:] if l.strip() else "" for l in pre]))
-                pre.clear()
-
-        for idx, (pad, text, width) in enumerate(prose):
-            # the line carrying the number states the construct; it is never
-            # a sample, however much 'Comparison: == <> < <=' looks like one
-            first = idx == 0 and pad == PROSE_INDENT and prose is opening
-            if not first and (pad > PROSE_INDENT
-                              or (pad == PROSE_INDENT and sample_like(text))):
-                close_para()
-                pre.append(" " * (pad - PROSE_INDENT) + text)
-                continue
-            close_pre()
-            if para:
-                prev_pad, prev, prev_width = prose[idx - 1]
-                room = prev_width + 1 + len(text.split()[0])
-                if SENTENCE_END.search(prev) and room <= FILL_COLUMN:
-                    close_para()        # the file could have fitted the next
-                                        # word on the line above and did not,
-                                        # so the break was meant
-            para.append(text)
-        close_para()
-        close_pre()
-        prose = []
-
-    def flush_code():
-        nonlocal code
-        while code and not code[0].strip():
-            code.pop(0)
-        while code and not code[-1].strip():
-            code.pop()
-        if code:
-            for line in code:
-                m = CODE_ITEM.match(line)
-                if m:
-                    items[-1]["anchors"].append(m.group(1))
-            items[-1]["children"].append(("code", code))
-        code = []
-
-    for line in body:
-        m = ITEM.match(line)
-        if m:
-            flush_prose()
-            flush_code()
-            blanks = []
-            items.append(dict(id=m.group(2), children=[], anchors=[]))
-            prose.append((PROSE_INDENT, (m.group(3) or "").strip(), len(line)))
-            opening = prose
-            continue
-
-        m = CONT.match(line)
-        if m and len(m.group(2)) >= PROSE_CONT_SPACE:
-            flush_code()
-            blanks = []
-            prose.append((len(m.group(2)), m.group(3), len(line)))
-            continue
-
-        if not line.strip():
-            blanks.append(line)
-            continue
-
-        flush_prose()
-        opener = CODE_ITEM.match(line)
-        if opener and not code:
-            flush_code()                # '--( [0020]' and '--- [0030]' are
-            items.append(dict(id=opener.group(1),   # constructs whose text is
-                              children=[], anchors=[]))   # itself the example
-        if code and blanks:
-            code.extend(blanks)         # a blank line inside one listing
-        blanks = []
-        code.append(line.rstrip())
-
-    flush_prose()
-    flush_code()
-    if not items[0]["children"]:
-        items.pop(0)
-    return items
-
-
 # --------------------------------------------------------------------------
 # the prototypes: listings, and the findings at the end
 # --------------------------------------------------------------------------
 
 FINDING = re.compile(r"^([XYZW]\d+)\s+(\S.*)$")
-FINDING_SAMPLE = 8    # indented further than an entry's own text
 
-
-def parse_findings(body):
-    """The closing section of a prototype: prose, then F1 .. Fn.
-
-    An entry starts at the left margin, its text is indented under the
-    label, and a line indented further than that is a sample it quotes.
-    """
-    lead, entries = [], []
-    cur = None
-
-    def add(target, kind, payload):
-        if kind == "p":
-            if target and target[-1][0] == "p":
-                target[-1] = ("p", target[-1][1] + " " + payload)
-                return
-        elif kind == "pre":
-            if target and target[-1][0] == "pre":
-                target[-1][1].append(payload)
-                return
-            payload = [payload]
-        target.append((kind, payload))
-
-    for line in body:
-        m = FINDING.match(line)
-        if m:
-            cur = dict(id=m.group(1), children=[])
-            entries.append(cur)
-            add(cur["children"], "p", m.group(2).strip())
-            continue
-        if not line.strip():
-            target = cur["children"] if cur else lead
-            if target and target[-1][0] == "p":
-                target.append(("p", ""))     # a paragraph boundary
-            continue
-        indent = len(line) - len(line.lstrip())
-        target = cur["children"] if cur else lead
-        if target and target[-1] == ("p", ""):
-            target.pop()
-            target.append(("p", line.strip()))
-            continue
-        if cur and indent >= FINDING_SAMPLE:
-            add(target, "pre", line.rstrip())
-        else:
-            add(target, "p", line.strip())
-
-    for e in entries:
-        e["children"] = [c for c in e["children"] if c[1]]
-    return [c for c in lead if c[1]], entries
-
-
-def parse_plain(body):
-    """Free text: paragraphs, bullet runs, indented blocks."""
-    blocks = []
-    run = []
-    kind = None
-
-    def flush():
-        nonlocal run, kind
-        if run:
-            blocks.append((kind, list(run)))
-        run, kind = [], None
-
-    for line in body:
-        if not line.strip():
-            flush()
-            continue
-        indent = len(line) - len(line.lstrip())
-        want = "quote" if indent else "para"
-        if kind and kind != want:
-            flush()
-        kind = want
-        run.append(line.rstrip())
-    flush()
-
-    out = []
-    for k, lines in blocks:
-        if k == "quote":
-            indents = {len(l) - len(l.lstrip()) for l in lines}
-            if len(indents) > 1:
-                strip = min(indents)
-                out.append(("pre", [l[strip:] for l in lines]))
-            else:
-                out.append(("quote", " ".join(l.strip() for l in lines)))
-        else:
-            out.append(("para", " ".join(lines)))
-    return out
 
 # --------------------------------------------------------------------------
 # the page
@@ -471,19 +189,29 @@ CSS = """
 :root{
   color-scheme: light;
   --bg:#f7f6f2; --bg-soft:#efece5; --panel:#fffefb; --panel-2:#f2efe8;
-  --ink:#1c2128; --ink-soft:#5a6270; --ink-faint:#8b9199;
+  --ink:#1c2128; --ink-soft:#5a6270; --ink-faint:#6b7178;
   --rule:#dedad0; --rule-soft:#e9e5dc;
   --accent:#a03526; --accent-soft:#c4705f; --accent-bg:#f6ece9;
   --code-bg:#fbfaf6; --code-rule:#e4e0d5;
   --k:#9a2f6b; --t:#0f6f68; --f:#2c4c8c; --d:#243b6b; --n:#7a4bab;
   --q:#4a6a1f; --c:#8a8880; --cd:#5f6f4a; --o:#7b7f88; --b:#8a5a12;
   --sh:0 1px 2px rgba(20,20,20,.05), 0 6px 20px rgba(20,20,20,.04);
+  /*  The interface face, named so a `font:` shorthand can reach it.  It
+      was used in three of those and defined in none, and a shorthand
+      whose family does not resolve is thrown away whole: every construct
+      heading and every table rendered at inherited body size.  */
+  /*  The sticky bar's height.  Four rules used to clear it with
+      four different numbers, so landing on a section stopped half
+      a rem higher than landing on a construct.  */
+  --bar:3.1rem;
+  --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,
+       "Helvetica Neue",sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme: dark;
     --bg:#12161c; --bg-soft:#171c24; --panel:#161b23; --panel-2:#1b212b;
-    --ink:#dfe4ec; --ink-soft:#9aa3b1; --ink-faint:#6d7683;
+    --ink:#dfe4ec; --ink-soft:#9aa3b1; --ink-faint:#7c8593;
     --rule:#2a313c; --rule-soft:#222933;
     --accent:#e2705c; --accent-soft:#b6543f; --accent-bg:#241a17;
     --code-bg:#0f1319; --code-rule:#232a34;
@@ -495,7 +223,7 @@ CSS = """
 :root[data-theme="dark"]{
   color-scheme: dark;
   --bg:#12161c; --bg-soft:#171c24; --panel:#161b23; --panel-2:#1b212b;
-  --ink:#dfe4ec; --ink-soft:#9aa3b1; --ink-faint:#6d7683;
+  --ink:#dfe4ec; --ink-soft:#9aa3b1; --ink-faint:#7c8593;
   --rule:#2a313c; --rule-soft:#222933;
   --accent:#e2705c; --accent-soft:#b6543f; --accent-bg:#241a17;
   --code-bg:#0f1319; --code-rule:#232a34;
@@ -505,7 +233,24 @@ CSS = """
 }
 
 *{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%; scroll-behavior:smooth; scroll-padding-top:4.5rem}
+/*  Every citation click and every '/' jump animated, with nothing asking
+    whether the reader wanted motion.  */
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *{transition-duration:.01ms !important; animation-duration:.01ms !important}
+}
+a:focus-visible, button:focus-visible, input:focus-visible{
+  outline:2px solid var(--accent-soft); outline-offset:2px; border-radius:3px;
+}
+/*  The keyboard route past a sidebar that is ~200 links deep on the tour. */
+a.skip{
+  position:absolute; left:.5rem; top:-3rem; z-index:60;
+  padding:.45rem .7rem; background:var(--panel); color:var(--ink);
+  border:1px solid var(--accent-soft); border-radius:5px; font-size:.85rem;
+}
+a.skip:focus{top:.5rem}
+html{-webkit-text-size-adjust:100%; scroll-behavior:smooth;
+     scroll-padding-top:calc(var(--bar) + 1rem)}
 body{
   margin:0; background:var(--bg); color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",sans-serif;
@@ -544,7 +289,7 @@ header.bar .where{
   text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 header.bar .grow{flex:1}
-header.bar button, .toggle{
+header.bar button{
   font:inherit; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
   color:var(--ink-soft); background:var(--panel); cursor:pointer;
   border:1px solid var(--rule); border-radius:5px; padding:.3rem .55rem;
@@ -555,8 +300,8 @@ header.bar button:hover{color:var(--ink); border-color:var(--ink-faint)}
 /* ---- layout ---- */
 .wrap{display:grid; grid-template-columns:17rem minmax(0,1fr); gap:0; align-items:start}
 nav.side{
-  position:sticky; top:3.1rem; align-self:start;
-  height:calc(100vh - 3.1rem); overflow:auto;
+  position:sticky; top:var(--bar); align-self:start;
+  height:calc(100vh - var(--bar)); overflow:auto;
   padding:1.4rem 1rem 3rem 1.4rem; border-right:1px solid var(--rule);
 }
 nav.side h3{
@@ -572,8 +317,6 @@ nav.side a{
 nav.side a:hover{background:var(--panel-2); color:var(--ink)}
 nav.side a.here{color:var(--accent); background:var(--accent-bg); font-weight:600}
 nav.side a.doc{font-size:.88rem}
-nav.side .sect{display:flex; gap:.5rem; align-items:baseline}
-nav.side .sect .num{font-size:.66rem; color:var(--ink-faint); min-width:1.4rem; font-variant-numeric:tabular-nums}
 #find{
   width:100%; font:inherit; font-size:.85rem; padding:.4rem .55rem;
   color:var(--ink); background:var(--panel); border:1px solid var(--rule); border-radius:5px;
@@ -597,7 +340,7 @@ main{padding:2.2rem 2.4rem 6rem; min-width:0; max-width:64rem}
 .hero .logo rect{fill:var(--panel)}
 .hero .logo path{fill:var(--accent)}
 .hero.wide::after{content:""; display:block; clear:both}
-@media (max-width:560px){ .hero .logo{width:3.6rem; height:3.6rem; border-radius:.8rem} }
+@media (max-width:35rem){ .hero .logo{width:3.6rem; height:3.6rem; border-radius:.8rem} }
 .hero .kind{font-size:.7rem; letter-spacing:.16em; text-transform:uppercase; color:var(--accent)}
 .hero h1{
   margin:.5rem 0 .9rem; font-size:clamp(1.5rem, 1.1rem + 1.6vw, 2.1rem);
@@ -605,30 +348,28 @@ main{padding:2.2rem 2.4rem 6rem; min-width:0; max-width:64rem}
 }
 .hero p{margin:.55rem 0; max-width:44rem; color:var(--ink-soft)}
 .hero p:first-of-type{color:var(--ink); font-size:1.06rem}
-.hero pre, .plain pre{
+.hero pre{
   margin:.7rem 0; padding:.7rem .85rem; overflow-x:auto;
   background:var(--panel-2); border-left:2px solid var(--rule);
   font-size:.82rem; line-height:1.5; color:var(--ink-soft);
 }
-.hero blockquote, .plain blockquote{
+.hero blockquote{
   margin:.7rem 0; padding:.1rem 0 .1rem .95rem;
   border-left:2px solid var(--rule); color:var(--ink-soft); max-width:44rem;
 }
 
 /* ---- sections ---- */
-section{padding-top:2.4rem; scroll-margin-top:4rem}
+section{padding-top:2.4rem; scroll-margin-top:calc(var(--bar) + .9rem)}
 section > h2{
   margin:0 0 1.1rem; font-size:.82rem; font-weight:700;
   letter-spacing:.13em; text-transform:uppercase; color:var(--ink);
   display:flex; align-items:center; gap:.7rem;
 }
 section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
-section > h2 .mod{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; text-transform:none; letter-spacing:0; color:var(--accent)}
-section > h2 .of{color:var(--ink-faint); font-weight:500; text-transform:none; letter-spacing:.02em}
-section > .note{margin:-.5rem 0 1.4rem; color:var(--ink-soft); font-size:.92rem; max-width:44rem}
 
 /* ---- one construct ---- */
-.item{position:relative; padding:0 0 1.5rem 0; scroll-margin-top:4.5rem}
+.item{position:relative; padding:0 0 1.5rem 0;
+      scroll-margin-top:calc(var(--bar) + 1rem)}
 .item .tag{
   display:inline-block; font-size:.68rem; letter-spacing:.04em;
   color:var(--ink-faint); background:var(--panel-2);
@@ -652,7 +393,6 @@ section > .note{margin:-.5rem 0 1.4rem; color:var(--ink-soft); font-size:.92rem;
   border-left:2px solid var(--accent-soft); border-radius:5px;
   font-size:.845rem; line-height:1.55; tab-size:4;
 }
-.listing.cont pre{border-left-color:var(--rule)}
 .listing .copy{
   position:absolute; top:.4rem; right:.4rem; opacity:0;
   font:inherit; font-size:.64rem; letter-spacing:.08em; text-transform:uppercase;
@@ -661,7 +401,12 @@ section > .note{margin:-.5rem 0 1.4rem; color:var(--ink-soft); font-size:.92rem;
   transition:opacity .12s;
 }
 .listing:hover .copy, .listing .copy:focus{opacity:1}
-pre.sample{
+/*  A sample inside a listing is a listing: .listing pre and pre.sample
+    have the same specificity, so this rule used to win and the
+    highlighted Landin blocks -- the ones that carry the argument -- got
+    the muted treatment while the plain shell blocks got the accented
+    one.  Only a sample standing on its own in prose keeps this.  */
+pre.sample:not(.listing > pre){
   margin:.15rem 0 .85rem; padding:.5rem .8rem; overflow-x:auto;
   background:var(--panel-2); border-left:2px solid var(--rule);
   font-size:.82rem; line-height:1.55;
@@ -684,28 +429,21 @@ a.cite:hover{background:var(--accent-bg)}
 #pop .tag{font-size:.68rem; color:var(--accent); display:block; margin-bottom:.2rem}
 
 /* ---- findings ---- */
-.finding{padding:0 0 1.4rem 0; scroll-margin-top:4.5rem; position:relative}
-.finding .tag{
-  display:inline-block; font-size:.7rem; font-weight:700; letter-spacing:.05em;
-  color:var(--accent); background:var(--accent-bg);
-  border:1px solid var(--accent-soft); border-radius:4px;
-  padding:.05rem .35rem; margin-bottom:.35rem; text-decoration:none;
-}
-.finding p{margin:0 0 .65rem; max-width:44rem}
 @media (min-width:70rem){
-  .finding{padding-left:4.2rem}
-  .finding .tag{position:absolute; left:0; top:.2rem; margin:0}
-}
+    }
 
 /* ---- index page ---- */
 .cards{display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(17rem,1fr)); margin:2rem 0}
-.card{
+/*  One card.  .card and .route were the same nine declarations twice,
+    differing only in an accent border and an accent title.  */
+.card, .route{
   display:block; padding:1rem 1.1rem; text-decoration:none; color:inherit;
   background:var(--panel); border:1px solid var(--rule); border-radius:8px;
 }
-.card:hover{border-color:var(--accent-soft); box-shadow:var(--sh)}
-.card strong{display:block; font-size:.95rem; margin-bottom:.3rem}
-.card span{display:block; color:var(--ink-soft); font-size:.87rem; line-height:1.5}
+.card:hover, .route:hover{border-color:var(--accent-soft); box-shadow:var(--sh)}
+.card strong, .route strong{display:block; font-size:.95rem; margin-bottom:.3rem}
+.card span, .route span{display:block; color:var(--ink-soft); font-size:.87rem;
+  line-height:1.5}
 .card em{display:block; margin-top:.5rem; font-style:normal; font-size:.7rem;
   letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint)}
 
@@ -728,32 +466,11 @@ nav.side a.sect .num{
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
 }
 .anchor{position:absolute; scroll-margin-top:4.5rem}
-.lead{margin-bottom:1rem}
-h3.banner{
-  margin:2rem 0 .7rem; font-size:.98rem; font-weight:500; line-height:1.55;
-  color:var(--ink-soft); max-width:44rem; padding-left:.9rem;
-  border-left:2px solid var(--accent-soft);
-}
-ul.bullets{list-style:none; margin:0; padding:0; max-width:44rem}
-ul.bullets li{
-  position:relative; padding:.42rem 0 .42rem 1.1rem;
-  border-bottom:1px solid var(--rule-soft); font-size:.96rem;
-}
-ul.bullets li:last-child{border-bottom:0}
-ul.bullets li::before{
-  content:""; position:absolute; left:0; top:1.05em;
-  width:.5rem; height:1px; background:var(--accent);
-}
-p.dropped{
-  max-width:44rem; padding-left:1.6rem; text-indent:-1.6rem;
-  border-left:2px solid var(--rule-soft); padding-top:.1rem;
-  margin:0 0 .9rem; padding-left:2.6rem; text-indent:-1rem;
-}
 
 @media (max-width:60rem){
   .wrap{grid-template-columns:minmax(0,1fr)}
   nav.side{
-    position:fixed; inset:3.1rem 0 auto 0; height:auto; max-height:75vh;
+    position:fixed; inset:var(--bar) 0 auto 0; height:auto; max-height:75vh;
     background:var(--bg); border-right:0; border-bottom:1px solid var(--rule);
     z-index:35; display:none;
   }
@@ -782,12 +499,18 @@ JS = """
     if(!now) now=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
     var next=now==='dark'?'light':'dark';
     root.setAttribute('data-theme',next);
+    tog.setAttribute('aria-pressed',next==='dark'?'true':'false');
+    tog.setAttribute('aria-label',next==='dark'?'use the light theme'
+                                              :'use the dark theme');
     try{ localStorage.setItem('landin-theme',next); }catch(e){}
   });
 
   var side=document.querySelector('nav.side');
   var menu=document.getElementById('menu');
-  if(menu) menu.addEventListener('click',function(){ side.classList.toggle('open'); });
+  if(menu) menu.addEventListener('click',function(){
+    var open=side.classList.toggle('open');
+    menu.setAttribute('aria-expanded',open?'true':'false');
+  });
   if(side) side.addEventListener('click',function(e){
     if(e.target.closest('a')) side.classList.remove('open');
   });
@@ -828,7 +551,7 @@ JS = """
      actually finds, so the box does something on every page rather than
      on two of them. */
   var find=document.getElementById('find'), count=document.getElementById('found');
-  var UNITS=['.item, .finding', '.route, .card, figure.shown', 'main section'];
+  var UNITS=['.item', '.route, .card, figure.shown', 'main section'];
   function scope(){ return document.querySelector('.doc.on') || document; }
   function pick(here){
     for(var i=0;i<UNITS.length;i++){
@@ -837,6 +560,14 @@ JS = """
     }
     return {sel:'', list:[]};
   }
+  /* A link to a section the filter has hidden is a control that does
+     nothing, so it is hidden with it -- and shown again when cleared. */
+  function syncNav(){
+    document.querySelectorAll('nav.side a.sect').forEach(function(a){
+      var t=document.getElementById(a.getAttribute('href').slice(1));
+      a.classList.toggle('hide',!!t&&t.classList.contains('hide'));
+    });
+  }
   function filter(){
     var here=scope(), chosen=pick(here), units=chosen.list;
     var secs=[].slice.call(here.querySelectorAll('main section'));
@@ -844,6 +575,7 @@ JS = """
     if(!q){
       units.forEach(function(u){ u.classList.remove('hide'); });
       secs.forEach(function(s){ s.classList.remove('hide'); });
+      syncNav();
       count.textContent=''; return;
     }
     var hits=0;
@@ -862,7 +594,9 @@ JS = """
                                    && !!s.querySelector(chosen.sel));
       });
     }
-    count.textContent=hits+(hits===1?' match':' matches');
+    syncNav();
+    count.textContent=hits+(hits===1?' match':' matches')
+      +(q?' for “'+q+'”':'');
   }
   window.landinFilter=filter;
   if(find){
@@ -871,19 +605,29 @@ JS = """
       if(e.key==='Escape'){ find.value=''; filter(); find.blur(); }
     });
   }
+  /* A bare '/' used to be swallowed anywhere on the page, which breaks
+     speech input and anything else that emits one (WCAG 2.1.4).  It now
+     only reaches the filter when no field has focus. */
   document.addEventListener('keydown',function(e){
-    if(e.key==='/' && find && document.activeElement!==find){ e.preventDefault(); find.focus(); }
+    if(e.key!=='/'||!find) return;
+    var on=document.activeElement;
+    if(on&&on!==document.body&&/^(INPUT|TEXTAREA|SELECT)$/.test(on.tagName)) return;
+    if(on===find) return;
+    e.preventDefault(); find.focus();
   });
 
   /* what a citation says, without leaving the line */
   var pop=document.getElementById('pop');
   function hide(){ if(pop) pop.style.display='none'; }
-  document.addEventListener('mouseover',function(e){
-    var a=e.target.closest('a.cite'); if(!a||!pop) return;
+  function show(a){
+    if(!a||!pop) return;
     var href=a.getAttribute('href');
     if(href.charAt(0)!=='#') return;
     var t=document.getElementById(href.slice(1)); if(!t) return;
-    var p=t.querySelector('p'); if(!p) return;
+    /* A construct whose body is only code has no paragraph -- [0010] is
+       one line of comment and a fence -- and the preview used to show
+       nothing at all for those.  Its heading says what it is. */
+    var p=t.querySelector('p')||t.querySelector('h3'); if(!p) return;
     pop.innerHTML='<span class="tag mono">['+a.dataset.cite+']</span>';
     pop.appendChild(document.createTextNode(p.textContent));
     pop.style.display='block';
@@ -893,10 +637,20 @@ JS = """
     if(top<window.scrollY+8) top=r.bottom+window.scrollY+8;
     pop.style.left=Math.max(window.scrollX+8,left)+'px';
     pop.style.top=top+'px';
-  });
-  document.addEventListener('mouseout',function(e){
-    if(e.target.closest('a.cite')) hide();
-  });
+    a.setAttribute('aria-describedby','pop');
+  }
+  /* A citation is a link, so it is already in the tab order; hovering was
+     the only way to read what it says, which left the keyboard and every
+     touch device out. */
+  document.addEventListener('mouseover',function(e){ show(e.target.closest('a.cite')); });
+  document.addEventListener('focusin',function(e){ show(e.target.closest('a.cite')); });
+  function drop(e){
+    var a=e.target.closest('a.cite');
+    if(a){ a.removeAttribute('aria-describedby'); hide(); }
+  }
+  document.addEventListener('mouseout',drop);
+  document.addEventListener('focusout',drop);
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') hide(); });
   window.addEventListener('scroll',hide,{passive:true});
 
   /* light up the construct a link arrives at */
@@ -915,160 +669,11 @@ JS = """
 def esc(text):
     return html.escape(text, quote=False)
 
-ARTIFACT_CSS = """
-.doc{display:none}
-.doc.on{display:block}
-nav.side .secs{display:none}
-nav.side .secs.on{display:block}
-nav.side button.doc{
-  display:block; width:100%; text-align:left; font:inherit; font-size:.88rem;
-  color:var(--ink-soft); background:none; border:0; border-radius:4px;
-  padding:.26rem .45rem; margin-left:-.45rem; cursor:pointer; line-height:1.35;
-}
-nav.side button.doc:hover{background:var(--panel-2); color:var(--ink)}
-nav.side button.doc[aria-current="true"]{
-  color:var(--accent); background:var(--accent-bg); font-weight:600;
-}
-nav.side button.doc:focus-visible{outline:2px solid var(--accent-soft); outline-offset:1px}
-"""
 
-ARTIFACT_JS = """
-(function(){
-  var panels={}, groups={}, buttons={};
-  document.querySelectorAll('.doc').forEach(function(d){ panels[d.dataset.doc]=d; });
-  document.querySelectorAll('nav.side .secs').forEach(function(g){ groups[g.dataset.doc]=g; });
-  document.querySelectorAll('nav.side button.doc').forEach(function(b){
-    buttons[b.dataset.doc]=b;
-    b.addEventListener('click',function(){ show(b.dataset.doc, true); });
-  });
-
-  function show(key, top){
-    if(!panels[key]) return;
-    Object.keys(panels).forEach(function(k){
-      panels[k].classList.toggle('on',k===key);
-      if(groups[k]) groups[k].classList.toggle('on',k===key);
-      if(buttons[k]) buttons[k].setAttribute('aria-current',k===key?'true':'false');
-    });
-    var where=document.getElementById('where');
-    if(where) where.textContent=buttons[key]?buttons[key].textContent:'';
-    if(top) window.scrollTo({top:0});
-    if(window.landinFilter) window.landinFilter();
-  }
-
-  /* a citation may name a construct in another document */
-  function reveal(id){
-    var t=document.getElementById(id); if(!t) return false;
-    var panel=t.closest('.doc');
-    if(panel && !panel.classList.contains('on')) show(panel.dataset.doc);
-    t.scrollIntoView({block:'start'});
-    return true;
-  }
-  document.addEventListener('click',function(e){
-    var a=e.target.closest('a[href^="#"]'); if(!a) return;
-    var id=a.getAttribute('href').slice(1);
-    if(reveal(id)){ e.preventDefault(); history.replaceState(null,'','#'+id); }
-  });
-  window.addEventListener('hashchange',function(){
-    if(location.hash.length>1) reveal(location.hash.slice(1));
-  });
-
-  show(document.querySelector('nav.side button.doc').dataset.doc);
-  if(location.hash.length>1) reveal(location.hash.slice(1));
-})();
-"""
-
-
-def artifact_nav(docs, groups):
-    """One sidebar for five documents: pick one, then move about inside it."""
-    out = ['<h3>documents</h3>']
-    for d in docs:
-        out.append(f'<button class="doc" type="button" data-doc="{d["key"]}">'
-                   f'{esc(d["nav"])}</button>')
-    out.append('<h3>find</h3>')
-    out.append('<input id="find" type="search" placeholder="filter — press /" '
-               'autocomplete="off" spellcheck="false">')
-    out.append('<div id="found"></div>')
-    out.append('<h3>in this document</h3>')
-    for d in docs:
-        out.append(f'<div class="secs" data-doc="{d["key"]}">')
-        for sid, title, count in groups[d["key"]]:
-            label = esc(title.split("  —  ")[0])
-            n = str(count) if count else ""
-            out.append(f'<a class="sect" href="#{sid}">'
-                       f'<span class="num">{n}</span><span>{label}</span></a>')
-        out.append("</div>")
-    return "\n".join(out)
-
-
-def artifact_page(panels, nav):
-    """A fragment: the artifact host supplies the document around it."""
-    return f"""<title>Landin — the specification, highlighted</title>
-<style>{CSS}{ARTIFACT_CSS}</style>
-<header class="bar">
-  <span class="brand">{landin_icon.inline("mark")}<span>Landin</span></span>
-  <span class="where" id="where"></span>
-  <span class="grow"></span>
-  <button id="menu" type="button" aria-label="documents and sections">menu</button>
-</header>
-<div class="wrap">
-<nav class="side">
-{nav}
-</nav>
-<main>
-{panels}
-</main>
-</div>
-<div id="pop"></div>
-<script>{JS}{ARTIFACT_JS}</script>
-"""
-
-
-def build_artifact(source, out_path):
-    """Every document on one page, since an artifact is one page."""
-    loaded = {d["src"]: split_sections((source / d["src"]).read_text())
-              for d in DOCS}
-    tour_ids = set()
-    for sec in loaded[DOCS[0]["src"]][1]:
-        for item in parse_tour_body(sec["body"]):
-            if item["id"]:
-                tour_ids.add(item["id"])
-            tour_ids.update(item["anchors"])
-
-    panels, groups = [], {}
-    for d in DOCS:
-        front, sections = loaded[d["src"]]
-        symbols = collect_symbols((source / d["src"]).read_text().split("\n"))
-        prefix = d["key"] + "-"
-
-        findings = set()
-        for sec in sections:
-            if is_findings(sec["body"]):
-                findings |= {e["id"] for e in parse_findings(sec["body"])[1]}
-
-        def links(ref, _f=findings, _ids=tour_ids):
-            return f"#{ref}" if ref in _f or ref in _ids else None
-
-        if d["kind"] == "tour":
-            body, nav_sections, _ = render_tour_sections(
-                sections, links, symbols, prefix)
-        else:
-            body, nav_sections = render_prototype_sections(
-                sections, links, symbols, prefix)
-        groups[d["key"]] = nav_sections
-        hero = render_plain(parse_plain(front["body"]), links)
-        panels.append(
-            f'<div class="doc" data-doc="{d["key"]}">\n'
-            f'<div class="hero"><div class="kind">{esc(d["nav"])}</div>'
-            f'<h1>{esc(front["title"])}</h1>{hero}</div>\n{body}\n'
-            f'<footer>Generated from <code>{esc(d["src"])}</code> by '
-            f'<code>render_html.py</code>. The text file is the specification; '
-            f'this page is a reading of it. The repository is at '
-            f'<a href="{REPO}">git.sr.ht/~sinnfrei/landin</a>.</footer>\n</div>')
-
-    out_path.write_text(artifact_page("\n".join(panels), artifact_nav(DOCS, groups)))
-    return out_path
-
-
+def attr(text):
+    """For a value that lands inside "..." -- esc leaves quotes alone, and
+    a heading with a quotation mark in it would end the attribute early."""
+    return html.escape(text)
 
 
 TICKED = re.compile(r"`([^`]+)`")
@@ -1084,20 +689,23 @@ def slug(title):
     return s or "section"
 
 
-def listing(code_html, cont=False):
-    return listing_of(f"<pre>{code_html}</pre>", cont)
+def listing(code_html, label=""):
+    return listing_of(f"<pre>{code_html}</pre>", label)
 
 
-def listing_of(pre_html, cont=False):
+def listing_of(pre_html, label=""):
     """The frame around a listing whose <pre> is already built.
 
     A <pre> may not contain a <pre>, and render_sample returns one of its
     own; wrapping that in another produced markup no parser is obliged to
     read the same way.
     """
-    klass = "listing cont" if cont else "listing"
-    return (f'<div class="{klass}">{pre_html}'
-            f'<button class="copy" type="button">copy</button></div>')
+    #  138 buttons on the tour all read "copy" and nothing else, which is
+    #  what a screen reader announces, one after another.  The construct
+    #  the listing belongs to is the only thing that tells them apart.
+    says = f' aria-label="copy the code for [{label}]"' if label else ""
+    return (f'<div class="listing">{pre_html}'
+            f'<button class="copy" type="button"{says}>copy</button></div>')
 
 
 def render_landin(lines, hl):
@@ -1141,215 +749,6 @@ def render_sample(lines, hl, links):
         else:
             out.append(cite_links(esc(line), links))
     return f'<pre class="sample">{chr(10).join(out)}</pre>'
-
-
-def render_plain(blocks, links):
-    out = []
-    for kind, payload in blocks:
-        if kind == "para":
-            out.append(f"<p>{prose_html(payload, links)}</p>")
-        elif kind == "quote":
-            out.append(f"<blockquote>{prose_html(payload, links)}</blockquote>")
-        else:
-            body = "\n".join(prose_html(l, links) for l in payload)
-            out.append(f"<pre>{body}</pre>")
-    return "\n".join(out)
-
-
-def is_findings(body):
-    """A closing findings section, whatever its title says."""
-    return sum(1 for l in body if FINDING.match(l)) >= 2
-
-
-def hanging_groups(body):
-    """Group free text the way a hanging indent groups it.
-
-    A flush-left line opens a group and the indented lines under it belong
-    to it, so the entries of WHAT WAS TRIED AND DROPPED come apart even
-    though no blank line separates them, and a plain paragraph of
-    flush-left lines stays one group.
-    """
-    groups, run = [], []
-
-    def close():
-        if run:
-            groups.append(list(run))
-            run.clear()
-
-    for line in body:
-        if not line.strip():
-            close()
-            continue
-        flush = not line[:1].isspace()
-        if flush and any(l[:1].isspace() for l in run):
-            close()
-        run.append(line.rstrip())
-    close()
-    return groups
-
-
-def interior_blanks(body):
-    solid = [i for i, l in enumerate(body) if l.strip()]
-    if not solid:
-        return 0
-    return len([l for l in body[solid[0]:solid[-1]] if not l.strip()])
-
-
-def section_style(title, body):
-    """What a section that is not a run of constructs actually is.
-
-    Read from the shape rather than from the title, so that renaming a
-    section cannot silently turn a list into one paragraph of run-together
-    lines. A section of constructs answers None and is parsed as such.
-    """
-    if is_findings(body):
-        return "findings"
-    if any(ITEM.match(l) for l in body):
-        return None
-    solid = [l.rstrip() for l in body if l.strip()]
-    if not solid:
-        return "prose"
-    if any(len(g) > 1 and any(l[:1].isspace() for l in g)
-           for g in hanging_groups(body)):
-        return "entries"
-    if (len(solid) >= 4 and interior_blanks(body) == 0
-            and not any(l[:1].isspace() for l in solid)
-            and not any(l.endswith(".") for l in solid)):
-        return "bullets"        # one line, one item, as the no-list is written
-    return "prose"
-
-
-def render_bullets(body, links):
-    out = ['<ul class="bullets">']
-    for line in body:
-        if line.strip():
-            out.append(f"<li>{prose_html(line.strip(), links)}</li>")
-    out.append("</ul>")
-    return "\n".join(out)
-
-
-def render_entries(body, links):
-    """Hanging-indent entries, as WHAT WAS TRIED AND DROPPED is written."""
-    out = []
-    for group in hanging_groups(body):
-        text = " ".join(l.strip() for l in group)
-        hanging = len(group) > 1 and any(l[:1].isspace() for l in group)
-        klass = ' class="dropped"' if hanging else ""
-        out.append(f"<p{klass}>{prose_html(text, links)}</p>")
-    return "\n".join(out)
-
-
-def render_findings(body, links, hl):
-    lead, entries = parse_findings(body)
-    out = []
-
-    def children_html(children):
-        bits = []
-        for kind, payload in children:
-            if kind == "p":
-                bits.append(f"<p>{prose_html(payload, links)}</p>")
-            else:
-                strip = min(len(l) - len(l.lstrip()) for l in payload if l.strip())
-                bits.append(render_sample([l[strip:] for l in payload], hl, links))
-        return chr(10).join(bits)
-
-    if lead:
-        out.append(f'<div class="lead">{children_html(lead)}</div>')
-    for e in entries:
-        out.append(f'<div class="finding" id="{e["id"]}">'
-                   f'<a class="tag" href="#{e["id"]}">{e["id"]}</a>'
-                   f'<div>{children_html(e["children"])}</div></div>')
-    return "\n".join(out)
-
-
-def render_section_head(title, note, links):
-    if "  —  " in title:
-        mod, rest = title.split("  —  ", 1)
-        head = (f'<span class="mod">{esc(mod)}</span>'
-                f'<span class="of">— {esc(rest)}</span>')
-    else:
-        head = esc(title)
-    out = [f"<h2>{head}</h2>"]
-    text = " ".join(l.strip() for l in note if l.strip())
-    if text:
-        out.append(f'<p class="note">{prose_html(text, links)}</p>')
-    return "\n".join(out)
-
-
-def render_tour_sections(sections, links, symbols, prefix=""):
-    """Every construct as a block of prose and the code under it."""
-    out, nav, ids = [], [], []
-    for sec in sections:
-        sid = prefix + slug(sec["title"])
-        style = section_style(sec["title"], sec["body"])
-        items = [] if style else parse_tour_body(sec["body"])
-        body = []
-        if style == "bullets":
-            body.append(render_bullets(sec["body"], links))
-        elif style == "entries":
-            body.append(render_entries(sec["body"], links))
-        elif style == "findings":
-            body.append(render_findings(sec["body"], links,
-                                        Highlighter(*symbols, links=links)))
-        elif style == "prose":
-            body.append(render_plain(parse_plain(sec["body"]), links))
-
-        for item in items:
-            hl = Highlighter(*symbols, links=links)
-            inner = []
-            for kind, payload in item["children"]:
-                if kind == "p":
-                    inner.append(f"<p>{prose_html(payload, links)}</p>")
-                elif kind == "pre":
-                    inner.append(render_sample(payload, hl, links))
-                else:
-                    cont = bool(payload) and payload[0][:1].isspace()
-                    inner.append(listing(hl.block(payload), cont))
-            anchors = "".join(f'<span class="anchor" id="{a}"></span>'
-                              for a in item["anchors"] if a != item["id"])
-            if item["id"]:
-                ids.append(item["id"])
-                ids.extend(a for a in item["anchors"] if a != item["id"])
-                body.append(
-                    f'<div class="item" id="{item["id"]}">{anchors}'
-                    f'<a class="tag" href="#{item["id"]}">{item["id"]}</a>'
-                    f'<div>{chr(10).join(inner)}</div></div>')
-            else:
-                body.append(f'<div class="lead">{anchors}'
-                            f'{chr(10).join(inner)}</div>')
-
-        count = len([i for i in items if i["id"]])
-        nav.append((sid, sec["title"], count))
-        out.append(f'<section id="{sid}" data-title="{esc(sec["title"])}">\n'
-                   f'{render_section_head(sec["title"], sec["note"], links)}\n'
-                   f'{chr(10).join(body)}\n</section>')
-    return "\n".join(out), nav, ids
-
-
-def render_prototype_sections(sections, links, symbols, prefix=""):
-    """The code is the argument here, so each section stays one listing."""
-    out, nav = [], []
-    for sec in sections:
-        sid = prefix + slug(sec["title"])
-        if is_findings(sec["body"]):
-            body = render_findings(sec["body"], links,
-                                   Highlighter(*symbols, links=links))
-            count = len(parse_findings(sec["body"])[1])
-        else:
-            hl = Highlighter(*symbols, links=links)
-            parts, count = [], 0
-            for kind, payload in split_banners(sec["body"]):
-                if kind == "banner":
-                    parts.append(f'<h3 class="banner">{prose_html(payload, links)}</h3>')
-                else:
-                    count += len(payload)
-                    parts.append(listing(hl.block(payload)))
-            body = "\n".join(parts)
-        nav.append((sid, sec["title"], count))
-        out.append(f'<section id="{sid}" data-title="{esc(sec["title"])}">\n'
-                   f'{render_section_head(sec["title"], sec["note"], links)}\n'
-                   f'{body}\n</section>')
-    return "\n".join(out), nav
 
 
 # --------------------------------------------------------------------------
@@ -1414,7 +813,10 @@ GUIDE_CSS = """
 .guide li{margin:0 0 6px}
 .guide blockquote{margin:0 0 14px;padding:2px 0 2px 14px;
   border-left:2px solid var(--accent-soft);color:var(--ink-soft)}
-.guide table{width:100%;border-collapse:collapse;margin:0 0 16px;
+/*  A table with a long path in a cell cannot fit a phone, and nothing
+    scrolled: it simply overflowed the page.  */
+.scroller{overflow-x:auto; margin:0 0 16px}
+.guide table{width:100%;border-collapse:collapse;
   font:400 14px/1.5 var(--ui)}
 .guide th{text-align:left;font-weight:600;color:var(--ink-soft);
   border-bottom:1px solid var(--rule);padding:7px 10px 7px 0;
@@ -1423,7 +825,6 @@ GUIDE_CSS = """
   vertical-align:top}
 .guide tr:last-child td{border-bottom:0}
 .guide td code,.guide th code{white-space:nowrap}
-.guide .term{color:var(--ink-soft)}
 .cards h3.group{grid-column:1/-1;font:600 13px/1 var(--ui);
   letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);
   margin:18px 0 2px}
@@ -1453,17 +854,10 @@ figure.shown figcaption .tag{
 }
 figure.shown figcaption .tag:hover{border-color:var(--accent-soft)}
 section.landing p.more{color:var(--ink-soft); font-size:.93rem; max-width:44rem}
-.routes{display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(19rem,1fr))}
-.route{
-  display:block; padding:1rem 1.1rem; text-decoration:none; color:inherit;
-  background:var(--panel); border:1px solid var(--rule); border-radius:8px;
-  border-left:2px solid var(--accent-soft);
-}
-.route:hover{border-color:var(--accent-soft); box-shadow:var(--sh)}
-.route strong{display:block; font-size:.95rem; margin-bottom:.3rem;
-  color:var(--accent)}
-.route span{display:block; color:var(--ink-soft); font-size:.87rem;
-  line-height:1.5}
+.routes{display:grid; gap:1rem; margin:0 0 1rem;
+  grid-template-columns:repeat(auto-fit,minmax(17rem,1fr))}
+.route{border-left:2px solid var(--accent-soft)}
+.route strong{color:var(--accent)}
 """
 
 #  A hyphen is not \w, and the documents tag a fence `landin-grammar`.
@@ -1524,16 +918,24 @@ def cells(line):
 
 def guide_table(rows, links, targets):
     head = cells(rows[0])
-    out = ["<table>", "<thead><tr>"]
+    out = ['<div class="scroller">', "<table>", "<thead><tr>"]
     for cell in head:
-        out.append(f"<th>{inline(cell, links, targets)}</th>")
+        out.append(f'<th scope="col">{inline(cell, links, targets)}</th>')
     out.append("</tr></thead><tbody>")
     for row in rows[2:]:
+        got = cells(row)
+        if len(got) != len(head):
+            #  A row that does not match its header renders lopsided, and
+            #  a table read as a row of pipes is what this reader exists
+            #  to refuse.
+            raise SystemExit(
+                "render_html: a table row has %d cells and its header %d:\n  %s"
+                % (len(got), len(head), row.strip()))
         out.append("<tr>")
-        for cell in cells(row):
+        for cell in got:
             out.append(f"<td>{inline(cell, links, targets)}</td>")
         out.append("</tr>")
-    out.append("</tbody></table>")
+    out.append("</tbody></table></div>")
     return "".join(out)
 
 
@@ -1580,10 +982,17 @@ def parse_guide(text):
         if fence:
             language = fence.group(1)
             body = []
+            opened = index + 1
             index += 1
             while index < len(lines) and not FENCE.match(lines[index]):
                 body.append(lines[index])
                 index += 1
+            if index >= len(lines):
+                #  It used to run to the end of the file and take every
+                #  heading after it, silently.
+                raise SystemExit(
+                    "render_html: the fence opened at line %d is never closed"
+                    % opened)
             index += 1
             block("code", (language, body))
             continue
@@ -1610,7 +1019,17 @@ def parse_guide(text):
                 elif number:
                     items.append(number.group(1))
                 elif lines[index].startswith("  ") and items:
-                    items[-1] += " " + lines[index].strip()
+                    #  An indented line continues the item it sits under.
+                    #  An indented BULLET is a nested list, which this
+                    #  reader does not build -- folding it into the parent
+                    #  turned structure into a run-on sentence that no
+                    #  word count could notice, so it is refused instead.
+                    rest = lines[index].strip()
+                    if BULLET.match(rest) or NUMBER.match(rest):
+                        raise SystemExit(
+                            "render_html: nested list at line %d is not "
+                            "supported:\n  %s" % (index + 1, lines[index]))
+                    items[-1] += " " + rest
                 elif not lines[index].strip() and items:
                     #  A blank line between items is a loose list, not the
                     #  end of one: three lettered alternatives spaced apart
@@ -1659,9 +1078,17 @@ def parse_guide(text):
 def render_guide_blocks(blocks, links, targets, hl):
     out = []
     open_item = False
+    inside = ""
     for kind, payload in blocks:
         if kind == "para":
-            out.append(f"<p>{inline(payload[0], links, targets)}</p>")
+            #  A finding opens a paragraph flush left -- "Z7  A pattern
+            #  binding needs..." -- and 26 citations across the prototypes
+            #  link to it.  Nothing emitted the anchor, so every one of
+            #  those links went nowhere.
+            found = FINDING.match(payload[0])
+            anchor = (f'<span class="anchor" id="{found.group(1)}"></span>'
+                      if found else "")
+            out.append(f"<p>{anchor}{inline(payload[0], links, targets)}</p>")
         elif kind == "sub":
             #  A construct heading is `[NNNN] title`, and its anchor is the
             #  id alone: 872 citations outside the documents link to
@@ -1677,9 +1104,16 @@ def render_guide_blocks(blocks, links, targets, hl):
             if found:
                 if open_item:
                     out.append("</div>")
-                out.append(f'<div class="item" id="{found.group(1)}">')
-                open_item = True
-                out.append(f'<h3 class="sub">{inline(payload, links, targets)}</h3>')
+                cid = found.group(1)
+                out.append(f'<div class="item" id="{cid}">')
+                open_item, inside = True, cid
+                #  The number, as its own anchor.  The stylesheet reserves
+                #  a gutter for it and lights it up when a citation
+                #  arrives; without it the gutter was empty on every
+                #  construct and arriving at one highlighted nothing.
+                out.append(f'<a class="tag" href="#{cid}">{cid}</a>')
+                rest = payload[len(cid) + 2:].strip() or payload
+                out.append(f'<h3 class="sub">{inline(rest, links, targets)}</h3>')
             else:
                 out.append(f'<h3 class="sub" id="{slug(payload)}">'
                            f"{inline(payload, links, targets)}</h3>")
@@ -1697,10 +1131,12 @@ def render_guide_blocks(blocks, links, targets, hl):
         elif kind == "code":
             language, body = payload
             if language in ("ldn", "landin"):
-                out.append(listing_of(render_landin(body, hl)))
+                out.append(listing_of(render_landin(body, hl), inside))
             else:
-                text = "\n".join(body)
-                out.append(f'<div class="listing"><pre>{esc(text)}</pre></div>')
+                #  A shell or text block is a listing too, and used to be
+                #  built by hand here -- which is why it was the one kind
+                #  of block with no copy button.
+                out.append(listing(esc("\n".join(body)), inside))
         else:
             raise SystemExit(f"render_html: unknown guide block {kind!r}")
     if open_item:
@@ -1733,7 +1169,7 @@ def render_guide(text, links, targets, hl):
         nav_sections.append((sid, sec["title"], subs))
         body.append(
             f'<section class="guide" id="{sid}" '
-            f'data-title="{esc(sec["title"])}">\n'
+            f'data-title="{attr(sec["title"])}">\n'
             f'<h2>{inline(sec["title"], links, targets)}</h2>\n'
             + render_guide_blocks(sec["blocks"], links, targets, hl)
             + "\n</section>")
@@ -1746,11 +1182,14 @@ def nav_html(docs, current, sections):
     out.append(f'<a class="doc" href="index.html">the front page</a>')
     for d in docs:
         here = ' here' if d["out"] == current else ""
-        out.append(f'<a class="doc{here}" href="{d["out"]}">{esc(d["nav"])}</a>')
+        now = ' aria-current="page"' if d["out"] == current else ""
+        out.append(f'<a class="doc{here}"{now} href="{d["out"]}">'
+                   f'{esc(d["nav"])}</a>')
     out.append('<h3>find</h3>')
     out.append('<input id="find" type="search" placeholder="filter — press /" '
+               'aria-label="filter this document" '
                'autocomplete="off" spellcheck="false">')
-    out.append('<div id="found"></div>')
+    out.append('<div id="found" role="status" aria-live="polite"></div>')
     if sections:
         out.append('<h3>in this document</h3>')
         for sid, title, count in sections:
@@ -1771,11 +1210,11 @@ def social(title, description, out):
     where = f"{SITE_URL}/" + ("" if out == "index.html" else out)
     tags = [f'<link rel="canonical" href="{where}">']
     if description:
-        tags.append(f'<meta name="description" content="{esc(description)}">')
+        tags.append(f'<meta name="description" content="{attr(description)}">')
     tags += [
         '<meta property="og:type" content="website">',
         f'<meta property="og:site_name" content="Landin">',
-        f'<meta property="og:title" content="{esc(title)}">',
+        f'<meta property="og:title" content="{attr(title)}">',
         f'<meta property="og:url" content="{where}">',
         f'<meta property="og:image" content="{SITE_URL}/{OG_IMAGE}">',
         '<meta property="og:image:width" content="1200">',
@@ -1784,7 +1223,7 @@ def social(title, description, out):
         '<meta name="twitter:card" content="summary_large_image">',
     ]
     if description:
-        tags.append(f'<meta property="og:description" content="{esc(description)}">')
+        tags.append(f'<meta property="og:description" content="{attr(description)}">')
     return "\n".join(tags)
 
 
@@ -1803,33 +1242,36 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 <style>{CSS}{GUIDE_CSS}</style>
 </head>
 <body>
+<a class="skip" href="#document">skip to the document</a>
 <header class="bar">
   <a class="brand" href="index.html">{landin_icon.inline("mark")}<span>Landin</span></a>
   <span class="where" id="where">{esc(kind)}</span>
   <span class="grow"></span>
   <a class="src" href="{REPO}">source</a>
-  <button id="menu" type="button" aria-label="sections">menu</button>
-  <button id="theme" type="button" aria-label="light or dark">theme</button>
+  <button id="menu" type="button" aria-label="documents and sections"
+          aria-expanded="false" aria-controls="side">menu</button>
+  <button id="theme" type="button" aria-label="use the dark theme"
+          aria-pressed="false">theme</button>
 </header>
 <div class="wrap">
-<nav class="side">
+<nav class="side" id="side" aria-label="documents and sections">
 {nav}
 </nav>
-<main>
-<div class="hero{' wide' if logo else ''}">
+<main id="document">
+<div class="hero{' wide' if logo else ''}" id="{slug(heading)}">
   {landin_icon.inline("light", classes="logo") if logo else ''}
   <div class="kind">{esc(kind)}</div>
   <h1>{esc(heading)}</h1>
   {hero}
 </div>
 {body}
+</main>
 <footer>
 Generated from <code>{esc(docname)}</code> by <code>render_html.py</code>.
 The text file is the specification; this page is a reading of it.
 Regenerate with <code>python3 render_html.py</code>.
 The repository is at <a href="{REPO}">git.sr.ht/~sinnfrei/landin</a>.
 </footer>
-</main>
 </div>
 <div id="pop"></div>
 <script>{JS}</script>
@@ -1938,6 +1380,24 @@ def write_resources(docs):
 
     return ["sitemap.xml", "robots.txt", OG_IMAGE,
             "icon-mono.svg", "apple-touch-icon.png"]
+
+
+def shelf_count(constructs, findings, sections):
+    """What a contents card says a document holds.
+
+    Every DOCS card used to say "N constructs in M sections", so the four
+    prototypes -- which carry findings and not constructs -- advertised
+    themselves as "0 constructs in 4 sections", and a document with no
+    headings at all as "0 sections".
+    """
+    if constructs:
+        held = f"{constructs} constructs"
+    elif findings:
+        held = f"{findings} findings"
+    else:
+        held = ""
+    where = f"{sections} sections" if sections else "one page"
+    return f"{held} in {where}" if held else where
 
 
 def tab_title(title, nav):
@@ -2078,6 +1538,16 @@ SCRIPTY = re.compile(r"<(script|style)\b.*?</\1>", re.S)
 ATTR = re.compile(r'\s(?:href|src)="([^"]*)"')
 
 
+MAIN = re.compile(r"<main\b[^>]*>(.*)</main>", re.S)
+ASIDE = re.compile(r"<(nav|header|footer)\b[^>]*>.*?</\1>", re.S)
+
+
+def body_region(page_html):
+    """The part of a page that is the document, and not the furniture."""
+    found = MAIN.search(page_html)
+    return ASIDE.sub(" ", found.group(1) if found else page_html)
+
+
 def verify(src: Path, out: Path):
     """Nothing may be lost on the way to the page.
 
@@ -2097,7 +1567,13 @@ def verify(src: Path, out: Path):
     #  A link's target lives in an attribute rather than in the text, and
     #  stripping tags takes it with them, so the targets are collected and
     #  counted alongside what a reader sees.
-    raw = SCRIPTY.sub(" ", out.read_text())
+    #  Only the document's own region counts.  Reduced over the whole
+    #  page, the sidebar's 15 document names, every section title in the
+    #  navigation, the meta description and the og tags all counted as
+    #  content -- so a heading that vanished from the body still balanced
+    #  against the copy of it in the navigation, and this said "every word
+    #  is on the page" while 79 citations had gone inert.
+    raw = SCRIPTY.sub(" ", body_region(out.read_text()))
     targets = " ".join(ATTR.findall(raw))
     parts = PRE.split(raw)
     page_text = html.unescape("\n".join(
@@ -2114,17 +1590,78 @@ def verify(src: Path, out: Path):
     return not lost
 
 
+def verify_front(out: Path, pieces):
+    """The front page holds no document of its own, so it is checked
+    against the pieces it was built from.
+
+    It was the one page with no check at all: the pitch, the status line
+    and the three samples are lifted out of tour.md and README.md, and any
+    of the three readers could quietly return nothing -- a renamed status
+    line, a moved rule, a construct that lost its fence -- leaving a blank
+    section that no word count would notice.
+    """
+    from collections import Counter
+    got = Counter(WORD.findall(html.unescape(
+        TAG.sub(" ", body_region(out.read_text())))))
+    short = []
+    for what, text in pieces:
+        for word, n in Counter(WORD.findall(text)).items():
+            if got.get(word, 0) < n:
+                short.append((what, word))
+                break
+    if short:
+        print(f"  {out.name}: {len(short)} of its pieces are not on the page")
+        for what, word in short:
+            print(f"    {what}: {word!r} is missing")
+    else:
+        print(f"  {out.name}: the pitch, the status and "
+              f"{len(pieces) - 2} samples are on the page")
+    return not short
+
+
+USAGE = """render the documentation as HTML
+
+    python3 render_html.py                      render every document
+    python3 render_html.py --verify             and check nothing was lost
+    python3 render_html.py --from DIR           read the documents from DIR
+    python3 render_html.py tour.md spec.md      render only those
+
+An unrecognised argument is refused rather than ignored: '--verfiy' used to
+render all fifteen pages without checking one of them."""
+
+
 def main(argv):
-    audit = "--audit" in argv
+    #  main() is handed argv without the program name, so every element
+    #  here is an argument the caller meant.
+    expecting = False
+    for arg in argv:
+        if expecting:                       # the directory after --from
+            expecting = False
+            continue
+        if arg in ("--help", "-h"):
+            print(USAGE)
+            return 0
+        if arg == "--from":
+            expecting = True
+            continue
+        if arg == "--verify":
+            continue
+        why = ("no such option" if arg.startswith("-") else "not a document")
+        if arg.startswith("-") or not arg.endswith(".md"):
+            print(f"render_html: {why}: {arg}\n\n{USAGE}", file=sys.stderr)
+            return 2
+
     check = "--verify" in argv
-    one_page = "--artifact" in argv
 
     source = HERE
     if "--from" in argv:
-        source = Path(argv[argv.index("--from") + 1]).resolve()
-    named = [Path(a).name for a in argv if a.endswith(".txt")]
+        at = argv.index("--from") + 1
+        if at >= len(argv):
+            print("render_html: --from wants a directory", file=sys.stderr)
+            return 2
+        source = Path(argv[at]).resolve()
 
-    named += [Path(a).name for a in argv if a.endswith(".md")]
+    named = [Path(a).name for a in argv if a.endswith(".md")]
     docs = [d for d in DOCS if not named or d["src"] in named
             or d["src"].split("/")[-1] in named]
     guides = [g for g in GUIDES if not named or g["src"] in named
@@ -2133,27 +1670,6 @@ def main(argv):
         print("nothing to render; the documents are "
               + ", ".join(d["src"] for d in DOCS + GUIDES))
         return 1
-    loaded = {d["src"]: split_sections((source / d["src"]).read_text())
-              for d in DOCS}
-
-    tour_front, tour_sections = loaded[DOCS[0]["src"]]
-    tour_ids = set()
-    for sec in tour_sections:
-        for item in parse_tour_body(sec["body"]):
-            if item["id"]:
-                tour_ids.add(item["id"])
-            tour_ids.update(item["anchors"])
-
-    if audit:
-        return run_audit(loaded, tour_ids)
-
-    if one_page:
-        SITE.mkdir(exist_ok=True)
-        out = build_artifact(source, SITE / "landin-artifact.html")
-        print(f"{SITE.name}/{out.name}    {out.stat().st_size // 1024} KB, "
-              f"{len(DOCS)} documents on one page")
-        return 0
-
     SITE.mkdir(exist_ok=True)
     counts = {}
     dangling = []
@@ -2180,7 +1696,12 @@ def main(argv):
         def links(ref, _here=d["out"]):
             where = construct_page.get(ref) or finding_page.get(ref)
             if where is None:
-                if ref.isdigit() and ref.endswith("0"):
+                #  A construct id is a multiple of ten, so [4096] in
+                #  "[4096]f32 + [4096]f32" is an array size and not a
+                #  citation that failed.  A finding reference has no such
+                #  ambiguity and is always reported -- which is the class
+                #  the old guard could never see.
+                if not ref.isdigit() or ref.endswith("0"):
                     dangling.append(ref)
                 return None
             return f"#{ref}" if where == _here else f"{where}#{ref}"
@@ -2193,10 +1714,10 @@ def main(argv):
                    title or d["nav"], hero, body, nav, d["src"],
                    out=d["out"], description=d["blurb"])
         (SITE / d["out"]).write_text(out)
-        counts[d["out"]] = (
-            "%d constructs in %d sections"
-            % (sum(1 for c, w in construct_page.items() if w == d["out"]),
-               len(nav_sections)))
+        counts[d["out"]] = shelf_count(
+            sum(1 for c, w in construct_page.items() if w == d["out"]),
+            sum(1 for f, w in finding_page.items() if w == d["out"]),
+            len(nav_sections))
         print(f"{SITE.name}/{d['out']:<20} {len(out) // 1024:4d} KB  "
               f"{len(nav_sections)} sections")
 
@@ -2206,10 +1727,16 @@ def main(argv):
     for g in guides:
         text = (source / g["src"]).read_text()
 
-        def links(ref, _ids=tour_ids):
-            if ref in _ids:
-                return f"tour.html#{ref}"
-            return None
+        #  The same resolver the documents use.  This used to read a set
+        #  built from DOCS[0] -- spec.md, not the tour -- through the
+        #  pre-Markdown reader, so it was empty and every citation on
+        #  every guide page rendered as text.  79 of them on the roadmap.
+        def links(ref, _here=g["out"]):
+            where = construct_page.get(ref) or finding_page.get(ref)
+            if where is None:
+                dangling.append(ref)
+                return None
+            return f"#{ref}" if where == _here else f"{where}#{ref}"
 
         title, hero, body, nav_sections = render_guide(
             text, links, link_targets,
@@ -2219,61 +1746,57 @@ def main(argv):
                    hero, body, nav, g["src"],
                    out=g["out"], description=g["blurb"])
         (SITE / g["out"]).write_text(out)
-        counts[g["out"]] = f"{len(nav_sections)} sections"
+        counts[g["out"]] = shelf_count(0, 0, len(nav_sections))
         print(f"{SITE.name}/{g['out']:<20} {len(out) // 1024:4d} KB  "
               f"{len(nav_sections)} sections")
 
-    if check:
-        print("checking that nothing was dropped:")
-        ok = all(verify(source / d["src"], SITE / d["out"])
-                 for d in docs + guides)
-        if not ok:
-            print("some content is missing from the pages")
-            return 1
-
+    front = []
     if len(docs) == len(DOCS) and len(guides) == len(GUIDES):
         tour_text = (source / "tour.md").read_text()
         intro = tour_intro(tour_text)[:2]
         status = readme_status((source / "README.md").read_text())
+        samples = landing_samples(tour_text)
+
+        #  Each reader must have found something.  Failing loudly here is
+        #  the contract this renderer keeps everywhere else: refuse what
+        #  you cannot read rather than publishing a hole.
+        if not intro:
+            raise SystemExit("render_html: tour.md has no opening prose "
+                             "for the front page")
+        if not status:
+            raise SystemExit("render_html: README.md has no **Status:** "
+                             "line for the front page")
+        if len(samples) != len(LANDING_IDS):
+            missing = set(LANDING_IDS) - {cid for cid, _, _ in samples}
+            raise SystemExit("render_html: the front page shows "
+                             + ", ".join(sorted(missing))
+                             + ", which tour.md does not define with a "
+                               "landin fence")
+
         (SITE / "index.html").write_text(
-            index_page(DOCS + GUIDES, counts, intro, status,
-                       landing_samples(tour_text), guide_symbols,
+            index_page(DOCS + GUIDES, counts, intro, status, samples,
+                       guide_symbols,
                        total=len(re.findall(r"(?m)^### \[\d{4}\]",
                                             tour_text))))
         print(f"{SITE.name}/index.html")
         for name in write_resources(DOCS + GUIDES):
             print(f"{SITE.name}/{name}")
+        front = ([("the pitch", " ".join(intro)), ("the status", status)]
+                 + [(f"sample [{cid}]", "\n".join(code))
+                    for cid, _, code in samples])
+
+    if check:
+        print("checking that nothing was dropped:")
+        ok = all(verify(source / d["src"], SITE / d["out"])
+                 for d in docs + guides)
+        if front:
+            ok = verify_front(SITE / "index.html", front) and ok
+        if not ok:
+            print("some content is missing from the pages")
+            return 1
     if dangling:
         print(f"warning: {len(set(dangling))} citations point nowhere: "
               f"{', '.join(sorted(set(dangling)))}")
-    return 0
-
-
-def run_audit(loaded, tour_ids):
-    """Print how the tour's prose lines were classified, and what was skipped."""
-    front, sections = loaded["tour.md"]
-    samples, paras, breaks = 0, 0, 0
-    for sec in sections:
-        style = section_style(sec["title"], sec["body"])
-        if style:
-            print(f"[plain:{style}] {sec['title']}")
-            continue
-        items = parse_tour_body(sec["body"])
-        if not items:
-            print(f"[plain:none] {sec['title']}")
-        for item in items:
-            for kind, payload in item["children"]:
-                if kind == "pre":
-                    samples += 1
-                    print(f"  sample in [{item['id']}]:")
-                    for l in payload:
-                        print(f"      |{l}")
-                elif kind == "p":
-                    paras += 1
-            breaks += max(0, len([1 for k, _ in item["children"] if k == "p"]) - 1)
-    print(f"\n{samples} samples, {paras} paragraphs "
-          f"({breaks} paragraph breaks found inside constructs)")
-    print(f"{len(tour_ids)} construct anchors")
     return 0
 
 

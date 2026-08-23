@@ -83,6 +83,23 @@ def geometry():
     return " ".join(path.group(1).split()), plate.group(1), mark.group(1)
 
 
+def _tokens(path):
+    """The path as commands and numbers, refusing what neither reader takes.
+
+    bounds() and the rasteriser used to parse this string separately, and
+    they disagreed: bounds() accepted a cubic the rasteriser then died on,
+    and both upper-cased the command letter, so a relative path would have
+    been read as absolute and drawn wrong rather than refused.
+    """
+    parts = re.findall(r"[A-Za-z]|-?\d*\.?\d+", path)
+    for token in parts:
+        if token.isalpha() and token not in ("M", "L", "Q", "Z"):
+            raise SystemExit(
+                "assets/icon.svg: this reader takes M, L, Q and Z, not %r"
+                % token)
+    return parts
+
+
 def bounds():
     """The mark's own box, as `x y width height`.
 
@@ -92,12 +109,12 @@ def bounds():
     the two agree today to the third decimal.
     """
     path, _, _ = geometry()
-    parts = re.findall(r"[A-Za-z]|-?\d*\.?\d+", path)
-    arity = {"M": 1, "L": 1, "Q": 2, "C": 3}
+    parts = _tokens(path)
+    arity = {"M": 1, "L": 1, "Q": 2}
     xs, ys, i, cmd = [], [], 0, None
     while i < len(parts):
         if parts[i].isalpha():
-            cmd = parts[i].upper()
+            cmd = parts[i]
             i += 1
             continue
         for k in range(arity[cmd]):
@@ -129,8 +146,23 @@ def svg(name="light", size=None, style="", crop=False):
 
 
 def _document(plate, mark, size, style, crop=False):
+    """A whole document, and one that says how big it is.
+
+    A viewBox alone gives an SVG no intrinsic size, and a consumer that
+    needs one -- a favicon, an <img>, anything that is not being sized by
+    a stylesheet of ours -- gets nothing to draw: the tab reported 0x0 and
+    showed a broken image, while every parser called the markup fine.  So
+    the box is written out even when no size was asked for.  inline() does
+    not come through here, because a fragment in a page is sized by the
+    page.
+    """
     path, _, _ = geometry()
-    box = ' width="%d" height="%d"' % (size, size) if size else ""
+    if size:
+        box = ' width="%d" height="%d"' % (size, size)
+    else:
+        dims = bounds()[2:] if crop else (256, 256)
+        box = ' width="%s" height="%s"' % tuple(
+            ("%.3f" % v).rstrip("0").rstrip(".") for v in dims)
     out = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="%s"%s'
            ' role="img" aria-label="Landin">' % (_box(crop), box)]
     if style:
@@ -209,7 +241,7 @@ def data_uri(name="auto", size=None, crop=False):
 def _subpaths(steps=24):
     """The path as closed polylines, with the quadratics flattened."""
     path, _, _ = geometry()
-    parts = re.findall(r"[A-Za-z]|-?\d*\.?\d+", path)
+    parts = _tokens(path)
     out, run = [], []
     x = y = 0.0
     i, cmd = 0, None
@@ -224,7 +256,7 @@ def _subpaths(steps=24):
     while i < len(parts):
         token = parts[i]
         if token.isalpha():
-            cmd = token.upper()
+            cmd = token
             i += 1
             if cmd == "Z":
                 if len(run) > 2:
