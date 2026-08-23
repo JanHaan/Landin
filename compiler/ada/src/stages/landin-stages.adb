@@ -13,6 +13,7 @@ package body Landin.Stages is
          Result.Parsed  := new Landin.Syntax.Forest.Table;
          Result.Meant   := new Landin.Resolution.Table;
          Result.Typed   := new Landin.Checking.Table;
+         Result.Lowered := new Landin.IR.Unit;
       end return;
    end Create;
 
@@ -54,6 +55,10 @@ package body Landin.Stages is
    function Types (Context : in out Compilation)
      return not null access Landin.Checking.Table
      is (Context.Typed);
+
+   function Code (Context : in out Compilation)
+     return not null access Landin.IR.Unit
+     is (Context.Lowered);
 
    procedure Report
      (Context : in out Compilation; Item : Landin.Diagnostics.Diagnostic)
