@@ -2354,6 +2354,105 @@ def check_icon(full_run):
     return out
 
 
+def check_fonts(full_run):
+    """The pages are set in two vendored faces, and the subsets have to cover them.
+
+    `assets/fonts.py` is every rendering of the two families, the way
+    `landin_icon.py` is every rendering of the mark.  Two things can go
+    wrong quietly, and both end the same way -- one paragraph, on one
+    page, coming out in a fallback face while every word count balances.
+
+    A `src` url that names a file nobody vendored, which is what a
+    half-finished re-vendoring leaves behind.  And a document that has
+    drifted outside the ranges the subsets carry: the faces are shipped as
+    their sources subset them rather than trimmed to the documents, so
+    this is a check the vendoring is still wide enough and not a check the
+    documents stayed narrow.
+    """
+    if not full_run:
+        return []
+
+    module = os.path.join(ROOT, "assets/fonts.py")
+    site = os.path.join(ROOT, "docs/site/render_html.py")
+    for path in (module, site):
+        if not os.path.exists(path):
+            return []
+
+    out = []
+    code = io.open(module, encoding="utf-8").read()
+    css = io.open(site, encoding="utf-8").read()
+
+    #  Each family, its own stylesheet, and the ranges its subsets carry.
+    families = re.findall(r'family="([^"]+)",\s*\n\s*css="([^"]+)"', code)
+    if not families:
+        out.append((module, 1, "no vendored family this check can read"))
+    covered = {}
+    for family, relative in families:
+        source = os.path.join(ROOT, "assets/fonts", relative)
+        if not os.path.exists(source):
+            out.append((module, 1, "%s names %s, which is not vendored"
+                                   % (family, relative)))
+            continue
+        sheet = io.open(source, encoding="utf-8").read()
+        spans = []
+        for face in re.findall(r"@font-face\s*\{(.*?)\}", sheet, re.S):
+            #  A src url that resolves nowhere is a face the browser skips
+            #  in silence, falling through to the next subset or the stack.
+            for url in re.findall(r"url\(\s*['\"]?([^'\")]+?)['\"]?\s*\)",
+                                  face):
+                name = os.path.basename(url)
+                if not os.path.exists(os.path.join(os.path.dirname(source),
+                                                   "woff2", name)):
+                    out.append((relative, 1, "asks for %s, which is not in "
+                                             "woff2/" % name))
+            found = re.search(r"unicode-range:\s*([^;}]+)", face)
+            if not found:
+                #  No range means the whole of Unicode, which is what an
+                #  unsubsetted family says, and it covers everything.
+                spans.append((0, 0x10FFFF))
+                continue
+            for low, high in re.findall(r"U\+([0-9A-Fa-f]+)(?:-([0-9A-Fa-f]+))?",
+                                        found.group(1)):
+                spans.append((int(low, 16), int(high or low, 16)))
+        if not spans:
+            out.append((relative, 1, "no @font-face this check can read"))
+        else:
+            covered[family] = spans
+
+    #  Every document the pages are rendered from, read out of the
+    #  renderer rather than listed again here.
+    for relative in sorted(set(re.findall(r'src="([^"]+)"', css))):
+        path = os.path.join(ROOT, relative)
+        if not os.path.exists(path):
+            continue
+        text = io.open(path, encoding="utf-8").read()
+        for family, spans in sorted(covered.items()):
+            missing = sorted({
+                ch for ch in set(text)
+                if ch not in "\n\r\t"
+                and not any(low <= ord(ch) <= high for low, high in spans)})
+            if missing:
+                out.append((relative, 1,
+                            "%s has no subset carrying %s; vendor the subset "
+                            "that does, in assets/fonts/"
+                            % (family, ", ".join("U+%04X" % ord(c)
+                                                 for c in missing[:8]))))
+
+    #  The renderer must ask the module for both stacks rather than
+    #  spelling a family of its own, and must copy what it asked for.
+    for role in ("ui", "mono"):
+        if 'fonts.stack("%s")' % role not in css:
+            out.append((site, 1, "--%s does not come from assets/fonts.py"
+                                 % role))
+    if "fonts.files()" not in css:
+        out.append((site, 1, "the faces are declared but never copied "
+                             "beside the pages"))
+    if "fonts.css()" not in css:
+        out.append((site, 1, "the pages carry no @font-face block"))
+
+    return out
+
+
 def check_unfenced_code(full_run):
     """A line of Landin outside a fence is a line nothing highlights.
 
@@ -2658,6 +2757,7 @@ def main(argv):
     extra += check_unfenced_code(full_run)
     extra += check_table_shape(full_run)
     extra += check_icon(full_run)
+    extra += check_fonts(full_run)
     extra += check_borrowed_icons(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)

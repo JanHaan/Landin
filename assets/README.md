@@ -3,8 +3,13 @@
 One drawing, several renderings, and a few borrowed ones beside it. `icon.svg` holds the geometry and the
 site's own two colours, and everything that shows a Landin mark is a
 rendering of that file rather than another copy of it that drifts away —
-the same arrangement as [`highlight/`](../highlight/README.md), for the
-same reason.
+the same arrangement as [`highlight/`](../highlight/README.md) and
+[`fonts/`](fonts/README.md), for the same reason.
+
+The two webfont families the pages are set in are the other thing here
+that a consumer must not name for itself: they have their own directory
+and their own module, and [`fonts/README.md`](fonts/README.md) is where
+they are described.
 
 | artifact | is | state |
 |---|---|---|
