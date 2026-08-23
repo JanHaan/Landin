@@ -1,6 +1,5 @@
 # Landin prototype 3 — a generic container library
 
-```landin
 Current with specification 0.1.0. Its own findings Z1-Z19 are all
 resolved below.
 
@@ -11,28 +10,34 @@ barely does. A container library does nothing else.
 
 Four containers, deliberately different in shape:
 
-  vec    a growing array — the one that reallocates, so it is where
-         the borrow rule earns its keep or fails to
-  small  inline capacity spilling to the heap — a fixed value
-         parameter and a variant holding storage
-  map    open addressing — a composed concept, and no null to use
-         as an empty marker
-  tree   arena-backed, children as indices — the idiom the language
-         keeps recommending, tested for once
-
+vec    a growing array — the one that reallocates, so it is where
+```text
+ the borrow rule earns its keep or fails to
+```
+small  inline capacity spilling to the heap — a fixed value
+```text
+ parameter and a variant holding storage
+```
+map    open addressing — a composed concept, and no null to use
+```text
+ as an empty marker
+```
+tree   arena-backed, children as indices — the idiom the language
+```text
+ keeps recommending, tested for once
+```
 Two conventions this file adopts, because calls could not be written
 without deciding them, and both follow the tour rather than inventing:
 
-  A type parameter that appears in the type of a value parameter is
-  deduced and left out at the call, as sort(values) does at [1300]. One
-  that appears only in the return type cannot be deduced and is named,
-  as sort(T: i32, data: values) does in the same place. Explicit type
-  arguments are therefore always named, never positional, which keeps
-  positional arguments to ordinary values.
+A type parameter that appears in the type of a value parameter is
+deduced and left out at the call, as sort(values) does at [1300]. One
+that appears only in the return type cannot be deduced and is named,
+as sort(T: i32, data: values) does in the same place. Explicit type
+arguments are therefore always named, never positional, which keeps
+positional arguments to ordinary values.
 
 Where a spelling had to be invented, the line is marked [Zn] and the
 question is written out at the end.
-```
 
 ---
 
@@ -776,18 +781,15 @@ end draw_all
 
 ---
 
-```landin
-[Z] WHAT THIS ONE FOUND
+## WHAT THIS ONE FOUND
+
 The resolutions below cite the pre-release revisions this
 specification passed through, 0.0.1 to 0.0.17, on the way to 0.1.0.
 They are kept because when one thing was settled relative to another
 still carries information.
 
-```
-
 ---
 
-```landin
 Nineteen, which is more than the first two prototypes together, and
 that is the expected shape: a driver uses the language's edges and a
 container library uses its middle. Four of them mattered more than the
@@ -802,257 +804,258 @@ went into 0.0.10, both settled by asking what the compiler already
 knows, and Z19 into 0.0.11 as undo. All nineteen are worked in.
 
 Z1  A conformance for a parameterised type has nowhere to put its
-    quantifier. "counted(A) is allocator" and "list(T) is iterable"
-    mean "for any A" and "for any T", and there is no way to say so.
-    Written here with a prefix binder,
+quantifier. "counted(A) is allocator" and "list(T) is iterable"
+mean "for any A" and "for any T", and there is no way to say so.
+Written here with a prefix binder,
 
-        (T: type) list(T) is iterable (Cur: usize, Item: T, ...)
+```landin
+(T: type) list(T) is iterable (Cur: usize, Item: T, ...)
+```
+which reads acceptably and puts the binder where every other
+binder in the language is: left of what it introduces. The
+functions supplying the entries are themselves generic, and the
+conformance's instantiation supplies their type argument, leaving
+a function of exactly the concept's shape — so nothing new is
+needed beyond the binder itself.
 
-    which reads acceptably and puts the binder where every other
-    binder in the language is: left of what it introduces. The
-    functions supplying the entries are themselves generic, and the
-    conformance's instantiation supplies their type argument, leaving
-    a function of exactly the concept's shape — so nothing new is
-    needed beyond the binder itself.
-
-    This is the finding of the file. Without it there is no generic
-    container that can be traversed, sorted, or handed to any other
-    generic code, so nothing above works at all.
+This is the finding of the file. Without it there is no generic
+container that can be traversed, sorted, or handed to any other
+generic code, so nothing above works at all.
 
 Z2  A type declaration needs the same parameter kinds a function
-    signature has. map wants a constrained parameter,
-    map: type (K: type is hashable, V: type), and small wants a fixed
-    value parameter, small: type (T: type, fixed N: u32). [1350] shows
-    only a plain type parameter and [1520] shows fixed only on a
-    function. Nothing here suggests a difficulty; it needs saying.
+signature has. map wants a constrained parameter,
+map: type (K: type is hashable, V: type), and small wants a fixed
+value parameter, small: type (T: type, fixed N: u32). [1350] shows
+only a plain type parameter and [1520] shows fixed only on a
+function. Nothing here suggests a difficulty; it needs saying.
 
 Z3  Slices and pointers have no stated way between them, and every
-    allocator needs both directions plus pointer arithmetic. Written
-    here as offset, base_of and slice_from in core. A core-only
-    privilege is defensible under [0490], but it should be stated
-    rather than assumed, because the alternative reading is that the
-    language cannot express its own allocator.
+allocator needs both directions plus pointer arithmetic. Written
+here as offset, base_of and slice_from in core. A core-only
+privilege is defensible under [0490], but it should be stated
+rather than assumed, because the alternative reading is that the
+language cannot express its own allocator.
 
 Z4  sizeof T and alignof T on a type parameter are constants when the
-    call is specialised and are not when it is compiled against a
-    table. The evidence therefore has to carry the size and alignment
-    of the type as well as the concept's functions. [1310] describes
-    the table as holding the functions and is silent about layout.
+call is specialised and are not when it is compiled against a
+table. The evidence therefore has to carry the size and alignment
+of the type as well as the concept's functions. [1310] describes
+the table as holding the functions and is silent about layout.
 
 Z5  RESOLVED at 0.0.9, together with Z16, which turned out to be the
-    same question from the other side. A returned reference names
-    what it was derived from; the convention on that parameter says
-    whether the view reads or writes, and the caller knows the source
-    must hold still. No clause means an independent result, which is
-    what keeps two live allocations out of one allocator legal — the
-    thing that killed option (a) below. Derivation stops at the three
-    primitives of [0500], so the allocator does not have to claim its
-    storage borrows it. Written rather than inferred, which also
-    removed every carve-out at the edges. Option (c) as set out here,
-    with the polarity kept: say what borrows, not what is fresh.
+same question from the other side. A returned reference names
+what it was derived from; the convention on that parameter says
+whether the view reads or writes, and the caller knows the source
+must hold still. No clause means an independent result, which is
+what keeps two live allocations out of one allocator legal — the
+thing that killed option (a) below. Derivation stops at the three
+primitives of [0500], so the allocator does not have to claim its
+storage borrows it. Written rather than inferred, which also
+removed every carve-out at the edges. Option (c) as set out here,
+with the polarity kept: say what borrows, not what is fresh.
 
-    The original finding, for the record.
+The original finding, for the record.
 
-    The accessor hole, and the one that deserved the most thought.
+The accessor hole, and the one that deserved the most thought.
 
-        xs := vec.used(numbers)
-        try vec.push(numbers, a, 5)      -- reallocates
-        use(xs)                          -- stale
+```landin
+xs := vec.used(numbers)
+try vec.push(numbers, a, 5)      -- reallocates
+use(xs)                          -- stale
+```
+[0830] catches this when the view is taken directly, xs := l.items,
+because the derivation is visible in one expression. Through a
+function it is not, and reading a container through an accessor is
+the ordinary way to read one — so the most likely dangling-slice
+bug in the library sits exactly where the rule stops.
 
-    [0830] catches this when the view is taken directly, xs := l.items,
-    because the derivation is visible in one expression. Through a
-    function it is not, and reading a container through an accessor is
-    the ordinary way to read one — so the most likely dangling-slice
-    bug in the library sits exactly where the rule stops.
+Three ways out, none free:
 
-    Three ways out, none free:
+- (a) Conservative: a reference-typed result borrows every
+  reference-typed argument. Purely local, no annotation. It also
+  marks new_slice(a, n) as borrowing the allocator, which would
+  forbid a second allocation while the first slice is alive.
+  That is not a corner case, that is allocation.
 
-    (a) Conservative: a reference-typed result borrows every
-        reference-typed argument. Purely local, no annotation. It also
-        marks new_slice(a, n) as borrowing the allocator, which would
-        forbid a second allocation while the first slice is alive.
-        That is not a corner case, that is allocation.
+- (b) Leave it, and list it in [0860] with the other holes. Honest,
+  cheap, and leaves the commonest failure unguarded.
 
-    (b) Leave it, and list it in [0860] with the other holes. Honest,
-        cheap, and leaves the commonest failure unguarded.
+- (c) Mark it, as the dual of escaping. escaping says the callee
+  keeps a reference to an argument; the new word says the caller
+  does. One word, local, no interprocedural analysis, symmetric
+  with something already present.
 
-    (c) Mark it, as the dual of escaping. escaping says the callee
-        keeps a reference to an argument; the new word says the caller
-        does. One word, local, no interprocedural analysis, symmetric
-        with something already present.
-
-    By [1710] this is a candidate, not a decision: the programmer must
-    say it, the compiler cannot work it out locally, and it is the
-    missing half of a mechanism that exists. What it does not do is
-    let two old mechanisms leave, so it should be argued rather than
-    slipped in, and (b) is a legitimate answer.
+By [1710] this is a candidate, not a decision: the programmer must
+say it, the compiler cannot work it out locally, and it is the
+missing half of a mechanism that exists. What it does not do is
+let two old mechanisms leave, so it should be argued rather than
+slipped in, and (b) is a legitimate answer.
 
 Z6  escaping on a generic value parameter says the right thing at both
-    extremes with no special case: vacuous for T = u32, since [0840]
-    already has it that a value holding no references is
-    unconstrained, and exact for T = ptr node. A pleasant result,
-    worth writing down because it looks wrong at first reading.
+extremes with no special case: vacuous for T = u32, since [0840]
+already has it that a value holding no references is
+unconstrained, and exact for T = ptr node. A pleasant result,
+worth writing down because it looks wrong at first reading.
 
 Z7  A pattern binding needs a stated convention. push_small wants to
-    write into the payload it matched, and whether a binding aliases
-    the payload or copies it is not said. For a [N]T payload the
-    difference is a whole array copy, and for small_used the
-    difference is between a valid slice and a dangling one. The
-    mechanism to reuse is obvious — in, inout and sink are already the
-    parameter conventions — which is [1710]'s first line exactly. Two
-    questions come with it: whether an inout binding borrows the
-    matched value for the arm, and what happens when the arm assigns
-    to the variant field it is bound out of.
+write into the payload it matched, and whether a binding aliases
+the payload or copies it is not said. For a [N]T payload the
+difference is a whole array copy, and for small_used the
+difference is between a valid slice and a dangling one. The
+mechanism to reuse is obvious — in, inout and sink are already the
+parameter conventions — which is [1710]'s first line exactly. Two
+questions come with it: whether an inout binding borrows the
+matched value for the arm, and what happens when the arm assigns
+to the variant field it is bound out of.
 
 Z8  There is no notion of uninitialised storage, and a container
-    cannot avoid having some. slice_from returns []T over memory
-    holding no T. Requiring a zero image would forbid list(ptr node),
-    which the tree needs, so that is not the answer. The containers
-    hold the invariant themselves and it works, but the type []T
-    claims more than is true between the allocation and the write.
-    Either core's privilege covers this too, or there is a separate
-    raw-storage type; one of the two should be said.
+cannot avoid having some. slice_from returns []T over memory
+holding no T. Requiring a zero image would forbid list(ptr node),
+which the tree needs, so that is not the answer. The containers
+hold the invariant themselves and it works, but the type []T
+claims more than is true between the allocation and the write.
+Either core's privilege covers this too, or there is a separate
+raw-storage type; one of the two should be said.
 
 Z9  A concept entry must have a concrete error set, because it is
-    reached through a table and [0960] forbids an inferred set there.
-    So the allocator concept fixes out_of_memory for every allocator
-    that will ever exist. Right for allocation, but it is a general
-    constraint on concept design that nobody has written down.
+reached through a table and [0960] forbids an inferred set there.
+So the allocator concept fixes out_of_memory for every allocator
+that will ever exist. Right for allocation, but it is a general
+constraint on concept design that nobody has written down.
 
 Z10 Threading the allocator rather than storing it holds up, and for a
-    better reason than visibility. A stored allocator makes the
-    container list(T, A), so a list in an arena and a list on the heap
-    become different types and no function takes both. Threading keeps
-    the type parameterised by T alone. The cost is one more argument
-    at every mutating call.
+better reason than visibility. A stored allocator makes the
+container list(T, A), so a list in an arena and a list on the heap
+become different types and no function takes both. Threading keeps
+the type parameterised by T alone. The cost is one more argument
+at every mutating call.
 
 Z11 [1340] says a conformance is declared explicitly even when the body
-    is empty, then shows button is widget supplying only focus, with
-    no sign of the drawable and clickable conformances it also needs.
-    The rule is right; the example undercuts it.
+is empty, then shows button is widget supplying only focus, with
+no sign of the drawable and clickable conformances it also needs.
+The rule is right; the example undercuts it.
 
 Z12 Passing a pointer target where an inout is wanted,
-    A.alloc(c.inner.val, size, align). Ordinary and surely intended,
-    never shown.
+A.alloc(c.inner.val, size, align). Ordinary and surely intended,
+never shown.
 
 Z13 RESOLVED at 0.0.10. sink takes a place, and a field of a binding
-    is a place, so every call in this file stands as written. The
-    path must be rooted in a binding with no dereference and no
-    computed index — the line where the analysis is still provable.
-    A sunk place is dead until assigned again, which closes the
-    window between the release and the repointing that a temporary
-    binding would have left open, and a place sunk out of an inout
-    parameter must be assigned again before returning.
+is a place, so every call in this file stands as written. The
+path must be rooted in a binding with no dereference and no
+computed index — the line where the analysis is still provable.
+A sunk place is dead until assigned again, which closes the
+window between the release and the repointing that a temporary
+binding would have left open, and a place sunk out of an inout
+parameter must be assigned again before returning.
 
-    The original finding, for the record.
+The original finding, for the record.
 
-    sink on a struct field. drop_slice takes sink s: []T and every
-    caller passes l.items rather than a binding. Killing a binding is
-    well defined; killing a field is not, and every caller here
-    reassigns the field immediately afterwards, which suggests the
-    rule wants to be about the assignment rather than about the field.
+sink on a struct field. drop_slice takes sink s: []T and every
+caller passes l.items rather than a binding. Killing a binding is
+well defined; killing a field is not, and every caller here
+reassigns the field immediately afterwards, which suggests the
+rule wants to be about the assignment rather than about the field.
 
 Z14 A variant case with no payload, written bare: leaf | branch: (...).
-    It is an atom and [1700] holds that atoms are one idea everywhere,
-    so this ought to need no decision — but every variant in the tour
-    carries a payload, so the spelling has never appeared.
+It is an atom and [1700] holds that atoms are one idea everywhere,
+so this ought to need no decision — but every variant in the tour
+carries a payload, so the spelling has never appeared.
 
 Z15 Not a gap, an observation. Nothing here wanted a label, a break
-    with a value or a complete clause, which is the second prototype
-    in a row to say so — see Y4. The map probes were written with
-    loop, break and a fail after the loop, and read better for it.
+with a value or a complete clause, which is the second prototype
+in a row to say so — see Y4. The map probes were written with
+loop, break and a fail after the loop, and read better for it.
 
 Z16 RESOLVED at 0.0.9 with Z5. The conventions read the same for
-    both kinds of parameter — may I write to what you gave me — and
-    on a reference that reaches the viewed storage, not only the
-    binding. const in the type was weighed and declined: it answers
-    only this half, leaves Z5 untouched, and would have been the
-    language's first implicit conversion.
+both kinds of parameter — may I write to what you gave me — and
+on a reference that reaches the viewed storage, not only the
+binding. const in the type was weighed and declined: it answers
+only this half, leaves Z5 untouched, and would have been the
+language's first implicit conversion.
 
-    The original finding, for the record.
+The original finding, for the record.
 
-    What a parameter convention means for a reference type is not
-    stated, and it is the same question as whether a pointer is to
-    mutable or immutable storage.
+What a parameter convention means for a reference type is not
+stated, and it is the same question as whether a pointer is to
+mutable or immutable storage.
 
-    sort at [1290] takes inout data: []T and writes through it, so the
-    convention evidently governs the storage the slice views, not the
-    slice value. But used takes l as in and hands back a []T that sort
-    then writes through — so a read-only parameter produced a writable
-    view of the same bytes, and nothing complained. The same holds for
-    ptr: nothing says whether ptr T may be written through, or whether
-    that depends on how the pointer arrived.
+sort at [1290] takes inout data: []T and writes through it, so the
+convention evidently governs the storage the slice views, not the
+slice value. But used takes l as in and hands back a []T that sort
+then writes through — so a read-only parameter produced a writable
+view of the same bytes, and nothing complained. The same holds for
+ptr: nothing says whether ptr T may be written through, or whether
+that depends on how the pointer arrived.
 
-    Two coherent answers. Either the convention governs only the
-    binding, and writability lives in the type — which means a second
-    pointer and slice type and is a large change. Or the convention
-    governs the viewed storage, in which case a slice returned from an
-    in parameter must be read-only, and there has to be a way to say
-    which of the two a returned reference is. The second is smaller
-    and fits Z5's option (c), since both want a word about what comes
-    back rather than what goes in.
+Two coherent answers. Either the convention governs only the
+binding, and writability lives in the type — which means a second
+pointer and slice type and is a large change. Or the convention
+governs the viewed storage, in which case a slice returned from an
+in parameter must be read-only, and there has to be a way to say
+which of the two a returned reference is. The second is smaller
+and fits Z5's option (c), since both want a word about what comes
+back rather than what goes in.
 
 Z17 [0710] says anonymous struct values take their type from context
-    and then says they never flow into a same-shaped named type — and
-    its own example, here: point = (x: 1.0, y: 2.0), does exactly
-    that. The coherent reading is the one the number literals already
-    use: a struct literal is untyped and takes a named type from
-    context, whereas a value already typed as an anonymous struct,
-    such as a return list, does not convert to a named one. Every
-    constructor above depends on this, so the wording needs fixing.
+and then says they never flow into a same-shaped named type — and
+its own example, here: point = (x: 1.0, y: 2.0), does exactly
+that. The coherent reading is the one the number literals already
+use: a struct literal is untyped and takes a named type from
+context, whereas a value already typed as an anonymous struct,
+such as a return list, does not convert to a named one. Every
+constructor above depends on this, so the wording needs fixing.
 
 Z18 RESOLVED at 0.0.10: nothing is written at the call site. A
-    convention belongs to the declaration and appears nowhere else.
-    The marker would have bought legibility rather than safety,
-    since a caller that misuses what it got is told so at its next
-    use, and escaping already puts an obligation on the caller from
-    the signature alone. The three examples were made to agree, and
-    [0780]'s was a bug rather than a third spelling.
+convention belongs to the declaration and appears nowhere else.
+The marker would have bought legibility rather than safety,
+since a caller that misuses what it got is told so at its next
+use, and escaping already puts an obligation on the caller from
+the signature alone. The three examples were made to agree, and
+[0780]'s was a bug rather than a third spelling.
 
-    The original finding, for the record.
+The original finding, for the record.
 
-    How an inout argument is written at the call site is inconsistent
-    in the tour. [0830] writes push(inout l, v); [0980] writes
-    process(source: src, target: dst, owned: buf) with no marker; and
-    [0780] writes push(addr head, n) where the parameter is
-    inout head: ptr node, which would need the argument to be head,
-    not its address. Three examples, three spellings.
+How an inout argument is written at the call site is inconsistent
+in the tour. [0830] writes push(inout l, v); [0980] writes
+process(source: src, target: dst, owned: buf) with no marker; and
+[0780] writes push(addr head, n) where the parameter is
+inout head: ptr node, which would need the argument to be head,
+not its address. Three examples, three spellings.
 
-    It matters more than it looks. With a marker, sort(vec.used(...))
-    becomes sort(inout vec.used(...)), which is absurd for a value
-    nobody can observe afterwards — so a marker pushes toward Z16's
-    second answer, where writability belongs to what is returned
-    rather than to the argument. Without one, an ordinary call gives
-    no sign that it changes its argument, which is a strange silence
-    in this language. Decide it, and fix the three examples.
+It matters more than it looks. With a marker, sort(vec.used(...))
+becomes sort(inout vec.used(...)), which is absurd for a value
+nobody can observe afterwards — so a marker pushes toward Z16's
+second answer, where writability belongs to what is returned
+rather than to the argument. Without one, an ordinary call gives
+no sign that it changes its argument, which is a strange silence
+in this language. Decide it, and fix the three examples.
 
 Z19 RESOLVED at 0.0.11 as undo, and the argument moved twice on the
-    way, so both corrections belong here.
+way, so both corrections belong here.
 
-    First, this finding overstated its own case. A flag and a
-    conditional defer is linear, not quadratic — three lines per
-    resource, however many there are. Only the else chain written
-    above was quadratic. So it was never about line count, and the
-    declined-errdefer position held up better than this said.
+First, this finding overstated its own case. A flag and a
+conditional defer is linear, not quadratic — three lines per
+resource, however many there are. Only the else chain written
+above was quadratic. So it was never about line count, and the
+declined-errdefer position held up better than this said.
 
-    What survives is the failure mode. Forgetting to set a flag frees
-    storage that is still in use, and under an arena, where free does
-    nothing, that mistake is silent until somebody runs the same
-    container on a real allocator. The workaround is a trap that the
-    usual test environment hides, which is a different and worse
-    thing than being verbose.
+What survives is the failure mode. Forgetting to set a flag frees
+storage that is still in use, and under an arena, where free does
+nothing, that mistake is silent until somebody runs the same
+container on a real allocator. The workaround is a trap that the
+usual test environment hides, which is a different and worse
+thing than being verbose.
 
-    Second, the shape. A cancellable defer was considered and
-    dropped: the cancel always sits where the block succeeds, so it
-    is hand-made bookkeeping for a question the block's exit already
-    answers. And defer with an argument was dropped because it reads
-    as a call. What went in is a word of its own — to defer is to do
-    it later, and this may never be done at all.
+Second, the shape. A cancellable defer was considered and
+dropped: the cancel always sits where the block succeeds, so it
+is hand-made bookkeeping for a question the block's exit already
+answers. And defer with an argument was dropped because it reads
+as a call. What went in is a word of its own — to defer is to do
+it later, and this may never be done at all.
 
-    The original finding, for the record.
+The original finding, for the record.
 
-    rehash makes three allocations that can each fail; the second
-    failing has to free one, the third has to free two.
-```
+rehash makes three allocations that can each fail; the second
+failing has to free one, the third has to free two.
 
 ---

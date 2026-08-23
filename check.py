@@ -2311,6 +2311,108 @@ def check_icon(full_run):
     return out
 
 
+def check_unfenced_code(full_run):
+    """A line of Landin outside a fence is a line nothing highlights.
+
+    The .txt form wrote an illustration as a comment beside the prose it
+    belonged to, and the conversion to Markdown read the `--` as markup
+    rather than as Landin.  Nine such lines landed in the prose, and two
+    of them split one example into two blocks with a sentence of code
+    between them: rendered, the line loses its highlighting and its
+    monospace and reads as a claim the document does not make.  Every
+    word survived, so the gate that counted words saw nothing.
+
+    The shape is narrow on purpose.  A declaration or an assignment at
+    column 0, or any line carrying a trailing Landin comment, outside a
+    fence, in a document that has fences.  Prose does not take that
+    shape; the nine lines all did.
+    """
+    if not full_run:
+        return []
+
+    paths = [os.path.join(ROOT, name) for name in LANGUAGE_FILES]
+    missing = absent(paths)
+    if missing:
+        return missing
+
+    #  A trailing comment, or a binding/assignment whose left side is a
+    #  name and an optional type.  Backticks mean the line is prose
+    #  quoting code, which is the form prose is supposed to use.
+    code = re.compile(r"\S {2,}--\s"
+                      r"|^[a-z_][a-z0-9_]*(\s*:\s*[A-Za-z_][\w\[\]().]*)?"
+                      r"\s*(:=|(?<![=<>!+\-*/%])=(?!=))\s*\S")
+
+    out = []
+    for path in paths:
+        name = os.path.basename(path)
+        inside = False
+        for n, line in enumerate(
+                io.open(path, encoding="utf-8").read().splitlines(), 1):
+            if line.strip().startswith("```"):
+                inside = not inside
+                continue
+            if inside or "`" in line or not line.strip():
+                continue
+            if line.startswith(("#", "-", "*", "|", ">")):
+                continue
+            if code.search(line):
+                out.append((name, n,
+                            "Landin outside a fence, so nothing highlights "
+                            "it: %r" % line.strip()[:60]))
+    return out
+
+
+def check_table_shape(full_run):
+    """Every row of a table has the cell count its header has.
+
+    A table is the form an aligned list takes, because indented prose is
+    a code block.  The renderer builds one cell per unescaped pipe, so a
+    row with one pipe too many grows a cell, and an inline code span that
+    straddles the new boundary closes in the wrong place: the operator
+    table in spec.md rendered `|` and `~` as two broken spans and a stray
+    backslash.  Every word was on the page, so the gate that counts words
+    saw nothing — which is the same blind spot the unfenced-code check
+    was written for.
+
+    A pipe inside a cell is written `\\|`, so a boundary is a pipe with no
+    backslash in front of it.
+    """
+    if not full_run:
+        return []
+
+    paths = [os.path.join(ROOT, name) for name in LIVE_DOCS]
+    boundary = re.compile(r"(?<!\\)\|")
+
+    out = []
+    for path in paths:
+        if not os.path.exists(path):
+            continue
+        name = os.path.basename(path)
+        inside = False
+        width, header = None, 0
+        for n, line in enumerate(
+                io.open(path, encoding="utf-8").read().splitlines(), 1):
+            if line.strip().startswith("```"):
+                inside = not inside
+                width = None
+                continue
+            s = line.strip()
+            if inside or not (s.startswith("|") and s.endswith("|")):
+                width = None
+                continue
+            count = len(boundary.split(s)) - 2      # the outer pipes
+            if width is None:
+                width, header = count, n
+                continue
+            if count != width:
+                out.append((name, n,
+                            "table row has %d cells and its header at line "
+                            "%d has %d" % (count, header, width)))
+        if inside:
+            out.append((name, 1, "a fence is never closed"))
+    return out
+
+
 def check_comment_forms(full_run):
     """The tour shows every comment form the grammar spells.
 
@@ -2510,6 +2612,8 @@ def main(argv):
     extra += check_precedence_table(full_run)
     extra += check_refused_constructs(full_run)
     extra += check_comment_forms(full_run)
+    extra += check_unfenced_code(full_run)
+    extra += check_table_shape(full_run)
     extra += check_icon(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)

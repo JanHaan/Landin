@@ -1100,6 +1100,22 @@ def listing_of(pre_html, cont=False):
             f'<button class="copy" type="button">copy</button></div>')
 
 
+def render_landin(lines, hl):
+    """A block tagged `landin` is Landin, and every line of it is highlighted.
+
+    Nothing is guessed here, because the fence already said what the block
+    is.  render_sample below has to guess, because it reads an indented
+    block from the .txt era that carried no tag; run over a tagged block it
+    asks `known_only` of each line and leaves as plain text every line
+    holding an ordinary name — which was most of them.  Fifty-eight blocks
+    across the tour and the four prototypes rendered with no highlighting
+    at all, and every word was on the page, so the gate saw nothing.
+    """
+    return ('<pre class="sample">'
+            + "\n".join(hl.line(l) if l.strip() else "" for l in lines)
+            + "</pre>")
+
+
 def render_sample(lines, hl, links):
     """An indented block inside prose: code where it is code, plain where not."""
     out = []
@@ -1494,8 +1510,16 @@ def inline(text, links, targets):
     return cite_links(out, links)
 
 
+#  A cell boundary is an unescaped pipe.  `\|` is how a table writes a
+#  literal one, which the operator table needs for the bitwise or: split
+#  on it and the row grows a cell, the code span closes in the wrong
+#  place, and every word is still on the page.
+CELL = re.compile(r"(?<!\\)\|")
+
+
 def cells(line):
-    return [c.strip() for c in ROW.match(line).group(1).split("|")]
+    body = ROW.match(line).group(1)
+    return [c.strip().replace("\\|", "|") for c in CELL.split(body)]
 
 
 def guide_table(rows, links, targets):
@@ -1587,6 +1611,18 @@ def parse_guide(text):
                     items.append(number.group(1))
                 elif lines[index].startswith("  ") and items:
                     items[-1] += " " + lines[index].strip()
+                elif not lines[index].strip() and items:
+                    #  A blank line between items is a loose list, not the
+                    #  end of one: three lettered alternatives spaced apart
+                    #  for reading became three one-item lists.
+                    ahead = index + 1
+                    while ahead < len(lines) and not lines[ahead].strip():
+                        ahead += 1
+                    if ahead < len(lines) and (BULLET.match(lines[ahead])
+                                               or NUMBER.match(lines[ahead])):
+                        index = ahead
+                        continue
+                    break
                 else:
                     break
                 index += 1
@@ -1661,7 +1697,7 @@ def render_guide_blocks(blocks, links, targets, hl):
         elif kind == "code":
             language, body = payload
             if language in ("ldn", "landin"):
-                out.append(listing_of(render_sample(body, hl, links)))
+                out.append(listing_of(render_landin(body, hl)))
             else:
                 text = "\n".join(body)
                 out.append(f'<div class="listing"><pre>{esc(text)}</pre></div>')

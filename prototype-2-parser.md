@@ -1,6 +1,5 @@
 # Landin prototype 2 — a parser full of recoverable errors
 
-```landin
 Current with specification 0.1.0. Its own findings Y1-Y7 are all
 resolved below.
 
@@ -15,16 +14,17 @@ The answer this prototype argues for: a diagnostics log is a
 capability. A function that was given one can report; a function that
 was not, cannot. No effect system, no global error list, just an
 argument — which is principle [1680] doing real work.
-```
 
 ---
 
 ## core/text  —  the parts this file leans on
 
+```landin
 utf8       distinct []u8
 position   an opaque byte offset into a utf8
 utf8 is indexable (Idx: position, Item: []u8, get: ...)
 utf8 is iterable  (Cur: position, Item: u32, ...)
+```
 
 ## config/diag  —  the diagnostics log
 
@@ -446,63 +446,63 @@ still carries information.
 ---
 
 Y1  RESOLVED at 0.0.12, written into the tour at [0950] with a
-    sharper test than this file had. The question is whether the
-    thing can be determined from what you already hold: a syntax
-    mistake is entirely in the bytes the parser is looking at, so
-    check it, report it, recover. Out of memory or a missing file
-    hangs on the world instead of on your data, and checking first
-    would only be a race. Check what you can foresee, and prefer
-    working around it to reporting it; fail is for what cannot be
-    foreseen or cannot be dealt with where it happens.
+sharper test than this file had. The question is whether the
+thing can be determined from what you already hold: a syntax
+mistake is entirely in the bytes the parser is looking at, so
+check it, report it, recover. Out of memory or a missing file
+hangs on the world instead of on your data, and checking first
+would only be a race. Check what you can foresee, and prefer
+working around it to reporting it; fail is for what cannot be
+foreseen or cannot be dealt with where it happens.
 
-    The original finding, for the record.
+The original finding, for the record.
 
-    Two kinds of error, and only one of them is the error channel.
-    fail is for what ends the work: out of memory, nesting past the
-    limit. A syntax mistake is not that, and threading it through
-    error sets would make every function fallible and every call a
-    try. The sink handles it, and the split reads cleanly.
-    This is worth writing into the tour as an idiom, because a
-    newcomer will otherwise reach for the error channel and end up
-    with a parser that stops at the first mistake.
+Two kinds of error, and only one of them is the error channel.
+fail is for what ends the work: out of memory, nesting past the
+limit. A syntax mistake is not that, and threading it through
+error sets would make every function fallible and every call a
+try. The sink handles it, and the split reads cleanly.
+This is worth writing into the tour as an idiom, because a
+newcomer will otherwise reach for the error channel and end up
+with a parser that stops at the first mistake.
 
 Y2  RESOLVED, by removing a rule rather than adding one. Parameter
-    order does not matter for what may refer to what, the same way
-    it does not matter inside a module. The compiler collects the
-    names, then resolves the types. One less rule, and it agrees
-    with a decision already made elsewhere.
+order does not matter for what may refer to what, the same way
+it does not matter inside a module. The compiler collects the
+names, then resolves the types. One less rule, and it agrees
+with a decision already made elsewhere.
 
 Y3  RESOLVED with it. A fixed parameter is deduced at the call site
-    from whatever argument pins it down, exactly as a type parameter
-    is; deduction never cared about order.
+from whatever argument pins it down, exactly as a type parameter
+is; deduction never cared about order.
 
 Y4  Nothing in this file needs a loop label, a break with a value,
-    or a complete clause. They were the right features for a search;
-    a parser is a different shape. Worth remembering when the fourth
-    prototype argues about which control flow earns its place.
+or a complete clause. They were the right features for a search;
+a parser is a different shape. Worth remembering when the fourth
+prototype argues about which control flow earns its place.
 
 Y5  The variant arms are constructed as text_value(s: ...) — a
-    variant case used as a constructor, like a type applied to
-    arguments. The tour shows variants being matched but never being
-    built. It needs an example.
+variant case used as a constructor, like a type applied to
+arguments. The tour shows variants being matched but never being
+built. It needs an example.
 
 Y6  RESOLVED. An else arm either yields a value or leaves, and the
-    ways of leaving now include break and continue, not only return
-    and fail. That is the same rule an if-expression arm follows, so
-    it removes a special case rather than adding one. The loop in
-    parse_file now reports a too-deep group and continues, which is
-    what a parser wants and what the placeholder zero was standing
-    in for.
+ways of leaving now include break and continue, not only return
+and fail. That is the same rule an if-expression arm follows, so
+it removes a special case rather than adding one. The loop in
+parse_file now reports a too-deep group and continues, which is
+what a parser wants and what the placeholder zero was standing
+in for.
 
 Y7  RESOLVED at 0.0.7: writing through a pointer is p.val = x, and
-    the tour shows it at [0430]. Allocation is spelt mem.new
-    everywhere since 0.0.14.
+the tour shows it at [0430]. Allocation is spelt mem.new
+everywhere since 0.0.14.
 
-    The original finding, for the record.
+The original finding, for the record.
 
-    arena.new returns a pointer whose origin is the arena. Assigning
-    into it through v.val.name works, but the tour never shows a
-    pointer being written through, only read. The spelling p.val = x
-    should appear somewhere.
+arena.new returns a pointer whose origin is the arena. Assigning
+into it through v.val.name works, but the tour never shows a
+pointer being written through, only read. The spelling p.val = x
+should appear somewhere.
 
 ---
