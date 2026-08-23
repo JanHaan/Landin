@@ -765,6 +765,36 @@ malformed IR unconstructible and so untestable.
 Still open in this item: the lowering pass, the verifier, and the textual
 dump. Nothing calls `Landin.IR` yet.
 
+Two defects in `landin-ir.adb`, found by designing the verifier and fixed
+here. Both corrupted a Unit silently in a release build, and neither could
+have been found by running the compiler, because nothing calls `Landin.IR`:
+a representation with no caller has no test, and this item shipped one.
+
+- **A run's base was taken when an item was created.** [1740] makes a module
+  a set, so `f` may call `g` written below it, and `Emit_Call`'s
+  `Holds (Into, Callee)` therefore forces a lowering to create every item
+  before it fills any. Every item then got the same base, and the second
+  item's slots read back as the first's -- caught by `Add_Slot`'s own
+  postcondition in debug and silent in release. A run's base is now taken on
+  its first append.
+- **A block's first value was taken when the block was created.** This
+  package's own header says blocks are created out of fill order -- "an
+  `if`'s else-entry is created before the then-arm's inner blocks and filled
+  after them" -- so every block but the first reported the instructions of
+  whichever was filled first. It is taken in `Enter` now, whose precondition
+  already says the block is empty.
+
+`Open_Run` is the third thing, and it is a rule rather than a fix: a `Run` is
+a base and a count, so an item's entities have to be contiguous, and going
+back to an item after starting another silently interleaves two runs. No
+precondition said so, so the body says it, in every mode -- the rule
+`Landin.Targets` learnt when a release build accepted an alignment of twelve
+that only a precondition had refused.
+
+`Landin.Tests.IR_Suite` is new and is what would have caught all three. Each
+of its three cases was run against the unfixed body and each failed there,
+which is the only evidence that a regression test regresses.
+
 Settled while designing it, and recorded because it changes what the verifier
 is: malformed IR cannot be caused by a source program, since the frontend
 refuses every ill-formed program before lowering runs. So a verifier failure
