@@ -2,7 +2,8 @@
 
 ## Authority and scope
 
-`tour.md` is the normative language specification. This file is the sole
+`spec.md` is the normative language specification and `tour.md` explains
+the language. This file is the sole
 durable authority for open work, implementation dependencies, phases,
 dispositions and completion gates. The prototype text files remain
 specification stress tests and design records. Derived executable programs
@@ -148,7 +149,7 @@ a forced consequence and should have been the former.
   by the four prototype programs.
 - **Competitive optimization:** optimization beyond correct deterministic
   baseline code generation and the specialization required by the amended
-  normative tour.
+  specification.
 - **Language evolution:** parked and watch items whose implementation triggers
   do not occur during this roadmap.
 - **Release readiness:** licensing, distribution, production claims and every
@@ -312,8 +313,9 @@ Status: complete
 Depends on: R0.30
 
 Add lexical rules, the precedence table, and statement/expression productions
-for the enabled kernel to `tour.md`, which remains the normative grammar
-home. A machine-readable inventory may be derived from it but never becomes a
+for the enabled kernel to `tour.md`, which was the normative grammar home
+when this item ran; the split recorded above moved the grammar to `spec.md`.
+A machine-readable inventory may be derived from it but never becomes a
 second independent grammar. Trace every production to constructs and fixtures.
 
 Sources: legacy A1; `H§P0.1`; `R` bottom line.
@@ -1275,7 +1277,7 @@ identical assembly and behavior under the pinned toolchain.
 
 ### R4 gate
 
-- The hosted normative tour is implemented on Linux x86-64.
+- Every hosted construct the tour describes is implemented on Linux x86-64.
 - Complete derived prototypes 2, 3 and 4 run with useful debugging.
 - Correct baseline code generation is measured; competitive optimization is
   not a gate.
@@ -1480,7 +1482,7 @@ Status: planned
 Depends on: R5.50, R6.100
 
 Complete the construct-matrix inventory for every current `[NNNN]`. For every
-construct still normative in `tour.md`, record its implementation state,
+construct the tour still describes, record its implementation state,
 applicable targets and the work item owning any open row. A rejection or
 transfer first amends the tour so the roadmap never overrides the specification.
 
@@ -1516,8 +1518,8 @@ Depends on: R2.90, R7.20, R7.30
 Close construct, grammar, guarantee, diagnostic, conformance/evidence,
 prototype-derivation and target-applicability matrices.
 
-Exit evidence: `tour.md` contains lexical, precedence, statement and expression
-grammar for every still-normative construct; no matrix contains a gap, stale
+Exit evidence: `spec.md` contains lexical, precedence, statement and expression
+grammar for every construct the tour still describes; no matrix contains a gap, stale
 test, unowned target or contradictory disposition.
 
 ### R7.50 — Prove deterministic baseline toolchain behavior
@@ -1555,7 +1557,7 @@ successor, and repository authority documents agree on the endpoint.
 
 ### R7 gate
 
-- Every construct still normative in the amended tour is implemented on every
+- Every construct the amended tour still describes is implemented on every
   applicable target.
 - All complete derived prototypes and evidence matrices pass.
 - Every durable item has an explicit terminal disposition.

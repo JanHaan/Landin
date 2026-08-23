@@ -334,7 +334,7 @@ def check_code(lines, offset):
 # --------------------------------------------------------------------------
 #  the grammar
 #
-#  tour.md's grammar section is normative, and two rounds of reading it by
+#  spec.md's grammar section is normative, and two rounds of reading it by
 #  hand found sixty-eight defects between them: a grammar argued over is a
 #  grammar that keeps being wrong in a new place.  So it is checked instead.
 #
@@ -1222,8 +1222,11 @@ def token_dump():
     different kind vocabularies, and a boundary difference is what a
     disagreement actually looks like.
     """
-    tour = os.path.join(ROOT, TOUR_NAME)
-    rules, trees, problems = read_grammar(tour)
+    #  The grammar moved to spec.md when the documents split, and this
+    #  kept reading tour.md, which has no `landin-grammar` fence left in
+    #  it: read_grammar returned nothing, this returned None, and the
+    #  token dump has not been compared with anything since.
+    rules, trees, problems = read_grammar(os.path.join(ROOT, SPEC_NAME))
     if problems or "program" not in trees:
         return None
 

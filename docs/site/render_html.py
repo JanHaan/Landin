@@ -56,8 +56,8 @@ DOCS = [
                "left unsaid. Normative."),
     dict(key="tour", src="tour.md", out="tour.html", kind="document",
          nav="the tour", group="the specification",
-         blurb="The normative specification, as a numbered tour. "
-               "Every construct keeps its number."),
+         blurb="The language explained, construct by numbered construct. "
+               "It teaches; the specification decides."),
     dict(key="p1", group="the prototypes", src="prototype-1-driver.md", out="prototype-1.html", kind="document",
          nav="prototype 1 — driver",
          blurb="A driver from an ugly vendor SVD: GPIO, an interrupt-driven "
@@ -249,8 +249,10 @@ a.skip{
   border:1px solid var(--accent-soft); border-radius:5px; font-size:.85rem;
 }
 a.skip:focus{top:.5rem}
-html{-webkit-text-size-adjust:100%; scroll-behavior:smooth;
-     scroll-padding-top:calc(var(--bar) + 1rem)}
+/*  The offset lives on the targets, as scroll-margin-top.  Setting
+    scroll-padding-top here as well made the two add up, so a section
+    landed 130px down the page instead of just under the bar.  */
+html{-webkit-text-size-adjust:100%; scroll-behavior:smooth}
 body{
   margin:0; background:var(--bg); color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",sans-serif;
@@ -359,7 +361,7 @@ main{padding:2.2rem 2.4rem 6rem; min-width:0; max-width:64rem}
 }
 
 /* ---- sections ---- */
-section{padding-top:2.4rem; scroll-margin-top:calc(var(--bar) + .9rem)}
+section{padding-top:2.4rem; scroll-margin-top:var(--bar)}
 section > h2{
   margin:0 0 1.1rem; font-size:.82rem; font-weight:700;
   letter-spacing:.13em; text-transform:uppercase; color:var(--ink);
@@ -369,7 +371,7 @@ section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
 
 /* ---- one construct ---- */
 .item{position:relative; padding:0 0 1.5rem 0;
-      scroll-margin-top:calc(var(--bar) + 1rem)}
+      scroll-margin-top:calc(var(--bar) + .6rem)}
 .item .tag{
   display:inline-block; font-size:.68rem; letter-spacing:.04em;
   color:var(--ink-faint); background:var(--panel-2);
@@ -465,7 +467,7 @@ nav.side a.sect .num{
   text-align:right; font-variant-numeric:tabular-nums;
   font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
 }
-.anchor{position:absolute; scroll-margin-top:4.5rem}
+.anchor{position:absolute; scroll-margin-top:calc(var(--bar) + .6rem)}
 
 @media (max-width:60rem){
   .wrap{grid-template-columns:minmax(0,1fr)}
@@ -531,16 +533,53 @@ JS = """
   document.querySelectorAll('nav.side a.sect').forEach(function(a){
     links[a.getAttribute('href').slice(1)]=a;
   });
-  if(sections.length && 'IntersectionObserver' in window){
-    var seen=new Set();
-    var io=new IntersectionObserver(function(es){
-      es.forEach(function(e){ e.isIntersecting?seen.add(e.target):seen.delete(e.target); });
-      var first=sections.filter(function(s){ return seen.has(s); })[0];
-      if(!first) return;
-      if(where) where.textContent=first.dataset.title||'';
-      Object.keys(links).forEach(function(k){ links[k].classList.toggle('here',k===first.id); });
-    },{rootMargin:'-72px 0px -70% 0px'});
-    sections.forEach(function(s){ io.observe(s); });
+  /* Which one is decided by where the sections are, not by which ones a
+     margin happens to overlap.  An observer band starting above the
+     landing point meant the tail of the previous section was still inside
+     it, and the first intersecting section in document order won -- so
+     clicking a section highlighted the one before it. */
+  if(sections.length){
+    var bar=document.querySelector('header.bar');
+    /*  The bar says which document you are reading until a titled section
+        takes over, so the top of the page keeps its label. */
+    var kind=where?where.textContent:'';
+    var last=0;
+    function current(){
+      /*  A section lands with its top at the bar's bottom edge, so
+          the line that decides which one you are in has to be a
+          hair below that and not above it.  */
+      var line=(bar?bar.getBoundingClientRect().bottom:48)+8;
+      var best=sections[0];
+      sections.forEach(function(s){
+        if(s.classList.contains('hide')) return;
+        if(s.getBoundingClientRect().top<=line) best=s;
+      });
+      return best;
+    }
+    function mark(){
+      var now=current();
+      if(!now) return;
+      if(where) where.textContent=now.dataset.title||kind;
+      Object.keys(links).forEach(function(k){
+        var on=(k===now.id);
+        links[k].classList.toggle('here',on);
+        if(on){ links[k].setAttribute('aria-current','true'); }
+        else { links[k].removeAttribute('aria-current'); }
+      });
+    }
+    /*  Coalesced on a clock rather than on an animation frame: a frame
+        never arrives in a hidden tab, and a pending flag waiting for one
+        stays set, so the highlight stopped updating for good.  */
+    function schedule(){
+      var now=Date.now();
+      if(now-last<50) return;
+      last=now;
+      mark();
+    }
+    addEventListener('scroll',schedule,{passive:true});
+    addEventListener('resize',schedule,{passive:true});
+    addEventListener('hashchange',schedule);
+    mark();
   }
 
   /* filter
