@@ -25,6 +25,7 @@ with Landin.Tests.Resolution_Suite;
 with Landin.Tests.Source_Suite;
 with Landin.Tests.Stages_Suite;
 with Landin.Tests.Targets_Suite;
+with Landin.Tests.Verifier_Suite;
 
 procedure Landin_Tests is
 
@@ -60,7 +61,8 @@ procedure Landin_Tests is
       "resolution       ",
       "source           ",
       "stages           ",
-      "targets          "];
+      "targets          ",
+      "verifier         "];
 
    function Trimmed (Name : Suite_Name) return String;
 
@@ -98,6 +100,7 @@ begin
    Landin.Tests.Source_Suite.Register (Cases);
    Landin.Tests.Stages_Suite.Register (Cases);
    Landin.Tests.Targets_Suite.Register (Cases);
+   Landin.Tests.Verifier_Suite.Register (Cases);
 
    for Suite of Expected_Suites loop
       if not Landin.Testing.Has_Suite (Cases, Trimmed (Suite)) then
