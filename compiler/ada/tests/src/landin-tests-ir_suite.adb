@@ -25,6 +25,7 @@ with Landin.Types;
 package body Landin.Tests.IR_Suite is
 
    use type Landin.IR.Slot_Id;
+   use type Landin.IR.Value_Id;
    use type Landin.Types.Type_Kind;
 
    --  Library-level, because Landin.Stages.Stage_Reference is a
@@ -249,6 +250,81 @@ package body Landin.Tests.IR_Suite is
       end;
    end Interleaved_Fill_Is_Refused;
 
+   ------------------------------------------------------------------
+   --  A call's arguments are its own
+   ------------------------------------------------------------------
+
+   --  The operand vector is the fifth run and the one Open_Run did not
+   --  reach when it was written.  Every other instruction records its
+   --  operands in the same call that creates them, so those runs cannot
+   --  interleave; a call's arguments arrive afterwards, and Enter asks
+   --  only that *this* item has no open block -- so another item can be
+   --  filled in between.  Before Add_Argument opened its own run, the
+   --  call below was handed one value and read back the other item's, in
+   --  debug and in release, with every precondition satisfied.
+   procedure A_Call_Reads_Its_Own_Arguments
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Call_Reads_Its_Own_Arguments
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Unit   : Landin.IR.Unit;
+         A, B   : Landin.IR.Item_Id;
+         Ba, Bb : Landin.IR.Block_Id;
+         Ignored, Wanted, Made, X, Y, Sum : Landin.IR.Value_Id;
+         Scope  : constant Landin.IR.Scope_Id :=
+           Landin.Resolution.Program_Scope;
+      begin
+         Landin.IR.Prepare (Unit, Meanings.all);
+         A := Landin.IR.Add_Item
+                (Unit, Landin.IR.Routine, 1, Landin.Types.U32, Site);
+         B := Landin.IR.Add_Item
+                (Unit, Landin.IR.Routine, 3, Landin.Types.U32, Site);
+         Ba := Landin.IR.Add_Block (Unit, A, Scope, Site);
+         Bb := Landin.IR.Add_Block (Unit, B, Scope, Site);
+
+         Landin.IR.Enter (Unit, A, Ba);
+         Ignored := Landin.IR.Emit_Number
+                      (Unit, A, Landin.Types.U32, 7, False, Site);
+         Wanted := Landin.IR.Emit_Number
+                     (Unit, A, Landin.Types.U32, 8, False, Site);
+         Made := Landin.IR.Emit_Call
+                   (Unit, A, B, Landin.Types.U32, Site);
+
+         --  A second item, open at the same time, putting its own
+         --  operands on the vector between the call and its argument.
+         Landin.IR.Enter (Unit, B, Bb);
+         X := Landin.IR.Emit_Number
+                (Unit, B, Landin.Types.U32, 100, False, Site);
+         Y := Landin.IR.Emit_Number
+                (Unit, B, Landin.Types.U32, 200, False, Site);
+         Sum := Landin.IR.Emit_Binary
+                  (Unit, B, Landin.IR.Add, X, Y, Landin.Types.U32, Site);
+
+         Landin.IR.Add_Argument (Unit, A, Made, Wanted);
+
+         Landin.Testing.Check_Equal
+           (Item, Landin.IR.Operand_Count (Unit, A, Made), 1,
+            "the call carries the one argument it was given");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Nth_Operand (Unit, A, Made, 1) = Wanted,
+            "the call reads its own argument and not the other item's");
+         Landin.Testing.Check
+           (Item, Ignored /= Wanted and then Sum /= Landin.IR.No_Value,
+            "the two items really did both emit");
+      end;
+   end A_Call_Reads_Its_Own_Arguments;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -260,6 +336,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "interleaved fill is refused",
          Interleaved_Fill_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "ir", "a call reads its own arguments",
+         A_Call_Reads_Its_Own_Arguments'Access);
    end Register;
 
 end Landin.Tests.IR_Suite;
