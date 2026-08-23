@@ -16,6 +16,7 @@ with Landin.Tests.Driver_Suite;
 with Landin.Tests.Fixture_Execution_Suite;
 with Landin.Tests.Fixture_Suite;
 with Landin.Tests.Harness_Suite;
+with Landin.Tests.IR_Suite;
 with Landin.Tests.Lexer_Suite;
 with Landin.Tests.Parser_Suite;
 with Landin.Tests.Platform_Suite;
@@ -50,6 +51,7 @@ procedure Landin_Tests is
       "fixture execution",
       "fixtures         ",
       "harness          ",
+      "ir               ",
       "parser           ",
       "platform         ",
       "source           ",
@@ -83,6 +85,7 @@ begin
    Landin.Tests.Fixture_Execution_Suite.Register (Cases);
    Landin.Tests.Fixture_Suite.Register (Cases);
    Landin.Tests.Harness_Suite.Register (Cases);
+   Landin.Tests.IR_Suite.Register (Cases);
    Landin.Tests.Lexer_Suite.Register (Cases);
    Landin.Tests.Parser_Suite.Register (Cases);
    Landin.Tests.Platform_Suite.Register (Cases);

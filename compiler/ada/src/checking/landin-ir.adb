@@ -63,12 +63,17 @@ package body Landin.IR is
       Made.Declaration := Declares;
       Made.Result := Result;
       Made.Site := Site;
-      Made.Slots := Run'(First => Natural (Into.Slots.Length), Count => 0);
-      Made.Parameters :=
-        Run'(First => Natural (Into.Parameters.Length), Count => 0);
-      Made.Blocks :=
-        Run'(First => Natural (Into.Blocks.Length), Count => 0);
-      Made.Values := Run'(First => Natural (Into.Code.Length), Count => 0);
+      --  A run's base is taken on its first append and not here.  [1740]
+      --  makes a module a set, so `f` may call `g` written below it, and
+      --  Emit_Call's `Holds (Into, Callee)` therefore forces a lowering to
+      --  create every item before it fills any.  Taking the base here gave
+      --  all of them the same one, and item two's slots then read back as
+      --  item one's -- silently in a release build, where Add_Slot's
+      --  postcondition is not there to catch it.
+      Made.Slots      := Run'(First => 0, Count => 0);
+      Made.Parameters := Run'(First => 0, Count => 0);
+      Made.Blocks     := Run'(First => 0, Count => 0);
+      Made.Values     := Run'(First => 0, Count => 0);
 
       Into.Items.Append (Made);
 
@@ -105,6 +110,26 @@ package body Landin.IR is
    function Slot_Count (Of_Unit : Unit; Item : Item_Id) return Natural
      is (Element (Of_Unit, Item).Slots.Count);
 
+   --  Opens a run on its first append, and refuses one that is no longer
+   --  at the end of its vector.  A Run is a base and a count, so an item's
+   --  entities have to be contiguous; filling item one after starting item
+   --  two would silently interleave two runs and leave both wrong.  The
+   --  rule is the body's and holds in every mode, which is what
+   --  Landin.Targets learnt when a release build accepted an alignment of
+   --  twelve that only a precondition had refused.
+   procedure Open_Run (Into : in out Run; Length : Natural);
+
+   procedure Open_Run (Into : in out Run; Length : Natural) is
+   begin
+      if Into.Count = 0 then
+         Into.First := Length;
+      elsif Into.First + Into.Count /= Length then
+         raise Landin.Compiler_Defect with
+           "an item's run is no longer at the end of its vector, so two"
+           & " items were filled at once";
+      end if;
+   end Open_Run;
+
    function Add_Slot
      (Into     : in out Unit;
       Item     : Item_Id;
@@ -114,6 +139,7 @@ package body Landin.IR is
    is
       Held : Item_Record := Element (Into, Item);
    begin
+      Open_Run (Held.Slots, Natural (Into.Slots.Length));
       Into.Slots.Append
         (Slot_Record'(Of_Type     => Of_Type,
                       Declaration => Declares,
@@ -136,6 +162,7 @@ package body Landin.IR is
    begin
       --  A parameter is a slot the caller filled, and the run below is
       --  the order [1920] names the parameters in.
+      Open_Run (Held.Parameters, Natural (Into.Parameters.Length));
       Into.Parameters.Append (Made);
       Held.Parameters.Count := Held.Parameters.Count + 1;
       Into.Items (Positive (Item)) := Held;
@@ -191,10 +218,17 @@ package body Landin.IR is
    is
       Held : Item_Record := Element (Into, Item);
    begin
+      --  First_Value is Enter's and not this one's.  Landin.IR's header
+      --  says blocks are created out of fill order -- "an `if`'s
+      --  else-entry is created before the then-arm's inner blocks and
+      --  filled after them" -- so a base taken at creation belongs to
+      --  whichever block was filled first, and every later block reports
+      --  that one's instructions.
+      Open_Run (Held.Blocks, Natural (Into.Blocks.Length));
       Into.Blocks.Append
         (Block_Record'(Scope       => Scope,
                        Site        => Site,
-                       First_Value => Natural (Into.Code.Length),
+                       First_Value => 0,
                        Values      => 0));
       Held.Blocks.Count := Held.Blocks.Count + 1;
       Into.Items (Positive (Item)) := Held;
@@ -204,8 +238,16 @@ package body Landin.IR is
    procedure Enter
      (Into : in out Unit; Item : Item_Id; Block : Block_Id)
    is
-      Held : Item_Record := Element (Into, Item);
+      Held  : Item_Record := Element (Into, Item);
+      Where : constant Positive := Block_At (Into, Item, Block);
+      Ready : Block_Record := Into.Blocks (Where);
    begin
+      --  The block is empty here -- Enter's precondition says so -- so
+      --  there is no run to move, and this is the first moment at which
+      --  where its instructions will land is known.
+      Ready.First_Value := Natural (Into.Code.Length);
+      Into.Blocks (Where) := Ready;
+
       Held.Open := Block;
       Into.Items (Positive (Item)) := Held;
    end Enter;
@@ -339,6 +381,7 @@ package body Landin.IR is
       Made  : Instruction := What;
    begin
       Made.In_Block := Held.Open;
+      Open_Run (Held.Values, Natural (Into.Code.Length));
       Into.Code.Append (Made);
 
       Held.Values.Count := Held.Values.Count + 1;
