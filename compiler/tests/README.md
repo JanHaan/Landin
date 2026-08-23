@@ -159,6 +159,31 @@ That check earned itself immediately: the driver had held `L0001` to `L0004`
 as literals since R0.50, and moving them into the catalogue was the first
 thing it demanded.
 
+## lowering.ir
+
+`compiler/tests/lowering.ir` is generated: `./scripts/test.sh --record`
+writes it by lowering every positive fixture and rendering the Unit with
+`Landin.IR.Dump`. It is the third recorded artefact and the only one
+`check.py` does not touch, and that difference matters enough to state.
+`check.py` generates the other two because it owns their sources — its own
+tokeniser, and the catalogue's Ada text. It owns nothing here: producing
+this file means running four compiler stages, so the Ada harness is what
+can produce it and **`python3 check.py` will not tell you it is stale.**
+`./scripts/test.sh` will, and so will the gate.
+
+Recording runs no case, and no case ever writes. Two disjoint modes in one
+binary, chosen only by an argument a human typed: there is no environment
+variable, nothing writes the file when it is missing, and nothing rewrites
+it when it does not match. A golden that repairs itself on a mismatch
+records the defect instead of reporting it. The loop is closed by hand —
+record, then run the suite again with no argument.
+
+What the file is for is narrow, and `landin-ir-dump.ads` says it: it proves
+the lowering has not changed its mind. That the corpus derives from the
+grammar is `check.py`'s, and what the instructions mean is
+`Landin.IR.Verifier`'s. No origin is printed, deliberately, so a comment
+edit above an instruction does not rewrite the artefact.
+
 ## Derived programs
 
 The four prototype text files in the repository root stay exactly as they
