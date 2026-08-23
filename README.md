@@ -137,3 +137,15 @@ The endpoint is feature-complete pre-v1, not production or self-hosting.
 Package acquisition, competitive optimization, release versioning, and
 self-hosting belong to successor roadmaps or later decisions. No version or
 release designation changes automatically.
+
+## License
+
+Copyright (c) 2026 Jan Haan. `MIT OR Apache-2.0`: use this under either
+[the MIT license](LICENSE-MIT) or [the Apache License, Version
+2.0](LICENSE-APACHE), at your option. [`LICENSE`](LICENSE) says which file
+governs what.
+
+What `refine` produces is not a derivative work of `refine`. Compiling a
+program places no licensing condition on that program, and neither does
+linking `core/*` into it — which is the point of a language that has to fit
+in 32 KB of somebody else's flash.
