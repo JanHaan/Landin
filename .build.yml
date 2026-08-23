@@ -76,7 +76,7 @@ tasks:
       cd landin
       ./compiler/ada/build/srht-x86-64/debug/bin/refine --identify
 
-  #  Render, verify and publish https://sinnfrei.srht.site.  The pages used
+  #  Render, verify and publish https://www.701.dev.  The pages used
   #  to move only when somebody remembered to run scripts/site.sh --publish,
   #  which is how documentation and its reading copy drift apart.
   #

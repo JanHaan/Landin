@@ -49,7 +49,7 @@ findings, including several that reversed a decision.
 ## Reading it online
 
 Every document here is published as a syntax-highlighted reading copy at
-**https://sinnfrei.srht.site** — the specification, the four prototypes, the
+**https://www.701.dev** — the specification, the four prototypes, the
 roadmap, and the implementation notes. Every `[NNNN]` citation links to the
 construct it names, and hovering one shows what it says.
 

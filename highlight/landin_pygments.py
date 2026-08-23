@@ -56,7 +56,7 @@ class LandinLexer(Lexer):
     aliases = ["landin", "ldn"]
     filenames = ["*.ldn"]
     mimetypes = ["text/x-landin"]
-    url = "https://sinnfrei.srht.site"
+    url = "https://www.701.dev"
 
     def get_tokens_unprocessed(self, text):
         lines = text.splitlines(keepends=True)

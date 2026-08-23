@@ -12,7 +12,10 @@
 
 Site="$LANDIN_ROOT/docs/site/site"
 Tarball="$LANDIN_ROOT/docs/site/landin-site.tar.gz"
-Domain="${LANDIN_PAGES_DOMAIN:-sinnfrei.srht.site}"
+Domain="${LANDIN_PAGES_DOMAIN:-www.701.dev}"
+#  pages.sr.ht serves one site per domain and cannot redirect,
+#  so the bare name is published too rather than going stale.
+Alias="${LANDIN_PAGES_ALIAS:-701.dev}"
 
 rm -rf "$Site"
 python3 "$LANDIN_ROOT/docs/site/render_html.py" --from "$LANDIN_ROOT" --verify
@@ -33,4 +36,8 @@ if [ "${1:-}" = "--publish" ]; then
     fi
     hut pages publish -d "$Domain" "$Tarball"
     echo "published: https://$Domain"
+    if [ -n "$Alias" ]; then
+        hut pages publish -d "$Alias" "$Tarball"
+        echo "published: https://$Alias"
+    fi
 fi

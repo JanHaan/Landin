@@ -46,9 +46,13 @@ hand is for a preview, or for putting the site back after something went out
 that should not have.
 
 Publishing by hand needs [`hut`](https://sr.ht/~emersion/hut/) configured
-with a token that has the `PAGES:RW` scope. `LANDIN_PAGES_DOMAIN` overrides the
-domain; `hut pages publish -s //some/path` moves the site into a
-subdirectory if the root is wanted for something else.
+with a token that has the `PAGES:RW` scope. The site goes to
+`www.701.dev` and then to `701.dev`: pages.sr.ht serves one site per domain
+and cannot redirect between them, so both are published rather than one of
+them going stale. `LANDIN_PAGES_DOMAIN` and `LANDIN_PAGES_ALIAS` override
+each, and an empty `LANDIN_PAGES_ALIAS` publishes only the first.
+`hut pages publish -s //some/path` moves the site into a subdirectory if
+the root is wanted for something else.
 
 The rendered pages and the tarball are not committed: they are generated,
 and a generated file in the history is a file that goes stale in the
