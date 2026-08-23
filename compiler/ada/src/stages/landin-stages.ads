@@ -39,6 +39,7 @@
 with Ada.Containers.Vectors;
 
 with Landin.Checking;
+with Landin.IR;
 with Landin.Diagnostics;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -104,6 +105,12 @@ package Landin.Stages is
    function Types (Context : in out Compilation)
      return not null access Landin.Checking.Table;
 
+   --  The target-neutral instructions the frontend was checking towards.
+   --  R1.70's, and the last representation this package gains: R1.80 emits
+   --  from it and keeps nothing here.
+   function Code (Context : in out Compilation)
+     return not null access Landin.IR.Unit;
+
    procedure Report
      (Context : in out Compilation; Item : Landin.Diagnostics.Diagnostic);
 
@@ -162,6 +169,7 @@ private
    type Forest_Access     is access Landin.Syntax.Forest.Table;
    type Resolution_Access is access Landin.Resolution.Table;
    type Checking_Access   is access Landin.Checking.Table;
+   type Code_Access       is access Landin.IR.Unit;
 
    type Compilation is limited record
       Facts   : Landin.Targets.Target_Facts;
@@ -172,6 +180,7 @@ private
       Parsed  : Forest_Access     := null;
       Meant   : Resolution_Access := null;
       Typed   : Checking_Access   := null;
+      Lowered : Code_Access       := null;
    end record;
 
 end Landin.Stages;
