@@ -96,6 +96,7 @@ from landin_highlight import Scanner, collect_symbols  # noqa: E402
 sys.path.insert(0, str(HERE.parents[1] / "assets"))
 
 import landin_icon  # noqa: E402
+import icons  # noqa: E402
 
 #  Both icons travel in the page.  The pages have no external references
 #  at all, and a favicon fetched from a second file would be the first
@@ -294,7 +295,11 @@ header.bar .grow{flex:1}
 /*  Everything in the bar is the same control: the source link sat beside
     the theme button at a different size, in a different case and with
     different padding, because it was added with a rule of its own.  */
+/*  An icon is 1em of the label beside it, so the two scale together and
+    the control keeps the bar's rhythm.  */
+svg.i{width:1em; height:1em; flex:none; vertical-align:-.12em}
 header.bar button, header.bar .src{
+  display:inline-flex; align-items:center; gap:.4rem;
   font:inherit; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
   color:var(--ink-soft); background:var(--panel); cursor:pointer;
   text-decoration:none; border:1px solid var(--rule); border-radius:5px;
@@ -303,6 +308,19 @@ header.bar button, header.bar .src{
 header.bar button:hover, header.bar .src:hover{
   color:var(--ink); border-color:var(--ink-faint);
 }
+/*  The toggle offers the theme you are not in: a moon on a light page,
+    a sun on a dark one.  Both are in the markup and CSS picks, so no
+    script is needed to draw the right one.  */
+.dark-only{display:none}
+.light-only{display:inline-block}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]) .dark-only{display:inline-block}
+  :root:not([data-theme="light"]) .light-only{display:none}
+}
+:root[data-theme="dark"] .dark-only{display:inline-block}
+:root[data-theme="dark"] .light-only{display:none}
+:root[data-theme="light"] .dark-only{display:none}
+:root[data-theme="light"] .light-only{display:inline-block}
 #menu{display:none}
 
 /* ---- layout ---- */
@@ -325,11 +343,18 @@ nav.side a{
 nav.side a:hover{background:var(--panel-2); color:var(--ink)}
 nav.side a.here{color:var(--accent); background:var(--accent-bg); font-weight:600}
 nav.side a.doc{font-size:.88rem}
+/*  The icon sits in the field rather than beside it, so the field is
+    still the full width of the column.  */
+.finder{position:relative; display:flex; align-items:center}
+.finder .i{position:absolute; left:.55rem; color:var(--ink-faint);
+  pointer-events:none}
 #find{
-  width:100%; font:inherit; font-size:.85rem; padding:.4rem .55rem;
+  width:100%; font:inherit; font-size:.85rem;
+  padding:.4rem .55rem .4rem 1.9rem;
   color:var(--ink); background:var(--panel); border:1px solid var(--rule); border-radius:5px;
 }
 #find:focus{outline:2px solid var(--accent-soft); outline-offset:1px}
+#find:focus + .i, .finder:focus-within .i{color:var(--accent)}
 #found{font-size:.72rem; color:var(--ink-faint); padding:.35rem .1rem 0}
 
 main{padding:2.2rem 2.4rem 6rem; min-width:0; max-width:64rem}
@@ -403,11 +428,17 @@ section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
 }
 .listing .copy{
   position:absolute; top:.4rem; right:.4rem; opacity:0;
-  font:inherit; font-size:.64rem; letter-spacing:.08em; text-transform:uppercase;
+  display:inline-flex; align-items:center; justify-content:center;
+  font:inherit; font-size:.8rem; line-height:1;
   color:var(--ink-faint); background:var(--panel); cursor:pointer;
-  border:1px solid var(--rule); border-radius:4px; padding:.15rem .4rem;
+  border:1px solid var(--rule); border-radius:4px; padding:.25rem;
   transition:opacity .12s;
 }
+.listing .copy:hover{color:var(--ink); border-color:var(--ink-faint)}
+/*  Having copied, the tick replaces the sheets for a moment. */
+.listing .copy .done{display:none}
+.listing .copy.done .i{display:none}
+.listing .copy.done .done{display:inline-block; color:var(--q)}
 .listing:hover .copy, .listing .copy:focus{opacity:1}
 /*  A sample inside a listing is a listing: .listing pre and pre.sample
     have the same specificity, so this rule used to win and the
@@ -535,8 +566,8 @@ JS = """
     var b=e.target.closest('.copy'); if(!b) return;
     var pre=b.parentNode.querySelector('pre');
     navigator.clipboard.writeText(pre.innerText).then(function(){
-      var was=b.textContent; b.textContent='copied';
-      setTimeout(function(){ b.textContent=was; },1100);
+      b.classList.add('done');
+      setTimeout(function(){ b.classList.remove('done'); },1100);
     });
   });
 
@@ -755,9 +786,11 @@ def listing_of(pre_html, label=""):
     #  138 buttons on the tour all read "copy" and nothing else, which is
     #  what a screen reader announces, one after another.  The construct
     #  the listing belongs to is the only thing that tells them apart.
-    says = f' aria-label="copy the code for [{label}]"' if label else ""
+    says = (f'copy the code for [{label}]' if label else "copy the code")
     return (f'<div class="listing">{pre_html}'
-            f'<button class="copy" type="button"{says}>copy</button></div>')
+            f'<button class="copy" type="button" aria-label="{says}" '
+            f'title="{says}">' + icons.use("copy") + icons.use("check", "i done")
+            + "</button></div>")
 
 
 def render_landin(lines, hl):
@@ -1232,9 +1265,10 @@ def nav_html(docs, current, sections):
         out.append(f'<a class="doc{here}"{now} href="{d["out"]}">'
                    f'{esc(d["nav"])}</a>')
     out.append('<h3>find</h3>')
-    out.append('<input id="find" type="search" placeholder="filter — press /" '
-               'aria-label="filter this document" '
-               'autocomplete="off" spellcheck="false">')
+    out.append('<div class="finder">' + icons.use("search", "i")
+               + '<input id="find" type="search" placeholder="filter — press /" '
+                 'aria-label="filter this document" '
+                 'autocomplete="off" spellcheck="false"></div>')
     out.append('<div id="found" role="status" aria-live="polite"></div>')
     if sections:
         out.append('<h3>in this document</h3>')
@@ -1288,16 +1322,17 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 <style>{CSS}{GUIDE_CSS}</style>
 </head>
 <body>
+{icons.symbols()}
 <a class="skip" href="#document">skip to the document</a>
 <header class="bar">
   <a class="brand" href="index.html">{landin_icon.inline("mark")}<span>Landin</span></a>
   <span class="where" id="where">{esc(kind)}</span>
   <span class="grow"></span>
-  <a class="src" href="{REPO}">source</a>
+  <a class="src" href="{REPO}">{icons.use("sourcehut")}<span>source</span></a>
   <button id="menu" type="button" aria-label="documents and sections"
-          aria-expanded="false" aria-controls="side">menu</button>
+          aria-expanded="false" aria-controls="side">{icons.use("menu")}<span>menu</span></button>
   <button id="theme" type="button" aria-label="use the dark theme"
-          aria-pressed="false">theme</button>
+          aria-pressed="false">{icons.use("moon", "i light-only")}{icons.use("sun", "i dark-only")}<span>theme</span></button>
 </header>
 <div class="wrap">
 <nav class="side" id="side" aria-label="documents and sections">
