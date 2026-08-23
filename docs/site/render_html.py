@@ -291,12 +291,18 @@ header.bar .where{
   text-transform:uppercase; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 header.bar .grow{flex:1}
-header.bar button{
+/*  Everything in the bar is the same control: the source link sat beside
+    the theme button at a different size, in a different case and with
+    different padding, because it was added with a rule of its own.  */
+header.bar button, header.bar .src{
   font:inherit; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
   color:var(--ink-soft); background:var(--panel); cursor:pointer;
-  border:1px solid var(--rule); border-radius:5px; padding:.3rem .55rem;
+  text-decoration:none; border:1px solid var(--rule); border-radius:5px;
+  padding:.3rem .55rem;
 }
-header.bar button:hover{color:var(--ink); border-color:var(--ink-faint)}
+header.bar button:hover, header.bar .src:hover{
+  color:var(--ink); border-color:var(--ink-faint);
+}
 #menu{display:none}
 
 /* ---- layout ---- */
@@ -875,12 +881,6 @@ GUIDE_CSS = """
   letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);
   margin:18px 0 2px}
 .cards h3.group:first-child{margin-top:0}
-
-header.bar .src{
-  font-size:.8rem; color:var(--ink-soft); text-decoration:none;
-  padding:.2rem .45rem; border:1px solid var(--rule); border-radius:5px;
-}
-header.bar .src:hover{color:var(--accent); border-color:var(--accent-soft)}
 
 /* ---- the front page ---- */
 .hero p.status{
