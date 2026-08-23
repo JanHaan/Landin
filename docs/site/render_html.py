@@ -1365,6 +1365,36 @@ GUIDE_CSS = """
   letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);
   margin:18px 0 2px}
 .cards h3.group:first-child{margin-top:0}
+
+/* ---- the front page ---- */
+.hero p.status{
+  margin-top:1rem; padding-left:.9rem; border-left:2px solid var(--accent-soft);
+  color:var(--ink-soft); font-size:.93rem;
+}
+section.landing{padding-top:2.6rem}
+figure.shown{margin:0 0 1.1rem}
+figure.shown figcaption{
+  display:flex; align-items:baseline; gap:.6rem; margin:0 0 .4rem;
+  color:var(--ink-soft); font-size:.9rem;
+}
+figure.shown figcaption .tag{
+  font-size:.68rem; letter-spacing:.04em; color:var(--accent);
+  text-decoration:none; border:1px solid var(--rule); border-radius:3px;
+  padding:.05rem .3rem;
+}
+figure.shown figcaption .tag:hover{border-color:var(--accent-soft)}
+section.landing p.more{color:var(--ink-soft); font-size:.93rem; max-width:44rem}
+.routes{display:grid; gap:1rem; grid-template-columns:repeat(auto-fit,minmax(19rem,1fr))}
+.route{
+  display:block; padding:1rem 1.1rem; text-decoration:none; color:inherit;
+  background:var(--panel); border:1px solid var(--rule); border-radius:8px;
+  border-left:2px solid var(--accent-soft);
+}
+.route:hover{border-color:var(--accent-soft); box-shadow:var(--sh)}
+.route strong{display:block; font-size:.95rem; margin-bottom:.3rem;
+  color:var(--accent)}
+.route span{display:block; color:var(--ink-soft); font-size:.87rem;
+  line-height:1.5}
 """
 
 #  A hyphen is not \w, and the documents tag a fence `landin-grammar`.
@@ -1600,7 +1630,7 @@ def render_guide(text, links, targets, hl):
 
 def nav_html(docs, current, sections):
     out = ['<h3>documents</h3>']
-    out.append(f'<a class="doc" href="index.html">contents</a>')
+    out.append(f'<a class="doc" href="index.html">the front page</a>')
     for d in docs:
         here = ' here' if d["out"] == current else ""
         out.append(f'<a class="doc{here}" href="{d["out"]}">{esc(d["nav"])}</a>')
@@ -1663,7 +1693,80 @@ Regenerate with <code>python3 render_html.py</code>.
 """
 
 
-def index_page(docs, pitch, counts):
+#  The front page introduces the language rather than listing the files,
+#  so it needs three things out of the sources: what the tour opens by
+#  saying, what the README says the state of the work is, and a few
+#  constructs to show.  None of it is written here -- a second copy of
+#  the pitch is a copy that goes stale.
+
+LANDING_IDS = ["0040", "0870", "0940"]
+
+FENCE_OPEN = re.compile(r"^```landin\s*$")
+
+
+def tour_intro(text):
+    """The paragraphs the tour opens with, before its first construct."""
+    body = []
+    for line in text.split("\n"):
+        if line.startswith("### ") or line.startswith("---"):
+            break
+        if line.startswith("## "):
+            continue
+        body.append(line)
+    paras, run = [], []
+    for line in body:
+        if line.strip():
+            run.append(line.strip())
+        elif run:
+            paras.append(" ".join(run))
+            run = []
+    if run:
+        paras.append(" ".join(run))
+    return paras
+
+
+def readme_status(text):
+    """The README's own status line, so the front page cannot claim more."""
+    m = re.search(r"\*\*(Status:.*?)\*\*", text, re.S)
+    return " ".join(m.group(1).split()) if m else ""
+
+
+def landing_samples(text, ids=LANDING_IDS):
+    """A few constructs, taken whole from the tour and kept citable.
+
+    By id rather than by position: [NNNN] is stable and the order is not,
+    which is what the tour says the numbering is for.
+    """
+    lines = text.split("\n")
+    found = {}
+    for i, line in enumerate(lines):
+        m = re.match(r"^### \[(\d{4})\] (.*)$", line)
+        if not m or m.group(1) not in ids:
+            continue
+        j = i + 1
+        while j < len(lines) and not FENCE_OPEN.match(lines[j]):
+            if lines[j].startswith("### "):
+                j = len(lines)
+                break
+            j += 1
+        if j >= len(lines):
+            continue
+        k = j + 1
+        while k < len(lines) and not lines[k].startswith("```"):
+            k += 1
+        code = lines[j + 1:k]
+        while code and not code[-1].strip():
+            code.pop()
+        found[m.group(1)] = (m.group(2), code)
+    return [(i, *found[i]) for i in ids if i in found]
+
+
+def index_page(docs, counts, intro, status, samples, symbols, total=0):
+    """The front door: what the language is, what it looks like, where to go.
+
+    The contents remain, at the bottom, because a reader who came back for
+    one document should not have to read the introduction again.
+    """
     groups = []
     for d in docs:
         name = d.get("group", "the specification")
@@ -1671,6 +1774,53 @@ def index_page(docs, pitch, counts):
             groups.append((name, []))
         groups[-1][1].append(d)
 
+    body = []
+
+    #  What it looks like, in constructs taken from the tour itself.  Each
+    #  keeps its number, and the number is the link back to the full entry.
+    if samples:
+        rest = f"{total - len(samples)}" if total else "rest"
+        shown = []
+        for cid, title, code in samples:
+            hl = Highlighter(*symbols, links=lambda ref: None)
+            shown.append(
+                f'<figure class="shown">'
+                f'<figcaption><a class="tag" href="tour.html#{cid}">{cid}</a>'
+                f'<span>{esc(title)}</span></figcaption>'
+                f'{listing(hl.block(code))}</figure>')
+        body.append(
+            '<section class="landing" id="what-it-looks-like">'
+            '<h2>what it looks like</h2>'
+            f'{chr(10).join(shown)}'
+            '<p class="more">Every construct is numbered, and the '
+            'numbers do not move. <a href="tour.html">Read the tour</a> '
+            f'for the other {rest}.</p></section>')
+
+    #  Three ways in, because the documents answer different questions and
+    #  a reader who starts in the wrong one finds it slow going.
+    routes = [
+        ("tour.html", "I want to learn the language",
+         "The tour teaches it in numbered constructs, from comments to "
+         "runtime dispatch. Start at the top and read down."),
+        ("spec.html", "I want to know what is decided",
+         "The specification is normative: the grammar of the kernel the "
+         "compiler accepts today, the rules the tour left unsaid, and why "
+         "each decision went the way it did."),
+        ("handoff.html", "I want to understand the design",
+         "The design in one page, the principles behind it, and which "
+         "decisions must not be quietly reversed."),
+        ("roadmap.html", "I want to know what is left",
+         "The roadmap owns every open item, dependency and gate. It is the "
+         "only place work is tracked."),
+    ]
+    cards = "".join(
+        f'<a class="route" href="{href}"><strong>{esc(head)}</strong>'
+        f'<span>{esc(text)}</span></a>' for href, head, text in routes)
+    body.append('<section class="landing" id="start-here">'
+                f'<h2>start here</h2><div class="routes">{cards}</div>'
+                '</section>')
+
+    #  The contents, as they were.
     cards = []
     for name, members in groups:
         cards.append(f'<h3 class="group">{esc(name)}</h3>')
@@ -1680,14 +1830,22 @@ def index_page(docs, pitch, counts):
                 f'<a class="card" href="{d["out"]}"><strong>{esc(d["nav"])}'
                 f'</strong><span>{esc(d["blurb"])}</span>'
                 f'<em>{esc(n)}</em></a>')
+    body.append('<section class="landing" id="every-document">'
+                '<h2>every document</h2>'
+                f'<div class="cards">{chr(10).join(cards)}</div></section>')
 
-    body = f'<div class="cards">{chr(10).join(cards)}</div>'
-    nav = nav_html(docs, "index.html", [])
-    hero = (f"<p>{esc(pitch)}</p><p>{VERSION_LINE}. The compiler does not "
-            "compile anything yet; the bootstrap chassis is built and "
-            "tested.</p>")
-    return page("Landin — the specification and the work", "contents",
-                "Landin", hero, body, nav, "the repository", logo=True)
+    hero = "".join(f"<p>{esc(t)}</p>" for t in intro)
+    if status:
+        hero += (f'<p class="status">'
+                 f'{prose_html(status, lambda ref: None)}</p>')
+
+    nav = nav_html(docs, "index.html", [
+        ("what-it-looks-like", "what it looks like", 0),
+        ("start-here", "start here", 0),
+        ("every-document", "every document", 0)])
+    return page("Landin — a systems language from 32 KB to 32 TB",
+                VERSION_LINE, "Landin", hero, chr(10).join(body), nav,
+                "the repository", logo=True)
 
 
 # --------------------------------------------------------------------------
@@ -1853,9 +2011,14 @@ def main(argv):
             return 1
 
     if len(docs) == len(DOCS) and len(guides) == len(GUIDES):
-        pitch = " ".join(l.strip() for l in tour_front["body"][:3] if l.strip())
+        tour_text = (source / "tour.md").read_text()
+        intro = tour_intro(tour_text)[:2]
+        status = readme_status((source / "README.md").read_text())
         (SITE / "index.html").write_text(
-            index_page(DOCS + GUIDES, pitch, counts))
+            index_page(DOCS + GUIDES, counts, intro, status,
+                       landing_samples(tour_text), guide_symbols,
+                       total=len(re.findall(r"(?m)^### \[\d{4}\]",
+                                            tour_text))))
         print(f"{SITE.name}/index.html")
     if dangling:
         print(f"warning: {len(set(dangling))} citations point nowhere: "

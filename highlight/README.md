@@ -10,7 +10,7 @@ away from it.
 |---|---|---|
 | `landin_highlight.py` | the scanner itself; standard library only, no output format | here |
 | `landin_pygments.py` | Pygments: sourcehut's blob view, Sphinx, MkDocs, `pygmentize` | here |
-| `docs/site/render_html.py` | the reading copies at sinnfrei.srht.site, as HTML spans | imports the scanner |
+| `docs/site/render_html.py` | the reading copies at www.701.dev, as HTML spans | imports the scanner |
 | a TextMate grammar | VS Code and its forks, Sublime Text, `bat` and other syntect tools, Shiki | planned |
 | a tree-sitter grammar | Neovim, Helix, Zed, Emacs 29+, and folds, indent and textobjects | planned |
 

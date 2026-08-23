@@ -38,7 +38,7 @@ python3 check.py prototype-2-parser.md
 nix develop
 ```
 
-Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and from R1.80 onwards — when `refine` starts emitting instructions — it is the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches https://sinnfrei.srht.site by being pushed, not by anyone running `scripts/site.sh --publish`.
+Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and from R1.80 onwards — when `refine` starts emitting instructions — it is the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches https://www.701.dev by being pushed, not by anyone running `scripts/site.sh --publish`.
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
 
@@ -77,7 +77,7 @@ in a table.
 
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 
-Every document above is also published as a reading copy at https://sinnfrei.srht.site, rendered by `docs/site/render_html.py`. The text files are the sources; the pages are generated and never edited by hand.
+Every document above is also published as a reading copy at https://www.701.dev, rendered by `docs/site/render_html.py`. The text files are the sources; the pages are generated and never edited by hand.
 
 The mark lives in `assets/`, not in the site renderer. `assets/icon.svg` is
 the drawing — `701` as a path, so no renderer needs Futura — and
