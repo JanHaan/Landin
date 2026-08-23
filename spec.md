@@ -498,6 +498,19 @@ first, exactly as [1850] found with two declarations of one
 name. So it is refused, and the report names the declaration
 the chain came back to, because that is the one place in it
 the reader is standing.
+A binding with no value is known too, and what it holds is
+zero -- false, for a bool. [0080] lets a binding carry no
+value and says it must be assigned before use, and that
+sentence has nothing to bite on here: [1460] says nothing
+runs before the entry point, so there is no moment at
+module level in which to assign one, and [1910]'s walk is
+over the paths through a body and there is no body. Zero is
+a value the compiler knows, which is the whole of what
+[1460] asks. So 'mut counter: u32' is module state a
+function updates without an initialiser that says nothing,
+and reading one before anything writes it reads zero rather
+than being refused, because there is nothing left to
+refuse.
 
 ### [1950] An operand an operation cannot take
 
@@ -548,7 +561,7 @@ the zero and the negative amount are what a reader changes.
 A rule above is one of two things, and a reader cannot tell them apart by
 reading it: a transcription of something `tour.md` already decided, or a
 decision taken because the tour said nothing and an implementation could not
-proceed without one. Nine were decisions. They are listed here with what
+proceed without one. Ten were decisions. They are listed here with what
 the tour said before, what was chosen, and what a competent reader could
 have chosen instead — because a decision written in the same voice as a
 transcription looks like it was always there, and [1050] was missed twice by
@@ -724,3 +737,28 @@ around, so masking here would make one operator answer two ways.
 **Pinned by** `negative/shift-amount-is-negative`,
 `negative/shift-amount-is-negative-in-a-body`,
 `positive/shift-amount-is-not-known`.
+
+### D10 — A module binding with no value holds zero
+
+**The tour said** that a binding may carry no value and must be assigned
+before use [0080], and that values at module level must be known at compile
+time [1460]. Neither says what one with no value holds, and the two do not
+combine: [0080]'s "before use" is a rule about paths through a body, and
+[1460] says nothing runs before the entry point, so at module level there is
+no path and no moment in which an assignment could happen.
+
+**Chosen:** zero, and false for a bool [1940]. Reading one before anything
+writes it reads zero. `positive/binding-declared-only` stays a positive
+fixture, and `mut counter: u32` is module state a function updates.
+
+**The alternative:** two, and both were defensible. Refuse a module binding
+with no value, on the strict reading that no value is not a known value —
+which is tidy, and costs `mut counter: u32 = 0` at every declaration of
+module state, where the `= 0` says nothing a reader did not know. Or keep
+the declaration and refuse the read, which is [0080] taken literally — but
+at module level "before use" is a question about which function runs first,
+and that is a whole-program analysis this specification does not have and R1
+is not equipped to answer.
+
+**Pinned by** `positive/binding-declared-only`,
+`positive/module-binding-with-no-value-reads-zero`.

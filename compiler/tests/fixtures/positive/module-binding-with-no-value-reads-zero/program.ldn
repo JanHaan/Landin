@@ -1,0 +1,11 @@
+later: i32
+mut counter: u32
+
+read_before_write: () -> (r: i32) =
+    r = later
+end read_before_write
+
+count_up: () -> (r: u32) =
+    counter = counter + 1
+    r = counter
+end count_up
