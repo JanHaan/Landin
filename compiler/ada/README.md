@@ -22,8 +22,7 @@ compiler/ada/
     stages/             target facts and the stage/pipeline seams
     syntax/             the tokens, the scan, the syntax table and the parse
     resolution/         declarations, scopes and what each name means
-    checking/           the language's types, and what each node has
-    checking/           the language's types, and what each node has
+    checking/           the language's types, what each node has, and the IR
     driver/             the request/result boundary
     main/               the `refine` entry point
   tests/src/            the harness, the fakes and the suites
@@ -53,6 +52,7 @@ replaced.
 | `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the eleven types, and each one's width against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Checking` | what type every node and every declaration has | decide a rule, or hold a width |
+| `Landin.IR` | the target-neutral instructions: items, slots, blocks, values, and the only construction of one | hold a scope tree, name a machine, or ask a width |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
@@ -68,6 +68,7 @@ replaced.
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
 | `Landin.Stages.Resolution` | the order the trees are walked in | own the resolution table, or a code |
 | `Landin.Stages.Checking` | the three type passes and the assignment walk | own a table, a code, or a width |
+| `Landin.Stages.Lowering` | the walk that builds the IR, and refusing to run on a refused program | own the Unit, work out a scope, or raise a diagnostic |
 | `Landin.Driver` | argument classification and the result | implement a language rule |
 | `Refine` | printing and the exit status | contain a decision |
 
@@ -105,11 +106,14 @@ what owns the pipeline.
 
 ## What is deliberately absent
 
-There is no IR or backend here yet. What does exist is the whole frontend:
-`refine` scans and parses every `.ldn` file it is given, resolves every name
-in them as one module, checks the type of everything and that every name is
-assigned before it is read, reports what none of the four could read, and
-produces nothing when a file is a program.
+There is no backend here yet, and nothing is emitted or executed. What does
+exist is the whole frontend and the IR behind it: `refine` scans and parses
+every `.ldn` file it is given, resolves every name in them as one module,
+checks the type of everything and that every name is assigned before it is
+read, reports what none of the four could read, lowers every function it
+accepted into `Landin.IR`, and produces nothing when a file is a program.
+A module binding gets its item and not yet its value, and there is no
+verifier and no dump; `ROADMAP.md` R1.70 owns all three.
 
 A width is a function of a type and a target description, never a property of
 either alone, and `Landin.Types.Width` is the only place one is formed.

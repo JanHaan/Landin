@@ -783,6 +783,17 @@ nothing lowers one, and nothing in `Landin.IR` enforced that.
 `positive/...`-style evidence for it is a case, not a fixture: a program with
 a type error produces a Unit with zero items.
 
+A third defect of the same family, found by an adversarial reading of the
+verifier's design and fixed here. `Open_Run` guards four vectors and there
+are five: every instruction but a call records its operands in the same call
+that creates them, so those runs cannot interleave, but a call's arguments
+arrive afterwards and `Enter` asks only that *this* item has no open block.
+So two items could be open at once, and a call was handed one value and read
+back the other item's -- in debug and in release, with every precondition
+satisfied and nothing to notice. `Add_Argument` opens its own run now, and
+`Emit_Call` no longer takes a base at creation, which is the same sentence
+as the first two fixes. The case that pins it fails against the old body.
+
 Still open in this item: **a datum's value block**, the verifier, and the
 textual dump. A `Binding` gets its item -- a routine that reads one needs it
 for `Load_Datum` -- and not yet its block, so a datum currently has none.

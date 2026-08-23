@@ -544,7 +544,7 @@ package body Landin.IR is
                          Result    => Result,
                          Site      => Site,
                          Named     => Callee,
-                         First_Arg => Natural (Into.Operands.Length),
+                         First_Arg => 0,
                          Args      => 0,
                          others    => <>)));
 
@@ -556,11 +556,22 @@ package body Landin.IR is
    is
       Where : constant Positive := Value_At (Into, Item, Call);
       What  : Instruction := Into.Code (Where);
+      Their : Run := Run'(First => What.First_Arg, Count => What.Args);
    begin
-      --  The call is the last instruction, so its operand run is the top
-      --  of the operand vector and appending extends it in place.
+      --  The fifth vector, and the one Open_Run did not reach when it was
+      --  written.  Every other instruction records its operands in the
+      --  same call that creates them, so no two of those runs can
+      --  interleave; a call's arguments arrive afterwards, and nothing
+      --  stops another item being filled in between -- Enter asks only
+      --  that *this* item has no open block, not that no other item does.
+      --  Measured before this line existed: a call was given one value
+      --  and read back another item's, in debug and in release, with
+      --  every precondition satisfied.
+      Open_Run (Their, Natural (Into.Operands.Length));
       Into.Operands.Append (Value);
-      What.Args := What.Args + 1;
+
+      What.First_Arg := Their.First;
+      What.Args      := Their.Count + 1;
       Into.Code (Where) := What;
    end Add_Argument;
 

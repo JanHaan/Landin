@@ -24,6 +24,16 @@
 --     L0100-L0199  reserved for R1.40's syntax failures
 --     L0200-L0299  name resolution, assigned at R1.50
 --     L0300-L0399  types and definite assignment, assigned at R1.60
+--     L0400-L0499  deliberately unassigned; see below
+
+--  `L0400`-`L0499` is the band R1.70 would have taken and did not, and it
+--  stays empty on purpose.  Malformed IR cannot be caused by a source
+--  program: the frontend refuses every ill-formed one, and the lowering
+--  refuses to run on a program that was refused.  So a verifier failure is
+--  a `Landin.Compiler_Defect` and never a diagnostic, and a code here
+--  would be a promise that some program can provoke it -- the promise
+--  `landin.ads` forbids.  A later reader should not spend the band before
+--  reading that argument.
 
 package Landin.Diagnostics.Catalogue is
 
