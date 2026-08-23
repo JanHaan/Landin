@@ -449,8 +449,14 @@ a.cite:hover{background:var(--accent-bg)}
 .card em{display:block; margin-top:.5rem; font-style:normal; font-size:.7rem;
   letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint)}
 
+/*  The footer sits outside <main> so it is a landmark of its own, which
+    put it in the grid's next cell -- under the sidebar, in a 17rem column,
+    wrapping after four words.  It belongs in the content column, aligned
+    with the document it describes.  */
 footer{
-  margin-top:3rem; padding-top:1.2rem; border-top:1px solid var(--rule);
+  grid-column:2; justify-self:start;
+  margin:0 0 4rem; padding:1.2rem 2.4rem 0;
+  border-top:1px solid var(--rule);
   color:var(--ink-faint); font-size:.8rem; max-width:44rem;
 }
 footer code{font-size:.9em; color:var(--ink-soft)}
@@ -471,6 +477,7 @@ nav.side a.sect .num{
 
 @media (max-width:60rem){
   .wrap{grid-template-columns:minmax(0,1fr)}
+  footer{grid-column:1; padding-left:1.2rem; padding-right:1.2rem}
   nav.side{
     position:fixed; inset:var(--bar) 0 auto 0; height:auto; max-height:75vh;
     background:var(--bg); border-right:0; border-bottom:1px solid var(--rule);
