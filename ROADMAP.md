@@ -64,9 +64,11 @@ version solving, publishing and the broader ecosystem remain outside scope.
   implement mixed Ada/Landin stages or freeze their transport.
 - The frame pointer is always present. Source and type provenance are carried
   from the first frontend slice so later debug information is not a retrofit.
-- Licensing is deliberately not an implementation-entry gate. Distribution,
-  contribution and license decisions belong to the release-readiness
-  successor roadmap.
+- The license is settled and is not an implementation gate: `MIT OR
+  Apache-2.0`, decided while the author was still the sole one, because that
+  is the only point at which relicensing costs one commit. `LICENSE` governs
+  the whole tree. Distribution and the contribution process remain with the
+  release-readiness successor roadmap.
 
 ## Roadmap mechanics
 
@@ -1550,7 +1552,7 @@ Depends on: R7.60
 
 Record that the compiler/toolchain slice is feature-complete pre-v1 and name all
 successor ownership. Do not edit a version, assign a release, claim production
-readiness, select a license or start self-hosting.
+readiness, change the license or start self-hosting.
 
 Exit evidence: every work item is complete, all transferred scope has a named
 successor, and repository authority documents agree on the endpoint.

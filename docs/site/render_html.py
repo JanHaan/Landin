@@ -1352,6 +1352,9 @@ Generated from <code>{esc(docname)}</code> by <code>render_html.py</code>.
 The text file is the specification; this page is a reading of it.
 Regenerate with <code>python3 render_html.py</code>.
 The repository is at <a href="{REPO}">git.sr.ht/~sinnfrei/landin</a>.
+<br>Copyright &#169; 2026 Jan Haan.
+Licensed under <a href="{REPO}/tree/main/item/LICENSE-MIT">MIT</a> or
+<a href="{REPO}/tree/main/item/LICENSE-APACHE">Apache-2.0</a>, at your option.
 </footer>
 </div>
 <div id="pop"></div>

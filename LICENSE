@@ -1,0 +1,29 @@
+Landin
+Copyright (c) 2026 Jan Haan
+
+SPDX-License-Identifier: MIT OR Apache-2.0
+
+This repository is dual-licensed.  You may use it under the terms of either
+
+  * the MIT license, in LICENSE-MIT, or
+  * the Apache License, Version 2.0, in LICENSE-APACHE,
+
+at your option.  You need not comply with both; pick whichever one suits
+you.  The MIT option exists because Apache-2.0 is incompatible with GPLv2,
+so a GPLv2 project can take the MIT terms instead.
+
+This covers the whole tree: the specification and the tour, the compiler,
+the fixtures, the scripts, the site generator and the mark.  There are no
+per-directory exceptions and no per-file headers; this file governs.
+
+What `refine` produces is not a derivative work of `refine`.  Compiling a
+program with this toolchain places no licensing condition on that program,
+and neither does linking `core/*` into it.  What you compile is yours.
+
+Third-party material carries its own notice next to it rather than here.
+Today there is one: the icon paths in `assets/icons.py`, from Lucide, under
+the ISC license, whose notice that file preserves.  Keep it.
+
+Unless you state otherwise, a contribution you intentionally submit for
+inclusion in this repository is licensed under the same dual terms, without
+any additional conditions.
