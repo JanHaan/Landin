@@ -822,11 +822,33 @@ convention, hosted `main`, ELF-compatible assembly and platform
 assemble/link/run path needed for a constant-return program. Keep aggregate,
 error-register and evidence calls in R2.
 
-Sources: `[1550]`, `[1650]`.
+[1950] hands this item three obligations, and what was measured to settle
+them is recorded under R1.70 rather than repeated here. A zero divisor and a
+negative shift amount the compiler does not know must trap, and only this
+item can emit that trap: `L0306` refuses the ones it knows and says nothing
+about the rest. A shift whose amount reaches or passes the width must yield
+zero [0320], and x86-64 masks the count instead -- five bits at 32-bit, six
+at 64 -- so `1u32 << 40` needs a guard the hardware does not give, on every
+shift whose amount the compiler cannot bound. And the lowest value of a
+signed type over -1 traps as the overflow [0300] already makes it, which
+`IDIV` gives here for nothing and R5.30 will have to construct.
+
+What a trap *does* is decided nowhere, and this is the first item that has to
+know. [0300], [0310] and [1950] all say an operation traps, and no sentence
+of either document says what that is: a hardware fault left to the kernel, a
+call into a routine the runtime owns, or an instruction chosen because it
+faults. R2.90's guarantee table classifies operations and does not define the
+mechanism, so it does not answer this. Decide it here, record it in
+`spec.md`'s register as the decision it is, and decide it before lowering
+hardens around an assumption.
+
+Sources: `[1550]`, `[1650]`, `[1950]`.
 
 Exit evidence: `refine` compiles a kernel `.ldn` program to deterministic
 assembly, assembles, links and executes it on native Linux x86-64 with the
-expected status.
+expected status; a program whose divisor is zero only at run time traps
+rather than returning a value, and a shift past the width yields zero on
+hardware that would have masked the count.
 
 ### R1.90 — Close the executable-kernel corpus
 Status: planned
