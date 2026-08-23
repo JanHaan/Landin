@@ -766,8 +766,28 @@ preconditions are structural only -- a wrong-arity call and a mid-block
 terminator are buildable on purpose, because a precondition there would make
 malformed IR unconstructible and so untestable.
 
-Still open in this item: the lowering pass, the verifier, and the textual
-dump. Nothing calls `Landin.IR` yet.
+The lowering has landed for routines. `Landin.Stages.Lowering` is a fourth
+frontend stage, wired into `refine`, so every positive fixture is lowered by
+the fixture suite and `Landin.Tests.Lowering_Suite` reads the Unit back for
+five of them. Two passes, and the first is forced rather than tidy: [1740]
+makes a module a set, so `f` may call `g` written below it and `Emit_Call`
+needs `g`'s item to exist by then -- every item is created over every tree
+before any is filled, and then each is filled alone, because
+`Landin.IR.Open_Run` refuses an interleaved fill.
+
+The stage refuses to run on a refused program on its own first line rather
+than relying on the pipeline stopping before it. That is what makes this
+item's no-diagnostic-code argument a fact instead of an accident of the
+driver's ordering: malformed IR cannot come from a source program only while
+nothing lowers one, and nothing in `Landin.IR` enforced that.
+`positive/...`-style evidence for it is a case, not a fixture: a program with
+a type error produces a Unit with zero items.
+
+Still open in this item: **a datum's value block**, the verifier, and the
+textual dump. A `Binding` gets its item -- a routine that reads one needs it
+for `Load_Datum` -- and not yet its block, so a datum currently has none.
+Closing it needs the logical fold described above and D10's zero, and both
+are decided; only the code is owed.
 
 Two defects in `landin-ir.adb`, found by designing the verifier and fixed
 here. Both corrupted a Unit silently in a release build, and neither could
