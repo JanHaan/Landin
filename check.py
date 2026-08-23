@@ -164,6 +164,15 @@ NAMED_FILE_ALLOWLIST = frozenset((
     #  handoff.md in the same sentence.  AGENTS.md already says the tracked
     #  repository does not depend on that archive.
     "HANDOFF.md",
+    #  Written into docs/site/site/ by render_html.py and never committed,
+    #  so they are in the built site and not in the repository.  A local
+    #  run finds them anyway, because a previous render left them on disk;
+    #  the clean gate is what noticed they are not tracked.
+    "robots.txt",
+    "sitemap.xml",
+    "og.png",
+    "icon-mono.svg",
+    "apple-touch-icon.png",
 ))
 
 STALE_BACKLOG_ALLOWLIST = {
