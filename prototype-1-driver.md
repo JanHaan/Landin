@@ -1,15 +1,13 @@
 # Landin prototype 1 — a driver from a vendor SVD
 
-```landin
 Current with specification 0.1.0. Its own findings X1-X9 are all
 resolved below. No compiler exists, so this is read as a
 specification test: every line is meant to follow a rule that is
 written down, and every place where the tour was silent is recorded at
-the end under [X].
+the end, under WHERE THE SPECIFICATION WAS SILENT.
 
 The target is a Cortex-M0 class part. GPIO, a timer, and a UART that
 receives by DMA and signals completion from an interrupt handler.
-```
 
 ---
 
@@ -415,11 +413,13 @@ end start
 What the escape rule rejects, and the reason the prototype was
 worth writing:
 
+```landin
 bad_start: () -> noreturn =
-mut local: [256]u8 = zeroed
-c := uart.open(..., local[0..<256])   -- error
-...
+    mut local: [256]u8 = zeroed
+    c := uart.open(..., local[0..<256])   -- error
+    ...
 end bad_start
+```
 
 open takes its buffer as escaping, so the argument must outlive
 the call. local has frame origin. The compiler refuses, and the
@@ -454,75 +454,71 @@ vectors: vector_table = (
 
 ---
 
-```landin
-[X] WHERE THE SPECIFICATION WAS SILENT
+## WHERE THE SPECIFICATION WAS SILENT
+
 The resolutions below cite the pre-release revisions this
 specification passed through, 0.0.1 to 0.0.17, on the way to 0.1.0.
 They are kept because when one thing was settled relative to another
 still carries information.
 
-```
-
 ---
 
-```landin
 X1  RESOLVED in the tour. An encoded union leaves out its base type
-    and takes the smallest width that holds its largest encoding, so
-    a two-value union is one bit and u1 is not missed.
+and takes the smallest width that holds its largest encoding, so
+a two-value union is one bit and u1 is not missed.
 
 X2  RESOLVED in the tour. An array may be a packed field: element
-    width times count must equal the range, element zero takes the
-    low bits.
+width times count must equal the range, element zero takes the
+low bits.
 
 X3  RESOLVED in the tour. A function type is an ordinary type and a
-    function an ordinary value of it, so no function-pointer type is
-    needed and addr is not used on functions. A callback is a pair
-    of a function value and a state pointer, written out.
+function an ordinary value of it, so no function-pointer type is
+needed and addr is not used on functions. A callback is a pair
+of a function value and a state pointer, written out.
 
 X4  RESOLVED at 0.0.12, by removing rather than deciding. A set is
-    not a kind of its own: set(X) generates a packed struct of bool,
-    one field per member, each at the bit its encoding names. So
-    membership is a field read, adding and removing a member is a
-    field write, and building one is the ordinary struct literal
-    with 'of' filling what was not named. No set literal, no set
-    operators, no membership operator — and the braces used here
-    were an intruder, since the language has none anywhere else.
-    What made it work is a partial struct literal, which the whole
-    language gains from and which had been missing since [0980]
-    refused default values.
+not a kind of its own: set(X) generates a packed struct of bool,
+one field per member, each at the bit its encoding names. So
+membership is a field read, adding and removing a member is a
+field write, and building one is the ordinary struct literal
+with 'of' filling what was not named. No set literal, no set
+operators, no membership operator — and the braces used here
+were an intruder, since the language has none anywhere else.
+What made it work is a partial struct literal, which the whole
+language gains from and which had been missing since [0980]
+refused default values.
 
 X5  RESOLVED at 0.0.12, as assumed. A field of register(T, ...) type
-    reads as a T and is assigned a T, and the access behaviour is
-    checked there. Written down with it: reset initialises nothing,
-    it records what the hardware leaves behind.
+reads as a T and is assigned a T, and the access behaviour is
+checked there. Written down with it: reset initialises nothing,
+it records what the hardware leaves behind.
 
 X6  RESOLVED at 0.0.12. addr on a volatile field yields the address
-    and nothing more, because volatility is a property of the access
-    path rather than of the number. Both directions between pointer
-    and integer are the ordinary conversion with no special word,
-    and the tour now says what the round trip costs: an integer that
-    used to be a pointer has no origin left. The half about
-    functions had already gone with X3.
+and nothing more, because volatility is a property of the access
+path rather than of the number. Both directions between pointer
+and integer are the ordinary conversion with no special word,
+and the tour now says what the round trip costs: an integer that
+used to be a pointer has no origin left. The half about
+functions had already gone with X3.
 
 X7  RESOLVED at 0.0.12, said in the tour: ordinary code, a shift by
-    a computed amount inside a register image, with the same bounds
-    check any index gets — and on an image only, never straight
-    through the volatile pointer.
+a computed amount inside a register image, with the same bounds
+check any index gets — and on an image only, never straight
+through the volatile pointer.
 
 X8  RESOLVED at 0.0.12 with a rule rather than a list: something is
-    builtin when the compiler has to know it. Atomics are, because
-    opaque assembly in a hot loop wrecks the allocation around it.
-    Masking interrupts is not — being opaque is exactly what a
-    critical section wants. So cpu is an ordinary core module per
-    target, written with assembler.block behind a fixed if, and the
-    calls in this file stand as they are. If an intrinsic later
-    turns out to be uniform across targets, the rule promotes it.
+builtin when the compiler has to know it. Atomics are, because
+opaque assembly in a hot loop wrecks the allocation around it.
+Masking interrupts is not — being opaque is exactly what a
+critical section wants. So cpu is an ordinary core module per
+target, written with assembler.block behind a fixed if, and the
+calls in this file stand as they are. If an intrinsic later
+turns out to be uniform across targets, the rule promotes it.
 
 X9  RESOLVED at 0.0.12: reachability from something kept is what
-    keeps a handler, and the table carries keep and names them.
-    extern(interrupt) does not imply it, because a calling
-    convention is what the program means and keep is an instruction
-    to the toolchain — two things [0760] separated on purpose.
-```
+keeps a handler, and the table carries keep and names them.
+extern(interrupt) does not imply it, because a calling
+convention is what the program means and keep is an instruction
+to the toolchain — two things [0760] separated on purpose.
 
 ---

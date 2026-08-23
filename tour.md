@@ -172,8 +172,8 @@ context, and are checked at that point.
 ```landin
 tiny:  u8  = 5
 large: u64 = 5
+-- bad: u8 = 300      is a compile error
 ```
-bad: u8 = 300      is a compile error
 
 ### [0200] With no context, an integer literal defaults to i32
 
@@ -189,9 +189,7 @@ Float literals are always recognisable as such. There is no
 silent slide between the two classes.
 ```landin
 ratio: f32 = 5.0
-```
-wrong: f32 = 5     is a compile error
-```landin
+-- wrong: f32 = 5     is a compile error
 half := 1.0 / 2.0     -- 0.5
 zero := 1 / 2         -- 0, integer division
 
@@ -256,8 +254,10 @@ A literal lives in read-only storage, so a reference to one
 cannot be written through by [0070] however the binding is
 declared. Writable text is a copy into storage you asked
 for.
-greeting: []u8 = "abc"
-greeting[0] = 0x78          -- error, the literal is static
+```landin
+-- greeting: []u8 = "abc"
+-- greeting[0] = 0x78          -- error, the literal is static
+```
 
 ### [0270] The escape set is closed and small
 
@@ -314,8 +314,8 @@ Overflow traps. Wrapping is a separate operator: +% -% *%
 No implicit conversion. Conversion is a type applied to a
 value. If the value is known at compile time, an impossible
 conversion is a compile error; otherwise it traps.
-bad: u8 = u8(300)        compile error
 ```landin
+-- bad: u8 = u8(300)        compile error
 runtime_narrow := u8(measured)   -- traps if out of range
 
 ```
@@ -428,8 +428,8 @@ p: ptr mut u32 = addr value
 v := p.val
 p.val = 43
 ro: ptr u32 = addr value         -- same address, read-only through ro
+-- ro.val = 1              -- error
 ```
-ro.val = 1              -- error
 
 ### [0440] A mut reference satisfies a plain one, never the reverse
 
@@ -571,9 +571,9 @@ all, because there is no null.
 ```landin
 buffer: [256]u8 = zeroed
 irqs:   set(irq) = zeroed        -- fine: a set is bools, see [0730]
+-- mode: clock_mode = zeroed     -- error, write 'internal'
+-- p:    ptr u32     = zeroed    -- error, no zero image
 ```
-mode: clock_mode = zeroed     -- error, write 'internal'
-p:    ptr u32     = zeroed    -- error, no zero image
 
 ### [0550] The first of those two properties is also a concept
 
@@ -686,9 +686,7 @@ advance: (inout w: world, dt: f32) -> none =
     shift_all(xs, dt)
 
     first := w.items[0]          -- a copy
-```
-p := addr w.items[0]     -- error: the fields are apart
-```landin
+    --  p := addr w.items[0]     -- error: the fields are apart
 end advance
 ```
 Only for structs without a variant part. Layout attributes
@@ -801,8 +799,8 @@ and neither ever becomes a same-shaped named type.
 ```landin
 here: point = (x: 1.0, y: 2.0)
 pair: (quot: i32, rem: i32) = divide(10, 3)
+-- named: point_pair = divide(10, 3)     -- no, that is named
 ```
-named: point_pair = divide(10, 3)     -- no, that is named
 
 ### [0720] 'of' fills every field the literal did not name
 
