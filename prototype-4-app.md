@@ -365,9 +365,7 @@ public build: (A: type is allocator, inout h: any io.world, inout a: A,
             fail bad_argument when k >= lenof args
 ```
 
-### [0950] in one line
-
-in one line: a bad number here is foreseeable
+[0950] in one line: a bad number here is foreseeable
 from what we already hold, so it is reported and
 worked around rather than routed through the channel.
 The else arm yields the value, and nobody had to

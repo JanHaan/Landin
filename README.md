@@ -53,8 +53,15 @@ Every document here is published as a syntax-highlighted reading copy at
 roadmap, and the implementation notes. Every `[NNNN]` citation links to the
 construct it names, and hovering one shows what it says.
 
-The CI gate republishes it as its last task on every push to `main`, so the
-pages read what the repository says. To render or publish it by hand:
+The repository the pages are generated from is at
+**https://git.sr.ht/~sinnfrei/landin**, and it is the only copy:
+
+```sh
+git clone https://git.sr.ht/~sinnfrei/landin
+```
+
+The CI gate republishes the pages as its last task on every push to `main`,
+so they read what the repository says. To render or publish by hand:
 
 ```sh
 ./scripts/site.sh              # render, verify, package

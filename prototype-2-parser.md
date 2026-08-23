@@ -88,10 +88,7 @@ end bounded_failed
 
 ```
 A constructor and not zeroed: severity is a named value set, and
-
-### [0540] does not let one of those be written as zeroed
-
-does not let one of those be written as zeroed, nor an
+[0540] does not let one of those be written as zeroed, nor an
 aggregate holding one. So the empty note has to be spelt.
 ```landin
 blank: entry = (where: text.nowhere, kind: warning, what: "")
