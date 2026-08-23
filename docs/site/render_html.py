@@ -6,9 +6,13 @@
     python3 render_html.py --verify         and check that nothing was dropped
     python3 render_html.py --from ../landin read the text files from elsewhere
 
-The pages are single files with no external references: the stylesheet,
-the script and the highlighting are all inlined, so one file can be
-opened from disk, mailed, or served as it is.
+The pages are single files: the stylesheet, the script and the
+highlighting are all inlined, so one file can be opened from disk,
+mailed, or served as it is.  What sits beside them is what a browser
+showing the document is not the one asking for -- the card a crawler
+fetches, the two icons that want to be files -- and the webfonts, which
+are inlined nowhere because eighty subsets are a megabyte and a page
+carrying its four would carry them again on the next page.
 
 Nothing here is a parser. The highlighting is not even here: it comes from
 highlight/landin_highlight.py, the one scanner every Landin highlighter is
@@ -97,6 +101,7 @@ sys.path.insert(0, str(HERE.parents[1] / "assets"))
 
 import landin_icon  # noqa: E402
 import icons  # noqa: E402
+import fonts  # noqa: E402
 
 #  Both icons travel in the page.  The pages have no external references
 #  at all, and a favicon fetched from a second file would be the first
@@ -197,16 +202,20 @@ CSS = """
   --k:#9a2f6b; --t:#0f6f68; --f:#2c4c8c; --d:#243b6b; --n:#7a4bab;
   --q:#4a6a1f; --c:#8a8880; --cd:#5f6f4a; --o:#7b7f88; --b:#8a5a12;
   --sh:0 1px 2px rgba(20,20,20,.05), 0 6px 20px rgba(20,20,20,.04);
-  /*  The interface face, named so a `font:` shorthand can reach it.  It
-      was used in three of those and defined in none, and a shorthand
-      whose family does not resolve is thrown away whole: every construct
-      heading and every table rendered at inherited body size.  */
+  /*  The two faces, named so a `font:` shorthand can reach them.  The
+      interface one was used in three of those and defined in none, and a
+      shorthand whose family does not resolve is thrown away whole: every
+      construct heading and every table rendered at inherited body size.
+
+      Both stacks come from assets/fonts.py, which is the only place that
+      knows which faces are vendored -- so a page cannot ask for a family
+      the site does not ship beside it, and neither can a rule below.  */
   /*  The sticky bar's height.  Four rules used to clear it with
       four different numbers, so landing on a section stopped half
       a rem higher than landing on a construct.  */
   --bar:3.1rem;
-  --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,
-       "Helvetica Neue",sans-serif;
+  --ui:{UI_STACK};
+  --mono:{MONO_STACK};
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -256,12 +265,12 @@ a.skip:focus{top:.5rem}
 html{-webkit-text-size-adjust:100%; scroll-behavior:smooth}
 body{
   margin:0; background:var(--bg); color:var(--ink);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",sans-serif;
+  font-family:var(--ui);
   font-size:16.5px; line-height:1.62;
   font-feature-settings:"kern" 1,"liga" 1;
 }
 code,pre,.mono,.tag,.cite{
-  font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  font-family:var(--mono);
 }
 code{
   font-size:.88em; padding:.05rem .28rem; color:var(--ink);
@@ -508,7 +517,7 @@ nav.side a.sect span:last-child{text-transform:uppercase; letter-spacing:.04em;
 nav.side a.sect .num{
   font-size:.66rem; color:var(--ink-faint); min-width:1.5rem;
   text-align:right; font-variant-numeric:tabular-nums;
-  font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-family:var(--mono);
 }
 .anchor{position:absolute; scroll-margin-top:calc(var(--bar) + .6rem)}
 
@@ -532,6 +541,20 @@ nav.side a.sect .num{
   a{color:inherit}
 }
 """
+
+#  The stacks are substituted rather than written above, because the list
+#  of vendored families is assets/fonts.py's to keep, and the CSS is one
+#  literal full of braces that `format` would read as fields.
+CSS = (CSS.replace("{UI_STACK}", fonts.stack("ui"))
+          .replace("{MONO_STACK}", fonts.stack("mono")))
+
+#  The faces themselves are files beside the pages, not data: urls: the
+#  eighty subsets come to 965 KiB, and a page that carried even the four
+#  an English reader needs would be 140 KiB heavier for glyphs the next
+#  page would carry again.  The declarations are inlined, so a page still
+#  knows what it wants to be set in; `font-display:swap` is what makes a
+#  page whose faces did not arrive readable rather than blank.
+FONT_CSS = fonts.css()
 
 JS = """
 (function(){
@@ -1319,7 +1342,7 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 {social(title, description, out)}
 {extra}
 {ICON_LINKS}
-<style>{CSS}{GUIDE_CSS}</style>
+<style>{FONT_CSS}{CSS}{GUIDE_CSS}</style>
 </head>
 <body>
 {icons.symbols()}
@@ -1462,8 +1485,19 @@ def write_resources(docs):
     (SITE / "apple-touch-icon.png").write_bytes(
         landin_icon.card(180, 180, share=0.62))
 
+    #  The faces.  Which of the eighty a reader fetches is the browser's
+    #  decision, from the `unicode-range` of each: an English page asks
+    #  for four of them, and a page that gained a Greek word would ask
+    #  for a fifth without the build being changed.  That is the reason
+    #  the subsets are shipped whole rather than merged into one file.
+    fonts_dir = SITE / fonts.OUT_DIR
+    fonts_dir.mkdir(exist_ok=True)
+    for name, source in fonts.files():
+        (fonts_dir / name).write_bytes(source.read_bytes())
+
     return ["sitemap.xml", "robots.txt", OG_IMAGE,
-            "icon-mono.svg", "apple-touch-icon.png"]
+            "icon-mono.svg", "apple-touch-icon.png",
+            "%s/ (%d faces)" % (fonts.OUT_DIR, len(fonts.files()))]
 
 
 def shelf_count(constructs, findings, sections):
