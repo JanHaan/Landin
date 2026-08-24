@@ -2289,11 +2289,11 @@ def check_icon(full_run):
     css = io.open(site, encoding="utf-8").read()
 
     #  The stylesheet's light values are the first :root, its dark ones the
-    #  forced [data-theme="dark"] block; the media-query copy repeats them
-    #  and is not read twice.
+    #  block the switch turns on over a light system; the other copy, the
+    #  one a dark system gets, repeats them and is not read twice.
     blocks = {
         "light": re.search(r":root\{(.*?)\n\}", css, re.S),
-        "dark": re.search(r':root\[data-theme="dark"\]\{(.*?)\n\}',
+        "dark": re.search(r":root:has\(#theme:checked\)\{(.*?)\n  \}",
                           css, re.S),
     }
     theme = {}
