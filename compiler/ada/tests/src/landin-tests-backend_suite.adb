@@ -377,6 +377,78 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Signed_Subtract_Follows_The_Target_Width;
 
+   --  [0300]'s wrapping add keeps the low byte and ignores carry.  With no
+   --  checked operation in this routine, no trap edge belongs in its text.
+   procedure Wrapping_Add_Ignores_Overflow
+     (Item : in out Landin.Testing.Context);
+
+   procedure Wrapping_Add_Ignores_Overflow
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: u8, b: u8) -> (r: u8) =" & LF
+         & "    r = a +% b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movb -7(%rbp), %al" & LF
+           & HT & "addb -6(%rbp), %al" & LF
+           & HT & "movb %al, -8(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "wrapping u8 addition stores the low byte immediately");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "ud2"),
+            "wrapping addition has no trap edge");
+      end;
+   end Wrapping_Add_Ignores_Overflow;
+
+   --  A target-width wrapping result follows the target rather than the host,
+   --  and subtraction likewise stores immediately without inspecting flags.
+   procedure Wrapping_Subtract_Follows_The_Target_Width
+     (Item : in out Landin.Testing.Context);
+
+   procedure Wrapping_Subtract_Follows_The_Target_Width
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: isize, b: isize) -> (r: isize) =" & LF
+         & "    r = a -% b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movq -56(%rbp), %rax" & LF
+           & HT & "subq -48(%rbp), %rax" & LF
+           & HT & "movq %rax, -64(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "wrapping isize subtraction follows the target width");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "ud2"),
+            "wrapping subtraction has no trap edge");
+      end;
+   end Wrapping_Subtract_Follows_The_Target_Width;
+
    --  AT&T's compare writes no destination, but its operand order still
    --  matters: `cmp right, left` sets flags for left minus right.  A signed
    --  less-than then materializes [1890]'s one-byte bool from those flags.
@@ -643,6 +715,12 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "wrapping add ignores overflow",
+         Wrapping_Add_Ignores_Overflow'Access);
+      Landin.Testing.Register
+        (Into, "backend", "wrapping subtract follows the target width",
+         Wrapping_Subtract_Follows_The_Target_Width'Access);
       Landin.Testing.Register
         (Into, "backend", "signed less-than compares left with right",
          Signed_Less_Than_Compares_Left_With_Right'Access);
