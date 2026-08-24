@@ -10,6 +10,7 @@ package body Landin.Backend.X86_64 is
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
    use type Landin.IR.Item_Kind;
+   use type Landin.IR.Opcode;
    use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
 
@@ -159,6 +160,12 @@ package body Landin.Backend.X86_64 is
          function Size_Of_Slot (Slot : Landin.IR.Slot_Id) return Held_Size
            is (Size_Of (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts));
 
+         --  A Value_Id restarts in each item, just as a Block_Id does.  The
+         --  extra `V` keeps a continuation distinct from a block label.
+         function Value_Label (Value : Landin.IR.Value_Id) return String
+           is (".L" & Trimmed (Landin.IR.Item_Id'Image (Item))
+               & "_V" & Trimmed (Landin.IR.Value_Id'Image (Value)));
+
          --  A move through the accumulator, at one width.  Every value
          --  that crosses an instruction crosses it this way.
          procedure Carry (Size : Held_Size; From, To : String);
@@ -247,6 +254,29 @@ package body Landin.Backend.X86_64 is
                   begin
                      Carry (Size_Of_Slot (Slot),
                             Value_Cell (Operand (1)), Slot_Cell (Slot));
+                  end;
+
+               when Landin.IR.Add | Landin.IR.Subtract =>
+                  declare
+                     Kind : constant Landin.Types.Integer_Name :=
+                       Landin.IR.Result_Of (Of_Unit, Item, Value);
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                     Next : constant String := Value_Label (Value);
+                  begin
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     Emit ((if Op = Landin.IR.Add then "add" else "sub")
+                           & Suffix (Held) & " "
+                           & Value_Cell (Operand (2)) & ", "
+                           & Accumulator (Held));
+                     Emit ((if Landin.Types.Is_Signed (Kind)
+                            then "jno " else "jnc ") & Next);
+                     Emit ("ud2");
+                     Put (Next & ":");
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", "
+                           & Value_Cell (Value));
                   end;
 
                when Landin.IR.Jump =>

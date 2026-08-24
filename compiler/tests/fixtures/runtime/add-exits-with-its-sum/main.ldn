@@ -1,0 +1,6 @@
+public main: () -> (code: i32) =
+    mut small: u8 = 254 + 1
+    small = small - 1
+    code = 40 + 2
+    code = code - 0
+end main

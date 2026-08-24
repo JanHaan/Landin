@@ -1,0 +1,5 @@
+class: runtime
+summary: checked addition and subtraction reach the host as the program's status
+program: main.ldn
+status: 42
+targets: linux-x86-64

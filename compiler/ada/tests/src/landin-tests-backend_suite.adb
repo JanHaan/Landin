@@ -239,6 +239,144 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Branch_Names_Both_Of_Its_Edges;
 
+   --  [0300] makes ordinary unsigned addition trap when its mathematical
+   --  result does not fit.  Carry is that condition on x86-64, and the
+   --  successful edge is the only one that stores the result.
+   procedure Unsigned_Add_Uses_Carry_To_Trap
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unsigned_Add_Uses_Carry_To_Trap
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: u8, b: u8) -> (r: u8) =" & LF
+         & "    r = a + b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "addb "),
+            "u8 addition uses a byte instruction");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "jnc .L1_V"),
+            "no carry reaches the successful continuation");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "ud2" & LF & ".L1_V"),
+            "carry reaches an explicit trap before the result is stored");
+      end;
+   end Unsigned_Add_Uses_Carry_To_Trap;
+
+   --  x86-64 reports an unsigned subtraction's borrow in the same carry
+   --  flag, so underflow takes the trap edge ordinary `-` requires.
+   procedure Unsigned_Subtract_Uses_Borrow_To_Trap
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unsigned_Subtract_Uses_Borrow_To_Trap
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: u16, b: u16) -> (r: u16) =" & LF
+         & "    r = a - b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "subw "),
+            "u16 subtraction uses a word instruction");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "jnc .L1_V"),
+            "no borrow reaches the successful continuation");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "ud2" & LF & ".L1_V"),
+            "borrow reaches an explicit trap before the result is stored");
+      end;
+   end Unsigned_Subtract_Uses_Borrow_To_Trap;
+
+   --  Carry does not say whether a signed result is representable.  Signed
+   --  arithmetic therefore takes its trap edge from x86-64's overflow flag.
+   procedure Signed_Add_Uses_Overflow_To_Trap
+     (Item : in out Landin.Testing.Context);
+
+   procedure Signed_Add_Uses_Overflow_To_Trap
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: i32, b: i32) -> (r: i32) =" & LF
+         & "    r = a + b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "addl "),
+            "i32 addition uses a long instruction");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "jno .L1_V"),
+            "no signed overflow reaches the successful continuation");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "jnc .L1_V"),
+            "signed addition does not use unsigned carry");
+      end;
+   end Signed_Add_Uses_Overflow_To_Trap;
+
+   --  isize obtains its width from the target description, while signed
+   --  subtraction still uses overflow rather than borrow to decide its edge.
+   procedure Signed_Subtract_Follows_The_Target_Width
+     (Item : in out Landin.Testing.Context);
+
+   procedure Signed_Subtract_Follows_The_Target_Width
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: isize, b: isize) -> (r: isize) =" & LF
+         & "    r = a - b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "subq "),
+            "isize subtraction follows the target's 64-bit width");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "jno .L1_V"),
+            "signed subtraction tests the overflow flag");
+      end;
+   end Signed_Subtract_Follows_The_Target_Width;
+
    ------------------------------------------------------------------
    --  The frame
    ------------------------------------------------------------------
@@ -355,6 +493,18 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a branch names both of its edges",
          A_Branch_Names_Both_Of_Its_Edges'Access);
+      Landin.Testing.Register
+        (Into, "backend", "unsigned add uses carry to trap",
+         Unsigned_Add_Uses_Carry_To_Trap'Access);
+      Landin.Testing.Register
+        (Into, "backend", "unsigned subtract uses borrow to trap",
+         Unsigned_Subtract_Uses_Borrow_To_Trap'Access);
+      Landin.Testing.Register
+        (Into, "backend", "signed add uses overflow to trap",
+         Signed_Add_Uses_Overflow_To_Trap'Access);
+      Landin.Testing.Register
+        (Into, "backend", "signed subtract follows the target width",
+         Signed_Subtract_Follows_The_Target_Width'Access);
       Landin.Testing.Register
         (Into, "backend", "every cell is aligned below the frame pointer",
          Every_Cell_Is_Aligned_Below_The_Frame_Pointer'Access);

@@ -1043,12 +1043,15 @@ without an answer. R2.10 owns a bool inside an aggregate and may say more; a
 frame cell is not an aggregate, and what it settles must agree with this.
 
 What is emitted so far is the straight-line kernel -- a literal, a truth, a
-slot read and written, a jump, a branch and a return -- against a prologue
-that sets up [1550]'s frame pointer and stores [1650]'s argument registers
-into their parameter slots. Any other opcode raises a compiler defect rather
-than emitting something plausible, because half of a trapping add is worse
-than none. Arithmetic, comparison, calls and the module data section remain,
-and so does every one of the three obligations above.
+slot read and written, ordinary add and subtract, a jump, a branch and a
+return -- against a prologue that sets up [1550]'s frame pointer and stores
+[1650]'s argument registers into their parameter slots. Add and subtract use
+the result type's width, test signed overflow or unsigned carry/borrow before
+anything can change the flags, and reach an explicit `ud2` on the failing
+edge; only the successful edge stores a result. Any other opcode raises a
+compiler defect rather than emitting something plausible. The remaining
+arithmetic, comparison, calls and the module data section remain, and so does
+every one of the three obligations above.
 
 The path from `refine` to a running process is now reachable, and a
 constant-return `main` compiled, linked and executed inside the pinned Linux
@@ -1156,10 +1159,13 @@ roadmap has already recorded against itself once.
 The `runtime` fixture class has landed with it, so the gate proves the
 executed path rather than a person having run it by hand once.
 `runtime/constant-return-exits-with-its-code` is compiled, linked and run by
-the suite, and its own exit status is what is asserted. Its program is held
-to the grammar exactly as a positive fixture's is, since it is legal source
-the compiler must accept; `check.py` derives it and reports a fixture the
-grammar cannot.
+the suite, and its own exit status is what is asserted. The separate
+`runtime/add-exits-with-its-sum` case computes `40 + 2` in the function body
+and crosses successful signed and unsigned add and subtract operations, so
+the same status now proves emitted arithmetic and distinct continuation labels
+rather than a literal alone. Their programs are held to the grammar exactly as a positive
+fixture's is, since they are legal source the compiler must accept; `check.py`
+derives each and reports a fixture the grammar cannot.
 
 A host that cannot finish the target fails rather than skipping, and that was
 a decision with a real alternative. Skipping keeps a macOS run green, and
