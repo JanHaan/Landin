@@ -16,12 +16,13 @@
 --  deterministic assembly, and nothing below reads a clock, a hash order
 --  or an address.
 --
---  What this does not emit yet.  Arithmetic, comparison, calls and the
---  module data section are not here, because [0300]'s trap and [0320]'s
---  shift beyond the width need the guards R1.80 records as its own
---  obligations and half of a trapping add is worse than none.  An opcode
---  this does not yet spell raises Compiler_Defect rather than emitting
---  something plausible.
+--  Ordinary add and subtract are the arithmetic here so far.  Each tests
+--  signed overflow or unsigned carry/borrow at the operation and reaches an
+--  explicit `ud2` before it stores a result.  The remaining arithmetic,
+--  comparison, calls and module data are not here yet; [0320]'s shift beyond
+--  the width in particular needs the guard R1.80 records as its own
+--  obligation.  An opcode this does not yet spell raises Compiler_Defect
+--  rather than emitting something plausible.
 --
 --  Nothing here asks the host how wide a pointer is.  Sizes come from
 --  `Landin.Backend.Size_Of` against the target description handed in, so
