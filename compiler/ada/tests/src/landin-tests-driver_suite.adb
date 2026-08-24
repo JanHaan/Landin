@@ -12,7 +12,21 @@ package body Landin.Tests.Driver_Suite is
    function Contains (Text : String; Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
 
+   LF : constant Character := Character'Val (10);
+
    function Arguments_Of (First : String) return Landin.Platform.Path_List;
+
+   function Both (First, Second : String) return Landin.Platform.Path_List;
+
+   function Both (First, Second : String)
+     return Landin.Platform.Path_List
+   is
+      Result : Landin.Platform.Path_List;
+   begin
+      Result.Append (First);
+      Result.Append (Second);
+      return Result;
+   end Both;
 
    function Arguments_Of (First : String) return Landin.Platform.Path_List is
       Result : Landin.Platform.Path_List;
@@ -25,9 +39,10 @@ package body Landin.Tests.Driver_Suite is
 
    procedure No_Arguments_Is_Misuse (Item : in out Landin.Testing.Context) is
       Host   : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
       Empty  : Landin.Platform.Path_List;
       Result : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Empty, Host);
+        Landin.Driver.Execute (Empty, Host, Tools);
    begin
       Landin.Testing.Check_Equal
         (Item, Result.Status, Landin.Driver.Status_Misuse,
@@ -44,8 +59,9 @@ package body Landin.Tests.Driver_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Host   : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
       Result : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Arguments_Of ("--identify"), Host);
+        Landin.Driver.Execute (Arguments_Of ("--identify"), Host, Tools);
       Text   : constant String := Unbounded.To_String (Result.Output);
    begin
       Landin.Testing.Check_Equal
@@ -71,8 +87,9 @@ package body Landin.Tests.Driver_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Host   : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
       Result : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Arguments_Of ("--wat"), Host);
+        Landin.Driver.Execute (Arguments_Of ("--wat"), Host, Tools);
       Text   : constant String := Unbounded.To_String (Result.Report);
    begin
       Landin.Testing.Check_Equal
@@ -90,8 +107,9 @@ package body Landin.Tests.Driver_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Host   : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
       Result : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Arguments_Of ("absent.ldn"), Host);
+        Landin.Driver.Execute (Arguments_Of ("absent.ldn"), Host, Tools);
       Text   : constant String := Unbounded.To_String (Result.Report);
    begin
       Landin.Testing.Check_Equal
@@ -114,15 +132,15 @@ package body Landin.Tests.Driver_Suite is
    procedure Sources_Are_Scanned_And_Parsed
      (Item : in out Landin.Testing.Context)
    is
-      LF   : constant Character := Character'Val (10);
       Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
    begin
       Host.Add_File ("main.ldn", "if: u32 = 1" & LF);
       Host.Add_File ("good.ldn", "n: u32 = 1" & LF);
 
       declare
          Result : constant Landin.Driver.Outcome :=
-           Landin.Driver.Execute (Arguments_Of ("main.ldn"), Host);
+           Landin.Driver.Execute (Arguments_Of ("main.ldn"), Host, Tools);
          Text   : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
@@ -147,7 +165,7 @@ package body Landin.Tests.Driver_Suite is
 
       declare
          Result : constant Landin.Driver.Outcome :=
-           Landin.Driver.Execute (Arguments_Of ("good.ldn"), Host);
+           Landin.Driver.Execute (Arguments_Of ("good.ldn"), Host, Tools);
       begin
          Landin.Testing.Check_Equal
            (Item, Result.Status, Landin.Driver.Status_Success,
@@ -170,12 +188,13 @@ package body Landin.Tests.Driver_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
    begin
       Host.Add_File ("empty.ldn", "");
 
       declare
          Result : constant Landin.Driver.Outcome :=
-           Landin.Driver.Execute (Arguments_Of ("empty.ldn"), Host);
+           Landin.Driver.Execute (Arguments_Of ("empty.ldn"), Host, Tools);
          Text   : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
@@ -193,10 +212,12 @@ package body Landin.Tests.Driver_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
       Known : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Arguments_Of ("--target=synthetic-32"), Host);
+        Landin.Driver.Execute
+          (Arguments_Of ("--target=synthetic-32"), Host, Tools);
       Wrong : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Arguments_Of ("--target=vax"), Host);
+        Landin.Driver.Execute (Arguments_Of ("--target=vax"), Host, Tools);
    begin
       Landin.Testing.Check_Equal
         (Item, Known.Status, Landin.Driver.Status_Success,
@@ -225,8 +246,9 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Help_Is_Printed (Item : in out Landin.Testing.Context) is
       Host   : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools  : Landin.Testing.Fakes.Fake_Tool_Runner;
       Asked  : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Arguments_Of ("--help"), Host);
+        Landin.Driver.Execute (Arguments_Of ("--help"), Host, Tools);
       Bare   : Landin.Platform.Path_List;
    begin
       Landin.Testing.Check_Equal
@@ -245,7 +267,7 @@ package body Landin.Tests.Driver_Suite is
       --  And no arguments prints the same text, with the misuse status.
       declare
          Empty : constant Landin.Driver.Outcome :=
-           Landin.Driver.Execute (Bare, Host);
+           Landin.Driver.Execute (Bare, Host, Tools);
       begin
          Landin.Testing.Check_Equal
            (Item, Unbounded.To_String (Empty.Output), Landin.Driver.Usage,
@@ -259,19 +281,7 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Misuse_Outranks_Help (Item : in out Landin.Testing.Context) is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
-
-      function Both (First, Second : String)
-        return Landin.Platform.Path_List;
-
-      function Both (First, Second : String)
-        return Landin.Platform.Path_List
-      is
-         Result : Landin.Platform.Path_List;
-      begin
-         Result.Append (First);
-         Result.Append (Second);
-         return Result;
-      end Both;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
 
    begin
       declare
@@ -279,7 +289,7 @@ package body Landin.Tests.Driver_Suite is
 
          procedure Refuses (First, Second : String) is
             Result : constant Landin.Driver.Outcome :=
-              Landin.Driver.Execute (Both (First, Second), Host);
+              Landin.Driver.Execute (Both (First, Second), Host, Tools);
          begin
             Landin.Testing.Check_Equal
               (Item, Result.Status, Landin.Driver.Status_Misuse,
@@ -304,8 +314,10 @@ package body Landin.Tests.Driver_Suite is
 
    procedure Targets_Have_A_Default (Item : in out Landin.Testing.Context) is
       Host     : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools    : Landin.Testing.Fakes.Fake_Tool_Runner;
       Named    : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Arguments_Of ("--target=linux-x86-64"), Host);
+        Landin.Driver.Execute
+          (Arguments_Of ("--target=linux-x86-64"), Host, Tools);
    begin
       Landin.Testing.Check_Equal
         (Item, Unbounded.To_String (Named.Output), "target: linux-x86-64"
@@ -331,12 +343,13 @@ package body Landin.Tests.Driver_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Host : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
    begin
       Host.Add_Unreadable ("locked.ldn");
 
       declare
          Result : constant Landin.Driver.Outcome :=
-           Landin.Driver.Execute (Arguments_Of ("locked.ldn"), Host);
+           Landin.Driver.Execute (Arguments_Of ("locked.ldn"), Host, Tools);
          Text   : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
@@ -361,6 +374,303 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check_Equal
         (Item, Landin.Driver.Status_Misuse, 2, "misuse is two");
    end Exit_Statuses_Are_Fixed;
+
+
+   ------------------------------------------------------------------
+   --  R1.80: what a request leaves behind
+   --
+   --  A fake filesystem and a fake tool runner, so the whole path from a
+   --  request to an invocation is asserted without a disk or a process.
+   --  What is pinned here is the argv and which files exist; that the
+   --  toolchain then produces a working program is the runtime fixture's,
+   --  and it is the only case that starts one.
+   ------------------------------------------------------------------
+
+   Entry_Program : constant String :=
+     "public main: () -> (code: i32) =" & LF
+     & "    code = 42" & LF
+     & "end main" & LF;
+
+   procedure Assembly_Is_Written_Without_A_Tool
+     (Item : in out Landin.Testing.Context);
+
+   procedure Assembly_Is_Written_Without_A_Tool
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("main.ldn", "--emit=asm"), Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "an accepted program emits and succeeds");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0,
+            "assembly is the compiler's own work and runs no tool");
+         Landin.Testing.Check
+           (Item,
+            Contains (Host.Written (Landin.Driver.Default_Assembly),
+                      "main:"),
+            "the default assembly path holds the routine");
+      end;
+   end Assembly_Is_Written_Without_A_Tool;
+
+   --  The whole invocation, in order.  A containment check would pass on a
+   --  command line that had lost its output.
+   procedure An_Executable_Runs_The_Triplet_Driver
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Executable_Runs_The_Triplet_Driver
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Args.Append ("main.ldn");
+      Args.Append ("--emit=exe");
+      Args.Append ("-o");
+      Args.Append ("main");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "the program is accepted and finished");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 1, "one invocation and no more");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Tools.Call_At (1).Program),
+            "x86_64-pc-linux-gnu-gcc",
+            "the driver is found by the target's triplet");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
+            "main.s" & LF & "-o" & LF & "main" & LF,
+            "and is handed the assembly it wrote and the output asked for");
+         Landin.Testing.Check
+           (Item, Contains (Host.Written ("main.s"), ".globl main"),
+            "the assembly beside the output is what it assembles");
+      end;
+   end An_Executable_Runs_The_Triplet_Driver;
+
+   procedure A_Named_Linker_Reaches_The_Driver
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Named_Linker_Reaches_The_Driver
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Args.Append ("main.ldn");
+      Args.Append ("--emit=exe");
+      Args.Append ("-o");
+      Args.Append ("main");
+      Args.Append ("--toolchain=x86_64-unknown-linux-gnu-gcc");
+      Args.Append ("--linker=mold");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "a named toolchain and linker still succeed");
+         --  The spelling a Homebrew cross toolchain installs, which is why
+         --  the override exists: the convention would have looked for
+         --  x86_64-pc-linux-gnu-gcc and found nothing.
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Tools.Call_At (1).Program),
+            "x86_64-unknown-linux-gnu-gcc",
+            "a named toolchain wins over the triplet");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Platform.Joined (Tools.Call_At (1).Arguments),
+            "main.s" & LF & "-o" & LF & "main" & LF & "-fuse-ld=mold" & LF,
+            "and the linker rides through as one more argument");
+      end;
+   end A_Named_Linker_Reaches_The_Driver;
+
+   --  [1970] is required before anything is written, so a program that
+   --  could never be linked leaves no file behind on the way to saying so.
+   procedure A_Hosted_Program_Needs_Its_Entry
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Hosted_Program_Needs_Its_Entry
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File
+        ("lib.ldn",
+         "public f: () -> (r: i32) =" & LF
+         & "    r = 1" & LF & "end f" & LF);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("lib.ldn", "--emit=exe"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a module with no entry cannot be an executable");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0502"), "and says which rule");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0, "no tool is run");
+         Landin.Testing.Check_Equal
+           (Item, Host.Written (Landin.Driver.Default_Executable & ".s"),
+            "", "and nothing was written first");
+      end;
+   end A_Hosted_Program_Needs_Its_Entry;
+
+   procedure A_Failing_Toolchain_Is_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Failing_Toolchain_Is_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Tools.Set_Result (1, "as: unrecognised opcode");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("main.ldn", "--emit=exe"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a toolchain that failed is a reported failure");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0501"), "and says which rule");
+         Landin.Testing.Check
+           (Item, Contains (Report, "as: unrecognised opcode"),
+            "carrying what the tool actually said");
+      end;
+   end A_Failing_Toolchain_Is_Reported;
+
+   --  A target with no backend cannot be asked for a file at all, which is
+   --  the same fact Landin.Targets.Capabilities already states.
+   procedure A_Target_With_No_Backend_Emits_Nothing
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Target_With_No_Backend_Emits_Nothing
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+      Args  : Landin.Platform.Path_List;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Args.Append ("main.ldn");
+      Args.Append ("--emit=asm");
+      Args.Append ("--target=synthetic-32");
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Args, Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "synthetic-32 has no backend and so no output");
+         Landin.Testing.Check
+           (Item, Contains (Unbounded.To_String (Result.Report), "L0500"),
+            "and says which rule");
+      end;
+   end A_Target_With_No_Backend_Emits_Nothing;
+
+   --  A refused program is not emitted, for the same reason the lowering
+   --  refuses to run on one: a file written from a failed compilation is a
+   --  plausible artefact of nothing.
+   procedure A_Refused_Program_Writes_Nothing
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Refused_Program_Writes_Nothing
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File
+        ("bad.ldn",
+         "public main: () -> (code: i32) =" & LF
+         & "    code = nowhere" & LF & "end main" & LF);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("bad.ldn", "--emit=exe"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "the program is refused");
+         Landin.Testing.Check_Equal
+           (Item, Tools.Run_Count, 0, "and no tool is run");
+         Landin.Testing.Check_Equal
+           (Item, Host.Written (Landin.Driver.Default_Executable & ".s"),
+            "", "and nothing is written");
+
+         --  The assertion that makes the guard load-bearing.  Without it
+         --  the backend still refuses -- a refused program has an empty
+         --  Unit, so [1970]'s entry is missing from it -- and the reader
+         --  gets a second complaint about an entry point on a program
+         --  whose actual fault is an unknown name.  That is the noise the
+         --  pipeline's stop-at-the-first-refusal exists to prevent, and
+         --  a report is where it would show up rather than a file.
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0201"),
+            "the unknown name is what is reported");
+         Landin.Testing.Check
+           (Item, not Contains (Report, "L0502"),
+            "and a refused program is not also asked for an entry");
+      end;
+   end A_Refused_Program_Writes_Nothing;
+
+   --  `-o` takes the argument after it, so a `-o` with nothing after it is
+   --  an unfinished request rather than a request to write to "".
+   procedure A_Dangling_Output_Is_Misuse
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Dangling_Output_Is_Misuse
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+
+      declare
+         Dangling : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute (Both ("main.ldn", "-o"), Host, Tools);
+         Unknown : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("main.ldn", "--emit=wat"), Host, Tools);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Dangling.Status, Landin.Driver.Status_Misuse,
+            "a -o with nothing after it is misuse");
+         Landin.Testing.Check_Equal
+           (Item, Unknown.Status, Landin.Driver.Status_Misuse,
+            "and so is an --emit nobody defined");
+      end;
+   end A_Dangling_Output_Is_Misuse;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
@@ -399,6 +709,30 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "an empty source is accepted",
          An_Empty_Source_Is_Accepted'Access);
+      Landin.Testing.Register
+        (Into, "driver", "assembly is written without a tool",
+         Assembly_Is_Written_Without_A_Tool'Access);
+      Landin.Testing.Register
+        (Into, "driver", "an executable runs the triplet driver",
+         An_Executable_Runs_The_Triplet_Driver'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a named linker reaches the driver",
+         A_Named_Linker_Reaches_The_Driver'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a hosted program needs its entry",
+         A_Hosted_Program_Needs_Its_Entry'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a failing toolchain is reported",
+         A_Failing_Toolchain_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a target with no backend emits nothing",
+         A_Target_With_No_Backend_Emits_Nothing'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a refused program writes nothing",
+         A_Refused_Program_Writes_Nothing'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a dangling output is misuse",
+         A_Dangling_Output_Is_Misuse'Access);
    end Register;
 
 end Landin.Tests.Driver_Suite;

@@ -12,4 +12,16 @@ package body Landin.Targets.Capabilities is
       end if;
    end Backend_For;
 
+   function Triplet (Facts : Target_Facts) return String is
+   begin
+      if Facts = Linux_X86_64 then
+         return "x86_64-pc-linux-gnu";
+      elsif Facts = Synthetic_32 then
+         return "";
+      else
+         raise Compiler_Defect
+           with "target has no stated toolchain triplet";
+      end if;
+   end Triplet;
+
 end Landin.Targets.Capabilities;

@@ -47,6 +47,25 @@ package body Landin.Tests.Fixture_Execution_Suite is
       return "build/" & Tag & "/" & Mode & "/bin/refine";
    end Refine_Path;
 
+   --  Where a runtime fixture's executable is built.  Beside `refine`
+   --  itself, because that directory is already per-host, already
+   --  disposable and already removed by scripts/clean.sh -- and because
+   --  Landin.Platform has no way to create one, which is a gap worth
+   --  leaving until something needs it for a reason better than this.
+   function Output_Directory return String;
+
+   function Output_Directory return String is
+      Path : constant String := Refine_Path;
+      Last : Natural := Path'Last;
+   begin
+      while Last >= Path'First and then Path (Last) /= '/' loop
+         Last := Last - 1;
+      end loop;
+
+      return (if Last >= Path'First
+              then Path (Path'First .. Last) else "");
+   end Output_Directory;
+
    --  Arguments are whitespace-separated.  A fixture that needs an
    --  argument containing a space needs a richer format, and saying so is
    --  better than quietly splitting it.
@@ -196,11 +215,113 @@ package body Landin.Tests.Fixture_Execution_Suite is
       end;
    end Recorded_Expectations_Hold;
 
+
+   ------------------------------------------------------------------
+   --  Runtime fixtures
+   --
+   --  Compiled, linked and executed, and the only cases in this
+   --  repository that run a program this compiler produced.  Everything
+   --  else can be checked against a command line; whether the bytes are
+   --  *correct* is what running them says.
+   --
+   --  A host that cannot finish the target fails rather than skipping.
+   --  That is the same rule scripts/env.sh already applies to the pinned
+   --  GNAT -- a machine without it is told so and stops, rather than
+   --  quietly building nothing -- and compiler/tests/README.md states it
+   --  for fixtures directly: an expectation nobody runs is a fault.  The
+   --  failure carries refine's own report, which is where L0500's note
+   --  says which toolchain would satisfy it.
+   ------------------------------------------------------------------
+
+   procedure Runtime_Fixtures_Execute
+     (Item : in out Landin.Testing.Context);
+
+   procedure Runtime_Fixtures_Execute
+     (Item : in out Landin.Testing.Context)
+   is
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Found   : Catalogue;
+      Program : constant String := Refine_Path;
+      Ran     : Natural := 0;
+   begin
+      if not Host.Exists (Program) then
+         Landin.Testing.Fail
+           (Item,
+            "refine was not found at " & Program
+            & "; run the harness through scripts/test.sh");
+         return;
+      end if;
+
+      Discover (Found, Fixture_Root, Host);
+
+      for Index in 1 .. Count (Found) loop
+         declare
+            Case_Item : constant Fixture := Nth (Found, Index);
+         begin
+            if Class (Case_Item) = Runtime then
+               Ran := Ran + 1;
+
+               declare
+                  Label : constant String :=
+                    "runtime/" & Name (Case_Item);
+                  Source : constant String :=
+                    Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
+                    & Landin.Testing.Fixtures.Program (Case_Item);
+                  Built : constant String :=
+                    Output_Directory & "runtime-" & Name (Case_Item);
+                  Runner  :
+                    Landin.Platform.Native.Tools.Native_Tool_Runner;
+                  Compile : Landin.Platform.Tool_Result;
+                  Outcome : Landin.Platform.Tool_Result;
+                  Args    : Landin.Platform.Path_List;
+                  Nothing : Landin.Platform.Path_List;
+               begin
+                  Landin.Platform.Add (Args, Source);
+                  Landin.Platform.Add (Args, "--emit=exe");
+                  Landin.Platform.Add (Args, "-o");
+                  Landin.Platform.Add (Args, Built);
+
+                  Runner.Run (Program, Args, Compile,
+                              Landin.Platform.Merged);
+
+                  if Compile.Exit_Code /= 0 then
+                     Landin.Testing.Fail
+                       (Item,
+                        Label & ": refine could not produce an executable"
+                        & ASCII.LF
+                        & Unbounded.To_String (Compile.Output));
+                  elsif not Host.Exists (Built) then
+                     Landin.Testing.Fail
+                       (Item,
+                        Label & ": refine reported success and wrote no"
+                        & " executable at " & Built);
+                  else
+                     Runner.Run (Built, Nothing, Outcome,
+                                 Landin.Platform.Merged);
+
+                     Landin.Testing.Check_Equal
+                       (Item, Outcome.Exit_Code, Status (Case_Item),
+                        Label & ": the program's own exit status");
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+
+      --  Without this the case would pass by running nothing, which is
+      --  the failure the class exists to prevent.
+      Landin.Testing.Check
+        (Item, Ran >= 1, "at least one runtime fixture was found");
+   end Runtime_Fixtures_Execute;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "fixture execution", "recorded expectations hold",
          Recorded_Expectations_Hold'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution", "runtime fixtures execute",
+         Runtime_Fixtures_Execute'Access);
    end Register;
 
 end Landin.Tests.Fixture_Execution_Suite;

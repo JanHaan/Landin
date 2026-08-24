@@ -365,6 +365,16 @@ package body Landin.Testing.Fixtures is
          Complain ("args without expect: nothing would be compared");
       end if;
 
+      --  A runtime fixture is compiled, linked and executed, so its
+      --  program is the whole of what it is.  Without one there is
+      --  nothing to run, and a status on its own is a number nobody
+      --  produces -- the same dead data the two rules above refuse.
+      if Seen_Class and then Item.Class = Runtime
+        and then not Seen_Program
+      then
+         Complain ("a runtime fixture needs a program to run");
+      end if;
+
       --  Any reported fault rejects the fixture.  A fixture that is
       --  half-accepted is a fixture whose fault stops being visible.
       Accepted := Natural (Problems.Length) = Before;

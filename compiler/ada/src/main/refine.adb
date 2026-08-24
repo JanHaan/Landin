@@ -14,6 +14,7 @@ with Landin;
 with Landin.Driver;
 with Landin.Platform;
 with Landin.Platform.Native;
+with Landin.Platform.Native.Tools;
 
 procedure Refine is
 
@@ -23,6 +24,7 @@ procedure Refine is
 
    Arguments : Landin.Platform.Path_List;
    Host      : Landin.Platform.Native.Native_Filesystem;
+   Tools     : Landin.Platform.Native.Tools.Native_Tool_Runner;
 
 begin
    for Index in 1 .. Command_Line.Argument_Count loop
@@ -31,7 +33,7 @@ begin
 
    declare
       Result : constant Landin.Driver.Outcome :=
-        Landin.Driver.Execute (Arguments, Host);
+        Landin.Driver.Execute (Arguments, Host, Tools);
    begin
       --  Written as bytes, not as text.  Ada.Text_IO does not recognise
       --  the line feeds inside these strings, so it believes the last line

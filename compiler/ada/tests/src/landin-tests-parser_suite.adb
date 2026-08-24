@@ -463,6 +463,7 @@ package body Landin.Tests.Parser_Suite is
                   else
                      declare
                         Host : Landin.Testing.Fakes.Fake_Filesystem;
+                        Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
                      begin
                         Host.Add_File
                           ("program.ldn", Unbounded.To_String (Content));
@@ -470,7 +471,7 @@ package body Landin.Tests.Parser_Suite is
                         declare
                            Ran : constant Landin.Driver.Outcome :=
                              Landin.Driver.Execute
-                               (Arguments_Of ("program.ldn"), Host);
+                               (Arguments_Of ("program.ldn"), Host, Tools);
                         begin
                            Pinned := Pinned + 1;
                            Landin.Testing.Check_Equal

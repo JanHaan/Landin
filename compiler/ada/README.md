@@ -56,6 +56,8 @@ replaced.
 | `Landin.IR` | the target-neutral instructions: items, slots, blocks, values, and the only construction of one | hold a scope tree, name a machine, or ask a width |
 | `Landin.Backend` | where a routine's cells live, counted in target bytes | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.X86_64` | the assembly text for one target, and every register in it | decide a layout, write a file, or run a tool |
+| `Landin.Backend.Toolchain` | the one command line that finishes a compilation, and the triplet it is found by | know what ELF is, invoke a linker directly, or search a PATH |
+| `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
@@ -115,10 +117,23 @@ straight-line kernel -- a literal, a truth, a slot read and written, a jump, a
 branch and a return -- and raises `Compiler_Defect` on any other opcode rather
 than emitting something plausible. Arithmetic, comparison, calls and the
 module data section are not there, because [0300]'s trap and [0320]'s shift
-beyond the width need guards that R1.80 records as its own obligations. Nor is
-any of it reachable from `refine`: nothing is written, assembled, linked or
-executed, and no driver argument asks for it. `ROADMAP.md` R1.80 owns the
-rest.
+beyond the width need guards that R1.80 records as its own obligations.
+
+What is reachable is the path around it. `--emit=asm` writes the assembly and
+`--emit=exe` assembles and links it through the driver
+`Landin.Backend.Toolchain` names, so a constant-return `main` runs and exits
+with its own `code`. The assembly half is host-independent by the rule that
+nothing outside `Landin.Targets` may ask the host anything: emitting for
+`linux-x86-64` produces identical bytes on macOS and on Linux. The finishing
+half is not, and says so -- a host without the target's triplet-prefixed
+driver reports `L0500` rather than reaching for whatever `gcc` names, which
+on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
+
+What is still missing is the fixture that runs it. Nothing in the suite
+compiles a program and executes the result yet, so the executed path is
+proved by the cases that pin the command line and not by the gate. `Runtime`
+exists in `Landin.Testing.Fixtures`' class enum and nothing produces one.
+`ROADMAP.md` R1.80 owns the rest.
 
 What does exist behind it is the whole frontend: `refine` scans and parses
 every `.ldn` file it is given, resolves every name in them as one module,
