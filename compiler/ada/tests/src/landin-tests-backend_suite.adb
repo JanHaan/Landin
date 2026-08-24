@@ -377,6 +377,144 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Signed_Subtract_Follows_The_Target_Width;
 
+   --  AT&T's compare writes no destination, but its operand order still
+   --  matters: `cmp right, left` sets flags for left minus right.  A signed
+   --  less-than then materializes [1890]'s one-byte bool from those flags.
+   procedure Signed_Less_Than_Compares_Left_With_Right
+     (Item : in out Landin.Testing.Context);
+
+   procedure Signed_Less_Than_Compares_Left_With_Right
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: i32, b: i32) -> (r: bool) =" & LF
+         & "    r = a < b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movl -28(%rbp), %eax" & LF
+           & HT & "cmpl -24(%rbp), %eax" & LF
+           & HT & "setl %al" & LF
+           & HT & "movb %al, -29(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "signed less-than compares left minus right and stores its bool");
+      end;
+   end Signed_Less_Than_Compares_Left_With_Right;
+
+   --  Equality ignores signedness, while the four ordered relations each
+   --  have their own signed condition.  Pin the complete [1820] comparison
+   --  level so no two source operators quietly become one machine verdict.
+   procedure Every_Signed_Comparison_Selects_Its_Condition
+     (Item : in out Landin.Testing.Context);
+
+   procedure Every_Signed_Comparison_Selects_Its_Condition
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: i16, b: i16) -> (r: bool) =" & LF
+         & "    equal: bool = a == b" & LF
+         & "    unequal: bool = a <> b" & LF
+         & "    less: bool = a < b" & LF
+         & "    at_most: bool = a <= b" & LF
+         & "    greater: bool = a > b" & LF
+         & "    r = a >= b" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "sete %al"),
+            "equality uses the equal condition");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "setne %al"),
+            "inequality uses the not-equal condition");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "setl %al"),
+            "signed less-than uses the less condition");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "setle %al"),
+            "signed less-or-equal uses the at-most condition");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "setg %al"),
+            "signed greater-than uses the greater condition");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "setge %al"),
+            "signed greater-or-equal uses the at-least condition");
+      end;
+   end Every_Signed_Comparison_Selects_Its_Condition;
+
+   --  Unsigned order is below/above rather than signed less/greater.  bool
+   --  shares those conditions over [1870]'s zero and one, and still compares
+   --  at its own one-byte width rather than the bool result choosing a width.
+   procedure Unsigned_And_Bool_Comparisons_Use_Their_Conditions
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unsigned_And_Bool_Comparisons_Use_Their_Conditions
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: u64, b: u64) -> (r: bool) =" & LF
+         & "    below: bool = a < b" & LF
+         & "    at_most: bool = a <= b" & LF
+         & "    above: bool = a > b" & LF
+         & "    r = a >= b" & LF
+         & "end f" & LF
+         & "g: (a: bool, b: bool) -> (r: bool) =" & LF
+         & "    r = a < b" & LF
+         & "end g" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "cmpq "),
+            "u64 operands select a quadword comparison");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "setb %al"),
+            "unsigned less-than uses below");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "setbe %al"),
+            "unsigned less-or-equal uses below-or-equal");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "seta %al"),
+            "unsigned greater-than uses above");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "setae %al"),
+            "unsigned greater-or-equal uses above-or-equal");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "cmpb "),
+            "bool operands select a byte comparison");
+      end;
+   end Unsigned_And_Bool_Comparisons_Use_Their_Conditions;
+
    ------------------------------------------------------------------
    --  The frame
    ------------------------------------------------------------------
@@ -505,6 +643,15 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "signed less-than compares left with right",
+         Signed_Less_Than_Compares_Left_With_Right'Access);
+      Landin.Testing.Register
+        (Into, "backend", "every signed comparison selects its condition",
+         Every_Signed_Comparison_Selects_Its_Condition'Access);
+      Landin.Testing.Register
+        (Into, "backend", "unsigned and bool comparisons use their conditions",
+         Unsigned_And_Bool_Comparisons_Use_Their_Conditions'Access);
       Landin.Testing.Register
         (Into, "backend", "every cell is aligned below the frame pointer",
          Every_Cell_Is_Aligned_Below_The_Frame_Pointer'Access);

@@ -1,0 +1,5 @@
+class: runtime
+summary: signed and unsigned comparisons choose the program's status
+program: main.ldn
+status: 42
+targets: linux-x86-64
