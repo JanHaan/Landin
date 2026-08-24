@@ -993,13 +993,15 @@ known-and-does-not-fit. A quotient that does not exist is a stronger case
 than a sum that does not fit, and it was the one getting through.
 
 ### R1.80 — Implement the minimal Linux x86-64 native path
-Status: planned
+Status: active
 Depends on: R1.70, R0.50, R0.70
 
 Implement the scalar data layout, frame-pointer rule, minimum SysV calling
-convention, hosted `main`, ELF-compatible assembly and platform
-assemble/link/run path needed for a constant-return program. Keep aggregate,
-error-register and evidence calls in R2.
+convention, hosted `public main: () -> (code: i32)` entry, ELF-compatible
+assembly and platform assemble/link/run path needed for a constant-return
+program. Keep aggregate, error-register and evidence calls in R2. [1970]
+requires exactly that public, no-argument entry and passes its named `i32`
+return to the host as the program status.
 
 [1950] hands this item three obligations, and what was measured to settle
 them is recorded under R1.70 rather than repeated here. A zero divisor and a
@@ -1012,16 +1014,14 @@ shift whose amount the compiler cannot bound. And the lowest value of a
 signed type over -1 traps as the overflow [0300] already makes it, which
 `IDIV` gives here for nothing and R5.30 will have to construct.
 
-What a trap *does* is decided nowhere, and this is the first item that has to
-know. [0300], [0310] and [1950] all say an operation traps, and no sentence
-of either document says what that is: a hardware fault left to the kernel, a
-call into a routine the runtime owns, or an instruction chosen because it
-faults. R2.90's guarantee table classifies operations and does not define the
-mechanism, so it does not answer this. Decide it here, record it in
-`spec.md`'s register as the decision it is, and decide it before lowering
-hardens around an assumption.
+[1960] now fixes what a trap does. It is synchronous and non-returning at the
+operation's point in evaluation order, and no later Landin action occurs. The
+operating system's signal, status or other encoding is not stable program
+behaviour. This backend deliberately emits `ud2` for a trap rather than
+inheriting the incidental fault or value of the arithmetic instruction; D11
+records the alternatives before lowering hardens around one.
 
-Sources: `[1550]`, `[1650]`, `[1950]`.
+Sources: `[1550]`, `[1650]`, `[1950]`, `[1960]`, `[1970]`.
 
 Exit evidence: `refine` compiles a kernel `.ldn` program to deterministic
 assembly, assembles, links and executes it on native Linux x86-64 with the

@@ -56,10 +56,29 @@ package Landin.Testing.Fakes is
    type Fake_Tool_Runner is
      limited new Landin.Platform.Tool_Runner with private;
 
+   --  Select a result that every subsequent call returns.  This also
+   --  abandons any ordered results that have not yet been consumed.
    procedure Set_Result
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
       Output    : String);
+
+   --  Select ordered mode on the first addition, then append one result for
+   --  each expected call.  Running past the end of the script is a compiler
+   --  defect rather than an accidental success.
+   procedure Add_Result
+     (Host      : in out Fake_Tool_Runner;
+      Exit_Code : Integer;
+      Output    : String);
+
+   type Tool_Call is record
+      Program   : Ada.Strings.Unbounded.Unbounded_String;
+      Arguments : Landin.Platform.Path_List;
+      Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged;
+   end record;
+
+   function Call_At
+     (Host : Fake_Tool_Runner; Index : Positive) return Tool_Call;
 
    function Last_Command (Host : Fake_Tool_Runner) return String;
    function Run_Count (Host : Fake_Tool_Runner) return Natural;
@@ -103,15 +122,25 @@ private
       Writes : Store_Access := new Store;
    end record;
 
-   --  Writes are recorded rather than performed; Run is callable on a
-   --  constant view, so the recording lives behind an access discriminant
-   --  free indirection instead of a mutable component.
+   use type Landin.Platform.Tool_Result;
+
+   package Result_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Landin.Platform.Tool_Result);
+
+   package Call_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Tool_Call);
+
+   type Result_Mode is (Repeating, Ordered);
+
+   --  Run is callable on a constant view, so its script cursor and history
+   --  live behind an access indirection instead of mutable components.
    type Recorder is record
-      Exit_Code : Integer := 0;
-      Output    : Unbounded.Unbounded_String;
-      Command   : Unbounded.Unbounded_String;
-      Runs      : Natural := 0;
-      Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged;
+      Mode        : Result_Mode := Repeating;
+      Repeat      : Landin.Platform.Tool_Result;
+      Script      : Result_Vectors.Vector;
+      Next_Result : Positive := 1;
+      Calls       : Call_Vectors.Vector;
    end record;
 
    type Recorder_Access is access Recorder;

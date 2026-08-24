@@ -5,7 +5,6 @@
 --  is executed here through the real tool adapter, and its bytes and exit
 --  status are compared with what it claims.
 
-with Ada.Directories;
 with Ada.Strings.Fixed;
 with Ada.Environment_Variables;
 with Ada.Strings.Unbounded;
@@ -47,19 +46,6 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
       return "build/" & Tag & "/" & Mode & "/bin/refine";
    end Refine_Path;
-
-   function Scratch_Path return String;
-
-   function Scratch_Path return String is
-      Tag  : constant String :=
-        (if Environment.Exists ("LANDIN_BUILD_TAG")
-         then Environment.Value ("LANDIN_BUILD_TAG") else "local");
-      Mode : constant String :=
-        (if Environment.Exists ("LANDIN_BUILD_MODE")
-         then Environment.Value ("LANDIN_BUILD_MODE") else "debug");
-   begin
-      return "build/" & Tag & "/" & Mode & "/fixture-scratch";
-   end Scratch_Path;
 
    --  Arguments are whitespace-separated.  A fixture that needs an
    --  argument containing a space needs a richer format, and saying so is
@@ -105,7 +91,6 @@ package body Landin.Tests.Fixture_Execution_Suite is
          return;
       end if;
 
-      Ada.Directories.Create_Path (Scratch_Path);
       Discover (Found, Fixture_Root, Host);
 
       Landin.Testing.Check_Equal
@@ -128,9 +113,8 @@ package body Landin.Tests.Fixture_Execution_Suite is
                     & Name (Case_Item) & "/" & Expect (Case_Item);
                   Expected : Unbounded.Unbounded_String;
                   Read     : Landin.Platform.Read_Status;
-                  Runner   : constant
-                    Landin.Platform.Native.Tools.Native_Tool_Runner :=
-                      Landin.Platform.Native.Tools.Create (Scratch_Path);
+                  Runner   :
+                    Landin.Platform.Native.Tools.Native_Tool_Runner;
                   Outcome  : Landin.Platform.Tool_Result;
                begin
                   Host.Read_File (Where, Expected, Read);
@@ -191,8 +175,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
       --  And a multi-argument run, because a runner that passed only the
       --  first argument would satisfy every single-argument fixture.
       declare
-         Runner  : constant Landin.Platform.Native.Tools.Native_Tool_Runner :=
-           Landin.Platform.Native.Tools.Create (Scratch_Path);
+         Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
          Several : Landin.Platform.Path_List;
          Outcome : Landin.Platform.Tool_Result;
       begin

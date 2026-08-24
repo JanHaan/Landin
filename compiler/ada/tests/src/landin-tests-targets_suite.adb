@@ -1,8 +1,10 @@
 with Landin.Targets;
+with Landin.Targets.Capabilities;
 
 package body Landin.Tests.Targets_Suite is
 
    use Landin.Targets;
+   use type Landin.Targets.Capabilities.Backend_Kind;
 
    ------------------------------------------------------------------
    --  Every field of a description is asserted against a literal.  An
@@ -79,6 +81,25 @@ package body Landin.Tests.Targets_Suite is
          Widest        => 8,
          Pointer_Bytes => 4);
    end Descriptions_Do_Not_Follow_The_Host;
+
+   procedure Backends_Are_Stated_Per_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure Backends_Are_Stated_Per_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      package Capabilities renames Landin.Targets.Capabilities;
+   begin
+      Landin.Testing.Check
+        (Item,
+         Capabilities.Backend_For (Linux_X86_64) =
+           Capabilities.Linux_X86_64_ELF,
+         "linux-x86-64 has the ELF backend");
+      Landin.Testing.Check
+        (Item,
+         Capabilities.Backend_For (Synthetic_32) = Capabilities.No_Backend,
+         "synthetic-32 has no backend");
+   end Backends_Are_Stated_Per_Target;
 
    ------------------------------------------------------------------
    --  Alignment is walked over every Scalar_Size for both descriptions,
@@ -205,6 +226,9 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Register
         (Into, "targets", "descriptions do not follow the host",
          Descriptions_Do_Not_Follow_The_Host'Access);
+      Landin.Testing.Register
+        (Into, "targets", "backends are stated per target",
+         Backends_Are_Stated_Per_Target'Access);
       Landin.Testing.Register
         (Into, "targets", "alignments are stated per target",
          Alignments_Are_Stated_Per_Target'Access);
