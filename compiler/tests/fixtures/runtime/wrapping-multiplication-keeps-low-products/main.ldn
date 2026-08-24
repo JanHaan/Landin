@@ -1,0 +1,24 @@
+public main: () -> (code: i32) =
+    unsigned_8: u8 = 255 *% 2
+    unsigned_16: u16 = 65535 *% 2
+    unsigned_32: u32 = 4294967295 *% 2
+    unsigned_64: u64 = 18446744073709551615 *% 2
+    signed_8: i8 = 127 *% 2
+    signed_16: i16 = 32767 *% 2
+    signed_32: i32 = 2147483647 *% 2
+    signed_64: i64 = 9223372036854775807 *% 2
+
+    if unsigned_8 == 254
+        and unsigned_16 == 65534
+        and unsigned_32 == 4294967294
+        and unsigned_64 == 18446744073709551614
+        and signed_8 == -2
+        and signed_16 == -2
+        and signed_32 == -2
+        and signed_64 == -2
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
