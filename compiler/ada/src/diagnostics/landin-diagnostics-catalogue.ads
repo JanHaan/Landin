@@ -25,6 +25,7 @@
 --     L0200-L0299  name resolution, assigned at R1.50
 --     L0300-L0399  types and definite assignment, assigned at R1.60
 --     L0400-L0499  deliberately unassigned; see below
+--     L0500-L0599  the backend and its toolchain, assigned at R1.80
 
 --  `L0400`-`L0499` is the band R1.70 would have taken and did not, and it
 --  stays empty on purpose.  Malformed IR cannot be caused by a source
@@ -45,6 +46,10 @@ package Landin.Diagnostics.Catalogue is
       Unknown_Option,
       Unreadable_Source,
       Unknown_Target,
+      --  Added at R1.80, when the driver first wrote a file.  It sits
+      --  beside Unreadable_Source because it is the same rule from the
+      --  other side, and a band records where a code was born.
+      Unwritable_Output,
       --  The scanner, assigned at R1.30.
       Construct_Not_Enabled,
       Malformed_Integer,
@@ -82,7 +87,14 @@ package Landin.Diagnostics.Catalogue is
       Immutable_Target,
       Unsupported_Use,
       Not_Known_At_Compile_Time,
-      Impossible_Operand);
+      Impossible_Operand,
+      --  The backend and its toolchain, assigned at R1.80.  None of
+      --  the three is about a construct a program wrote: two are the
+      --  host failing to finish a program it accepted, and the third
+      --  is a shape [1970] requires and the module does not have.
+      No_Toolchain,
+      Toolchain_Failed,
+      Entry_Point_Missing);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -95,6 +107,7 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Option        => "L0002",
             when Unreadable_Source     => "L0003",
             when Unknown_Target        => "L0004",
+            when Unwritable_Output     => "L0005",
             when Construct_Not_Enabled => "L0010",
             when Malformed_Integer     => "L0011",
             when Unknown_Bytes         => "L0012",
@@ -120,7 +133,10 @@ package Landin.Diagnostics.Catalogue is
             when Immutable_Target         => "L0303",
             when Unsupported_Use          => "L0304",
             when Not_Known_At_Compile_Time => "L0305",
-            when Impossible_Operand        => "L0306");
+            when Impossible_Operand        => "L0306",
+            when No_Toolchain              => "L0500",
+            when Toolchain_Failed          => "L0501",
+            when Entry_Point_Missing       => "L0502");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -128,6 +144,7 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Option        => Error,
             when Unreadable_Source     => Error,
             when Unknown_Target        => Error,
+            when Unwritable_Output     => Error,
             when Construct_Not_Enabled => Error,
             when Malformed_Integer     => Error,
             when Unknown_Bytes         => Error,
@@ -136,7 +153,8 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Error,
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
-            when Literal_Out_Of_Range .. Impossible_Operand => Error);
+            when Literal_Out_Of_Range .. Impossible_Operand => Error,
+            when No_Toolchain .. Entry_Point_Missing => Error);
 
    function State (Of_Code : Code_Name) return Disposition
      is (case Of_Code is
@@ -148,6 +166,7 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Option        => Live,
             when Unreadable_Source     => Live,
             when Unknown_Target        => Live,
+            when Unwritable_Output     => Live,
             when Construct_Not_Enabled => Live,
             when Malformed_Integer     => Live,
             when Unknown_Bytes         => Live,
@@ -156,7 +175,8 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Live,
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
-            when Literal_Out_Of_Range .. Impossible_Operand => Live);
+            when Literal_Out_Of_Range .. Impossible_Operand => Live,
+            when No_Toolchain .. Entry_Point_Missing => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
    --  user reads: the message at the raise site is what a user reads.
@@ -170,6 +190,8 @@ package Landin.Diagnostics.Catalogue is
                "a source that is missing or cannot be read",
             when Unknown_Target        =>
                "a target no description names",
+            when Unwritable_Output     =>
+               "an output file that cannot be written",
             when Construct_Not_Enabled =>
                "[1830]: the tour describes this and the kernel omits it",
             when Malformed_Integer     =>
@@ -225,7 +247,16 @@ package Landin.Diagnostics.Catalogue is
                & " reads it",
             when Impossible_Operand    =>
                "[1950]: an operand the operation cannot take, where the"
-               & " compiler knows it");
+               & " compiler knows it",
+            when No_Toolchain          =>
+               "[1550]: no assembler and linker for the target on this"
+               & " host",
+            when Toolchain_Failed      =>
+               "[1550]: the platform assembler or linker refused what"
+               & " was emitted",
+            when Entry_Point_Missing   =>
+               "[1970]: a hosted program with no"
+               & " `public main: () -> (code: i32)`");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -242,6 +273,7 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Option        => False,
             when Unreadable_Source     => False,
             when Unknown_Target        => False,
+            when Unwritable_Output     => False,
             when Construct_Not_Enabled => True,
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,
@@ -250,7 +282,12 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => True,
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
-            when Literal_Out_Of_Range .. Impossible_Operand => True);
+            when Literal_Out_Of_Range .. Impossible_Operand => True,
+            --  None of the three is about a place in a file.  Two are
+            --  the host failing to finish an accepted program, and the
+            --  third is a declaration the module never made, which has
+            --  no span by definition.
+            when No_Toolchain .. Entry_Point_Missing => False);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -261,6 +298,7 @@ package Landin.Diagnostics.Catalogue is
             when Unknown_Option        => False,
             when Unreadable_Source     => False,
             when Unknown_Target        => False,
+            when Unwritable_Output     => False,
             when Construct_Not_Enabled => True,
             when Malformed_Integer     => True,
             when Unknown_Bytes         => True,
@@ -274,7 +312,8 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Name       => True,
             --  Every one of these points at something a program wrote.
             when Literal_Out_Of_Range .. Impossible_Operand =>
-               True);
+               True,
+            when No_Toolchain .. Entry_Point_Missing => False);
 
    --  How many secondary labels the diagnostic must carry. An unterminated
    --  block comment needs one: the end of the file is where it was noticed
@@ -338,6 +377,10 @@ package Landin.Diagnostics.Catalogue is
             when Unsupported_Use       => 2,
             when Not_Known_At_Compile_Time => 1,
             when Impossible_Operand    => 1,
+            --  The one diagnostic here a user is stuck on rather than
+            --  informed by, so it owes them the way out: which program
+            --  was looked for, and how to name another.
+            when No_Toolchain          => 1,
             when others                => 0);
 
    function Count return Natural

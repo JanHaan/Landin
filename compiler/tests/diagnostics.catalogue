@@ -8,6 +8,7 @@ L0001  Retired  a source was read and no frontend is wired to the driver
 L0002  Live     an option the driver does not define
 L0003  Live     a source that is missing or cannot be read
 L0004  Live     a target no description names
+L0005  Live     an output file that cannot be written
 L0010  Live     [1830]: the tour describes this and the kernel omits it
 L0011  Live     [1770]: a digit outside the base the prefix selected
 L0012  Live     [1750]: a run of bytes no rule spells
@@ -34,3 +35,6 @@ L0303  Live     [1900]: a place that may not be written
 L0304  Live     [1920]: a name used in a way the kernel does not enable
 L0305  Live     [1940]: a module value the compiler cannot know when it reads it
 L0306  Live     [1950]: an operand the operation cannot take, where the compiler knows it
+L0500  Live     [1550]: no assembler and linker for the target on this host
+L0501  Live     [1550]: the platform assembler or linker refused what was emitted
+L0502  Live     [1970]: a hosted program with no `public main: () -> (code: i32)`

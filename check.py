@@ -1355,7 +1355,13 @@ def check_grammar_corpus(full_run):
                           "/landin-diagnostics-syntactic.ads"))))
 
 
+    #  A runtime fixture's program is legal source that the compiler is
+    #  expected to accept, compile and run, so the grammar must derive it
+    #  exactly as it derives a positive one.  Its own directory rather
+    #  than positive/, because what it pins is what the program *does*
+    #  when it runs and not merely that it was accepted.
     for kind, default_derive in (("positive", True),
+                                 ("runtime", True),
                                  ("negative", False)):
         directory = os.path.join(fixtures, kind)
         if not os.path.isdir(directory):
