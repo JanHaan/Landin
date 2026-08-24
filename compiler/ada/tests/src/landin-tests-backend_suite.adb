@@ -377,6 +377,122 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Signed_Subtract_Follows_The_Target_Width;
 
+   --  One-operand `mul` forms a full unsigned product in the implicit
+   --  accumulator pair.  Carry is clear exactly when its high half is zero,
+   --  so the successful edge alone may store the low byte.
+   procedure Unsigned_Multiply_Uses_The_Full_Product
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unsigned_Multiply_Uses_The_Full_Product
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: u8, b: u8) -> (r: u8) =" & LF
+         & "    r = a * b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Operation : constant String :=
+           HT & "movb -7(%rbp), %al" & LF
+           & HT & "mulb -6(%rbp)" & LF
+           & HT & "jnc .L1_V";
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Operation),
+            "u8 multiply checks the full unsigned product immediately");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "ud2" & LF & ".L1_V"),
+            "unsigned overflow reaches an explicit trap");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movb %al, -8(%rbp)"),
+            "only the successful edge stores the low product");
+      end;
+   end Unsigned_Multiply_Uses_The_Full_Product;
+
+   --  One-operand `imul` reports whether the full signed product is the sign
+   --  extension of its low half.  Its overflow flag therefore decides whether
+   --  the low byte is representable, independently of unsigned carry.
+   procedure Signed_Multiply_Uses_Overflow_To_Trap
+     (Item : in out Landin.Testing.Context);
+
+   procedure Signed_Multiply_Uses_Overflow_To_Trap
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: i8, b: i8) -> (r: i8) =" & LF
+         & "    r = a * b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Operation : constant String :=
+           HT & "movb -7(%rbp), %al" & LF
+           & HT & "imulb -6(%rbp)" & LF
+           & HT & "jno .L1_V";
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Operation),
+            "i8 multiply tests signed overflow immediately");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "jnc .L1_V"),
+            "signed multiply does not use unsigned carry");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "ud2" & LF & ".L1_V"),
+            "signed overflow reaches an explicit trap");
+      end;
+   end Signed_Multiply_Uses_Overflow_To_Trap;
+
+   --  [0300]'s wrapping multiply keeps the accumulator's low target-width
+   --  half.  The full product may overflow, but no flag or trap edge is read.
+   procedure Wrapping_Multiply_Keeps_The_Low_Product
+     (Item : in out Landin.Testing.Context);
+
+   procedure Wrapping_Multiply_Keeps_The_Low_Product
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: isize, b: isize) -> (r: isize) =" & LF
+         & "    r = a *% b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movq -56(%rbp), %rax" & LF
+           & HT & "imulq -48(%rbp)" & LF
+           & HT & "movq %rax, -64(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "wrapping isize multiply stores the low target-width product");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "ud2"),
+            "wrapping multiply has no trap edge");
+      end;
+   end Wrapping_Multiply_Keeps_The_Low_Product;
+
    --  [0300]'s wrapping add keeps the low byte and ignores carry.  With no
    --  checked operation in this routine, no trap edge belongs in its text.
    procedure Wrapping_Add_Ignores_Overflow
@@ -715,6 +831,15 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "unsigned multiply uses the full product",
+         Unsigned_Multiply_Uses_The_Full_Product'Access);
+      Landin.Testing.Register
+        (Into, "backend", "signed multiply uses overflow to trap",
+         Signed_Multiply_Uses_Overflow_To_Trap'Access);
+      Landin.Testing.Register
+        (Into, "backend", "wrapping multiply keeps the low product",
+         Wrapping_Multiply_Keeps_The_Low_Product'Access);
       Landin.Testing.Register
         (Into, "backend", "wrapping add ignores overflow",
          Wrapping_Add_Ignores_Overflow'Access);

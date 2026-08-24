@@ -296,6 +296,47 @@ package body Landin.Backend.X86_64 is
                            & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Multiply =>
+                  declare
+                     Kind : constant Landin.Types.Integer_Name :=
+                       Landin.IR.Result_Of (Of_Unit, Item, Value);
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                     Next : constant String := Value_Label (Value);
+                     Signed : constant Boolean :=
+                       Landin.Types.Is_Signed (Kind);
+                  begin
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     Emit ((if Signed then "imul" else "mul")
+                           & Suffix (Held) & " "
+                           & Value_Cell (Operand (2)));
+                     Emit ((if Signed then "jno " else "jnc ") & Next);
+                     Emit ("ud2");
+                     Put (Next & ":");
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", "
+                           & Value_Cell (Value));
+                  end;
+
+               when Landin.IR.Wrapping_Multiply =>
+                  declare
+                     Kind : constant Landin.Types.Integer_Name :=
+                       Landin.IR.Result_Of (Of_Unit, Item, Value);
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                  begin
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     Emit ((if Landin.Types.Is_Signed (Kind)
+                            then "imul" else "mul")
+                           & Suffix (Held) & " "
+                           & Value_Cell (Operand (2)));
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", "
+                           & Value_Cell (Value));
+                  end;
+
                when Landin.IR.Equal_To
                   | Landin.IR.Not_Equal_To
                   | Landin.IR.Less_Than

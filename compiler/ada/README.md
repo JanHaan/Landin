@@ -113,11 +113,11 @@ what owns the pipeline.
 
 `Landin.Backend` lays out a routine's frame and
 `Landin.Backend.X86_64` emits assembly for the current scalar kernel: literals,
-truths, slot traffic, checked and wrapping add and subtract, comparisons,
-jumps, branches and returns. It raises `Compiler_Defect` on every other opcode
-rather than emitting something plausible. The remaining arithmetic, calls and
-module data are not there; [0320]'s shift beyond the width still needs the
-guard R1.80 records as its own obligation.
+truths, slot traffic, checked and wrapping add, subtract and multiply,
+comparisons, jumps, branches and returns. It raises `Compiler_Defect` on every
+other opcode rather than emitting something plausible. The remaining
+arithmetic, calls and module data are not there; [0320]'s shift beyond the
+width still needs the guard R1.80 records as its own obligation.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver
@@ -131,8 +131,9 @@ on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
 
 The `Runtime` fixture class compiles programs, links them, runs them on the
 target and checks their statuses. The Linux gate therefore proves literal
-return, checked arithmetic, wrapping across signed and unsigned boundaries,
-and comparison-driven control flow on the hardware the backend emits for. A
+return, checked arithmetic across every fixed integer width, wrapping add,
+subtract and multiply across signed and unsigned boundaries, and
+comparison-driven control flow on the hardware the backend emits for. A
 host without the target toolchain fails
 rather than silently skipping that evidence. `ROADMAP.md` R1.80 owns the
 remaining backend work.
