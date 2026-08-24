@@ -1148,7 +1148,7 @@ def check_pinned_toolchain(full_run):
 
     The recipe pins it, compiler/ada/TOOLCHAIN.md records it for a reader,
     and environments/pins.sh is the one place a value is written; the nix
-    shell and the CI manifest read that file rather than repeating it. Every
+    shell and the CI manifests read that file rather than repeating it. Every
     file naming a compiler version is another chance to be wrong, and the one
     that drifts is the one nobody reads.
     """
@@ -1203,6 +1203,24 @@ def check_pinned_toolchain(full_run):
         if "environments/pins.sh" not in text:
             out.append((path, 1, "%s does not read environments/pins.sh"
                                  % relative))
+        for name, pattern in wanted.items():
+            found = re.search(pattern, recipe_text)
+            if found and found.group(1) in text:
+                out.append((path, 1,
+                            "%s names %s literally instead of reading it "
+                            "from environments/pins.sh" % (relative, name)))
+
+    #  A further manifest need not install the toolchain at all --
+    #  .builds/nix.yml leaves that to the flake, which is why it is not held
+    #  to reading the pins -- but it is still a file where a version could be
+    #  written by hand, and that half of the rule holds everywhere.
+    builds = os.path.join(ROOT, ".builds")
+    for name_yml in sorted(os.listdir(builds) if os.path.isdir(builds) else []):
+        if not name_yml.endswith(".yml"):
+            continue
+        path = os.path.join(builds, name_yml)
+        relative = os.path.join(".builds", name_yml)
+        text = io.open(path, encoding="utf-8").read()
         for name, pattern in wanted.items():
             found = re.search(pattern, recipe_text)
             if found and found.group(1) in text:

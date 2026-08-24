@@ -57,6 +57,10 @@ version solving, publishing and the broader ecosystem remain outside scope.
   Linux loop; native Linux x86-64 CI is authoritative for Linux behavior.
   Hosting is git.sr.ht with builds.sr.ht for that gate, decided at R0.70.
   Only `.build.yml` names it; the commands it runs are the ordinary ones.
+  The nix shell is checked by a second manifest, `.builds/nix.yml`, which is
+  not a gate and produces evidence for nothing in the table: it exists only
+  because that shell has broken twice on what nothing else reaches, and it
+  runs only when a file that shell is made of changed.
 - Native macOS arm64 has its own compiler build, platform-tool and debugger
   gate. A Linux container is not evidence for Darwin behavior.
 - Ada package specifications and stage fixtures are tested seams so a future
