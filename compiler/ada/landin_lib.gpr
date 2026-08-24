@@ -9,6 +9,7 @@ library project Landin_Lib is
    for Source_Dirs use
      ("src/base", "src/source", "src/diagnostics", "src/platform",
       "src/stages", "src/syntax", "src/resolution", "src/checking",
+      "src/backend",
       "src/driver");
    for Object_Dir use Landin_Common.Build_Dir & "/lib-obj";
    for Library_Dir use Landin_Common.Build_Dir & "/lib";

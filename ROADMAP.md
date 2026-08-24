@@ -1021,6 +1021,37 @@ behaviour. This backend deliberately emits `ud2` for a trap rather than
 inheriting the incidental fault or value of the arithmetic instruction; D11
 records the alternatives before lowering hardens around one.
 
+The frame is laid out before anything is emitted against it, and two of its
+rules are this item's rather than a paragraph's. Every *value* gets a cell and
+not only every slot: `Landin.IR` keeps values block-local so that a backend
+never computes dominance, and the cheapest correct way to honour that is to
+store each defined value and reload it where it is used. That is unoptimised
+by construction -- every operand is a memory reference -- and it is the
+"deterministic baseline code generation before competitive optimization" this
+roadmap already asked for, with promoting a cell to a register left to R4.50
+where a register allocator is actually being written. A cell is then placed at
+the first distance below the frame pointer that is at least its own size and a
+multiple of its alignment, so the address it names is aligned rather than
+merely the count that reaches it.
+
+A bool is one byte, and that is a boundary worth naming rather than leaving in
+a body. [0150] says a one-bit field outside a packed struct "occupies the next
+machine width", and the next machine width above one bit is a byte, so this is
+a transcription and not a twelfth decision. But `Landin.Types` says in its own
+header that how a bool is stored is R2.10's, and a frame cannot be laid out
+without an answer. R2.10 owns a bool inside an aggregate and may say more; a
+frame cell is not an aggregate, and what it settles must agree with this.
+
+What is emitted so far is the straight-line kernel -- a literal, a truth, a
+slot read and written, a jump, a branch and a return -- against a prologue
+that sets up [1550]'s frame pointer and stores [1650]'s argument registers
+into their parameter slots. Any other opcode raises a compiler defect rather
+than emitting something plausible, because half of a trapping add is worse
+than none. Arithmetic, comparison, calls and the module data section remain,
+and so does every one of the three obligations above. Nothing is reachable
+from `refine` yet: no file is written, no tool is run, and the exit evidence
+below is untouched by this.
+
 Sources: `[1550]`, `[1650]`, `[1950]`, `[1960]`, `[1970]`.
 
 Exit evidence: `refine` compiles a kernel `.ldn` program to deterministic
