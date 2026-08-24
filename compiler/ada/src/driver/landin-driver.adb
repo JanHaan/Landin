@@ -1,5 +1,9 @@
+with Landin.Backend.Entry_Point;
+with Landin.Backend.Toolchain;
+with Landin.Backend.X86_64;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
+with Landin.IR;
 with Landin.Source;
 with Landin.Stages;
 with Landin.Stages.Checking;
@@ -7,6 +11,7 @@ with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
 with Landin.Stages.Syntax;
 with Landin.Targets;
+with Landin.Targets.Capabilities;
 
 package body Landin.Driver is
 
@@ -19,6 +24,10 @@ package body Landin.Driver is
    --  until R1.30 built it, and check.py now refuses a code written
    --  anywhere else.
    package Rows renames Landin.Diagnostics.Catalogue;
+
+   use type Landin.IR.Item_Id;
+   use type Landin.Platform.Write_Status;
+   use type Landin.Targets.Capabilities.Backend_Kind;
 
    --  The syntax stage holds nothing, so one instance for the process is
    --  right, and it has to outlive the access type that names it: a
@@ -35,12 +44,27 @@ package body Landin.Driver is
      Rows.Code (Rows.Unreadable_Source);
    Code_Unknown_Target : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Unknown_Target);
+   Code_Unwritable : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Unwritable_Output);
+   Code_No_Toolchain : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.No_Toolchain);
+   Code_Toolchain_Failed : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Toolchain_Failed);
+   Code_No_Entry : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Entry_Point_Missing);
+
+   --  What a request asked to be left behind.  Nothing is the state every
+   --  request had before R1.80 and most still have: a program is read,
+   --  checked and lowered, and no file is written.
+   type Emit_Kind is (Emit_Nothing, Emit_Assembly, Emit_Executable);
 
    function Identity return String is
      ("refine - the Landin bootstrap compiler" & LF
       & "no release version is assigned" & LF
       & "language frontend: scanner, parser, names, types" & LF
-      & "target-neutral IR: lowered, not yet emitted" & LF
+      & "target-neutral IR: lowered and verified" & LF
+      & "backend: linux-x86-64, straight-line kernel only" & LF
+      & "toolchain: found by GNU triplet, assembles and links" & LF
       & "targets described: linux-x86-64, synthetic-32" & LF);
 
    function Usage return String is
@@ -49,16 +73,30 @@ package body Landin.Driver is
       & "  --help              print this text" & LF
       & "  --identify          print tool identity" & LF
       & "  --target=NAME       select a described target" & LF
+      & "  --emit=asm|exe      write assembly, or assemble and link" & LF
+      & "  -o PATH             where to write it" & LF
+      & "  --toolchain=NAME    the assembler and linker driver to run" & LF
+      & "  --linker=NAME       pass -fuse-ld=NAME to that driver" & LF
       & LF
       & "Source files are scanned, parsed, resolved and checked as one"
       & LF
-      & "module.  Nothing is compiled yet, so a program that is accepted"
+      & "module.  Without --emit a program that is accepted produces no"
       & LF
-      & "produces no output." & LF);
+      & "output.  --emit=exe requires "
+      & Landin.Backend.Entry_Point.Required_Shape & "." & LF
+      & LF
+      & "The toolchain is found by the target's GNU triplet, so"
+      & LF
+      & "linux-x86-64 runs x86_64-pc-linux-gnu-gcc unless --toolchain"
+      & LF
+      & "names another." & LF);
 
    function Starts_With (Text : String; Prefix : String) return Boolean is
      (Text'Length >= Prefix'Length
       and then Text (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
+
+   function After (Text : String; Prefix : String) return String is
+     (Text (Text'First + Prefix'Length .. Text'Last));
 
    ---------------------------------------------------------------------
    --  Execute
@@ -66,7 +104,8 @@ package body Landin.Driver is
 
    function Execute
      (Arguments : Landin.Platform.Path_List;
-      Host      : Landin.Platform.Filesystem'Class) return Outcome
+      Host      : Landin.Platform.Filesystem'Class;
+      Tools     : Landin.Platform.Tool_Runner'Class) return Outcome
    is
       Facts    : Landin.Targets.Target_Facts := Landin.Targets.Linux_X86_64;
       Inputs   : Landin.Platform.Path_List;
@@ -77,6 +116,11 @@ package body Landin.Driver is
       Rejected : Landin.Platform.Path_List;
       Wants_Usage    : Boolean := False;
       Wants_Identity : Boolean := False;
+      Emit      : Emit_Kind := Emit_Nothing;
+      Output    : Unbounded.Unbounded_String;
+      Toolchain : Unbounded.Unbounded_String;
+      Linker    : Unbounded.Unbounded_String;
+      Index     : Positive := 1;
    begin
       if Natural (Arguments.Length) = 0 then
          Result.Status := Status_Misuse;
@@ -89,24 +133,70 @@ package body Landin.Driver is
       --  a real defect: `refine --wat --identify` printed the identity and
       --  exited zero, so a script checking the status read a misuse as a
       --  success.
-      for Argument of Arguments loop
-         if Argument = "--help" then
-            Wants_Usage := True;
+      --
+      --  An index and not a cursor, because `-o` takes the argument after
+      --  it.  Every other option carries its value with an `=`, which is
+      --  the shape `--target=` set and R1.80 kept.
+      while Index <= Natural (Arguments.Length) loop
+         declare
+            Argument : constant String := Arguments.Element (Index);
+         begin
+            if Argument = "--help" then
+               Wants_Usage := True;
 
-         elsif Argument = "--identify" then
-            Wants_Identity := True;
+            elsif Argument = "--identify" then
+               Wants_Identity := True;
 
-         elsif Starts_With (Argument, "--target=") then
-            Targets.Append
-              (Argument (Argument'First + 9 .. Argument'Last));
+            elsif Starts_With (Argument, "--target=") then
+               Targets.Append (After (Argument, "--target="));
 
-         elsif Starts_With (Argument, "-") then
-            Unknowns.Append (Argument);
-            Bad_Use := True;
+            elsif Starts_With (Argument, "--toolchain=") then
+               Toolchain :=
+                 Unbounded.To_Unbounded_String
+                   (After (Argument, "--toolchain="));
 
-         else
-            Inputs.Append (Argument);
-         end if;
+            elsif Starts_With (Argument, "--linker=") then
+               Linker :=
+                 Unbounded.To_Unbounded_String
+                   (After (Argument, "--linker="));
+
+            elsif Starts_With (Argument, "--emit=") then
+               declare
+                  Kind : constant String := After (Argument, "--emit=");
+               begin
+                  if Kind = "asm" then
+                     Emit := Emit_Assembly;
+                  elsif Kind = "exe" then
+                     Emit := Emit_Executable;
+                  else
+                     Unknowns.Append (Argument);
+                     Bad_Use := True;
+                  end if;
+               end;
+
+            elsif Argument = "-o" then
+               --  A `-o` with nothing after it is a misuse and not an
+               --  empty path: silently writing to "" would be the worst
+               --  reading of a request that is simply unfinished.
+               if Index = Natural (Arguments.Length) then
+                  Unknowns.Append (Argument);
+                  Bad_Use := True;
+               else
+                  Index := Index + 1;
+                  Output :=
+                    Unbounded.To_Unbounded_String (Arguments.Element (Index));
+               end if;
+
+            elsif Starts_With (Argument, "-") then
+               Unknowns.Append (Argument);
+               Bad_Use := True;
+
+            else
+               Inputs.Append (Argument);
+            end if;
+         end;
+
+         Index := Index + 1;
       end loop;
 
       --  Help and identity answer immediately, but only once the whole
@@ -152,6 +242,145 @@ package body Landin.Driver is
                   Where   => Landin.Source.Empty_Span,
                   Message => Text));
          end Note_Failure;
+
+         --  L0500 owes a note, because it is the one diagnostic here a
+         --  reader is stuck on rather than informed by.
+         procedure Note_No_Toolchain (Text : String; Advice : String);
+
+         procedure Note_No_Toolchain (Text : String; Advice : String) is
+            Item : Landin.Diagnostics.Diagnostic :=
+              Landin.Diagnostics.Make
+                (Code    => Code_No_Toolchain,
+                 Level   => Landin.Diagnostics.Error,
+                 Source  => Landin.Source.No_Source,
+                 Where   => Landin.Source.Empty_Span,
+                 Message => Text);
+         begin
+            Landin.Diagnostics.Add_Note (Item, Advice);
+            Landin.Stages.Report (Context, Item);
+         end Note_No_Toolchain;
+
+         procedure Emit_Requested;
+
+         --  Everything past the frontend, in one place.  It runs only on a
+         --  program every stage accepted, so nothing below has to ask again
+         --  whether the Unit is worth reading.
+         procedure Emit_Requested is
+            Assembly_Path : constant String :=
+              (if Emit = Emit_Executable
+               then Assembly_Beside
+                      (if Unbounded.Length (Output) > 0
+                       then Unbounded.To_String (Output)
+                       else Default_Executable)
+               elsif Unbounded.Length (Output) > 0
+               then Unbounded.To_String (Output)
+               else Default_Assembly);
+
+            Written : Landin.Platform.Write_Status;
+         begin
+            --  A target nothing emits for cannot be asked for a file.
+            --  `synthetic-32` exists to keep layout arithmetic honest on a
+            --  64-bit host and has no backend, which is what
+            --  Landin.Targets.Capabilities already says.
+            if Landin.Targets.Capabilities.Backend_For (Facts)
+               /= Landin.Targets.Capabilities.Linux_X86_64_ELF
+            then
+               Note_No_Toolchain
+                 ("no backend emits for target "
+                  & Landin.Targets.Name (Facts),
+                  "describe a target with a backend, or drop --emit");
+               return;
+            end if;
+
+            --  [1970]'s entry is required before anything is written, so a
+            --  program that could never be linked does not leave a file
+            --  behind on the way to saying so.
+            if Emit = Emit_Executable
+              and then Landin.Backend.Entry_Point.Hosted_Main
+                         (Landin.Stages.Code (Context).all,
+                          Landin.Stages.Meanings (Context).all,
+                          Landin.Stages.Identities (Context).all)
+                       = Landin.IR.No_Item
+            then
+               Note_Failure
+                 (Code_No_Entry,
+                  "a hosted program needs "
+                  & Landin.Backend.Entry_Point.Required_Shape);
+               return;
+            end if;
+
+            Host.Write_File
+              (Assembly_Path,
+               Landin.Backend.X86_64.Text
+                 (Landin.Stages.Code (Context).all,
+                  Landin.Stages.Meanings (Context).all,
+                  Landin.Stages.Identities (Context).all,
+                  Landin.Stages.Target (Context)),
+               Written);
+
+            if Written /= Landin.Platform.Write_Ok then
+               Note_Failure
+                 (Code_Unwritable, "cannot write: " & Assembly_Path);
+               return;
+            end if;
+
+            if Emit /= Emit_Executable then
+               return;
+            end if;
+
+            declare
+               Driver : constant String :=
+                 Landin.Backend.Toolchain.Driver_For
+                   (Facts, Unbounded.To_String (Toolchain));
+               Target_Path : constant String :=
+                 (if Unbounded.Length (Output) > 0
+                  then Unbounded.To_String (Output)
+                  else Default_Executable);
+               Ran : Landin.Platform.Tool_Result;
+            begin
+               if Driver = "" then
+                  Note_No_Toolchain
+                    ("target " & Landin.Targets.Name (Facts)
+                     & " names no toolchain",
+                     "name one with --toolchain=NAME");
+                  return;
+               end if;
+
+               --  A tool that cannot be started at all is the platform
+               --  interface's own distinction, and it is exactly the one a
+               --  host without this target's toolchain falls on.  Catching
+               --  it here is what turns "not installed" into a sentence
+               --  rather than an unhandled exception at the top of
+               --  `refine`.
+               begin
+                  Tools.Run
+                    (Program   => Driver,
+                     Arguments =>
+                       Landin.Backend.Toolchain.Link_Arguments
+                         (Assembly => Assembly_Path,
+                          Output   => Target_Path,
+                          Linker   => Unbounded.To_String (Linker)),
+                     Result    => Ran,
+                     Capture   => Landin.Platform.Merged);
+               exception
+                  when Landin.External_Tool_Failed =>
+                     Note_No_Toolchain
+                       ("cannot run " & Driver & " for target "
+                        & Landin.Targets.Name (Facts),
+                        "install a toolchain named " & Driver
+                        & ", or name another with --toolchain=NAME");
+                     return;
+               end;
+
+               if Ran.Exit_Code /= 0 then
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     Driver & " failed with status"
+                     & Integer'Image (Ran.Exit_Code) & LF
+                     & Unbounded.To_String (Ran.Output));
+               end if;
+            end;
+         end Emit_Requested;
 
       begin
          for Name of Rejected loop
@@ -219,6 +448,16 @@ package body Landin.Driver is
                     with "the frontend pipeline did not run";
                end if;
             end;
+
+            --  The backend runs on nothing that was refused, for the same
+            --  reason the lowering does: an unaccepted program has no Unit
+            --  worth emitting, and a file written from one would be a
+            --  plausible artefact of a failed compilation.
+            if Emit /= Emit_Nothing
+              and then not Landin.Stages.Failed (Context)
+            then
+               Emit_Requested;
+            end if;
          end if;
 
          --  A rejected target is not a selected target, so nothing is

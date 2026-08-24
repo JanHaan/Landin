@@ -91,11 +91,27 @@ everywhere.
 |---|---|
 | unit | a note of what an implementation-side case covers; the case itself lives in `compiler/ada/tests` |
 | negative, end-to-end | executed: `refine` is run with `args`, and its bytes and exit status are compared with `expect` and `status` |
-| positive, runtime, ABI, debugger | reserved; no fixture yet. A positive or runtime fixture needs a program the compiler can accept, so the first ones arrive with R1; ABI and debugger fixtures arrive with the work that produces an ABI and debug information |
+| runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` |
+| positive, ABI, debugger | reserved; no fixture yet. A positive fixture needs a program the compiler can accept, so the first ones arrive with R1; ABI and debugger fixtures arrive with the work that produces an ABI and debug information |
 
 A class with no fixtures is the normal state early in the roadmap, and an
 empty class directory is not a fault. A fixture that records an expectation
 nobody runs is.
+
+That last sentence decides what a runtime fixture does on a host that cannot
+finish the target, and the answer is that the run fails. A macOS host with no
+ELF toolchain reports the fixture as a failure carrying `refine`'s own
+report, which is where `L0500`'s note says which toolchain would satisfy it.
+Skipping would be the quiet non-run the sentence refuses, and it would also
+hide the gate losing its toolchain. This is the same rule `scripts/env.sh`
+already applies one level up: a machine without the pinned GNAT is told so
+and stops, rather than quietly building nothing.
+
+A runtime fixture carries `program` and `status` and neither `expect` nor
+`args`, because nothing compares `refine`'s own output -- what is asserted is
+what the compiled program did. One without a `program` is a reported fault,
+for the same reason `expect` without `args` is: a status nobody produces is
+dead data.
 
 ## The grammar corpus
 

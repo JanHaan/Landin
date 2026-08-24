@@ -1048,9 +1048,130 @@ that sets up [1550]'s frame pointer and stores [1650]'s argument registers
 into their parameter slots. Any other opcode raises a compiler defect rather
 than emitting something plausible, because half of a trapping add is worse
 than none. Arithmetic, comparison, calls and the module data section remain,
-and so does every one of the three obligations above. Nothing is reachable
-from `refine` yet: no file is written, no tool is run, and the exit evidence
-below is untouched by this.
+and so does every one of the three obligations above.
+
+The path from `refine` to a running process is now reachable, and a
+constant-return `main` compiled, linked and executed inside the pinned Linux
+image exits with the status [1970] promises. `--emit=asm` writes the
+assembly and `--emit=exe` assembles and links it, with `-o` naming either.
+
+Two of the first plan's assumptions were wrong, and measuring is what found
+both. `cc` does not exist on the Linux gate at all: the container recipe and
+`.build.yml` install `binutils` and `libc6-dev` and deliberately not
+`build-essential`, so a link driven by `cc` would have failed CI rather than
+this host. And the pinned GNAT is already a complete toolchain -- `as`, `ld`
+and `gcc` all resolve inside its own `bin/`, ahead of `/usr/bin` -- so the
+finishing step needs no new dependency and no second C toolchain. It is the
+one pinned toolchain this repository already committed to.
+
+A driver is named, never a linker. The crt startup objects, `-lc` and the
+dynamic loader's path live in the compiler driver and differ per
+distribution; invoking `ld` directly would move every one of them into this
+compiler, where no paragraph could say what they are.
+
+Which driver is a decision, and it is the GNU convention rather than a new
+one. Cross tools carry the `--target` argument as a prefix -- GCC's own
+internals documentation states it, and the pinned GNAT installs itself as
+`x86_64-pc-linux-gnu-gcc` on Linux and `aarch64-apple-darwin24.6.0-gcc` on
+the macOS host, both measured. So `Landin.Targets.Capabilities` carries a
+triplet and `refine` runs `<triplet>-gcc`. That package and not
+`Target_Facts`, because its header already claims exactly this ground --
+"the external tools needed to finish a program for that machine" -- while
+`Target_Facts` says a description holds "nothing about what a program may
+name". A target with no backend has no triplet, which is the same fact its
+backend column already states.
+
+The triplet is not canonicalised and is not a target name. One machine is
+`x86_64-pc-linux-gnu` to the pinned GNAT, `x86_64-linux-gnu` to Debian's
+cross packages and `x86_64-unknown-linux-gnu` to LLVM and to the Homebrew
+tap that cross-compiles from macOS. Autoconf's own manual says not to
+duplicate `config.sub`'s canonicalisation, so one spelling is carried
+verbatim per target and `--toolchain=NAME` settles every other. That
+override is not hypothetical: it is exactly what a macOS host with the
+`messense/macos-cross-toolchains` tap needs, since that tap spells the
+triplet the third way.
+
+There is deliberately no fall back to a bare `gcc`. A host whose
+triplet-prefixed driver is absent cannot finish this target, and reaching
+for whatever `gcc` names would, on the macOS development host, hand ELF-only
+assembly to a toolchain that emits Mach-O. Making that a stated refusal
+costs one diagnostic; making it a fallback would cost a host-detection rule
+this compiler has nowhere to put. Whether the driver exists is not asked
+twice either: `Landin.Platform`'s interface already separates a tool that
+could not be started from one that ran and failed, and the first is exactly
+what a host without the toolchain falls on.
+
+Zig was read rather than assumed, since `tour.md`'s third line is "Zig, but
+sweeter". Zig builds for every target independently of the host and buys
+that by vendoring the finishing step -- LLD as a multi-format cross-linker
+and libc *sources* for 97+ targets. [1550] has already declined that
+mechanism, and LLVM by name. But the property separates from the mechanism:
+source to assembly text is host-independent here *already*, by the rule that
+nothing outside `Landin.Targets` may ask the host anything, so `--emit=asm`
+for `linux-x86-64` produces identical bytes on macOS and on Linux. Only the
+finishing step ever needed a toolchain, and that is the half the triplet
+convention answers.
+
+GAS is the only assembler and that is not a flag: the emitted text is
+already GAS-specific in AT&T operand order, `@function` and
+`.note.GNU-stack`, so a second assembler would be a second emission dialect
+and therefore a backend variant. mold is a `--linker=NAME` pass-through
+appending `-fuse-ld=NAME`, which is all it costs because all three ways mold
+documents go through a compiler driver for the reason above. What this
+repository owns is the command line, and a case asserts it exactly; no
+environment here runs mold, so that flag is argv-tested and never executed,
+and this sentence is where that gap is recorded rather than implied.
+
+Four codes were assigned, and `L0500`-`L0599` is a new band for the backend
+and its toolchain. `L0005` sits in the driver band instead, beside `L0003`,
+because an output that cannot be written is the same rule as a source that
+cannot be read from the other side.
+
+Two ways of reaching a target this repository has no backend for were
+proposed here and both are declined, recorded because each will be proposed
+again. Vendoring Apple's `.tbd` stubs, which is how Zig cross-compiles to
+macOS without an SDK: declined because it is the vendoring [1550] already
+refused, and because Landin does not need it -- macOS arm64's answer is a
+macOS runner, not a Mach-O cross-linker, and Xcode on a Mac is exactly what
+Apple's agreement contemplates. And building cross toolchains and retaining
+the artefacts: declined for three separate reasons, one per target. Cortex-M
+needs no build at all, since `arm-none-eabi-gcc` is packaged on both
+Homebrew and Debian. A Linux cross toolchain for a macOS host is legally
+clean and duplicates work the `messense/macos-cross-toolchains` tap already
+does, which is also the role `scripts/env.sh` declines in one sentence --
+"the pin is a version, not a distributor". And retaining a macOS artefact
+where the Linux gate could fetch it does not avoid the licence question but
+relocates it: osxcross states it cannot ship the SDK "for legal reasons",
+and Apple's agreement says the SDKs may not be installed, used or run "on
+any non-Apple-branded computer", which is the Linux gate exactly. That is
+not a legal opinion and Apple's own forum answer to the question is to
+consult a lawyer; it is the reason this project will not be the one to find
+out.
+
+What outranks all three: no backend exists for macOS arm64 or Cortex-M, so a
+cross toolchain for either would have nothing to assemble. Building one now
+would ship infrastructure nothing exercises, which is the failure this
+roadmap has already recorded against itself once.
+
+The `runtime` fixture class has landed with it, so the gate proves the
+executed path rather than a person having run it by hand once.
+`runtime/constant-return-exits-with-its-code` is compiled, linked and run by
+the suite, and its own exit status is what is asserted. Its program is held
+to the grammar exactly as a positive fixture's is, since it is legal source
+the compiler must accept; `check.py` derives it and reports a fixture the
+grammar cannot.
+
+A host that cannot finish the target fails rather than skipping, and that was
+a decision with a real alternative. Skipping keeps a macOS run green, and
+`compiler/tests/README.md` already refuses it in one sentence -- "A fixture
+that records an expectation nobody runs is [a fault]" -- because a green run
+that tested nothing is worse than a red one, and because the same silence
+would hide the Linux gate losing its own toolchain. The failure carries
+`refine`'s report, so `L0500`'s note is what tells the reader which toolchain
+would satisfy it. This is the rule `scripts/env.sh` already applies one level
+up, where a machine without the pinned GNAT is told so and stops rather than
+quietly building nothing; a third outcome beside pass and fail was considered
+and declined as machinery bought for one case.
 
 Sources: `[1550]`, `[1650]`, `[1950]`, `[1960]`, `[1970]`.
 
@@ -1466,6 +1587,13 @@ Depends on: R5.10, R5.20, R2.30
 
 Implement the arm64 data layout, Darwin calling conventions, native assembly,
 object/link integration, hosted entry and minimal platform runtime.
+
+Natively, and that word is load-bearing rather than incidental. R1.80
+declined cross-linking Mach-O from the Linux gate and recorded why; the
+consequence lands here, because "execute natively on macOS arm64" needs a
+macOS host to execute on. R0.70's local macOS loop is what this item
+promotes to a gate, and until it does, no Linux run can produce this item's
+evidence.
 
 Exit evidence: ABI differential and end-to-end cases execute natively on macOS
 arm64.
