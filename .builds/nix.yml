@@ -1,0 +1,80 @@
+#  The nix shell's own check, and not a gate.
+#
+#  docs/environments.md says this shell carries no authority: the three
+#  environments recorded there are unchanged by it, and a result produced in
+#  it is evidence for none of them.  This manifest is separate from
+#  .build.yml for exactly that reason -- a red run here says a convenience
+#  broke, not that Landin did, and the gate's verdict must not depend on it.
+#
+#  It exists because nothing else can catch that.  The shell has broken twice,
+#  each time on something only a real x86-64 nix run reaches: the pinned
+#  gprbuild's argv[0] sensitivity, and `refine` naming its linker driver by
+#  GNU triplet and so reaching the archive's own unwrapped compiler, which
+#  holds no libc and could not find `Scrt1.o`.  The local Rosetta loop cannot
+#  stand in for this.  It cannot build the shell at all: Rosetta's binfmt
+#  handler replaces a custom argv[0] with the binary's own path, which breaks
+#  every nixpkgs `--inherit-argv0` wrapper.  Both quirks are recorded in
+#  docs/environments.md.
+#
+#  And it runs only when something that can break it changed.  The pinned
+#  archives are 501 MB, fetched again on every run because builds.sr.ht keeps
+#  nothing between builds; paying that on every push to check a convenience
+#  is not a trade worth making.  See the first task.
+
+image: nixos/latest
+
+environment:
+  #  A flake is still an experimental feature on a stock nix.
+  NIX_CONFIG: experimental-features = nix-command flakes
+
+tasks:
+  #  What this shell is made of: the flake and its lock, the pins, the
+  #  scripts every environment runs, this manifest, and the two packages that
+  #  decide which external program `refine` names and how it is found.  A
+  #  push touching none of that cannot have broken this shell in a way the
+  #  tasks below would see, and skipping is decided before anything is
+  #  fetched.
+  #
+  #  A new runtime fixture is deliberately not on that list.  R1.80 adds them
+  #  almost every commit, and the gate already runs every one of them on
+  #  x86-64 hardware; triggering on them would pay this job's whole cost for
+  #  a signal that is already had.
+  #
+  #  The marker is a file rather than an early exit because the manifest
+  #  reference documents no way to end a build early as a success, and a
+  #  check that was skipped must not read as one that failed.
+  #
+  #  builds.sr.ht names the pushed commit but not the one before it, so the
+  #  comparison is against HEAD~1.  That is exact for a single-commit push
+  #  and can miss an earlier commit of a longer one, so every case it cannot
+  #  decide runs the job: being wrong towards running costs bandwidth, and
+  #  being wrong the other way costs the only check this shell has.
+  - relevant: |
+      cd landin
+      if ! git rev-parse HEAD~1 >/dev/null 2>&1; then
+          echo "landin: no previous commit to compare against; checking"
+          exit 0
+      fi
+      if git diff --name-only HEAD~1 HEAD | grep -qE '^(flake\.(nix|lock)|environments/pins\.sh|scripts/|\.builds/nix\.yml|compiler/ada/src/backend/landin-backend-toolchain\.|compiler/ada/src/platform/landin-platform-native-tools\.)'
+      then
+          echo "landin: this shell's inputs changed; checking it"
+      else
+          echo "landin: nothing this shell is made of changed; not checking"
+          touch ~/skip
+      fi
+
+  #  Recorded first, so a captured log names the compiler that produced it.
+  #  This is also the task that fails when the shell cannot be built at all.
+  - identify: |
+      if [ -e ~/skip ]; then exit 0; fi
+      cd landin
+      uname -a
+      nix develop --command ./scripts/toolchain.sh
+
+  #  The whole suite, because the runtime fixtures are what found the linker
+  #  defect: they are the only cases that ask this shell's toolchain to
+  #  finish a program rather than merely to compile the compiler.
+  - test: |
+      if [ -e ~/skip ]; then exit 0; fi
+      cd landin
+      nix develop --command ./scripts/test.sh
