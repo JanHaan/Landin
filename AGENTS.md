@@ -40,6 +40,8 @@ nix develop
 
 Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and from R1.80 onwards — when `refine` starts emitting instructions — it is the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches https://www.701.dev by being pushed, not by anyone running `scripts/site.sh --publish`.
 
+A push also submits `.builds/nix.yml`, which checks the `nix develop` shell and is not a gate: it carries no authority, and it skips itself unless the push touched a file that shell is made of. Both manifests are submitted because builds.sr.ht looks for `.build.yml` and `.builds/*.yml` alike. Adding a third would need a reason — four manifests per push is the limit, beyond which builds.sr.ht chooses at random.
+
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
 
 `scripts/test.sh` builds and then runs `compiler/ada`'s test program; `scripts/linux-loop.sh` runs the same thing in the pinned Linux image. Those are the two runnable test commands. There is no separate lint or typecheck step: the pinned build treats every warning as an error and enforces GNAT style checks. Warnings are policy, not preference — do not silence one without a recorded reason.

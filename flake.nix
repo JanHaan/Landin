@@ -128,6 +128,24 @@
           gnat = pkgs.wrapCCWith {
             cc = gnatUnwrapped;
             isAlireGNAT = true;
+
+            #  The wrapper writes `gcc`, `cc`, `g++` and `cpp`, and prefixes
+            #  a driver's name with a GNU triplet only when it is
+            #  cross-compiling.  `refine` names its driver by triplet --
+            #  `Landin.Backend.Toolchain` says why, and deliberately will not
+            #  fall back to a bare `gcc` -- so on this shell it reached the
+            #  archive's own `x86_64-pc-linux-gnu-gcc`, which holds no libc
+            #  and could not find `Scrt1.o`.  gprbuild was unaffected: it
+            #  links through the wrapper's `gcc`, which is why the compiler
+            #  built here and the programs it emitted did not.  Every name
+            #  the pinned compiler answers to has to reach the wrapper, and
+            #  the archive's own bin is what says what those names are.
+            extraBuildCommands = ''
+              for driver in ${gnatUnwrapped}/bin/*-gcc; do
+                [ -e "$driver" ] || continue
+                ln -sf gcc "$out/bin/$(basename "$driver")"
+              done
+            '';
           };
 
           gprbuild =

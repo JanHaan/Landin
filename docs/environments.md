@@ -132,6 +132,43 @@ what nixpkgs' `makeWrapper` arranges — and under Rosetta the same store paths
 ran without complaint. Evidence about this shell therefore comes from nix on
 x86-64 hardware, running the same scripts as every other environment.
 
+Measured since, and the reason that is not merely a preference: the local
+loop cannot build this shell at all. Rosetta's `binfmt` handler replaces a
+custom `argv[0]` with the interpreted binary's own path — a program exec'd as
+`I-AM-ARGV0` reads its own path back out of `/proc/self/cmdline` — so every
+nixpkgs wrapper built with `--inherit-argv0` loses the name it was given.
+`auto-patchelf` is one of them: it runs under a bare interpreter that cannot
+import `elftools`, `autoPatchelfHook` fails, and the pinned archives are
+never patched. That is the paragraph above read from the other side — the
+same sensitivity, met by the translation rather than by the toolchain — and
+it is why this shell is answered for on hardware.
+
+R1.80 needed one more thing of it, and only running programs found it. nixpkgs
+wraps a compiler under the names `gcc`, `cc`, `g++` and `cpp`, and prefixes a
+driver's name with a GNU triplet only when it is cross-compiling; `refine`
+names its driver by triplet, so it reached the pinned archive's own
+`x86_64-pc-linux-gnu-gcc` rather than the wrapper, and linked with a compiler
+holding no libc — `cannot find Scrt1.o`. gprbuild was unaffected, because it
+links through the wrapper, which is why the compiler built in that shell and
+the programs it emitted did not. The flake now points every triplet-prefixed
+driver the archive ships at the wrapper.
+
+Both of those were found by hand, which is why `.builds/nix.yml` now checks
+this shell at builds.sr.ht: it is the only environment that can. It is a
+second manifest and deliberately not part of the gate — a red run there says
+a convenience broke, not that Landin did — and it runs the ordinary
+`scripts/toolchain.sh` and `scripts/test.sh` inside `nix develop`. It also
+runs only when a file this shell is made of changed, because the pinned
+archives are 501 MB and builds.sr.ht keeps nothing between builds, so the
+alternative is paying that on every push to check a convenience.
+
+Its first run settles both halves. The shell built on x86-64 nix with the
+pinned GNAT 16.1.0 and GPRbuild 26.0.0, and the suite passed 133 cases with
+no failures — `runtime fixtures execute` among them, which is the case that
+reported `cannot find Scrt1.o` and the reason any of this was looked at.
+That is a result for this shell and for nothing else: the table above is
+still what the three environments say.
+
 It is a convenience for editing on a nix machine and carries no authority of
 its own: the table above is unchanged by it, and a result produced in it is
 not evidence for any of the three environments. `flake.lock` pins the nixpkgs
