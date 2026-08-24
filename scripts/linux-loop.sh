@@ -41,6 +41,15 @@ if [ "$#" -eq 0 ]; then
     set -- sh -c './scripts/build.sh && ./scripts/test.sh'
 fi
 
+#  Release needs the memory, and the default does not have it.  A release
+#  build is -O2 with -gnatn, so gprbuild's -j0 runs one gnat1 per core doing
+#  cross-unit inlining, and in a default-sized VM the kernel kills one:
+#  "gcc: fatal error: Killed signal terminated program gnat1", reported
+#  against whichever unit was unlucky.  That reads like a compiler defect in
+#  that file and is not one -- the same build passes natively and on the
+#  x86-64 gate -- so the size is set here rather than rediscovered.
+LANDIN_LINUX_MEMORY="${LANDIN_LINUX_MEMORY:-4g}"
+
 #  LANDIN_BUILD_TAG keeps Linux object files out of the macOS ones: the
 #  repository is the same directory in both, and .ali files from two hosts
 #  in one object directory is a build that fails in a confusing way.
@@ -48,6 +57,7 @@ exec container run \
     --rm \
     --arch amd64 \
     --rosetta \
+    --memory "$LANDIN_LINUX_MEMORY" \
     --volume "$LANDIN_ROOT:/work" \
     --workdir /work \
     --env LANDIN_BUILD_TAG=linux-amd64 \

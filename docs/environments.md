@@ -53,6 +53,22 @@ The local Linux loop runs the very same scripts inside the pinned image:
 ./scripts/linux-loop.sh sh -c '...'  # anything else, in the same environment
 ```
 
+The loop asks for 4 GiB, and `LANDIN_LINUX_MEMORY` overrides it. That is not
+a preference. A release build is `-O2` with `-gnatn`, so gprbuild's `-j0`
+runs one `gnat1` per core doing cross-unit inlining, and in a default-sized
+VM the kernel kills one of them:
+
+```
+gcc: fatal error: Killed signal terminated program gnat1
+compilation terminated.
+   compilation of landin-ir.adb failed
+```
+
+The unit named there is whichever was unlucky, not a unit with anything
+wrong in it -- the same source builds in release natively and on the x86-64
+gate. This is written down because the message reads exactly like a compiler
+defect in one file and cost an investigation once already.
+
 `environments/linux-amd64/Containerfile` pins its base image by digest and
 verifies both toolchain archives against the checksums in
 `environments/pins.sh` before unpacking either of them. That file is the one
