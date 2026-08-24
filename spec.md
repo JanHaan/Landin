@@ -556,12 +556,39 @@ R5.30's to know about.
 The report names the operand and not the operator, because
 the zero and the negative amount are what a reader changes.
 
+### [1960] A trap stops at the operation
+
+A trap is synchronous with the operation that causes it and
+happens at that operation's point in [0410]'s order. It does
+not return. The operation produces no value, and no later
+Landin action occurs; actions before it are not undone.
+How the surrounding system reports the trap is not Landin
+program behaviour. An operating system's signal, exception,
+status or other encoding is not stable across targets or
+compiler releases and a program may not depend on it.
+The Linux x86-64 backend deliberately emits `ud2` when it
+must trap. It does not inherit the accidental fault or value
+of the machine instruction used for the operation.
+
+### [1970] The first hosted path has one entry shape
+
+The minimal Linux x86-64 path implemented by R1.80 accepts one
+hosted entry shape: a public function named `main`, with no
+arguments and the one named return `code` of type `i32`. Its
+declaration therefore starts
+`public main: () -> (code: i32) =`. The returned code is passed
+to the host as the program's status through the system C ABI
+[1650]. This is the first native slice's boundary, not a
+restriction on every hosted executable: [1650]'s C `argc` and
+`argv` form stays available. A freestanding program does not
+use this rule; its build description names the entry [1650].
+
 ## THE DECISIONS THIS DOCUMENT TOOK
 
 A rule above is one of two things, and a reader cannot tell them apart by
 reading it: a transcription of something `tour.md` already decided, or a
 decision taken because the tour said nothing and an implementation could not
-proceed without one. Ten were decisions. They are listed here with what
+proceed without one. Twelve were decisions. They are listed here with what
 the tour said before, what was chosen, and what a competent reader could
 have chosen instead — because a decision written in the same voice as a
 transcription looks like it was always there, and [1050] was missed twice by
@@ -762,3 +789,49 @@ is not equipped to answer.
 
 **Pinned by** `positive/binding-declared-only`,
 `positive/module-binding-with-no-value-reads-zero`.
+
+### D11 — A trap is a deliberate synchronous stop
+
+**The tour said** that overflow traps [0300] and a runtime conversion whose
+value does not fit traps [0310]; [1950] adds two operands that trap when their
+value is not known. None says where a trap happens, whether it returns, what
+follows it, or whether the host's report is program behaviour.
+
+**Chosen:** [1960]. A trap happens at the operation's point in evaluation
+order, never returns, and permits no later Landin action. Its operating-system
+encoding is not stable. The Linux x86-64 backend uses a deliberate `ud2`, so
+the language does not inherit whichever fault or value an arithmetic
+instruction happens to provide.
+
+**The alternative:** leave each operation to its machine instruction, or call
+a runtime routine. The first has already been ruled out by D8's measured
+x86-64 and AArch64 disagreement, and would wrongly trap the defined remainder
+of the lowest signed value by -1 on x86-64. The second can give a stable report,
+but makes that report an interface the language must preserve and a runtime
+every freestanding target must supply.
+
+**Future evidence required:** R1.80's runtime arithmetic trap cases, and the
+first slice that enables [0310]'s runtime conversions must exercise its
+out-of-range trap through the same contract.
+
+### D12 — The first hosted path accepts one `main` shape
+
+**The tour said** that hosted `main` follows the system C ABI, calls the
+no-argument form ordinary and keeps the C `argc` and `argv` form available
+[1650]. Its capability-root example has exactly
+`public main: () -> (code: i32)` [1660], but an example does not say which
+shape the first native slice must implement.
+
+**Chosen:** [1970]. R1.80's minimal Linux x86-64 path accepts one public
+no-argument `main` and returns its host status through the one named `i32`
+return `code`. This is an implementation boundary for that slice; it does not
+remove [1650]'s C form from the language.
+
+**The alternative:** implement the C `argc` and `argv` shape in the first
+slice too, permit a different public function to be selected by the build, or
+treat the return's name as immaterial. Each is workable, but makes the first
+executable slice carry an entry-selection or argument representation rule it
+does not need; freestanding builds already have the explicit-entry rule
+[1650].
+
+**Future evidence required:** R1.80's hosted entry and exit-status cases.
