@@ -217,8 +217,16 @@ CSS = """
   --ui:{UI_STACK};
   --mono:{MONO_STACK};
 }
+/*  The switch is a checkbox, and it inverts: checked means the theme the
+    system did not ask for.  CSS cannot read which theme that is, only
+    match on it, so the dark variables are written under both halves of
+    the question -- system dark and not inverted, system light and
+    inverted.  Nothing here needs a script, which is the point: with
+    scripting off the switch still works, it just does not outlive the
+    page.  There is no script half at all: the choice is the box's,
+    it is not stored anywhere, and it lasts as long as the page does.  */
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
+  :root:not(:has(#theme:checked)){
     color-scheme: dark;
     --bg:#12161c; --bg-soft:#171c24; --panel:#161b23; --panel-2:#1b212b;
     --ink:#dfe4ec; --ink-soft:#9aa3b1; --ink-faint:#7c8593;
@@ -230,16 +238,18 @@ CSS = """
     --sh:0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.28);
   }
 }
-:root[data-theme="dark"]{
-  color-scheme: dark;
-  --bg:#12161c; --bg-soft:#171c24; --panel:#161b23; --panel-2:#1b212b;
-  --ink:#dfe4ec; --ink-soft:#9aa3b1; --ink-faint:#7c8593;
-  --rule:#2a313c; --rule-soft:#222933;
-  --accent:#e2705c; --accent-soft:#b6543f; --accent-bg:#241a17;
-  --code-bg:#0f1319; --code-rule:#232a34;
-  --k:#f0919d; --t:#6fd3c2; --f:#93bcff; --d:#b9cdf5; --n:#cbaaf2;
-  --q:#b3d178; --c:#7a828f; --cd:#a9bd93; --o:#8b93a1; --b:#e0ae6a;
-  --sh:0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.28);
+@media (prefers-color-scheme: light), (prefers-color-scheme: no-preference){
+  :root:has(#theme:checked){
+    color-scheme: dark;
+    --bg:#12161c; --bg-soft:#171c24; --panel:#161b23; --panel-2:#1b212b;
+    --ink:#dfe4ec; --ink-soft:#9aa3b1; --ink-faint:#7c8593;
+    --rule:#2a313c; --rule-soft:#222933;
+    --accent:#e2705c; --accent-soft:#b6543f; --accent-bg:#241a17;
+    --code-bg:#0f1319; --code-rule:#232a34;
+    --k:#f0919d; --t:#6fd3c2; --f:#93bcff; --d:#b9cdf5; --n:#cbaaf2;
+    --q:#b3d178; --c:#7a828f; --cd:#a9bd93; --o:#8b93a1; --b:#e0ae6a;
+    --sh:0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.28);
+  }
 }
 
 *{box-sizing:border-box}
@@ -307,14 +317,14 @@ header.bar .grow{flex:1}
 /*  An icon is 1em of the label beside it, so the two scale together and
     the control keeps the bar's rhythm.  */
 svg.i{width:1em; height:1em; flex:none; vertical-align:-.12em}
-header.bar button, header.bar .src{
+header.bar button, header.bar .src, header.bar label[for="theme"]{
   display:inline-flex; align-items:center; gap:.4rem;
   font:inherit; font-size:.72rem; letter-spacing:.08em; text-transform:uppercase;
   color:var(--ink-soft); background:var(--panel); cursor:pointer;
   text-decoration:none; border:1px solid var(--rule); border-radius:5px;
   padding:.3rem .55rem; white-space:nowrap;
 }
-header.bar button:hover, header.bar .src:hover{
+header.bar button:hover, header.bar .src:hover, header.bar label[for="theme"]:hover{
   color:var(--ink); border-color:var(--ink-faint);
 }
 /*  The toggle offers the theme you are not in: a moon on a light page,
@@ -323,13 +333,39 @@ header.bar button:hover, header.bar .src:hover{
 .dark-only{display:none}
 .light-only{display:inline-block}
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) .dark-only{display:inline-block}
-  :root:not([data-theme="light"]) .light-only{display:none}
+  :root:not(:has(#theme:checked)) .dark-only{display:inline-block}
+  :root:not(:has(#theme:checked)) .light-only{display:none}
 }
-:root[data-theme="dark"] .dark-only{display:inline-block}
-:root[data-theme="dark"] .light-only{display:none}
-:root[data-theme="light"] .dark-only{display:none}
-:root[data-theme="light"] .light-only{display:inline-block}
+@media (prefers-color-scheme: light), (prefers-color-scheme: no-preference){
+  :root:has(#theme:checked) .dark-only{display:inline-block}
+  :root:has(#theme:checked) .light-only{display:none}
+}
+/*  The box itself is never seen, but it is what is focused and what is
+    typed at, so it is clipped rather than `display:none` -- which would
+    take it out of the tab order and leave the label unreachable by
+    keyboard.  The ring is drawn on the label instead.  */
+input.theme-x{
+  position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+  border:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
+}
+input.theme-x:focus-visible + label{outline:2px solid var(--accent); outline-offset:2px}
+/*  A phone has room for the actions, but not for three copies of what their
+    icons already say.  Keep every action and its accessible name, collapse
+    only the visible labels, and give the resulting icon controls a useful
+    touch target.  The changing document/section label is expendable here;
+    the page heading says the same thing below the bar.  */
+@media (max-width:35rem){
+  header.bar{gap:.45rem; padding:.45rem .65rem}
+  header.bar .where{display:none}
+  header.bar .src, header.bar button, header.bar label[for="theme"]{
+    width:2.25rem; height:2.25rem; justify-content:center; gap:0; padding:0;
+  }
+  header.bar .src span, header.bar button span,
+  header.bar label[for="theme"] span{
+    position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+    border:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap;
+  }
+}
 #menu{display:none}
 
 /* ---- layout ---- */
@@ -558,22 +594,6 @@ FONT_CSS = fonts.css()
 
 JS = """
 (function(){
-  var root=document.documentElement;
-  var saved=null;
-  try{ saved=localStorage.getItem('landin-theme'); }catch(e){}
-  if(saved){ root.setAttribute('data-theme',saved); }
-  var tog=document.getElementById('theme');
-  if(tog) tog.addEventListener('click',function(){
-    var now=root.getAttribute('data-theme');
-    if(!now) now=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-    var next=now==='dark'?'light':'dark';
-    root.setAttribute('data-theme',next);
-    tog.setAttribute('aria-pressed',next==='dark'?'true':'false');
-    tog.setAttribute('aria-label',next==='dark'?'use the light theme'
-                                              :'use the dark theme');
-    try{ localStorage.setItem('landin-theme',next); }catch(e){}
-  });
-
   var side=document.querySelector('nav.side');
   var menu=document.getElementById('menu');
   if(menu) menu.addEventListener('click',function(){
@@ -1354,8 +1374,8 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
   <a class="src" href="{REPO}">{icons.use("sourcehut")}<span>source</span></a>
   <button id="menu" type="button" aria-label="documents and sections"
           aria-expanded="false" aria-controls="side">{icons.use("menu")}<span>menu</span></button>
-  <button id="theme" type="button" aria-label="use the dark theme"
-          aria-pressed="false">{icons.use("moon", "i light-only")}{icons.use("sun", "i dark-only")}<span>theme</span></button>
+  <input class="theme-x" id="theme" type="checkbox">
+  <label for="theme">{icons.use("moon", "i light-only")}{icons.use("sun", "i dark-only")}<span>theme</span></label>
 </header>
 <div class="wrap">
 <nav class="side" id="side" aria-label="documents and sections">
