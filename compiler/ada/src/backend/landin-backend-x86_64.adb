@@ -279,6 +279,23 @@ package body Landin.Backend.X86_64 is
                            & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Wrapping_Add
+                  | Landin.IR.Wrapping_Subtract =>
+                  declare
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                  begin
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     Emit ((if Op = Landin.IR.Wrapping_Add
+                            then "add" else "sub") & Suffix (Held) & " "
+                           & Value_Cell (Operand (2)) & ", "
+                           & Accumulator (Held));
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", "
+                           & Value_Cell (Value));
+                  end;
+
                when Landin.IR.Equal_To
                   | Landin.IR.Not_Equal_To
                   | Landin.IR.Less_Than
