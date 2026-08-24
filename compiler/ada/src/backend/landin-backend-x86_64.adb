@@ -296,6 +296,91 @@ package body Landin.Backend.X86_64 is
                            & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Divide | Landin.IR.Remainder =>
+                  declare
+                     Kind : constant Landin.Types.Integer_Name :=
+                       Landin.IR.Result_Of (Of_Unit, Item, Value);
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                     Nonzero : constant String :=
+                       Value_Label (Value) & "_nonzero";
+                     Divide : constant String :=
+                       Value_Label (Value) & "_divide";
+                     Done : constant String :=
+                       Value_Label (Value) & "_done";
+                     Signed : constant Boolean :=
+                       Landin.Types.Is_Signed (Kind);
+                     Minimum_Pattern : constant Landin.Types.Magnitude :=
+                       2 ** Natural (Landin.Types.Width (Kind, Facts) - 1);
+                  begin
+                     Emit ("cmp" & Suffix (Held) & " $0, "
+                           & Value_Cell (Operand (2)));
+                     Emit ("jne " & Nonzero);
+                     Emit ("ud2");
+                     Put (Nonzero & ":");
+
+                     if Signed then
+                        Emit ("cmp" & Suffix (Held) & " $-1, "
+                              & Value_Cell (Operand (2)));
+                        Emit ("jne " & Divide);
+                        Emit ("movabsq $"
+                              & Trimmed
+                                  (Landin.Types.Magnitude'Image
+                                     (Minimum_Pattern))
+                              & ", %rax");
+                        Emit ("cmp" & Suffix (Held) & " "
+                              & Value_Cell (Operand (1)) & ", "
+                              & Accumulator (Held));
+                        Emit ("jne " & Divide);
+                        if Op = Landin.IR.Divide then
+                           Emit ("ud2");
+                        else
+                           Emit ("mov" & Suffix (Held) & " $0, "
+                                 & Value_Cell (Value));
+                           Emit ("jmp " & Done);
+                        end if;
+                        Put (Divide & ":");
+                     end if;
+
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     if Signed then
+                        Emit
+                          (case Held is
+                              when Landin.Targets.Byte_1 => "cbtw",
+                              when Landin.Targets.Byte_2 => "cwtd",
+                              when Landin.Targets.Byte_4 => "cltd",
+                              when Landin.Targets.Byte_8 => "cqto");
+                     else
+                        case Held is
+                           when Landin.Targets.Byte_1 =>
+                              Emit ("movb $0, %ah");
+                           when Landin.Targets.Byte_2 =>
+                              Emit ("xorw %dx, %dx");
+                           when Landin.Targets.Byte_4 =>
+                              Emit ("xorl %edx, %edx");
+                           when Landin.Targets.Byte_8 =>
+                              Emit ("xorq %rdx, %rdx");
+                        end case;
+                     end if;
+                     Emit ((if Signed then "idiv" else "div")
+                           & Suffix (Held) & " "
+                           & Value_Cell (Operand (2)));
+                     Emit ("mov" & Suffix (Held) & " "
+                           & (if Op = Landin.IR.Divide
+                              then Accumulator (Held)
+                              else
+                                (case Held is
+                                    when Landin.Targets.Byte_1 => "%ah",
+                                    when Landin.Targets.Byte_2 => "%dx",
+                                    when Landin.Targets.Byte_4 => "%edx",
+                                    when Landin.Targets.Byte_8 => "%rdx"))
+                           & ", " & Value_Cell (Value));
+                     if Op = Landin.IR.Remainder then
+                        Put (Done & ":");
+                     end if;
+                  end;
+
                when Landin.IR.Multiply =>
                   declare
                      Kind : constant Landin.Types.Integer_Name :=

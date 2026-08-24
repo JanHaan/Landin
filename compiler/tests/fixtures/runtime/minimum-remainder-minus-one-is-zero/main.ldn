@@ -1,0 +1,16 @@
+public main: () -> (code: i32) =
+    signed_8: i8 = -128 % -1
+    signed_16: i16 = -32768 % -1
+    signed_32: i32 = -2147483648 % -1
+    signed_64: i64 = -9223372036854775808 % -1
+
+    if signed_8 == 0
+        and signed_16 == 0
+        and signed_32 == 0
+        and signed_64 == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
