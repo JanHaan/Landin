@@ -9,11 +9,9 @@ package Landin.Platform.Native.Tools is
 
    type Native_Tool_Runner is limited new Tool_Runner with private;
 
-   --  Scratch_Directory is where captured output is staged.  A tool that
-   --  cannot be started at all raises External_Tool_Failed; a tool that ran
-   --  and failed reports its exit code, which the driver can describe.
-   function Create (Scratch_Directory : String) return Native_Tool_Runner;
-
+   --  A tool that cannot be started at all raises External_Tool_Failed; a
+   --  tool that ran and failed reports its exit code, which the driver can
+   --  describe.  Capture files are temporary resources owned by this adapter.
    overriding procedure Run
      (Host      : Native_Tool_Runner;
       Program   : String;
@@ -23,8 +21,6 @@ package Landin.Platform.Native.Tools is
 
 private
 
-   type Native_Tool_Runner is limited new Tool_Runner with record
-      Scratch : Path_Vectors.Vector;
-   end record;
+   type Native_Tool_Runner is limited new Tool_Runner with null record;
 
 end Landin.Platform.Native.Tools;

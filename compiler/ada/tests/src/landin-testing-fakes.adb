@@ -188,25 +188,91 @@ package body Landin.Testing.Fakes is
    --  Tool runner
    ---------------------------------------------------------------------
 
+   function Formatted_Command
+     (Program : String; Arguments : Landin.Platform.Path_List) return String;
+
+   function Formatted_Command
+     (Program : String; Arguments : Landin.Platform.Path_List) return String
+   is
+      Line : Unbounded.Unbounded_String :=
+        Unbounded.To_Unbounded_String (Program);
+   begin
+      for Argument of Arguments loop
+         Unbounded.Append (Line, " " & Argument);
+      end loop;
+      return Unbounded.To_String (Line);
+   end Formatted_Command;
+
    procedure Set_Result
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
       Output    : String)
    is
    begin
-      Host.State.Exit_Code := Exit_Code;
-      Host.State.Output := Unbounded.To_Unbounded_String (Output);
+      Host.State.Mode := Repeating;
+      Host.State.Repeat :=
+        (Exit_Code => Exit_Code,
+         Output    => Unbounded.To_Unbounded_String (Output));
+      Host.State.Script.Clear;
+      Host.State.Next_Result := 1;
    end Set_Result;
 
-   function Last_Command (Host : Fake_Tool_Runner) return String
-     is (Unbounded.To_String (Host.State.Command));
+   procedure Add_Result
+     (Host      : in out Fake_Tool_Runner;
+      Exit_Code : Integer;
+      Output    : String)
+   is
+   begin
+      if Host.State.Mode /= Ordered then
+         Host.State.Mode := Ordered;
+         Host.State.Script.Clear;
+         Host.State.Next_Result := 1;
+      end if;
+
+      Host.State.Script.Append
+        (Landin.Platform.Tool_Result'
+           (Exit_Code => Exit_Code,
+            Output    => Unbounded.To_Unbounded_String (Output)));
+   end Add_Result;
+
+   function Call_At
+     (Host : Fake_Tool_Runner; Index : Positive) return Tool_Call
+   is
+   begin
+      if Index > Natural (Host.State.Calls.Length) then
+         raise Compiler_Defect with "fake tool call index is out of range";
+      end if;
+
+      return Host.State.Calls.Element (Index);
+   end Call_At;
+
+   function Last_Command (Host : Fake_Tool_Runner) return String is
+   begin
+      if Host.State.Calls.Is_Empty then
+         return "";
+      end if;
+
+      declare
+         Call : constant Tool_Call := Host.State.Calls.Last_Element;
+      begin
+         return Formatted_Command
+           (Unbounded.To_String (Call.Program), Call.Arguments);
+      end;
+   end Last_Command;
 
    function Run_Count (Host : Fake_Tool_Runner) return Natural
-     is (Host.State.Runs);
+     is (Natural (Host.State.Calls.Length));
 
    function Last_Capture
      (Host : Fake_Tool_Runner) return Landin.Platform.Capture_Mode
-     is (Host.State.Capture);
+   is
+   begin
+      if Host.State.Calls.Is_Empty then
+         return Landin.Platform.Merged;
+      end if;
+
+      return Host.State.Calls.Last_Element.Capture;
+   end Last_Capture;
 
    overriding procedure Run
      (Host      : Fake_Tool_Runner;
@@ -215,20 +281,25 @@ package body Landin.Testing.Fakes is
       Result    : out Landin.Platform.Tool_Result;
       Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged)
    is
-      Line : Unbounded.Unbounded_String :=
-        Unbounded.To_Unbounded_String (Program);
    begin
-      for Argument of Arguments loop
-         Unbounded.Append (Line, " " & Argument);
-      end loop;
+      if Host.State.Mode = Ordered then
+         if Host.State.Next_Result > Natural (Host.State.Script.Length) then
+            raise Compiler_Defect
+              with "fake tool script exhausted before: "
+                   & Formatted_Command (Program, Arguments);
+         end if;
 
-      Host.State.Command := Line;
-      Host.State.Runs := Host.State.Runs + 1;
-      Host.State.Capture := Capture;
+         Result := Host.State.Script.Element (Host.State.Next_Result);
+         Host.State.Next_Result := Host.State.Next_Result + 1;
+      else
+         Result := Host.State.Repeat;
+      end if;
 
-      Result :=
-        (Exit_Code => Host.State.Exit_Code,
-         Output    => Host.State.Output);
+      Host.State.Calls.Append
+        (Tool_Call'
+           (Program   => Unbounded.To_Unbounded_String (Program),
+            Arguments => Arguments,
+            Capture   => Capture));
    end Run;
 
 end Landin.Testing.Fakes;
