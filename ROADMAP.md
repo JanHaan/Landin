@@ -57,6 +57,10 @@ version solving, publishing and the broader ecosystem remain outside scope.
   Linux loop; native Linux x86-64 CI is authoritative for Linux behavior.
   Hosting is git.sr.ht with builds.sr.ht for that gate, decided at R0.70.
   Only `.build.yml` names it; the commands it runs are the ordinary ones.
+  The nix shell is checked by a second manifest, `.builds/nix.yml`, which is
+  not a gate and produces evidence for nothing in the table: it exists only
+  because that shell has broken twice on what nothing else reaches, and it
+  runs only when a file that shell is made of changed.
 - Native macOS arm64 has its own compiler build, platform-tool and debugger
   gate. A Linux container is not evidence for Darwin behavior.
 - Ada package specifications and stage fixtures are tested seams so a future
@@ -1043,24 +1047,29 @@ without an answer. R2.10 owns a bool inside an aggregate and may say more; a
 frame cell is not an aggregate, and what it settles must agree with this.
 
 What is emitted so far is the straight-line kernel -- a literal, a truth, a
-slot read and written, ordinary and wrapping add, subtract and multiply, all
-six comparisons, a jump, a branch and a return -- against a prologue that sets
-up [1550]'s frame pointer and stores [1650]'s argument registers into their
-parameter slots. Ordinary add and subtract use the result type's width, test
-signed overflow or unsigned carry/borrow before anything can change the flags,
+slot read and written, ordinary and wrapping add, subtract and multiply,
+division, remainder, all six comparisons, a jump, a branch and a return --
+against a prologue that sets up [1550]'s frame pointer and stores [1650]'s
+argument registers into their parameter slots. Ordinary add and subtract use
+the result type's width, test signed overflow or unsigned carry/borrow before
+anything can change the flags,
 and reach an explicit `ud2` on the failing edge; only the successful edge
 stores a result. Multiply uses the one-operand `imul` or `mul`, whose implicit
 high half lets overflow mean a non-sign-extension for signed values or a
 nonzero high half for unsigned ones, and tests overflow or carry at that same
 point. Their wrapping forms ignore those flags and immediately retain the
-low-width result. A comparison
-loads its left operand and uses GAS's `cmp right, left` order at the operands'
+low-width result. Division and remainder guard an unknown zero divisor and
+reach `ud2` before `div` or `idiv`; signed division likewise recognizes its
+minimum over minus one and traps deliberately. Signed remainder recognizes the
+same pair as its specified zero instead, because executing `idiv` would
+incidentally fault. A comparison loads its left operand and uses GAS's
+`cmp right, left` order at the operands'
 width, then materializes [1890]'s one-byte bool with equality or the appropriate
 signed or unsigned ordering condition. `bool` ordering uses its specified zero
 and one as unsigned values. Any other opcode raises a compiler defect rather
 than emitting something plausible. The remaining arithmetic, calls and the
-module data section remain, and so does every one of the three obligations
-above.
+module data section remain; of the three obligations above, only the variable
+shift guard remains.
 
 The path from `refine` to a running process is now reachable, and a
 constant-return `main` compiled, linked and executed inside the pinned Linux
@@ -1184,10 +1193,15 @@ exercises representable signed and unsigned products at 8, 16, 32 and 64 bits,
 so all four one-operand instruction widths and both flag interpretations run on
 the emitted-for hardware. `runtime/wrapping-multiplication-keeps-low-products`
 multiplies each fixed-width signed maximum and unsigned maximum by two and
-observes the low-width result across the same matrix. Their programs are held
-to the grammar exactly as a positive fixture's is, since they are legal source
-the compiler must accept; `check.py` derives each and reports a fixture the
-grammar cannot.
+observes the low-width result across the same matrix.
+`runtime/division-and-remainder-exit-with-their-results` executes signed and
+unsigned quotient and remainder operations at all four fixed widths, including
+negative truncation toward zero and a remainder with the dividend's sign.
+`runtime/minimum-remainder-minus-one-is-zero` executes the non-trapping special
+case at every signed width, rather than merely finding its branch in text.
+Their programs are held to the grammar exactly as a positive fixture's is,
+since they are legal source the compiler must accept; `check.py` derives each
+and reports a fixture the grammar cannot.
 
 A host that cannot finish the target fails rather than skipping, and that was
 a decision with a real alternative. Skipping keeps a macOS run green, and
