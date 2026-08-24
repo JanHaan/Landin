@@ -335,16 +335,41 @@ package body Landin.Stages.Lowering is
          Count : constant Natural := Syn.Argument_Count (Of_Tree, Node);
          Given : array (1 .. Positive'Max (1, Count)) of IR.Value_Id :=
            [others => IR.No_Value];
+         Saved : array (1 .. Positive'Max (1, Count)) of IR.Slot_Id :=
+           [others => IR.No_Slot];
          Made : IR.Value_Id;
       begin
-         --  Every argument before the call, because Add_Argument requires
-         --  the call to still be the last instruction emitted: an
-         --  argument evaluated after it would have to be emitted between
-         --  the two.
+         --  [0410] fixes argument evaluation left to right.  Every argument
+         --  with another after it crosses through a slot before that later
+         --  expression runs: a short circuit there can change blocks, and
+         --  operands are block-local.  The last argument is already in the
+         --  block where the call will be emitted.
          for Which in 1 .. Count loop
-            Given (Which) :=
-              Lower_Expression
-                (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Which), Scope);
+            declare
+               Argument : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, Which);
+            begin
+               Given (Which) := Lower_Expression (Of_Tree, Argument, Scope);
+
+               if Which < Count then
+                  Saved (Which) :=
+                    IR.Add_Slot
+                      (Unit.all, Filling, Scalar_At (Of_Tree, Argument),
+                       Res.No_Declaration, Site_Of (Of_Tree, Argument));
+                  IR.Emit_Store
+                    (Unit.all, Filling, Saved (Which), Given (Which),
+                     Site_Of (Of_Tree, Argument));
+               end if;
+            end;
+         end loop;
+
+         --  Every argument must precede the call, because Add_Argument
+         --  requires the call to remain the last instruction emitted.
+         for Which in 1 .. Count loop
+            if Which < Count then
+               Given (Which) :=
+                 IR.Emit_Load (Unit.all, Filling, Saved (Which), Site);
+            end if;
          end loop;
 
          Made :=
@@ -468,20 +493,39 @@ package body Landin.Stages.Lowering is
                return Lower_Call (Of_Tree, Node, Scope);
 
             when others =>
-               --  [0410] fixes the order: the left, then the right, and a
-               --  linear run of instructions is that order.
+               --  [0410] fixes the order: the left, then the right.  The
+               --  right can change blocks, so the earlier value crosses
+               --  through a slot and is loaded in the block where the
+               --  operation is emitted.  This is the same block-local
+               --  operand rule a call's earlier arguments follow.
                declare
+                  Left_Node : constant Syn.Node_Id :=
+                    Syn.Left_Of (Of_Tree, Node);
+                  Right_Node : constant Syn.Node_Id :=
+                    Syn.Right_Of (Of_Tree, Node);
+                  Saved_Left : constant IR.Slot_Id :=
+                    IR.Add_Slot
+                      (Unit.all, Filling, Scalar_At (Of_Tree, Left_Node),
+                       Res.No_Declaration, Site_Of (Of_Tree, Left_Node));
                   Left : constant IR.Value_Id :=
-                    Lower_Expression
-                      (Of_Tree, Syn.Left_Of (Of_Tree, Node), Scope);
-                  Right : constant IR.Value_Id :=
-                    Lower_Expression
-                      (Of_Tree, Syn.Right_Of (Of_Tree, Node), Scope);
+                    Lower_Expression (Of_Tree, Left_Node, Scope);
                begin
-                  return IR.Emit_Binary
-                           (Unit.all, Filling,
-                            Opcode_For (Syn.Kind (Of_Tree, Node)),
-                            Left, Right, Scalar_At (Of_Tree, Node), Site);
+                  IR.Emit_Store
+                    (Unit.all, Filling, Saved_Left, Left,
+                     Site_Of (Of_Tree, Left_Node));
+
+                  declare
+                     Right : constant IR.Value_Id :=
+                       Lower_Expression (Of_Tree, Right_Node, Scope);
+                     Carried_Left : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Saved_Left, Site);
+                  begin
+                     return IR.Emit_Binary
+                              (Unit.all, Filling,
+                               Opcode_For (Syn.Kind (Of_Tree, Node)),
+                               Carried_Left, Right,
+                               Scalar_At (Of_Tree, Node), Site);
+                  end;
                end;
          end case;
       end Lower_Expression;

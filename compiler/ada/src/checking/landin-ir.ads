@@ -344,12 +344,13 @@ package Landin.IR is
    ------------------------------------------------------------------
 
    --  A named cell of one of [1790]'s eleven types, and the only thing
-   --  that crosses a block boundary.  Four kinds of thing become one:
-   --  [1800]'s parameter, its named return, [1810]'s local binding, and
-   --  a cell the lowering introduces for a short-circuit's result.  The
-   --  last has no declaration; the first three carry theirs, which is
-   --  how R4.60 puts a name on one and how Landin.Resolution answers
-   --  which scope it is in.
+   --  that crosses a block boundary.  Five kinds of thing become one:
+   --  [1800]'s parameter, its named return, [1810]'s local binding, a cell
+   --  the lowering introduces for a short-circuit's result, and a temporary
+   --  that carries an earlier call or binary operand past the blocks a later
+   --  operand can make.  The last two have no declaration; the first three
+   --  carry theirs, which is how R4.60 puts a name on one and how
+   --  Landin.Resolution answers which scope it is in.
    --
    --  A slot has no address, no offset and no size.  Where it lives is
    --  R1.80's frame question and how wide it is comes from
