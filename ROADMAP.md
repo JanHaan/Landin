@@ -739,7 +739,7 @@ the parser's table; three mutations were tried from both sides and each was
 reported. 78 cases, 1671 checks.
 
 ### R1.70 — Implement target-neutral IR and verification
-Status: active
+Status: complete
 Depends on: R1.60, R0.60
 
 Introduce the smallest evolvable target-neutral IR, preserving source
@@ -774,6 +774,20 @@ makes a module a set, so `f` may call `g` written below it and `Emit_Call`
 needs `g`'s item to exist by then -- every item is created over every tree
 before any is filled, and then each is filled alone, because
 `Landin.IR.Open_Run` refuses an interleaved fill.
+
+R1.80's first backend walk exposed one more consequence of the block-local
+operand rule above. [0410] evaluates call arguments and binary operands left
+to right, but a later `and` or `or` changes blocks. The lowering retained the
+earlier value directly, so both `choose(a, b and c)` and
+`a == (b and c)` reached the verifier with an operand defined in the entry
+block and consumed in the join block; each legal program became a compiler
+defect. The disposition stays inside R1.70's unoptimised IR: every call
+argument that has another after it, and every binary left operand, is stored
+in an anonymous typed temporary slot before the later expression is lowered
+and loaded again where the call or operation is emitted. The focused lowering
+cases assert both the block-local reload and the identity of the saved value;
+each fails against the corresponding direct-value lowering rather than merely
+checking that the verifier happened not to raise.
 
 The stage refuses to run on a refused program on its own first line rather
 than relying on the pipeline stopping before it. That is what makes this

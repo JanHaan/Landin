@@ -30,6 +30,7 @@ package body Landin.Tests.Lowering_Suite is
 
    package IR renames Landin.IR;
 
+   use type IR.Block_Id;
    use type IR.Item_Kind;
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Write_Status;
@@ -371,6 +372,180 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
+   procedure A_Call_Carries_An_Earlier_Argument_Across_A_Short_Circuit
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Call_Carries_An_Earlier_Argument_Across_A_Short_Circuit
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      --  [0410] evaluates `a` before the later argument.  That argument
+      --  changes blocks, so the earlier value has to cross through a slot:
+      --  every operand of the eventual call remains block-local.
+      Lower
+        (Work,
+         "caller: (a: bool, b: bool, c: bool) -> (r: bool) =" & LF
+         & "    r = choose(a, b and c)" & LF
+         & "end caller" & LF
+         & "choose: (first: bool, second: bool) -> (r: bool) =" & LF
+         & "    r = first" & LF
+         & "end choose" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         One  : constant IR.Item_Id := 1;
+         A_Load  : IR.Value_Id := IR.No_Value;
+         Saved_A : IR.Slot_Id := IR.No_Slot;
+         Split   : IR.Value_Id := IR.No_Value;
+         Found   : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Unit, One) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+               Op    : constant IR.Opcode := IR.Op_Of (Unit, One, Value);
+            begin
+               if Op = IR.Load
+                 and then IR.Slot_Of (Unit, One, Value)
+                            = IR.Nth_Parameter (Unit, One, 1)
+                 and then A_Load = IR.No_Value
+               then
+                  A_Load := Value;
+               elsif Op = IR.Store
+                 and then A_Load /= IR.No_Value
+                 and then IR.Nth_Operand (Unit, One, Value, 1) = A_Load
+               then
+                  Saved_A := IR.Slot_Of (Unit, One, Value);
+               elsif Op = IR.Branch then
+                  Split := Value;
+               elsif Op = IR.Call then
+                  Found := Value;
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, A_Load /= IR.No_Value and then Split /= IR.No_Value
+                  and then A_Load < Split,
+            "the first argument was evaluated before the short circuit");
+         Landin.Testing.Check
+           (Item, Found /= IR.No_Value, "the call was emitted");
+
+         if Found /= IR.No_Value then
+            Landin.Testing.Check_Equal
+              (Item, IR.Operand_Count (Unit, One, Found), 2,
+               "the call carries both block-local arguments");
+
+            if Saved_A /= IR.No_Slot then
+               declare
+                  Carried : constant IR.Value_Id :=
+                    IR.Nth_Operand (Unit, One, Found, 1);
+               begin
+                  Landin.Testing.Check
+                    (Item, IR.Op_Of (Unit, One, Carried) = IR.Load
+                           and then IR.Slot_Of (Unit, One, Carried) = Saved_A,
+                     "the first operand is the saved value of a");
+               end;
+            else
+               Landin.Testing.Check
+                 (Item, False, "the value of a was saved before the branch");
+            end if;
+         end if;
+
+         Check_Terminators (Item, Unit, "a call after a short circuit");
+      end;
+   end A_Call_Carries_An_Earlier_Argument_Across_A_Short_Circuit;
+
+   ------------------------------------------------------------------
+
+   procedure A_Binary_Carries_Its_Left_Across_A_Short_Circuit
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Binary_Carries_Its_Left_Across_A_Short_Circuit
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      --  [0410] evaluates `a` before the right operand.  The nested logical
+      --  expression changes blocks, so `a` must cross through a slot before
+      --  both operands meet again at the comparison.
+      Lower
+        (Work,
+         "f: (a: bool, b: bool, c: bool) -> (r: bool) =" & LF
+         & "    r = a == (b and c)" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit    : IR.Unit renames Landin.Stages.Code (Work).all;
+         One     : constant IR.Item_Id := 1;
+         A_Load  : IR.Value_Id := IR.No_Value;
+         Saved_A : IR.Slot_Id := IR.No_Slot;
+         Found   : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Unit, One) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+               Op    : constant IR.Opcode := IR.Op_Of (Unit, One, Value);
+            begin
+               if Op = IR.Load
+                 and then IR.Slot_Of (Unit, One, Value)
+                            = IR.Nth_Parameter (Unit, One, 1)
+                 and then A_Load = IR.No_Value
+               then
+                  A_Load := Value;
+               elsif Op = IR.Store
+                 and then A_Load /= IR.No_Value
+                 and then IR.Nth_Operand (Unit, One, Value, 1) = A_Load
+               then
+                  Saved_A := IR.Slot_Of (Unit, One, Value);
+               elsif Op = IR.Equal_To then
+                  Found := Value;
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, Found /= IR.No_Value, "the comparison was emitted");
+
+         if Found /= IR.No_Value and then Saved_A /= IR.No_Slot then
+            declare
+               Carried : constant IR.Value_Id :=
+                 IR.Nth_Operand (Unit, One, Found, 1);
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Op_Of (Unit, One, Carried) = IR.Load
+                        and then IR.Slot_Of (Unit, One, Carried) = Saved_A,
+                  "the left operand is the saved value of a");
+               Landin.Testing.Check
+                 (Item, IR.Block_Of (Unit, One, Carried)
+                          = IR.Block_Of (Unit, One, Found),
+                  "the carried left operand is block-local");
+            end;
+         else
+            Landin.Testing.Check
+              (Item, False, "the value of a crossed through a slot");
+         end if;
+
+         Check_Terminators (Item, Unit, "a binary after a short circuit");
+      end;
+   end A_Binary_Carries_Its_Left_Across_A_Short_Circuit;
+
+   ------------------------------------------------------------------
+
    procedure A_Module_Value_Becomes_A_Datum
      (Item : in out Landin.Testing.Context);
 
@@ -606,6 +781,14 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a call carries its arguments",
          A_Call_Carries_Its_Arguments'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a call carries an earlier argument across a short circuit",
+         A_Call_Carries_An_Earlier_Argument_Across_A_Short_Circuit'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a binary carries its left across a short circuit",
+         A_Binary_Carries_Its_Left_Across_A_Short_Circuit'Access);
       Landin.Testing.Register
         (Into, "lowering", "a module value becomes a datum",
          A_Module_Value_Becomes_A_Datum'Access);
