@@ -111,13 +111,13 @@ what owns the pipeline.
 
 ## What is deliberately absent
 
-The backend here is a beginning and not a path. `Landin.Backend` lays out a
-routine's frame and `Landin.Backend.X86_64` emits assembly for the
-straight-line kernel -- a literal, a truth, a slot read and written, a jump, a
-branch and a return -- and raises `Compiler_Defect` on any other opcode rather
-than emitting something plausible. Arithmetic, comparison, calls and the
-module data section are not there, because [0300]'s trap and [0320]'s shift
-beyond the width need guards that R1.80 records as its own obligations.
+`Landin.Backend` lays out a routine's frame and
+`Landin.Backend.X86_64` emits assembly for the current scalar kernel: literals,
+truths, slot traffic, checked add and subtract, comparisons, jumps, branches
+and returns. It raises `Compiler_Defect` on every other opcode rather than
+emitting something plausible. The remaining arithmetic, calls and module data
+are not there; [0320]'s shift beyond the width still needs the guard R1.80
+records as its own obligation.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver
@@ -129,11 +129,12 @@ half is not, and says so -- a host without the target's triplet-prefixed
 driver reports `L0500` rather than reaching for whatever `gcc` names, which
 on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
 
-What is still missing is the fixture that runs it. Nothing in the suite
-compiles a program and executes the result yet, so the executed path is
-proved by the cases that pin the command line and not by the gate. `Runtime`
-exists in `Landin.Testing.Fixtures`' class enum and nothing produces one.
-`ROADMAP.md` R1.80 owns the rest.
+The `Runtime` fixture class compiles programs, links them, runs them on the
+target and checks their statuses. The Linux gate therefore proves literal
+return, checked add and subtract, and comparison-driven control flow on the
+hardware the backend emits for. A host without the target toolchain fails
+rather than silently skipping that evidence. `ROADMAP.md` R1.80 owns the
+remaining backend work.
 
 What does exist behind it is the whole frontend: `refine` scans and parses
 every `.ldn` file it is given, resolves every name in them as one module,

@@ -1,0 +1,19 @@
+public main: () -> (code: i32) =
+    signed_low: i8 = -1
+    signed_high: i8 = 1
+    unsigned_low: u8 = 1
+    unsigned_high: u8 = 255
+
+    if signed_low < signed_high
+        and signed_low <= signed_low
+        and signed_high > signed_low
+        and signed_high >= signed_high
+        and unsigned_high > unsigned_low
+        and unsigned_low == 1
+        and unsigned_high <> unsigned_low
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
