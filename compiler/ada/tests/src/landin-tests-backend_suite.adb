@@ -377,6 +377,143 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Signed_Subtract_Follows_The_Target_Width;
 
+   --  x86-64 divides its implicit full-width dividend.  An unknown zero
+   --  divisor therefore reaches Landin's explicit trap before `div`, while a
+   --  valid u8 dividend has its high byte cleared and stores the quotient.
+   procedure Unsigned_Divide_Guards_Zero_And_Stores_The_Quotient
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unsigned_Divide_Guards_Zero_And_Stores_The_Quotient
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: u8, b: u8) -> (r: u8) =" & LF
+         & "    r = a / b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Guard : constant String :=
+           HT & "cmpb $0, -6(%rbp)" & LF
+           & HT & "jne .L1_V5_nonzero" & LF
+           & HT & "ud2" & LF
+           & ".L1_V5_nonzero:" & LF;
+         Operation : constant String :=
+           HT & "movb -7(%rbp), %al" & LF
+           & HT & "movb $0, %ah" & LF
+           & HT & "divb -6(%rbp)" & LF
+           & HT & "movb %al, -8(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Guard),
+            "a runtime zero divisor reaches an explicit trap");
+         Landin.Testing.Check
+           (Item, Contains (Text, Operation),
+            "u8 division clears the high dividend and stores its quotient");
+      end;
+   end Unsigned_Divide_Guards_Zero_And_Stores_The_Quotient;
+
+   --  Signed division has a second trap case: the minimum value divided by
+   --  minus one.  It is recognized before `idiv`, rather than inheriting the
+   --  processor's incidental divide fault, and a valid byte is sign-extended.
+   procedure Signed_Divide_Guards_Overflow_And_Truncates
+     (Item : in out Landin.Testing.Context);
+
+   procedure Signed_Divide_Guards_Overflow_And_Truncates
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: i8, b: i8) -> (r: i8) =" & LF
+         & "    r = a / b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Overflow : constant String :=
+           HT & "cmpb $-1, -6(%rbp)" & LF
+           & HT & "jne .L1_V5_divide" & LF
+           & HT & "movabsq $128, %rax" & LF
+           & HT & "cmpb -7(%rbp), %al" & LF
+           & HT & "jne .L1_V5_divide" & LF
+           & HT & "ud2" & LF;
+         Operation : constant String :=
+           ".L1_V5_divide:" & LF
+           & HT & "movb -7(%rbp), %al" & LF
+           & HT & "cbtw" & LF
+           & HT & "idivb -6(%rbp)" & LF
+           & HT & "movb %al, -8(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Overflow),
+            "signed minimum divided by minus one reaches an explicit trap");
+         Landin.Testing.Check
+           (Item, Contains (Text, Operation),
+            "i8 division sign-extends its dividend and stores the quotient");
+      end;
+   end Signed_Divide_Guards_Overflow_And_Truncates;
+
+   --  The signed minimum modulo minus one is zero in Landin.  Since `idiv`
+   --  would fault for that operand pair, remainder recognizes it as a
+   --  successful zero result and otherwise stores the high half's remainder.
+   procedure Signed_Remainder_Handles_Minimum_Modulo_Minus_One
+     (Item : in out Landin.Testing.Context);
+
+   procedure Signed_Remainder_Handles_Minimum_Modulo_Minus_One
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: i8, b: i8) -> (r: i8) =" & LF
+         & "    r = a % b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Special : constant String :=
+           HT & "cmpb $-1, -6(%rbp)" & LF
+           & HT & "jne .L1_V5_divide" & LF
+           & HT & "movabsq $128, %rax" & LF
+           & HT & "cmpb -7(%rbp), %al" & LF
+           & HT & "jne .L1_V5_divide" & LF
+           & HT & "movb $0, -8(%rbp)" & LF
+           & HT & "jmp .L1_V5_done" & LF;
+         Operation : constant String :=
+           ".L1_V5_divide:" & LF
+           & HT & "movb -7(%rbp), %al" & LF
+           & HT & "cbtw" & LF
+           & HT & "idivb -6(%rbp)" & LF
+           & HT & "movb %ah, -8(%rbp)" & LF
+           & ".L1_V5_done:" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Special),
+            "signed minimum modulo minus one stores zero without dividing");
+         Landin.Testing.Check
+           (Item, Contains (Text, Operation),
+            "an ordinary i8 remainder comes from its implicit register");
+      end;
+   end Signed_Remainder_Handles_Minimum_Modulo_Minus_One;
+
    --  One-operand `mul` forms a full unsigned product in the implicit
    --  accumulator pair.  Carry is clear exactly when its high half is zero,
    --  so the successful edge alone may store the low byte.
@@ -831,6 +968,15 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "unsigned divide guards zero and stores quotient",
+         Unsigned_Divide_Guards_Zero_And_Stores_The_Quotient'Access);
+      Landin.Testing.Register
+        (Into, "backend", "signed divide guards overflow and truncates",
+         Signed_Divide_Guards_Overflow_And_Truncates'Access);
+      Landin.Testing.Register
+        (Into, "backend", "signed remainder handles minimum modulo minus one",
+         Signed_Remainder_Handles_Minimum_Modulo_Minus_One'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned multiply uses the full product",
          Unsigned_Multiply_Uses_The_Full_Product'Access);
