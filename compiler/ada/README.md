@@ -23,6 +23,7 @@ compiler/ada/
     syntax/             the tokens, the scan, the syntax table and the parse
     resolution/         declarations, scopes and what each name means
     checking/           the language's types, what each node has, and the IR
+    backend/            the frame, and the assembly emitted against it
     driver/             the request/result boundary
     main/               the `refine` entry point
   tests/src/            the harness, the fakes and the suites
@@ -53,6 +54,8 @@ replaced.
 | `Landin.Types` | the eleven types, and each one's width against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Checking` | what type every node and every declaration has | decide a rule, or hold a width |
 | `Landin.IR` | the target-neutral instructions: items, slots, blocks, values, and the only construction of one | hold a scope tree, name a machine, or ask a width |
+| `Landin.Backend` | where a routine's cells live, counted in target bytes | name a machine, choose a register, or ask the host a width |
+| `Landin.Backend.X86_64` | the assembly text for one target, and every register in it | decide a layout, write a file, or run a tool |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
 | `Landin.Diagnostics.Text` | deterministic rendering | decide severity or ordering policy |
 | `Landin.Diagnostics.Catalogue` | every diagnostic code, and what each requires of its occurrences | hold a message, or a code nothing raises |
@@ -106,14 +109,22 @@ what owns the pipeline.
 
 ## What is deliberately absent
 
-There is no backend here yet, and nothing is emitted or executed. What does
-exist is the whole frontend and the IR behind it: `refine` scans and parses
+The backend here is a beginning and not a path. `Landin.Backend` lays out a
+routine's frame and `Landin.Backend.X86_64` emits assembly for the
+straight-line kernel -- a literal, a truth, a slot read and written, a jump, a
+branch and a return -- and raises `Compiler_Defect` on any other opcode rather
+than emitting something plausible. Arithmetic, comparison, calls and the
+module data section are not there, because [0300]'s trap and [0320]'s shift
+beyond the width need guards that R1.80 records as its own obligations. Nor is
+any of it reachable from `refine`: nothing is written, assembled, linked or
+executed, and no driver argument asks for it. `ROADMAP.md` R1.80 owns the
+rest.
+
+What does exist behind it is the whole frontend: `refine` scans and parses
 every `.ldn` file it is given, resolves every name in them as one module,
 checks the type of everything and that every name is assigned before it is
 read, reports what none of the four could read, lowers every function it
-accepted into `Landin.IR`, and produces nothing when a file is a program.
-A module binding gets its item and not yet its value, and there is no
-verifier and no dump; `ROADMAP.md` R1.70 owns all three.
+accepted into `Landin.IR`, verifies it and can dump it.
 
 A width is a function of a type and a target description, never a property of
 either alone, and `Landin.Types.Width` is the only place one is formed.

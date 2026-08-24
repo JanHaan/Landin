@@ -1,0 +1,366 @@
+--  The frame a routine gets, and the assembly emitted against it.
+--
+--  These cases read the text, because the text is what an assembler is
+--  handed and R1.80's exit evidence asks for it to be deterministic.  The
+--  first case asserts a whole program's assembly rather than a substring
+--  of it: what is being pinned is every instruction and its order, and a
+--  containment check would pass on a prologue that had lost its frame
+--  pointer.  That the assembly is also *correct* is what running it on
+--  Linux x86-64 says, and this suite does not claim to say it.
+--
+--  The frame cases are separate from the emission ones on purpose.  A
+--  cell's offset is target arithmetic and `Landin.Backend` computes it
+--  without naming a machine, so a 32-bit description must lay out the
+--  same item differently on this 64-bit host; that is the rule
+--  `compiler/ada/README.md` states, checked here rather than assumed.
+
+with Ada.Strings.Fixed;
+
+with Landin.Backend;
+with Landin.Backend.X86_64;
+with Landin.IR;
+with Landin.Source;
+with Landin.Stages.Checking;
+with Landin.Stages.Lowering;
+with Landin.Stages.Resolution;
+with Landin.Stages.Syntax;
+with Landin.Targets;
+with Landin.Types;
+
+package body Landin.Tests.Backend_Suite is
+
+   package IR renames Landin.IR;
+
+   function Contains (Text : String; Needle : String) return Boolean is
+     (Ada.Strings.Fixed.Index (Text, Needle) > 0);
+
+   use type Landin.Source.Source_Id;
+   use type Landin.Targets.Byte_Count;
+   use type Landin.Targets.Scalar_Size;
+
+   Frontend : aliased Landin.Stages.Syntax.Instance;
+   Names    : aliased Landin.Stages.Resolution.Instance;
+   Checker  : aliased Landin.Stages.Checking.Instance;
+   Lowerer  : aliased Landin.Stages.Lowering.Instance;
+
+   LF : constant Character := Character'Val (10);
+   HT : constant Character := Character'Val (9);
+
+   procedure Lower
+     (Work : in out Landin.Stages.Compilation;
+      Text : String;
+      Ran  : out Natural);
+
+   procedure Lower
+     (Work : in out Landin.Stages.Compilation;
+      Text : String;
+      Ran  : out Natural)
+   is
+      Order   : Landin.Stages.Pipeline;
+      Written : constant Landin.Source.Source_Id :=
+        Landin.Stages.Add_Source (Work, "back.ldn", Text);
+   begin
+      pragma Assert (Written /= Landin.Source.No_Source);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Landin.Stages.Append (Order, Lowerer'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+   end Lower;
+
+   function Emitted (Work : in out Landin.Stages.Compilation) return String
+     is (Landin.Backend.X86_64.Text
+           (Landin.Stages.Code (Work).all,
+            Landin.Stages.Meanings (Work).all,
+            Landin.Stages.Identities (Work).all,
+            Landin.Stages.Target (Work)));
+
+   ------------------------------------------------------------------
+   --  Emission
+   ------------------------------------------------------------------
+
+   --  [1970]'s entry shape, and the whole of what it emits.  Every value
+   --  is stored to its own cell and reloaded, which is the baseline
+   --  `Landin.Backend`'s header states the cost of rather than hides.
+   procedure A_Constant_Return_Emits_Its_Whole_Frame
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Constant_Return_Emits_Its_Whole_Frame
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+
+      Expected : constant String :=
+        HT & ".text" & LF
+        & HT & ".globl main" & LF
+        & HT & ".type main, @function" & LF
+        & "main:" & LF
+        & HT & "pushq %rbp" & LF
+        & HT & "movq %rsp, %rbp" & LF
+        & HT & "subq $16, %rsp" & LF
+        & ".L1_1:" & LF
+        & HT & "movabsq $42, %rax" & LF
+        & HT & "movl %eax, -8(%rbp)" & LF
+        & HT & "movl -8(%rbp), %eax" & LF
+        & HT & "movl %eax, -4(%rbp)" & LF
+        & HT & "movl -4(%rbp), %eax" & LF
+        & HT & "movl %eax, -12(%rbp)" & LF
+        & HT & "movl -12(%rbp), %eax" & LF
+        & HT & "movq %rbp, %rsp" & LF
+        & HT & "popq %rbp" & LF
+        & HT & "ret" & LF
+        & HT & ".size main, .-main" & LF
+        & HT & ".section .note.GNU-stack,"""",@progbits" & LF;
+   begin
+      Lower
+        (Work,
+         "public main: () -> (code: i32) =" & LF
+         & "    code = 42" & LF
+         & "end main" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      Landin.Testing.Check_Equal
+        (Item, Emitted (Work), Expected,
+         "the entry emits its frame, its value cells and its return");
+   end A_Constant_Return_Emits_Its_Whole_Frame;
+
+   --  [1740]'s `public` is what puts a symbol in the object's table, and
+   --  a function without it is emitted and not exported.
+   procedure Only_A_Public_Routine_Is_Made_Global
+     (Item : in out Landin.Testing.Context);
+
+   procedure Only_A_Public_Routine_Is_Made_Global
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: () -> (r: u32) =" & LF & "    r = 1" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & ".type f, @function"),
+            "the routine is emitted");
+         Landin.Testing.Check
+           (Item, not Contains (Text, ".globl"),
+            "nothing declared it public, so nothing is global");
+      end;
+   end Only_A_Public_Routine_Is_Made_Global;
+
+   --  [1650]'s C ABI hands the first integer arguments in registers, and
+   --  a parameter is a slot the caller filled, so the prologue is where
+   --  the register becomes a cell.
+   procedure A_Parameter_Is_Stored_From_Its_Register
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Parameter_Is_Stored_From_Its_Register
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: u32, b: u64) -> (r: u32) =" & LF
+         & "    r = a" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "movl %edi, -4(%rbp)"),
+            "the first parameter arrives in the first register, u32 wide");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "movq %rsi, -16(%rbp)"),
+            "the second arrives in the second register, u64 wide");
+      end;
+   end A_Parameter_Is_Stored_From_Its_Register;
+
+   --  Every block gets a label, and a Branch spells both of its edges:
+   --  the taken one as a condition and the other as a jump, so no block
+   --  falls through to whichever one the emitter happened to print next.
+   procedure A_Branch_Names_Both_Of_Its_Edges
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Branch_Names_Both_Of_Its_Edges
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (c: bool) -> (r: u32) =" & LF
+         & "    if c then" & LF
+         & "        r = 1" & LF
+         & "    else" & LF
+         & "        r = 2" & LF
+         & "    end if" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "cmpb $0, "),
+            "a bool is tested as the one byte it occupies");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "jne .L1_3"),
+            "the taken edge is the branch's target");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "jmp .L1_4"),
+            "the other edge is spelt and not fallen through to");
+         Landin.Testing.Check
+           (Item, Contains (Text, ".L1_5:"),
+            "every block carries a label");
+      end;
+   end A_Branch_Names_Both_Of_Its_Edges;
+
+   ------------------------------------------------------------------
+   --  The frame
+   ------------------------------------------------------------------
+
+   --  A cell starts at a distance that is a multiple of its alignment,
+   --  so the address it names is aligned and not merely reached by an
+   --  aligned count.
+   procedure Every_Cell_Is_Aligned_Below_The_Frame_Pointer
+     (Item : in out Landin.Testing.Context);
+
+   procedure Every_Cell_Is_Aligned_Below_The_Frame_Pointer
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      --  A byte, then something eight wide: the second has to be pushed
+      --  past the first rather than laid beside it.
+      Lower
+        (Work,
+         "f: (a: u8, b: u64) -> (r: u64) =" & LF
+         & "    r = b" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Unit   : IR.Unit renames Landin.Stages.Code (Work).all;
+         One    : constant IR.Item_Id := 1;
+         Layout : constant Landin.Backend.Frame :=
+           Landin.Backend.Laid_Out
+             (Unit, One, Landin.Stages.Target (Work));
+         Sound  : Boolean := True;
+      begin
+         for Which in 1 .. IR.Slot_Count (Unit, One) loop
+            declare
+               Slot : constant IR.Slot_Id := IR.Slot_Id (Which);
+               Wide : constant Landin.Targets.Scalar_Size :=
+                 Landin.Backend.Size_Of
+                   (IR.Type_Of (Unit, One, Slot),
+                    Landin.Stages.Target (Work));
+               Where : constant Landin.Targets.Byte_Count :=
+                 Landin.Backend.Slot_Offset (Layout, Slot);
+               Needs : constant Landin.Targets.Byte_Alignment :=
+                 Landin.Targets.Alignment_Of
+                   (Landin.Stages.Target (Work), Wide);
+            begin
+               if Where mod Landin.Targets.Byte_Count (Needs) /= 0
+                 or else Where
+                         < Landin.Targets.Byte_Count
+                             (Landin.Targets.Bytes (Wide))
+               then
+                  Sound := False;
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, Sound, "every slot's cell is aligned and fits below it");
+         Landin.Testing.Check
+           (Item,
+            Landin.Backend.Extent (Layout)
+              mod Landin.Targets.Byte_Count
+                    (Landin.Targets.Stack_Alignment
+                       (Landin.Stages.Target (Work)))
+              = 0,
+            "the frame leaves the stack as aligned as it found it");
+      end;
+   end Every_Cell_Is_Aligned_Below_The_Frame_Pointer;
+
+   --  Nothing outside Landin.Targets may ask the host how wide a pointer
+   --  is, so the same item laid out against a 32-bit description gives a
+   --  usize cell four bytes on this 64-bit host.
+   procedure A_Frame_Follows_The_Target_And_Not_The_Host
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Frame_Follows_The_Target_And_Not_The_Host
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Landin.Testing.Check
+        (Item,
+         Landin.Backend.Size_Of
+           (Landin.Types.Usize, Landin.Targets.Synthetic_32)
+         = Landin.Targets.Byte_4,
+         "usize is four bytes on a 32-bit description");
+      Landin.Testing.Check
+        (Item,
+         Landin.Backend.Size_Of
+           (Landin.Types.Usize, Landin.Targets.Linux_X86_64)
+         = Landin.Targets.Byte_8,
+         "and eight on a 64-bit one");
+      --  [0150]: outside a packed struct a one-bit field occupies the
+      --  next machine width, which is a byte.
+      Landin.Testing.Check
+        (Item,
+         Landin.Backend.Size_Of
+           (Landin.Types.Bool, Landin.Targets.Linux_X86_64)
+         = Landin.Targets.Byte_1,
+         "a bool occupies the next machine width above one bit");
+   end A_Frame_Follows_The_Target_And_Not_The_Host;
+
+   procedure Register (Into : in out Landin.Testing.Registry) is
+   begin
+      Landin.Testing.Register
+        (Into, "backend", "a constant return emits its whole frame",
+         A_Constant_Return_Emits_Its_Whole_Frame'Access);
+      Landin.Testing.Register
+        (Into, "backend", "only a public routine is made global",
+         Only_A_Public_Routine_Is_Made_Global'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a parameter is stored from its register",
+         A_Parameter_Is_Stored_From_Its_Register'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a branch names both of its edges",
+         A_Branch_Names_Both_Of_Its_Edges'Access);
+      Landin.Testing.Register
+        (Into, "backend", "every cell is aligned below the frame pointer",
+         Every_Cell_Is_Aligned_Below_The_Frame_Pointer'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a frame follows the target and not the host",
+         A_Frame_Follows_The_Target_And_Not_The_Host'Access);
+   end Register;
+
+end Landin.Tests.Backend_Suite;
