@@ -1,0 +1,16 @@
+public main: () -> (code: i32) =
+    unsigned_add: u8 = 255 +% 1
+    unsigned_subtract: u8 = 0 -% 1
+    signed_add: i8 = 127 +% 1
+    signed_subtract: i8 = -128 -% 1
+
+    if unsigned_add == 0
+        and unsigned_subtract == 255
+        and signed_add == -128
+        and signed_subtract == 127
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
