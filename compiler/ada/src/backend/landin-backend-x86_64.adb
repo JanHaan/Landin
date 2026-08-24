@@ -279,6 +279,45 @@ package body Landin.Backend.X86_64 is
                            & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Equal_To
+                  | Landin.IR.Not_Equal_To
+                  | Landin.IR.Less_Than
+                  | Landin.IR.Less_Or_Equal
+                  | Landin.IR.Greater_Than
+                  | Landin.IR.Greater_Or_Equal =>
+                  declare
+                     Kind : constant Landin.Types.Scalar_Name :=
+                       Landin.IR.Result_Of
+                         (Of_Unit, Item, Operand (1));
+                     Held : constant Held_Size := Size_Of (Kind, Facts);
+                     Signed : constant Boolean :=
+                       Kind in Landin.Types.Integer_Name
+                       and then Landin.Types.Is_Signed
+                                  (Landin.Types.Integer_Name (Kind));
+                     Condition : constant String :=
+                       (case Op is
+                           when Landin.IR.Equal_To => "sete",
+                           when Landin.IR.Not_Equal_To => "setne",
+                           when Landin.IR.Less_Than =>
+                             (if Signed then "setl" else "setb"),
+                           when Landin.IR.Less_Or_Equal =>
+                             (if Signed then "setle" else "setbe"),
+                           when Landin.IR.Greater_Than =>
+                             (if Signed then "setg" else "seta"),
+                           when Landin.IR.Greater_Or_Equal =>
+                             (if Signed then "setge" else "setae"),
+                           when others => raise Program_Error);
+                  begin
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     Emit ("cmp" & Suffix (Held) & " "
+                           & Value_Cell (Operand (2)) & ", "
+                           & Accumulator (Held));
+                     Emit (Condition & " %al");
+                     Emit ("movb %al, " & Value_Cell (Value));
+                  end;
+
                when Landin.IR.Jump =>
                   Emit ("jmp "
                         & Label (Item,
