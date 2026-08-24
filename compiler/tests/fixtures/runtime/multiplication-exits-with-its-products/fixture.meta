@@ -1,0 +1,5 @@
+class: runtime
+summary: checked multiplication keeps representable signed and unsigned products
+program: main.ldn
+status: 42
+targets: linux-x86-64
