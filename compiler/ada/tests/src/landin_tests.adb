@@ -10,6 +10,7 @@ with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
 with Landin.Testing;
+with Landin.Tests.Backend_Suite;
 with Landin.Tests.Catalogue_Suite;
 with Landin.Tests.Diagnostics_Suite;
 with Landin.Tests.Driver_Suite;
@@ -49,7 +50,8 @@ procedure Landin_Tests is
    subtype Suite_Name is String (1 .. 17);
 
    Expected_Suites : constant array (Positive range <>) of Suite_Name :=
-     ["diagnostics      ",
+     ["backend          ",
+      "diagnostics      ",
       "driver           ",
       "fixture execution",
       "fixtures         ",
@@ -118,6 +120,7 @@ begin
       return;
    end if;
 
+   Landin.Tests.Backend_Suite.Register (Cases);
    Landin.Tests.Catalogue_Suite.Register (Cases);
    Landin.Tests.Diagnostics_Suite.Register (Cases);
    Landin.Tests.Driver_Suite.Register (Cases);
