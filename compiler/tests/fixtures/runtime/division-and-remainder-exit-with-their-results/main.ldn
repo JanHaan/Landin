@@ -1,0 +1,40 @@
+public main: () -> (code: i32) =
+    unsigned_8_quotient: u8 = 253 / 6
+    unsigned_8_remainder: u8 = 253 % 6
+    unsigned_16_quotient: u16 = 60001 / 300
+    unsigned_16_remainder: u16 = 60001 % 300
+    unsigned_32_quotient: u32 = 4200000001 / 70000
+    unsigned_32_remainder: u32 = 4200000001 % 70000
+    unsigned_64_quotient: u64 = 18000000000000000001 / 4000000000
+    unsigned_64_remainder: u64 = 18000000000000000001 % 4000000000
+    signed_8_quotient: i8 = -43 / 6
+    signed_8_remainder: i8 = -43 % 6
+    signed_16_quotient: i16 = -30001 / 300
+    signed_16_remainder: i16 = -30001 % 300
+    signed_32_quotient: i32 = -2100000001 / 70000
+    signed_32_remainder: i32 = -2100000001 % 70000
+    signed_64_quotient: i64 = -8000000001 / 4000000000
+    signed_64_remainder: i64 = -8000000001 % 4000000000
+
+    if unsigned_8_quotient == 42
+        and unsigned_8_remainder == 1
+        and unsigned_16_quotient == 200
+        and unsigned_16_remainder == 1
+        and unsigned_32_quotient == 60000
+        and unsigned_32_remainder == 1
+        and unsigned_64_quotient == 4500000000
+        and unsigned_64_remainder == 1
+        and signed_8_quotient == -7
+        and signed_8_remainder == -1
+        and signed_16_quotient == -100
+        and signed_16_remainder == -1
+        and signed_32_quotient == -30000
+        and signed_32_remainder == -1
+        and signed_64_quotient == -2
+        and signed_64_remainder == -1
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -20,13 +20,16 @@
 --  carry/borrow at the operation and reach an explicit `ud2` before storing
 --  a result; their wrapping forms ignore those flags and store the low-width
 --  result immediately.  Multiply uses x86-64's one-operand form so its
---  implicit high half makes unsigned overflow observable too.  Comparisons
---  load their left operand, compare the right at that operand's width, and
---  materialize a one-byte bool with the signed or unsigned condition [1890]
---  requires.  The remaining arithmetic, calls and module data are not here
---  yet; [0320]'s shift beyond the width in particular needs the guard R1.80
---  records as its own obligation.  An opcode
---  this does not yet spell raises Compiler_Defect rather than emitting
+--  implicit high half makes unsigned overflow observable too.  Divide and
+--  remainder guard a zero divisor before their one-operand instruction;
+--  signed division explicitly traps the minimum over minus one, while signed
+--  remainder produces that pair's specified zero without executing `idiv`.
+--  Comparisons load their left operand, compare the right at that operand's
+--  width, and materialize a one-byte bool with the signed or unsigned
+--  condition [1890] requires.  The remaining arithmetic, calls and module
+--  data are not here yet; [0320]'s shift beyond the width in particular needs
+--  the guard R1.80 records as its own obligation.  An opcode this does not yet
+--  spell raises Compiler_Defect rather than emitting
 --  something plausible.
 --
 --  Nothing here asks the host how wide a pointer is.  Sizes come from

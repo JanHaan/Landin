@@ -1,0 +1,5 @@
+class: runtime
+summary: signed minimum remainder minus one is zero at every width
+program: main.ldn
+status: 42
+targets: linux-x86-64
