@@ -160,9 +160,14 @@ a convenience broke, not that Landin did — and it runs the ordinary
 `scripts/toolchain.sh` and `scripts/test.sh` inside `nix develop`. It also
 runs only when a file this shell is made of changed, because the pinned
 archives are 501 MB and builds.sr.ht keeps nothing between builds, so the
-alternative is paying that on every push to check a convenience. Its first
-green run is still owed; until then this paragraph records an intent and not
-a result.
+alternative is paying that on every push to check a convenience.
+
+Its first run settles both halves. The shell built on x86-64 nix with the
+pinned GNAT 16.1.0 and GPRbuild 26.0.0, and the suite passed 133 cases with
+no failures — `runtime fixtures execute` among them, which is the case that
+reported `cannot find Scrt1.o` and the reason any of this was looked at.
+That is a result for this shell and for nothing else: the table above is
+still what the three environments say.
 
 It is a convenience for editing on a nix machine and carries no authority of
 its own: the table above is unchanged by it, and a result produced in it is
