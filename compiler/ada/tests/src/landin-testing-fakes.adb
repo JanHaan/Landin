@@ -206,12 +206,14 @@ package body Landin.Testing.Fakes is
    procedure Set_Result
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
-      Output    : String)
+      Output    : String;
+      Ended     : Landin.Platform.Termination := Landin.Platform.Exited)
    is
    begin
       Host.State.Mode := Repeating;
       Host.State.Repeat :=
-        (Exit_Code => Exit_Code,
+        (Ended     => Ended,
+         Exit_Code => Exit_Code,
          Output    => Unbounded.To_Unbounded_String (Output));
       Host.State.Script.Clear;
       Host.State.Next_Result := 1;
@@ -220,7 +222,8 @@ package body Landin.Testing.Fakes is
    procedure Add_Result
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
-      Output    : String)
+      Output    : String;
+      Ended     : Landin.Platform.Termination := Landin.Platform.Exited)
    is
    begin
       if Host.State.Mode /= Ordered then
@@ -231,7 +234,8 @@ package body Landin.Testing.Fakes is
 
       Host.State.Script.Append
         (Landin.Platform.Tool_Result'
-           (Exit_Code => Exit_Code,
+           (Ended     => Ended,
+            Exit_Code => Exit_Code,
             Output    => Unbounded.To_Unbounded_String (Output)));
    end Add_Result;
 

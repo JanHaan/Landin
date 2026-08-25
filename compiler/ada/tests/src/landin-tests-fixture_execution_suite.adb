@@ -25,6 +25,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
 
    use Landin.Testing.Fixtures;
    use type Landin.Platform.Read_Status;
+   use type Landin.Platform.Termination;
 
    Fixture_Root : constant String := "../tests/fixtures";
 
@@ -158,6 +159,14 @@ package body Landin.Tests.Fixture_Execution_Suite is
                         Label & ": recorded "
                         & (if Stream (Case_Item) = Output
                            then "standard output" else "merged output"));
+                     --  A `refine` a signal killed has no status, and
+                     --  the field beside it holds zero, so a fixture
+                     --  expecting zero would be satisfied by a compiler
+                     --  that died after writing the right bytes.
+                     Landin.Testing.Check
+                       (Item,
+                        Outcome.Ended = Landin.Platform.Exited,
+                        Label & ": refine returned a status");
                      Landin.Testing.Check_Equal
                        (Item, Outcome.Exit_Code, Status (Case_Item),
                         Label & ": recorded exit status");
@@ -284,7 +293,18 @@ package body Landin.Tests.Fixture_Execution_Suite is
                   Runner.Run (Program, Args, Compile,
                               Landin.Platform.Merged);
 
-                  if Compile.Exit_Code /= 0 then
+                  --  How the compile ended is asked before what it
+                  --  returned, for the reason above: reading the zero
+                  --  beside Signaled would send a stale executable from an
+                  --  earlier run to be executed as though it were this
+                  --  fixture's answer.
+                  if Compile.Ended /= Landin.Platform.Exited then
+                     Landin.Testing.Fail
+                       (Item,
+                        Label & ": refine was stopped before it could"
+                        & " produce an executable" & ASCII.LF
+                        & Unbounded.To_String (Compile.Output));
+                  elsif Compile.Exit_Code /= 0 then
                      Landin.Testing.Fail
                        (Item,
                         Label & ": refine could not produce an executable"
@@ -299,9 +319,25 @@ package body Landin.Tests.Fixture_Execution_Suite is
                      Runner.Run (Built, Nothing, Outcome,
                                  Landin.Platform.Merged);
 
-                     Landin.Testing.Check_Equal
-                       (Item, Outcome.Exit_Code, Status (Case_Item),
-                        Label & ": the program's own exit status");
+                     --  [1960] makes a trap's encoding unstable, so a
+                     --  trapping fixture is held to having ended without
+                     --  a status and to nothing further: not to a signal
+                     --  number, and not to which operation trapped.
+                     if Traps (Case_Item) then
+                        Landin.Testing.Check
+                          (Item,
+                           Outcome.Ended = Landin.Platform.Signaled,
+                           Label & ": the program trapped rather than"
+                           & " returning a status");
+                     else
+                        Landin.Testing.Check
+                          (Item,
+                           Outcome.Ended = Landin.Platform.Exited,
+                           Label & ": the program returned a status");
+                        Landin.Testing.Check_Equal
+                          (Item, Outcome.Exit_Code, Status (Case_Item),
+                           Label & ": the program's own exit status");
+                     end if;
                   end if;
                end;
             end if;

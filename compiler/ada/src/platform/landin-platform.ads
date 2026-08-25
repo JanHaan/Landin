@@ -68,7 +68,22 @@ package Landin.Platform is
    --  work that has something to assemble.
    ---------------------------------------------------------------------
 
+   --  How a run ended, which is not the same question as what it returned.
+   --  A program that a signal killed has no exit status at all, and on a
+   --  POSIX host the two are separate fields of one wait result; folding
+   --  them into an integer is what makes a killed program indistinguishable
+   --  from one that exited with some number.
+   --
+   --  R1.80 needs the distinction and not the encoding: `spec.md` [1960]
+   --  says a trap's operating-system signal or status is not stable program
+   --  behaviour, so a caller may ask whether a program ended normally and
+   --  may not ask which signal ended it.  Nothing here carries a signal
+   --  number, deliberately.
+   type Termination is (Exited, Signaled);
+
    type Tool_Result is record
+      Ended     : Termination := Exited;
+      --  Meaningful when Ended is Exited, and zero otherwise.
       Exit_Code : Integer := 0;
       Output    : Ada.Strings.Unbounded.Unbounded_String;
    end record;
