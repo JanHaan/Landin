@@ -67,9 +67,9 @@ package body Landin.Syntax.Parser is
      (Word_None,
       Word_Loop, Word_While, Word_For, Word_Match, Word_Defer,
       Word_Undo, Word_Try, Word_Fail, Word_Break, Word_Continue,
-      Word_Lenof);
+      Word_Lenof, Word_Distinct);
 
-   subtype Real_Word is Refused_Word range Word_Loop .. Word_Lenof;
+   subtype Real_Word is Refused_Word range Word_Loop .. Word_Distinct;
 
    function Spelling (Item : Real_Word) return String
      is (case Item is
@@ -83,7 +83,8 @@ package body Landin.Syntax.Parser is
             when Word_Fail     => "fail",
             when Word_Break    => "break",
             when Word_Continue => "continue",
-            when Word_Lenof    => "lenof");
+            when Word_Lenof    => "lenof",
+            when Word_Distinct => "distinct");
 
    function Refusal (Item : Real_Word) return Syn.Refused_Construct
      is (case Item is
@@ -97,7 +98,8 @@ package body Landin.Syntax.Parser is
             when Word_Fail     => Syn.Fail_Statement,
             when Word_Break    => Syn.Break_Statement,
             when Word_Continue => Syn.Continue_Statement,
-            when Word_Lenof    => Syn.Length_Of);
+            when Word_Lenof    => Syn.Length_Of,
+            when Word_Distinct => Syn.Distinct_Type);
 
    --  The kernel's types are the scalar names only [1790].  These are
    --  ordinary declared names the kernel predeclares, not keywords, which
@@ -127,11 +129,13 @@ package body Landin.Syntax.Parser is
    --  Naming them is the difference between "this type is not enabled
    --  yet" and "this is not a type", and only the first is true.
    type Refused_Type is
-     (Float_16, Float_32, Float_64,
+     (Wide_Unsigned, Wide_Signed, Float_16, Float_32, Float_64,
       Text_Utf8, Text_Utf16, Text_C_String);
 
    function Spelling (Item : Refused_Type) return String
      is (case Item is
+            when Wide_Unsigned => "u128",
+            when Wide_Signed   => "i128",
             when Float_16      => "f16",
             when Float_32      => "f32",
             when Float_64      => "f64",
@@ -141,6 +145,8 @@ package body Landin.Syntax.Parser is
 
    function Refusal (Item : Refused_Type) return Syn.Refused_Construct
      is (case Item is
+            when Wide_Unsigned
+               | Wide_Signed   => Syn.Wide_Integer_Type,
             when Float_16
                | Float_32
                | Float_64      => Syn.Float_Type,
@@ -911,6 +917,20 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Type, At_Type);
                end if;
 
+               --  [0650]'s `distinct` is not reserved, so only the parser
+               --  can meet it, and [1795] made a type position somewhere a
+               --  name may stand -- without this it reads as a type name
+               --  and the report is about the token after it.
+               if Word_At_Hand = Word_Distinct then
+                  Type_Refused := True;
+                  Refuse
+                    (Item    => Syn.Distinct_Type,
+                     Where   => At_Type,
+                     Message => "`distinct` is not enabled yet");
+                  Advance;
+                  return Add (Error_Type, At_Type);
+               end if;
+
                if Peek = Tok.Identifier then
                   declare
                      Spelled : constant Landin.Source.Names.Name_Id :=
@@ -937,19 +957,13 @@ package body Landin.Syntax.Parser is
                         end if;
                      end loop;
 
-                     Complain
-                       (Item    => Syn.Type_Expected,
-                        Where   => At_Type,
-                        Message => "`"
-                                   & Landin.Source.Names.Spelling
-                                       (Names, Spelled)
-                                   & "` is not a type the kernel enables",
-                        Note    => "[1790]: the kernel's types are the"
-                                   & " scalar names only",
-                        Related => Declared_At,
-                        Because => "declared here");
+                     --  [1795] lets a program declare a type, so a name
+                     --  that is not one of the eleven is no longer wrong
+                     --  here: whether it names one is resolution's to
+                     --  answer, and this stage stops guessing.
                      Advance;
-                     return Add (Error_Type, At_Type);
+                     return Add
+                       (Type_Reference, At_Type, Named => Spelled);
                   end;
                end if;
 

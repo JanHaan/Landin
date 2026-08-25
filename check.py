@@ -1926,7 +1926,11 @@ def check_refused_constructs(full_run):
                         found.group(1)))
 
     keywords = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
-    scalars = set(re.findall(r'"([a-z0-9]+)"', rules.get("type", "")))
+    #  [1795] let a type position hold a declared name, so the eleven the
+    #  kernel predeclares moved into their own rule.  This reads that one:
+    #  `type` now spells no name of its own.
+    scalars = set(re.findall(r'"([a-z0-9]+)"',
+                             rules.get("scalar_name", "")))
 
     words = spellings("Real_Word")
     if words is None:

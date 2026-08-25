@@ -141,6 +141,10 @@ package Landin.Syntax is
       --  Types [1790].  A name, not a closed set: see the header.
       Error_Type,
       Type_Name,
+      --  A type the program declared [1795].  Told apart from the eleven
+      --  the kernel predeclares because those are known to the parser and
+      --  this one is a name only resolution can answer for.
+      Type_Reference,
       --  The parts that are none of the above.
       Parameter,
       Named_Return,
@@ -156,7 +160,8 @@ package Landin.Syntax is
 
    subtype Expression_Kind is Node_Kind range Call .. Logical_Or;
 
-   subtype Type_Reference_Kind is Node_Kind range Error_Type .. Type_Name;
+   subtype Type_Reference_Kind is Node_Kind
+     range Error_Type .. Type_Reference;
 
    subtype Unary_Kind is Node_Kind range Negation .. Logical_Not;
 
@@ -177,7 +182,8 @@ package Landin.Syntax is
    --  identifiers in seven positions.
    function Has_Name (Of_Kind : Node_Kind) return Boolean
      is (Of_Kind in Function_Declaration | Binding | Parameter
-                    | Named_Return | Name_Reference | Type_Name);
+                    | Named_Return | Name_Reference | Type_Name
+                    | Type_Declaration | Type_Reference);
 
    ------------------------------------------------------------------
    --  Trees
@@ -345,12 +351,14 @@ package Landin.Syntax is
      with Pre  => Index <= Declaration_Count (Of_Tree),
           Post => Contains (Of_Tree, Nth_Declaration'Result);
 
-   --  `type` of a binding, a parameter or a named return [1790] [1800].
-   --  No_Node for [1790]'s `:=` form, where there is no type to point at.
+   --  `type` of a binding, a parameter or a named return [1790] [1800],
+   --  and the type a type declaration names [1795].  No_Node for [1790]'s
+   --  `:=` form, where there is no type to point at.
    function Declared_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                          in Binding | Parameter | Named_Return;
+                          in Binding | Parameter | Named_Return
+                             | Type_Declaration;
 
    --  The value a binding is given, a place is assigned, or a discard
    --  throws away.  No_Node for a binding declared without one [1790].

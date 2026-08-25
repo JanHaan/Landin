@@ -161,6 +161,9 @@ package body Landin.Resolution is
      return Declaration_Sort
      is (case Of_Kind is
             when Landin.Syntax.Function_Declaration => Module_Function,
+            --  [1795]: a type declaration names a type, and the kernel
+            --  has only the module scope to name one in.
+            when Landin.Syntax.Type_Declaration     => Module_Type,
             when Landin.Syntax.Parameter            => Parameter,
             when Landin.Syntax.Named_Return         => Named_Return,
             when Landin.Syntax.Binding              =>
@@ -231,7 +234,8 @@ package body Landin.Resolution is
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Verdict
      is (if Landin.Syntax.Kind (Of_Tree, Node)
-            /= Landin.Syntax.Name_Reference
+            not in Landin.Syntax.Name_Reference
+                   | Landin.Syntax.Type_Reference
          then Not_A_Reference
          elsif Of_Table.Bound.Element (Slot (Of_Table, Of_Tree, Node))
                = No_Declaration

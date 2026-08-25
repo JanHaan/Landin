@@ -157,14 +157,18 @@ line_comment  ::= "--" (any byte except line_end)*
 A binding names one thing, and says how much it may change.
 The full form, the inferred form and the mutable form are [0040],
 [0050] and [0060]; a binding with no value must be assigned before
-it is read [0080]. The kernel's types are the scalar names only:
-several names sharing one declaration [0100], types the program
-declares [0120], structs, variants and the rest of TYPES YOU
-DECLARE are not enabled yet.
+it is read [0080]. The kernel's types are the eleven scalar names and what
+[1795] declares from them: several names sharing one declaration
+[0100], structs, variants and the rest of TYPES YOU DECLARE are
+not enabled yet. A type position holds a name either way, since
+[1760] makes the eleven ordinary declared names the kernel
+predeclares; the grammar spells them out because they are the
+only ones a program does not have to declare for itself.
 ```landin-grammar
 binding     ::= "mut"? identifier ":" type ("=" expression)?
               | "mut"? identifier ":=" expression
-type        ::= "u8" | "u16" | "u32" | "u64"
+type        ::= scalar_name | identifier
+scalar_name ::= "u8" | "u16" | "u32" | "u64"
               | "i8" | "i16" | "i32" | "i64"
               | "usize" | "isize" | "bool"
 
