@@ -24,11 +24,17 @@
 --  remainder guard a zero divisor before their one-operand instruction;
 --  signed division explicitly traps the minimum over minus one, while signed
 --  remainder produces that pair's specified zero without executing `idiv`.
+--  Unary minus is checked the same way, because [1890] gives it its own
+--  integer type back: `neg` reports the lowest signed value as overflow and
+--  every nonzero unsigned value as carry.  [0330]'s `~`, `&`, `^` and `|`
+--  cannot leave their own type and so carry no edge at all, and [0340]'s
+--  `not` flips the low bit alone rather than the byte, because [1870] fixes
+--  a bool at zero or one.
 --  Comparisons load their left operand, compare the right at that operand's
 --  width, and materialize a one-byte bool with the signed or unsigned
---  condition [1890] requires.  The remaining arithmetic, calls and module
---  data are not here yet; [0320]'s shift beyond the width in particular needs
---  the guard R1.80 records as its own obligation.  An opcode this does not yet
+--  condition [1890] requires.  Shifts, calls and module data are not here
+--  yet; [0320]'s shift beyond the width in particular needs the guard R1.80
+--  records as its own obligation.  An opcode this does not yet
 --  spell raises Compiler_Defect rather than emitting
 --  something plausible.
 --
