@@ -601,6 +601,49 @@ package body Landin.Backend.X86_64 is
                      Emit ("movb %al, " & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Call =>
+                  --  [1920] names every parameter once and in order, so the
+                  --  operands are already the argument list and [1650]'s
+                  --  registers are filled from them in that order.  The frame
+                  --  is a multiple of the target's stack alignment, so `%rsp`
+                  --  still meets the ABI at the call.  A `-> none` callee
+                  --  defines nothing, and [1930] says there is no result
+                  --  there to store.
+                  declare
+                     Callee : constant Landin.IR.Item_Id :=
+                       Landin.IR.Callee_Of (Of_Unit, Item, Value);
+                     Gives : constant Landin.Types.Type_Kind :=
+                       Landin.IR.Result_Of (Of_Unit, Item, Value);
+                  begin
+                     for Index in 1 .. Landin.IR.Operand_Count
+                                         (Of_Unit, Item, Value)
+                     loop
+                        declare
+                           Argument : constant Landin.IR.Value_Id :=
+                             Operand (Index);
+                           Held : constant Held_Size :=
+                             Size_Of_Value (Argument);
+                        begin
+                           Emit ("mov" & Suffix (Held) & " "
+                                 & Value_Cell (Argument) & ", "
+                                 & Argument_Register (Index, Held));
+                        end;
+                     end loop;
+
+                     Emit ("call " & Symbol (Callee));
+
+                     if Gives in Landin.Types.Scalar_Name then
+                        declare
+                           Held : constant Held_Size :=
+                             Size_Of (Gives, Facts);
+                        begin
+                           Emit ("mov" & Suffix (Held) & " "
+                                 & Accumulator (Held) & ", "
+                                 & Value_Cell (Value));
+                        end;
+                     end if;
+                  end;
+
                when Landin.IR.Jump =>
                   Emit ("jmp "
                         & Label (Item,

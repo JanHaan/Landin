@@ -36,8 +36,13 @@
 --  does not give: the amount is tested against the type's own width, because
 --  [0320] and D13 fill with zeros beyond it while x86-64 would mask the
 --  count, and a signed amount is tested for being negative, because [1950]
---  leaves the ones the compiler could not read to the trap.  Calls and module
---  data are not here yet.  An opcode this does not yet
+--  leaves the ones the compiler could not read to the trap.  A call fills
+--  [1650]'s six argument registers from its operands in order, each at its
+--  own parameter's width, and takes the result from the accumulator into a
+--  frame cell; a callee returning none leaves nothing to take.  The frame is
+--  a multiple of the target's stack alignment, so `%rsp` still meets the ABI
+--  where a call is made.  Module data is not here yet.  An opcode this does
+--  not yet
 --  spell raises Compiler_Defect rather than emitting
 --  something plausible.
 --
