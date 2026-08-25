@@ -61,6 +61,8 @@ package body Landin.Testing.Fixtures is
 
    function Status (Item : Fixture) return Integer is (Item.Status);
 
+   function Traps (Item : Fixture) return Boolean is (Item.Traps);
+
    function Stream (Item : Fixture) return Stream_Choice is (Item.Stream);
 
    function Count (In_Catalogue : Catalogue) return Natural
@@ -141,6 +143,7 @@ package body Landin.Testing.Fixtures is
       Seen_Targets : Boolean := False;
       Seen_Args    : Boolean := False;
       Seen_Status  : Boolean := False;
+      Seen_Traps   : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Lex     : Boolean := False;
       Seen_Codes   : Boolean := False;
@@ -301,6 +304,21 @@ package body Landin.Testing.Fixtures is
                   Complain ("stream is not output or merged: " & Value);
                end if;
 
+            elsif Key = "traps" then
+               if Seen_Traps then
+                  Complain ("duplicate key: traps");
+                  return;
+               end if;
+               Seen_Traps := True;
+
+               if Value = "yes" then
+                  Item.Traps := True;
+               elsif Value = "no" then
+                  Item.Traps := False;
+               else
+                  Complain ("traps is not yes or no: " & Value);
+               end if;
+
             elsif Key = "status" then
                if Seen_Status then
                   Complain ("duplicate key: status");
@@ -331,6 +349,7 @@ package body Landin.Testing.Fixtures is
                Args    => Unbounded.Null_Unbounded_String,
                Codes   => Unbounded.Null_Unbounded_String,
                Status  => 0,
+               Traps   => False,
                Stream  => Merged);
 
       for Index in Content'Range loop
@@ -373,6 +392,19 @@ package body Landin.Testing.Fixtures is
         and then not Seen_Program
       then
          Complain ("a runtime fixture needs a program to run");
+      end if;
+
+      --  [1960] leaves a trap no status to carry, so a fixture that says
+      --  its program traps and also names a status is claiming two
+      --  answers, and only one of them can be observed.
+      if Seen_Traps and then Item.Traps and then Seen_Status then
+         Complain ("a trapping fixture has no exit status to compare");
+      end if;
+
+      if Seen_Traps and then Item.Traps
+        and then Seen_Class and then Item.Class /= Runtime
+      then
+         Complain ("only a runtime fixture runs a program that could trap");
       end if;
 
       --  Any reported fault rejects the fixture.  A fixture that is

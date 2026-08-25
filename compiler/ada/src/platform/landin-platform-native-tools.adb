@@ -63,7 +63,9 @@ package body Landin.Platform.Native.Tools is
 
       pragma Unreferenced (Host);
    begin
-      Result := (Exit_Code => 0, Output => Unbounded.Null_Unbounded_String);
+      Result := (Ended     => Landin.Platform.Exited,
+                 Exit_Code => 0,
+                 Output    => Unbounded.Null_Unbounded_String);
       Located := OS.Locate_Exec_On_Path (Program);
 
       if Located = null then
@@ -108,7 +110,24 @@ package body Landin.Platform.Native.Tools is
       if Read /= Read_Ok then
          Result.Output := Unbounded.Null_Unbounded_String;
       end if;
-      Result.Exit_Code := Status;
+
+      --  A child that a signal killed is reported here as -1, and an
+      --  ordinary exit as its own status.  That is measured rather than
+      --  assumed: this exact call answers `success=TRUE code=-1` for a
+      --  child killed by SIGILL and by SIGSEGV, and `code=7` for one that
+      --  exited 7, on the pinned GNAT inside the linux/amd64 image.  A
+      --  POSIX exit status is one byte and so can never be -1, which is
+      --  what makes the two answerable apart.
+      --
+      --  No signal number reaches the record; [1960] says which signal is
+      --  not stable program behaviour, and this seam is where that stops.
+      if Status = -1 then
+         Result.Ended := Landin.Platform.Signaled;
+         Result.Exit_Code := 0;
+      else
+         Result.Ended := Landin.Platform.Exited;
+         Result.Exit_Code := Status;
+      end if;
 
       Cleanup_Capture;
       Release_Arguments;

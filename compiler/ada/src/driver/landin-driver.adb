@@ -26,6 +26,7 @@ package body Landin.Driver is
    package Rows renames Landin.Diagnostics.Catalogue;
 
    use type Landin.IR.Item_Id;
+   use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
    use type Landin.Targets.Capabilities.Backend_Kind;
 
@@ -372,7 +373,16 @@ package body Landin.Driver is
                      return;
                end;
 
-               if Ran.Exit_Code /= 0 then
+               --  How the run ended is asked before what it returned,
+               --  because a tool a signal killed has no status and the
+               --  field beside it holds zero.  Reading that alone would
+               --  make a dead assembler a success that wrote nothing.
+               if Ran.Ended /= Landin.Platform.Exited then
+                  Note_Failure
+                    (Code_Toolchain_Failed,
+                     Driver & " was stopped before it could finish" & LF
+                     & Unbounded.To_String (Ran.Output));
+               elsif Ran.Exit_Code /= 0 then
                   Note_Failure
                     (Code_Toolchain_Failed,
                      Driver & " failed with status"

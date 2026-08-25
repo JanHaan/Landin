@@ -172,6 +172,37 @@ package body Landin.Tests.Fixture_Suite is
 
       Host.Add_File ("root/unit/stray.txt", "not a fixture");
 
+      --  A trapping program has no exit status to record [1960], so a
+      --  fixture that claims one as well is claiming two answers.
+      Host.Add_Directory ("root/runtime");
+      Host.Add_Directory ("root/runtime/traps-and-a-status");
+      Host.Add_File
+        ("root/runtime/traps-and-a-status/fixture.meta",
+         "class: runtime" & LF & "summary: both" & LF
+         & "program: main.ldn" & LF & "status: 42" & LF
+         & "traps: yes" & LF);
+
+      Host.Add_Directory ("root/runtime/traps-is-not-a-verdict");
+      Host.Add_File
+        ("root/runtime/traps-is-not-a-verdict/fixture.meta",
+         "class: runtime" & LF & "summary: odd" & LF
+         & "program: main.ldn" & LF & "traps: perhaps" & LF);
+
+      Host.Add_Directory ("root/runtime/traps-twice");
+      Host.Add_File
+        ("root/runtime/traps-twice/fixture.meta",
+         "class: runtime" & LF & "summary: twice" & LF
+         & "program: main.ldn" & LF & "traps: yes" & LF
+         & "traps: no" & LF);
+
+      --  Only a runtime fixture runs a program at all, so nothing else has
+      --  anything that could trap.
+      Host.Add_Directory ("root/unit/traps-without-a-program");
+      Host.Add_File
+        ("root/unit/traps-without-a-program/fixture.meta",
+         "class: unit" & LF & "summary: misplaced" & LF
+         & "traps: yes" & LF);
+
       Discover (Found, "root", Host);
 
       Landin.Testing.Check_Equal
@@ -198,6 +229,18 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Check
         (Item, Mentions (Found, "fixture entry is not a directory"),
          "a stray file in a class directory is reported");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "a trapping fixture has no exit status"),
+         "traps beside a status is reported");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "traps is not yes or no"),
+         "a traps value that is not a verdict is reported");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "duplicate key: traps"),
+         "a repeated traps is reported");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "only a runtime fixture runs a program"),
+         "traps outside the runtime class is reported");
    end Malformed_Metadata_Is_Refused;
 
    --  Reads the repository's real fixture tree, deliberately: the tree is

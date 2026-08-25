@@ -810,9 +810,16 @@ of the lowest signed value by -1 on x86-64. The second can give a stable report,
 but makes that report an interface the language must preserve and a runtime
 every freestanding target must supply.
 
-**Future evidence required:** R1.80's runtime arithmetic trap cases, and the
-first slice that enables [0310]'s runtime conversions must exercise its
-out-of-range trap through the same contract.
+**Evidence:** `runtime/checked-overflow-traps` and
+`runtime/a-zero-divisor-traps` run on Linux x86-64 and are held to having
+ended without returning a status, which is the whole of what this decision
+makes observable. The first is the one that tells a trap edge from no edge:
+without it the addition keeps its low byte and the program returns normally.
+Neither says which signal ended it, because this decision is what says that
+question has no stable answer.
+
+**Future evidence required:** the first slice that enables [0310]'s runtime
+conversions must exercise its out-of-range trap through the same contract.
 
 ### D12 — The first hosted path accepts one `main` shape
 

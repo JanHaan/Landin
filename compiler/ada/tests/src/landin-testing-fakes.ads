@@ -58,10 +58,15 @@ package Landin.Testing.Fakes is
 
    --  Select a result that every subsequent call returns.  This also
    --  abandons any ordered results that have not yet been consumed.
+   --
+   --  Ended is defaulted, because almost every case is about a tool that
+   --  ran and answered.  A case that wants a program a signal killed says
+   --  so, and says nothing about which signal: see `Landin.Platform`.
    procedure Set_Result
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
-      Output    : String);
+      Output    : String;
+      Ended     : Landin.Platform.Termination := Landin.Platform.Exited);
 
    --  Select ordered mode on the first addition, then append one result for
    --  each expected call.  Running past the end of the script is a compiler
@@ -69,7 +74,8 @@ package Landin.Testing.Fakes is
    procedure Add_Result
      (Host      : in out Fake_Tool_Runner;
       Exit_Code : Integer;
-      Output    : String);
+      Output    : String;
+      Ended     : Landin.Platform.Termination := Landin.Platform.Exited);
 
    type Tool_Call is record
       Program   : Ada.Strings.Unbounded.Unbounded_String;
