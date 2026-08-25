@@ -105,6 +105,18 @@ package body Landin.Stages.Resolution is
             begin
                pragma Assert (Made /= Landin.Resolution.No_Declaration);
             end;
+
+            --  [1795] made a type position a place a name can stand, so
+            --  the type a declaration writes down is resolved like any
+            --  other name.  Before it, every type was one of the eleven
+            --  the parser knew and there was nothing here to look up.
+            if Syn.Kind (Of_Tree, Node)
+               in Syn.Binding | Syn.Parameter | Syn.Named_Return
+                  | Syn.Type_Declaration
+            then
+               Resolve (Of_Tree, Syn.Declared_Type (Of_Tree, Node),
+                        Inside);
+            end if;
          end;
       end Declare_One;
 
@@ -121,11 +133,15 @@ package body Landin.Stages.Resolution is
             return;
          end if;
 
+         --  One of the eleven the kernel predeclares, which the parser
+         --  already recognised: there is no declaration to find.
          if Syn.Kind (Of_Tree, Node) = Syn.Type_Name then
             return;
          end if;
 
-         if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference then
+         if Syn.Kind (Of_Tree, Node)
+            in Syn.Name_Reference | Syn.Type_Reference
+         then
             declare
                Named : constant Landin.Source.Names.Name_Id :=
                  Syn.Name (Of_Tree, Node);
@@ -281,6 +297,11 @@ package body Landin.Stages.Resolution is
                     Syn.Nth_Declaration (Of_Tree.all, Position);
                begin
                   case Syn.Kind (Of_Tree.all, Node) is
+                     when Syn.Type_Declaration =>
+                        --  Declare_One already resolved the type it
+                        --  names, in the scope it was declared in.
+                        null;
+
                      when Syn.Binding =>
                         --  A module binding's value is read in the module
                         --  scope, which is the whole of it.

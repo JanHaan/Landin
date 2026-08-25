@@ -1,0 +1,5 @@
+class: positive
+summary: [1795] a type declaration names a type, and D15 makes one without `distinct` another name for it
+constructs: 0120, 1795, 1790
+program: program.ldn
+targets: linux-x86-64, macos-arm64

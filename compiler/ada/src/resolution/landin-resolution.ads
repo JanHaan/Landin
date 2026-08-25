@@ -104,14 +104,15 @@ package Landin.Resolution is
    --  used by [1740] and by [1810], and which of the two it is, is which
    --  scope it is in.
    type Declaration_Sort is
-     (Module_Function, Module_Binding, Parameter, Named_Return,
-      Local_Binding);
+     (Module_Function, Module_Type, Module_Binding, Parameter,
+      Named_Return, Local_Binding);
 
    --  The kinds of node that declare a name.  Not Has_Name: that answers
    --  for a Name_Reference and a Type_Name too, and neither declares
    --  anything.
    function Declares (Of_Kind : Landin.Syntax.Node_Kind) return Boolean
      is (Of_Kind in Landin.Syntax.Function_Declaration
+                    | Landin.Syntax.Type_Declaration
                     | Landin.Syntax.Binding
                     | Landin.Syntax.Parameter
                     | Landin.Syntax.Named_Return);
@@ -380,7 +381,8 @@ package Landin.Resolution is
                   and then Covers (Into, Of_Tree)
                   and then Landin.Syntax.Contains (Of_Tree, Node)
                   and then Landin.Syntax.Kind (Of_Tree, Node)
-                           = Landin.Syntax.Name_Reference
+                           in Landin.Syntax.Name_Reference
+                              | Landin.Syntax.Type_Reference
                   and then Contains (Into, To)
                   and then Verdict_Of (Into, Of_Tree, Node) = Unresolved,
           Post => Verdict_Of (Into, Of_Tree, Node) = Bound

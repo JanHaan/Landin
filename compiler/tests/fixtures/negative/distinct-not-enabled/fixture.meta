@@ -1,0 +1,6 @@
+class: negative
+summary: [0650] makes a distinct type and D15 makes it the only form that does, so the kernel refuses the word rather than reading it as a type name
+constructs: 0650, 1795
+program: program.ldn
+codes: L0010
+targets: linux-x86-64, macos-arm64
