@@ -1308,13 +1308,50 @@ Their programs are held to the grammar exactly as a positive fixture's is,
 since they are legal source the compiler must accept; `check.py` derives each
 and reports a fixture the grammar cannot.
 
-The two trap edges are pinned in deterministic assembly, but [1960]'s native
-trap evidence remains outstanding: a runtime fixture currently records only an
-integer status, so it cannot distinguish ordinary return from signal
-termination without freezing the OS encoding [1960] declares unstable. The
-runtime seam must expose normal versus abnormal termination before the final
-zero-divisor case can assert the semantic distinction rather than one Linux
-signal number.
+[1960]'s native trap evidence is here too, and getting it needed the runtime
+seam widened rather than a fixture written. A `Tool_Result` carried an integer,
+and an integer cannot tell a program a signal killed from one that exited with
+some number -- so a trapping fixture could only have been written by freezing
+the encoding [1960] declares unstable. `Landin.Platform` now answers how a run
+ended as well as what it returned, in two values and not a number: `Exited`
+with a status, or `Signaled` with none. No signal number reaches the record,
+which is the whole point of the distinction. The decoding is measured rather
+than assumed -- the pinned GNAT's own spawn answers -1 for a child killed by
+SIGILL and by SIGSEGV and the true status otherwise, and a POSIX exit status is
+one byte and so can never be -1 -- and `compiler/tests/README.md` records what
+that measurement was.
+
+A fixture says `traps: yes` in place of `status`, because a program that
+trapped has no status and claiming both is claiming an answer nobody can
+observe. `runtime/checked-overflow-traps` is the one that discriminates: it
+adds one to a `255u8` the compiler cannot read, and without the backend's own
+overflow check the instruction keeps the low byte and the program returns 42.
+Removing that edge and running the gate turns the fixture red, which is
+measured rather than argued. `runtime/a-zero-divisor-traps` proves [1950]'s
+other obligation but cannot tell the deliberate `ud2` from the fault x86-64
+raises anyway; deterministic assembly is what pins D11's choice between those,
+and this is recorded so the fixture is not read as evidence it is not.
+
+Widening that seam found a defect one level up, which is the argument for
+widening it rather than reading a number more cleverly at the fixture. The
+driver asked whether the assembler's status was zero, and a tool a signal
+killed has no status: with the two folded into one integer it read -1 and
+reported a failure by luck, and with them apart it would have read the zero
+beside `Signaled` and called a dead assembler a success that wrote nothing.
+The driver now asks how the run ended before it asks what it returned, and a
+case pins it; the fixture harness asks the same before reading a recorded
+status or sending a compiled program to be run, since a `refine` that died
+after writing the right bytes would otherwise satisfy a fixture expecting
+zero, and a compile that died would send a stale executable from an earlier
+run to be executed as this fixture's answer.
+
+The decoding itself is measured on whichever host runs the suite rather than
+once on Linux and assumed elsewhere: a platform case kills a shell with SIGILL
+through the real adapter and holds the answer to being `Signaled`, beside one
+that exits 3 and carries its status. That case touches the real host on
+purpose -- how a killed process is reported is a fact about the host and the
+pinned runtime, and a fake would only repeat what this adapter was told to
+believe.
 
 A host that cannot finish the target fails rather than skipping, and that was
 a decision with a real alternative. Skipping keeps a macOS run green, and

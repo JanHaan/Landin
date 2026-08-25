@@ -12,6 +12,7 @@ package body Landin.Tests.Platform_Suite is
    use type Landin.Platform.Capture_Mode;
    use type Landin.Platform.List_Status;
    use type Landin.Platform.Read_Status;
+   use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
 
    Scratch : constant String := "build/test-scratch";
@@ -446,6 +447,47 @@ package body Landin.Tests.Platform_Suite is
          "the default runner captured the tool output");
    end A_Default_Native_Runner_Captures_Output;
 
+   --  Touches the real host, deliberately: how a killed process is reported
+   --  is a fact about the host and the pinned runtime, and a fake would
+   --  only repeat what this adapter was told to believe.  R1.80 rests on
+   --  it, since [1960]'s trap is observable in no other way, and the
+   --  decoding it rests on -- a status of -1 and never an ordinary one --
+   --  is measured here on whichever host runs the suite rather than
+   --  measured once on Linux and assumed for the other.
+   procedure A_Killed_Tool_Is_Not_An_Exit
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Killed_Tool_Is_Not_An_Exit
+     (Item : in out Landin.Testing.Context)
+   is
+      Runner    : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Arguments : Landin.Platform.Path_List;
+      Result    : Landin.Platform.Tool_Result;
+   begin
+      Landin.Platform.Add (Arguments, "-c");
+      Landin.Platform.Add (Arguments, "kill -ILL $$");
+      Runner.Run ("sh", Arguments, Result);
+
+      Landin.Testing.Check
+        (Item, Result.Ended = Landin.Platform.Signaled,
+         "a tool a signal killed did not exit");
+
+      declare
+         Ordinary : Landin.Platform.Path_List;
+         Exited   : Landin.Platform.Tool_Result;
+      begin
+         Landin.Platform.Add (Ordinary, "-c");
+         Landin.Platform.Add (Ordinary, "exit 3");
+         Runner.Run ("sh", Ordinary, Exited);
+
+         Landin.Testing.Check
+           (Item, Exited.Ended = Landin.Platform.Exited,
+            "and one that exited says so");
+         Landin.Testing.Check_Equal
+           (Item, Exited.Exit_Code, 3, "carrying its own status");
+      end;
+   end A_Killed_Tool_Is_Not_An_Exit;
+
    --  Every byte value, not just the printable ones.  A reader that
    --  narrowed or sign-extended high bytes would have passed every test
    --  the suite had, because they were all ASCII.
@@ -552,6 +594,9 @@ package body Landin.Tests.Platform_Suite is
       Landin.Testing.Register
         (Into, "platform", "a default native runner captures output",
          A_Default_Native_Runner_Captures_Output'Access);
+      Landin.Testing.Register
+        (Into, "platform", "a killed tool is not an exit",
+         A_Killed_Tool_Is_Not_An_Exit'Access);
       Landin.Testing.Register
         (Into, "platform", "every byte survives",
          Every_Byte_Survives'Access);

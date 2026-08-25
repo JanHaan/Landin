@@ -565,6 +565,39 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Failing_Toolchain_Is_Reported;
 
+   --  A tool a signal killed has no exit status at all, and reading the one
+   --  beside it would read zero.  The driver asks how the run ended before
+   --  it asks what it returned, or an assembler that died would be a
+   --  success that wrote nothing.
+   procedure A_Killed_Toolchain_Is_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Killed_Toolchain_Is_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File ("main.ldn", Entry_Program);
+      Tools.Set_Result (0, "", Landin.Platform.Signaled);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("main.ldn", "--emit=exe"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a toolchain a signal killed is a reported failure");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0501"), "and says which rule");
+         Landin.Testing.Check
+           (Item, not Contains (Report, "status 0"),
+            "without claiming it returned a status");
+      end;
+   end A_Killed_Toolchain_Is_Reported;
+
    --  A target with no backend cannot be asked for a file at all, which is
    --  the same fact Landin.Targets.Capabilities already states.
    procedure A_Target_With_No_Backend_Emits_Nothing
@@ -724,6 +757,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a failing toolchain is reported",
          A_Failing_Toolchain_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a killed toolchain is reported",
+         A_Killed_Toolchain_Is_Reported'Access);
       Landin.Testing.Register
         (Into, "driver", "a target with no backend emits nothing",
          A_Target_With_No_Backend_Emits_Nothing'Access);

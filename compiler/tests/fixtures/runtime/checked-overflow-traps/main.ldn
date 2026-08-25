@@ -1,0 +1,12 @@
+--  [0300]'s overflow, on a value the compiler cannot read.  Without the
+--  backend's own check this returns 42: `add` alone keeps the low byte and
+--  the program runs on, so this fixture is what tells the trap edge apart
+--  from no edge at all.
+grow: (n: u8) -> (r: u8) =
+    r = n + 1
+end grow
+
+public main: () -> (code: i32) =
+    _ = grow(255)
+    code = 42
+end main

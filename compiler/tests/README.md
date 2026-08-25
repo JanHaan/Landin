@@ -36,6 +36,7 @@ Fixture classes, and the directory each uses:
 | `expect` | no | the file holding the expected bytes |
 | `args` | no | the arguments `refine` is run with |
 | `status` | no | the exit status `refine` must produce (default 0) |
+| `traps` | no | `yes` if the program must end without returning a status |
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
 | `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order |
@@ -91,7 +92,7 @@ everywhere.
 |---|---|
 | unit | a note of what an implementation-side case covers; the case itself lives in `compiler/ada/tests` |
 | negative, end-to-end | executed: `refine` is run with `args`, and its bytes and exit status are compared with `expect` and `status` |
-| runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` |
+| runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` -- or, with `traps: yes`, it is held to having ended without returning one |
 | positive, ABI, debugger | reserved; no fixture yet. A positive fixture needs a program the compiler can accept, so the first ones arrive with R1; ABI and debugger fixtures arrive with the work that produces an ABI and debug information |
 
 A class with no fixtures is the normal state early in the roadmap, and an
@@ -112,6 +113,25 @@ A runtime fixture carries `program` and `status` and neither `expect` nor
 what the compiled program did. One without a `program` is a reported fault,
 for the same reason `expect` without `args` is: a status nobody produces is
 dead data.
+
+`traps: yes` replaces `status` rather than joining it. `spec.md` [1960] says a
+trap is synchronous and non-returning and that its operating-system signal or
+status is not stable program behaviour, so a fixture may assert that the
+program ended without returning a status and may not assert which signal ended
+it. Naming both is a reported fault: a program that trapped has no status, and
+a fixture claiming one is claiming an answer nobody can observe. Nothing in the
+format or in `Landin.Platform` carries a signal number, deliberately.
+
+What that can and cannot tell apart is worth knowing before writing one.
+`runtime/checked-overflow-traps` adds one to a `255u8` the compiler cannot
+read: without the backend's own check the instruction keeps the low byte and
+the program returns 42, so the fixture fails when the trap edge is removed --
+which is measured, not assumed. `runtime/a-zero-divisor-traps` cannot make that
+distinction, because x86-64 faults on a zero divisor whether or not the
+compiler guarded it; it proves [1950]'s obligation is met and not which of the
+two stopped the program. D11 is where the choice to emit a deliberate `ud2`
+rather than inherit the incidental fault is recorded, and deterministic
+assembly is what pins it.
 
 ## The grammar corpus
 

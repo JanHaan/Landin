@@ -1,0 +1,14 @@
+--  The divisor is not one the compiler can read: `L0306` refuses a zero it
+--  knows, and [1950] leaves this one to the trap.
+divisor_of: (n: i32) -> (r: i32) =
+    r = 0
+
+    if n > 100 then
+        r = 2
+    end if
+end divisor_of
+
+public main: () -> (code: i32) =
+    divisor: i32 = divisor_of(1)
+    code = 42 / divisor
+end main

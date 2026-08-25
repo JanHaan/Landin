@@ -46,6 +46,13 @@ package Landin.Testing.Fixtures is
    function Args    (Item : Fixture) return String;
    function Status  (Item : Fixture) return Integer;
 
+   --  Whether the fixture's program must end without exiting.  [1960] says
+   --  a trap's operating-system encoding is not stable program behaviour,
+   --  so what a fixture may assert is that the program did not return a
+   --  status -- never which signal ended it.  A trapping fixture therefore
+   --  carries no `status`, and `Status` says nothing about one.
+   function Traps (Item : Fixture) return Boolean;
+
    --  Which stream the expectation is about.  `output` means the bytes
    --  must arrive on standard output and standard error must be empty;
    --  `merged` accepts either, and is only right where a fixture does not
@@ -94,6 +101,7 @@ private
       Args    : Unbounded.Unbounded_String;
       Codes   : Unbounded.Unbounded_String;
       Status  : Integer := 0;
+      Traps   : Boolean := False;
       Stream  : Stream_Choice := Merged;
    end record;
 
