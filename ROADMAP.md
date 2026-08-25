@@ -113,7 +113,7 @@ three roadmap items in a row found it silent on rules their implementation
 could not proceed without: three constructs added at R1.50, eight at R1.60.
 Each was written into a section titled "THE GRAMMAR OF THE ENABLED KERNEL",
 which says of itself that it covers the constructs the compiler enables
-today -- so permanent rules were accumulating in a container defined as
+today — so permanent rules were accumulating in a container defined as
 temporary, and that section had doubled in two items.
 
 So the documents split. `spec.md` is normative and holds the grammar of the
@@ -123,7 +123,7 @@ left unsaid, which do not, plus the register below. `tour.md` explains,
 
 Seven of the eighteen rules added at R1.50 and R1.60 were decisions rather
 than transcriptions, and in the tour's voice a decision is indistinguishable
-from a rule that was always there -- which is how [1050], "the condition,
+from a rule that was always there — which is how [1050], "the condition,
 which must be bool", was missed twice by a reader who assumed the surrounding
 text was settled. `spec.md` ends with a register naming each: what the tour
 said before, what was chosen, the alternative a competent reader could have
@@ -367,8 +367,8 @@ what `check.py`'s independent tokeniser produced.
 Invalid escapes are struck from this item's evidence, with the reason
 recorded rather than the clause quietly dropped: the kernel's only literals
 are integers and the two booleans `[1770]`, and character, text and raw
-literals `[0250]` `[0260]` `[0280]` -- the only constructs that define an
-escape at all -- are refused by `[1830]`. No enabled rule reads a byte as an
+literals `[0250]` `[0260]` `[0280]` — the only constructs that define an
+escape at all — are refused by `[1830]`. No enabled rule reads a byte as an
 escape, so neither a valid nor an invalid one can be written. The clause
 belongs to the work that enables a literal carrying escapes, and R4.10 owns
 the remaining hosted literal forms.
@@ -411,8 +411,8 @@ The catalogue holds no prose. `L0003` is raised with two sentences, for a
 source that is missing and one that cannot be read, because one rule was
 violated and the difference is wording; a code split for a wording reason is
 the worst use of a stable identifier. What a code requires of every
-occurrence -- a source, a non-empty span, how many secondary labels, how many
-notes -- is in the row, and `Landin.Diagnostics.Lexical` checks the row
+occurrence — a source, a non-empty span, how many secondary labels, how many
+notes — is in the row, and `Landin.Diagnostics.Lexical` checks the row
 against the diagnostic it just built rather than trusting itself.
 
 Exit evidence: negative cases assert code and spans separately from prose
@@ -452,15 +452,15 @@ union of its own tokens and its children's. The parser suite walks every slot
 of every node of every corpus file, and of every truncation of one, which is
 what makes a debug build check them.
 
-A hole is a node. There are four -- one per band, so a case over a band still
-covers the hole instead of falling out of it -- and `Is_Sound` propagates
+A hole is a node. There are four — one per band, so a case over a band still
+covers the hole instead of falling out of it — and `Is_Sound` propagates
 upward, so R1.60 checks a subtree only when no descendant is a hole and one
 missing `then` does not become a cascade of type errors about a hole.
 
 [1820] is a table rather than ten procedures: `Landin.Syntax.Precedence`
 transcribes the levels, the operators, the fold and the first sets, and
 `check.py`'s `check_precedence_table` compares the transcription with the
-grammar it transcribes. That is the whole argument for the shape -- ten
+grammar it transcribes. That is the whole argument for the shape — ten
 procedures are ten paraphrases and there is nothing to compare a paraphrase
 to. Seven mutations were tried from both sides (a level renamed, an operator
 moved between levels, the wrong level made non-associative, a prefix operator
@@ -474,7 +474,7 @@ silently, because the scanner already reported it. Reporting is monotone in
 token index, which kills same-position cascades. And an `end` that is not
 this construct's is left where it is for whatever construct needs it, so one
 missing `end` is one report rather than two. A refused construct closes
-itself -- `end loop` closes a loop -- so swallowing its own closer keeps one
+itself — `end loop` closes a loop — so swallowing its own closer keeps one
 refusal from becoming three reports. No cap on diagnostics per file: a cap is
 reporting policy, the driver owns policy, and [0950] already refuses the
 smaller version of the idea. A nesting limit is different and is set here,
@@ -515,8 +515,8 @@ All three hold. Every one of the 42 positive programs in the corpus parses
 with no diagnostic and every one of the 23 negative programs is rejected,
 which is the same verdict `check.py` reaches from the grammar independently.
 Each negative fixture now names the exact ordered sequence of codes its report
-carries -- `several-independent-errors` carries three, from three separate
-mistakes -- and `check.py` refuses a negative fixture that names none, so a
+carries — `several-independent-errors` carries three, from three separate
+mistakes — and `check.py` refuses a negative fixture that names none, so a
 rejection whose shape nobody checked is no longer possible. The corpus is
 truncated at every byte of every file and each of the ~2,000 prefixes yields a
 tree whose invariants hold; that pass found a real defect on its first run, a
@@ -535,7 +535,7 @@ shadowing and deterministic duplicate/unresolved-name diagnostics for the
 kernel.
 
 **This item needed normative text the tour did not have, and adding it is the
-first thing to read here.** [0130] and [0140] are two sentences -- order
+first thing to read here.** [0130] and [0140] are two sentences — order
 inside a module does not matter, an inner scope may shadow an outer name --
 and neither says which scopes exist, that two declarations of one name in one
 scope is an error, or that a name resolving to nothing is one. A rule about an
@@ -544,9 +544,9 @@ were added to the kernel section: [1840] names the three scopes the grammar
 has and says which of them is ordered, [1850] refuses one name declared twice
 in one scope, and [1860] refuses a name that names nothing. Each cites the
 sentence it comes from. The duplicate rule was already repository policy
-before it was specification -- `check.py` has enforced "two declarations of
+before it was specification — `check.py` has enforced "two declarations of
 one name in one module" as a textual invariant since R0, and `README.md`
-advertises it -- so [1850] wrote down what the checker already believed. A
+advertises it — so [1850] wrote down what the checker already believed. A
 first attempt at this item attributed all three rules to [0130] and [0140]
 directly; an adversarial reading found that neither paragraph says any of
 them, which is what sent the work to the tour instead of to a citation.
@@ -566,8 +566,8 @@ stage cannot keep anything in itself; and `Stage_Reference` is a library-level
 access type, so a stage object cannot be a local of one compilation either.
 The line that keeps `Landin.Stages` a seam is exact and is now written in its
 header: it may depend on a representation and may never depend on a stage.
-Ada enforces that for the specification only -- a parent's spec may not `with`
-its own child, and a parent's *body* may -- so the rule and not the compiler
+Ada enforces that for the specification only — a parent's spec may not `with`
+its own child, and a parent's *body* may — so the rule and not the compiler
 is what stops `landin-stages.adb` from building a default pipeline.
 
 A resolution is one array of `Declaration_Id` per compilation, one run per
@@ -595,7 +595,7 @@ always in one.
 
 `check.py` gained the classification a name-error fixture needs. A program
 refused for a reason of names is syntactically legal, so the grammar must
-derive it -- the opposite of what `negative/` used to mean. The stage is read
+derive it — the opposite of what `negative/` used to mean. The stage is read
 out of `Landin.Diagnostics.Lexical` and `Landin.Diagnostics.Syntactic`, the two
 packages that turn a fault into a code, and never out of the number: the
 catalogue's header forbids reading a stage off a code, and `L0010` is the
@@ -617,10 +617,10 @@ Both hold. Twelve fixtures were added, four positive and eight negative, and
 the corpus is now 46 positives and 31 negatives. A name is resolved across two
 files in either command-line order with the same result, a module name is used
 above the line that introduces it, a local shadows a parameter, and one name is
-declared in both arms of an `if` -- all accepted. A duplicate in a module, in a
+declared in both arms of an `if` — all accepted. A duplicate in a module, in a
 body, between two parameters and between a parameter and the named return; a
 name declared nowhere, one from another arm, one after the branch closes, and
-one used above its own declaration -- all refused, each with the exact ordered
+one used above its own declaration — all refused, each with the exact ordered
 code sequence its fixture names, checked by running `Landin.Driver.Execute` the
 way a user runs it rather than by assembling the stages in a test.
 
@@ -641,7 +641,7 @@ that a comparison yields a bool, or that `and` takes one. Nothing forbade
 assigning an immutable binding: [0040] says "immutable by default" and states
 a property, exactly as [0130] stated one before [1850] had to state the
 refusal. Nothing said what a call must match, what may be discarded, or --
-sharpest of all -- what "the type of its context" in [0190] actually means,
+sharpest of all — what "the type of its context" in [0190] actually means,
 which a checker cannot ask for until the positions are listed.
 
 So [1870] says what each of the eleven types holds, [1880] lists every
@@ -654,7 +654,7 @@ compiler knows when it reads it. Each cites the sentence it derives from.
 Two things the tour already said were missed on the first reading and found by
 an adversarial one, and both are recorded here because they are the kind of
 mistake this process exists to catch. [1050] states "the condition, which must
-be bool" -- it sits indented inside a code example, so a scan anchored at
+be bool" — it sits indented inside a code example, so a scan anchored at
 column 0 does not see it, and the whole grammar section is written that way.
 And [1460] states "Values at module level must be known at compile time.
 Nothing runs before the entry point", which is [1940]'s source and settles
@@ -663,7 +663,7 @@ Nothing runs before the entry point", which is [1940]'s source and settles
 Two rules were narrowed rather than adopted as drafted. [1880] first folded
 every all-literal operator before the range check; that would make
 `u8 = 200 + 100` a static error, and [0300] says overflow *traps*. So only a
-unary minus folds, which is the one case that is forced -- without it
+unary minus folds, which is the one case that is forced — without it
 `i8 = -128` is unwritable, because `integer` [1770] spells no sign and `-` is
 an operator [1820]. And [1940] first promised a report naming every
 declaration a cycle runs through; a diagnostic carries an exact number of
@@ -675,7 +675,7 @@ Nothing asks the host how wide anything is. A width is a function of a type
 64-bit host. A literal's value lives in `Landin.Types.Magnitude`, whose bound
 is written out as `2 ** 64 - 1`: that is a fact about `u64`, where
 `Long_Long_Integer` would have been a fact about the machine running the
-compiler -- the same move `Landin.Targets.Byte_Count` already made and states
+compiler — the same move `Landin.Targets.Byte_Count` already made and states
 its reason for. `Fits` builds `2 ** Usable - 1` one bit at a time, because
 forming it directly is one past `Magnitude'Last` in exactly the `u64` case it
 exists to answer. Sign is separate from magnitude because the grammar
@@ -690,8 +690,8 @@ its type down, over every tree, before any body is read, because [1840]'s
 module scope is a set and crosses files. Pass two infers [1790]'s `:=` form on
 demand with `Underway` marking what is already being asked, which is the whole
 of the cycle check. Pass three reads the bodies. Inside an expression the walk
-is two mutually recursive halves -- a node is either asked what type it has or
-required to have one -- because that second half is the only way a literal
+is two mutually recursive halves — a node is either asked what type it has or
+required to have one — because that second half is the only way a literal
 ever gets a type at all. What the flat table still buys is the answer: one
 array indexed by `Node_Id`, no map anywhere.
 
@@ -707,23 +707,23 @@ separate from the parser's `L0010` for a reason of information rather than of
 stage: `u8(x)` is a perfectly good `call` production, and what makes it
 [0700]'s conversion is what `u8` turned out to name. Reusing `L0010` would
 also have made its fixture unwritable, because `check_grammar_corpus` requires
-a frontend-code fixture *not* to derive and this one does -- which an
+a frontend-code fixture *not* to derive and this one does — which an
 adversarial reading caught before it was written.
 
 One defect, found by R1.70's design and fixed under this item's number
 because it is this item's rule that was incomplete. `over: u8 = 200 + 100`
-was accepted. Inside a body that is right -- [0300] says overflow traps, and
+was accepted. Inside a body that is right — [0300] says overflow traps, and
 narrowing [1880]'s folding rule to leave it to the trap was correct. At module
 level it is wrong, and the reason is the interaction of two rules that are
 each correct alone: [1460] says nothing runs before the entry point, so a
 module value has no moment in which to trap and no value to stand for it. So
 [1940] gained the rule, and a module value's operators are folded and refused
 when no type holds the answer. Folding needs a signed value where a literal's
-`Magnitude` is unsigned -- `x: i32 = 1 - 2` is negative -- so `Landin.Types`
+`Magnitude` is unsigned — `x: i32 = 1 - 2` is negative — so `Landin.Types`
 gained `Folded`, bounded by `u64`'s span and its negation for `Magnitude`'s
 reason. The bitwise and shift levels are deliberately not folded: their answer
 depends on a width, and a width belongs to a target. Division by zero is not
-folded either, for the same reason a module value cannot trap -- and at
+folded either, for the same reason a module value cannot trap — and at
 R1.70 that turned out to be a hole rather than a decision, because
 declining was silent. [1950] closes it.
 
@@ -754,7 +754,7 @@ control flow, value definitions, types and call shapes before lowering.
 shape is forced rather than chosen. A structured IR would be `Landin.Syntax`
 plus `Landin.Checking` under new names and R1.80 would still have to
 linearise it, and "exactly one terminator, in last position" is a property a
-tree cannot violate and therefore cannot test -- which would make this item's
+tree cannot violate and therefore cannot test — which would make this item's
 own exit evidence vacuous. Blocks are forced by the kernel and not deferred
 to loops: [0410] makes `and` and `or` short-circuit, observably, so the
 logical words are control flow and `Opcode` has no `Logical_And` and no
@@ -766,7 +766,7 @@ comparison instead of a dominance relation and is the same invariant
 `Landin.Syntax` states as `Slot'Result < Id`. A value's identity is the
 position of the instruction that defines it, so "exactly one definition" is
 the shape of the table rather than a rule to verify. The builder's
-preconditions are structural only -- a wrong-arity call and a mid-block
+preconditions are structural only — a wrong-arity call and a mid-block
 terminator are buildable on purpose, because a precondition there would make
 malformed IR unconstructible and so untestable.
 
@@ -775,7 +775,7 @@ frontend stage, wired into `refine`, so every positive fixture is lowered by
 the fixture suite and `Landin.Tests.Lowering_Suite` reads the Unit back for
 five of them. Two passes, and the first is forced rather than tidy: [1740]
 makes a module a set, so `f` may call `g` written below it and `Emit_Call`
-needs `g`'s item to exist by then -- every item is created over every tree
+needs `g`'s item to exist by then — every item is created over every tree
 before any is filled, and then each is filled alone, because
 `Landin.IR.Open_Run` refuses an interleaved fill.
 
@@ -807,14 +807,14 @@ are five: every instruction but a call records its operands in the same call
 that creates them, so those runs cannot interleave, but a call's arguments
 arrive afterwards and `Enter` asks only that *this* item has no open block.
 So two items could be open at once, and a call was handed one value and read
-back the other item's -- in debug and in release, with every precondition
+back the other item's — in debug and in release, with every precondition
 satisfied and nothing to notice. `Add_Argument` opens its own run now, and
 `Emit_Call` no longer takes a base at creation, which is the same sentence
 as the first two fixes. The case that pins it fails against the old body.
 
 A datum's value block has landed with it. A `Binding` gets its item and its
 block: the value, or D10's zero where there is none, and a `Leave` carrying
-it. Nothing about it is special-cased -- it is `Lower_Expression` over the
+it. Nothing about it is special-cased — it is `Lower_Expression` over the
 same machinery a body uses, which is what keeps the logical case free.
 
 The verifier has landed with it. `Landin.IR.Verifier` is a child of the IR,
@@ -827,9 +827,9 @@ verified by the fixture suite rather than by a probe.
 
 What it does not check is as deliberate as what it does, and the package
 header says which is which. Nothing whose violation the table's shape
-already forbids -- "every value has exactly one definition" is what a
+already forbids — "every value has exactly one definition" is what a
 `Value_Id` *is*, and a test for it could not fail. Nothing that belongs to
-someone else -- whether a `Number` fits its type needs a width and a width
+someone else — whether a `Number` fits its type needs a width and a width
 is `Landin.Targets`'; whether a `Scope_Id` names a real scope is R1.50's and
 asking again would be the second authority the IR's header refuses.
 
@@ -893,20 +893,20 @@ a representation with no caller has no test, and this item shipped one.
   a set, so `f` may call `g` written below it, and `Emit_Call`'s
   `Holds (Into, Callee)` therefore forces a lowering to create every item
   before it fills any. Every item then got the same base, and the second
-  item's slots read back as the first's -- caught by `Add_Slot`'s own
+  item's slots read back as the first's — caught by `Add_Slot`'s own
   postcondition in debug and silent in release. A run's base is now taken on
   its first append.
 - **A block's first value was taken when the block was created.** This
-  package's own header says blocks are created out of fill order -- "an
+  package's own header says blocks are created out of fill order — "an
   `if`'s else-entry is created before the then-arm's inner blocks and filled
-  after them" -- so every block but the first reported the instructions of
+  after them" — so every block but the first reported the instructions of
   whichever was filled first. It is taken in `Enter` now, whose precondition
   already says the block is empty.
 
 `Open_Run` is the third thing, and it is a rule rather than a fix: a `Run` is
 a base and a count, so an item's entities have to be contiguous, and going
 back to an item after starting another silently interleaves two runs. No
-precondition said so, so the body says it, in every mode -- the rule
+precondition said so, so the body says it, in every mode — the rule
 `Landin.Targets` learnt when a release build accepted an alignment of twelve
 that only a precondition had refused.
 
@@ -919,7 +919,7 @@ guessed, because the lowering has to lower every one of them. Eight forms
 were run and all eight are accepted today. Six lower without argument: a
 comparison, `not`, a bitwise operator and a shift all have opcodes, and
 `x: u8 = 200 + 100 - 100` folds at `Folded` width and is a legal program
-whose intermediate never exists at run time -- a verifier that constant
+whose intermediate never exists at run time — a verifier that constant
 folded a datum in the instruction's own type would refuse it, which is a
 trap worth naming here.
 
@@ -931,7 +931,7 @@ Two do not, and each needed something.
   lowering would fold the logical level inside a datum. That was wrong, and
   the correction is worth keeping rather than quietly replacing. Folding the
   logical level needs the comparison level under it, and
-  `k: bool = (1 << 2) < 8 and true` is accepted -- measured, not supposed --
+  `k: bool = (1 << 2) < 8 and true` is accepted — measured, not supposed --
   so it needs the bitwise and shift levels too, and those need a width. That
   is a second constant folder beside the checker's, over the whole of
   [1820], and two authorities on one question is what this compiler refuses
@@ -940,7 +940,7 @@ Two do not, and each needed something.
   type. So a datum gets the blocks a body would, from the same
   `Lower_Short_Circuit`, and no new evaluator exists to disagree with the
   checker. What it costs is that R1.80 reads a datum's block instead of one
-  folded constant -- which it had to do regardless, because [1940]'s fold
+  folded constant — which it had to do regardless, because [1940]'s fold
   stops at the arithmetic level and the header already said the bitwise and
   shift levels arrive as instructions.
 - **`later: i32` has no value to describe.** Reading one was accepted too --
@@ -972,7 +972,7 @@ own first three targets.
 
 The first two rows disagree with [0320], which fills with zeros beyond the
 width for any amount, so `refine` already owes a guard on both of R1.80's and
-R5.30's targets for an ordinary over-wide shift -- and a negative amount
+R5.30's targets for an ordinary over-wide shift — and a negative amount
 therefore costs no code generation that was not already owed. The division
 rows disagree with each other, which is what rules out leaving a zero divisor
 to the machine: one program would mean two things.
@@ -1012,8 +1012,8 @@ them is recorded under R1.70 rather than repeated here. A zero divisor and a
 negative shift amount the compiler does not know must trap, and only this
 item can emit that trap: `L0306` refuses the ones it knows and says nothing
 about the rest. A shift whose amount reaches or passes the width must yield
-zero [0320], and x86-64 masks the count instead -- five bits at 32-bit, six
-at 64 -- so `1u32 << 40` needs a guard the hardware does not give, on every
+zero [0320], and x86-64 masks the count instead — five bits at 32-bit, six
+at 64 — so `1u32 << 40` needs a guard the hardware does not give, on every
 shift whose amount the compiler cannot bound. And the lowest value of a
 signed type over -1 traps as the overflow [0300] already makes it, which
 `IDIV` gives here for nothing and R5.30 will have to construct.
@@ -1030,7 +1030,7 @@ rules are this item's rather than a paragraph's. Every *value* gets a cell and
 not only every slot: `Landin.IR` keeps values block-local so that a backend
 never computes dominance, and the cheapest correct way to honour that is to
 store each defined value and reload it where it is used. That is unoptimised
-by construction -- every operand is a memory reference -- and it is the
+by construction — every operand is a memory reference — and it is the
 "deterministic baseline code generation before competitive optimization" this
 roadmap already asked for, with promoting a cell to a register left to R4.50
 where a register allocator is actually being written. A cell is then placed at
@@ -1046,7 +1046,7 @@ header that how a bool is stored is R2.10's, and a frame cannot be laid out
 without an answer. R2.10 owns a bool inside an aggregate and may say more; a
 frame cell is not an aggregate, and what it settles must agree with this.
 
-What is emitted so far is the straight-line kernel -- a literal, a truth, a
+What is emitted so far is the straight-line kernel — a literal, a truth, a
 slot read and written, ordinary and wrapping add, subtract and multiply,
 division, remainder, the unary and bitwise operators, both shifts, all six
 comparisons, a call, a jump, a branch, a return and a module value --
@@ -1082,8 +1082,8 @@ and one as unsigned values.
 
 A shift is where this backend emits most of what the hardware does not give,
 and both of the obligations above are now discharged there. The amount is
-tested against the type's own width, because x86-64 masks the count -- five
-bits at 32-bit, six at 64 -- while [0320] fills with zeros beyond it for any
+tested against the type's own width, because x86-64 masks the count — five
+bits at 32-bit, six at 64 — while [0320] fills with zeros beyond it for any
 amount, so `1u32 << 40` would otherwise shift by 8. A signed amount is tested
 for being negative first, because D6 gives the amount the left operand's type
 and [1950] leaves the ones `L0306` could not read to the trap; an unsigned
@@ -1103,7 +1103,7 @@ it every parameter once and in order, so its operands are already the argument
 list and the six registers are filled from them in that order, each at its own
 parameter's width rather than at one the call site picks. The result comes
 back in the accumulator and becomes a frame cell like any other value, and a
-callee returning none leaves nothing there to take -- which is [1930]'s rule
+callee returning none leaves nothing there to take — which is [1930]'s rule
 seen from the backend, since a discard is about who reads a result and not
 about what ran. Nothing is pushed for a call: the frame is already a multiple
 of the target's stack alignment, so `%rsp` meets the ABI where the call is
@@ -1159,8 +1159,8 @@ Two of the first plan's assumptions were wrong, and measuring is what found
 both. `cc` does not exist on the Linux gate at all: the container recipe and
 `.build.yml` install `binutils` and `libc6-dev` and deliberately not
 `build-essential`, so a link driven by `cc` would have failed CI rather than
-this host. And the pinned GNAT is already a complete toolchain -- `as`, `ld`
-and `gcc` all resolve inside its own `bin/`, ahead of `/usr/bin` -- so the
+this host. And the pinned GNAT is already a complete toolchain — `as`, `ld`
+and `gcc` all resolve inside its own `bin/`, ahead of `/usr/bin` — so the
 finishing step needs no new dependency and no second C toolchain. It is the
 one pinned toolchain this repository already committed to.
 
@@ -1170,13 +1170,13 @@ distribution; invoking `ld` directly would move every one of them into this
 compiler, where no paragraph could say what they are.
 
 Which driver is a decision, and it is the GNU convention rather than a new
-one. Cross tools carry the `--target` argument as a prefix -- GCC's own
+one. Cross tools carry the `--target` argument as a prefix — GCC's own
 internals documentation states it, and the pinned GNAT installs itself as
 `x86_64-pc-linux-gnu-gcc` on Linux and `aarch64-apple-darwin24.6.0-gcc` on
 the macOS host, both measured. So `Landin.Targets.Capabilities` carries a
 triplet and `refine` runs `<triplet>-gcc`. That package and not
 `Target_Facts`, because its header already claims exactly this ground --
-"the external tools needed to finish a program for that machine" -- while
+"the external tools needed to finish a program for that machine" — while
 `Target_Facts` says a description holds "nothing about what a program may
 name". A target with no backend has no triplet, which is the same fact its
 backend column already states.
@@ -1203,7 +1203,7 @@ what a host without the toolchain falls on.
 
 Zig was read rather than assumed, since `tour.md`'s third line is "Zig, but
 sweeter". Zig builds for every target independently of the host and buys
-that by vendoring the finishing step -- LLD as a multi-format cross-linker
+that by vendoring the finishing step — LLD as a multi-format cross-linker
 and libc *sources* for 97+ targets. [1550] has already declined that
 mechanism, and LLVM by name. But the property separates from the mechanism:
 source to assembly text is host-independent here *already*, by the rule that
@@ -1231,7 +1231,7 @@ Two ways of reaching a target this repository has no backend for were
 proposed here and both are declined, recorded because each will be proposed
 again. Vendoring Apple's `.tbd` stubs, which is how Zig cross-compiles to
 macOS without an SDK: declined because it is the vendoring [1550] already
-refused, and because Landin does not need it -- macOS arm64's answer is a
+refused, and because Landin does not need it — macOS arm64's answer is a
 macOS runner, not a Mach-O cross-linker, and Xcode on a Mac is exactly what
 Apple's agreement contemplates. And building cross toolchains and retaining
 the artefacts: declined for three separate reasons, one per target. Cortex-M
@@ -1295,9 +1295,9 @@ filled out of order or at the wrong width reaches the other status; it also
 recurses ten deep for a triangular number, calls a function returning none as
 a statement, and discards a result.
 `runtime/module-values-hold-and-are-updated` reads folded module values back
-on the hardware -- an arithmetic fold, one that names another, D13's shift
+on the hardware — an arithmetic fold, one that names another, D13's shift
 beyond the width, a complement at a byte's width, a negative one, `u64`'s
-largest and a comparison -- and then calls a function twice that adds to a
+largest and a comparison — and then calls a function twice that adds to a
 `mut` module binding declared with no value, so D10's zero is where the count
 starts from. It also runs four of those expressions a second time as
 instructions and compares the two answers, which is the check that matters
@@ -1307,8 +1307,8 @@ that comparison existed.
 Three more came out of asking what this item had proved rather than what it
 had emitted, and the question was worth asking: every positive fixture emitted
 assembly, and emitting is not running. Four of [1810]'s statement forms had
-never executed -- `return when`, a bare `return` inside a body, an `elsif`
-chain, and `inc`/`dec` -- so a wrong branch edge or a mis-emitted epilogue
+never executed — `return when`, a bare `return` inside a body, an `elsif`
+chain, and `inc`/`dec` — so a wrong branch edge or a mis-emitted epilogue
 would have passed the whole gate on the strength of the compiler having
 accepted the program. `runtime/statements-run-as-they-read` runs all four.
 Every executed call had carried integers, so `runtime/bools-cross-the-abi`
@@ -1327,7 +1327,7 @@ and reports a fixture the grammar cannot.
 The audit found one more, and it is the shape of defect this item can produce
 at all: a program the frontend accepts and the backend cannot emit. Nothing in
 the kernel bounds a parameter list, [1650] hands six integer arguments in
-registers and the rest on the stack, and the stack half is not written -- so a
+registers and the rest on the stack, and the stack half is not written — so a
 seventh parameter met `Argument_Register`'s compiler defect and `refine`
 exited 70 saying "internal compiler defect". That is the one answer an
 accepted program must never get: it is neither a compilation nor a diagnostic,
@@ -1339,7 +1339,7 @@ with the rest of the ABI at R4.40; until then this is a stated limit rather
 than a crash.
 
 The audit's last finding was not this item's to cause and is this item's to
-have exposed. [1940]'s cycle rule was implemented in one place only -- the
+have exposed. [1940]'s cycle rule was implemented in one place only — the
 guard that catches a module value whose *type* is being inferred from itself
 -- so `a: i32 = b + 1` beside `b: i32 = a + 1` slipped past it: both write
 their types down, nothing is ever Underway, and the checker's own fold walked
@@ -1349,7 +1349,7 @@ folder meeting the cycle three stages later and raising a compiler defect.
 The fold now carries its own guard over the declarations it is standing
 inside, and reports [1940]'s refusal naming the declaration the chain came
 back to. A chain of three reports three times, once per member, because each
-member is separately a value no type holds -- which is the rule
+member is separately a value no type holds — which is the rule
 `compiler/tests/README.md` already states about `codes` being a list rather
 than a set.
 
@@ -1357,8 +1357,8 @@ That guard also retired a depth limit that was doing semantic work it should
 never have done. The fold stopped at sixty-four links and returned quietly,
 which was written when the only thing that could recur forever was a cycle
 [1940] was assumed to have reported already. It was accepting two kinds of
-program in silence: a cycle longer than the limit, and -- worse, because it
-is legal source -- an honest chain longer than it, whose fold was then never
+program in silence: a cycle longer than the limit, and — worse, because it
+is legal source — an honest chain longer than it, whose fold was then never
 checked against its type. A chain of three hundred `u8` bindings each one
 more than the last was accepted entire; it now reports the forty-five links
 whose answer no `u8` holds. Nothing bounds the walk now except the cycle
@@ -1385,14 +1385,14 @@ evidence for exactly that.
 [1960]'s native trap evidence is here too, and getting it needed the runtime
 seam widened rather than a fixture written. A `Tool_Result` carried an integer,
 and an integer cannot tell a program a signal killed from one that exited with
-some number -- so a trapping fixture could only have been written by freezing
+some number — so a trapping fixture could only have been written by freezing
 the encoding [1960] declares unstable. `Landin.Platform` now answers how a run
 ended as well as what it returned, in two values and not a number: `Exited`
 with a status, or `Signaled` with none. No signal number reaches the record,
 which is the whole point of the distinction. The decoding is measured rather
-than assumed -- the pinned GNAT's own spawn answers -1 for a child killed by
+than assumed — the pinned GNAT's own spawn answers -1 for a child killed by
 SIGILL and by SIGSEGV and the true status otherwise, and a POSIX exit status is
-one byte and so can never be -1 -- and `compiler/tests/README.md` records what
+one byte and so can never be -1 — and `compiler/tests/README.md` records what
 that measurement was.
 
 A fixture says `traps: yes` in place of `status`, because a program that
@@ -1423,14 +1423,14 @@ The decoding itself is measured on whichever host runs the suite rather than
 once on Linux and assumed elsewhere: a platform case kills a shell with SIGILL
 through the real adapter and holds the answer to being `Signaled`, beside one
 that exits 3 and carries its status. That case touches the real host on
-purpose -- how a killed process is reported is a fact about the host and the
+purpose — how a killed process is reported is a fact about the host and the
 pinned runtime, and a fake would only repeat what this adapter was told to
 believe.
 
 A host that cannot finish the target fails rather than skipping, and that was
 a decision with a real alternative. Skipping keeps a macOS run green, and
-`compiler/tests/README.md` already refuses it in one sentence -- "A fixture
-that records an expectation nobody runs is [a fault]" -- because a green run
+`compiler/tests/README.md` already refuses it in one sentence — "A fixture
+that records an expectation nobody runs is [a fault]" — because a green run
 that tested nothing is worse than a red one, and because the same silence
 would hide the Linux gate losing its own toolchain. The failure carries
 `refine`'s report, so `L0500`'s note is what tells the reader which toolchain
@@ -1455,7 +1455,7 @@ and the emitted bytes were measured identical on macOS arm64 and on Linux
 x86-64 by hand. A seventh parameter met a compiler defect and exited 70,
 which is the one answer an accepted program must never get; it is `L0503`
 now. And [1940]'s cycle rule was implemented for the chains that have a type
-to infer and no others, so a typed one was accepted in silence -- twice over,
+to infer and no others, so a typed one was accepted in silence — twice over,
 because the fold's depth limit was quietly accepting long chains as well.
 
 The last of those is the shape worth remembering rather than the individual
@@ -1480,7 +1480,7 @@ one construct-indexed corpus.
 
 R1.80's audit leaves this item three things to start from, each recorded
 where it was found. No positive fixture is executed, only emitted, so the
-matrix has to say for each construct whether it was accepted, emitted or run -- those are three different claims and only the third is
+matrix has to say for each construct whether it was accepted, emitted or run — those are three different claims and only the third is
 evidence about a machine. A runtime fixture names one `program`, so a
 multi-file module cannot be expressed as one at all, though the driver
 compiles several sources as one module. And a refusal that only a backend can
@@ -1490,7 +1490,7 @@ without `--emit`; `L0503` is an end-to-end fixture for that reason.
 The first of those is closed. Every positive fixture is now handed to a
 backend as well as to a parser: the suite runs `refine --emit=asm` over all
 of them and fails on a program that was accepted and could not be emitted,
-carrying `refine`'s own report. It is measured rather than assumed -- with
+carrying `refine`'s own report. It is measured rather than assumed — with
 [1650]'s register count temporarily cut to one, the case reports
 `positive/call-fills-every-parameter: accepted but not emitted` and names
 `L0503` as the reason. What a positive fixture still does not do is run;
@@ -1500,7 +1500,7 @@ evidence now asks each row to state.
 The corpus now says what it is evidence about. A fixture carrying a program
 names the constructs it exercises, and `check.py` holds every one of them to a
 paragraph `tour.md` or `spec.md` defines while the harness holds it to being
-four digits -- each half asked of the side that can answer it. A fixture with
+four digits — each half asked of the side that can answer it. A fixture with
 no program names none, because an unknown option and the identity text are
 about the tool rather than the language.
 
@@ -1518,8 +1518,8 @@ The matrix itself is generated, for the reason the catalogue and the token
 dump already are: a hand-kept index of 197 rows is an index that will be
 wrong. `check.py --matrix` writes `compiler/tests/constructs.matrix` and a
 full run refuses it when stale. Every construct either document defines gets
-a row, against the three claims the corpus can make about it -- accepted,
-emitted, executed -- plus whether the parser refuses it by name and cites the
+a row, against the three claims the corpus can make about it — accepted,
+emitted, executed — plus whether the parser refuses it by name and cites the
 paragraph, which is what explains a row for a construct the kernel does not
 enable.
 
@@ -1531,7 +1531,7 @@ and not what the program in it actually exercises, so a runtime program full
 of literals says nothing about [1770] unless it names it. Under-claiming is
 the expected state of a list seeded from prose, and the first pass over it is
 done: every construct of [1740]-[1970] that can be executed now is, and the
-four that are not -- [1830], [1850], [1860] and [1910] -- are rules about what
+four that are not — [1830], [1850], [1860] and [1910] — are rules about what
 a compiler refuses or checks, which nothing runs. Sixty-one constructs carry
 evidence.
 
@@ -1541,13 +1541,13 @@ change if it were implemented wrong, not when it appears in the text. Every
 runtime program contains literals, so claiming [1770] everywhere would fill a
 column and say nothing. That rule caught one of this pass's own claims --
 `runtime/statements-run-as-they-read` was given [1840] while declaring nothing
-inside an `if` arm, which is not evidence about arm scopes -- and the fixture
+inside an `if` arm, which is not evidence about arm scopes — and the fixture
 grew a function that declares the same name in both arms rather than the claim
 being quietly kept.
 
 Reading the bare rows separated two things that had looked like one. Most of
-the 136 were the language the kernel has not reached -- floats, characters,
-text, ranges, `sizeof`, pointers, arrays, slices -- and their silence is
+the 136 were the language the kernel has not reached — floats, characters,
+text, ranges, `sizeof`, pointers, arrays, slices — and their silence is
 correct. But a second group was covered all along and unattributed: a fixture
 demonstrating an inferred binding cited [1790], the kernel rule it was written
 against, and not [0050], the paragraph that teaches the thing. The tour is
@@ -1557,7 +1557,7 @@ each paragraph against the program that claims it.
 
 Two rows were neither, and both became fixtures. [0150] names `u128` and
 `i128` while [1790]'s type rule does not, and the kernel already refuses one
-by name -- `L0101`, rather than reading it as a name that declares nothing --
+by name — `L0101`, rather than reading it as a name that declares nothing --
 with nothing pinning that. And [0410] fixes evaluation order, which no fixture
 could have observed: every runtime program until now asserted a *value*, and a
 value is the same whichever operand ran first. `runtime/evaluation-order-is-left-then-right`
@@ -1570,8 +1570,8 @@ The matrix reads 76 with evidence and 121 with neither, and what is left in
 that 121 is language the kernel does not have.
 
 The last of the three is closed too. A runtime fixture named one `program`,
-so [1840]'s own sentence -- the module scope is "every file compiled
-together" -- was a claim the corpus had no way to make, though the driver has
+so [1840]'s own sentence — the module scope is "every file compiled
+together" — was a claim the corpus had no way to make, though the driver has
 compiled several sources as one module since R1.50. A fixture may now name
 `with`, the rest of the module, and `runtime/one-module-across-two-files`
 executes a program whose `main` calls a function and reads a module value
@@ -1584,8 +1584,8 @@ The fourth word in this item's exit evidence turned out to be asking for
 something the design forbids, and the wording is corrected below rather than
 the design bent to it. There can be no verifier *fixture*:
 `Landin.IR.Verifier`'s own header argues that malformed IR cannot be caused
-by a source program -- the frontend refuses every ill-formed one and this
-stage refuses to run on a refused one -- and the `L0400`-`L0499` band is left
+by a source program — the frontend refuses every ill-formed one and this
+stage refuses to run on a refused one — and the `L0400`-`L0499` band is left
 unassigned precisely so that no code promises otherwise. A fixture class for
 it would be a promise `landin.ads` forbids.
 
@@ -1596,7 +1596,7 @@ release build does not quietly skip it. Both halves were measured.
 
 That left one thing worth guarding. Because no fixture can reach the
 verifier, deleting the call would turn all of its rules off without a single
-case going red -- the failure this item exists to find, in the machinery of
+case going red — the failure this item exists to find, in the machinery of
 the item itself. `check.py` now holds the lowering stage to making that call,
 which is the same kind of structural rule as the one that keeps every code
 literal in the catalogue: some invariants are about where a line is and not
@@ -1612,7 +1612,7 @@ the matrix reads 82 with evidence against 115 that are language the kernel
 does not have.
 
 One row was left deliberately. [1550] says Landin keeps its own native
-backends, which is true and which every runtime fixture depends on -- and no
+backends, which is true and which every runtime fixture depends on — and no
 fixture *discriminates* it: a Landin that emitted LLVM IR would exit 42 just
 the same. Claiming it would be the failure the claiming rule exists to
 prevent, so the row stays bare and this sentence is why.
@@ -1639,7 +1639,7 @@ which is the whole reason for building it rather than counting fixtures.
 
 Two habits came out of it and both are written where they will be met.
 Attribute a fixture to the paragraph that teaches the thing and not only to
-the kernel rule it was written against -- two passes of this item found rows
+the kernel rule it was written against — two passes of this item found rows
 covered all along and unattributed, and the second pass found them after the
 first had already looked. And name a construct only when the fixture's
 passing would change if it were implemented wrong, which is what keeps a
@@ -1671,7 +1671,7 @@ Most of the model arrived with the chassis: `Landin.Targets` has held the
 facts, the widths, the alignments and the checked arithmetic since R0.60, and
 cases already refuse an alignment it will not guess and report an overflow.
 What it did not have was a way for a *program* to observe any of it, which is
-what "measurements agree with the target model" asks for -- so [0370] is
+what "measurements agree with the target model" asks for — so [0370] is
 enabled, and `sizeof` and `alignof` are the first constructs of the tour to be
 turned on since the kernel was drawn.
 
@@ -1680,7 +1680,7 @@ because a size is a count of bytes on the machine being compiled for and that
 is what [0160] says `usize` is; and the answer is not folded by the checker or
 the lowering. `Landin.IR` carries `Measure_Size` and `Measure_Align` with the
 type asked about, and the backend answers, because a size needs a width and a
-width needs a target -- the same seam [0320]'s zero-fill already sits on, and
+width needs a target — the same seam [0320]'s zero-fill already sits on, and
 the one that keeps the IR target-neutral. A case emits one source against two
 descriptions and reads 8 against Linux x86-64 and 4 against the synthetic
 32-bit one, from a host that is neither.
@@ -1689,7 +1689,7 @@ The goldens are the other half, and they are recorded rather than generated:
 producing one means asking the target model, which `check.py` cannot do, so
 `./scripts/test.sh --record` writes `compiler/tests/layout.targets` beside
 `lowering.ir` and a case holds it to what the model says now. Both described
-targets are in it rather than the synthetic one alone -- what a reader needs
+targets are in it rather than the synthetic one alone — what a reader needs
 is the two columns beside each other, because the defect being guarded
 against is a description quietly inheriting the development host's answers,
 and a `usize` reading eight in both would be exactly that.
@@ -1697,7 +1697,7 @@ and a `usize` reading eight in both would be exactly that.
 `lenof` is the third of [0370] and is not enabled with them: it measures an
 array or a slice, [1790]'s type rule has neither, and R2.20 is where they
 arrive. It is refused by name and cites the paragraph, like every other
-construct the tour describes and the kernel omits -- and refusing it took
+construct the tour describes and the kernel omits — and refusing it took
 consuming the name it was measuring, because leaving that behind turned one
 answered question into three reports about a statement shape.
 
@@ -1705,8 +1705,8 @@ Closing it against those clauses found one defect and one overstatement.
 
 The defect was in the slice above rather than in the model: an expression
 body would not take a measurement. [1800] says a body may be one expression,
-and `Parse_Body` decided what one was from its own list of tokens -- a
-literal, a paren, a prefix sign -- written before [1820] had a first set to
+and `Parse_Body` decided what one was from its own list of tokens — a
+literal, a paren, a prefix sign — written before [1820] had a first set to
 ask. Adding `sizeof` to that first set did not add it here, so
 `g: () -> (r: usize) = sizeof u64 end` was refused with "this begins no
 statement" while `g: () -> (r: usize) = 8 end` was fine. The body now asks

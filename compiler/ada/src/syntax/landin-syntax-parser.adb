@@ -127,12 +127,11 @@ package body Landin.Syntax.Parser is
    --  Naming them is the difference between "this type is not enabled
    --  yet" and "this is not a type", and only the first is true.
    type Refused_Type is
-     (Named_Type, Float_16, Float_32, Float_64,
+     (Float_16, Float_32, Float_64,
       Text_Utf8, Text_Utf16, Text_C_String);
 
    function Spelling (Item : Refused_Type) return String
      is (case Item is
-            when Named_Type    => "type",
             when Float_16      => "f16",
             when Float_32      => "f32",
             when Float_64      => "f64",
@@ -142,7 +141,6 @@ package body Landin.Syntax.Parser is
 
    function Refusal (Item : Refused_Type) return Syn.Refused_Construct
      is (case Item is
-            when Named_Type    => Syn.Declared_Type,
             when Float_16
                | Float_32
                | Float_64      => Syn.Float_Type,
@@ -304,6 +302,9 @@ package body Landin.Syntax.Parser is
               return Slot_List;
             function Parse_Program return Node_Id;
             function Parse_Declaration return Node_Id;
+            function Parse_Type_Declaration
+              (Exported  : Boolean;
+               Public_At : Landin.Source.Span) return Node_Id;
             function Parse_Binding
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
@@ -781,6 +782,15 @@ package body Landin.Syntax.Parser is
                   return Parse_Function (Exported, Public_At);
                end if;
 
+               --  [1795]: `identifier ":" "type" "=" type`.  Decided the
+               --  same way a function is, by what follows the colon.
+               if Peek = Tok.Identifier
+                 and then Ahead (1) = Tok.Colon
+                 and then Ahead (2) = Tok.Kw_Type
+               then
+                  return Parse_Type_Declaration (Exported, Public_At);
+               end if;
+
                return Parse_Binding (Exported, Public_At);
             end Parse_Declaration;
 
@@ -860,6 +870,41 @@ package body Landin.Syntax.Parser is
             begin
                Type_Refused := False;
 
+               --  [1795] makes `type` a keyword, so a type position that
+               --  holds one is met here by kind rather than by spelling.
+               --  In a parameter it is [1290]'s type parameter and
+               --  elsewhere it is [0120]'s declaration written where a
+               --  type belongs; naming which is the difference between
+               --  "not enabled yet" and "not a type".
+               if Peek = Tok.Kw_Type then
+                  Type_Refused := True;
+                  Refuse
+                    (Item    => (if In_Parameter then Syn.Type_Parameter
+                                 else Syn.Declared_Type),
+                     Where   => At_Type,
+                     Message => "`type` is not enabled yet");
+                  Advance;
+                  return Add (Error_Type, At_Type);
+               end if;
+
+               --  [0670]'s inline form is also the parameter, return and
+               --  payload list, so a `(` where a type belongs is a struct
+               --  and is named as one.  [1795] made this reachable: the
+               --  declaration around it is enabled now and its body is
+               --  what is not.
+               if Peek = Tok.Left_Paren then
+                  Type_Refused := True;
+                  Refuse
+                    (Item    => Syn.Struct_Type,
+                     Where   => At_Type,
+                     Message => "a struct is not enabled yet");
+                  --  The `(` is left where it is: Resync_Declaration
+                  --  counts nesting from here, and skipping it first
+                  --  would leave `x: i32` looking like the next
+                  --  declaration.
+                  return Add (Error_Type, At_Type);
+               end if;
+
                if Peek not in Tok.Kernel_Kind then
                   Mark_Reported;
                   Advance;
@@ -883,10 +928,7 @@ package body Landin.Syntax.Parser is
                         if Refused_Id (Item) = Spelled then
                            Type_Refused := True;
                            Refuse
-                             (Item    =>
-                                (if Item = Named_Type and then In_Parameter
-                                 then Syn.Type_Parameter
-                                 else Refusal (Item)),
+                             (Item    => Refusal (Item),
                               Where   => At_Type,
                               Message => "`" & Spelling (Item)
                                          & "` is not enabled yet");
@@ -945,6 +987,49 @@ package body Landin.Syntax.Parser is
 
             --  binding ::= "mut"? identifier ":" type ("=" expression)?
             --            | "mut"? identifier ":=" expression      [1790]
+            --  `identifier ":" "type" "=" type` [1795].  The name is
+            --  parsed the way every declared name is, so [1760]'s two
+            --  narrowings hold for a type name unchanged.
+            function Parse_Type_Declaration
+              (Exported  : Boolean;
+               Public_At : Landin.Source.Span) return Node_Id
+            is
+               Start : constant Landin.Source.Span :=
+                 (if Exported then Public_At else Here);
+               Named   : Landin.Source.Names.Name_Id;
+               At_Name : constant Landin.Source.Span :=
+                 Parse_Declared_Name (Named);
+               Aliased_Type : Node_Id := No_Node;
+            begin
+               --  The colon and the word are what brought us here.
+               Advance;
+               Advance;
+
+               if Expect
+                    (Wanted  => Tok.Equal,
+                     Message => "a type declaration names a type after `=`",
+                     Note    => "[1795]: name `:` `type` `=` type",
+                     Related => At_Name,
+                     Because => "declared here")
+               then
+                  Aliased_Type := Parse_Type (False, At_Name);
+
+                  if Type_Refused then
+                     Resync_Declaration;
+                  end if;
+               else
+                  Resync_Declaration;
+               end if;
+
+               return Add
+                 (Of_Kind  => Type_Declaration,
+                  At_Token => At_Name,
+                  Extent   => Join (Start, After_Previous),
+                  Children => [1 => Aliased_Type],
+                  Named    => Named,
+                  Exported => Exported);
+            end Parse_Type_Declaration;
+
             function Parse_Binding
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id
