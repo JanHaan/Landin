@@ -1832,7 +1832,21 @@ one. A checker case distinguishes two same-shaped declarations and follows the
 three alias shapes; the positive struct fixture puts its alias first so the
 language-facing path pins the ordering too.
 
-Implement arrays, ordinary/C/packed structs, variants, tags, payload alignment
+A declared ordinary struct now has the [0750] placement its scalar fields ask
+for, recorded beside that identity in `Landin.Checking`; direct and forward
+aliases query that same canonical layout. The checker passes the fields in
+declaration order to `Landin.Targets.Placement`; it does not put an
+aggregate datum into the scalar IR, enable a value, or infer layout from the
+host. `Landin.Types.Storage_Size` is the one shared conversion from a scalar to
+ordinary unpacked storage, so frame layout and aggregate layout cannot disagree
+about `bool` or pointer-width integers. The checker case works `i32 i32 bool`
+to offsets 0, 4 and 8, extent 9, alignment 4 and size 12, then checks
+`usize bool` as size 16 on Linux x86-64 and 8 on the synthetic 32-bit target. That is the
+first source-declared layout and proves both source order and target dependence
+through the frontend seam while values remain deliberately refused.
+
+Complete ordinary structs and implement arrays, C/packed structs, variants,
+tags, payload alignment
 and the policy for spare-bit folding. Use measured fixtures rather than host
 Ada representation as authority.
 
