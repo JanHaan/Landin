@@ -10,7 +10,17 @@ is eventually rewritten, these must still be the tests it has to pass.
 compiler/tests/
   fixtures/<class>/<name>/fixture.meta   the fixture and its metadata
   harness-cases/malformed/               trees that must be rejected
+  constructs.matrix                      generated: every [NNNN] and its evidence
+  diagnostics.catalogue                  generated: every code and its rule
+  lexical.tokens                         generated: the scanned corpus
 ```
+
+The three generated files are reading copies of something that is decided
+elsewhere, and `check.py` refuses each when it is stale. `constructs.matrix`
+is R1.90's: it lists every construct either document defines against what
+the corpus says about it, and a construct with neither evidence nor a
+by-name refusal is a row that item has to answer for. Regenerate it with
+`python3 check.py --matrix`.
 
 Fixture classes, and the directory each uses:
 
