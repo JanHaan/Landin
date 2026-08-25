@@ -1,0 +1,14 @@
+--  [1840]: the module scope is "every file compiled together", and until
+--  this fixture nothing executed a program that was more than one file.
+--  `main` names a function and a module value declared in the other, and
+--  the other names one declared here, so neither file is self-contained
+--  and the module has to be the set of both [0130].
+public main: () -> (code: i32) =
+    if doubled(base) == 84 and echoed == 42 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
+
+base: i32 = 42
