@@ -103,6 +103,18 @@ begin
 
          if Wrote then
             Text_IO.Put_Line ("wrote compiler/tests/lowering.ir");
+
+            Landin.Tests.Targets_Suite.Record_Artefact
+              ("../tests/layout.targets", Wrote);
+
+            if Wrote then
+               Text_IO.Put_Line ("wrote compiler/tests/layout.targets");
+            else
+               Text_IO.Put_Line
+                 (Text_IO.Standard_Error,
+                  "could not write ../tests/layout.targets");
+               Ada.Command_Line.Set_Exit_Status (1);
+            end if;
          else
             Text_IO.Put_Line
               (Text_IO.Standard_Error, "could not write " & Path);

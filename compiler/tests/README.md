@@ -13,10 +13,15 @@ compiler/tests/
   constructs.matrix                      generated: every [NNNN] and its evidence
   diagnostics.catalogue                  generated: every code and its rule
   lexical.tokens                         generated: the scanned corpus
+  layout.targets                         recorded: what each target measures
+  lowering.ir                            recorded: every positive fixture, lowered
 ```
 
-The three generated files are reading copies of something that is decided
-elsewhere, and `check.py` refuses each when it is stale. `constructs.matrix`
+Generated and recorded are not the same word here. `check.py` writes the
+first three and refuses each when it is stale; the last two are written by
+`./scripts/test.sh --record`, because producing them means running compiler
+stages and asking the target model, which `check.py` cannot do. It will not
+tell you those two are stale -- the harness and the gate will. `constructs.matrix`
 is R1.90's: it lists every construct either document defines against what
 the corpus says about it, and a construct with neither evidence nor a
 by-name refusal is a row that item has to answer for. Regenerate it with
@@ -256,17 +261,28 @@ That check earned itself immediately: the driver had held `L0001` to `L0004`
 as literals since R0.50, and moving them into the catalogue was the first
 thing it demanded.
 
-## lowering.ir
+## lowering.ir and layout.targets
 
 `compiler/tests/lowering.ir` is generated: `./scripts/test.sh --record`
 writes it by lowering every positive fixture and rendering the Unit with
-`Landin.IR.Dump`. It is the third recorded artefact and the only one
-`check.py` does not touch, and that difference matters enough to state.
+`Landin.IR.Dump`. `compiler/tests/layout.targets` is written by the same
+command, and records what `Landin.Targets` says a value of each scalar type
+measures on each described target. Both are recorded artefacts `check.py`
+does not touch, and that difference matters enough to state.
 `check.py` generates the other two because it owns their sources — its own
 tokeniser, and the catalogue's Ada text. It owns nothing here: producing
-this file means running four compiler stages, so the Ada harness is what
-can produce it and **`python3 check.py` will not tell you it is stale.**
-`./scripts/test.sh` will, and so will the gate.
+these files means running compiler stages and asking the target model, so the
+Ada harness is what can produce them and **`python3 check.py` will not tell
+you either is stale.** `./scripts/test.sh` will, and so will the gate.
+
+`layout.targets` exists for an ordering reason R2.10 states: a description is
+the only thing a compiler with no such machine can be held to, and the
+synthetic 32-bit target has no backend and will not have one until a Cortex-M
+slice arrives. Recording both targets rather than that one is deliberate --
+what a reader needs is not "the 32-bit model says four" but the two columns
+beside each other, because the defect being guarded against is a description
+quietly inheriting the development host's answers. A `usize` that read eight
+in both would be exactly that, and it is a one-line change away at any time.
 
 Recording runs no case, and no case ever writes. Two disjoint modes in one
 binary, chosen only by an argument a human typed: there is no environment
