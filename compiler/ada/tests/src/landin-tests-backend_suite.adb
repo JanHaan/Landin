@@ -583,6 +583,134 @@ package body Landin.Tests.Backend_Suite is
       end loop;
    end Every_Bitwise_Operator_Selects_Its_Instruction;
 
+   --  [0320] fills with zeros beyond the width for any amount, and x86-64
+   --  masks the count instead -- five bits at 32-bit, six at 64 -- so
+   --  `1u8 << 40` would shift by 8 on the bare hardware.  The width test is
+   --  therefore the compiler's own and not the processor's.
+   procedure Unsigned_Shift_Left_Zeroes_Beyond_The_Width
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unsigned_Shift_Left_Zeroes_Beyond_The_Width
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: u8, s: u8) -> (r: u8) =" & LF
+         & "    r = a << s" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movb -6(%rbp), %al" & LF
+           & HT & "cmpb $8, %al" & LF
+           & HT & "jb .L1_V5_inrange" & LF
+           & HT & "movb $0, -8(%rbp)" & LF
+           & HT & "jmp .L1_V5_done" & LF
+           & ".L1_V5_inrange:" & LF
+           & HT & "movb -6(%rbp), %cl" & LF
+           & HT & "movb -7(%rbp), %al" & LF
+           & HT & "shlb %cl, %al" & LF
+           & HT & "movb %al, -8(%rbp)" & LF
+           & ".L1_V5_done:" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "a u8 shift tests its own width before shifting");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "ud2"),
+            "an unsigned amount cannot be negative and needs no trap");
+      end;
+   end Unsigned_Shift_Left_Zeroes_Beyond_The_Width;
+
+   --  D6 gives the amount the left operand's type, so a signed left operand
+   --  admits a negative amount and [1950] leaves the ones the compiler could
+   --  not read to the trap.  A signed `>>` is the arithmetic one.
+   procedure Signed_Shift_Right_Traps_A_Negative_Amount
+     (Item : in out Landin.Testing.Context);
+
+   procedure Signed_Shift_Right_Traps_A_Negative_Amount
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: i32, s: i32) -> (r: i32) =" & LF
+         & "    r = a >> s" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Guard : constant String :=
+           HT & "movl -24(%rbp), %eax" & LF
+           & HT & "cmpl $0, %eax" & LF
+           & HT & "jge .L1_V5_nonnegative" & LF
+           & HT & "ud2" & LF
+           & ".L1_V5_nonnegative:" & LF
+           & HT & "cmpl $32, %eax" & LF
+           & HT & "jb .L1_V5_inrange" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Guard),
+            "a negative amount traps before the width is tested");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "sarl %cl, %eax"),
+            "a signed shift right is the arithmetic one");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "shrl %cl, %eax"),
+            "a signed shift right is not the logical one");
+      end;
+   end Signed_Shift_Right_Traps_A_Negative_Amount;
+
+   --  D13 settles the sentence [0320] left open: an amount at or past the
+   --  width gives zero on every shift, and a signed `>>` is not the
+   --  exception.  The width itself comes from the target description.
+   procedure A_Signed_Shift_Beyond_The_Width_Is_Zero
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Signed_Shift_Beyond_The_Width_Is_Zero
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: isize, s: isize) -> (r: isize) =" & LF
+         & "    r = a >> s" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Beyond : constant String :=
+           HT & "cmpq $64, %rax" & LF
+           & HT & "jb .L1_V5_inrange" & LF
+           & HT & "movq $0, -64(%rbp)" & LF
+           & HT & "jmp .L1_V5_done" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Beyond),
+            "isize takes its width from the target and zeroes beyond it");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "sarq %cl, %rax"),
+            "an amount below the width still keeps the sign");
+      end;
+   end A_Signed_Shift_Beyond_The_Width_Is_Zero;
+
    --  x86-64 divides its implicit full-width dividend.  An unknown zero
    --  divisor therefore reaches Landin's explicit trap before `div`, while a
    --  valid u8 dividend has its high byte cleared and stores the quotient.
@@ -1174,6 +1302,15 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "unsigned shift left zeroes beyond the width",
+         Unsigned_Shift_Left_Zeroes_Beyond_The_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "signed shift right traps a negative amount",
+         Signed_Shift_Right_Traps_A_Negative_Amount'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a signed shift beyond the width is zero",
+         A_Signed_Shift_Beyond_The_Width_Is_Zero'Access);
       Landin.Testing.Register
         (Into, "backend", "complement inverts without a trap",
          Complement_Inverts_Without_A_Trap'Access);

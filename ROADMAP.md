@@ -1048,8 +1048,8 @@ frame cell is not an aggregate, and what it settles must agree with this.
 
 What is emitted so far is the straight-line kernel -- a literal, a truth, a
 slot read and written, ordinary and wrapping add, subtract and multiply,
-division, remainder, the unary and bitwise operators, all six comparisons, a
-jump, a branch and a return --
+division, remainder, the unary and bitwise operators, both shifts, all six
+comparisons, a jump, a branch and a return --
 against a prologue that sets up [1550]'s frame pointer and stores [1650]'s
 argument registers into their parameter slots. Ordinary add and subtract use
 the result type's width, test signed overflow or unsigned carry/borrow before
@@ -1078,11 +1078,28 @@ A comparison loads its left operand and uses GAS's
 `cmp right, left` order at the operands'
 width, then materializes [1890]'s one-byte bool with equality or the appropriate
 signed or unsigned ordering condition. `bool` ordering uses its specified zero
-and one as unsigned values. Any other opcode raises a compiler defect rather
-than emitting something plausible. Shifts, calls and the
-module data section remain. The remaining parts of the obligations above are
-both variable-shift cases: a negative amount must trap, while an amount at or
-past the width must yield zero instead of the count x86-64 would mask.
+and one as unsigned values.
+
+A shift is where this backend emits most of what the hardware does not give,
+and both of the obligations above are now discharged there. The amount is
+tested against the type's own width, because x86-64 masks the count -- five
+bits at 32-bit, six at 64 -- while [0320] fills with zeros beyond it for any
+amount, so `1u32 << 40` would otherwise shift by 8. A signed amount is tested
+for being negative first, because D6 gives the amount the left operand's type
+and [1950] leaves the ones `L0306` could not read to the trap; an unsigned
+amount cannot be negative and carries no such test. `<<` is `shl`, an unsigned
+`>>` is `shr` and a signed one is `sar`, and the count reaches `%cl` only
+after both tests have passed.
+
+That left a sentence in [0320] to settle rather than transcribe, since "fill
+with zeros beyond the width, for any amount" and "Signed >> keeps the sign"
+disagree exactly where a signed `>>` reaches its width. D13 records the
+decision and its alternative: the zeros sentence governs, so `-1i32 >> 31` is
+-1 while `-1i32 >> 32` is 0, and `runtime/shifts-fill-with-zeros-beyond-the-width`
+is what proves it on the hardware.
+
+Any other opcode raises a compiler defect rather
+than emitting something plausible. Calls and the module data section remain.
 
 The path from `refine` to a running process is now reachable, and a
 constant-return `main` compiled, linked and executed inside the pinned Linux
@@ -1216,6 +1233,13 @@ case at every signed width, rather than merely finding its branch in text.
 unsigned zero and a 64-bit value, complements at two widths, applies each
 bitwise operator at 8, 32 and 64 bits, and reads both directions of `not`, so a
 width-wide complement standing in for `not` reaches the other status.
+`runtime/shifts-fill-with-zeros-beyond-the-width` shifts within the width at
+8, 32 and 64 bits, then past it in both directions, and every over-wide amount
+in it is one x86-64's masking would answer differently: `1u8 << 32` masks to a
+shift by nothing rather than to zero, as do `1u64 << 64` and
+`4294967295u32 >> 32`, while `1i32 << 40` masks to a shift by 8. `-1i32 >> 32`
+and `-1i8 >> 8` are D13's own case, and both are -1 on a backend that lets
+`sar` exhaust itself.
 Their programs are held to the grammar exactly as a positive fixture's is,
 since they are legal source the compiler must accept; `check.py` derives each
 and reports a fixture the grammar cannot.

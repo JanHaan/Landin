@@ -32,9 +32,12 @@
 --  a bool at zero or one.
 --  Comparisons load their left operand, compare the right at that operand's
 --  width, and materialize a one-byte bool with the signed or unsigned
---  condition [1890] requires.  Shifts, calls and module data are not here
---  yet; [0320]'s shift beyond the width in particular needs the guard R1.80
---  records as its own obligation.  An opcode this does not yet
+--  condition [1890] requires.  A shift carries the two rules the hardware
+--  does not give: the amount is tested against the type's own width, because
+--  [0320] and D13 fill with zeros beyond it while x86-64 would mask the
+--  count, and a signed amount is tested for being negative, because [1950]
+--  leaves the ones the compiler could not read to the trap.  Calls and module
+--  data are not here yet.  An opcode this does not yet
 --  spell raises Compiler_Defect rather than emitting
 --  something plausible.
 --
