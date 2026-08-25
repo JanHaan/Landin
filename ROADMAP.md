@@ -436,7 +436,7 @@ semantics and debugging.
 `Landin.Syntax` is a flat table of nodes indexed by a dense `Node_Id`, not a
 pointer structure, and the reason is the four stages that read it. R1.50 wants
 to say which declaration a name resolves to, R1.60 what type an expression
-has, R1.70 which IR value a node produced, R4.60 where a node came from --
+has, R1.70 which IR value a node produced, R4.60 where a node came from —
 and none of them may add a field to `Landin.Syntax`, which must not know that
 types or values exist. With a dense integer each of them says it in an array
 of its own, sized once and indexed in constant time. A tree of tagged records
@@ -536,7 +536,7 @@ kernel.
 
 **This item needed normative text the tour did not have, and adding it is the
 first thing to read here.** [0130] and [0140] are two sentences — order
-inside a module does not matter, an inner scope may shadow an outer name --
+inside a module does not matter, an inner scope may shadow an outer name —
 and neither says which scopes exist, that two declarations of one name in one
 scope is an error, or that a name resolving to nothing is one. A rule about an
 inner scope means nothing until the inner ones are named, so three constructs
@@ -575,7 +575,7 @@ source, exactly as `Landin.Syntax` lays every node's children end to end.
 That is the flat tree's payoff arriving: a reference costs one addition and
 one index, with no map and no order that depends on where the host put an
 object. Lookup is hashed and never iterated, and the report order is the order
-the sources were added and then the order the declarations were written --
+the sources were added and then the order the declarations were written —
 which is what makes it source-stable rather than identity-stable.
 
 Two passes, because [1840] gives the kernel one unordered scope and two
@@ -640,7 +640,7 @@ two operands of a binary operator must share a type, what the result type is,
 that a comparison yields a bool, or that `and` takes one. Nothing forbade
 assigning an immutable binding: [0040] says "immutable by default" and states
 a property, exactly as [0130] stated one before [1850] had to state the
-refusal. Nothing said what a call must match, what may be discarded, or --
+refusal. Nothing said what a call must match, what may be discarded, or —
 sharpest of all — what "the type of its context" in [0190] actually means,
 which a checker cannot ask for until the positions are listed.
 
@@ -931,7 +931,7 @@ Two do not, and each needed something.
   lowering would fold the logical level inside a datum. That was wrong, and
   the correction is worth keeping rather than quietly replacing. Folding the
   logical level needs the comparison level under it, and
-  `k: bool = (1 << 2) < 8 and true` is accepted — measured, not supposed --
+  `k: bool = (1 << 2) < 8 and true` is accepted — measured, not supposed —
   so it needs the bitwise and shift levels too, and those need a width. That
   is a second constant folder beside the checker's, over the whole of
   [1820], and two authorities on one question is what this compiler refuses
@@ -943,7 +943,7 @@ Two do not, and each needed something.
   folded constant — which it had to do regardless, because [1940]'s fold
   stops at the arithmetic level and the header already said the bitwise and
   shift levels arrive as instructions.
-- **`later: i32` has no value to describe.** Reading one was accepted too --
+- **`later: i32` has no value to describe.** Reading one was accepted too —
   `r = later` compiles, and [1910] excludes module bindings from its walk by
   name, so nothing catches it. Settled as D10: it holds zero, false for a
   bool. The alternatives are recorded there.
@@ -1049,7 +1049,7 @@ frame cell is not an aggregate, and what it settles must agree with this.
 What is emitted so far is the straight-line kernel — a literal, a truth, a
 slot read and written, ordinary and wrapping add, subtract and multiply,
 division, remainder, the unary and bitwise operators, both shifts, all six
-comparisons, a call, a jump, a branch, a return and a module value --
+comparisons, a call, a jump, a branch, a return and a module value —
 against a prologue that sets up [1550]'s frame pointer and stores [1650]'s
 argument registers into their parameter slots. Ordinary add and subtract use
 the result type's width, test signed overflow or unsigned carry/borrow before
@@ -1175,7 +1175,7 @@ internals documentation states it, and the pinned GNAT installs itself as
 `x86_64-pc-linux-gnu-gcc` on Linux and `aarch64-apple-darwin24.6.0-gcc` on
 the macOS host, both measured. So `Landin.Targets.Capabilities` carries a
 triplet and `refine` runs `<triplet>-gcc`. That package and not
-`Target_Facts`, because its header already claims exactly this ground --
+`Target_Facts`, because its header already claims exactly this ground —
 "the external tools needed to finish a program for that machine" — while
 `Target_Facts` says a description holds "nothing about what a program may
 name". A target with no backend has no triplet, which is the same fact its
@@ -1238,7 +1238,7 @@ the artefacts: declined for three separate reasons, one per target. Cortex-M
 needs no build at all, since `arm-none-eabi-gcc` is packaged on both
 Homebrew and Debian. A Linux cross toolchain for a macOS host is legally
 clean and duplicates work the `messense/macos-cross-toolchains` tap already
-does, which is also the role `scripts/env.sh` declines in one sentence --
+does, which is also the role `scripts/env.sh` declines in one sentence —
 "the pin is a version, not a distributor". And retaining a macOS artefact
 where the Linux gate could fetch it does not avoid the licence question but
 relocates it: osxcross states it cannot ship the SDK "for legal reasons",
@@ -1341,7 +1341,7 @@ than a crash.
 The audit's last finding was not this item's to cause and is this item's to
 have exposed. [1940]'s cycle rule was implemented in one place only — the
 guard that catches a module value whose *type* is being inferred from itself
--- so `a: i32 = b + 1` beside `b: i32 = a + 1` slipped past it: both write
+— so `a: i32 = b + 1` beside `b: i32 = a + 1` slipped past it: both write
 their types down, nothing is ever Underway, and the checker's own fold walked
 the chain to its depth limit and returned quietly. `refine` accepted the
 program and said nothing, and the only thing that noticed was this item's
@@ -1539,7 +1539,7 @@ The rule that keeps that number worth reading is written into
 `compiler/tests/README.md`: name a construct when the fixture's passing would
 change if it were implemented wrong, not when it appears in the text. Every
 runtime program contains literals, so claiming [1770] everywhere would fill a
-column and say nothing. That rule caught one of this pass's own claims --
+column and say nothing. That rule caught one of this pass's own claims —
 `runtime/statements-run-as-they-read` was given [1840] while declaring nothing
 inside an `if` arm, which is not evidence about arm scopes — and the fixture
 grew a function that declares the same name in both arms rather than the claim
@@ -1557,7 +1557,7 @@ each paragraph against the program that claims it.
 
 Two rows were neither, and both became fixtures. [0150] names `u128` and
 `i128` while [1790]'s type rule does not, and the kernel already refuses one
-by name — `L0101`, rather than reading it as a name that declares nothing --
+by name — `L0101`, rather than reading it as a name that declares nothing —
 with nothing pinning that. And [0410] fixes evaluation order, which no fixture
 could have observed: every runtime program until now asserted a *value*, and a
 value is the same whichever operand ran first. `runtime/evaluation-order-is-left-then-right`
