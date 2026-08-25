@@ -1049,7 +1049,7 @@ frame cell is not an aggregate, and what it settles must agree with this.
 What is emitted so far is the straight-line kernel -- a literal, a truth, a
 slot read and written, ordinary and wrapping add, subtract and multiply,
 division, remainder, the unary and bitwise operators, both shifts, all six
-comparisons, a jump, a branch and a return --
+comparisons, a call, a jump, a branch and a return --
 against a prologue that sets up [1550]'s frame pointer and stores [1650]'s
 argument registers into their parameter slots. Ordinary add and subtract use
 the result type's width, test signed overflow or unsigned carry/borrow before
@@ -1098,8 +1098,20 @@ decision and its alternative: the zeros sentence governs, so `-1i32 >> 31` is
 -1 while `-1i32 >> 32` is 0, and `runtime/shifts-fill-with-zeros-beyond-the-width`
 is what proves it on the hardware.
 
+A call is where [1650]'s ABI is finally read from the other side. [1920] gives
+it every parameter once and in order, so its operands are already the argument
+list and the six registers are filled from them in that order, each at its own
+parameter's width rather than at one the call site picks. The result comes
+back in the accumulator and becomes a frame cell like any other value, and a
+callee returning none leaves nothing there to take -- which is [1930]'s rule
+seen from the backend, since a discard is about who reads a result and not
+about what ran. Nothing is pushed for a call: the frame is already a multiple
+of the target's stack alignment, so `%rsp` meets the ABI where the call is
+made. A seventh argument is not reachable yet and says so rather than picking
+a register, and R2 still owns aggregate, error-register and evidence calls.
+
 Any other opcode raises a compiler defect rather
-than emitting something plausible. Calls and the module data section remain.
+than emitting something plausible. The module data section remains.
 
 The path from `refine` to a running process is now reachable, and a
 constant-return `main` compiled, linked and executed inside the pinned Linux
@@ -1240,6 +1252,11 @@ shift by nothing rather than to zero, as do `1u64 << 64` and
 `4294967295u32 >> 32`, while `1i32 << 40` masks to a shift by 8. `-1i32 >> 32`
 and `-1i8 >> 8` are D13's own case, and both are -1 on a backend that lets
 `sar` exhaust itself.
+`runtime/calls-return-through-the-abi` carries six arguments of six different
+widths and checks each against its own value inside the callee, so a register
+filled out of order or at the wrong width reaches the other status; it also
+recurses ten deep for a triangular number, calls a function returning none as
+a statement, and discards a result.
 Their programs are held to the grammar exactly as a positive fixture's is,
 since they are legal source the compiler must accept; `check.py` derives each
 and reports a fixture the grammar cannot.
