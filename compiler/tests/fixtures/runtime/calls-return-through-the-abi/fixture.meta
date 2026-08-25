@@ -1,0 +1,5 @@
+class: runtime
+summary: arguments reach a callee in order and results come back through the ABI
+program: main.ldn
+status: 42
+targets: linux-x86-64

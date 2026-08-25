@@ -711,6 +711,121 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Signed_Shift_Beyond_The_Width_Is_Zero;
 
+   --  [1920] gives a call every parameter once and in order, and [1650]'s
+   --  ABI says where those go.  The result comes back in the accumulator and
+   --  becomes a frame cell like any other value.
+   procedure A_Call_Fills_Its_Argument_Registers_In_Order
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Call_Fills_Its_Argument_Registers_In_Order
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "g: (a: i32, b: i32) -> (r: i32) =" & LF
+         & "    r = a" & LF & "end g" & LF
+         & "f: (x: i32) -> (r: i32) =" & LF
+         & "    r = g(x, x)" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movl -24(%rbp), %edi" & LF
+           & HT & "movl -20(%rbp), %esi" & LF
+           & HT & "call g" & LF
+           & HT & "movl %eax, -28(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "arguments reach their registers in order and the result a cell");
+      end;
+   end A_Call_Fills_Its_Argument_Registers_In_Order;
+
+   --  [1920] gives a call of a function returning none no type at all, so
+   --  there is nothing in the accumulator to keep and [1930] has no result to
+   --  discard either.  A discarded scalar result still lands in its cell,
+   --  because the discard is about who reads it and not about what ran.
+   procedure A_Call_Returning_None_Keeps_Nothing
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Call_Returning_None_Keeps_Nothing
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "g: (a: i32) -> none =" & LF
+         & "    _ = a" & LF & "end g" & LF
+         & "f: (x: i32) -> none =" & LF
+         & "    g(x)" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movl -8(%rbp), %edi" & LF
+           & HT & "call g" & LF
+           & HT & "movq %rbp, %rsp" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "a call returning none stores no result after it");
+      end;
+   end A_Call_Returning_None_Keeps_Nothing;
+
+   --  [1650] hands six integer arguments in registers, and each is named at
+   --  its own parameter's width rather than at one the call picks.
+   procedure Six_Arguments_Reach_Their_Own_Widths
+     (Item : in out Landin.Testing.Context);
+
+   procedure Six_Arguments_Reach_Their_Own_Widths
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "g: (a: i8, b: i16, c: i32, d: i64, e: u8, h: usize)"
+         & " -> (r: i8) =" & LF
+         & "    r = a" & LF & "end g" & LF
+         & "f: () -> (r: i8) =" & LF
+         & "    r = g(1, 2, 3, 4, 5, 6)" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Registers : constant String :=
+           HT & "movb -49(%rbp), %dil" & LF
+           & HT & "movw -52(%rbp), %si" & LF
+           & HT & "movl -56(%rbp), %edx" & LF
+           & HT & "movq -64(%rbp), %rcx" & LF
+           & HT & "movb -65(%rbp), %r8b" & LF
+           & HT & "movq -48(%rbp), %r9" & LF
+           & HT & "call g" & LF
+           & HT & "movb %al, -66(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Registers),
+            "each argument reaches its register at its own width");
+      end;
+   end Six_Arguments_Reach_Their_Own_Widths;
+
    --  x86-64 divides its implicit full-width dividend.  An unknown zero
    --  divisor therefore reaches Landin's explicit trap before `div`, while a
    --  valid u8 dividend has its high byte cleared and stores the quotient.
@@ -1302,6 +1417,15 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a call fills its argument registers in order",
+         A_Call_Fills_Its_Argument_Registers_In_Order'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a call returning none keeps nothing",
+         A_Call_Returning_None_Keeps_Nothing'Access);
+      Landin.Testing.Register
+        (Into, "backend", "six arguments reach their own widths",
+         Six_Arguments_Reach_Their_Own_Widths'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned shift left zeroes beyond the width",
          Unsigned_Shift_Left_Zeroes_Beyond_The_Width'Access);

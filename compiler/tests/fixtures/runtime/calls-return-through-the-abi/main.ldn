@@ -1,0 +1,48 @@
+sum_of_six: (a: i8, b: i16, c: i32, d: i64, e: u8, f: usize) -> (r: i64) =
+    r = 0
+    r = r + d
+    r = r + 1000000
+end sum_of_six
+
+widths: (a: i8, b: i16, c: i32, d: i64, e: u8, f: usize) -> (r: i64) =
+    r = 0
+
+    if a == -1 and b == -300 and c == 70000
+        and d == 5000000000 and e == 255 and f == 18446744073709551615
+    then
+        r = 1
+    end if
+end widths
+
+triangle: (n: u32) -> (r: u32) =
+    r = 0
+
+    if n > 0 then
+        r = n + triangle(n - 1)
+    end if
+end triangle
+
+nothing_at_all: (a: i32) -> none =
+    _ = a + 1
+end nothing_at_all
+
+public main: () -> (code: i32) =
+    nothing_at_all(7)
+
+    carried: i64 = sum_of_six(1, 2, 3, 44, 5, 6)
+    ordered: i64 = widths(-1, -300, 70000, 5000000000, 255,
+        18446744073709551615)
+    nested: u32 = triangle(10)
+    discarded: i64 = 0
+    _ = sum_of_six(1, 2, 3, 4, 5, 6)
+
+    if carried == 1000044
+        and ordered == 1
+        and nested == 55
+        and discarded == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
