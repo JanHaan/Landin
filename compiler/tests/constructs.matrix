@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  197 constructs, 83 with evidence, 114 with neither.
+#  198 constructs, 84 with evidence, 114 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -80,7 +80,7 @@
 0640   tour        -                                  An enumeration is a union of atoms
 0650   tour        -                                  Distinct type
 0660   tour        -                                  Range subtype: checked at assignment and conversion
-0670   tour        -                                  Struct, block form and inline form
+0670   tour        refused-by-name                    Struct, block form and inline form
 0680   tour        -                                  Struct with a variant part
 0690   tour        -                                  A case with no payload is written bare
 0700   tour        -                                  Construction and conversion use the same form
@@ -193,6 +193,7 @@
 1770   spec        accepted emitted executed          The kernel's literals are integers and the two booleans
 1780   spec        accepted emitted refused           A comment ends a token, and its opener says which kind it is
 1790   spec        accepted emitted executed refused  A binding names one thing, and says how much it may change
+1795   spec        -                                  A type declaration names a type, and names nothing new
 1800   spec        accepted emitted executed refused  A function is a value with a body, and its returns are named
 1810   spec        accepted emitted executed refused  Statements do one thing each, and only exits carry 'when'
 1820   spec        accepted emitted executed refused  Precedence, tightest first, and comparison does not chain

@@ -51,10 +51,10 @@ package Landin.Tokens is
      (End_Of_Input,
       Identifier,
       Integer_Literal,
-      --  The nineteen words [1760] reserves.
+      --  The twenty words [1760] reserves.
       Kw_Alignof, Kw_And, Kw_Dec, Kw_Else, Kw_Elsif, Kw_End, Kw_False,
       Kw_If, Kw_Inc, Kw_Mut, Kw_None, Kw_Not, Kw_Or, Kw_Public,
-      Kw_Return, Kw_Sizeof, Kw_Then, Kw_True, Kw_When,
+      Kw_Return, Kw_Sizeof, Kw_Then, Kw_True, Kw_Type, Kw_When,
       --  The signs the kernel productions spell.
       Ampersand, Bar, Caret, Colon, Colon_Equal, Comma, Equal,
       Equal_Equal, Greater, Greater_Equal, Greater_Greater, Left_Paren,

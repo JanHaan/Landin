@@ -104,6 +104,7 @@ package Landin.Diagnostics.Syntactic is
       For_Statement,
       Continue_Statement,
       Length_Of,
+      Struct_Type,
       Break_Statement,
       Match_Statement,
       Type_Parameter);
@@ -128,6 +129,7 @@ package Landin.Diagnostics.Syntactic is
             when For_Statement        => "[1150]",
             when Continue_Statement   => "[1180]",
             when Length_Of            => "[0370]",
+            when Struct_Type          => "[0670]",
             when Break_Statement      => "[1190]",
             when Match_Statement      => "[1210]",
             when Type_Parameter       => "[1290]")
@@ -177,7 +179,8 @@ private
             --  R2.20 brings the arrays and slices `lenof` measures; the
             --  other two of [0370] are enabled and this one has nothing
             --  to ask about yet.
-            when Length_Of            => "R2.20",
+            when Length_Of
+               | Struct_Type          => "R2.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter       => "R2.40",
             --  R2.50 sources [0900] for the parameter conventions.

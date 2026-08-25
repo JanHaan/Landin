@@ -2710,6 +2710,46 @@ def check_fonts(full_run):
     return out
 
 
+def check_ascii_dashes(full_run):
+    """Prose uses a typographic dash rather than a spaced ASCII pair.
+
+    The renderer preserves source punctuation, as it must: replacing `--`
+    while rendering would corrupt Landin comments, command options and code.
+    Fences and inline code therefore stay literal, while prose writes an em
+    dash directly.  Findings preserve obsolete wording and are excluded for
+    the same reason the language checks exclude them.
+    """
+    if not full_run:
+        return []
+
+    paths = [os.path.join(ROOT, name) for name in LIVE_DOCS]
+    missing = absent(paths)
+    if missing:
+        return missing
+
+    inline_code = re.compile(r"`[^`]*`")
+    out = []
+    for path in paths:
+        name = os.path.relpath(path, ROOT)
+        inside, findings = False, False
+        for n, line in enumerate(
+                io.open(path, encoding="utf-8").read().splitlines(), 1):
+            stripped = line.strip()
+            if stripped.startswith("## WHAT THIS ONE FOUND") \
+                    or stripped.startswith(
+                        "## WHERE THE SPECIFICATION WAS SILENT") \
+                    or stripped.startswith("## WHAT WAS TRIED AND DROPPED"):
+                findings = True
+            if stripped.startswith("```"):
+                inside = not inside
+                continue
+            if not inside and not findings \
+                    and " -- " in inline_code.sub("", line):
+                out.append((name, n,
+                            "prose uses spaced '--' instead of an em dash"))
+    return out
+
+
 def check_unfenced_code(full_run):
     """A line of Landin outside a fence is a line nothing highlights.
 
@@ -3021,6 +3061,7 @@ def main(argv):
     extra += check_precedence_table(full_run)
     extra += check_refused_constructs(full_run)
     extra += check_comment_forms(full_run)
+    extra += check_ascii_dashes(full_run)
     extra += check_unfenced_code(full_run)
     extra += check_table_shape(full_run)
     extra += check_icon(full_run)

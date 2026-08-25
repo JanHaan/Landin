@@ -51,7 +51,7 @@ and not on a statement [0090]: what a module exports is decided
 where the module is written, never inside a body.
 ```landin-grammar
 program     ::= declaration*
-declaration ::= "public"? (binding | function)
+declaration ::= "public"? (binding | function | type_declaration)
 
 ```
 
@@ -89,7 +89,7 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves nineteen words; the reserved set of the whole language is
+reserves twenty words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
@@ -102,7 +102,7 @@ digit       ::= "0" ... "9"
 keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
               | "end" | "return" | "when" | "inc" | "dec" | "none"
               | "true" | "false" | "and" | "or" | "not"
-              | "sizeof" | "alignof"
+              | "sizeof" | "alignof" | "type"
 
 ```
 
@@ -167,6 +167,25 @@ binding     ::= "mut"? identifier ":" type ("=" expression)?
 type        ::= "u8" | "u16" | "u32" | "u64"
               | "i8" | "i16" | "i32" | "i64"
               | "usize" | "isize" | "bool"
+
+```
+
+### [1795] A type declaration names a type, and names nothing new
+
+A type declaration names a type, and names nothing new.
+[0120] declares a type like any other value and [0650] writes
+'distinct' to make one that is not the type it was written from.
+D15 reads the second as deciding the first: without that word a
+declaration gives an existing type another name and the two are
+one type everywhere. The kernel has only the scalar names to
+alias, so 'count: type = u32' is the whole of what it can say;
+'distinct', a range subtype [0660], and every body of TYPES YOU
+DECLARE are refused by name.
+A type name is an ordinary declared name [1760], so one
+declaration per name per scope [1850] and a name that names
+nothing is refused [1860] both hold for it unchanged.
+```landin-grammar
+type_declaration ::= identifier ":" "type" "=" type
 
 ```
 
@@ -502,7 +521,7 @@ name. So it is refused, and the report names the declaration
 the chain came back to, because that is the one place in it
 the reader is standing.
 A binding with no value is known too, and what it holds is
-zero -- false, for a bool. [0080] lets a binding carry no
+zero — false, for a bool. [0080] lets a binding carry no
 value and says it must be assigned before use, and that
 sentence has nothing to bite on here: [1460] says nothing
 runs before the entry point, so there is no moment at
@@ -535,7 +554,7 @@ the trap inside a body. Here the operand is what is wrong
 and there is no operation to perform at all, which is the
 case [0310] already answered for 'u8(300)': known when the
 compiler reads it, it is refused; otherwise it traps.
-Known is [1880]'s and [1940]'s and nothing besides -- inside
+Known is [1880]'s and [1940]'s and nothing besides — inside
 a body a literal, or a unary minus over one; at module
 level the whole of [1940]'s fold. So 'x / 0' is refused and
 'x / y' traps, and which of the two a program gets does not
@@ -814,7 +833,7 @@ but makes that report an interface the language must preserve and a runtime
 every freestanding target must supply.
 
 **What the tour also said, and this does not yet do:** [1670] states the
-mechanism a failed check eventually uses -- a call to a fixed never-returning
+mechanism a failed check eventually uses — a call to a fixed never-returning
 `panic_handler`, taking an atom for the kind and a compiler-assigned `site`
 number, with file and line in a side table a constrained build omits. That is
 not an alternative this decision declined; it is a paragraph the kernel cannot
@@ -870,7 +889,7 @@ signed left operand admits an amount of any size.
 **Chosen:** the zeros sentence governs every shift, so an amount at or past
 the width gives zero and a signed `>>` is not an exception. `-1i32 >> 31` is
 -1 and `-1i32 >> 32` is 0. A backend therefore tests the amount against the
-type's own width rather than letting the processor mask the count -- x86-64
+type's own width rather than letting the processor mask the count — x86-64
 masks to five bits at 32-bit and six at 64, which is the masking [0320]
 already declined for over-wide amounts.
 
@@ -878,7 +897,7 @@ already declined for over-wide amounts.
 `>>` saturates to all sign bits and `-1i32 >> 32` is -1. It is continuous
 where this rule has a step, and it is what x86-64's `sar` gives for free once
 the count is clamped. It was declined because it makes one operator answer
-two ways -- zeros for `<<` and for unsigned `>>`, sign bits for signed `>>` --
+two ways — zeros for `<<` and for unsigned `>>`, sign bits for signed `>>` --
 where the tour states the zero-fill rule for shifts as a class and states the
 sign rule about which bits `>>` brings in, not about what an exhausted shift
 leaves behind.
@@ -906,13 +925,13 @@ half with teeth. The value is not folded by the checker or the lowering:
 `Landin.IR` carries `Measure_Size` and `Measure_Align` with the type asked
 about, and the backend answers, because a size needs a width and a width
 needs a target. That is the seam [0320]'s zero-fill already sits on, and it
-keeps the IR target-neutral -- the same source emits 8 for `sizeof usize`
+keeps the IR target-neutral — the same source emits 8 for `sizeof usize`
 against the Linux x86-64 description and 4 against the synthetic 32-bit one.
 
 **The alternative:** `i32`, which is what an untyped literal would default
 to and so the least surprising answer for a reader who has only read [0200];
-declined because it makes the common use -- comparing against or multiplying
-by a width -- start with a conversion. Or folding in the checker, which
+declined because it makes the common use — comparing against or multiplying
+by a width — start with a conversion. Or folding in the checker, which
 would put a target fact in a stage this repository has kept target-neutral
 on purpose, and which `Landin.IR`'s own header already argues against for
 the shifts.
@@ -920,3 +939,34 @@ the shifts.
 **Pinned by** `positive/measurement-of-a-type`,
 `runtime/measurements-answer-for-the-target`, and the backend case that
 emits one source against two target descriptions.
+
+### D15 — A type declaration without `distinct` is an alias
+
+**The tour said** that types are declared like any other value with `type`
+[0120], and that `distinct` makes a type with the same representation, a
+different type and no operations inherited [0650]. It does not say what a
+declaration without that word gives.
+
+**Chosen:** another name for the same type. `meter: type = distinct f32` is
+the only form that makes a new one, and `count: type = u32` leaves `count`
+and `u32` one type: a value of either is a value of the other, everywhere,
+with no conversion. The evidence is the word itself: [0650] spells
+`distinct` explicitly, and a modifier that changed nothing would not be
+written. The tour reaches for it exactly where it wants two types that share
+a representation to stop being interchangeable.
+
+**What this does not decide:** a `struct` or `variant` body introduces a
+type that is nominal, because there is no existing type for it to be another
+name for, and [0710] says a value typed as an anonymous struct "never
+becomes a same-shaped named type". That is a different sentence from this
+one and R2.20's later slices are where it is implemented.
+
+**The alternative:** every `type` declaration introduces a distinct type,
+reading [0120]'s "like any other value" as a definition and treating
+`distinct` as emphasis. It is one rule instead of two, and it was declined
+because it makes `distinct` a word that does nothing. An alias that needs a
+conversion at every use is not an alias, so the language would have no way to
+give a type a second name at all.
+
+**Pinned by** `positive/type-declaration-aliases-a-scalar`,
+`negative/distinct-not-enabled`.

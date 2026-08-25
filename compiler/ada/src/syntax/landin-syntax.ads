@@ -85,6 +85,10 @@ package Landin.Syntax is
       --  Below: declarations [1740].
       Error_Declaration,
       Function_Declaration,
+      --  [1795].  A declaration and not a binding: what it names is a
+      --  type rather than a value, and [1790]'s `mut` and `:=` forms
+      --  have nothing to say about one.
+      Type_Declaration,
       Binding,
       --  Statements [1810].  Binding is one of these too, because [1810]
       --  uses [1790]'s rule unchanged and only [1740] may put `public` on
