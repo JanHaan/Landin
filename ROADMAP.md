@@ -1304,9 +1304,35 @@ instructions and compares the two answers, which is the check that matters
 for a fold: a shift, a division and a remainder over negative values are
 where a folder and a processor can disagree, and one of them was wrong until
 that comparison existed.
+Three more came out of asking what this item had proved rather than what it
+had emitted, and the question was worth asking: every positive fixture emitted
+assembly, and emitting is not running. Four of [1810]'s statement forms had
+never executed -- `return when`, a bare `return` inside a body, an `elsif`
+chain, and `inc`/`dec` -- so a wrong branch edge or a mis-emitted epilogue
+would have passed the whole gate on the strength of the compiler having
+accepted the program. `runtime/statements-run-as-they-read` runs all four.
+Every executed call had carried integers, so `runtime/bools-cross-the-abi`
+passes and returns [1870]'s one-byte bool through [1650]'s registers. And
+`runtime/recursive-fibonacci` is the first program here that is a program
+rather than a probe: a function that calls itself twice with one call's result
+feeding a checked `+`, over a frame that has to survive both, 242785
+activations deep at `fib(25)`. All three passed on the first run, which is the
+outcome to be suspicious of and the reason to record that they had been
+missing rather than to note that they pass.
+
 Their programs are held to the grammar exactly as a positive fixture's is,
 since they are legal source the compiler must accept; `check.py` derives each
 and reports a fixture the grammar cannot.
+
+What none of this shows is that the language works. The enabled kernel is
+[1740]-[1830] and the tour is the whole language, so `while`, `for`, `loop`,
+`match`, `defer`, `undo`, `try`, `fail`, `break`, `continue`, `type` and every
+construct built on it, the three float widths and the three text views are all
+refused by name, each citing the paragraph that describes it and the item that
+enables it. There is no I/O either, so a program's exit status is the only
+thing a fixture can observe. R1.80 is a working vertical slice through a small
+language and not a working language, and the fixtures above should be read as
+evidence for exactly that.
 
 [1960]'s native trap evidence is here too, and getting it needed the runtime
 seam widened rather than a fixture written. A `Tool_Result` carried an integer,

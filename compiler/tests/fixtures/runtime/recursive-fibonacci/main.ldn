@@ -1,0 +1,25 @@
+--  The smallest program that is a program rather than a probe: a function
+--  that calls itself twice, one call's result feeding an operator, over a
+--  frame that has to survive both.  fib(25) is 242785 calls deep enough to
+--  find a prologue or an epilogue that only looked right.
+fib: (n: u32) -> (r: u32) =
+    r = n
+
+    if n > 1 then
+        r = fib(n - 1) + fib(n - 2)
+    end if
+end fib
+
+public main: () -> (code: i32) =
+    if fib(0) == 0
+        and fib(1) == 1
+        and fib(2) == 1
+        and fib(10) == 55
+        and fib(20) == 6765
+        and fib(25) == 75025
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
