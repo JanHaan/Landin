@@ -10,6 +10,29 @@ package body Landin.Types is
             when Landin.Tokens.Decimal     => 10,
             when Landin.Tokens.Hexadecimal => 16);
 
+   ------------------
+   --  Storage_Size  --
+   ------------------
+
+   function Storage_Size
+     (Item  : Scalar_Name;
+      Facts : Landin.Targets.Target_Facts) return Landin.Targets.Scalar_Size is
+   begin
+      if Item = Bool then
+         return Landin.Targets.Byte_1;
+      end if;
+
+      case Width (Item, Facts) is
+         when 8      => return Landin.Targets.Byte_1;
+         when 16     => return Landin.Targets.Byte_2;
+         when 32     => return Landin.Targets.Byte_4;
+         when 64     => return Landin.Targets.Byte_8;
+         when others =>
+            raise Compiler_Defect with
+              "no scalar size holds this target's width";
+      end case;
+   end Storage_Size;
+
    ------------
    --  Fits  --
    ------------

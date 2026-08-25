@@ -55,6 +55,7 @@ package body Landin.Checking is
 
       for Unused in 1 .. Landin.Resolution.Declaration_Count (Meanings) loop
          Into.Declarations.Append (Settlement'(others => <>));
+         Into.Layouts.Append (Aggregate_Layout'(others => <>));
       end loop;
 
       --  Interned once, so a Type_Name node costs eleven integer
@@ -154,6 +155,80 @@ package body Landin.Checking is
 
       Into.Bodies (Natural (Id)) := Wrote;
    end Note_Body;
+
+   ------------------------------------------------------------------
+   --  How an aggregate is laid out
+   ------------------------------------------------------------------
+
+   function Has_Layout (Of_Table : Table; Id : Declaration_Id)
+     return Boolean
+   is
+      From : constant Declaration_Id := Body_Of (Of_Table, Id);
+   begin
+      return From /= No_Declaration
+        and then Of_Table.Layouts (Natural (From)).Ready;
+   end Has_Layout;
+
+   function Layout_Field_Count (Of_Table : Table; Id : Declaration_Id)
+     return Natural
+     is (Of_Table.Layouts
+           (Natural (Body_Of (Of_Table, Id))).Count);
+
+   procedure Lay_Out
+     (Into  : in out Table;
+      Id    : Declaration_Id;
+      Fields : Field_Type_Array;
+      Facts : Landin.Targets.Target_Facts)
+   is
+      Built : Aggregate_Layout;
+   begin
+      Built.First := Natural (Into.Field_Offsets.Length) + 1;
+      Built.Count := Fields'Length;
+
+      for Field in Fields'Range loop
+         declare
+            At_Offset : Landin.Targets.Byte_Count;
+         begin
+            Landin.Targets.Place
+              (Built.Placed,
+               Landin.Types.Storage_Size (Fields (Field), Facts),
+               Facts, At_Offset);
+            Into.Field_Offsets.Append (At_Offset);
+         end;
+      end loop;
+
+      Built.Ready := True;
+      Into.Layouts (Natural (Id)) := Built;
+   end Lay_Out;
+
+   function Field_Offset
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Landin.Targets.Byte_Count
+   is
+      Layout : Aggregate_Layout renames
+        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+   begin
+      return Of_Table.Field_Offsets (Layout.First + Field - 1);
+   end Field_Offset;
+
+   function Layout_Extent (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Targets.Byte_Count
+     is (Landin.Targets.Extent_Of
+           (Of_Table.Layouts
+              (Natural (Body_Of (Of_Table, Id))).Placed));
+
+   function Layout_Alignment (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Targets.Byte_Alignment
+     is (Landin.Targets.Alignment_Of
+           (Of_Table.Layouts
+              (Natural (Body_Of (Of_Table, Id))).Placed));
+
+   function Layout_Size (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Targets.Byte_Count
+     is (Landin.Targets.Size_Of
+           (Of_Table.Layouts
+              (Natural (Body_Of (Of_Table, Id))).Placed));
 
    procedure Note
      (Into    : in out Table;

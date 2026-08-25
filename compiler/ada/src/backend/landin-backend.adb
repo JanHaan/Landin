@@ -1,7 +1,6 @@
 package body Landin.Backend is
 
    use type Landin.Targets.Byte_Count;
-   use type Landin.Types.Type_Kind;
 
    ------------------------------------------------------------------
    --  Size_Of
@@ -10,22 +9,8 @@ package body Landin.Backend is
    function Size_Of
      (Item : Landin.Types.Scalar_Name;
       Facts : Landin.Targets.Target_Facts)
-     return Landin.Targets.Scalar_Size is
-   begin
-      if Item = Landin.Types.Bool then
-         return Landin.Targets.Byte_1;
-      end if;
-
-      case Landin.Types.Width (Item, Facts) is
-         when 8      => return Landin.Targets.Byte_1;
-         when 16     => return Landin.Targets.Byte_2;
-         when 32     => return Landin.Targets.Byte_4;
-         when 64     => return Landin.Targets.Byte_8;
-         when others =>
-            raise Compiler_Defect
-              with "no scalar size holds this target's width";
-      end case;
-   end Size_Of;
+     return Landin.Targets.Scalar_Size
+     is (Landin.Types.Storage_Size (Item, Facts));
 
    ------------------------------------------------------------------
    --  Laid_Out

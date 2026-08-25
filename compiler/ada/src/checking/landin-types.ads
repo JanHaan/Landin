@@ -22,7 +22,7 @@
 --  band is exhaustive, so a type this package forgets is a compile error
 --  under -gnatwe rather than a fall-through.
 --
---  Five of the values are not one of the eleven, and each is a value
+--  The first five values are not one of the eleven, and each is a value
 --  rather than an absence for the reason Landin.Resolution.Verdict gives:
 --  one number meaning both "no type here" and "no type yet" is how a
 --  missing type becomes a cascade.
@@ -131,6 +131,13 @@ package Landin.Types is
             when U32 | I32     => 32,
             when U64 | I64     => 64,
             when Usize | Isize => Landin.Targets.Pointer_Width (Facts));
+
+   --  How much ordinary, unpacked storage one scalar needs.  This is shared
+   --  by frame and aggregate layout: [0150]'s bool occupies the next machine
+   --  width above one bit, a byte, while every integer follows Width above.
+   function Storage_Size
+     (Item  : Scalar_Name;
+      Facts : Landin.Targets.Target_Facts) return Landin.Targets.Scalar_Size;
 
    ------------------------------------------------------------------
    --  What a literal says

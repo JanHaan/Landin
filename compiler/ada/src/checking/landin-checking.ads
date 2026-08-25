@@ -64,6 +64,7 @@ with Landin.Source;
 with Landin.Source.Names;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
+with Landin.Targets;
 with Landin.Types;
 
 package Landin.Checking is
@@ -194,6 +195,69 @@ package Landin.Checking is
                   and then Natural (Wrote) <= Declaration_Limit (Into),
           Post => Body_Of (Into, Id) = Wrote;
 
+   ------------------------------------------------------------------
+   --  How an aggregate is laid out
+   ------------------------------------------------------------------
+
+   --  Field order is declaration order [0750].  The types are scalar-only
+   --  while aggregate values remain refused; this array is the complete
+   --  input needed to place that first enabled family without teaching
+   --  Landin.Targets what a field or a syntax tree is.
+   type Field_Type_Array is
+     array (Positive range <>) of Landin.Types.Scalar_Name;
+
+   --  Every query accepts either the body declaration or any alias of it;
+   --  Body_Of is the canonical key, just as it is for nominal equality.
+   function Has_Layout (Of_Table : Table; Id : Declaration_Id)
+     return Boolean
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id);
+
+   function Layout_Field_Count (Of_Table : Table; Id : Declaration_Id)
+     return Natural
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id);
+
+   procedure Lay_Out
+     (Into  : in out Table;
+      Id    : Declaration_Id;
+      Fields : Field_Type_Array;
+      Facts : Landin.Targets.Target_Facts)
+     with Pre  => Is_Prepared (Into)
+                  and then Contains (Into, Id)
+                  and then Body_Of (Into, Id) = Id
+                  and then not Has_Layout (Into, Id),
+          Post => Has_Layout (Into, Id)
+                  and then Layout_Field_Count (Into, Id) = Fields'Length;
+
+   function Field_Offset
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Landin.Targets.Byte_Count
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id)
+                 and then Field <= Layout_Field_Count (Of_Table, Id);
+
+   function Layout_Extent (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Targets.Byte_Count
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id);
+
+   function Layout_Alignment (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Targets.Byte_Alignment
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id);
+
+   function Layout_Size (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Targets.Byte_Count
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id);
+
    --  Says what a node synthesised.  Once: a second Note on one node is a
    --  pass that walked it twice, which is the defect this refuses rather
    --  than the last write silently winning.
@@ -319,6 +383,22 @@ private
       Element_Type => Landin.Provenance.Declaration_Id,
       "="          => Landin.Provenance."=");
 
+   package Offset_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Landin.Targets.Byte_Count,
+      "="          => Landin.Targets."=");
+
+   type Aggregate_Layout is record
+      Ready  : Boolean := False;
+      First  : Natural := 0;
+      Count  : Natural := 0;
+      Placed : Landin.Targets.Placement := Landin.Targets.Empty_Placement;
+   end record;
+
+   package Layout_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Aggregate_Layout);
+
    type Table is tagged limited record
       Ready        : Boolean := False;
       Node_Types   : Type_Vectors.Vector;
@@ -331,6 +411,8 @@ private
       Runs         : Run_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
       Bodies       : Body_Vectors.Vector;
+      Layouts      : Layout_Vectors.Vector;
+      Field_Offsets : Offset_Vectors.Vector;
       Scalars      : Scalar_Identities :=
         [others => Landin.Source.Names.No_Name];
    end record;
