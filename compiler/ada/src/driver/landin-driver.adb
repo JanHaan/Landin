@@ -4,7 +4,9 @@ with Landin.Backend.X86_64;
 with Landin.Diagnostics;
 with Landin.Diagnostics.Catalogue;
 with Landin.IR;
+with Landin.Resolution;
 with Landin.Source;
+with Landin.Source.Names;
 with Landin.Stages;
 with Landin.Stages.Checking;
 with Landin.Stages.Lowering;
@@ -26,6 +28,7 @@ package body Landin.Driver is
    package Rows renames Landin.Diagnostics.Catalogue;
 
    use type Landin.IR.Item_Id;
+   use type Landin.IR.Item_Kind;
    use type Landin.Platform.Termination;
    use type Landin.Platform.Write_Status;
    use type Landin.Targets.Capabilities.Backend_Kind;
@@ -53,6 +56,8 @@ package body Landin.Driver is
      Rows.Code (Rows.Toolchain_Failed);
    Code_No_Entry : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Entry_Point_Missing);
+   Code_Wide_Call : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Argument_Not_In_A_Register);
 
    --  What a request asked to be left behind.  Nothing is the state every
    --  request had before R1.80 and most still have: a program is read,
@@ -309,6 +314,53 @@ package body Landin.Driver is
                   & Landin.Backend.Entry_Point.Required_Shape);
                return;
             end if;
+
+            --  [1650] hands six integer arguments in registers and the
+            --  rest on the stack, and this backend has only the first
+            --  half.  Nothing in the kernel bounds a parameter list, so a
+            --  seventh is a program the frontend accepts and the backend
+            --  cannot emit -- and an accepted program must be told what is
+            --  missing rather than meeting an internal defect.  Asked here
+            --  and before anything is written, for [1970]'s reason above.
+            declare
+               Unit : Landin.IR.Unit renames
+                 Landin.Stages.Code (Context).all;
+               Known : Landin.Resolution.Table renames
+                 Landin.Stages.Meanings (Context).all;
+               Spellings : Landin.Source.Names.Table renames
+                 Landin.Stages.Identities (Context).all;
+               Refused : Boolean := False;
+            begin
+               for Index in 1 .. Landin.IR.Item_Count (Unit) loop
+                  declare
+                     Item : constant Landin.IR.Item_Id :=
+                       Landin.IR.Item_Id (Index);
+                  begin
+                     if Landin.IR.Kind_Of (Unit, Item) = Landin.IR.Routine
+                       and then Landin.IR.Parameter_Count (Unit, Item)
+                                > Landin.Backend.X86_64.Register_Arguments
+                     then
+                        Note_Failure
+                          (Code_Wide_Call,
+                           "`"
+                           & Landin.Source.Names.Spelling
+                               (Spellings,
+                                Landin.Resolution.Name_Of
+                                  (Known,
+                                   Landin.IR.Declares (Unit, Item)))
+                           & "` has more parameters than the"
+                           & Natural'Image
+                               (Landin.Backend.X86_64.Register_Arguments)
+                           & " this backend passes in registers");
+                        Refused := True;
+                     end if;
+                  end;
+               end loop;
+
+               if Refused then
+                  return;
+               end if;
+            end;
 
             Host.Write_File
               (Assembly_Path,
