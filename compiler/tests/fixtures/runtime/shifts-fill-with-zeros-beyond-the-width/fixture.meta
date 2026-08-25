@@ -1,6 +1,6 @@
 class: runtime
 summary: shifts fill with zeros beyond the width, and a signed right shift is no exception
-constructs: 0320, 1890
+constructs: 0320, 1770, 1800, 1880, 1890
 program: main.ldn
 status: 42
 targets: linux-x86-64

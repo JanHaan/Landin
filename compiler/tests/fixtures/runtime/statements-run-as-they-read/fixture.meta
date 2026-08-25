@@ -1,6 +1,6 @@
 class: runtime
 summary: [1810]'s early return, bare return, elsif chain and inc/dec run as they read
-constructs: 1810
+constructs: 1770, 1790, 1800, 1810, 1840
 program: main.ldn
 status: 42
 targets: linux-x86-64
