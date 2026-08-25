@@ -1,0 +1,27 @@
+--  [0410]: the left operand is evaluated before the right.  Until this
+--  fixture nothing observed an order at all -- every runtime program
+--  asserted a value, and a value is the same whichever operand ran first.
+--  Module state is what makes an order visible without any I/O to watch.
+mut trace: u32
+
+step: (mark: u32) -> (r: u32) =
+    trace = trace * 10 + mark
+    r = mark
+end step
+
+public main: () -> (code: i32) =
+    _ = step(1) + step(2)
+
+    --  Left first spells 12, right first spells 21, and the arguments of
+    --  one call are ordered the same way: 34 rather than 43.
+    ordered: bool = trace == 12
+
+    trace = 0
+    _ = step(3) * step(4)
+
+    if ordered and trace == 34 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

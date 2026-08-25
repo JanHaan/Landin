@@ -1,5 +1,5 @@
 class: positive
 summary: [1740] public rides on a declaration
-constructs: 1740
+constructs: 0090, 1740
 program: program.ldn
 targets: linux-x86-64, macos-arm64
