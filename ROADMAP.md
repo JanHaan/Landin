@@ -1569,6 +1569,17 @@ which is what makes it evidence rather than decoration.
 The matrix reads 76 with evidence and 121 with neither, and what is left in
 that 121 is language the kernel does not have.
 
+The last of the three is closed too. A runtime fixture named one `program`,
+so [1840]'s own sentence -- the module scope is "every file compiled
+together" -- was a claim the corpus had no way to make, though the driver has
+compiled several sources as one module since R1.50. A fixture may now name
+`with`, the rest of the module, and `runtime/one-module-across-two-files`
+executes a program whose `main` calls a function and reads a module value
+declared in the other file while that file reads one declared back in the
+first. Neither file is self-contained, which is what makes it evidence about
+a set rather than about two programs that happen to link: deleting the `with`
+line leaves `refine` unable to resolve either name.
+
 Exit evidence: positive, negative, verifier and runtime cases all run through
 the real driver; the construct matrix has no unexplained kernel row, and each
 row says whether the construct was accepted, emitted or executed.

@@ -61,6 +61,13 @@ package Landin.Testing.Fixtures is
    --  documents; this side holds the shape only.
    function Constructs (Item : Fixture) return String;
 
+   --  The rest of the module, when a fixture needs more than one file.
+   --  [1840]'s module scope is "every file compiled together", so a claim
+   --  about it cannot be made by a fixture that can only name one; this is
+   --  what lets one be written.  `program` stays the file the fixture is
+   --  named for, and these are handed to `refine` after it.
+   function With_Sources (Item : Fixture) return String;
+
    --  Which stream the expectation is about.  `output` means the bytes
    --  must arrive on standard output and standard error must be empty;
    --  `merged` accepts either, and is only right where a fixture does not
@@ -111,6 +118,7 @@ private
       Status  : Integer := 0;
       Traps   : Boolean := False;
       Made_Of : Ada.Strings.Unbounded.Unbounded_String;
+      Beside  : Ada.Strings.Unbounded.Unbounded_String;
       Stream  : Stream_Choice := Merged;
    end record;
 

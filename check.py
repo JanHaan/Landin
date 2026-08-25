@@ -2257,6 +2257,43 @@ def fixture_constructs():
     return out
 
 
+def fixture_sources():
+    """Every file a fixture names is a file that is there.
+
+    `with` names the rest of a module [1840], and a name that points at
+    nothing is the same dead data `expect` without `args` already is: the
+    fixture would compile one file and claim to have compiled two.
+    """
+    out = []
+    fixtures = os.path.join(ROOT, "compiler/tests/fixtures")
+    if not os.path.isdir(fixtures):
+        return out
+
+    for kind in sorted(os.listdir(fixtures)):
+        directory = os.path.join(fixtures, kind)
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            case = os.path.join(directory, name)
+            meta = os.path.join(case, "fixture.meta")
+            if not os.path.exists(meta):
+                continue
+            text = io.open(meta, encoding="utf-8").read()
+            where = "compiler/tests/fixtures/%s/%s/fixture.meta" % (kind,
+                                                                    name)
+            for key in ("program", "with"):
+                named = re.search(r"^%s: (.+)$" % key, text, re.M)
+                if not named:
+                    continue
+                for one in (f.strip() for f in named.group(1).split(",")):
+                    if one and not os.path.exists(os.path.join(case, one)):
+                        out.append((where, 1,
+                                    "`%s` names %s, which is not here"
+                                    % (key, one)))
+
+    return out
+
+
 def construct_matrix():
     """R1.90's construct matrix, generated from what the corpus says.
 
@@ -2965,6 +3002,7 @@ def main(argv):
     extra += check_catalogue(full_run)
     if full_run:
         extra += fixture_constructs()
+        extra += fixture_sources()
     extra += check_matrix(full_run)
     for path, line, why in sorted(set(extra)):
         total += 1

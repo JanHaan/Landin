@@ -1,0 +1,6 @@
+doubled: (n: i32) -> (r: i32) =
+    r = n + n
+end doubled
+
+--  Declared in the other file, read here: [0130]'s set has no order.
+echoed: i32 = base

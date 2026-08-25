@@ -202,6 +202,12 @@ package body Landin.Tests.Fixture_Suite is
          "class: unit" & LF & "summary: shapeless" & LF
          & "constructs: 1810, twelve" & LF);
 
+      Host.Add_Directory ("root/unit/with-and-no-program");
+      Host.Add_File
+        ("root/unit/with-and-no-program/fixture.meta",
+         "class: unit" & LF & "summary: rootless" & LF
+         & "with: second.ldn" & LF);
+
       Host.Add_Directory ("root/unit/constructs-twice");
       Host.Add_File
         ("root/unit/constructs-twice/fixture.meta",
@@ -259,6 +265,9 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Check
         (Item, Mentions (Found, "a construct is four digits"),
          "a construct that is not four digits is reported");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "there is no program to be the rest of"),
+         "the rest of a module with no program is reported");
       Landin.Testing.Check
         (Item, Mentions (Found, "duplicate key: constructs"),
          "a repeated constructs is reported");
