@@ -181,10 +181,12 @@ A type declaration names a type, and names nothing new.
 'distinct' to make one that is not the type it was written from.
 D15 reads the second as deciding the first: without that word a
 declaration gives an existing type another name and the two are
-one type everywhere. The kernel has only the scalar names to
-alias, so 'count: type = u32' is the whole of what it can say;
-'distinct', a range subtype [0660], and every body of TYPES YOU
-DECLARE are refused by name.
+one type everywhere. A struct body [0670] has no existing type
+to alias and introduces the nominal type [0710] whose identity
+is this declaration; an alias of that name keeps the same
+identity. Every alias chain has to reach a scalar type or a
+struct body. A chain that comes back to an alias in the chain
+reaches no type and is refused at that declaration.
 A type name is an ordinary declared name [1760], so one
 declaration per name per scope [1850] and a name that names
 nothing is refused [1860] both hold for it unchanged.

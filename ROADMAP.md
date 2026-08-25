@@ -1821,6 +1821,17 @@ being quietly mistreated. Which aggregate is not in `Landin.Types` either;
 identity is which declaration wrote it, and that belongs where what every
 node has already lives.
 
+That identity now has its side tables in `Landin.Checking`: a struct body and
+its declaration carry the declaration's identity, while a direct, chained or
+forward alias carries the identity it names. The forward case found that the
+resolver had been reading each module declaration's written type while it was
+still collecting module names, so a type alias could name only a declaration
+above it even though [1840] makes the module a set. Collection and resolution
+are separate passes now, just as lowering creates every item before filling
+one. A checker case distinguishes two same-shaped declarations and follows the
+three alias shapes; the positive struct fixture puts its alias first so the
+language-facing path pins the ordering too.
+
 Implement arrays, ordinary/C/packed structs, variants, tags, payload alignment
 and the policy for spare-bit folding. Use measured fixtures rather than host
 Ada representation as authority.
