@@ -53,7 +53,7 @@
 0370   tour        accepted emitted executed refused refused-by-name sizeof, alignof and lenof
 0380   tour        -                                  addr takes an address
 0390   tour        refused                            Assignment is a statement
-0400   tour        accepted emitted                   No ++ and no --
+0400   tour        accepted emitted                   No `++` and no `--`
 0410   tour        accepted emitted executed          Evaluation order is fixed
 0420   tour        -                                  The dot is not only field access
 0430   tour        -                                  Pointer type, address, dereference

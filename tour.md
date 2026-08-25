@@ -387,10 +387,10 @@ Assignment is a statement, never an expression:
 =  +=  -=  *=  /=  %=  &=  |=  ^=  <<=  >>=
 and the wrapping forms  +%=  -%=  *%=
 
-### [0400] No ++ and no --
+### [0400] No `++` and no `--`
 
-No ++ and no --. There are inc and dec statements, though
-'x += 1' says the same thing.
+No `++` and no `--`. There are inc and dec statements, though
+`x += 1` says the same thing.
 ```landin
 inc total
 dec total

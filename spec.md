@@ -897,7 +897,7 @@ already declined for over-wide amounts.
 `>>` saturates to all sign bits and `-1i32 >> 32` is -1. It is continuous
 where this rule has a step, and it is what x86-64's `sar` gives for free once
 the count is clamped. It was declined because it makes one operator answer
-two ways — zeros for `<<` and for unsigned `>>`, sign bits for signed `>>` --
+two ways — zeros for `<<` and for unsigned `>>`, sign bits for signed `>>` —
 where the tour states the zero-fill rule for shifts as a class and states the
 sign rule about which bits `>>` brings in, not about what an exhausted shift
 leaves behind.

@@ -191,7 +191,7 @@ format or in `Landin.Platform` carries a signal number, deliberately.
 What that can and cannot tell apart is worth knowing before writing one.
 `runtime/checked-overflow-traps` adds one to a `255u8` the compiler cannot
 read: without the backend's own check the instruction keeps the low byte and
-the program returns 42, so the fixture fails when the trap edge is removed --
+the program returns 42, so the fixture fails when the trap edge is removed —
 which is measured, not assumed. `runtime/a-zero-divisor-traps` cannot make that
 distinction, because x86-64 faults on a zero divisor whether or not the
 compiler guarded it; it proves [1950]'s obligation is met and not which of the
@@ -278,7 +278,7 @@ you either is stale.** `./scripts/test.sh` will, and so will the gate.
 `layout.targets` exists for an ordering reason R2.10 states: a description is
 the only thing a compiler with no such machine can be held to, and the
 synthetic 32-bit target has no backend and will not have one until a Cortex-M
-slice arrives. Recording both targets rather than that one is deliberate --
+slice arrives. Recording both targets rather than that one is deliberate —
 what a reader needs is not "the 32-bit model says four" but the two columns
 beside each other, because the defect being guarded against is a description
 quietly inheriting the development host's answers. A `usize` that read eight
