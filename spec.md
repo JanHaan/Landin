@@ -835,3 +835,31 @@ does not need; freestanding builds already have the explicit-entry rule
 [1650].
 
 **Future evidence required:** R1.80's hosted entry and exit-status cases.
+
+### D13 — An amount at or past the width gives zero on every shift
+
+**The tour said** two things about a shift that do not agree at the boundary:
+that shifts "fill with zeros beyond the width, for any amount", and that
+"Signed >> keeps the sign" [0320]. Its example is a `<<`, so it settles
+nothing for the one operator where the two sentences meet. D6 makes the
+question reachable, since the amount takes the left operand's type and a
+signed left operand admits an amount of any size.
+
+**Chosen:** the zeros sentence governs every shift, so an amount at or past
+the width gives zero and a signed `>>` is not an exception. `-1i32 >> 31` is
+-1 and `-1i32 >> 32` is 0. A backend therefore tests the amount against the
+type's own width rather than letting the processor mask the count -- x86-64
+masks to five bits at 32-bit and six at 64, which is the masking [0320]
+already declined for over-wide amounts.
+
+**The alternative:** let "keeps the sign" govern at every amount, so a signed
+`>>` saturates to all sign bits and `-1i32 >> 32` is -1. It is continuous
+where this rule has a step, and it is what x86-64's `sar` gives for free once
+the count is clamped. It was declined because it makes one operator answer
+two ways -- zeros for `<<` and for unsigned `>>`, sign bits for signed `>>` --
+where the tour states the zero-fill rule for shifts as a class and states the
+sign rule about which bits `>>` brings in, not about what an exhausted shift
+leaves behind.
+
+**Pinned by** `runtime/shifts-fill-with-zeros-beyond-the-width`, whose
+`-1i32 >> 32`, `-1i8 >> 8` and `1u64 << 64` are each zero on the hardware.

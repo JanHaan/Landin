@@ -256,6 +256,72 @@ package body Landin.Backend.X86_64 is
                             Value_Cell (Operand (1)), Slot_Cell (Slot));
                   end;
 
+               when Landin.IR.Shift_Left | Landin.IR.Shift_Right =>
+                  --  Two rules the hardware does not give.  [0320] fills with
+                  --  zeros beyond the width for any amount, and x86-64 masks
+                  --  the count to five or six bits instead, so the width test
+                  --  is emitted here.  And [1950] leaves an amount the
+                  --  compiler could not read to the trap; `L0306` has already
+                  --  refused the negative ones it knew.  D6 gives the amount
+                  --  the left operand's type, so both tests are at that width
+                  --  rather than at the count's.
+                  declare
+                     Kind : constant Landin.Types.Integer_Name :=
+                       Landin.IR.Result_Of (Of_Unit, Item, Value);
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                     Signed : constant Boolean :=
+                       Landin.Types.Is_Signed (Kind);
+                     Bits : constant Landin.Targets.Bit_Width :=
+                       Landin.Types.Width (Kind, Facts);
+                     Not_Negative : constant String :=
+                       Value_Label (Value) & "_nonnegative";
+                     In_Range : constant String :=
+                       Value_Label (Value) & "_inrange";
+                     Done : constant String :=
+                       Value_Label (Value) & "_done";
+                     Instruction : constant String :=
+                       (if Op = Landin.IR.Shift_Left then "shl"
+                        elsif Signed then "sar"
+                        else "shr");
+                  begin
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (2)) & ", "
+                           & Accumulator (Held));
+
+                     if Signed then
+                        Emit ("cmp" & Suffix (Held) & " $0, "
+                              & Accumulator (Held));
+                        Emit ("jge " & Not_Negative);
+                        Emit ("ud2");
+                        Put (Not_Negative & ":");
+                     end if;
+
+                     --  Every remaining amount is at or above zero, so the
+                     --  width test is an unsigned one on both signednesses.
+                     Emit ("cmp" & Suffix (Held) & " $"
+                           & Trimmed
+                               (Landin.Targets.Bit_Width'Image (Bits))
+                           & ", " & Accumulator (Held));
+                     Emit ("jb " & In_Range);
+                     Emit ("mov" & Suffix (Held) & " $0, "
+                           & Value_Cell (Value));
+                     Emit ("jmp " & Done);
+                     Put (In_Range & ":");
+
+                     --  The count is below the width, so its low byte is the
+                     --  whole of it and `%cl` is where a variable count goes.
+                     Emit ("movb " & Value_Cell (Operand (2)) & ", %cl");
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     Emit (Instruction & Suffix (Held) & " %cl, "
+                           & Accumulator (Held));
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", "
+                           & Value_Cell (Value));
+                     Put (Done & ":");
+                  end;
+
                when Landin.IR.Bitwise_And
                   | Landin.IR.Bitwise_Xor
                   | Landin.IR.Bitwise_Or =>

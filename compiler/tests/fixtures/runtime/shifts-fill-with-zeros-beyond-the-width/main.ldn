@@ -1,0 +1,37 @@
+public main: () -> (code: i32) =
+    within_8: u8 = 3 << 6
+    within_32: i32 = 1 << 30
+    within_64: u64 = 1 << 63
+    logical_32: u32 = 4294967295 >> 24
+    logical_64: u64 = 18446744073709551615 >> 60
+    arithmetic_32: i32 = -256 >> 4
+    arithmetic_8: i8 = -128 >> 3
+
+    beyond_left_8: u8 = 1 << 32
+    beyond_left_32: i32 = 1 << 40
+    beyond_left_64: u64 = 1 << 64
+    beyond_right_32: u32 = 4294967295 >> 32
+    beyond_right_64: u64 = 18446744073709551615 >> 64
+    beyond_negative: i32 = -1 >> 32
+    beyond_negative_8: i8 = -1 >> 8
+
+    if within_8 == 192
+        and within_32 == 1073741824
+        and within_64 == 9223372036854775808
+        and logical_32 == 255
+        and logical_64 == 15
+        and arithmetic_32 == -16
+        and arithmetic_8 == -16
+        and beyond_left_8 == 0
+        and beyond_left_32 == 0
+        and beyond_left_64 == 0
+        and beyond_right_32 == 0
+        and beyond_right_64 == 0
+        and beyond_negative == 0
+        and beyond_negative_8 == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
