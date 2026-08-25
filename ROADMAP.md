@@ -1472,7 +1472,7 @@ fixture still cannot name two source files. Each is recorded above where the
 work that meets it will find it.
 
 ### R1.90 — Close the executable-kernel corpus
-Status: planned
+Status: complete
 Depends on: R1.80
 
 Tie grammar, diagnostics, syntax, checking, IR and native behavior together in
@@ -1630,6 +1630,21 @@ Exit evidence: positive, negative and runtime cases all run through the real
 driver and the verifier runs inside it on every Unit lowered; the construct
 matrix has no unexplained kernel row, and each row says whether the construct
 was accepted, emitted or executed.
+
+Closed with the corpus indexed and the index generated. What the item is not
+is a claim that the corpus is finished: 82 rows carry evidence, 115 are
+language the kernel does not have, and every one of those 115 becomes work
+for whichever item enables it. The matrix is the place that will say so,
+which is the whole reason for building it rather than counting fixtures.
+
+Two habits came out of it and both are written where they will be met.
+Attribute a fixture to the paragraph that teaches the thing and not only to
+the kernel rule it was written against -- two passes of this item found rows
+covered all along and unattributed, and the second pass found them after the
+first had already looked. And name a construct only when the fixture's
+passing would change if it were implemented wrong, which is what keeps a
+column from filling up with rows that mean nothing; [1550] is bare for that
+reason and says so.
 
 ### R1 gate
 
