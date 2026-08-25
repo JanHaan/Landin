@@ -1,0 +1,5 @@
+class: runtime
+summary: folded module values hold their answers and module state is updated
+program: main.ldn
+status: 42
+targets: linux-x86-64

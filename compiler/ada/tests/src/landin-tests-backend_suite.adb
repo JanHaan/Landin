@@ -826,6 +826,155 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Six_Arguments_Reach_Their_Own_Widths;
 
+   --  A datum's block describes a value and is not code [1940], so it
+   --  becomes an initialized object in `.data` at its own alignment rather
+   --  than instructions anything runs.
+   procedure A_Module_Value_Becomes_Initialized_Data
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Value_Becomes_Initialized_Data
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower (Work, "public answer: i32 = 42" & LF, Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & ".data" & LF
+           & HT & ".globl answer" & LF
+           & HT & ".type answer, @object" & LF
+           & HT & ".align 4" & LF
+           & "answer:" & LF
+           & HT & ".long 42" & LF
+           & HT & ".size answer, 4" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "a module value is emitted as initialized data");
+      end;
+   end A_Module_Value_Becomes_Initialized_Data;
+
+   --  A module value is reached by name rather than through a frame, and
+   --  x86-64's position-independent form of that name is RIP-relative.
+   --  [1900] lets a `mut` module binding be written as well as read.
+   procedure A_Module_Binding_Is_Reached_Through_Rip
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Binding_Is_Reached_Through_Rip
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut counter: u32" & LF
+         & "bump: () -> (r: u32) =" & LF
+         & "    counter = counter + 1" & LF
+         & "    r = counter" & LF & "end bump" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl counter(%rip), %eax"),
+            "a module value is read through RIP");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl %eax, counter(%rip)"),
+            "and written back the same way");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & ".long 0" & LF),
+            "D10's binding with no value holds zero");
+      end;
+   end A_Module_Binding_Is_Reached_Through_Rip;
+
+   --  [1940] folds an operator in a module value, and `Landin.IR`'s header
+   --  says the checker leaves the bitwise and shift levels to whoever has a
+   --  width.  That is this backend, so the fold finishes here.
+   procedure A_Module_Value_Folds_Every_Level
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Value_Folds_Every_Level
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "sum: i32 = 40 + 2" & LF
+         & "derived: i32 = sum + 1" & LF
+         & "beyond: u32 = 1 << 40" & LF
+         & "masked: u8 = ~0 & 240" & LF
+         & "below: i8 = 0 - 100" & LF
+         & "verdict: bool = 3 > 2" & LF
+         & "kept: i8 = below >> 7" & LF
+         & "wide: i32 = sum - 298 >> 4" & LF
+         & "carried: u16 = 40000 + 30000 - 10000" & LF
+         & "halved: u16 = (40000 + 30000) / 2" & LF
+         & "wrapped: u16 = 40000 +% 30000 -% 10000" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "sum:" & LF & HT & ".long 42" & LF),
+            "an arithmetic fold reaches its value");
+         Landin.Testing.Check
+           (Item, Contains (Text, "derived:" & LF & HT & ".long 43" & LF),
+            "a module value may name one folded above it");
+         Landin.Testing.Check
+           (Item, Contains (Text, "beyond:" & LF & HT & ".long 0" & LF),
+            "D13's zero beyond the width holds at module level too");
+         Landin.Testing.Check
+           (Item, Contains (Text, "masked:" & LF & HT & ".byte 240" & LF),
+            "a complement folds at its own width and not at 64");
+         Landin.Testing.Check
+           (Item, Contains (Text, "below:" & LF & HT & ".byte -100" & LF),
+            "a negative fold is written as one");
+         Landin.Testing.Check
+           (Item, Contains (Text, "verdict:" & LF & HT & ".byte 1" & LF),
+            "a comparison folds to [1870]'s one-byte bool");
+         --  Every complement in an arithmetic shift is at the type's own
+         --  width; taking one at the fold's 64 gives 127 here instead.
+         Landin.Testing.Check
+           (Item, Contains (Text, "kept:" & LF & HT & ".byte -1" & LF),
+            "a negative shift right keeps the sign at its own width");
+         Landin.Testing.Check
+           (Item, Contains (Text, "wide:" & LF & HT & ".long -16" & LF),
+            "and at a wider one");
+         --  A checked operator has no width to answer at, because [1460]
+         --  gives a module value no moment in which to trap: the whole
+         --  expression is worked out and the checker refuses the answer no
+         --  type holds.  Masking each step instead would give 2232 here.
+         Landin.Testing.Check
+           (Item, Contains (Text, "carried:" & LF & HT & ".word 60000" & LF),
+            "a checked fold carries an intermediate no type holds");
+         Landin.Testing.Check
+           (Item, Contains (Text, "halved:" & LF & HT & ".word 35000" & LF),
+            "and divides the number rather than a narrowed pattern");
+         --  [0300]'s wrapping forms are about a width and say so, so these
+         --  do narrow at each step: 70000 wraps to 4464 before the minus.
+         Landin.Testing.Check
+           (Item, Contains (Text, "wrapped:" & LF & HT & ".word 60000" & LF),
+            "a wrapping fold narrows at each step");
+      end;
+   end A_Module_Value_Folds_Every_Level;
+
    --  x86-64 divides its implicit full-width dividend.  An unknown zero
    --  divisor therefore reaches Landin's explicit trap before `div`, while a
    --  valid u8 dividend has its high byte cleared and stores the quotient.
@@ -1417,6 +1566,15 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a module value becomes initialized data",
+         A_Module_Value_Becomes_Initialized_Data'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a module binding is reached through rip",
+         A_Module_Binding_Is_Reached_Through_Rip'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a module value folds every level",
+         A_Module_Value_Folds_Every_Level'Access);
       Landin.Testing.Register
         (Into, "backend", "a call fills its argument registers in order",
          A_Call_Fills_Its_Argument_Registers_In_Order'Access);

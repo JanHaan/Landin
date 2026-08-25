@@ -41,10 +41,19 @@
 --  own parameter's width, and takes the result from the accumulator into a
 --  frame cell; a callee returning none leaves nothing to take.  The frame is
 --  a multiple of the target's stack alignment, so `%rsp` still meets the ABI
---  where a call is made.  Module data is not here yet.  An opcode this does
---  not yet
---  spell raises Compiler_Defect rather than emitting
---  something plausible.
+--  where a call is made.
+--
+--  A module value is data and not code.  [1460] says nothing runs before the
+--  entry point, so a datum's block is folded here rather than executed, and
+--  the fold lands here because `Landin.IR`'s header says the checker leaves
+--  the bitwise and shift levels to whoever has a width.  What comes out is
+--  an initialized object in `.data` at its own alignment; a binding with no
+--  value holds zero, which D10 settled.  A routine reaches one by name,
+--  RIP-relative, rather than through a frame cell.
+--
+--  Every opcode `Landin.IR` spells is emitted, so the case that dispatches
+--  them is exhaustive rather than ending in a defect: a new opcode fails to
+--  compile here instead of failing at run time.
 --
 --  Nothing here asks the host how wide a pointer is.  Sizes come from
 --  `Landin.Backend.Size_Of` against the target description handed in, so
