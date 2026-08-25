@@ -13,7 +13,6 @@ package body Landin.Backend.X86_64 is
    use type Landin.IR.Opcode;
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
-   use type Landin.Types.Type_Kind;
 
    LF : constant Character := Character'Val (10);
 
