@@ -1785,6 +1785,23 @@ they had been carrying, so each now refuses one thing. `compiler/tests/README.md
 lost an example with them — it cited `float-literal-not-enabled` for why
 `codes` is a list and not a set, and that fixture names one code now.
 
+The layout arithmetic came next and before any language change, because it
+can be proved without one. `Landin.Targets.Placement` is [0750] and nothing
+else: fields keep the order they were written, each begins at its own
+alignment rounded up from where the last ended, and the whole rounds up to
+the widest alignment any field asked for so that an array of them keeps
+every element aligned. `layout(optimal)` and `layout(c)` are the other two
+policies [0750] names and arrive with the attributes.
+
+The order is the evidence. `u8 u32 u8` occupies twelve bytes and `u8 u8 u32`
+occupies eight, and a layout that reordered fields to save padding would
+make both answers the same — which is the sentence [0750] is written to
+prevent, so the two orders are a case and both are recorded. The goldens now
+carry four worked aggregates per target, where `u8 usize` is sixteen bytes
+against Linux x86-64 and eight against the synthetic 32-bit description
+while `u64 u8` is sixteen against both: the pointer width moving, and not
+the whole model.
+
 Implement arrays, ordinary/C/packed structs, variants, tags, payload alignment
 and the policy for spare-bit folding. Use measured fixtures rather than host
 Ada representation as authority.

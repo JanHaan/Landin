@@ -247,6 +247,8 @@ package body Landin.Tests.Targets_Suite is
    --  what each one is.
    ------------------------------------------------------------------
 
+   type Size_List is array (Positive range <>) of Scalar_Size;
+
    function Layout_Text return String;
 
    function Layout_Text return String is
@@ -309,6 +311,41 @@ package body Landin.Tests.Targets_Suite is
                   & LF);
             end;
          end loop;
+
+         --  [0750]'s rule, worked: the same three fields in two orders.
+         --  A reader can check the padding by counting, and a layout that
+         --  reordered fields would make the two lines agree.
+         declare
+            procedure Row (Label : String; Sizes : Size_List);
+
+            procedure Row (Label : String; Sizes : Size_List) is
+               Made  : Placement := Empty_Placement;
+               Where : Byte_Count;
+               Line  : Unbounded.Unbounded_String;
+            begin
+               for Each of Sizes loop
+                  Place (Made, Each, Facts, Where);
+                  Unbounded.Append
+                    (Line, Trimmed (Byte_Count'Image (Where)) & " ");
+               end loop;
+
+               Unbounded.Append
+                 (Text,
+                  "  " & Padded (Label, 16)
+                  & Padded (Unbounded.To_String (Line), 12)
+                  & Padded (Trimmed (Byte_Count'Image (Size_Of (Made))), 7)
+                  & Trimmed (Byte_Alignment'Image (Alignment_Of (Made)))
+                  & LF);
+            end Row;
+         begin
+            Unbounded.Append
+              (Text, LF & "  aggregate       offsets     size   align"
+               & LF);
+            Row ("u8 u32 u8", [Byte_1, Byte_4, Byte_1]);
+            Row ("u8 u8 u32", [Byte_1, Byte_1, Byte_4]);
+            Row ("u8 usize", [Byte_1, Pointer_Size (Facts)]);
+            Row ("u64 u8", [Byte_8, Byte_1]);
+         end;
       end Describe;
    begin
       Unbounded.Append
@@ -365,8 +402,93 @@ package body Landin.Tests.Targets_Suite is
          "the recorded layout is what the target model says now");
    end The_Recorded_Layout_Is_Current;
 
+   --  [0750]: fields keep the order you wrote them, with natural
+   --  alignment and padding in between.  The order is the evidence: the
+   --  same three fields written two ways occupy different numbers of
+   --  bytes, and a layout that reordered them to save padding would make
+   --  both answers the same and break the sentence.
+   procedure Fields_Keep_The_Order_They_Were_Written
+     (Item : in out Landin.Testing.Context);
+
+   procedure Fields_Keep_The_Order_They_Were_Written
+     (Item : in out Landin.Testing.Context)
+   is
+      Wide  : Placement := Empty_Placement;
+      Tight : Placement := Empty_Placement;
+      Where : Byte_Count;
+   begin
+      --  u8, u32, u8: the second field pays three bytes of padding and
+      --  the third leaves the whole rounded up.
+      Place (Wide, Byte_1, Linux_X86_64, Where);
+      Landin.Testing.Check_Equal
+        (Item, Natural (Where), 0, "the first field begins at zero");
+      Place (Wide, Byte_4, Linux_X86_64, Where);
+      Landin.Testing.Check_Equal
+        (Item, Natural (Where), 4, "a four-byte field aligns to four");
+      Place (Wide, Byte_1, Linux_X86_64, Where);
+      Landin.Testing.Check_Equal
+        (Item, Natural (Where), 8, "and the byte after it follows on");
+
+      Landin.Testing.Check_Equal
+        (Item, Natural (Extent_Of (Wide)), 9, "the fields reach nine");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Size_Of (Wide)), 12,
+         "and the whole rounds up to its own alignment");
+      Landin.Testing.Check
+        (Item, Alignment_Of (Wide) = 4,
+         "an aggregate aligns as widely as its widest field");
+
+      --  u8, u8, u32: the same three fields, written so that no padding
+      --  is needed at all.
+      Place (Tight, Byte_1, Linux_X86_64, Where);
+      Place (Tight, Byte_1, Linux_X86_64, Where);
+      Place (Tight, Byte_4, Linux_X86_64, Where);
+      Landin.Testing.Check_Equal
+        (Item, Natural (Where), 4, "the wide field still aligns to four");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Size_Of (Tight)), 8,
+         "and the order that needs no padding is smaller");
+   end Fields_Keep_The_Order_They_Were_Written;
+
+   --  The layout follows the description and not the machine running the
+   --  compiler, which for an aggregate means the pointer-width field is
+   --  where the two descriptions come apart.
+   procedure A_Layout_Follows_The_Target_And_Not_The_Host
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Layout_Follows_The_Target_And_Not_The_Host
+     (Item : in out Landin.Testing.Context)
+   is
+      Wide   : Placement := Empty_Placement;
+      Narrow : Placement := Empty_Placement;
+      Where  : Byte_Count;
+   begin
+      --  u8 then usize, on each description.
+      Place (Wide, Byte_1, Linux_X86_64, Where);
+      Place (Wide, Pointer_Size (Linux_X86_64), Linux_X86_64, Where);
+      Landin.Testing.Check_Equal
+        (Item, Natural (Where), 8,
+         "a 64-bit pointer field aligns to eight");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Size_Of (Wide)), 16, "and the whole is sixteen");
+
+      Place (Narrow, Byte_1, Synthetic_32, Where);
+      Place (Narrow, Pointer_Size (Synthetic_32), Synthetic_32, Where);
+      Landin.Testing.Check_Equal
+        (Item, Natural (Where), 4,
+         "a 32-bit pointer field aligns to four");
+      Landin.Testing.Check_Equal
+        (Item, Natural (Size_Of (Narrow)), 8, "and the whole is eight");
+   end A_Layout_Follows_The_Target_And_Not_The_Host;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "targets", "fields keep the order they were written",
+         Fields_Keep_The_Order_They_Were_Written'Access);
+      Landin.Testing.Register
+        (Into, "targets", "a layout follows the target and not the host",
+         A_Layout_Follows_The_Target_And_Not_The_Host'Access);
       Landin.Testing.Register
         (Into, "targets", "the recorded layout is current",
          The_Recorded_Layout_Is_Current'Access);
