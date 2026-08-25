@@ -11,29 +11,29 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  197 constructs, 61 with evidence, 136 with neither.
+#  197 constructs, 76 with evidence, 121 with neither.
 #
 #  id    defined in  evidence
-0010   tour        -                                  Line comment, to end of line
-0020   tour        -                                  Block comment. Nests properly
-0030   tour        -                                  Doc comment. Attaches to the declaration that follows
+0010   tour        accepted emitted                   Line comment, to end of line
+0020   tour        accepted emitted                   Block comment. Nests properly
+0030   tour        accepted emitted                   Doc comment. Attaches to the declaration that follows
 0040   tour        refused                            Full form: name, type, value
-0050   tour        -                                  Type inferred from the value
-0060   tour        -                                  Mutable binding
+0050   tour        accepted emitted                   Type inferred from the value
+0060   tour        accepted emitted                   Mutable binding
 0070   tour        -                                  Two questions about a reference
-0080   tour        -                                  Declaration only
-0090   tour        -                                  Exported from the module
+0080   tour        accepted emitted                   Declaration only
+0090   tour        accepted emitted                   Exported from the module
 0100   tour        -                                  Several names may share one declaration
-0110   tour        -                                  Left of ':' is always the name being introduced
+0110   tour        accepted emitted                   Left of ':' is always the name being introduced
 0120   tour        refused refused-by-name            Types are declared like any other value, with 'type'
 0130   tour        accepted emitted                   Order inside a module does not matter
 0140   tour        accepted emitted                   An inner scope may shadow an outer name
-0150   tour        -                                  Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
-0160   tour        -                                  Pointer-width integers: usize, isize
+0150   tour        refused                            Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
+0160   tour        refused                            Pointer-width integers: usize, isize
 0170   tour        refused-by-name                    Floating point: f16, f32, f64
-0180   tour        -                                  bool, with true and false
-0190   tour        -                                  Integer literals are untyped
-0200   tour        -                                  With no context, an integer literal defaults to i32
+0180   tour        accepted emitted                   bool, with true and false
+0190   tour        accepted emitted                   Integer literals are untyped
+0200   tour        accepted emitted                   With no context, an integer literal defaults to i32
 0210   tour        refused                            Float literals are always recognisable as such
 0220   tour        accepted emitted                   Bases, separators, exponents
 0230   tour        -                                  Hex float literals express every representable value exactly
@@ -53,8 +53,8 @@
 0370   tour        -                                  sizeof, alignof and lenof
 0380   tour        -                                  addr takes an address
 0390   tour        refused                            Assignment is a statement
-0400   tour        -                                  No ++ and no --
-0410   tour        -                                  Evaluation order is fixed
+0400   tour        accepted emitted                   No ++ and no --
+0410   tour        accepted emitted executed          Evaluation order is fixed
 0420   tour        -                                  The dot is not only field access
 0430   tour        -                                  Pointer type, address, dereference
 0440   tour        -                                  A mut reference satisfies a plain one, never the reverse

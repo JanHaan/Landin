@@ -1545,6 +1545,30 @@ inside an `if` arm, which is not evidence about arm scopes -- and the fixture
 grew a function that declares the same name in both arms rather than the claim
 being quietly kept.
 
+Reading the bare rows separated two things that had looked like one. Most of
+the 136 were the language the kernel has not reached -- floats, characters,
+text, ranges, `sizeof`, pointers, arrays, slices -- and their silence is
+correct. But a second group was covered all along and unattributed: a fixture
+demonstrating an inferred binding cited [1790], the kernel rule it was written
+against, and not [0050], the paragraph that teaches the thing. The tour is
+where the language is explained, so a fixture that demonstrates a tour rule is
+evidence about it, and thirteen such attributions were added after reading
+each paragraph against the program that claims it.
+
+Two rows were neither, and both became fixtures. [0150] names `u128` and
+`i128` while [1790]'s type rule does not, and the kernel already refuses one
+by name -- `L0101`, rather than reading it as a name that declares nothing --
+with nothing pinning that. And [0410] fixes evaluation order, which no fixture
+could have observed: every runtime program until now asserted a *value*, and a
+value is the same whichever operand ran first. `runtime/evaluation-order-is-left-then-right`
+watches it through module state instead, since the kernel has no I/O to watch:
+`step(1) + step(2)` leaves a trace reading 12 rather than 21, and the
+arguments of one call leave 34 rather than 43. Asserting the reverse exits 1,
+which is what makes it evidence rather than decoration.
+
+The matrix reads 76 with evidence and 121 with neither, and what is left in
+that 121 is language the kernel does not have.
+
 Exit evidence: positive, negative, verifier and runtime cases all run through
 the real driver; the construct matrix has no unexplained kernel row, and each
 row says whether the construct was accepted, emitted or executed.

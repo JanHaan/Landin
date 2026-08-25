@@ -2554,3 +2554,9 @@ file negative/usize-is-not-u64/program.ldn tokens 25
   48 49 b
   50 53 end
   54 55 f
+file negative/wide-integer-not-enabled/program.ldn tokens 5
+  0 4 wide
+  4 5 :
+  6 10 u128
+  11 12 =
+  13 14 1

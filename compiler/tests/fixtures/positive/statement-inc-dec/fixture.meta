@@ -1,5 +1,5 @@
 class: positive
 summary: [1810] inc and dec are statements, not operators
-constructs: 1810
+constructs: 0400, 1810
 program: program.ldn
 targets: linux-x86-64, macos-arm64
