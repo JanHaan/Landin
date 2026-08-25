@@ -1580,9 +1580,32 @@ first. Neither file is self-contained, which is what makes it evidence about
 a set rather than about two programs that happen to link: deleting the `with`
 line leaves `refine` unable to resolve either name.
 
-Exit evidence: positive, negative, verifier and runtime cases all run through
-the real driver; the construct matrix has no unexplained kernel row, and each
-row says whether the construct was accepted, emitted or executed.
+The fourth word in this item's exit evidence turned out to be asking for
+something the design forbids, and the wording is corrected below rather than
+the design bent to it. There can be no verifier *fixture*:
+`Landin.IR.Verifier`'s own header argues that malformed IR cannot be caused
+by a source program -- the frontend refuses every ill-formed one and this
+stage refuses to run on a refused one -- and the `L0400`-`L0499` band is left
+unassigned precisely so that no code promises otherwise. A fixture class for
+it would be a promise `landin.ads` forbids.
+
+What the clause can honestly ask is that the verifier *runs* in the real
+driver path, and it does: `Landin.Stages.Lowering` verifies every Unit it
+builds, in every build mode, and its body raises rather than asserting so a
+release build does not quietly skip it. Both halves were measured.
+
+That left one thing worth guarding. Because no fixture can reach the
+verifier, deleting the call would turn all of its rules off without a single
+case going red -- the failure this item exists to find, in the machinery of
+the item itself. `check.py` now holds the lowering stage to making that call,
+which is the same kind of structural rule as the one that keeps every code
+literal in the catalogue: some invariants are about where a line is and not
+about what a run produces.
+
+Exit evidence: positive, negative and runtime cases all run through the real
+driver and the verifier runs inside it on every Unit lowered; the construct
+matrix has no unexplained kernel row, and each row says whether the construct
+was accepted, emitted or executed.
 
 ### R1 gate
 
