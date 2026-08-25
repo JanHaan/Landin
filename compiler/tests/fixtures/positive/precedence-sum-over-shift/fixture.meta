@@ -1,4 +1,5 @@
 class: positive
 summary: [1820] sum binds tighter than shift: 1 << 1 + 1 is 4, not 3
+constructs: 1820
 program: program.ldn
 targets: linux-x86-64, macos-arm64

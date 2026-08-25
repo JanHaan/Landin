@@ -1,5 +1,6 @@
 class: runtime
 summary: a doubly recursive function computes Fibonacci and returns its own answer as the program's status
+constructs: 1920, 1970
 program: main.ldn
 status: 42
 targets: linux-x86-64

@@ -1,5 +1,6 @@
 class: negative
 summary: [1920] a call names every parameter exactly once, and [0980] gives none a default value
+constructs: 1920, 0980
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0301

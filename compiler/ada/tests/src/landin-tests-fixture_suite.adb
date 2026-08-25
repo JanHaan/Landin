@@ -102,6 +102,7 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_File
         ("root/negative/broken-name/fixture.meta",
          "class: negative" & LF & "summary: a rejection" & LF
+         & "constructs: 1740" & LF
          & "program: broken.ldn" & LF & "expect: broken.expected" & LF
          & "args: broken.ldn" & LF & "status: 1" & LF);
 
@@ -130,6 +131,8 @@ package body Landin.Tests.Fixture_Suite is
         (Item, Program (Nth (Found, 3)), "broken.ldn", "program is kept");
       Landin.Testing.Check_Equal
         (Item, Expect (Nth (Found, 3)), "broken.expected", "expect is kept");
+      Landin.Testing.Check_Equal
+        (Item, Constructs (Nth (Found, 3)), "1740", "constructs are kept");
    end Well_Formed_Fixtures_Are_Discovered;
 
    procedure Malformed_Metadata_Is_Refused
@@ -179,6 +182,7 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_File
         ("root/runtime/traps-and-a-status/fixture.meta",
          "class: runtime" & LF & "summary: both" & LF
+         & "constructs: 1960" & LF
          & "program: main.ldn" & LF & "status: 42" & LF
          & "traps: yes" & LF);
 
@@ -186,12 +190,29 @@ package body Landin.Tests.Fixture_Suite is
       Host.Add_File
         ("root/runtime/traps-is-not-a-verdict/fixture.meta",
          "class: runtime" & LF & "summary: odd" & LF
+         & "constructs: 1960" & LF
          & "program: main.ldn" & LF & "traps: perhaps" & LF);
+
+      --  A construct is four digits and the documents define which four.
+      --  This side checks the shape; check.py checks that the paragraph
+      --  exists, because it is the thing that reads the documents.
+      Host.Add_Directory ("root/unit/constructs-are-not-four-digits");
+      Host.Add_File
+        ("root/unit/constructs-are-not-four-digits/fixture.meta",
+         "class: unit" & LF & "summary: shapeless" & LF
+         & "constructs: 1810, twelve" & LF);
+
+      Host.Add_Directory ("root/unit/constructs-twice");
+      Host.Add_File
+        ("root/unit/constructs-twice/fixture.meta",
+         "class: unit" & LF & "summary: twice" & LF
+         & "constructs: 1810" & LF & "constructs: 1820" & LF);
 
       Host.Add_Directory ("root/runtime/traps-twice");
       Host.Add_File
         ("root/runtime/traps-twice/fixture.meta",
          "class: runtime" & LF & "summary: twice" & LF
+         & "constructs: 1960" & LF
          & "program: main.ldn" & LF & "traps: yes" & LF
          & "traps: no" & LF);
 
@@ -235,6 +256,12 @@ package body Landin.Tests.Fixture_Suite is
       Landin.Testing.Check
         (Item, Mentions (Found, "traps is not yes or no"),
          "a traps value that is not a verdict is reported");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "a construct is four digits"),
+         "a construct that is not four digits is reported");
+      Landin.Testing.Check
+        (Item, Mentions (Found, "duplicate key: constructs"),
+         "a repeated constructs is reported");
       Landin.Testing.Check
         (Item, Mentions (Found, "duplicate key: traps"),
          "a repeated traps is reported");

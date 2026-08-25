@@ -1,5 +1,6 @@
 class: runtime
 summary: signed and unsigned comparisons choose the program's status
+constructs: 0350, 1870, 1890
 program: main.ldn
 status: 42
 targets: linux-x86-64

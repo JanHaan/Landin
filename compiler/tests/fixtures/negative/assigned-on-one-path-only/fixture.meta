@@ -1,5 +1,6 @@
 class: negative
 summary: [1910] no condition is believed, so a name assigned in one arm and not another is not assigned after it
+constructs: 1910
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0302

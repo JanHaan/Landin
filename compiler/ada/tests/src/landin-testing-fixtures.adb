@@ -1,3 +1,5 @@
+with Ada.Strings.Fixed;
+
 package body Landin.Testing.Fixtures is
 
    use type Landin.Platform.List_Status;
@@ -62,6 +64,9 @@ package body Landin.Testing.Fixtures is
    function Status (Item : Fixture) return Integer is (Item.Status);
 
    function Traps (Item : Fixture) return Boolean is (Item.Traps);
+
+   function Constructs (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Made_Of));
 
    function Stream (Item : Fixture) return Stream_Choice is (Item.Stream);
 
@@ -144,6 +149,7 @@ package body Landin.Testing.Fixtures is
       Seen_Args    : Boolean := False;
       Seen_Status  : Boolean := False;
       Seen_Traps   : Boolean := False;
+      Seen_Constructs : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Lex     : Boolean := False;
       Seen_Codes   : Boolean := False;
@@ -304,6 +310,57 @@ package body Landin.Testing.Fixtures is
                   Complain ("stream is not output or merged: " & Value);
                end if;
 
+            elsif Key = "constructs" then
+               if Seen_Constructs then
+                  Complain ("duplicate key: constructs");
+                  return;
+               end if;
+               Seen_Constructs := True;
+
+               declare
+                  First : Integer := Value'First;
+                  Ok    : Boolean := Value'Length > 0;
+
+                  procedure Consider (Text : String);
+
+                  procedure Consider (Text : String) is
+                     Trimmed : constant String :=
+                       Ada.Strings.Fixed.Trim (Text, Ada.Strings.Both);
+                  begin
+                     if Trimmed'Length /= 4 then
+                        Ok := False;
+                        return;
+                     end if;
+
+                     for Letter of Trimmed loop
+                        if Letter not in '0' .. '9' then
+                           Ok := False;
+                        end if;
+                     end loop;
+                  end Consider;
+               begin
+                  for Index in Value'Range loop
+                     if Value (Index) = ',' then
+                        Consider (Value (First .. Index - 1));
+                        First := Index + 1;
+                     end if;
+                  end loop;
+
+                  if First <= Value'Last then
+                     Consider (Value (First .. Value'Last));
+                  else
+                     Ok := False;
+                  end if;
+
+                  if Ok then
+                     Item.Made_Of := Unbounded.To_Unbounded_String (Value);
+                  else
+                     Complain
+                       ("a construct is four digits, and this is not: "
+                        & Value);
+                  end if;
+               end;
+
             elsif Key = "traps" then
                if Seen_Traps then
                   Complain ("duplicate key: traps");
@@ -350,6 +407,7 @@ package body Landin.Testing.Fixtures is
                Codes   => Unbounded.Null_Unbounded_String,
                Status  => 0,
                Traps   => False,
+               Made_Of => Unbounded.Null_Unbounded_String,
                Stream  => Merged);
 
       for Index in Content'Range loop
@@ -392,6 +450,17 @@ package body Landin.Testing.Fixtures is
         and then not Seen_Program
       then
          Complain ("a runtime fixture needs a program to run");
+      end if;
+
+      --  A `.ldn` program is written in the language, so it is evidence
+      --  about some construct of it and R1.90 wants to know which.  A
+      --  fixture with no program is about the tool rather than the
+      --  language -- an unknown option, the identity text, an
+      --  implementation-side note -- and names no construct for the same
+      --  reason.
+      if Seen_Program and then not Seen_Constructs then
+         Complain
+           ("a fixture with a program says which constructs it is about");
       end if;
 
       --  [1960] leaves a trap no status to carry, so a fixture that says

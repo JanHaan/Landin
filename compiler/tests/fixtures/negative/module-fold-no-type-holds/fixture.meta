@@ -1,5 +1,6 @@
 class: negative
 summary: [1940] a module value has no moment in which to trap, so a fold no type holds is refused
+constructs: 1940
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0300

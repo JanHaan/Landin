@@ -1,5 +1,6 @@
 class: negative
 summary: [1900] an immutable binding may not be written, because [0040] makes it immutable
+constructs: 1900, 0040
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0303

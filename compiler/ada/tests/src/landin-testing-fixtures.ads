@@ -53,6 +53,14 @@ package Landin.Testing.Fixtures is
    --  carries no `status`, and `Status` says nothing about one.
    function Traps (Item : Fixture) return Boolean;
 
+   --  The constructs this fixture is evidence about, in the order it named
+   --  them: `[NNNN]` ids without their brackets.  R1.90 indexes the corpus
+   --  by construct, and a citation in a summary is prose -- a matrix needs
+   --  a list that was written to be read.  Which paragraphs exist is
+   --  check.py's to know, because it is the thing that reads the
+   --  documents; this side holds the shape only.
+   function Constructs (Item : Fixture) return String;
+
    --  Which stream the expectation is about.  `output` means the bytes
    --  must arrive on standard output and standard error must be empty;
    --  `merged` accepts either, and is only right where a fixture does not
@@ -102,6 +110,7 @@ private
       Codes   : Unbounded.Unbounded_String;
       Status  : Integer := 0;
       Traps   : Boolean := False;
+      Made_Of : Ada.Strings.Unbounded.Unbounded_String;
       Stream  : Stream_Choice := Merged;
    end record;
 

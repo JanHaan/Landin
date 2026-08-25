@@ -1,4 +1,5 @@
 class: positive
 summary: [1820] parentheses override the table: (1 + 2) * 3 is 9
+constructs: 1820
 program: program.ldn
 targets: linux-x86-64, macos-arm64

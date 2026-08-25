@@ -40,6 +40,7 @@ Fixture classes, and the directory each uses:
 | `stream` | no | `output` (the bytes must be on standard output, and standard error must be empty) or `merged` (default) |
 | `lex` | no | the exact complaint the scanner must produce, for a fixture whose fault is lexical |
 | `codes` | yes for a negative with a program | the diagnostic codes the report must carry, in order |
+| `constructs` | yes for a fixture with a program | the `[NNNN]` ids, without brackets, this fixture is evidence about |
 | `targets` | no | comma-separated targets the fixture applies to |
 
 `codes` also says which stage refused the fixture, and that is what decides
@@ -58,6 +59,24 @@ so `float-literal-not-enabled` names `L0010, L0010` -- once for the type and
 once for the literal. `check.py` holds every name in it to the catalogue, and
 refuses a negative fixture with a program that names none; the parser suite
 scans and parses the program and holds the report to the exact sequence.
+
+`constructs` is what R1.90 indexes the corpus by, and it is a written list
+rather than a reading of the summary. A citation in prose is prose: it is
+there to explain the fixture to a person, it may name a paragraph the fixture
+merely mentions, and a heuristic over English is how a check ends up
+believing 114 lines of it were code. `check.py` holds every id to a paragraph
+`tour.md` or `spec.md` actually defines, and the harness holds it to being
+four digits -- the two halves of the question, asked by the side that can
+answer each.
+
+A fixture with a `program` must name at least one, because a `.ldn` program
+is written in the language and is therefore evidence about some construct of
+it. A fixture without one is about the tool rather than the language -- an
+unknown option, the identity text, an implementation-side note -- and names
+none for the same reason. A construct the kernel does not enable yet is
+perfectly good: `negative/convention-not-enabled` names [1830] for the
+refusal and [0900] for the thing being refused, and [0900] is a paragraph
+about a construct no fixture can yet use.
 
 `targets` is checked against the targets `ROADMAP.md` names: `linux-x86-64`,
 `macos-arm64`, `cortex-m`, `synthetic-32`. A fixture may name a target the

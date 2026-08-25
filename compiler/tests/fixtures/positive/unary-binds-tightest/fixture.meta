@@ -1,4 +1,5 @@
 class: positive
 summary: [1820] unary binds tighter than any binary level
+constructs: 1820
 program: program.ldn
 targets: linux-x86-64, macos-arm64

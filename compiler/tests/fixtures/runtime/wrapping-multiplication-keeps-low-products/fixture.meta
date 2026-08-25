@@ -1,5 +1,6 @@
 class: runtime
 summary: wrapping multiplication keeps low signed and unsigned products
+constructs: 0300
 program: main.ldn
 status: 42
 targets: linux-x86-64
