@@ -74,7 +74,7 @@ package body Landin.Tests.Catalogue_Suite is
       end loop;
 
       Landin.Testing.Check_Equal
-        (Item, Rows.Count, 34, "the catalogue holds thirty-four codes");
+        (Item, Rows.Count, 35, "the catalogue holds thirty-five codes");
    end Rows_Are_Whole;
 
    --  A fault kind maps to exactly one code, and every kind has one.

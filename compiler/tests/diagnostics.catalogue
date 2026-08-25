@@ -38,3 +38,4 @@ L0306  Live     [1950]: an operand the operation cannot take, where the compiler
 L0500  Live     [1550]: no assembler and linker for the target on this host
 L0501  Live     [1550]: the platform assembler or linker refused what was emitted
 L0502  Live     [1970]: a hosted program with no `public main: () -> (code: i32)`
+L0503  Live     [1650]: a parameter past the six the ABI hands in registers

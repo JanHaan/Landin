@@ -975,6 +975,45 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Module_Value_Folds_Every_Level;
 
+   --  R1.80's exit evidence asks for deterministic assembly, and until this
+   --  case nothing held it to that.  Two runs of one source through two
+   --  separate compilations must agree byte for byte: an address, a hash
+   --  order or a clock reaching the text would show up here and nowhere
+   --  else, since a single run agrees with itself by construction.
+   procedure The_Same_Source_Emits_The_Same_Bytes
+     (Item : in out Landin.Testing.Context);
+
+   procedure The_Same_Source_Emits_The_Same_Bytes
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "counter: i32 = 7 + 1" & LF
+        & "fib: (n: u32) -> (r: u32) =" & LF
+        & "    r = n" & LF
+        & "    if n > 1 then" & LF
+        & "        r = fib(n - 1) + fib(n - 2)" & LF
+        & "    end if" & LF
+        & "end fib" & LF
+        & "g: (a: i32, b: i32) -> (r: i32) =" & LF
+        & "    r = a * b - counter" & LF
+        & "end g" & LF;
+
+      First  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Second : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran    : Natural;
+   begin
+      Lower (First, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Lower (Second, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "and four again");
+
+      Landin.Testing.Check_Equal
+        (Item, Emitted (First), Emitted (Second),
+         "one source emits one text");
+   end The_Same_Source_Emits_The_Same_Bytes;
+
    --  x86-64 divides its implicit full-width dividend.  An unknown zero
    --  divisor therefore reaches Landin's explicit trap before `div`, while a
    --  valid u8 dividend has its high byte cleared and stores the quotient.
@@ -1566,6 +1605,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "the same source emits the same bytes",
+         The_Same_Source_Emits_The_Same_Bytes'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value becomes initialized data",
          A_Module_Value_Becomes_Initialized_Data'Access);
