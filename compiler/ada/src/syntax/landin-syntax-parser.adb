@@ -1162,9 +1162,14 @@ package body Landin.Syntax.Parser is
             function Parse_Body (Context : Frame) return Node_Id is
             begin
                if Context.Returns then
-                  if Tok.Is_Literal (Peek)
-                    or else Peek = Tok.Left_Paren
-                    or else Pre.Is_Prefix (Peek)
+                  --  [1800]'s expression body takes any expression, so
+                  --  this asks the same question [1820]'s first set does
+                  --  rather than keeping a second list beside it: a token
+                  --  that begins an expression and is not a name begins
+                  --  one here.  A name is the case below, where it may
+                  --  instead begin a binding or an assignment.
+                  if Pre.Begins_Expression (Peek)
+                    and then Peek /= Tok.Identifier
                   then
                      return Parse_Expression;
                   end if;

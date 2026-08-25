@@ -1661,7 +1661,7 @@ needed by the hosted parser. Raw storage remains container-driven and closes
 in R3 rather than being designed in isolation.
 
 ### R2.10 — Establish target-parametric data layout
-Status: active
+Status: complete
 Depends on: R1.60, R1.70
 
 Implement target facts, scalar widths/alignment and checked layout arithmetic.
@@ -1701,8 +1701,39 @@ construct the tour describes and the kernel omits -- and refusing it took
 consuming the name it was measuring, because leaving that behind turned one
 answered question into three reports about a statement shape.
 
-Exit evidence: Linux x86-64 measurements and synthetic 32-bit cases agree with
-the target model; overflow and impossible alignment are diagnosed.
+Closing it against those clauses found one defect and one overstatement.
+
+The defect was in the slice above rather than in the model: an expression
+body would not take a measurement. [1800] says a body may be one expression,
+and `Parse_Body` decided what one was from its own list of tokens -- a
+literal, a paren, a prefix sign -- written before [1820] had a first set to
+ask. Adding `sizeof` to that first set did not add it here, so
+`g: () -> (r: usize) = sizeof u64 end` was refused with "this begins no
+statement" while `g: () -> (r: usize) = 8 end` was fine. The body now asks
+`Begins_Expression`, which is the question it meant, and a fixture pins the
+case. The lesson is the one a second list always teaches: the duplicate was
+right when it was written and wrong the moment the thing it duplicated grew.
+
+The overstatement is "diagnosed". Aligning past the end of `Byte_Count` and
+an alignment that is not a power of two both raise `Compiler_Defect`, which
+is correct today and is not a diagnostic: no source program can ask for
+either, because the kernel has no aggregate to lay out and a frame of local
+scalars cannot approach 2**48 bytes. R2.20 is where a program can first
+describe a layout of its own, and where these become reachable from source
+and so need codes rather than defects. The clause below says what is true
+now and names the item that changes it.
+
+The first clause is honestly met and worth saying why: the runtime fixture's
+constants are read out of the System V ABI rather than out of `Landin.Targets`,
+so a model that disagreed with the machine would fail it. A fixture that
+asserted the model against itself would pass whatever the model said.
+
+Exit evidence: a program measures its own target with [0370] and the answers
+are the System V ABI's; the synthetic 32-bit description differs from the
+Linux x86-64 one in `compiler/tests/layout.targets` where a pointer width
+should make it differ and nowhere else; overflow and impossible alignment
+raise a compiler defect, which R2.20 turns into a diagnosis when a program
+can first cause one.
 
 ### R2.20 — Implement aggregates, variants and complete value layout
 Status: planned
