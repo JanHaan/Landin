@@ -2728,6 +2728,7 @@ def check_ascii_dashes(full_run):
         return missing
 
     inline_code = re.compile(r"`[^`]*`")
+    ascii_dash = re.compile(r"(?<!\S)--(?!\S)")
     out = []
     for path in paths:
         name = os.path.relpath(path, ROOT)
@@ -2744,9 +2745,10 @@ def check_ascii_dashes(full_run):
                 inside = not inside
                 continue
             if not inside and not findings \
-                    and " -- " in inline_code.sub("", line):
+                    and ascii_dash.search(inline_code.sub("", line)):
                 out.append((name, n,
-                            "prose uses spaced '--' instead of an em dash"))
+                            "prose uses standalone '--' instead of an em "
+                            "dash"))
     return out
 
 
