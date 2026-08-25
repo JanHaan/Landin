@@ -1,0 +1,5 @@
+class: positive
+summary: [0370] sizeof and alignof take a type and give D14's usize back
+constructs: 0370, 0160, 1790
+program: program.ldn
+targets: linux-x86-64, macos-arm64

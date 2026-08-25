@@ -531,6 +531,28 @@ package body Landin.Stages.Checking is
             when Syn.True_Literal | Syn.False_Literal =>
                return Kept (Ty.Bool);
 
+            --  D14: a measurement is a `usize`.  The type it asks about
+            --  is recorded on its own node, because the lowering reads it
+            --  from there and a type name is not an expression that would
+            --  otherwise be walked.
+            when Syn.Size_Of | Syn.Align_Of =>
+               declare
+                  Asked : constant Syn.Node_Id :=
+                    Syn.Measured_Type (Of_Tree, Node);
+               begin
+                  if Syn.Kind (Of_Tree, Asked) /= Syn.Type_Name then
+                     --  An Error_Type: the parser refused what stood
+                     --  there and named it.
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Asked,
+                     Landin.Checking.Named
+                       (Types.all, Syn.Name (Of_Tree, Asked)));
+                  return Kept (Ty.Usize);
+               end;
+
             when Syn.Name_Reference =>
                if Res.Verdict_Of (Meanings.all, Of_Tree, Node)
                   /= Res.Bound

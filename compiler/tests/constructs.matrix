@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  197 constructs, 82 with evidence, 115 with neither.
+#  197 constructs, 83 with evidence, 114 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -29,7 +29,7 @@
 0130   tour        accepted emitted executed          Order inside a module does not matter
 0140   tour        accepted emitted                   An inner scope may shadow an outer name
 0150   tour        refused                            Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
-0160   tour        refused                            Pointer-width integers: usize, isize
+0160   tour        accepted emitted executed refused  Pointer-width integers: usize, isize
 0170   tour        refused-by-name                    Floating point: f16, f32, f64
 0180   tour        accepted emitted                   bool, with true and false
 0190   tour        accepted emitted                   Integer literals are untyped
@@ -50,7 +50,7 @@
 0340   tour        accepted emitted executed refused  Logical: and, or, not
 0350   tour        accepted emitted executed          Comparison
 0360   tour        -                                  Ranges
-0370   tour        -                                  sizeof, alignof and lenof
+0370   tour        accepted emitted executed refused refused-by-name sizeof, alignof and lenof
 0380   tour        -                                  addr takes an address
 0390   tour        refused                            Assignment is a statement
 0400   tour        accepted emitted                   No ++ and no --

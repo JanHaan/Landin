@@ -89,7 +89,7 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves seventeen words; the reserved set of the whole language is
+reserves nineteen words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
@@ -102,6 +102,7 @@ digit       ::= "0" ... "9"
 keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
               | "end" | "return" | "when" | "inc" | "dec" | "none"
               | "true" | "false" | "and" | "or" | "not"
+              | "sizeof" | "alignof"
 
 ```
 
@@ -243,8 +244,10 @@ refuses that anyway.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
-primary     ::= literal | identifier | call | "(" expression ")"
+primary     ::= literal | identifier | call | measurement
+              | "(" expression ")"
 call        ::= identifier "(" arguments? ")"
+measurement ::= ("sizeof" | "alignof") type
 arguments   ::= expression ("," expression)*
 unary       ::= ("-" | "~" | "not")* primary
 product     ::= unary (("*" | "/" | "%" | "*%") unary)*
@@ -882,3 +885,38 @@ leaves behind.
 
 **Pinned by** `runtime/shifts-fill-with-zeros-beyond-the-width`, whose
 `-1i32 >> 32`, `-1i8 >> 8` and `1u64 << 64` are each zero on the hardware.
+
+### D14 — A measurement is a `usize`, and only the target knows it
+
+**The tour said** that `sizeof`, `alignof` and `lenof` measure, and that on
+an array or a literal the length is a compile-time value [0370]. It writes
+`w1 := sizeof u32` with the inferred form, so nothing in it says what type a
+measurement has, and [0200]'s default is about an integer *literal* rather
+than about this.
+
+**Chosen:** `usize`. A size and an alignment are counts of bytes on the
+machine being compiled for, which is what [0160] says `usize` is for, and a
+measurement that defaulted to `i32` would need a conversion at every use
+where a width is wanted. `lenof` is not enabled with them: it measures an
+array or a slice and [1790]'s type rule has neither, so it is refused by
+name and cites [0370].
+
+**Where the answer comes from** is the other half of this decision and the
+half with teeth. The value is not folded by the checker or the lowering:
+`Landin.IR` carries `Measure_Size` and `Measure_Align` with the type asked
+about, and the backend answers, because a size needs a width and a width
+needs a target. That is the seam [0320]'s zero-fill already sits on, and it
+keeps the IR target-neutral -- the same source emits 8 for `sizeof usize`
+against the Linux x86-64 description and 4 against the synthetic 32-bit one.
+
+**The alternative:** `i32`, which is what an untyped literal would default
+to and so the least surprising answer for a reader who has only read [0200];
+declined because it makes the common use -- comparing against or multiplying
+by a width -- start with a conversion. Or folding in the checker, which
+would put a target fact in a stage this repository has kept target-neutral
+on purpose, and which `Landin.IR`'s own header already argues against for
+the shifts.
+
+**Pinned by** `positive/measurement-of-a-type`,
+`runtime/measurements-answer-for-the-target`, and the backend case that
+emits one source against two target descriptions.

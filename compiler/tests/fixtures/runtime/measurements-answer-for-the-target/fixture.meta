@@ -1,0 +1,6 @@
+class: runtime
+summary: [0370] a program measures its own target and the answers are the ones the ABI states for x86-64
+constructs: 0370, 0160, 1770, 1800, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

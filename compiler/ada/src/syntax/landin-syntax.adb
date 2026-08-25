@@ -19,6 +19,8 @@ package body Landin.Syntax is
             when Error_Expression         => 0,
             when Name_Reference           => 0,
             when Literal_Kind             => 0,
+            --  The one slot is [1790]'s type, not an expression.
+            when Size_Of | Align_Of       => 1,
             when Unary_Kind               => 1,
             when Binary_Kind              => 2,
             when Error_Type | Type_Name   => 0,
@@ -102,6 +104,9 @@ package body Landin.Syntax is
      is (Nth_Item (Of_Tree, Root (Of_Tree), Index));
 
    function Declared_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
 
    function Value_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
