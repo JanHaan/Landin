@@ -2257,6 +2257,34 @@ def fixture_constructs():
     return out
 
 
+def lowering_verifies():
+    """The lowering stage verifies every Unit it builds.
+
+    `Landin.IR.Verifier`'s header argues that malformed IR cannot be
+    caused by a source program, and that is why the `L0400`-`L0499` band
+    is unassigned: a code there would promise that some program can
+    provoke one.  The same argument is why no fixture can reach the
+    verifier, and so why deleting the call would turn every one of its
+    rules off without a single case going red.
+
+    A structural check is the only kind that can see that, which is the
+    same reason the catalogue owns every code literal: some invariants are
+    about where a line is, not about what a run produces.
+    """
+    where = "compiler/ada/src/stages/landin-stages-lowering.adb"
+    path = os.path.join(ROOT, where)
+    missing = absent((path,))
+    if missing:
+        return missing
+
+    text = io.open(path, encoding="utf-8").read()
+    if "Landin.IR.Verifier.Verify" in text:
+        return []
+    return [(where, 1,
+             "this builds every Unit and no longer verifies one; no"
+             " fixture can catch that, which is why this check exists")]
+
+
 def fixture_sources():
     """Every file a fixture names is a file that is there.
 
@@ -3003,6 +3031,7 @@ def main(argv):
     if full_run:
         extra += fixture_constructs()
         extra += fixture_sources()
+        extra += lowering_verifies()
     extra += check_matrix(full_run)
     for path, line, why in sorted(set(extra)):
         total += 1
