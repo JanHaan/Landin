@@ -1,5 +1,6 @@
 class: runtime
 summary: [1870]'s one-byte bool crosses [1650]'s ABI as an argument and as a result
+constructs: 1870, 1650
 program: main.ldn
 status: 42
 targets: linux-x86-64

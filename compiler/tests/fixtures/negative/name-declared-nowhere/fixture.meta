@@ -1,5 +1,6 @@
 class: negative
 summary: [1860] a name that is not in scope is a misspelling, not a new binding
+constructs: 1860
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0201

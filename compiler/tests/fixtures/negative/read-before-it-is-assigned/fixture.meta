@@ -1,5 +1,6 @@
 class: negative
 summary: [1910] a binding declared with no value is read on a path that did not assign it
+constructs: 1910
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0302

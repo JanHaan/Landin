@@ -1,5 +1,6 @@
 class: negative
 summary: [1750] a byte no rule spells is named where it sits, and is not swallowed into the name it landed in
+constructs: 1750
 program: program.ldn
 lex: no rule spells '\xe9'
 targets: linux-x86-64, macos-arm64

@@ -1,4 +1,5 @@
 class: positive
 summary: [1940] one module value may name another written below it, because [0130] makes a module a set
+constructs: 1940, 0130
 program: program.ldn
 targets: linux-x86-64, macos-arm64

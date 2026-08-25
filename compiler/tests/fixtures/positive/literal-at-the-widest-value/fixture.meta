@@ -1,4 +1,5 @@
 class: positive
 summary: [1870] a u8 holds every unsigned value of eight bits, and 255 is one
+constructs: 1870
 program: program.ldn
 targets: linux-x86-64, macos-arm64

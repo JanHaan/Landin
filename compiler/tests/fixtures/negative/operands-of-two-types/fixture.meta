@@ -1,5 +1,6 @@
 class: negative
 summary: [1890] every binary operator takes two operands of one type, because [0310] converts nothing
+constructs: 1890, 0310
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0301

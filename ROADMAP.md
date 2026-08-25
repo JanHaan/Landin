@@ -1497,6 +1497,23 @@ carrying `refine`'s own report. It is measured rather than assumed -- with
 that is the runtime class, and the distinction is the one this item's exit
 evidence now asks each row to state.
 
+The corpus now says what it is evidence about. A fixture carrying a program
+names the constructs it exercises, and `check.py` holds every one of them to a
+paragraph `tour.md` or `spec.md` defines while the harness holds it to being
+four digits -- each half asked of the side that can answer it. A fixture with
+no program names none, because an unknown option and the identity text are
+about the tool rather than the language.
+
+It is a written list and not a reading of the summary, and that is the same
+decision the fenced-block rule already made one level up: a citation in prose
+is there to explain the fixture to a person, may name a paragraph the fixture
+merely mentions, and a heuristic over English is how a check ends up believing
+114 lines of it were code. The 118 fixtures that already cited a construct
+were seeded from those citations and the remaining 17 were written by hand,
+which is why the list is a starting point to be corrected rather than a
+finding: 51 constructs are named so far, and all ten of [1740]-[1830] are
+among them.
+
 Exit evidence: positive, negative, verifier and runtime cases all run through
 the real driver; the construct matrix has no unexplained kernel row, and each
 row says whether the construct was accepted, emitted or executed.

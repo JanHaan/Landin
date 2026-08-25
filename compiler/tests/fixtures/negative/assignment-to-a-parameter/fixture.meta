@@ -1,5 +1,6 @@
 class: negative
 summary: [1900] a parameter may not be written: the unmarked convention is [0900] in
+constructs: 1900, 0900
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0303

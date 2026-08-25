@@ -1,5 +1,6 @@
 class: runtime
 summary: checked addition and subtraction reach the host as the program's status
+constructs: 0290, 0300, 1970
 program: main.ldn
 status: 42
 targets: linux-x86-64
