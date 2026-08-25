@@ -1,5 +1,6 @@
 class: negative
 summary: [1940] a module value is one the compiler knows when it reads it, and a call is not
+constructs: 1940
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0305

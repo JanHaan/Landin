@@ -1,5 +1,6 @@
 class: negative
 summary: [1870] a u8 holds no value of 300, and [1880] checks the literal where its context gives it a type
+constructs: 1870, 1880
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0300

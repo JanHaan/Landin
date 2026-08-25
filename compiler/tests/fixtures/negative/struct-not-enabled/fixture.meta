@@ -1,5 +1,6 @@
 class: negative
 summary: [1830] a declared type is [0120] and not enabled; the parser refuses at the type position and never reaches the struct on the right of the =
+constructs: 1830, 0120
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0010

@@ -1,5 +1,6 @@
 class: negative
 summary: [1950] the same refusal inside a body, where D6's amount type is what makes a negative one writable at all
+constructs: 1950
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0306

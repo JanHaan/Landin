@@ -1,4 +1,5 @@
 class: positive
 summary: [1820] 'and' binds tighter than 'or'
+constructs: 1820
 program: program.ldn
 targets: linux-x86-64, macos-arm64

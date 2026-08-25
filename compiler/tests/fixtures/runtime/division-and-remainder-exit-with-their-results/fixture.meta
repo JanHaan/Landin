@@ -1,5 +1,6 @@
 class: runtime
 summary: division and remainder produce signed and unsigned results at every width
+constructs: 0290, 1950
 program: main.ldn
 status: 42
 targets: linux-x86-64

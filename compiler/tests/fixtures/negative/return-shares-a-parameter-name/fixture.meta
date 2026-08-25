@@ -1,5 +1,6 @@
 class: negative
 summary: [1840] the named return is declared in the signature, beside the parameters
+constructs: 1840
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0200

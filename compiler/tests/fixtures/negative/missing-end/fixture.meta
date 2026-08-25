@@ -1,5 +1,6 @@
 class: negative
 summary: [1800] a body must be closed, and the report must point at the function it could not close
+constructs: 1800
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0104

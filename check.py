@@ -2207,6 +2207,56 @@ def check_catalogue(full_run):
     return out
 
 
+def fixture_constructs():
+    """Every `constructs:` a fixture names, held to a paragraph.
+
+    R1.90 indexes the corpus by construct, and an index whose keys are not
+    the documents' own keys indexes nothing.  A fixture may name a
+    construct the kernel does not enable yet -- a negative fixture for
+    `while` is about [1140] -- so the only question here is whether the
+    paragraph exists.
+    """
+    out = []
+    known = construct_ids()
+    fixtures = os.path.join(ROOT, "compiler/tests/fixtures")
+    if not os.path.isdir(fixtures):
+        return out
+
+    for kind in sorted(os.listdir(fixtures)):
+        directory = os.path.join(fixtures, kind)
+        if not os.path.isdir(directory):
+            continue
+        for name in sorted(os.listdir(directory)):
+            meta = os.path.join(directory, name, "fixture.meta")
+            if not os.path.exists(meta):
+                continue
+            text = io.open(meta, encoding="utf-8").read()
+            named = re.search(r"^constructs: (.+)$", text, re.M)
+            where = "compiler/tests/fixtures/%s/%s/fixture.meta" % (
+                kind, name)
+
+            if not named:
+                #  A fixture with a program is written in the language and
+                #  so is evidence about some construct of it.  One without
+                #  is about the tool, and names none for that reason.
+                if re.search(r"^program: ", text, re.M):
+                    out.append((where, 1,
+                                "this carries a program and names no"
+                                " construct it is evidence about"))
+                continue
+
+            for one in (c.strip() for c in named.group(1).split(",")):
+                if not re.fullmatch(r"\d{4}", one):
+                    out.append((where, 1,
+                                "`%s` is not a four-digit construct" % one))
+                elif one not in known:
+                    out.append((where, 1,
+                                "this names [%s], which neither document"
+                                " defines" % one))
+
+    return out
+
+
 def present(relative):
     """Whether a repository-relative path exists, case included.
 
@@ -2785,6 +2835,8 @@ def main(argv):
     extra += check_borrowed_icons(full_run)
     extra += check_named_files(full_run)
     extra += check_catalogue(full_run)
+    if full_run:
+        extra += fixture_constructs()
     for path, line, why in sorted(set(extra)):
         total += 1
         print("%-30s %5d  %s" % (path, line, why))

@@ -1,4 +1,5 @@
 class: positive
 summary: [1060] every construct has a one-line form
+constructs: 1060
 program: program.ldn
 targets: linux-x86-64, macos-arm64
