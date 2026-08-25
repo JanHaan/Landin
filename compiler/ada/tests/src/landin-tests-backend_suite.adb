@@ -377,6 +377,212 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Signed_Subtract_Follows_The_Target_Width;
 
+   --  [0330]'s `~` gives its own integer type back and cannot overflow, so
+   --  it is one width-specific `not` through the accumulator with no edge.
+   procedure Complement_Inverts_Without_A_Trap
+     (Item : in out Landin.Testing.Context);
+
+   procedure Complement_Inverts_Without_A_Trap
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: u8) -> (r: u8) =" & LF
+         & "    r = ~a" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movb -3(%rbp), %al" & LF
+           & HT & "notb %al" & LF
+           & HT & "movb %al, -4(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "u8 complement inverts through the accumulator");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "ud2"),
+            "complement has no trap edge");
+      end;
+   end Complement_Inverts_Without_A_Trap;
+
+   --  Unary minus gives its own integer type back [1890], so negating the
+   --  lowest signed value overflows exactly as [0300] describes.  `neg` sets
+   --  overflow for precisely that operand, which is the edge to test.
+   procedure Signed_Negation_Traps_On_The_Lowest_Value
+     (Item : in out Landin.Testing.Context);
+
+   procedure Signed_Negation_Traps_On_The_Lowest_Value
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: i8) -> (r: i8) =" & LF
+         & "    r = -a" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movb -3(%rbp), %al" & LF
+           & HT & "negb %al" & LF
+           & HT & "jno .L1_V2" & LF
+           & HT & "ud2" & LF
+           & ".L1_V2:" & LF
+           & HT & "movb %al, -4(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "i8 negation traps before storing an unrepresentable result");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "jnc .L1_V2"),
+            "signed negation does not use unsigned carry");
+      end;
+   end Signed_Negation_Traps_On_The_Lowest_Value;
+
+   --  An unsigned type holds the negation of zero and of nothing else, and
+   --  `neg` sets carry for exactly the operands that are not zero.
+   procedure Unsigned_Negation_Uses_Carry_To_Trap
+     (Item : in out Landin.Testing.Context);
+
+   procedure Unsigned_Negation_Uses_Carry_To_Trap
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: usize) -> (r: usize) =" & LF
+         & "    r = -a" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "negq %rax"),
+            "usize negation follows the target's 64-bit width");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "jnc .L1_V2"),
+            "unsigned negation tests carry");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "jno .L1_V2"),
+            "unsigned negation does not use signed overflow");
+      end;
+   end Unsigned_Negation_Uses_Carry_To_Trap;
+
+   --  [0340]'s `not` takes a bool and gives one back, and [1870] fixes that
+   --  bool at zero or one.  Flipping the low bit is therefore the whole
+   --  operation; a width-wide `not` would give 254 for `not false`.
+   procedure Logical_Not_Flips_The_One_Byte_Bool
+     (Item : in out Landin.Testing.Context);
+
+   procedure Logical_Not_Flips_The_One_Byte_Bool
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: (a: bool) -> (r: bool) =" & LF
+         & "    r = not a" & LF & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & "movb -3(%rbp), %al" & LF
+           & HT & "xorb $1, %al" & LF
+           & HT & "movb %al, -4(%rbp)" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "logical not flips the bool's low bit alone");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & "notb %al"),
+            "logical not is not a width-wide complement");
+      end;
+   end Logical_Not_Flips_The_One_Byte_Bool;
+
+   --  [0330]'s `&`, `^` and `|` give their own integer type back, so each is
+   --  one width-specific instruction with no edge and no signed variant.
+   procedure Every_Bitwise_Operator_Selects_Its_Instruction
+     (Item : in out Landin.Testing.Context);
+
+   procedure Every_Bitwise_Operator_Selects_Its_Instruction
+     (Item : in out Landin.Testing.Context)
+   is
+      type Case_Row is record
+         Source      : access constant String;
+         Instruction : access constant String;
+      end record;
+
+      And_Source : aliased constant String := "&";
+      Xor_Source : aliased constant String := "^";
+      Or_Source  : aliased constant String := "|";
+      And_Text   : aliased constant String := "andl";
+      Xor_Text   : aliased constant String := "xorl";
+      Or_Text    : aliased constant String := "orl";
+
+      Rows : constant array (1 .. 3) of Case_Row :=
+        [(And_Source'Access, And_Text'Access),
+         (Xor_Source'Access, Xor_Text'Access),
+         (Or_Source'Access, Or_Text'Access)];
+   begin
+      for Row of Rows loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Ran  : Natural;
+         begin
+            Lower
+              (Work,
+               "f: (a: i32, b: i32) -> (r: i32) =" & LF
+               & "    r = a " & Row.Source.all & " b" & LF & "end f" & LF,
+               Ran);
+
+            Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+            declare
+               Text : constant String := Emitted (Work);
+               Expected : constant String :=
+                 HT & "movl -28(%rbp), %eax" & LF
+                 & HT & Row.Instruction.all & " -24(%rbp), %eax" & LF
+                 & HT & "movl %eax, -32(%rbp)" & LF;
+            begin
+               Landin.Testing.Check
+                 (Item, Contains (Text, Expected),
+                  Row.Source.all & " emits " & Row.Instruction.all
+                  & " and stores immediately");
+               Landin.Testing.Check
+                 (Item, not Contains (Text, HT & "ud2"),
+                  Row.Source.all & " has no trap edge");
+            end;
+         end;
+      end loop;
+   end Every_Bitwise_Operator_Selects_Its_Instruction;
+
    --  x86-64 divides its implicit full-width dividend.  An unknown zero
    --  divisor therefore reaches Landin's explicit trap before `div`, while a
    --  valid u8 dividend has its high byte cleared and stores the quotient.
@@ -968,6 +1174,21 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "complement inverts without a trap",
+         Complement_Inverts_Without_A_Trap'Access);
+      Landin.Testing.Register
+        (Into, "backend", "signed negation traps on the lowest value",
+         Signed_Negation_Traps_On_The_Lowest_Value'Access);
+      Landin.Testing.Register
+        (Into, "backend", "unsigned negation uses carry to trap",
+         Unsigned_Negation_Uses_Carry_To_Trap'Access);
+      Landin.Testing.Register
+        (Into, "backend", "logical not flips the one byte bool",
+         Logical_Not_Flips_The_One_Byte_Bool'Access);
+      Landin.Testing.Register
+        (Into, "backend", "every bitwise operator selects its instruction",
+         Every_Bitwise_Operator_Selects_Its_Instruction'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned divide guards zero and stores quotient",
          Unsigned_Divide_Guards_Zero_And_Stores_The_Quotient'Access);

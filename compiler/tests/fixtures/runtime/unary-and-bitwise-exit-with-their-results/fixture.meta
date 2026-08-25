@@ -1,0 +1,5 @@
+class: runtime
+summary: unary and bitwise operators produce their signed and unsigned results
+program: main.ldn
+status: 42
+targets: linux-x86-64
