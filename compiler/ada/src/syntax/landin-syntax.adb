@@ -8,6 +8,8 @@ package body Landin.Syntax is
             when Program                  => 0,
             when Error_Declaration        => 0,
             when Function_Declaration     => 2,
+            --  The one slot is the type it names [1795].
+            when Type_Declaration         => 1,
             when Binding                  => 2,
             when Error_Statement          => 0,
             when Assignment               => 2,

@@ -65,7 +65,7 @@ compilation terminated.
 ```
 
 The unit named there is whichever was unlucky, not a unit with anything
-wrong in it -- the same source builds in release natively and on the x86-64
+wrong in it — the same source builds in release natively and on the x86-64
 gate. This is written down because the message reads exactly like a compiler
 defect in one file and cost an investigation once already.
 

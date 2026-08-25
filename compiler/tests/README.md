@@ -21,7 +21,7 @@ Generated and recorded are not the same word here. `check.py` writes the
 first three and refuses each when it is stale; the last two are written by
 `./scripts/test.sh --record`, because producing them means running compiler
 stages and asking the target model, which `check.py` cannot do. It will not
-tell you those two are stale -- the harness and the gate will. `constructs.matrix`
+tell you those two are stale — the harness and the gate will. `constructs.matrix`
 is R1.90's: it lists every construct either document defines against what
 the corpus says about it, and a construct with neither evidence nor a
 by-name refusal is a row that item has to answer for. Regenerate it with
@@ -67,11 +67,11 @@ whose first code belongs to one of those must derive exactly as a positive
 fixture does. `check.py` reads which codes the frontend raises out of
 `Landin.Diagnostics.Lexical` and `Landin.Diagnostics.Syntactic` rather than out
 of the number, because the catalogue's own header forbids reading a stage off a
-code -- `L0010` is raised by the scanner and by the parser both.
+code — `L0010` is raised by the scanner and by the parser both.
 
 `codes` is an ordered list and not a set. Two refused constructs in one file
 are two reports, and a regression that doubles a count is invisible to a set,
-so `float-literal-not-enabled` names `L0010, L0010` -- once for the type and
+so `float-literal-not-enabled` names `L0010, L0010` — once for the type and
 once for the literal. `check.py` holds every name in it to the catalogue, and
 refuses a negative fixture with a program that names none; the parser suite
 scans and parses the program and holds the report to the exact sequence.
@@ -81,7 +81,7 @@ is "every file compiled together", so a claim about it cannot be made by a
 fixture that can only name one; `program` stays the file the fixture is named
 for and `with` is handed to `refine` after it, in the order written. Naming
 the rest of a module with no `program` to be the rest of is a reported fault,
-and `check.py` holds every file either key names to being there -- a name
+and `check.py` holds every file either key names to being there — a name
 pointing at nothing would compile one file while claiming to have compiled
 two. Every `.ldn` in a fixture directory is held to the grammar already, so
 the extra files are derived like any other.
@@ -92,7 +92,7 @@ there to explain the fixture to a person, it may name a paragraph the fixture
 merely mentions, and a heuristic over English is how a check ends up
 believing 114 lines of it were code. `check.py` holds every id to a paragraph
 `tour.md` or `spec.md` actually defines, and the harness holds it to being
-four digits -- the two halves of the question, asked by the side that can
+four digits — the two halves of the question, asked by the side that can
 answer each.
 
 Name a construct when the fixture's *passing* would change if that construct
@@ -102,13 +102,13 @@ would make that row read "covered" while saying nothing; a fixture whose
 asserted values come from literals earns it. The failure this rule prevents
 is the one a matrix is most prone to: a full column that means nothing. When
 a claim turns out not to be earned, the honest repairs are to drop it or to
-make it true -- `runtime/statements-run-as-they-read` claimed [1840] before
+make it true — `runtime/statements-run-as-they-read` claimed [1840] before
 it declared anything inside an arm, and grew a function that does.
 
 A fixture with a `program` must name at least one, because a `.ldn` program
 is written in the language and is therefore evidence about some construct of
-it. A fixture without one is about the tool rather than the language -- an
-unknown option, the identity text, an implementation-side note -- and names
+it. A fixture without one is about the tool rather than the language — an
+unknown option, the identity text, an implementation-side note — and names
 none for the same reason. A construct the kernel does not enable yet is
 perfectly good: `negative/convention-not-enabled` names [1830] for the
 refusal and [0900] for the thing being refused, and [0900] is a paragraph
@@ -147,7 +147,7 @@ everywhere.
 |---|---|
 | unit | a note of what an implementation-side case covers; the case itself lives in `compiler/ada/tests` |
 | negative, end-to-end | executed: `refine` is run with `args`, and its bytes and exit status are compared with `expect` and `status` |
-| runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` -- or, with `traps: yes`, it is held to having ended without returning one |
+| runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` — or, with `traps: yes`, it is held to having ended without returning one |
 | positive | executed: the program is scanned and parsed with nothing reported, the grammar must derive it, and `refine` is asked to emit assembly for it |
 | ABI, debugger | reserved; no fixture yet. They arrive with the work that produces an ABI and debug information |
 
@@ -165,7 +165,7 @@ already applies one level up: a machine without the pinned GNAT is told so
 and stops, rather than quietly building nothing.
 
 A runtime fixture carries `program` and `status` and neither `expect` nor
-`args`, because nothing compares `refine`'s own output -- what is asserted is
+`args`, because nothing compares `refine`'s own output — what is asserted is
 what the compiled program did. One without a `program` is a reported fault,
 for the same reason `expect` without `args` is: a status nobody produces is
 dead data.
@@ -177,7 +177,7 @@ R1.80's audit having never been handed to a backend: every stage accepted
 them and no case asked for a byte of assembly. So the positive class now
 emits as well, and a construct that reaches a compiler defect on the way to
 `.s` fails there rather than waiting for a runtime fixture to happen to use
-it. It is still not executed -- most of the corpus is a fragment with no
+it. It is still not executed — most of the corpus is a fragment with no
 entry point to run, and a claim about a machine belongs to the runtime class.
 
 `traps: yes` replaces `status` rather than joining it. `spec.md` [1960] says a

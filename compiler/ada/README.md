@@ -98,12 +98,12 @@ name in them means. Two facts about the seam decide that it has to be there
 rather than in a stage. `Run` takes `Item` as an `in` parameter of a limited
 interface, so a stage cannot keep anything in itself; and `Stage_Reference` is a
 library-level access type, so a stage object cannot be a local of one
-compilation either -- `Append (Line, Local'Access)` on a local instance is
+compilation either — `Append (Line, Local'Access)` on a local instance is
 rejected as "non-local pointer cannot point to local object". The price is that
 `Landin.Stages` gains one `with` clause per representation as the roadmap adds
 them. The line that keeps it a seam is exact: this package may depend on a
 representation and may never depend on a stage. Ada enforces that for the
-specification only -- a parent's spec may not `with` its own child -- and a
+specification only — a parent's spec may not `with` its own child — and a
 parent's *body* may, so `landin-stages.adb` growing a `with
 Landin.Stages.Syntax` to build a default pipeline is how the rule would
 actually be broken. Nothing but the rule stops it, and `Landin.Driver` is
@@ -130,7 +130,7 @@ What is reachable is the path around it. `--emit=asm` writes the assembly and
 with its own `code`. The assembly half is host-independent by the rule that
 nothing outside `Landin.Targets` may ask the host anything: emitting for
 `linux-x86-64` produces identical bytes on macOS and on Linux. The finishing
-half is not, and says so -- a host without the target's triplet-prefixed
+half is not, and says so — a host without the target's triplet-prefixed
 driver reports `L0500` rather than reaching for whatever `gcc` names, which
 on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
 
@@ -156,14 +156,14 @@ accepted into `Landin.IR`, verifies it and can dump it.
 A width is a function of a type and a target description, never a property of
 either alone, and `Landin.Types.Width` is the only place one is formed.
 `usize` is [0160]'s pointer-width integer, so it is as wide as
-`Landin.Targets.Pointer_Width` says and no wider -- which is how a 32-bit
+`Landin.Targets.Pointer_Width` says and no wider — which is how a 32-bit
 target description stays 32-bit on a 64-bit host. A literal's value is held in
 `Landin.Types.Magnitude`, whose bound is written out as `2 ** 64 - 1` because
 that is a fact about `u64`; a host width leaking in would be
 `Long_Long_Integer`, whose range is a fact about the machine running the
 compiler.
-`L0001` is retired -- the catalogue said it retires when the frontend is wired
-to the driver, and R1.40 is where that happened -- and its row stays so its
+`L0001` is retired — the catalogue said it retires when the frontend is wired
+to the driver, and R1.40 is where that happened — and its row stays so its
 number is never handed to another rule.
 
 Both halves are held to the grammar from both sides. `check.py` compares
@@ -185,8 +185,8 @@ of `Declaration_Id` with one run per source and a first index, which is what
 `Landin.Syntax` already does with a node's children. A child's
 index is lower than its parent's and a child's extent lies inside it, both as
 postconditions. A construct the parser could not read becomes an error node of
-the band it needed -- one per band, so a case over a band still covers the
-hole -- and `Is_Sound` propagates upward so that one syntax mistake does not
+the band it needed — one per band, so a case over a band still covers the
+hole — and `Is_Sound` propagates upward so that one syntax mistake does not
 become a cascade of type errors about a hole. Trees live in the compilation's
 `Landin.Syntax.Forest`, one per source and none freed, which is R1.50's answer
 to where they live: a tree cannot be an element of a container, because it is
@@ -194,10 +194,10 @@ limited with unknown discriminants, and an initialised allocator whose value is
 the parse is the one form Ada gives for building one where it will outlive the
 call.
 
-A diagnostic code is written in exactly one place, `Landin.Diagnostics.Catalogue`, and `check.py` refuses a code literal anywhere else in `src/`. Each column of the catalogue is an exhaustive case over the code names, so a code with no row is a missing-case error rather than a warning. The catalogue holds no prose: `L0003` is raised with two sentences, for a source that is missing and one that cannot be read, because one rule was violated and the difference between them is wording. What a code requires of every occurrence -- a source, a non-empty span, how many secondary labels, how many notes -- is in the row, and `Landin.Diagnostics.Lexical` checks the row against the diagnostic it just built.
+A diagnostic code is written in exactly one place, `Landin.Diagnostics.Catalogue`, and `check.py` refuses a code literal anywhere else in `src/`. Each column of the catalogue is an exhaustive case over the code names, so a code with no row is a missing-case error rather than a warning. The catalogue holds no prose: `L0003` is raised with two sentences, for a source that is missing and one that cannot be read, because one rule was violated and the difference between them is wording. What a code requires of every occurrence — a source, a non-empty span, how many secondary labels, how many notes — is in the row, and `Landin.Diagnostics.Lexical` checks the row against the diagnostic it just built.
 
 `Landin.Tokens` knows two things the kernel grammar does not, both on
-purpose. A band of deferred lexemes -- `1.5`, `"text"`, `+=`, `!` -- is read
+purpose. A band of deferred lexemes — `1.5`, `"text"`, `+=`, `!` — is read
 as one token each so that `[1830]` can refuse a construct by name instead of
 reporting a stray byte, and so that enabling one later cannot change how a
 file that never used it was read. Every deferred kind names the tour
