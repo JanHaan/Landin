@@ -28,9 +28,9 @@
 0120   tour        accepted emitted refused refused-by-name Types are declared like any other value, with 'type'
 0130   tour        accepted emitted executed          Order inside a module does not matter
 0140   tour        accepted emitted                   An inner scope may shadow an outer name
-0150   tour        refused-by-name                    Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
+0150   tour        refused refused-by-name            Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
 0160   tour        accepted emitted executed refused  Pointer-width integers: usize, isize
-0170   tour        refused-by-name                    Floating point: f16, f32, f64
+0170   tour        refused refused-by-name            Floating point: f16, f32, f64
 0180   tour        accepted emitted                   bool, with true and false
 0190   tour        accepted emitted                   Integer literals are untyped
 0200   tour        accepted emitted                   With no context, an integer literal defaults to i32
@@ -73,7 +73,7 @@
 0570   tour        -                                  Slice: a view
 0580   tour        -                                  An empty slice still has a base
 0590   tour        -                                  Fixed arrays are the vector type
-0600   tour        refused-by-name                    Text types are distinct views
+0600   tour        refused refused-by-name            Text types are distinct views
 0610   tour        -                                  Indexing utf8 by an integer yields the bytes of one
 0620   tour        -                                  DEFERRED to a later version, kept here as a design record
 0630   tour        -                                  Atoms: one declaration, one value, its own type
