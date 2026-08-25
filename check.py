@@ -1951,17 +1951,42 @@ def check_refused_constructs(full_run):
                     "%s refuses %r, which neither document writes"
                     % (name, word)))
 
-    refused_types = spellings("Refused_Type")
-    if refused_types is None:
-        out.append(("compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
-                    "the refused-type table could not be read"))
-    else:
-        for name, word in sorted(refused_types.items()):
-            if word in scalars:
-                out.append((
-                    "compiler/ada/src/syntax/landin-syntax-parser.adb", 1,
-                    "%s refuses %r, which the grammar's type rule spells"
-                    % (name, word)))
+    #  [1795] moved the type names the tour writes and the kernel omits
+    #  out of the parser: a type position holds any identifier now, so
+    #  whether one names a type the kernel lacks is a question about what
+    #  it resolved to, and only the checker can ask it.
+    checking = os.path.join(
+        ROOT, "compiler/ada/src/diagnostics/landin-diagnostics-checking.ads")
+    out.extend(absent((checking,)))
+    if os.path.exists(checking):
+        checking_text = io.open(checking, encoding="utf-8").read()
+        found = re.search(
+            r"function Spelling \(Item : Refused_Type_Name\) return String"
+            r"\s*is \(case Item is(.*?)\);", checking_text, re.S)
+        if not found:
+            out.append((
+                "compiler/ada/src/diagnostics"
+                "/landin-diagnostics-checking.ads", 1,
+                "the refused-type table could not be read"))
+        else:
+            refused_types = dict(
+                (m.group(1), m.group(2)) for m in
+                re.finditer(r"when\s+([A-Za-z0-9_]+)\s*=>\s*\"([^\"]*)\"",
+                            found.group(1)))
+            for name, word in sorted(refused_types.items()):
+                where = ("compiler/ada/src/diagnostics"
+                         "/landin-diagnostics-checking.ads")
+                if word in scalars:
+                    out.append((
+                        where, 1,
+                        "%s refuses %r, which the grammar's type rule "
+                        "spells" % (name, word)))
+                elif not re.search(r"(?<![A-Za-z0-9_])%s(?![A-Za-z0-9_])"
+                                   % re.escape(word), tour_text):
+                    out.append((
+                        where, 1,
+                        "%s refuses %r, which neither document writes"
+                        % (name, word)))
 
     #  The eleven, exactly.  A twelfth here would be a type the grammar
     #  does not have, and a missing one a type no program could name.

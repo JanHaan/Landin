@@ -1762,8 +1762,28 @@ third could not move: `u128` and `i128` are refused by the parser on a name
 basis, which was sound while the grammar spelled every type and is not now
 that `type` derives an identifier. Their negative fixture was removed rather
 than weakened — the corpus rule that a frontend refusal must not derive is
-right, and the refusal is what is in the wrong stage. Moving it to where an
-unresolved type name is answered for is work this item still owes.
+right, and the refusal is what is in the wrong stage.
+
+That debt is paid, and paying it found the problem was general rather than
+about two names. Every entry in the parser's refused-type table had the same
+flaw — `f32` and `utf8` were refused there too, and only escaped notice
+because their fixtures carried a float or a text *literal* the scanner
+refuses first, so the program stayed underivable for a reason that had
+nothing to do with the type. The table moved to
+`Landin.Diagnostics.Checking`, which already described exactly this: "the
+constructs the tour describes, the kernel omits, and only the checker can
+recognise, because recognising one means knowing what a name resolved to."
+Resolution now leaves an unresolved *type* name to the checker rather than
+reporting the weaker answer first, and the checker names the construct or
+says the name is declared nowhere.
+
+The refusals became `L0304`, [1830]'s half that belongs to the checker, and
+each type got the fixture it never had: `f32`, `utf8` and `u128` are refused
+by name in programs the grammar derives, which is what the corpus rule wanted
+all along. The two literal fixtures kept their literals and lost the type
+they had been carrying, so each now refuses one thing. `compiler/tests/README.md`
+lost an example with them — it cited `float-literal-not-enabled` for why
+`codes` is a list and not a set, and that fixture names one code now.
 
 Implement arrays, ordinary/C/packed structs, variants, tags, payload alignment
 and the policy for spare-bit folding. Use measured fixtures rather than host
