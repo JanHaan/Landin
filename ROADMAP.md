@@ -1049,7 +1049,7 @@ frame cell is not an aggregate, and what it settles must agree with this.
 What is emitted so far is the straight-line kernel -- a literal, a truth, a
 slot read and written, ordinary and wrapping add, subtract and multiply,
 division, remainder, the unary and bitwise operators, both shifts, all six
-comparisons, a call, a jump, a branch and a return --
+comparisons, a call, a jump, a branch, a return and a module value --
 against a prologue that sets up [1550]'s frame pointer and stores [1650]'s
 argument registers into their parameter slots. Ordinary add and subtract use
 the result type's width, test signed overflow or unsigned carry/borrow before
@@ -1111,7 +1111,44 @@ made. A seventh argument is not reachable yet and says so rather than picking
 a register, and R2 still owns aggregate, error-register and evidence calls.
 
 Any other opcode raises a compiler defect rather
-than emitting something plausible. The module data section remains.
+A module value is the one item that is data rather than code, and folding it
+is this item's work rather than the checker's. [1460] says nothing runs before
+the entry point, so a datum's block describes a value and is never executed;
+`Landin.IR`'s header already recorded why the fold could not finish earlier,
+which is that the checker declines the bitwise and shift levels because
+[0320]'s zero-fill needs a width and a width needs a target. So the backend
+folds the block it was handed, at each value's own width, and writes an
+initialized object into `.data` at its own alignment. A binding with no value
+folds to zero, which is D10 and not a new rule, and a routine reaches one by
+name RIP-relative rather than through a frame cell.
+
+Two things about that fold were wrong before the runtime fixture compared it
+with the hardware, and both are worth keeping written down. A negative
+arithmetic shift took its complement at the fold's own 64 bits rather than at
+the type's, so `-1i8 >> 1` folded to 127. And a checked operator narrowed at
+every step, which is not what a checked operator means here: [1460] gives a
+module value no moment in which to trap, so the whole expression is worked out
+and [1940]'s refusal falls on the answer, which is what `L0300` already says
+when it reports what a fold "works out to". Narrowing each step made
+`u16 = (40000 + 30000) / 2` emit 2232, which is neither the 35000 the checker
+computes nor anything a program could have meant. [0300]'s wrapping forms are
+the ones that are about a width and say so by name, so those do narrow at each
+step, and the bitwise set and the shifts likewise.
+
+With that the backend spells every opcode `Landin.IR` has, so the case that
+dispatches them is exhaustive rather than ending in a defect: a new opcode now
+fails to compile instead of failing at run time, which is the earlier the two
+can be found.
+
+One measurement belongs to a later item rather than this one. Folding a datum
+that names another is memoized here, because `b = a + a` reaches `a` twice and
+a chain of those would otherwise double with every link. The checker's own
+fold has that shape and is not memoized: twenty-one such declarations take
+9.5 seconds and twenty-five take two and a half minutes, all of it in the
+frontend, measured on the development host. Nothing in the kernel corpus is
+written that way and no fixture is slow, so this is recorded rather than
+fixed. Whichever item next opens `Landin.Checking`'s module-value fold should
+memoize it there for the same reason, and the fix is the same few lines.
 
 The path from `refine` to a running process is now reachable, and a
 constant-return `main` compiled, linked and executed inside the pinned Linux
@@ -1257,6 +1294,16 @@ widths and checks each against its own value inside the callee, so a register
 filled out of order or at the wrong width reaches the other status; it also
 recurses ten deep for a triangular number, calls a function returning none as
 a statement, and discards a result.
+`runtime/module-values-hold-and-are-updated` reads folded module values back
+on the hardware -- an arithmetic fold, one that names another, D13's shift
+beyond the width, a complement at a byte's width, a negative one, `u64`'s
+largest and a comparison -- and then calls a function twice that adds to a
+`mut` module binding declared with no value, so D10's zero is where the count
+starts from. It also runs four of those expressions a second time as
+instructions and compares the two answers, which is the check that matters
+for a fold: a shift, a division and a remainder over negative values are
+where a folder and a processor can disagree, and one of them was wrong until
+that comparison existed.
 Their programs are held to the grammar exactly as a positive fixture's is,
 since they are legal source the compiler must accept; `check.py` derives each
 and reports a fixture the grammar cannot.
