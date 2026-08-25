@@ -1602,6 +1602,30 @@ which is the same kind of structural rule as the one that keeps every code
 literal in the catalogue: some invariants are about where a line is and not
 about what a run produces.
 
+Closing it found what closing R1.80 found, in the same shape and one level
+up: the corpus had a second layer of rows that were covered and unattributed.
+[0880]'s single-expression body that still takes an `end`, [0890]'s `-> none`,
+[0930]'s named return assigned before the return, [1020]'s explicit discard,
+[1050]'s branch and [0870]'s function value all had fixtures citing the kernel
+rule and not the paragraph that teaches the thing. Ten more attributions, and
+the matrix reads 82 with evidence against 115 that are language the kernel
+does not have.
+
+One row was left deliberately. [1550] says Landin keeps its own native
+backends, which is true and which every runtime fixture depends on -- and no
+fixture *discriminates* it: a Landin that emitted LLVM IR would exit 42 just
+the same. Claiming it would be the failure the claiming rule exists to
+prevent, so the row stays bare and this sentence is why.
+
+And one row was a divergence rather than a gap. [1670] says a failed check
+calls a fixed never-returning `panic_handler` taking an atom and a site
+number, and R1.80 emits `ud2`; nothing in either document reconciled the two,
+and D11 read as though calling a routine had been considered and declined.
+It had not: `panic_kind` is a `type` over atoms and `noreturn` is a return
+form, and [1790] enables none of them, so [1670] is a paragraph this kernel
+cannot reach rather than one it rejected. D11 now says so and names R6.70,
+which owns panic behaviour.
+
 Exit evidence: positive, negative and runtime cases all run through the real
 driver and the verifier runs inside it on every Unit lowered; the construct
 matrix has no unexplained kernel row, and each row says whether the construct

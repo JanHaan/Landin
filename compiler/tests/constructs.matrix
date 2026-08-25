@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  197 constructs, 76 with evidence, 121 with neither.
+#  197 constructs, 82 with evidence, 115 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -100,13 +100,13 @@
 0840   tour        -                                  Origins join to the shortest-lived part
 0850   tour        -                                  Volatile is exempt from the borrow rule and from every
 0860   tour        -                                  What this does not catch
-0870   tour        -                                  A function is a value of a function type
-0880   tour        -                                  A single-expression body still takes an end
-0890   tour        -                                  Nothing returned
+0870   tour        refused                            A function is a value of a function type
+0880   tour        accepted emitted                   A single-expression body still takes an end
+0890   tour        accepted emitted                   Nothing returned
 0900   tour        refused refused-by-name            Three parameter conventions
 0910   tour        -                                  sink takes a place
 0920   tour        refused refused-by-name            Multiple named returns
-0930   tour        -                                  Every named return must be assigned before return
+0930   tour        accepted emitted refused           Every named return must be assigned before return
 0940   tour        refused                            Errors: a declared set of atoms in one dedicated register
 0950   tour        -                                  Not everything that goes wrong belongs in that channel
 0960   tour        refused-by-name                    Propagating: try, visible at the call site
@@ -115,10 +115,10 @@
 0990   tour        -                                  A return list is an anonymous struct
 1000   tour        refused                            A function type is an ordinary type
 1010   tour        -                                  Anonymous functions
-1020   tour        -                                  Discarding a result must be explicit
+1020   tour        accepted emitted refused           Discarding a result must be explicit
 1030   tour        -                                  Handling
 1040   tour        -                                  A caller parameter is filled in by the compiler with the
-1050   tour        -                                  Branch
+1050   tour        accepted emitted                   Branch
 1060   tour        accepted emitted                   Every construct has a one-line form
 1070   tour        -                                  A declaration is allowed in a condition
 1080   tour        -                                  A block has the value of its last expression
