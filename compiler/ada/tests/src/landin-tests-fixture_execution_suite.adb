@@ -233,6 +233,105 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  else can be checked against a command line; whether the bytes are
    --  *correct* is what running them says.
    --
+   ------------------------------------------------------------------
+   --  Every positive fixture is emitted, and not merely accepted
+   --
+   --  A positive fixture is a program the compiler must accept, and until
+   --  R1.90 that was the whole of what any case asked of one.  Accepting
+   --  is not emitting: R1.80's audit found four of [1810]'s statement
+   --  forms that every stage accepted and no case had ever asked a
+   --  backend for, so a construct could reach a compiler defect and the
+   --  corpus would say nothing.  This asks the backend for all of them.
+   --
+   --  It does not run them.  What a positive fixture claims is that the
+   --  program is legal, and most of the corpus is a fragment with no
+   --  entry point to run; the runtime class is where a claim about a
+   --  machine belongs.  The three words the matrix wants are separate for
+   --  this reason: accepted, emitted, executed.
+   ------------------------------------------------------------------
+
+   procedure Every_Positive_Fixture_Is_Emitted
+     (Item : in out Landin.Testing.Context);
+
+   procedure Every_Positive_Fixture_Is_Emitted
+     (Item : in out Landin.Testing.Context)
+   is
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Found   : Catalogue;
+      Program : constant String := Refine_Path;
+      Ran     : Natural := 0;
+   begin
+      if not Host.Exists (Program) then
+         Landin.Testing.Fail
+           (Item,
+            "refine was not found at " & Program
+            & "; run the harness through scripts/test.sh");
+         return;
+      end if;
+
+      Discover (Found, Fixture_Root, Host);
+
+      for Index in 1 .. Count (Found) loop
+         declare
+            Case_Item : constant Fixture := Nth (Found, Index);
+         begin
+            if Class (Case_Item) = Positive_Program
+              and then Landin.Testing.Fixtures.Program (Case_Item) /= ""
+            then
+               Ran := Ran + 1;
+
+               declare
+                  Label : constant String :=
+                    "positive/" & Name (Case_Item);
+                  Source : constant String :=
+                    Fixture_Root & "/positive/" & Name (Case_Item) & "/"
+                    & Landin.Testing.Fixtures.Program (Case_Item);
+                  Written : constant String :=
+                    Output_Directory & "positive-" & Name (Case_Item)
+                    & ".s";
+                  Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
+                  Outcome : Landin.Platform.Tool_Result;
+                  Args    : Landin.Platform.Path_List;
+               begin
+                  Landin.Platform.Add (Args, Source);
+                  Landin.Platform.Add (Args, "--emit=asm");
+                  Landin.Platform.Add (Args, "-o");
+                  Landin.Platform.Add (Args, Written);
+
+                  Runner.Run (Program, Args, Outcome,
+                              Landin.Platform.Merged);
+
+                  if Outcome.Ended /= Landin.Platform.Exited then
+                     Landin.Testing.Fail
+                       (Item,
+                        Label & ": refine was stopped before it could"
+                        & " emit" & ASCII.LF
+                        & Unbounded.To_String (Outcome.Output));
+                  elsif Outcome.Exit_Code /= 0 then
+                     --  An accepted program that cannot be emitted is
+                     --  either a backend gap or a compiler defect, and
+                     --  both are this case's business to surface.
+                     Landin.Testing.Fail
+                       (Item,
+                        Label & ": accepted but not emitted" & ASCII.LF
+                        & Unbounded.To_String (Outcome.Output));
+                  else
+                     Landin.Testing.Check
+                       (Item, Host.Exists (Written),
+                        Label & ": the assembly was written");
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+
+      --  Without this the case would pass by emitting nothing, which is
+      --  the failure the whole class exists to prevent.
+      Landin.Testing.Check
+        (Item, Ran >= 50,
+         "the positive corpus was emitted rather than skipped");
+   end Every_Positive_Fixture_Is_Emitted;
+
    --  A host that cannot finish the target fails rather than skipping.
    --  That is the same rule scripts/env.sh already applies to the pinned
    --  GNAT -- a machine without it is told so and stops, rather than
@@ -355,6 +454,9 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "recorded expectations hold",
          Recorded_Expectations_Hold'Access);
+      Landin.Testing.Register
+        (Into, "fixture execution", "every positive fixture is emitted",
+         Every_Positive_Fixture_Is_Emitted'Access);
       Landin.Testing.Register
         (Into, "fixture execution", "runtime fixtures execute",
          Runtime_Fixtures_Execute'Access);
