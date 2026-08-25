@@ -99,7 +99,10 @@ package body Landin.Stages.Checking is
       function Settled_Type (Id : Res.Declaration_Id) return Ty.Type_Kind;
       function Declared_As (Id : Res.Declaration_Id) return Ty.Type_Kind;
       function Declared_As_Node
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+        (Of_Tree        : Syn.Tree;
+         Node           : Syn.Node_Id;
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
+         return Ty.Type_Kind;
       procedure Check_Literal
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -150,35 +153,64 @@ package body Landin.Stages.Checking is
       --  resolution can answer for and which this follows to the type it
       --  was declared from.  D15 makes that an alias, so following it is
       --  the whole of what a type declaration means.
-      function Type_At (Of_Tree : Syn.Tree; Written : Syn.Node_Id)
-        return Ty.Type_Kind;
+      function Type_At
+        (Of_Tree        : Syn.Tree;
+         Written        : Syn.Node_Id;
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
+         return Ty.Type_Kind;
 
-      function Type_At (Of_Tree : Syn.Tree; Written : Syn.Node_Id)
-        return Ty.Type_Kind is
+      function Type_At
+        (Of_Tree        : Syn.Tree;
+         Written        : Syn.Node_Id;
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
+         return Ty.Type_Kind is
       begin
          --  [0670]'s block form.  Every field's type is checked here,
          --  because this is the walk that reaches them: a field is a
          --  binding without a value and nothing else visits one.
          if Syn.Kind (Of_Tree, Written) = Syn.Struct_Body then
-            for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop
-               declare
-                  Each : constant Syn.Node_Id :=
-                    Syn.Nth_Field (Of_Tree, Written, Index);
-                  Held : constant Ty.Type_Kind :=
-                    Type_At (Of_Tree, Syn.Declared_Type (Of_Tree, Each));
-               begin
-                  if Held = Ty.Aggregate then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Each),
-                        Message => "a field of a struct type is not"
-                                   & " enabled yet",
-                        Refused => Bad.Struct_Value,
-                        Into    => Found);
+            declare
+               Fields : Landin.Checking.Field_Type_Array
+                 (1 .. Syn.Field_Count (Of_Tree, Written)) :=
+                   [others => Ty.U8];
+               Can_Lay_Out : Boolean := True;
+            begin
+               for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop
+                  declare
+                     Each : constant Syn.Node_Id :=
+                       Syn.Nth_Field (Of_Tree, Written, Index);
+                     Held : constant Ty.Type_Kind :=
+                       Type_At (Of_Tree, Syn.Declared_Type (Of_Tree, Each));
+                  begin
+                     if Held in Ty.Scalar_Name then
+                        Fields (Index) := Held;
+                     else
+                        Can_Lay_Out := False;
+                     end if;
+
+                     if Held = Ty.Aggregate then
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Each),
+                           Message => "a field of a struct type is not"
+                                      & " enabled yet",
+                           Refused => Bad.Struct_Value,
+                           Into    => Found);
+                     end if;
+                  end;
+               end loop;
+
+               if Can_Lay_Out then
+                  if For_Declaration = Res.No_Declaration then
+                     raise Landin.Compiler_Defect with
+                       "a struct body has no declaration identity";
                   end if;
-               end;
-            end loop;
+
+                  Landin.Checking.Lay_Out
+                    (Types.all, For_Declaration, Fields, Facts);
+               end if;
+            end;
 
             return Ty.Aggregate;
          end if;
@@ -295,7 +327,10 @@ package body Landin.Stages.Checking is
       end Type_At;
 
       function Declared_As_Node
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+        (Of_Tree        : Syn.Tree;
+         Node           : Syn.Node_Id;
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
+         return Ty.Type_Kind
       is
          Written : constant Syn.Node_Id := Syn.Declared_Type (Of_Tree, Node);
       begin
@@ -304,7 +339,8 @@ package body Landin.Stages.Checking is
          end if;
 
          declare
-            Held : constant Ty.Type_Kind := Type_At (Of_Tree, Written);
+            Held : constant Ty.Type_Kind :=
+              Type_At (Of_Tree, Written, For_Declaration);
          begin
             --  [1795] declares the type; a *value* of one waits for the
             --  rest of R2.20.  Refused where the value is declared, so
@@ -345,31 +381,37 @@ package body Landin.Stages.Checking is
          end if;
 
          declare
-            Held : constant Ty.Type_Kind :=
-              Declared_As_Node (Of_Tree.all, Node);
+            Written : constant Syn.Node_Id :=
+              Syn.Declared_Type (Of_Tree.all, Node);
+            Is_Body : constant Boolean :=
+              Written /= Syn.No_Node
+              and then Syn.Kind (Of_Tree.all, Written) = Syn.Struct_Body;
          begin
-            --  A struct body writes a new identity.  A declaration that
-            --  names an existing aggregate is D15's alias and carries the
-            --  identity the type position was given.
-            if Held = Ty.Aggregate then
-               if Syn.Kind
-                    (Of_Tree.all, Syn.Declared_Type (Of_Tree.all, Node))
-                  = Syn.Struct_Body
-               then
-                  Landin.Checking.Note_Body (Types.all, Id, Id);
-                  Landin.Checking.Note_Body
-                    (Types.all, Of_Tree.all,
-                     Syn.Declared_Type (Of_Tree.all, Node), Id);
-               else
+            --  The identity exists before the body is checked because its
+            --  layout is recorded against that identity during the walk.
+            if Is_Body then
+               Landin.Checking.Note_Body (Types.all, Id, Id);
+               Landin.Checking.Note_Body
+                 (Types.all, Of_Tree.all, Written, Id);
+            end if;
+
+            declare
+               Held : constant Ty.Type_Kind :=
+                 Declared_As_Node
+                   (Of_Tree.all, Node,
+                    (if Is_Body then Id else Res.No_Declaration));
+            begin
+               --  A declaration that names an existing aggregate is D15's
+               --  alias and carries the identity the type position was given.
+               if Held = Ty.Aggregate and then not Is_Body then
                   Landin.Checking.Note_Body
                     (Types.all, Id,
                      Landin.Checking.Body_Of
-                       (Types.all, Of_Tree.all,
-                        Syn.Declared_Type (Of_Tree.all, Node)));
+                       (Types.all, Of_Tree.all, Written));
                end if;
-            end if;
 
-            return Held;
+               return Held;
+            end;
          end;
       end Declared_As;
 
