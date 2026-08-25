@@ -2076,6 +2076,12 @@ file negative/duplicate-parameter/program.ldn tokens 17
   45 46 f
 file negative/error-channel-not-enabled/program.ldn refused no rule spells '!'
 file negative/float-literal-not-enabled/program.ldn refused no rule spells '.'
+file negative/float-type-not-enabled/program.ldn tokens 5
+  0 5 ratio
+  5 6 :
+  7 10 f32
+  11 12 =
+  13 14 1
 file negative/function-used-as-a-value/program.ldn tokens 24
   0 1 g
   1 2 :
@@ -2625,6 +2631,12 @@ file negative/struct-not-enabled/program.ldn tokens 13
   26 29 i32
   29 30 )
 file negative/text-literal-not-enabled/program.ldn refused no rule spells '"'
+file negative/text-type-not-enabled/program.ldn tokens 5
+  0 4 name
+  4 5 :
+  6 10 utf8
+  11 12 =
+  13 14 1
 file negative/type-name-is-not-a-type/program.ldn tokens 10
   0 1 v
   1 2 :
@@ -2671,3 +2683,9 @@ file negative/usize-is-not-u64/program.ldn tokens 25
   48 49 b
   50 53 end
   54 55 f
+file negative/wide-integer-not-enabled/program.ldn tokens 5
+  0 4 wide
+  4 5 :
+  6 10 u128
+  11 12 =
+  13 14 1

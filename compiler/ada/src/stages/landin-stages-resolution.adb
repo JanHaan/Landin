@@ -152,7 +152,14 @@ package body Landin.Stages.Resolution is
                          (Meanings.all, Inside, Named));
             begin
                if Meant = Landin.Resolution.No_Declaration then
-                  if Named /= Landin.Source.Names.No_Name then
+                  --  A type name that resolved to nothing is left to the
+                  --  checker, which is the stage that can tell a type the
+                  --  tour writes and [1790] omits from a name nobody
+                  --  declared.  Reporting here would put the weaker of
+                  --  the two answers first.
+                  if Syn.Kind (Of_Tree, Node) = Syn.Type_Reference then
+                     null;
+                  elsif Named /= Landin.Source.Names.No_Name then
                      Names.Report
                        (Item    => Names.Unresolved_Name,
                         Source  => Syn.Source_Of (Of_Tree),

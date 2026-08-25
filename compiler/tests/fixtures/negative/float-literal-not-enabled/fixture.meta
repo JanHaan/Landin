@@ -3,4 +3,4 @@ summary: [1830] floats are described by [0210] and not enabled; the report must 
 constructs: 1830, 0210
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0010, L0010
+codes: L0010

@@ -169,7 +169,56 @@ package body Landin.Stages.Checking is
 
          if Res.Verdict_Of (Meanings.all, Of_Tree, Written) /= Res.Bound
          then
-            --  [1860] already reported a name that names nothing.
+            --  [1830]'s refusal from the checker's side.  A name that
+            --  resolved to nothing may still be a type the tour writes
+            --  and [1790] omits, and saying which it is costs one table:
+            --  the difference between "not enabled yet" and "declared
+            --  nowhere" is the whole of what a reader needs here.
+            declare
+               Spelled_Here : constant String :=
+                 Spelled (Syn.Name (Of_Tree, Written));
+            begin
+               for Named in Bad.Refused_Type_Name loop
+                  if Bad.Spelling (Named) = Spelled_Here then
+                     if Landin.Checking.Type_Of
+                          (Types.all, Of_Tree, Written) = Ty.Undecided
+                     then
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Written),
+                           Message => "`" & Spelled_Here
+                                      & "` is not enabled yet",
+                           Refused => Bad.Refusal (Named),
+                           Into    => Found);
+                     end if;
+
+                     return Ty.Ill_Typed;
+                  end if;
+               end loop;
+            end;
+
+            --  [1860]: a name that names nothing, said here because
+            --  resolution leaves a type name to this stage.
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+               = Ty.Undecided
+            then
+               Landin.Checking.Note
+                 (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Written),
+                  Message => "`" & Spelled (Syn.Name (Of_Tree, Written))
+                             & "` is not declared in any scope this"
+                             & " reaches",
+                  Note    => "[1860]: a name that names nothing is"
+                             & " refused",
+                  Into    => Found);
+            end if;
+
             return Ty.Ill_Typed;
          end if;
 

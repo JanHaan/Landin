@@ -123,37 +123,6 @@ package body Landin.Syntax.Parser is
             when Type_Isize => "isize",
             when Type_Bool  => "bool");
 
-   --  Spellings a type position may hold that the tour describes and this
-   --  grammar omits.  `type` is the declaration of a type [0120], the
-   --  three float widths are [0170] and the three text views are [0600].
-   --  Naming them is the difference between "this type is not enabled
-   --  yet" and "this is not a type", and only the first is true.
-   type Refused_Type is
-     (Wide_Unsigned, Wide_Signed, Float_16, Float_32, Float_64,
-      Text_Utf8, Text_Utf16, Text_C_String);
-
-   function Spelling (Item : Refused_Type) return String
-     is (case Item is
-            when Wide_Unsigned => "u128",
-            when Wide_Signed   => "i128",
-            when Float_16      => "f16",
-            when Float_32      => "f32",
-            when Float_64      => "f64",
-            when Text_Utf8     => "utf8",
-            when Text_Utf16    => "utf16",
-            when Text_C_String => "cstring");
-
-   function Refusal (Item : Refused_Type) return Syn.Refused_Construct
-     is (case Item is
-            when Wide_Unsigned
-               | Wide_Signed   => Syn.Wide_Integer_Type,
-            when Float_16
-               | Float_32
-               | Float_64      => Syn.Float_Type,
-            when Text_Utf8
-               | Text_Utf16
-               | Text_C_String => Syn.Text_Type);
-
    --  The three parameter conventions [0900].  A convention is written
    --  before the name, so `inout x: i32` is an identifier followed by an
    --  identifier, which `parameter ::= identifier ":" type` cannot derive.
@@ -219,11 +188,6 @@ package body Landin.Syntax.Parser is
               of Landin.Source.Names.Name_Id :=
                 [for S in Scalar_Name =>
                    Landin.Source.Names.Intern (Names, Spelling (S))];
-
-            Refused_Id : constant array (Refused_Type)
-              of Landin.Source.Names.Name_Id :=
-                [for R in Refused_Type =>
-                   Landin.Source.Names.Intern (Names, Spelling (R))];
 
             Convention_Id : constant array (Convention)
               of Landin.Source.Names.Name_Id :=
@@ -941,19 +905,6 @@ package body Landin.Syntax.Parser is
                            Advance;
                            return Add
                              (Type_Name, At_Type, Named => Spelled);
-                        end if;
-                     end loop;
-
-                     for Item in Refused_Type loop
-                        if Refused_Id (Item) = Spelled then
-                           Type_Refused := True;
-                           Refuse
-                             (Item    => Refusal (Item),
-                              Where   => At_Type,
-                              Message => "`" & Spelling (Item)
-                                         & "` is not enabled yet");
-                           Advance;
-                           return Add (Error_Type, At_Type);
                         end if;
                      end loop;
 
