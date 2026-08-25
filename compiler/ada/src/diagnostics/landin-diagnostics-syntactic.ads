@@ -105,6 +105,8 @@ package Landin.Diagnostics.Syntactic is
       Continue_Statement,
       Length_Of,
       Struct_Type,
+      Wide_Integer_Type,
+      Distinct_Type,
       Break_Statement,
       Match_Statement,
       Type_Parameter);
@@ -130,6 +132,8 @@ package Landin.Diagnostics.Syntactic is
             when Continue_Statement   => "[1180]",
             when Length_Of            => "[0370]",
             when Struct_Type          => "[0670]",
+            when Wide_Integer_Type    => "[0150]",
+            when Distinct_Type        => "[0650]",
             when Break_Statement      => "[1190]",
             when Match_Statement      => "[1210]",
             when Type_Parameter       => "[1290]")
@@ -180,13 +184,15 @@ private
             --  other two of [0370] are enabled and this one has nothing
             --  to ask about yet.
             when Length_Of
-               | Struct_Type          => "R2.20",
+               | Struct_Type
+               | Distinct_Type        => "R2.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter       => "R2.40",
             --  R2.50 sources [0900] for the parameter conventions.
             when Parameter_Convention => "R2.50",
             --  R4.10 closes the hosted construct matrix.
-            when Float_Type
+            when Wide_Integer_Type
+               | Float_Type
                | Text_Type            => "R4.10");
 
 end Landin.Diagnostics.Syntactic;

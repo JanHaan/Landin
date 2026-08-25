@@ -1736,8 +1736,34 @@ raise a compiler defect, which R2.20 turns into a diagnosis when a program
 can first cause one.
 
 ### R2.20 — Implement aggregates, variants and complete value layout
-Status: planned
+Status: active
 Depends on: R2.10
+
+[1795] and D15 are the first slice: a program may declare a type, and one
+declared without [0650]'s `distinct` is another name for the type it was
+written from. The kernel has only the scalar names to alias, so
+`count: type = u32` is the whole of what it can say — but saying it moved a
+boundary that had been in one place since R1.40.
+
+The parser stopped owning the type namespace. A type position used to hold
+one of eleven names the parser recognised by interned identity, and anything
+else was refused there as "not a type the kernel enables". A program can now
+declare one, so the parser builds a name and resolution answers for it: the
+grammar's `type` rule became `scalar_name | identifier`, resolution resolves
+a type name like any other, and the checker follows a declared one to what it
+was declared from. That is the shape the tour already described — [1760]
+says the eleven are "ordinary declared names [0120] that the kernel happens
+to predeclare" — and the implementation had been reading it the other way.
+
+Two refusals had to move with it, and both are the same lesson. `distinct`
+and an inline struct body used to be met while reading a *declaration*, and
+are now met while reading a *type*, because that is where they stand. A
+third could not move: `u128` and `i128` are refused by the parser on a name
+basis, which was sound while the grammar spelled every type and is not now
+that `type` derives an identifier. Their negative fixture was removed rather
+than weakened — the corpus rule that a frontend refusal must not derive is
+right, and the refusal is what is in the wrong stage. Moving it to where an
+unresolved type name is answered for is work this item still owes.
 
 Implement arrays, ordinary/C/packed structs, variants, tags, payload alignment
 and the policy for spare-bit folding. Use measured fixtures rather than host

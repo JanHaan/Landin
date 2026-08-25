@@ -25,7 +25,8 @@ package body Landin.Syntax is
             when Size_Of | Align_Of       => 1,
             when Unary_Kind               => 1,
             when Binary_Kind              => 2,
-            when Error_Type | Type_Name   => 0,
+            when Error_Type | Type_Name
+               | Type_Reference           => 0,
             when Parameter | Named_Return => 1,
             when If_Arm                   => 2,
             when Block                    => 0);

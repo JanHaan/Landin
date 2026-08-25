@@ -145,6 +145,67 @@ package body Landin.Stages.Checking is
       --  The type a declaring node writes down: [0110]'s right of the
       --  colon, read as one of [1790]'s eleven.  Undecided when it writes
       --  none, which in the kernel is only [1790]'s `:=` form.
+      --  What a type position names.  One of [1790]'s eleven, which the
+      --  parser recognised; or [1795]'s declared name, which only
+      --  resolution can answer for and which this follows to the type it
+      --  was declared from.  D15 makes that an alias, so following it is
+      --  the whole of what a type declaration means.
+      function Type_At (Of_Tree : Syn.Tree; Written : Syn.Node_Id)
+        return Ty.Type_Kind;
+
+      function Type_At (Of_Tree : Syn.Tree; Written : Syn.Node_Id)
+        return Ty.Type_Kind is
+      begin
+         if Syn.Kind (Of_Tree, Written) = Syn.Type_Name then
+            return Landin.Checking.Named
+              (Types.all, Syn.Name (Of_Tree, Written));
+         end if;
+
+         if Syn.Kind (Of_Tree, Written) /= Syn.Type_Reference then
+            --  An Error_Type: the parser refused what stood there and said
+            --  so, so this declines to answer.
+            return Ty.Ill_Typed;
+         end if;
+
+         if Res.Verdict_Of (Meanings.all, Of_Tree, Written) /= Res.Bound
+         then
+            --  [1860] already reported a name that names nothing.
+            return Ty.Ill_Typed;
+         end if;
+
+         declare
+            Means : constant Res.Declaration_Id :=
+              Res.Bound_To (Meanings.all, Of_Tree, Written);
+         begin
+            if Res.Sort_Of (Meanings.all, Means) /= Res.Module_Type then
+               --  Every place that needs this type asks again, so the
+               --  node carries whether it has been answered for: without
+               --  that a name used once is reported once per pass.
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                  /= Ty.Undecided
+               then
+                  return Ty.Ill_Typed;
+               end if;
+
+               Landin.Checking.Note (Types.all, Of_Tree, Written,
+                                     Ty.Ill_Typed);
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Written),
+                  Message => "`"
+                             & Spelled (Syn.Name (Of_Tree, Written))
+                             & "` names something that is not a type",
+                  Note    => "[1795]: a type position names one of the"
+                             & " scalar types or a `type` declaration",
+                  Into    => Found);
+               return Ty.Ill_Typed;
+            end if;
+
+            return Settled_Type (Means);
+         end;
+      end Type_At;
+
       function Declared_As_Node
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
       is
@@ -154,14 +215,7 @@ package body Landin.Stages.Checking is
             return Ty.Undecided;
          end if;
 
-         if Syn.Kind (Of_Tree, Written) /= Syn.Type_Name then
-            --  An Error_Type: the parser refused what stood there and said
-            --  so, so this declines to answer.
-            return Ty.Ill_Typed;
-         end if;
-
-         return Landin.Checking.Named
-           (Types.all, Syn.Name (Of_Tree, Written));
+         return Type_At (Of_Tree, Written);
       end Declared_As_Node;
 
       function Declared_As (Id : Res.Declaration_Id) return Ty.Type_Kind is
@@ -709,6 +763,8 @@ package body Landin.Stages.Checking is
                   when Res.Named_Return    => True,
                   when Res.Parameter       => False,
                   when Res.Module_Function => False,
+                  --  [1795] names a type, and a type is not a place.
+                  when Res.Module_Type     => False,
                   when Res.Module_Binding | Res.Local_Binding =>
                      Syn.Is_Mutable (Their_Tree.all, Their_Node));
 
@@ -1846,6 +1902,20 @@ package body Landin.Stages.Checking is
                     Syn.Nth_Declaration (Of_Tree.all, Position);
                begin
                   case Syn.Kind (Of_Tree.all, Node) is
+                     --  [1795] declares no value, so there is nothing
+                     --  here to fold, to assign or to read.  Asking what
+                     --  it names settles its type and reports a name that
+                     --  is not a type, which is the whole of its check.
+                     when Syn.Type_Declaration =>
+                        declare
+                           Ignored : constant Ty.Type_Kind :=
+                             Settled_Type (Declaration_At
+                                             (Syn.Source_Of (Of_Tree.all),
+                                              Node));
+                        begin
+                           pragma Assert (Ignored = Ignored);
+                        end;
+
                      when Syn.Binding =>
                         Check_Module_Value (Of_Tree.all, Node);
                         Check_Statement

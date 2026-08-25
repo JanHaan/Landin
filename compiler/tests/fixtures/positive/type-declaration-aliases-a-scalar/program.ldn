@@ -1,0 +1,11 @@
+count: type = u32
+size:  type = count
+
+n: count = 7
+m: size = 9
+
+--  D15: an alias is the same type, so a `u32` place takes a `count` and a
+--  `count` place takes a `u32`, with no conversion anywhere.
+widen: (a: count) -> (r: u32) =
+    r = a + m
+end widen

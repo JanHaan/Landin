@@ -1192,6 +1192,48 @@ file positive/token-separation/program.ldn tokens 17
   46 50 incx
   51 54 end
   55 56 f
+file positive/type-declaration-aliases-a-scalar/program.ldn tokens 41
+  0 5 count
+  5 6 :
+  7 11 type
+  12 13 =
+  14 17 u32
+  18 22 size
+  22 23 :
+  25 29 type
+  30 31 =
+  32 37 count
+  39 40 n
+  40 41 :
+  42 47 count
+  48 49 =
+  50 51 7
+  52 53 m
+  53 54 :
+  55 59 size
+  60 61 =
+  62 63 9
+  202 207 widen
+  207 208 :
+  209 210 (
+  210 211 a
+  211 212 :
+  213 218 count
+  218 219 )
+  220 222 ->
+  223 224 (
+  224 225 r
+  225 226 :
+  227 230 u32
+  230 231 )
+  232 233 =
+  238 239 r
+  240 241 =
+  242 243 a
+  244 245 +
+  246 247 m
+  248 251 end
+  252 257 widen
 file positive/unary-binds-tightest/program.ldn tokens 20
   0 1 f
   1 2 :
@@ -1946,6 +1988,13 @@ file negative/discard-of-nothing/program.ldn tokens 24
   67 68 )
   69 72 end
   73 74 f
+file negative/distinct-not-enabled/program.ldn tokens 6
+  0 5 meter
+  5 6 :
+  7 11 type
+  12 13 =
+  14 22 distinct
+  23 26 u32
 file negative/divisor-is-zero/program.ldn tokens 7
   0 8 quotient
   8 9 :
@@ -2576,6 +2625,17 @@ file negative/struct-not-enabled/program.ldn tokens 13
   26 29 i32
   29 30 )
 file negative/text-literal-not-enabled/program.ldn refused no rule spells '"'
+file negative/type-name-is-not-a-type/program.ldn tokens 10
+  0 1 v
+  1 2 :
+  3 6 i32
+  7 8 =
+  9 10 1
+  11 12 n
+  12 13 :
+  14 15 v
+  16 17 =
+  18 19 2
 file negative/unclosed-block-comment/program.ldn refused a block comment is never closed
 file negative/underscore-as-name/program.ldn tokens 5
   0 1 _
@@ -2611,9 +2671,3 @@ file negative/usize-is-not-u64/program.ldn tokens 25
   48 49 b
   50 53 end
   54 55 f
-file negative/wide-integer-not-enabled/program.ldn tokens 5
-  0 4 wide
-  4 5 :
-  6 10 u128
-  11 12 =
-  13 14 1

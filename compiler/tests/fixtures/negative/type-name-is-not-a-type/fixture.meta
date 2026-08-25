@@ -1,0 +1,6 @@
+class: negative
+summary: [1795] a type position names a scalar type or a `type` declaration, and a binding is neither
+constructs: 1795
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64
