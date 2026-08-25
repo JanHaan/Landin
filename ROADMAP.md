@@ -1529,8 +1529,21 @@ kernel has not reached, and the file says in its own header what it is
 measuring: evidence is what a fixture *claims* out of its `constructs:` list
 and not what the program in it actually exercises, so a runtime program full
 of literals says nothing about [1770] unless it names it. Under-claiming is
-the expected state of a list seeded from prose. Correcting it is the work
-this item now has a place to record.
+the expected state of a list seeded from prose, and the first pass over it is
+done: every construct of [1740]-[1970] that can be executed now is, and the
+four that are not -- [1830], [1850], [1860] and [1910] -- are rules about what
+a compiler refuses or checks, which nothing runs. Sixty-one constructs carry
+evidence.
+
+The rule that keeps that number worth reading is written into
+`compiler/tests/README.md`: name a construct when the fixture's passing would
+change if it were implemented wrong, not when it appears in the text. Every
+runtime program contains literals, so claiming [1770] everywhere would fill a
+column and say nothing. That rule caught one of this pass's own claims --
+`runtime/statements-run-as-they-read` was given [1840] while declaring nothing
+inside an `if` arm, which is not evidence about arm scopes -- and the fixture
+grew a function that declares the same name in both arms rather than the claim
+being quietly kept.
 
 Exit evidence: positive, negative, verifier and runtime cases all run through
 the real driver; the construct matrix has no unexplained kernel row, and each

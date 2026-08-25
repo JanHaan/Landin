@@ -41,6 +41,20 @@ counted: () -> (r: i32) =
     r = total
 end counted
 
+--  [1840] and D2: each arm of an `if` is its own scope, so both arms may
+--  declare the same name and neither can see the other's.
+arm_scoped: (c: bool) -> (r: u32) =
+    r = 0
+
+    if c then
+        t: u32 = 11
+        r = t
+    else
+        t: u32 = 22
+        r = t
+    end if
+end arm_scoped
+
 public main: () -> (code: i32) =
     if early(0) == 7
         and early(5) == 9
@@ -50,6 +64,8 @@ public main: () -> (code: i32) =
         and which_arm(0 - 4) == 2
         and which_arm(0) == 3
         and counted() == 41
+        and arm_scoped(true) == 11
+        and arm_scoped(false) == 22
     then
         code = 42
     else

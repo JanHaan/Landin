@@ -190,18 +190,18 @@
 1740   spec        accepted emitted refused           A program is declarations, in any order
 1750   spec        accepted emitted refused           A source file is bytes
 1760   spec        accepted emitted refused           Identifiers are lower case, and no identifier is a keyword
-1770   spec        accepted emitted                   The kernel's literals are integers and the two booleans
+1770   spec        accepted emitted executed          The kernel's literals are integers and the two booleans
 1780   spec        accepted emitted refused           A comment ends a token, and its opener says which kind it is
-1790   spec        accepted emitted refused           A binding names one thing, and says how much it may change
-1800   spec        accepted emitted refused           A function is a value with a body, and its returns are named
+1790   spec        accepted emitted executed refused  A binding names one thing, and says how much it may change
+1800   spec        accepted emitted executed refused  A function is a value with a body, and its returns are named
 1810   spec        accepted emitted executed refused  Statements do one thing each, and only exits carry 'when'
-1820   spec        accepted emitted refused           Precedence, tightest first, and comparison does not chain
+1820   spec        accepted emitted executed refused  Precedence, tightest first, and comparison does not chain
 1830   spec        refused                            What is not enabled is refused, and named
-1840   spec        accepted emitted refused           The kernel's scopes, outermost first
+1840   spec        accepted emitted executed refused  The kernel's scopes, outermost first
 1850   spec        refused                            One scope gives one name to one thing
 1860   spec        refused                            A name that names nothing is refused
 1870   spec        accepted emitted executed refused  The kernel's types, and what each of them holds
-1880   spec        accepted emitted refused           Where a literal's type comes from, and what a context is
+1880   spec        accepted emitted executed refused  Where a literal's type comes from, and what a context is
 1890   spec        accepted emitted executed refused  What each operator takes and what it gives
 1900   spec        accepted emitted executed refused  What may be written, and what may not
 1910   spec        accepted emitted refused           Assigned before it is read

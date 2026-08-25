@@ -1,6 +1,6 @@
 class: runtime
 summary: signed minimum remainder minus one is zero at every width
-constructs: 0290, 0300, 1950
+constructs: 0290, 0300, 1770, 1800, 1950
 program: main.ldn
 status: 42
 targets: linux-x86-64
