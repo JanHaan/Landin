@@ -1685,6 +1685,15 @@ the one that keeps the IR target-neutral. A case emits one source against two
 descriptions and reads 8 against Linux x86-64 and 4 against the synthetic
 32-bit one, from a host that is neither.
 
+The goldens are the other half, and they are recorded rather than generated:
+producing one means asking the target model, which `check.py` cannot do, so
+`./scripts/test.sh --record` writes `compiler/tests/layout.targets` beside
+`lowering.ir` and a case holds it to what the model says now. Both described
+targets are in it rather than the synthetic one alone -- what a reader needs
+is the two columns beside each other, because the defect being guarded
+against is a description quietly inheriting the development host's answers,
+and a `usize` reading eight in both would be exactly that.
+
 `lenof` is the third of [0370] and is not enabled with them: it measures an
 array or a slice, [1790]'s type rule has neither, and R2.20 is where they
 arrive. It is refused by name and cites the paragraph, like every other
