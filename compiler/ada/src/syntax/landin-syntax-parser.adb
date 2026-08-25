@@ -66,9 +66,10 @@ package body Landin.Syntax.Parser is
    type Refused_Word is
      (Word_None,
       Word_Loop, Word_While, Word_For, Word_Match, Word_Defer,
-      Word_Undo, Word_Try, Word_Fail, Word_Break, Word_Continue);
+      Word_Undo, Word_Try, Word_Fail, Word_Break, Word_Continue,
+      Word_Lenof);
 
-   subtype Real_Word is Refused_Word range Word_Loop .. Word_Continue;
+   subtype Real_Word is Refused_Word range Word_Loop .. Word_Lenof;
 
    function Spelling (Item : Real_Word) return String
      is (case Item is
@@ -81,7 +82,8 @@ package body Landin.Syntax.Parser is
             when Word_Try      => "try",
             when Word_Fail     => "fail",
             when Word_Break    => "break",
-            when Word_Continue => "continue");
+            when Word_Continue => "continue",
+            when Word_Lenof    => "lenof");
 
    function Refusal (Item : Real_Word) return Syn.Refused_Construct
      is (case Item is
@@ -94,7 +96,8 @@ package body Landin.Syntax.Parser is
             when Word_Try      => Syn.Try_Expression,
             when Word_Fail     => Syn.Fail_Statement,
             when Word_Break    => Syn.Break_Statement,
-            when Word_Continue => Syn.Continue_Statement);
+            when Word_Continue => Syn.Continue_Statement,
+            when Word_Lenof    => Syn.Length_Of);
 
    --  The kernel's types are the scalar names only [1790].  These are
    --  ordinary declared names the kernel predeclares, not keywords, which
@@ -1863,6 +1866,54 @@ package body Landin.Syntax.Parser is
                         At_Token  => At_Item,
                         Radix     => Tok.Base (Item),
                         Digits_At => Tok.Digit_Span (Item));
+                  end;
+               end if;
+
+               --  [0370]'s third measurement.  `lenof` is not reserved,
+               --  so only the parser can meet it, and an expression is
+               --  where it is written: without this it reads as a name
+               --  followed by another name and the report is about a
+               --  statement shape rather than about what was asked for.
+               if Word_At_Hand = Word_Lenof then
+                  declare
+                     Refused : constant Landin.Source.Span := Here;
+                  begin
+                     Refuse
+                       (Item    => Refusal (Word_Lenof),
+                        Where   => Refused,
+                        Message => "`" & Spelling (Word_Lenof)
+                                   & "` is not enabled yet");
+                     Advance;
+
+                     --  `lenof xs` is one construct, so the thing it was
+                     --  measuring goes with it.  Leaving the name behind
+                     --  makes the next rule complain about a statement
+                     --  shape, which is two more reports about one
+                     --  sentence the reader already had an answer for.
+                     if Peek = Tok.Identifier then
+                        Advance;
+                     end if;
+
+                     return Add (Error_Expression, Refused);
+                  end;
+               end if;
+
+               --  [0370]: `sizeof` and `alignof` take a type where every
+               --  other expression takes an expression.  Parse_Type is
+               --  reused rather than a second reading of the same rule,
+               --  so a type the kernel omits is refused by name here as
+               --  it is anywhere else a type may be written.
+               if Peek in Tok.Kw_Sizeof | Tok.Kw_Alignof then
+                  declare
+                     Measuring : constant Node_Kind :=
+                       (if Peek = Tok.Kw_Sizeof then Size_Of else Align_Of);
+                  begin
+                     Advance;
+                     return Add
+                       (Of_Kind  => Measuring,
+                        At_Token => At_Item,
+                        Children =>
+                          [1 => Parse_Type (False, At_Item)]);
                   end;
                end if;
 

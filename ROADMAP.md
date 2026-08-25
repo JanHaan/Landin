@@ -1661,11 +1661,36 @@ needed by the hosted parser. Raw storage remains container-driven and closes
 in R3 rather than being designed in isolation.
 
 ### R2.10 — Establish target-parametric data layout
-Status: planned
+Status: active
 Depends on: R1.60, R1.70
 
 Implement target facts, scalar widths/alignment and checked layout arithmetic.
 Add synthetic 32-bit layout goldens before a Cortex backend exists.
+
+Most of the model arrived with the chassis: `Landin.Targets` has held the
+facts, the widths, the alignments and the checked arithmetic since R0.60, and
+cases already refuse an alignment it will not guess and report an overflow.
+What it did not have was a way for a *program* to observe any of it, which is
+what "measurements agree with the target model" asks for -- so [0370] is
+enabled, and `sizeof` and `alignof` are the first constructs of the tour to be
+turned on since the kernel was drawn.
+
+Two decisions came with them and both are D14. A measurement is a `usize`,
+because a size is a count of bytes on the machine being compiled for and that
+is what [0160] says `usize` is; and the answer is not folded by the checker or
+the lowering. `Landin.IR` carries `Measure_Size` and `Measure_Align` with the
+type asked about, and the backend answers, because a size needs a width and a
+width needs a target -- the same seam [0320]'s zero-fill already sits on, and
+the one that keeps the IR target-neutral. A case emits one source against two
+descriptions and reads 8 against Linux x86-64 and 4 against the synthetic
+32-bit one, from a host that is neither.
+
+`lenof` is the third of [0370] and is not enabled with them: it measures an
+array or a slice, [1790]'s type rule has neither, and R2.20 is where they
+arrive. It is refused by name and cites the paragraph, like every other
+construct the tour describes and the kernel omits -- and refusing it took
+consuming the name it was measuring, because leaving that behind turned one
+answered question into three reports about a statement shape.
 
 Exit evidence: Linux x86-64 measurements and synthetic 32-bit cases agree with
 the target model; overflow and impossible alignment are diagnosed.

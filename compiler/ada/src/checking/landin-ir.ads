@@ -170,6 +170,12 @@ package Landin.IR is
       --  module binding carry `mut`.
       Load_Datum,
       Store_Datum,
+      --  [0370]'s measurements.  The type they ask about is carried, not
+      --  the answer: a size needs a width and a width needs a target, so
+      --  the answer belongs to whoever has one.  This is the same seam
+      --  the bitwise and shift levels of a module fold already sit on.
+      Measure_Size,
+      Measure_Align,
       --  [1820]'s prefix operators.
       Negation,
       Complement,
@@ -604,6 +610,26 @@ package Landin.IR is
    --  grammar keeps them apart: `integer` spells no sign, so no signed
    --  65-bit type is ever needed.  This is Landin.Types.Fits' pair,
    --  carried rather than folded into a pattern.
+   --  Which type [0370] is asking about.
+   function Measured_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+     return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Measure_Size | Measure_Align;
+
+   function Emit_Measurement
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Of_Code  : Opcode;
+      Measured : Landin.Types.Scalar_Name;
+      Gives    : Landin.Types.Scalar_Name;
+      Site     : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Of_Code in Measure_Size | Measure_Align
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted (Into, Item, Emit_Measurement'Result, Of_Code);
+
    function Number_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Magnitude
@@ -832,6 +858,7 @@ private
       Target      : Block_Id                  := No_Block;
       Alternative : Block_Id                  := No_Block;
       Number      : Landin.Types.Magnitude    := 0;
+      Measured    : Landin.Types.Scalar_Name  := Landin.Types.Bool;
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;
    end record;

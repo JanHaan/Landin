@@ -345,6 +345,11 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Block_Id
      is (Held (Of_Unit, Item, Value).Alternative);
 
+   function Measured_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+     return Landin.Types.Scalar_Name
+     is (Held (Of_Unit, Item, Value).Measured);
+
    function Number_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Magnitude
@@ -408,6 +413,21 @@ package body Landin.IR is
                          Number  => Value,
                          Negated => Negated,
                          others  => <>)));
+
+   function Emit_Measurement
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Of_Code  : Opcode;
+      Measured : Landin.Types.Scalar_Name;
+      Gives    : Landin.Types.Scalar_Name;
+      Site     : Landin.Provenance.Origin) return Value_Id
+     is (Append
+           (Into, Item,
+            Instruction'(Op       => Of_Code,
+                         Result   => Gives,
+                         Site     => Site,
+                         Measured => Measured,
+                         others   => <>)));
 
    function Emit_Truth
      (Into  : in out Unit;

@@ -1,0 +1,3 @@
+f: () -> (r: usize) =
+    r = lenof grid
+end f

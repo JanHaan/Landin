@@ -51,10 +51,10 @@ package Landin.Tokens is
      (End_Of_Input,
       Identifier,
       Integer_Literal,
-      --  The seventeen words [1760] reserves.
-      Kw_And, Kw_Dec, Kw_Else, Kw_Elsif, Kw_End, Kw_False, Kw_If,
-      Kw_Inc, Kw_Mut, Kw_None, Kw_Not, Kw_Or, Kw_Public, Kw_Return,
-      Kw_Then, Kw_True, Kw_When,
+      --  The nineteen words [1760] reserves.
+      Kw_Alignof, Kw_And, Kw_Dec, Kw_Else, Kw_Elsif, Kw_End, Kw_False,
+      Kw_If, Kw_Inc, Kw_Mut, Kw_None, Kw_Not, Kw_Or, Kw_Public,
+      Kw_Return, Kw_Sizeof, Kw_Then, Kw_True, Kw_When,
       --  The signs the kernel productions spell.
       Ampersand, Bar, Caret, Colon, Colon_Equal, Comma, Equal,
       Equal_Equal, Greater, Greater_Equal, Greater_Greater, Left_Paren,
@@ -74,7 +74,7 @@ package Landin.Tokens is
    --  stream the parser may take at face value.
    subtype Kernel_Kind is Token_Kind range End_Of_Input .. Underscore;
 
-   subtype Reserved_Word is Token_Kind range Kw_And .. Kw_When;
+   subtype Reserved_Word is Token_Kind range Kw_Alignof .. Kw_When;
 
    subtype Punctuation is Token_Kind range Ampersand .. Underscore;
 
@@ -87,7 +87,7 @@ package Landin.Tokens is
    --  One spelling each, which is what makes Spelling total here and absent
    --  elsewhere: Compound_Assign covers thirteen spellings [0390], and a
    --  literal has as many as there are programs.
-   subtype Spelled_Kind is Token_Kind range Kw_And .. Right_Bracket;
+   subtype Spelled_Kind is Token_Kind range Kw_Alignof .. Right_Bracket;
 
    --  `literal ::= integer | "true" | "false"` [1770]. true and false are
    --  reserved words and literals at once, so this is a predicate rather
@@ -95,9 +95,10 @@ package Landin.Tokens is
    function Is_Literal (Of_Kind : Token_Kind) return Boolean
      is (Of_Kind in Integer_Literal | Kw_True | Kw_False);
 
-   --  The bytes of a kind that has only one spelling.
+   --  The bytes of a kind that has only one spelling.  `alignof` is the
+   --  longest, at seven.
    function Spelling (Of_Kind : Spelled_Kind) return String
-     with Post => Spelling'Result'Length in 1 .. 6;
+     with Post => Spelling'Result'Length in 1 .. 7;
 
    subtype Construct_Reference is String (1 .. 6);
 

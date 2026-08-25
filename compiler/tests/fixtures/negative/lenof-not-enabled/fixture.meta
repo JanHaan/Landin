@@ -1,0 +1,6 @@
+class: negative
+summary: [0370] measures an array or a slice with lenof and [1790]'s types have neither, so it is refused by name
+constructs: 0370
+program: program.ldn
+codes: L0010
+targets: linux-x86-64, macos-arm64
