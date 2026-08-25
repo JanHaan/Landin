@@ -1,0 +1,5 @@
+class: negative
+summary: [1940] a fold follows a chain however long it is; the answer no u8 holds is seventy links from the literal that starts it
+program: program.ldn
+codes: L0300
+targets: linux-x86-64, macos-arm64
