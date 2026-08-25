@@ -1514,6 +1514,24 @@ which is why the list is a starting point to be corrected rather than a
 finding: 51 constructs are named so far, and all ten of [1740]-[1830] are
 among them.
 
+The matrix itself is generated, for the reason the catalogue and the token
+dump already are: a hand-kept index of 197 rows is an index that will be
+wrong. `check.py --matrix` writes `compiler/tests/constructs.matrix` and a
+full run refuses it when stale. Every construct either document defines gets
+a row, against the three claims the corpus can make about it -- accepted,
+emitted, executed -- plus whether the parser refuses it by name and cites the
+paragraph, which is what explains a row for a construct the kernel does not
+enable.
+
+It reads at 197 constructs, 61 with evidence and 136 with neither, and all
+twenty-four of [1740]-[1970] are covered. The 136 are mostly the language the
+kernel has not reached, and the file says in its own header what it is
+measuring: evidence is what a fixture *claims* out of its `constructs:` list
+and not what the program in it actually exercises, so a runtime program full
+of literals says nothing about [1770] unless it names it. Under-claiming is
+the expected state of a list seeded from prose. Correcting it is the work
+this item now has a place to record.
+
 Exit evidence: positive, negative, verifier and runtime cases all run through
 the real driver; the construct matrix has no unexplained kernel row, and each
 row says whether the construct was accepted, emitted or executed.
