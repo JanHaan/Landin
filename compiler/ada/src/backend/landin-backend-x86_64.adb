@@ -11,6 +11,7 @@ package body Landin.Backend.X86_64 is
    use type Landin.Targets.Byte_Count;
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Opcode;
+   use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
 
@@ -24,6 +25,60 @@ package body Landin.Backend.X86_64 is
 
    subtype Held_Size is Landin.Targets.Scalar_Size
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
+
+   --  A datum's value, held as the bit pattern the target will store.  A
+   --  module value is folded rather than run [1940], and `Landin.IR`'s own
+   --  header says why the folding lands here: the checker declines the
+   --  bitwise and shift levels because [0320]'s zero-fill needs a width,
+   --  and a width needs a target.  This is that width's side of the seam.
+   --
+   --  The widest enabled type is 64 bits, so one modular type covers every
+   --  fold and narrower ones are masked back to their own width after each
+   --  operation.  This asks the host nothing: the modulus is written out,
+   --  exactly as `Landin.Types.Folded`'s bound is.
+   type Pattern is mod 2 ** 64;
+
+   function Mask
+     (Value : Pattern; Bits : Landin.Targets.Bit_Width) return Pattern
+     is (if Bits >= 64 then Value
+         else Value and (2 ** Natural (Bits) - 1));
+
+   --  Whether a pattern's top bit is set at that width, which for a signed
+   --  type is what makes it negative.
+   function Is_Negative
+     (Value : Pattern; Bits : Landin.Targets.Bit_Width) return Boolean
+     is ((Value and 2 ** (Natural (Bits) - 1)) /= 0);
+
+   --  A number read as the pattern the target stores, and back again.  A
+   --  fold works in numbers, because a module value has no moment in which
+   --  to trap [1460] and so the whole expression is worked out before any
+   --  type is asked to hold it; these two are for the operators that are
+   --  about a width rather than about a number -- the wrapping forms, the
+   --  bitwise set and the shifts.
+   function To_Pattern
+     (Value : Landin.Types.Folded;
+      Bits  : Landin.Targets.Bit_Width) return Pattern
+     is (if Value < 0
+         then Mask (0 - Pattern (-Value), Bits)
+         else Mask (Pattern (Value), Bits));
+
+   function As_Number
+     (Value  : Pattern;
+      Bits   : Landin.Targets.Bit_Width;
+      Signed : Boolean) return Landin.Types.Folded
+     is (if Signed and then Is_Negative (Value, Bits)
+         then -Landin.Types.Folded (Mask (0 - Value, Bits))
+         else Landin.Types.Folded (Value));
+
+   --  How wide a fold works at.  `Landin.Types.Width` answers for the
+   --  eleven integers only, and a bool is [1870]'s zero or one in the byte
+   --  `Landin.Backend` gives it, so it folds at that byte's width.
+   function Fold_Width
+     (Kind : Landin.Types.Scalar_Name;
+      Facts : Landin.Targets.Target_Facts) return Landin.Targets.Bit_Width
+     is (if Kind in Landin.Types.Integer_Name
+         then Landin.Types.Width (Landin.Types.Integer_Name (Kind), Facts)
+         else 8);
 
    --  The suffix that makes an instruction operate at one width, and the
    --  accumulator named at that width.  One accumulator is all this shape
@@ -396,6 +451,26 @@ package body Landin.Backend.X86_64 is
                            & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Load_Datum | Landin.IR.Store_Datum =>
+                  --  A module value is named rather than offset from a
+                  --  frame, and RIP-relative is how x86-64 names one
+                  --  without a relocation the loader has to fix up.
+                  declare
+                     Datum : constant Landin.IR.Item_Id :=
+                       Landin.IR.Datum_Of (Of_Unit, Item, Value);
+                     Kind : constant Landin.Types.Scalar_Name :=
+                       Landin.IR.Result_Of (Of_Unit, Datum);
+                     Held : constant Held_Size := Size_Of (Kind, Facts);
+                     Place : constant String :=
+                       Symbol (Datum) & "(%rip)";
+                  begin
+                     if Op = Landin.IR.Load_Datum then
+                        Carry (Held, Place, Value_Cell (Value));
+                     else
+                        Carry (Held, Value_Cell (Operand (1)), Place);
+                     end if;
+                  end;
+
                when Landin.IR.Add | Landin.IR.Subtract =>
                   declare
                      Kind : constant Landin.Types.Integer_Name :=
@@ -677,11 +752,6 @@ package body Landin.Backend.X86_64 is
                   end if;
 
                   Emit_Epilogue;
-
-               when others =>
-                  raise Compiler_Defect
-                    with "this backend does not emit "
-                         & Landin.IR.Opcode'Image (Op) & " yet";
             end case;
          end Emit_Instruction;
 
@@ -742,6 +812,329 @@ package body Landin.Backend.X86_64 is
               & Symbol (Item));
       end Emit_Routine;
 
+      --  The value a datum's block describes.  [1460] says nothing runs
+      --  before the entry point, so this walk is a fold and not an
+      --  interpreter: it reaches the block's own Leave and answers with
+      --  what that carries.
+      function Folded (Item : Landin.IR.Item_Id) return Landin.Types.Folded;
+
+      --  Each datum is folded once.  [0130] makes a module a set, so one
+      --  module value may name another as often as it likes: `b = a + a`
+      --  reaches `a` twice, and a chain of those without this would cost
+      --  two folds per link and so double with every one of them.  The
+      --  state is here for the second reason as well -- a cycle names
+      --  nothing at all and [1940] refuses it, so meeting one here is a
+      --  defect rather than something to fold.
+      type Fold_State is (Unseen, Running, Settled);
+
+      Fold_Of : array (1 .. Landin.IR.Item_Count (Of_Unit))
+                  of Landin.Types.Folded := [others => 0];
+      Fold_At : array (1 .. Landin.IR.Item_Count (Of_Unit)) of Fold_State :=
+        [others => Unseen];
+
+      function Folded (Item : Landin.IR.Item_Id) return Landin.Types.Folded is
+         Answer : Landin.Types.Folded := 0;
+
+         --  [0410] fixes the order of a binary's operands, so the lowering
+         --  carries the left one through a slot.  A fold therefore reads
+         --  slots as well as values, even though nothing here runs.
+         Held : array (1 .. Landin.IR.Value_Count (Of_Unit, Item))
+                  of Landin.Types.Folded := [others => 0];
+         Slots : array (1 .. Landin.IR.Slot_Count (Of_Unit, Item))
+                   of Landin.Types.Folded := [others => 0];
+
+         function Bits_Of
+           (Value : Landin.IR.Value_Id) return Landin.Targets.Bit_Width;
+
+         function Bits_Of
+           (Value : Landin.IR.Value_Id) return Landin.Targets.Bit_Width
+         is
+            Kind : constant Landin.Types.Scalar_Name :=
+              Landin.IR.Result_Of (Of_Unit, Item, Value);
+         begin
+            return Fold_Width (Kind, Facts);
+         end Bits_Of;
+
+         function Signed_At (Value : Landin.IR.Value_Id) return Boolean;
+
+         function Signed_At (Value : Landin.IR.Value_Id) return Boolean is
+            Kind : constant Landin.Types.Scalar_Name :=
+              Landin.IR.Result_Of (Of_Unit, Item, Value);
+         begin
+            return Kind in Landin.Types.Integer_Name
+                   and then Landin.Types.Is_Signed
+                              (Landin.Types.Integer_Name (Kind));
+         end Signed_At;
+
+         function Of_Value (Value : Landin.IR.Value_Id)
+           return Landin.Types.Folded
+           is (Held (Natural (Value)));
+
+         function Operand_Of
+           (Value : Landin.IR.Value_Id; Index : Positive)
+           return Landin.IR.Value_Id
+           is (Landin.IR.Nth_Operand (Of_Unit, Item, Value, Index));
+      begin
+         case Fold_At (Natural (Item)) is
+            when Settled =>
+               return Fold_Of (Natural (Item));
+
+            when Running =>
+               raise Compiler_Defect
+                 with "a module value names itself through a chain the "
+                      & "checker was to have refused";
+
+            when Unseen =>
+               Fold_At (Natural (Item)) := Running;
+         end case;
+
+         for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Item) loop
+            for Position in 1 .. Landin.IR.Length
+                                   (Of_Unit, Item,
+                                    Landin.IR.Block_Id (Block))
+            loop
+               declare
+                  Value : constant Landin.IR.Value_Id :=
+                    Landin.IR.Nth_Value
+                      (Of_Unit, Item, Landin.IR.Block_Id (Block), Position);
+                  Op : constant Landin.IR.Opcode :=
+                    Landin.IR.Op_Of (Of_Unit, Item, Value);
+               begin
+                  case Op is
+                     when Landin.IR.Number =>
+                        --  [1880]'s minus is carried apart from [1770]'s
+                        --  magnitude, and this is where the two meet.
+                        Held (Natural (Value)) :=
+                          (if Landin.IR.Is_Negated (Of_Unit, Item, Value)
+                           then -Landin.Types.Folded
+                                   (Landin.IR.Number_Of
+                                      (Of_Unit, Item, Value))
+                           else Landin.Types.Folded
+                                  (Landin.IR.Number_Of
+                                     (Of_Unit, Item, Value)));
+
+                     when Landin.IR.Truth =>
+                        Held (Natural (Value)) :=
+                          (if Landin.IR.Truth_Of (Of_Unit, Item, Value)
+                           then 1 else 0);
+
+                     when Landin.IR.Load_Datum =>
+                        --  [0130] makes a module a set, so one module value
+                        --  may name another written below it.
+                        Held (Natural (Value)) :=
+                          Folded
+                            (Landin.IR.Datum_Of (Of_Unit, Item, Value));
+
+                     when Landin.IR.Load =>
+                        Held (Natural (Value)) :=
+                          Slots (Natural
+                                   (Landin.IR.Slot_Of
+                                      (Of_Unit, Item, Value)));
+
+                     when Landin.IR.Store =>
+                        Slots (Natural
+                                 (Landin.IR.Slot_Of (Of_Unit, Item, Value)))
+                          := Of_Value (Operand_Of (Value, 1));
+
+                     when Landin.IR.Negation =>
+                        Held (Natural (Value)) :=
+                          -Of_Value (Operand_Of (Value, 1));
+
+                     when Landin.IR.Logical_Not =>
+                        Held (Natural (Value)) :=
+                          1 - Of_Value (Operand_Of (Value, 1));
+
+                     when Landin.IR.Complement =>
+                        --  A width operation, so it is the one place the
+                        --  pattern rather than the number is what is meant.
+                        declare
+                           Bits : constant Landin.Targets.Bit_Width :=
+                             Bits_Of (Value);
+                        begin
+                           Held (Natural (Value)) :=
+                             As_Number
+                               (Mask (not To_Pattern
+                                            (Of_Value
+                                               (Operand_Of (Value, 1)),
+                                             Bits),
+                                      Bits),
+                                Bits, Signed_At (Value));
+                        end;
+
+                     when Landin.IR.Add | Landin.IR.Subtract
+                        | Landin.IR.Multiply | Landin.IR.Divide
+                        | Landin.IR.Remainder
+                        | Landin.IR.Wrapping_Add
+                        | Landin.IR.Wrapping_Subtract
+                        | Landin.IR.Wrapping_Multiply
+                        | Landin.IR.Bitwise_And | Landin.IR.Bitwise_Xor
+                        | Landin.IR.Bitwise_Or
+                        | Landin.IR.Shift_Left | Landin.IR.Shift_Right
+                        | Landin.IR.Equal_To | Landin.IR.Not_Equal_To
+                        | Landin.IR.Less_Than | Landin.IR.Less_Or_Equal
+                        | Landin.IR.Greater_Than
+                        | Landin.IR.Greater_Or_Equal =>
+                        declare
+                           Left_Id : constant Landin.IR.Value_Id :=
+                             Operand_Of (Value, 1);
+                           A : constant Landin.Types.Folded :=
+                             Of_Value (Left_Id);
+                           B : constant Landin.Types.Folded :=
+                             Of_Value (Operand_Of (Value, 2));
+
+                           --  A comparison gives a bool back, so its own
+                           --  width and sign say nothing about the
+                           --  operands'.
+                           Compares : constant Boolean :=
+                             Op in Landin.IR.Equal_To
+                                 .. Landin.IR.Greater_Or_Equal;
+                           Bits : constant Landin.Targets.Bit_Width :=
+                             (if Compares then Bits_Of (Left_Id)
+                              else Bits_Of (Value));
+                           Signed : constant Boolean :=
+                             (if Compares then Signed_At (Left_Id)
+                              else Signed_At (Value));
+
+                           Left : constant Pattern := To_Pattern (A, Bits);
+                           Right : constant Pattern := To_Pattern (B, Bits);
+
+                           function Truth (Of_It : Boolean)
+                             return Landin.Types.Folded
+                             is (if Of_It then 1 else 0);
+
+                           --  A width operation's answer, read back as the
+                           --  number that pattern stands for.
+                           function Narrowed (Bits_Wide : Pattern)
+                             return Landin.Types.Folded
+                             is (As_Number (Mask (Bits_Wide, Bits),
+                                            Bits, Signed));
+
+                           --  [0320] and D13: an amount at or past the
+                           --  width gives zero, on every shift.
+                           Exhausted : constant Boolean :=
+                             Op in Landin.IR.Shift_Left
+                                 | Landin.IR.Shift_Right
+                             and then B >= Landin.Types.Folded (Bits);
+                        begin
+                           Held (Natural (Value)) :=
+                             (case Op is
+                                 --  A checked operator has no width to
+                                 --  answer at: [1460] gives a module value
+                                 --  no moment in which to trap, so the
+                                 --  whole expression is worked out and the
+                                 --  checker refuses the answer no type
+                                 --  holds.  That is why these do not mask.
+                                 when Landin.IR.Add => A + B,
+                                 when Landin.IR.Subtract => A - B,
+                                 when Landin.IR.Multiply => A * B,
+                                 --  Ada's own division truncates toward
+                                 --  zero and its remainder takes the
+                                 --  dividend's sign, which is [0290].
+                                 when Landin.IR.Divide => A / B,
+                                 when Landin.IR.Remainder => A rem B,
+                                 --  [0300]'s wrapping forms are width
+                                 --  operations and say so by name.
+                                 when Landin.IR.Wrapping_Add =>
+                                   Narrowed (Left + Right),
+                                 when Landin.IR.Wrapping_Subtract =>
+                                   Narrowed (Left - Right),
+                                 when Landin.IR.Wrapping_Multiply =>
+                                   Narrowed (Left * Right),
+                                 when Landin.IR.Bitwise_And =>
+                                   Narrowed (Left and Right),
+                                 when Landin.IR.Bitwise_Xor =>
+                                   Narrowed (Left xor Right),
+                                 when Landin.IR.Bitwise_Or =>
+                                   Narrowed (Left or Right),
+                                 when Landin.IR.Shift_Left =>
+                                   (if Exhausted then 0
+                                    else Narrowed
+                                           (Left * 2 ** Natural (Right))),
+                                 --  A negative arithmetic shift is the
+                                 --  complement of the logical shift of the
+                                 --  complement, and every complement in
+                                 --  that sentence is at this type's width
+                                 --  rather than at the pattern's 64.
+                                 when Landin.IR.Shift_Right =>
+                                   (if Exhausted then 0
+                                    elsif Signed and then A < 0
+                                    then Narrowed
+                                           (not (Mask (not Left, Bits)
+                                                 / 2 ** Natural (Right)))
+                                    else Narrowed
+                                           (Left / 2 ** Natural (Right))),
+                                 when Landin.IR.Equal_To => Truth (A = B),
+                                 when Landin.IR.Not_Equal_To =>
+                                   Truth (A /= B),
+                                 when Landin.IR.Less_Than => Truth (A < B),
+                                 when Landin.IR.Less_Or_Equal =>
+                                   Truth (A <= B),
+                                 when Landin.IR.Greater_Than =>
+                                   Truth (A > B),
+                                 when others => Truth (A >= B));
+                        end;
+
+                     when Landin.IR.Leave =>
+                        Answer := Of_Value (Operand_Of (Value, 1));
+
+                     when Landin.IR.Call | Landin.IR.Store_Datum
+                        | Landin.IR.Jump | Landin.IR.Branch =>
+                        --  [1940] admits none of these in a module value,
+                        --  and [1830] refuses a call there by name.
+                        raise Compiler_Defect
+                          with "a module value reached the backend holding "
+                               & Landin.IR.Opcode'Image (Op);
+                  end case;
+               end;
+            end loop;
+         end loop;
+
+         Fold_Of (Natural (Item)) := Answer;
+         Fold_At (Natural (Item)) := Settled;
+         return Answer;
+      end Folded;
+
+      --  How wide a store the assembler is asked for, at each size.
+      function Directive (Size : Held_Size) return String
+        is (case Size is
+               when Landin.Targets.Byte_1 => ".byte",
+               when Landin.Targets.Byte_2 => ".word",
+               when Landin.Targets.Byte_4 => ".long",
+               when Landin.Targets.Byte_8 => ".quad");
+
+      procedure Emit_Datum (Item : Landin.IR.Item_Id);
+
+      procedure Emit_Datum (Item : Landin.IR.Item_Id) is
+         Kind : constant Landin.Types.Scalar_Name :=
+           Landin.IR.Result_Of (Of_Unit, Item);
+         Held : constant Held_Size := Size_Of (Kind, Facts);
+         --  A negative value is written as one rather than as the pattern
+         --  it becomes, because the assembler is the thing that knows how
+         --  wide the store is and both spellings assemble the same bytes.
+         --  The checker has already refused a fold this type cannot hold.
+         Written : constant String :=
+           Trimmed (Landin.Types.Folded'Image (Folded (Item)));
+         Bytes : constant String :=
+           Trimmed (Positive'Image (Landin.Targets.Bytes (Held)));
+      begin
+         if Landin.Resolution.Is_Public
+              (Meanings, Landin.IR.Declares (Of_Unit, Item))
+         then
+            Put (Character'Val (9) & ".globl " & Symbol (Item));
+         end if;
+
+         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put (Character'Val (9) & ".align "
+              & Trimmed
+                  (Landin.Targets.Byte_Alignment'Image
+                     (Landin.Targets.Alignment_Of (Facts, Held))));
+         Put (Symbol (Item) & ":");
+         Emit (Directive (Held) & " " & Written);
+         Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
+      end Emit_Datum;
+
+      Any_Data : Boolean := False;
+
    begin
       Put (Character'Val (9) & ".text");
 
@@ -752,11 +1145,27 @@ package body Landin.Backend.X86_64 is
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine then
                Emit_Routine (Item);
             else
-               raise Compiler_Defect
-                 with "this backend does not emit a datum yet";
+               Any_Data := True;
             end if;
          end;
       end loop;
+
+      --  Data follows every routine rather than interrupting them, so the
+      --  section directive is written once and the text stays one run.
+      if Any_Data then
+         Put (Character'Val (9) & ".data");
+
+         for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Item : constant Landin.IR.Item_Id :=
+                 Landin.IR.Item_Id (Index);
+            begin
+               if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
+                  Emit_Datum (Item);
+               end if;
+            end;
+         end loop;
+      end if;
 
       --  An executable stack is inherited when nothing says otherwise,
       --  and nothing this compiler emits needs one.

@@ -1,0 +1,59 @@
+answer: i32 = 40 + 2
+derived: i32 = answer + 1
+beyond: u32 = 1 << 40
+masked: u8 = ~0 & 240
+below: i8 = 0 - 100
+widest: u64 = 18446744073709551615
+verdict: bool = 3 > 2
+
+kept: i8 = below >> 3
+wide: i32 = 0 - 256 >> 4
+quotient: i32 = 0 - 43 / 6
+remainder: i32 = 0 - 43 % 6
+
+mut counter: u32
+mut latch: bool
+
+bump: (by: u32) -> (r: u32) =
+    counter = counter + by
+    r = counter
+end bump
+
+public main: () -> (code: i32) =
+    _ = bump(10)
+    _ = bump(32)
+    latch = true
+
+    --  The same expressions the module values folded, run as instructions.
+    --  A fold that disagrees with the hardware reaches the other status.
+    run_below: i8 = below
+    run_wide: i32 = 0 - 256
+    run_dividend: i32 = 0 - 43
+    run_kept: i8 = run_below >> 3
+    run_shift: i32 = run_wide >> 4
+    run_quotient: i32 = run_dividend / 6
+    run_remainder: i32 = run_dividend % 6
+
+    if answer == 42
+        and derived == 43
+        and beyond == 0
+        and masked == 240
+        and below == -100
+        and widest == 18446744073709551615
+        and verdict
+        and counter == 42
+        and latch
+        and kept == run_kept
+        and wide == run_shift
+        and quotient == run_quotient
+        and remainder == run_remainder
+        and kept == -13
+        and wide == -16
+        and quotient == -7
+        and remainder == -1
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
