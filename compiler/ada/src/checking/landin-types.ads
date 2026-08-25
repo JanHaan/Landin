@@ -66,7 +66,14 @@ package Landin.Types is
       U8, U16, U32, U64,
       I8, I16, I32, I64,
       Usize, Isize,
-      Bool);
+      Bool,
+      --  A type a program declared a body for [1795], laid out by
+      --  [0750].  Which one is not here: this package holds what a type
+      --  *is* and an aggregate's identity is which declaration wrote it,
+      --  which is Landin.Checking's to keep for the same reason what
+      --  every node has is.  Two aggregates are one type when they came
+      --  from one declaration and never otherwise [0710].
+      Aggregate);
 
    subtype Scalar_Name is Type_Kind range U8 .. Bool;
 
@@ -76,7 +83,7 @@ package Landin.Types is
 
    --  A type a value can actually have, which is what an expression node
    --  must end the pass with when its subtree is sound.
-   subtype Settled is Type_Kind range Untyped_Integer .. Bool;
+   subtype Settled is Type_Kind range Untyped_Integer .. Aggregate;
 
    function Spelling (Item : Scalar_Name) return String
      is (case Item is

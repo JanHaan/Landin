@@ -928,6 +928,8 @@ item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 11
     9 SUBTRACT u32 <- 7 8
     10 STORE slot 1 <- 9
     11 LEAVE
+file positive/struct-type-is-declared/program.ldn
+unit items 0
 file positive/token-separation/program.ldn
 unit items 1
 item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 7

@@ -1174,6 +1174,41 @@ file positive/statement-inc-dec/program.ldn tokens 19
   53 54 n
   55 58 end
   59 60 f
+file positive/struct-type-is-declared/program.ldn tokens 34
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 i32
+  36 37 y
+  37 38 :
+  39 42 i32
+  43 46 end
+  47 52 point
+  264 270 offset
+  270 271 :
+  272 276 type
+  277 278 =
+  279 282 i32
+  284 288 span
+  288 289 :
+  290 294 type
+  295 296 =
+  297 303 struct
+  308 312 from
+  312 313 :
+  314 320 offset
+  325 327 to
+  327 328 :
+  331 337 offset
+  342 345 tag
+  345 346 :
+  348 350 u8
+  351 354 end
+  355 359 span
 file positive/token-separation/program.ldn tokens 17
   0 1 f
   1 2 :
@@ -2616,6 +2651,14 @@ file negative/shift-amount-takes-the-left-type/program.ldn tokens 21
   37 40 300
   41 44 end
   45 46 f
+file negative/struct-needs-a-field/program.ldn tokens 7
+  0 5 empty
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  21 24 end
+  25 30 empty
 file negative/struct-not-enabled/program.ldn tokens 13
   0 5 point
   5 6 :
@@ -2630,6 +2673,20 @@ file negative/struct-not-enabled/program.ldn tokens 13
   24 25 :
   26 29 i32
   29 30 )
+file negative/struct-value-not-enabled/program.ldn tokens 13
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 i32
+  32 35 end
+  36 41 point
+  43 47 here
+  47 48 :
+  49 54 point
 file negative/text-literal-not-enabled/program.ldn refused no rule spells '"'
 file negative/text-type-not-enabled/program.ldn tokens 5
   0 4 name

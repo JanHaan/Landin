@@ -1,0 +1,15 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+--  [0750] keeps the fields in the order they were written, so the
+--  declaration is also the layout.  A field may name a type declared
+--  elsewhere, because a field's type is a type position like any other.
+offset: type = i32
+
+span: type = struct
+    from: offset
+    to:   offset
+    tag:  u8
+end span
