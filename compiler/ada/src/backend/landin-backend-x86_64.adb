@@ -256,6 +256,80 @@ package body Landin.Backend.X86_64 is
                             Value_Cell (Operand (1)), Slot_Cell (Slot));
                   end;
 
+               when Landin.IR.Bitwise_And
+                  | Landin.IR.Bitwise_Xor
+                  | Landin.IR.Bitwise_Or =>
+                  --  [0330] gives each of these its own integer type back, so
+                  --  every pattern they produce is one the type holds and
+                  --  neither signedness nor a flag has anything to say.
+                  declare
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                     Instruction : constant String :=
+                       (case Op is
+                           when Landin.IR.Bitwise_And => "and",
+                           when Landin.IR.Bitwise_Xor => "xor",
+                           when Landin.IR.Bitwise_Or => "or",
+                           when others => raise Program_Error);
+                  begin
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     Emit (Instruction & Suffix (Held) & " "
+                           & Value_Cell (Operand (2)) & ", "
+                           & Accumulator (Held));
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", "
+                           & Value_Cell (Value));
+                  end;
+
+               when Landin.IR.Logical_Not =>
+                  --  [1870] fixes a bool at zero or one, so the low bit is
+                  --  the whole value and `not` over the byte would give 254
+                  --  for `not false`.
+                  Emit ("movb " & Value_Cell (Operand (1)) & ", %al");
+                  Emit ("xorb $1, %al");
+                  Emit ("movb %al, " & Value_Cell (Value));
+
+               when Landin.IR.Negation =>
+                  --  [1890] gives unary minus its own integer type back, so
+                  --  the lowest signed value has no negation the type holds
+                  --  and no unsigned value but zero has one at all.  `neg`
+                  --  reports the first as overflow and the second as carry.
+                  declare
+                     Kind : constant Landin.Types.Integer_Name :=
+                       Landin.IR.Result_Of (Of_Unit, Item, Value);
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                     Next : constant String := Value_Label (Value);
+                  begin
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     Emit ("neg" & Suffix (Held) & " " & Accumulator (Held));
+                     Emit ((if Landin.Types.Is_Signed (Kind)
+                            then "jno " else "jnc ") & Next);
+                     Emit ("ud2");
+                     Put (Next & ":");
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", "
+                           & Value_Cell (Value));
+                  end;
+
+               when Landin.IR.Complement =>
+                  --  [0330]'s `~` gives its own type back, so every pattern
+                  --  it can produce is one the type holds and no edge is
+                  --  needed.
+                  declare
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                  begin
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (1)) & ", "
+                           & Accumulator (Held));
+                     Emit ("not" & Suffix (Held) & " " & Accumulator (Held));
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", "
+                           & Value_Cell (Value));
+                  end;
+
                when Landin.IR.Add | Landin.IR.Subtract =>
                   declare
                      Kind : constant Landin.Types.Integer_Name :=

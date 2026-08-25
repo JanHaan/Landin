@@ -1,0 +1,46 @@
+public main: () -> (code: i32) =
+    complement_8: u8 = ~0
+    complement_32: i32 = ~0
+
+    positive_8: i8 = 42
+    zero_8: u8 = 0
+    large_64: i64 = 4000000000
+    negation_8: i8 = -positive_8
+    negation_zero: u8 = -zero_8
+    negation_64: i64 = -large_64
+
+    and_32: i32 = 4080 & 255
+    xor_32: i32 = 4080 ^ 255
+    or_32: i32 = 4080 | 255
+    and_8: u8 = 240 & 63
+    xor_8: u8 = 240 ^ 63
+    or_8: u8 = 240 | 63
+    and_64: u64 = 18446744073709551614 & 255
+    xor_64: u64 = 18446744073709551614 ^ 255
+    or_64: u64 = 18446744073709551614 | 1
+
+    truth: bool = not false
+    falsehood: bool = not true
+
+    if complement_8 == 255
+        and complement_32 == -1
+        and negation_8 == -42
+        and negation_zero == 0
+        and negation_64 == -4000000000
+        and and_32 == 240
+        and xor_32 == 3855
+        and or_32 == 4095
+        and and_8 == 48
+        and xor_8 == 207
+        and or_8 == 255
+        and and_64 == 254
+        and xor_64 == 18446744073709551361
+        and or_64 == 18446744073709551615
+        and truth
+        and not falsehood
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

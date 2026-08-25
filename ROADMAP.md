@@ -1048,7 +1048,8 @@ frame cell is not an aggregate, and what it settles must agree with this.
 
 What is emitted so far is the straight-line kernel -- a literal, a truth, a
 slot read and written, ordinary and wrapping add, subtract and multiply,
-division, remainder, all six comparisons, a jump, a branch and a return --
+division, remainder, the unary and bitwise operators, all six comparisons, a
+jump, a branch and a return --
 against a prologue that sets up [1550]'s frame pointer and stores [1650]'s
 argument registers into their parameter slots. Ordinary add and subtract use
 the result type's width, test signed overflow or unsigned carry/borrow before
@@ -1062,12 +1063,23 @@ low-width result. Division and remainder guard an unknown zero divisor and
 reach `ud2` before `div` or `idiv`; signed division likewise recognizes its
 minimum over minus one and traps deliberately. Signed remainder recognizes the
 same pair as its specified zero instead, because executing `idiv` would
-incidentally fault. A comparison loads its left operand and uses GAS's
+incidentally fault.
+
+Unary minus is checked on the same footing, and that is [1890]'s doing rather
+than a new rule: it gives its own integer type back, so the lowest signed value
+has no negation the type holds and no unsigned value but zero has one at all.
+`neg` reports the first as overflow and the second as carry, so one instruction
+answers both without a comparison. [0330]'s `~`, `&`, `^` and `|` cannot leave
+their own type, so they carry no edge and no signed variant. [0340]'s `not` is
+the one that is not a width-wide operation: [1870] fixes a bool at zero or one,
+so it flips the low bit and a `notb` would give 254 for `not false`.
+
+A comparison loads its left operand and uses GAS's
 `cmp right, left` order at the operands'
 width, then materializes [1890]'s one-byte bool with equality or the appropriate
 signed or unsigned ordering condition. `bool` ordering uses its specified zero
 and one as unsigned values. Any other opcode raises a compiler defect rather
-than emitting something plausible. The remaining arithmetic, calls and the
+than emitting something plausible. Shifts, calls and the
 module data section remain. The remaining parts of the obligations above are
 both variable-shift cases: a negative amount must trap, while an amount at or
 past the width must yield zero instead of the count x86-64 would mask.
@@ -1200,6 +1212,10 @@ unsigned quotient and remainder operations at all four fixed widths, including
 negative truncation toward zero and a remainder with the dividend's sign.
 `runtime/minimum-remainder-minus-one-is-zero` executes the non-trapping special
 case at every signed width, rather than merely finding its branch in text.
+`runtime/unary-and-bitwise-exit-with-their-results` negates a signed, an
+unsigned zero and a 64-bit value, complements at two widths, applies each
+bitwise operator at 8, 32 and 64 bits, and reads both directions of `not`, so a
+width-wide complement standing in for `not` reaches the other status.
 Their programs are held to the grammar exactly as a positive fixture's is,
 since they are legal source the compiler must accept; `check.py` derives each
 and reports a fixture the grammar cannot.
