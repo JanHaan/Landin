@@ -43,6 +43,7 @@ Fixture classes, and the directory each uses:
 | `class` | yes | must match the directory the fixture sits in |
 | `summary` | yes | one line, what the fixture proves |
 | `program` | no | the `.ldn` program the fixture runs |
+| `with` | no | the rest of the module, when one file is not enough |
 | `expect` | no | the file holding the expected bytes |
 | `args` | no | the arguments `refine` is run with |
 | `status` | no | the exit status `refine` must produce (default 0) |
@@ -69,6 +70,16 @@ so `float-literal-not-enabled` names `L0010, L0010` -- once for the type and
 once for the literal. `check.py` holds every name in it to the catalogue, and
 refuses a negative fixture with a program that names none; the parser suite
 scans and parses the program and holds the report to the exact sequence.
+
+`with` is how a fixture is more than one file. [1840] says the module scope
+is "every file compiled together", so a claim about it cannot be made by a
+fixture that can only name one; `program` stays the file the fixture is named
+for and `with` is handed to `refine` after it, in the order written. Naming
+the rest of a module with no `program` to be the rest of is a reported fault,
+and `check.py` holds every file either key names to being there -- a name
+pointing at nothing would compile one file while claiming to have compiled
+two. Every `.ldn` in a fixture directory is held to the grammar already, so
+the extra files are derived like any other.
 
 `constructs` is what R1.90 indexes the corpus by, and it is a written list
 rather than a reading of the summary. A citation in prose is prose: it is

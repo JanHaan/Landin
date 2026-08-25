@@ -68,6 +68,9 @@ package body Landin.Testing.Fixtures is
    function Constructs (Item : Fixture) return String
      is (Unbounded.To_String (Item.Made_Of));
 
+   function With_Sources (Item : Fixture) return String
+     is (Unbounded.To_String (Item.Beside));
+
    function Stream (Item : Fixture) return Stream_Choice is (Item.Stream);
 
    function Count (In_Catalogue : Catalogue) return Natural
@@ -150,6 +153,7 @@ package body Landin.Testing.Fixtures is
       Seen_Status  : Boolean := False;
       Seen_Traps   : Boolean := False;
       Seen_Constructs : Boolean := False;
+      Seen_With    : Boolean := False;
       Seen_Stream  : Boolean := False;
       Seen_Lex     : Boolean := False;
       Seen_Codes   : Boolean := False;
@@ -310,6 +314,19 @@ package body Landin.Testing.Fixtures is
                   Complain ("stream is not output or merged: " & Value);
                end if;
 
+            elsif Key = "with" then
+               if Seen_With then
+                  Complain ("duplicate key: with");
+                  return;
+               end if;
+               Seen_With := True;
+
+               if Value'Length = 0 then
+                  Complain ("with names no file");
+               else
+                  Item.Beside := Unbounded.To_Unbounded_String (Value);
+               end if;
+
             elsif Key = "constructs" then
                if Seen_Constructs then
                   Complain ("duplicate key: constructs");
@@ -408,6 +425,7 @@ package body Landin.Testing.Fixtures is
                Status  => 0,
                Traps   => False,
                Made_Of => Unbounded.Null_Unbounded_String,
+               Beside  => Unbounded.Null_Unbounded_String,
                Stream  => Merged);
 
       for Index in Content'Range loop
@@ -458,6 +476,13 @@ package body Landin.Testing.Fixtures is
       --  language -- an unknown option, the identity text, an
       --  implementation-side note -- and names no construct for the same
       --  reason.
+      --  The rest of a module is only meaningful beside the file the
+      --  fixture is named for.
+      if Seen_With and then not Seen_Program then
+         Complain ("with names the rest of a module and there is no"
+                   & " program to be the rest of");
+      end if;
+
       if Seen_Program and then not Seen_Constructs then
          Complain
            ("a fixture with a program says which constructs it is about");

@@ -26,7 +26,7 @@
 0100   tour        -                                  Several names may share one declaration
 0110   tour        accepted emitted                   Left of ':' is always the name being introduced
 0120   tour        refused refused-by-name            Types are declared like any other value, with 'type'
-0130   tour        accepted emitted                   Order inside a module does not matter
+0130   tour        accepted emitted executed          Order inside a module does not matter
 0140   tour        accepted emitted                   An inner scope may shadow an outer name
 0150   tour        refused                            Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
 0160   tour        refused                            Pointer-width integers: usize, isize
