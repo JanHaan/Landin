@@ -1,0 +1,58 @@
+--  [1810]'s statement forms, executed.  Every one of these was emitted and
+--  none had ever run: the corpus proved the backend produced assembly for
+--  them and nothing proved the assembly was right.
+
+--  `return when` leaves early, and the named return keeps what it held.
+early: (x: i32) -> (r: i32) =
+    r = 7
+    return when x == 0
+    r = 9
+end early
+
+--  A bare `return` in the middle of a body does the same without asking.
+plain: (x: i32) -> (r: i32) =
+    r = 1
+
+    if x > 0 then
+        r = 2
+        return
+    end if
+
+    r = 3
+end plain
+
+--  An `elsif` chain picks exactly one arm.
+which_arm: (x: i32) -> (r: i32) =
+    if x > 0 then
+        r = 1
+    elsif x < 0 then
+        r = 2
+    else
+        r = 3
+    end if
+end which_arm
+
+--  [1900]: `inc` says what `x = x + 1` says, and `dec` the other way.
+counted: () -> (r: i32) =
+    mut total: i32 = 40
+    inc total
+    inc total
+    dec total
+    r = total
+end counted
+
+public main: () -> (code: i32) =
+    if early(0) == 7
+        and early(5) == 9
+        and plain(1) == 2
+        and plain(0) == 3
+        and which_arm(4) == 1
+        and which_arm(0 - 4) == 2
+        and which_arm(0) == 3
+        and counted() == 41
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
