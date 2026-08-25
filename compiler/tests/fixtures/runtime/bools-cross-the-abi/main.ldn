@@ -1,0 +1,22 @@
+--  [1870]'s bool is one byte, and a byte is what crosses [1650]'s ABI in
+--  both directions.  Every call the corpus ran until now carried integers.
+agrees: (a: bool, b: u8) -> (r: bool) =
+    r = a and b == 7
+end agrees
+
+both: (a: bool, b: bool) -> (r: bool) =
+    r = a or b
+end both
+
+public main: () -> (code: i32) =
+    if agrees(true, 7)
+        and not agrees(false, 7)
+        and not agrees(true, 8)
+        and both(false, true)
+        and not both(false, false)
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
