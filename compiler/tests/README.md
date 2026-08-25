@@ -93,7 +93,8 @@ everywhere.
 | unit | a note of what an implementation-side case covers; the case itself lives in `compiler/ada/tests` |
 | negative, end-to-end | executed: `refine` is run with `args`, and its bytes and exit status are compared with `expect` and `status` |
 | runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` -- or, with `traps: yes`, it is held to having ended without returning one |
-| positive, ABI, debugger | reserved; no fixture yet. A positive fixture needs a program the compiler can accept, so the first ones arrive with R1; ABI and debugger fixtures arrive with the work that produces an ABI and debug information |
+| positive | executed: the program is scanned and parsed with nothing reported, the grammar must derive it, and `refine` is asked to emit assembly for it |
+| ABI, debugger | reserved; no fixture yet. They arrive with the work that produces an ABI and debug information |
 
 A class with no fixtures is the normal state early in the roadmap, and an
 empty class directory is not a fault. A fixture that records an expectation
@@ -113,6 +114,16 @@ A runtime fixture carries `program` and `status` and neither `expect` nor
 what the compiled program did. One without a `program` is a reported fault,
 for the same reason `expect` without `args` is: a status nobody produces is
 dead data.
+
+Accepted, emitted and executed are three claims and not one, which is why
+three classes make them. A positive fixture is a program the compiler must
+accept, and asking only that was how four of [1810]'s statement forms reached
+R1.80's audit having never been handed to a backend: every stage accepted
+them and no case asked for a byte of assembly. So the positive class now
+emits as well, and a construct that reaches a compiler defect on the way to
+`.s` fails there rather than waiting for a runtime fixture to happen to use
+it. It is still not executed -- most of the corpus is a fragment with no
+entry point to run, and a claim about a machine belongs to the runtime class.
 
 `traps: yes` replaces `status` rather than joining it. `spec.md` [1960] says a
 trap is synchronous and non-returning and that its operating-system signal or

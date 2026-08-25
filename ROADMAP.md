@@ -1487,6 +1487,16 @@ compiles several sources as one module. And a refusal that only a backend can
 raise has no home in the negative corpus, because a negative fixture is run
 without `--emit`; `L0503` is an end-to-end fixture for that reason.
 
+The first of those is closed. Every positive fixture is now handed to a
+backend as well as to a parser: the suite runs `refine --emit=asm` over all
+of them and fails on a program that was accepted and could not be emitted,
+carrying `refine`'s own report. It is measured rather than assumed -- with
+[1650]'s register count temporarily cut to one, the case reports
+`positive/call-fills-every-parameter: accepted but not emitted` and names
+`L0503` as the reason. What a positive fixture still does not do is run;
+that is the runtime class, and the distinction is the one this item's exit
+evidence now asks each row to state.
+
 Exit evidence: positive, negative, verifier and runtime cases all run through
 the real driver; the construct matrix has no unexplained kernel row, and each
 row says whether the construct was accepted, emitted or executed.
