@@ -993,9 +993,17 @@ package body Landin.Stages.Checking is
          Value   : out Ty.Folded;
          Known   : out Boolean);
 
-      --  Deep enough for any module value a person writes, and bounded so
-      --  that a chain [1940] has already reported cannot recur forever.
-      Fold_Limit : constant Natural := 64;
+      --  Which module bindings this fold is standing inside.  [1940] says a
+      --  chain that comes back to where it began names nothing at all, and
+      --  the inference guard above catches only the chains that have a type
+      --  to infer: `a: i32 = b + 1` beside `b: i32 = a + 1` writes both
+      --  types down, so nothing is ever Underway and the cycle reached this
+      --  walk unreported.  It was found by the backend meeting it, which is
+      --  three stages too late for a rule the checker owns.
+      Folding : array (Res.Declaration_Id'(1)
+                       .. Res.Declaration_Id
+                            (Res.Declaration_Count (Meanings.all)))
+                  of Boolean := [others => False];
 
       procedure Fold
         (Of_Tree : Syn.Tree;
@@ -1084,7 +1092,7 @@ package body Landin.Stages.Checking is
          Value := 0;
          Known := False;
 
-         if Node = Syn.No_Node or else Depth > Fold_Limit then
+         if Node = Syn.No_Node then
             return;
          end if;
 
@@ -1141,13 +1149,42 @@ package body Landin.Stages.Checking is
                              not null access constant Syn.Tree :=
                                Tree_For
                                  (Res.Source_Of (Meanings.all, Means));
+                           Theirs : constant Syn.Node_Id :=
+                             Res.Node_Of (Meanings.all, Means);
                         begin
+                           if Folding (Means) then
+                              --  [1940]: the report names the declaration
+                              --  the chain came back to, because that is
+                              --  the one place in it the reader is
+                              --  standing.
+                              Bad.Report
+                                (Item    =>
+                                   Bad.Not_Known_At_Compile_Time,
+                                 Source  =>
+                                   Res.Source_Of (Meanings.all, Means),
+                                 Where   =>
+                                   Syn.Anchor (Their_Tree.all, Theirs),
+                                 Message => "the value of `"
+                                            & Spelled
+                                                (Syn.Name
+                                                   (Their_Tree.all,
+                                                    Theirs))
+                                            & "` is worked out from"
+                                            & " itself",
+                                 Note    => "[1940]: a chain that comes"
+                                            & " back to where it began"
+                                            & " names nothing at all",
+                                 Into    => Found);
+                              Known := False;
+                              return;
+                           end if;
+
+                           Folding (Means) := True;
                            Fold
                              (Their_Tree.all,
-                              Syn.Value_Of
-                                (Their_Tree.all,
-                                 Res.Node_Of (Meanings.all, Means)),
+                              Syn.Value_Of (Their_Tree.all, Theirs),
                               Depth + 1, Value, Known);
+                           Folding (Means) := False;
                         end;
                      end if;
                   end;
