@@ -1338,6 +1338,33 @@ constant so the number cannot disagree with itself. Stack arguments belong
 with the rest of the ABI at R4.40; until then this is a stated limit rather
 than a crash.
 
+The audit's last finding was not this item's to cause and is this item's to
+have exposed. [1940]'s cycle rule was implemented in one place only -- the
+guard that catches a module value whose *type* is being inferred from itself
+-- so `a: i32 = b + 1` beside `b: i32 = a + 1` slipped past it: both write
+their types down, nothing is ever Underway, and the checker's own fold walked
+the chain to its depth limit and returned quietly. `refine` accepted the
+program and said nothing, and the only thing that noticed was this item's
+folder meeting the cycle three stages later and raising a compiler defect.
+The fold now carries its own guard over the declarations it is standing
+inside, and reports [1940]'s refusal naming the declaration the chain came
+back to. A chain of three reports three times, once per member, because each
+member is separately a value no type holds -- which is the rule
+`compiler/tests/README.md` already states about `codes` being a list rather
+than a set.
+
+That guard also retired a depth limit that was doing semantic work it should
+never have done. The fold stopped at sixty-four links and returned quietly,
+which was written when the only thing that could recur forever was a cycle
+[1940] was assumed to have reported already. It was accepting two kinds of
+program in silence: a cycle longer than the limit, and -- worse, because it
+is legal source -- an honest chain longer than it, whose fold was then never
+checked against its type. A chain of three hundred `u8` bindings each one
+more than the last was accepted entire; it now reports the forty-five links
+whose answer no `u8` holds. Nothing bounds the walk now except the cycle
+guard and the parser's own nesting limit, which is where a bound on how deep
+a program may be written belongs.
+
 It has no home in the negative corpus, which is worth recording because the
 next backend-only refusal will meet the same wall. A negative fixture is run
 as `refine program.ldn` with no `--emit`, and this program is accepted there:
