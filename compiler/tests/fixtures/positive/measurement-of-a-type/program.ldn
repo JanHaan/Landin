@@ -2,3 +2,7 @@ width: usize = sizeof u32
 step: usize = alignof u64
 flag: usize = sizeof bool
 here: usize = sizeof usize
+
+--  [1800]'s expression body takes any expression, and a measurement is
+--  one: it had to be asked for before the body parser agreed.
+pointer_width: () -> (r: usize) = sizeof usize end

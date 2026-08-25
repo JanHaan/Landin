@@ -635,7 +635,7 @@ file positive/local-shadows-a-parameter/program.ldn tokens 24
   49 50 x
   51 54 end
   55 56 f
-file positive/measurement-of-a-type/program.ldn tokens 24
+file positive/measurement-of-a-type/program.ldn tokens 38
   0 5 width
   5 6 :
   7 12 usize
@@ -660,6 +660,20 @@ file positive/measurement-of-a-type/program.ldn tokens 24
   90 91 =
   92 98 sizeof
   99 104 usize
+  241 254 pointer_width
+  254 255 :
+  256 257 (
+  257 258 )
+  259 261 ->
+  262 263 (
+  263 264 r
+  264 265 :
+  266 271 usize
+  271 272 )
+  273 274 =
+  275 281 sizeof
+  282 287 usize
+  288 291 end
 file positive/module-binding-with-no-value-reads-zero/program.ldn tokens 44
   0 5 later
   5 6 :
