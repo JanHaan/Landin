@@ -275,6 +275,9 @@ package body Landin.Syntax.Parser is
             function Parse_Type_Declaration
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
+            function Parse_Struct_Body
+              (Named   : Landin.Source.Names.Name_Id;
+               At_Name : Landin.Source.Span) return Node_Id;
             function Parse_Binding
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
@@ -977,10 +980,15 @@ package body Landin.Syntax.Parser is
                      Related => At_Name,
                      Because => "declared here")
                then
-                  Aliased_Type := Parse_Type (False, At_Name);
+                  --  [1795]: a name, or [0670]'s block form.
+                  if Peek = Tok.Kw_Struct then
+                     Aliased_Type := Parse_Struct_Body (Named, At_Name);
+                  else
+                     Aliased_Type := Parse_Type (False, At_Name);
 
-                  if Type_Refused then
-                     Resync_Declaration;
+                     if Type_Refused then
+                        Resync_Declaration;
+                     end if;
                   end if;
                else
                   Resync_Declaration;
@@ -994,6 +1002,76 @@ package body Landin.Syntax.Parser is
                   Named    => Named,
                   Exported => Exported);
             end Parse_Type_Declaration;
+
+            --  `"struct" field+ "end" identifier?` [1795], where a
+            --  field is `identifier ":" type` [0750].  The closing name
+            --  is checked the way a function's is, because a body that
+            --  ends with the wrong name is a reader's mistake worth
+            --  naming rather than a parse that quietly succeeded.
+            function Parse_Struct_Body
+              (Named   : Landin.Source.Names.Name_Id;
+               At_Name : Landin.Source.Span) return Node_Id
+            is
+               Opened : constant Landin.Source.Span := Here;
+               Fields : Slot_Vectors.Vector;
+            begin
+               Advance;
+
+               while Peek = Tok.Identifier loop
+                  declare
+                     Field_Named : Landin.Source.Names.Name_Id;
+                     At_Field    : constant Landin.Source.Span :=
+                       Parse_Declared_Name (Field_Named);
+                     Of_Type     : Node_Id := No_Node;
+                  begin
+                     if Expect
+                          (Wanted  => Tok.Colon,
+                           Message => "a field names its type after `:`",
+                           Note    => "[0750]: a field is a name and a"
+                                      & " type, in the order the layout"
+                                      & " keeps them",
+                           Related => At_Field,
+                           Because => "the field named here")
+                     then
+                        Of_Type := Parse_Type (False, At_Field);
+
+                        if Type_Refused then
+                           Resync_Declaration;
+                           exit;
+                        end if;
+                     end if;
+
+                     Fields.Append
+                       (Add
+                          (Of_Kind  => Field,
+                           At_Token => At_Field,
+                           Extent   => Join (At_Field, After_Previous),
+                           Children => [1 => Of_Type],
+                           Named    => Field_Named));
+                  end;
+               end loop;
+
+               if Natural (Fields.Length) = 0 then
+                  Complain
+                    (Item    => Syn.Type_Expected,
+                     Where   => Here,
+                     Message => "a struct needs at least one field",
+                     Note    => "[0670]: a struct is its fields, and one"
+                                & " with none has no value to describe",
+                     Related => At_Name,
+                     Because => "declared here");
+               end if;
+
+               if Skip_Past_Closer (Named) then
+                  null;
+               end if;
+
+               return Add
+                 (Of_Kind  => Struct_Body,
+                  At_Token => Opened,
+                  Extent   => Join (Opened, After_Previous),
+                  Children => To_List (Fields));
+            end Parse_Struct_Body;
 
             function Parse_Binding
               (Exported  : Boolean;

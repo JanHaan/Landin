@@ -156,6 +156,33 @@ package body Landin.Stages.Checking is
       function Type_At (Of_Tree : Syn.Tree; Written : Syn.Node_Id)
         return Ty.Type_Kind is
       begin
+         --  [0670]'s block form.  Every field's type is checked here,
+         --  because this is the walk that reaches them: a field is a
+         --  binding without a value and nothing else visits one.
+         if Syn.Kind (Of_Tree, Written) = Syn.Struct_Body then
+            for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop
+               declare
+                  Each : constant Syn.Node_Id :=
+                    Syn.Nth_Field (Of_Tree, Written, Index);
+                  Held : constant Ty.Type_Kind :=
+                    Type_At (Of_Tree, Syn.Declared_Type (Of_Tree, Each));
+               begin
+                  if Held = Ty.Aggregate then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Each),
+                        Message => "a field of a struct type is not"
+                                   & " enabled yet",
+                        Refused => Bad.Struct_Value,
+                        Into    => Found);
+                  end if;
+               end;
+            end loop;
+
+            return Ty.Aggregate;
+         end if;
+
          if Syn.Kind (Of_Tree, Written) = Syn.Type_Name then
             return Landin.Checking.Named
               (Types.all, Syn.Name (Of_Tree, Written));
@@ -264,7 +291,35 @@ package body Landin.Stages.Checking is
             return Ty.Undecided;
          end if;
 
-         return Type_At (Of_Tree, Written);
+         declare
+            Held : constant Ty.Type_Kind := Type_At (Of_Tree, Written);
+         begin
+            --  [1795] declares the type; a *value* of one waits for the
+            --  rest of R2.20.  Refused where the value is declared, so
+            --  the report names the binding rather than the type.
+            if Held = Ty.Aggregate
+              and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
+            then
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                  = Ty.Undecided
+               then
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message => "a value of a struct type is not enabled"
+                                & " yet",
+                     Refused => Bad.Struct_Value,
+                     Into    => Found);
+               end if;
+
+               return Ty.Ill_Typed;
+            end if;
+
+            return Held;
+         end;
       end Declared_As_Node;
 
       function Declared_As (Id : Res.Declaration_Id) return Ty.Type_Kind is

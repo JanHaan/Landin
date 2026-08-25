@@ -1,0 +1,6 @@
+class: negative
+summary: [0670] declares a struct type and a value of one waits for the rest of R2.20, so the binding is refused and not the declaration
+constructs: 0670, 1795, 1830
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

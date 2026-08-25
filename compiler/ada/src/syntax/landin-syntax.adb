@@ -27,6 +27,10 @@ package body Landin.Syntax is
             when Binary_Kind              => 2,
             when Error_Type | Type_Name
                | Type_Reference           => 0,
+            --  A struct body's fields are its trailing run; a field's
+            --  one slot is its type.
+            when Struct_Body              => 0,
+            when Field                    => 1,
             when Parameter | Named_Return => 1,
             when If_Arm                   => 2,
             when Block                    => 0);
@@ -161,6 +165,13 @@ package body Landin.Syntax is
 
    function Argument_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      is (Run_Length (Of_Tree, Id));
+
+   function Field_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Field
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
 
    function Nth_Argument
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id

@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 86 with evidence, 112 with neither.
+#  198 constructs, 87 with evidence, 111 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -80,7 +80,7 @@
 0640   tour        -                                  An enumeration is a union of atoms
 0650   tour        refused refused-by-name            Distinct type
 0660   tour        -                                  Range subtype: checked at assignment and conversion
-0670   tour        refused-by-name                    Struct, block form and inline form
+0670   tour        accepted emitted refused refused-by-name Struct, block form and inline form
 0680   tour        -                                  Struct with a variant part
 0690   tour        -                                  A case with no payload is written bare
 0700   tour        -                                  Construction and conversion use the same form
@@ -88,7 +88,7 @@
 0720   tour        -                                  'of' fills every field the literal did not name
 0730   tour        -                                  A register has three kinds of field
 0740   tour        -                                  Access behaviour is data, not keywords
-0750   tour        -                                  Fields keep the order you wrote them
+0750   tour        accepted emitted                   Fields keep the order you wrote them
 0760   tour        -                                  Attributes are prefix words, from a closed set
 0770   tour        -                                  There is no borrow checker and there are no lifetime
 0780   tour        -                                  Parameters are non-escaping by default
