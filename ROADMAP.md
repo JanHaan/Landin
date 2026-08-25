@@ -997,7 +997,7 @@ known-and-does-not-fit. A quotient that does not exist is a stronger case
 than a sum that does not fit, and it was the one getting through.
 
 ### R1.80 — Implement the minimal Linux x86-64 native path
-Status: active
+Status: complete
 Depends on: R1.70, R0.50, R0.70
 
 Implement the scalar data layout, frame-pointer rule, minimum SysV calling
@@ -1447,6 +1447,30 @@ expected status; a program whose divisor is zero only at run time traps
 rather than returning a value, and a shift past the width yields zero on
 hardware that would have masked the count.
 
+Closed against those four clauses one at a time, which is what found the
+three things wrong with them. Deterministic was asserted in this item, in the
+backend's own header and in `compiler/ada/README.md`, and nothing checked it:
+a case now lowers one source through two compilations and compares the text,
+and the emitted bytes were measured identical on macOS arm64 and on Linux
+x86-64 by hand. A seventh parameter met a compiler defect and exited 70,
+which is the one answer an accepted program must never get; it is `L0503`
+now. And [1940]'s cycle rule was implemented for the chains that have a type
+to infer and no others, so a typed one was accepted in silence -- twice over,
+because the fold's depth limit was quietly accepting long chains as well.
+
+The last of those is the shape worth remembering rather than the individual
+bug. Every one of them was found by asking what this item had *proved*
+instead of what it had *built*: every positive fixture emitted assembly, and
+four of [1810]'s statement forms had still never run. Emitting is not
+running, and a corpus that stops at "the compiler accepted it" says nothing
+about what the machine then does.
+
+What is finished is a vertical slice and not a language. R1.90 closes the
+kernel corpus behind it; stack arguments wait for R4.40, `Landin.Checking`'s
+own module fold is still exponential on a chain nobody writes, and a runtime
+fixture still cannot name two source files. Each is recorded above where the
+work that meets it will find it.
+
 ### R1.90 — Close the executable-kernel corpus
 Status: planned
 Depends on: R1.80
@@ -1454,8 +1478,18 @@ Depends on: R1.80
 Tie grammar, diagnostics, syntax, checking, IR and native behavior together in
 one construct-indexed corpus.
 
+R1.80's audit leaves this item three things to start from, each recorded
+where it was found. No positive fixture is executed, only emitted, so the
+matrix has to say for each construct whether it was accepted, emitted or run -- those are three different claims and only the third is
+evidence about a machine. A runtime fixture names one `program`, so a
+multi-file module cannot be expressed as one at all, though the driver
+compiles several sources as one module. And a refusal that only a backend can
+raise has no home in the negative corpus, because a negative fixture is run
+without `--emit`; `L0503` is an end-to-end fixture for that reason.
+
 Exit evidence: positive, negative, verifier and runtime cases all run through
-the real driver; the construct matrix has no unexplained kernel row.
+the real driver; the construct matrix has no unexplained kernel row, and each
+row says whether the construct was accepted, emitted or executed.
 
 ### R1 gate
 
