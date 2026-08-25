@@ -35,6 +35,7 @@ L0303  Live     [1900]: a place that may not be written
 L0304  Live     [1920]: a name used in a way the kernel does not enable
 L0305  Live     [1940]: a module value the compiler cannot know when it reads it
 L0306  Live     [1950]: an operand the operation cannot take, where the compiler knows it
+L0307  Live     [1795]: a chain of aliases that reaches no type
 L0500  Live     [1550]: no assembler and linker for the target on this host
 L0501  Live     [1550]: the platform assembler or linker refused what was emitted
 L0502  Live     [1970]: a hosted program with no `public main: () -> (code: i32)`

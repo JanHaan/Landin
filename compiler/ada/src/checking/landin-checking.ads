@@ -153,6 +153,47 @@ package Landin.Checking is
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
 
+   --  Which declaration wrote the aggregate a node or a declaration has
+   --  the type of.  [0710]: two are one type when this answers the same
+   --  declaration for both, and never otherwise.
+   function Body_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id)
+     return Landin.Provenance.Declaration_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Body_Of
+     (Of_Table : Table; Id : Landin.Provenance.Declaration_Id)
+     return Landin.Provenance.Declaration_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Natural (Id) <= Declaration_Limit (Of_Table);
+
+   procedure Note_Body
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Wrote   : Landin.Provenance.Declaration_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Wrote /= No_Declaration
+                  and then Natural (Wrote) <= Declaration_Limit (Into),
+          Post => Body_Of (Into, Of_Tree, Node) = Wrote;
+
+   procedure Note_Body
+     (Into  : in out Table;
+      Id    : Landin.Provenance.Declaration_Id;
+      Wrote : Landin.Provenance.Declaration_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Id /= No_Declaration
+                  and then Wrote /= No_Declaration
+                  and then Natural (Id) <= Declaration_Limit (Into)
+                  and then Natural (Wrote) <= Declaration_Limit (Into),
+          Post => Body_Of (Into, Id) = Wrote;
+
    --  Says what a node synthesised.  Once: a second Note on one node is a
    --  pass that walked it twice, which is the defect this refuses rather
    --  than the last write silently winning.
@@ -219,10 +260,10 @@ package Landin.Checking is
           Post => (if State_Of (Of_Table, Id) = Settled
                    then Type_Of'Result /= Landin.Types.Undecided);
 
-   --  Opens the inference of a module binding written with [1790]'s `:=`,
-   --  whose type is its value's and whose value may name another module
-   --  binding.  Nothing else needs it: every other declaration the kernel
-   --  has writes its type down, so it settles without opening anything.
+   --  Marks a declaration while its type is being worked out.  [1790]'s
+   --  `:=` may name another inferred module binding, and [1795]'s alias may
+   --  name another alias; in either case reaching an Underway declaration
+   --  is the cycle rather than recursion without an end.
    procedure Begin_Inference
      (Into : in out Table; Id : Declaration_Id)
      with Pre  => Is_Prepared (Into)
@@ -273,11 +314,23 @@ private
    type Scalar_Identities is
      array (Landin.Types.Scalar_Name) of Landin.Source.Names.Name_Id;
 
+   package Body_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Landin.Provenance.Declaration_Id,
+      "="          => Landin.Provenance."=");
+
    type Table is tagged limited record
       Ready        : Boolean := False;
       Node_Types   : Type_Vectors.Vector;
+      --  Which declaration an Aggregate node's type came from.  Empty for
+      --  every other node, and the reason it is a side table rather than
+      --  part of Landin.Types: what a type *is* has no room for which one
+      --  it is, and [0710] makes two aggregates one type exactly when
+      --  they came from one declaration.
+      Node_Bodies  : Body_Vectors.Vector;
       Runs         : Run_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
+      Bodies       : Body_Vectors.Vector;
       Scalars      : Scalar_Identities :=
         [others => Landin.Source.Names.No_Name];
    end record;

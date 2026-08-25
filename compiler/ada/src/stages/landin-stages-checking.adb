@@ -278,7 +278,19 @@ package body Landin.Stages.Checking is
                return Ty.Ill_Typed;
             end if;
 
-            return Settled_Type (Means);
+            declare
+               Held : constant Ty.Type_Kind := Settled_Type (Means);
+            begin
+               --  [0710]: which aggregate this is, carried from the
+               --  declaration that wrote it to every place that names it.
+               if Held = Ty.Aggregate then
+                  Landin.Checking.Note_Body
+                    (Types.all, Of_Tree, Written,
+                     Landin.Checking.Body_Of (Types.all, Means));
+               end if;
+
+               return Held;
+            end;
          end;
       end Type_At;
 
@@ -332,7 +344,33 @@ package body Landin.Stages.Checking is
             return Ty.Not_Typed;
          end if;
 
-         return Declared_As_Node (Of_Tree.all, Node);
+         declare
+            Held : constant Ty.Type_Kind :=
+              Declared_As_Node (Of_Tree.all, Node);
+         begin
+            --  A struct body writes a new identity.  A declaration that
+            --  names an existing aggregate is D15's alias and carries the
+            --  identity the type position was given.
+            if Held = Ty.Aggregate then
+               if Syn.Kind
+                    (Of_Tree.all, Syn.Declared_Type (Of_Tree.all, Node))
+                  = Syn.Struct_Body
+               then
+                  Landin.Checking.Note_Body (Types.all, Id, Id);
+                  Landin.Checking.Note_Body
+                    (Types.all, Of_Tree.all,
+                     Syn.Declared_Type (Of_Tree.all, Node), Id);
+               else
+                  Landin.Checking.Note_Body
+                    (Types.all, Id,
+                     Landin.Checking.Body_Of
+                       (Types.all, Of_Tree.all,
+                        Syn.Declared_Type (Of_Tree.all, Node)));
+               end if;
+            end if;
+
+            return Held;
+         end;
       end Declared_As;
 
       function Settled_Type (Id : Res.Declaration_Id) return Ty.Type_Kind is
@@ -346,30 +384,58 @@ package body Landin.Stages.Checking is
                return Landin.Checking.Type_Of (Types.all, Id);
 
             when Landin.Checking.Underway =>
-               --  [1940]: a chain of module values that comes back to
-               --  where it began names nothing at all, and this is the one
-               --  place in it the reader is standing.
+               --  A chain came back to where it began.  [1940] says that
+               --  for module values; [1795] says an alias has to reach a
+               --  type rather than itself.
                declare
                   Of_Tree : constant not null access constant Syn.Tree :=
                     Tree_For (Res.Source_Of (Meanings.all, Id));
                   Node : constant Syn.Node_Id :=
                     Res.Node_Of (Meanings.all, Id);
                begin
-                  Bad.Report
-                    (Item    => Bad.Not_Known_At_Compile_Time,
-                     Source  => Res.Source_Of (Meanings.all, Id),
-                     Where   => Syn.Anchor (Of_Tree.all, Node),
-                     Message => "the value of `"
-                                & Spelled (Syn.Name (Of_Tree.all, Node))
-                                & "` is worked out from itself",
-                     Note    => "[1940]: a chain that comes back to where"
-                                & " it began names nothing at all",
-                     Into    => Found);
+                  if Res.Sort_Of (Meanings.all, Id) = Res.Module_Type then
+                     Bad.Report
+                       (Item    => Bad.Cyclic_Type_Alias,
+                        Source  => Res.Source_Of (Meanings.all, Id),
+                        Where   => Syn.Anchor (Of_Tree.all, Node),
+                        Message => "the type alias `"
+                                   & Spelled (Syn.Name (Of_Tree.all, Node))
+                                   & "` eventually names itself",
+                        Note    => "[1795]: an alias chain has to reach a"
+                                   & " scalar or a struct body",
+                        Into    => Found);
+                  else
+                     Bad.Report
+                       (Item    => Bad.Not_Known_At_Compile_Time,
+                        Source  => Res.Source_Of (Meanings.all, Id),
+                        Where   => Syn.Anchor (Of_Tree.all, Node),
+                        Message => "the value of `"
+                                   & Spelled (Syn.Name (Of_Tree.all, Node))
+                                   & "` is worked out from itself",
+                        Note    => "[1940]: a chain that comes back to where"
+                                   & " it began names nothing at all",
+                        Into    => Found);
+                  end if;
                end;
 
                return Ty.Ill_Typed;
 
             when Landin.Checking.Untouched =>
+               if Res.Sort_Of (Meanings.all, Id) = Res.Module_Type then
+                  --  A forward type alias reaches here before pass one's
+                  --  outer walk reaches the declaration it names.  Settle
+                  --  that written type now; Infer is only [1790]'s `:=`
+                  --  binding and would ask a type declaration for a value.
+                  Landin.Checking.Begin_Inference (Types.all, Id);
+
+                  declare
+                     Held : constant Ty.Type_Kind := Declared_As (Id);
+                  begin
+                     Landin.Checking.Settle (Types.all, Id, Held);
+                     return Held;
+                  end;
+               end if;
+
                Infer (Id);
                return (if Landin.Checking.State_Of (Types.all, Id)
                           = Landin.Checking.Settled
@@ -1971,13 +2037,29 @@ package body Landin.Stages.Checking is
       for Id in Res.Declaration_Id'(1)
                 .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
       loop
-         declare
-            Written : constant Ty.Type_Kind := Declared_As (Id);
-         begin
-            if Written /= Ty.Undecided then
-               Landin.Checking.Settle (Types.all, Id, Written);
+         if Landin.Checking.State_Of (Types.all, Id)
+            = Landin.Checking.Untouched
+         then
+            if Res.Sort_Of (Meanings.all, Id) = Res.Module_Type then
+               --  Settled_Type marks an alias before following it, so a
+               --  cycle returns to an Underway declaration rather than
+               --  recursively settling the declaration the outer pass is
+               --  still visiting.
+               declare
+                  Written : constant Ty.Type_Kind := Settled_Type (Id);
+               begin
+                  pragma Unreferenced (Written);
+               end;
+            else
+               declare
+                  Written : constant Ty.Type_Kind := Declared_As (Id);
+               begin
+                  if Written /= Ty.Undecided then
+                     Landin.Checking.Settle (Types.all, Id, Written);
+                  end if;
+               end;
             end if;
-         end;
+         end if;
       end loop;
 
       --  Pass two: [1790]'s `:=` form, in declaration order so a cycle is

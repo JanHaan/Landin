@@ -48,6 +48,7 @@ package body Landin.Checking is
 
             for Unused in 1 .. Held loop
                Into.Node_Types.Append (Landin.Types.Undecided);
+               Into.Node_Bodies.Append (Landin.Provenance.No_Declaration);
             end loop;
          end;
       end loop;
@@ -101,6 +102,58 @@ package body Landin.Checking is
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Landin.Types.Type_Kind
      is (Of_Table.Node_Types (Slot (Of_Table, Of_Tree, Node)));
+
+   function Body_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id)
+     return Landin.Provenance.Declaration_Id
+     is (Of_Table.Node_Bodies (Slot (Of_Table, Of_Tree, Node)));
+
+   function Body_Of
+     (Of_Table : Table; Id : Landin.Provenance.Declaration_Id)
+     return Landin.Provenance.Declaration_Id
+     is (if Id /= Landin.Provenance.No_Declaration
+           and then Natural (Id) <= Natural (Of_Table.Bodies.Length)
+         then Of_Table.Bodies (Natural (Id))
+         else Landin.Provenance.No_Declaration);
+
+   procedure Note_Body
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Wrote   : Landin.Provenance.Declaration_Id)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Into.Node_Bodies (Where) /= Landin.Provenance.No_Declaration
+        and then Into.Node_Bodies (Where) /= Wrote
+      then
+         raise Landin.Compiler_Defect with
+           "one node was assigned two aggregate type identities";
+      end if;
+
+      Into.Node_Bodies (Where) := Wrote;
+   end Note_Body;
+
+   procedure Note_Body
+     (Into  : in out Table;
+      Id    : Landin.Provenance.Declaration_Id;
+      Wrote : Landin.Provenance.Declaration_Id) is
+   begin
+      while Natural (Into.Bodies.Length) < Natural (Id) loop
+         Into.Bodies.Append (Landin.Provenance.No_Declaration);
+      end loop;
+
+      if Into.Bodies (Natural (Id)) /= Landin.Provenance.No_Declaration
+        and then Into.Bodies (Natural (Id)) /= Wrote
+      then
+         raise Landin.Compiler_Defect with
+           "one declaration was assigned two aggregate type identities";
+      end if;
+
+      Into.Bodies (Natural (Id)) := Wrote;
+   end Note_Body;
 
    procedure Note
      (Into    : in out Table;

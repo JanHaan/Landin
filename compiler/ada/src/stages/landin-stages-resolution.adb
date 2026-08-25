@@ -46,9 +46,10 @@ package body Landin.Stages.Resolution is
         is (Landin.Source.Names.Spelling (Spellings.all, Of_Name));
 
       procedure Declare_One
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         Inside  : Landin.Resolution.Scope_Id);
+        (Of_Tree         : Syn.Tree;
+         Node            : Syn.Node_Id;
+         Inside          : Landin.Resolution.Scope_Id;
+         Resolve_Declared : Boolean := True);
 
       procedure Resolve
         (Of_Tree : Syn.Tree;
@@ -65,9 +66,10 @@ package body Landin.Stages.Resolution is
       --  and one duplicate is one report rather than a second entry every
       --  later stage would have to choose between.
       procedure Declare_One
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         Inside  : Landin.Resolution.Scope_Id)
+        (Of_Tree          : Syn.Tree;
+         Node             : Syn.Node_Id;
+         Inside           : Landin.Resolution.Scope_Id;
+         Resolve_Declared : Boolean := True)
       is
          Named : constant Landin.Source.Names.Name_Id :=
            Syn.Name (Of_Tree, Node);
@@ -110,9 +112,10 @@ package body Landin.Stages.Resolution is
             --  the type a declaration writes down is resolved like any
             --  other name.  Before it, every type was one of the eleven
             --  the parser knew and there was nothing here to look up.
-            if Syn.Kind (Of_Tree, Node)
-               in Syn.Binding | Syn.Parameter | Syn.Named_Return
-                  | Syn.Type_Declaration
+            if Resolve_Declared
+              and then Syn.Kind (Of_Tree, Node)
+                       in Syn.Binding | Syn.Parameter | Syn.Named_Return
+                          | Syn.Type_Declaration
             then
                Resolve (Of_Tree, Syn.Declared_Type (Of_Tree, Node),
                         Inside);
@@ -281,7 +284,8 @@ package body Landin.Stages.Resolution is
                   then
                      Declare_One
                        (Of_Tree.all, Node,
-                        Landin.Resolution.Program_Scope);
+                        Landin.Resolution.Program_Scope,
+                        Resolve_Declared => False);
                   end if;
                end;
             end loop;
@@ -305,13 +309,21 @@ package body Landin.Stages.Resolution is
                begin
                   case Syn.Kind (Of_Tree.all, Node) is
                      when Syn.Type_Declaration =>
-                        --  Declare_One already resolved the type it
-                        --  names, in the scope it was declared in.
-                        null;
+                        --  Every module name exists before any type position
+                        --  is read, because [1840]'s module scope is a set.
+                        Resolve
+                          (Of_Tree.all,
+                           Syn.Declared_Type (Of_Tree.all, Node),
+                           Landin.Resolution.Program_Scope);
 
                      when Syn.Binding =>
-                        --  A module binding's value is read in the module
-                        --  scope, which is the whole of it.
+                        --  Both halves are read only after every module name
+                        --  exists.  The value and its written type therefore
+                        --  obey the same set rule.
+                        Resolve
+                          (Of_Tree.all,
+                           Syn.Declared_Type (Of_Tree.all, Node),
+                           Landin.Resolution.Program_Scope);
                         Resolve
                           (Of_Tree.all,
                            Syn.Value_Of (Of_Tree.all, Node),

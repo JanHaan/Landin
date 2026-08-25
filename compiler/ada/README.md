@@ -52,7 +52,7 @@ replaced.
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and never freed | hand out a tree that can be copied or written to |
 | `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the eleven types, and each one's width against a target | hold a machine fact of its own, or ask the host for one |
-| `Landin.Checking` | what type every node and every declaration has | decide a rule, or hold a width |
+| `Landin.Checking` | what type every node and declaration has, including a nominal aggregate's declaration identity | decide a rule, or hold a width |
 | `Landin.IR` | the target-neutral instructions: items, slots, blocks, values, and the only construction of one | hold a scope tree, name a machine, or ask a width |
 | `Landin.Backend` | where a routine's cells live, counted in target bytes | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.X86_64` | the assembly text for one target, and every register in it | decide a layout, write a file, or run a tool |
