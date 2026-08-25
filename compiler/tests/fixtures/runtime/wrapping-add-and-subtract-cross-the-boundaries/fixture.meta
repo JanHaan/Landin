@@ -1,6 +1,6 @@
 class: runtime
 summary: wrapping addition and subtraction cross signed and unsigned boundaries
-constructs: 0300
+constructs: 0300, 1770, 1800, 1880
 program: main.ldn
 status: 42
 targets: linux-x86-64

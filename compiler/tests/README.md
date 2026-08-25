@@ -79,6 +79,16 @@ believing 114 lines of it were code. `check.py` holds every id to a paragraph
 four digits -- the two halves of the question, asked by the side that can
 answer each.
 
+Name a construct when the fixture's *passing* would change if that construct
+were implemented wrong, and not when the construct merely appears in the
+text. Every runtime program contains literals, so naming [1770] everywhere
+would make that row read "covered" while saying nothing; a fixture whose
+asserted values come from literals earns it. The failure this rule prevents
+is the one a matrix is most prone to: a full column that means nothing. When
+a claim turns out not to be earned, the honest repairs are to drop it or to
+make it true -- `runtime/statements-run-as-they-read` claimed [1840] before
+it declared anything inside an arm, and grew a function that does.
+
 A fixture with a `program` must name at least one, because a `.ldn` program
 is written in the language and is therefore evidence about some construct of
 it. A fixture without one is about the tool rather than the language -- an

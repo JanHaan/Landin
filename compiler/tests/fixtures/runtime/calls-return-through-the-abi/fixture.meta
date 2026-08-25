@@ -1,6 +1,6 @@
 class: runtime
 summary: arguments reach a callee in order and results come back through the ABI
-constructs: 1650, 1920, 1930, 1970
+constructs: 1650, 1770, 1800, 1920, 1930, 1970
 program: main.ldn
 status: 42
 targets: linux-x86-64

@@ -1,6 +1,6 @@
 class: runtime
 summary: unary and bitwise operators produce their signed and unsigned results
-constructs: 0330, 0340, 1870, 1890
+constructs: 0330, 0340, 1770, 1790, 1800, 1870, 1890
 program: main.ldn
 status: 42
 targets: linux-x86-64
