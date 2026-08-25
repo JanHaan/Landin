@@ -22,6 +22,12 @@ target linux-x86-64
   isize   64    8      8
   bool    1     1      1
 
+  aggregate       offsets     size   align
+  u8 u32 u8       0 4 8       12     4
+  u8 u8 u32       0 1 4       8      4
+  u8 usize        0 8         16     8
+  u64 u8          0 8         16     8
+
 target synthetic-32
   pointer   32 bits, aligned 4
   stack     aligned 8
@@ -40,3 +46,9 @@ target synthetic-32
   usize   32    4      4
   isize   32    4      4
   bool    1     1      1
+
+  aggregate       offsets     size   align
+  u8 u32 u8       0 4 8       12     4
+  u8 u8 u32       0 1 4       8      4
+  u8 usize        0 4         8      4
+  u64 u8          0 8         16     8

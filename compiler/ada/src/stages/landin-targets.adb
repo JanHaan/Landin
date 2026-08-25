@@ -111,4 +111,35 @@ package body Landin.Targets is
       return Offset + (Step - Remainder);
    end Align_Up;
 
+   ------------------------------------------------------------------
+   --  Placement
+   ------------------------------------------------------------------
+
+   function Empty_Placement return Placement is (others => <>);
+
+   function Extent_Of (Item : Placement) return Byte_Count
+     is (Item.Reach);
+
+   function Alignment_Of (Item : Placement) return Byte_Alignment
+     is (Item.Widest);
+
+   function Size_Of (Item : Placement) return Byte_Count
+     is (Align_Up (Item.Reach, Item.Widest));
+
+   procedure Place
+     (Into  : in out Placement;
+      Size  : Scalar_Size;
+      Facts : Target_Facts;
+      At_Offset : out Byte_Count)
+   is
+      Wants : constant Byte_Alignment := Alignment_Of (Facts, Size);
+   begin
+      At_Offset := Align_Up (Into.Reach, Wants);
+      Into.Reach := At_Offset + Byte_Count (Bytes (Size));
+
+      if Wants > Into.Widest then
+         Into.Widest := Wants;
+      end if;
+   end Place;
+
 end Landin.Targets;

@@ -90,7 +90,62 @@ package Landin.Targets is
      with Post => Align_Up'Result >= Offset
                   and then Align_Up'Result mod Byte_Count (Alignment) = 0;
 
+   ---------------------------------------------------------------------
+   --  Where the fields of an aggregate go
+   --
+   --  [0750]: fields keep the order you wrote them, with natural
+   --  alignment and padding in between, "so a hexdump matches the source
+   --  and the layout does not shift under a new compiler".  That sentence
+   --  is the whole of this: no reordering, no packing, and padding only
+   --  where an alignment demands it.  `layout(optimal)` and `layout(c)`
+   --  are [0750]'s other two policies and arrive with the attributes.
+   --
+   --  An accumulator rather than a function over a list, because the
+   --  caller holds the fields and this package must not learn what a
+   --  field is.  It counts target bytes throughout, so a 32-bit
+   --  description lays out as a 32-bit machine on a 64-bit host.
+   ---------------------------------------------------------------------
+
+   type Placement is private;
+
+   function Empty_Placement return Placement
+     with Post => Extent_Of (Empty_Placement'Result) = 0
+                  and then Alignment_Of (Empty_Placement'Result) = 1;
+
+   --  Where the next field of that size begins, and the placement with it
+   --  added.  The offset is the field's own alignment rounded up from
+   --  where the last one ended, which is [0750]'s "natural alignment and
+   --  padding in between".
+   procedure Place
+     (Into  : in out Placement;
+      Size  : Scalar_Size;
+      Facts : Target_Facts;
+      At_Offset : out Byte_Count)
+     with Post => At_Offset mod Byte_Count (Alignment_Of (Facts, Size)) = 0
+                  and then Extent_Of (Into)
+                           >= At_Offset + Byte_Count (Bytes (Size));
+
+   --  How far the fields reach, before the whole is rounded up.
+   function Extent_Of (Item : Placement) return Byte_Count;
+
+   --  The widest alignment any field asked for, which is the aggregate's
+   --  own [0750].  One with no fields aligns to a byte and occupies none.
+   function Alignment_Of (Item : Placement) return Byte_Alignment;
+
+   --  The size a value of the aggregate takes, which is its extent
+   --  rounded up to its own alignment so that an array of them keeps
+   --  every element aligned.
+   function Size_Of (Item : Placement) return Byte_Count
+     with Post => Size_Of'Result >= Extent_Of (Item)
+                  and then Size_Of'Result
+                           mod Byte_Count (Alignment_Of (Item)) = 0;
+
 private
+
+   type Placement is record
+      Reach : Byte_Count     := 0;
+      Widest : Byte_Alignment := 1;
+   end record;
 
    Name_Length : constant := 24;
 
