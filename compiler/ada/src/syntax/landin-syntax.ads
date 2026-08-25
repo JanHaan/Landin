@@ -145,6 +145,12 @@ package Landin.Syntax is
       --  the kernel predeclares because those are known to the parser and
       --  this one is a name only resolution can answer for.
       Type_Reference,
+      --  [0670]'s block form, which a type declaration may give instead
+      --  of a name, and one of its fields.  A field is a binding without
+      --  a value [0750] and keeps the position it was written in,
+      --  because that position is the layout.
+      Struct_Body,
+      Field,
       --  The parts that are none of the above.
       Parameter,
       Named_Return,
@@ -162,6 +168,9 @@ package Landin.Syntax is
 
    subtype Type_Reference_Kind is Node_Kind
      range Error_Type .. Type_Reference;
+
+   --  What a type declaration may name: a type, or a body of its own.
+   subtype Type_Body_Kind is Node_Kind range Error_Type .. Struct_Body;
 
    subtype Unary_Kind is Node_Kind range Negation .. Logical_Not;
 
@@ -183,7 +192,7 @@ package Landin.Syntax is
    function Has_Name (Of_Kind : Node_Kind) return Boolean
      is (Of_Kind in Function_Declaration | Binding | Parameter
                     | Named_Return | Name_Reference | Type_Name
-                    | Type_Declaration | Type_Reference);
+                    | Type_Declaration | Type_Reference | Field);
 
    ------------------------------------------------------------------
    --  Trees
@@ -358,7 +367,7 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                           in Binding | Parameter | Named_Return
-                             | Type_Declaration;
+                             | Type_Declaration | Field;
 
    --  The value a binding is given, a place is assigned, or a discard
    --  throws away.  No_Node for a binding declared without one [1790].
@@ -461,6 +470,19 @@ package Landin.Syntax is
 
    --  The type [0370] is asked about.  A type and not an expression, which
    --  is why it is not Operand_Of.
+   --  [0670]'s fields, in the order they were written, which [0750]
+   --  makes the order they are laid out in.
+   function Field_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Struct_Body;
+
+   function Nth_Field
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Struct_Body
+                  and then Index <= Field_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Field'Result);
+
    function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) in Size_Of | Align_Of,

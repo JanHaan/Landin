@@ -1,0 +1,5 @@
+class: positive
+summary: [0670] declares a struct in its block form, and [0750] keeps its fields in the order they were written
+constructs: 0670, 0750, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

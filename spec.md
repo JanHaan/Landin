@@ -89,7 +89,7 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves twenty words; the reserved set of the whole language is
+reserves twenty-one words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
@@ -102,7 +102,7 @@ digit       ::= "0" ... "9"
 keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
               | "end" | "return" | "when" | "inc" | "dec" | "none"
               | "true" | "false" | "and" | "or" | "not"
-              | "sizeof" | "alignof" | "type"
+              | "sizeof" | "alignof" | "type" | "struct"
 
 ```
 
@@ -189,7 +189,9 @@ A type name is an ordinary declared name [1760], so one
 declaration per name per scope [1850] and a name that names
 nothing is refused [1860] both hold for it unchanged.
 ```landin-grammar
-type_declaration ::= identifier ":" "type" "=" type
+type_declaration ::= identifier ":" "type" "=" (type | struct_body)
+struct_body      ::= "struct" field+ "end" identifier?
+field            ::= identifier ":" type
 
 ```
 

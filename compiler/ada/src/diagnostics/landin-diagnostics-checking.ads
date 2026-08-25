@@ -87,7 +87,11 @@ package Landin.Diagnostics.Checking is
       --  the kernel lacks is a question about what it resolved to.
       Wide_Integer_Type,
       Float_Type,
-      Text_Type);
+      Text_Type,
+      --  [0670] declares one; a value of one waits for the rest of
+      --  R2.20, which is what carries an aggregate through a frame, an
+      --  ABI and an initialiser.
+      Struct_Value);
 
    function Construct (Item : Refused_Use)
      return Landin.Tokens.Construct_Reference
@@ -97,7 +101,8 @@ package Landin.Diagnostics.Checking is
             when Call_Of_A_Binding  => "[1000]",
             when Wide_Integer_Type  => "[0150]",
             when Float_Type         => "[0170]",
-            when Text_Type          => "[0600]")
+            when Text_Type          => "[0600]",
+            when Struct_Value       => "[0670]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  The type names above, spelled once.  A name that is not here is a
@@ -154,6 +159,7 @@ private
             --  the wide integers, the floats and the text views arrive.
             when Wide_Integer_Type
                | Float_Type
-               | Text_Type         => "R4.10");
+               | Text_Type         => "R4.10",
+            when Struct_Value      => "R2.20");
 
 end Landin.Diagnostics.Checking;

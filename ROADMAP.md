@@ -1802,6 +1802,25 @@ against Linux x86-64 and eight against the synthetic 32-bit description
 while `u64 u8` is sixteen against both: the pointer width moving, and not
 the whole model.
 
+[0670]'s block form is declared next, and only declared. `point: type =
+struct x: i32 y: i32 end point` parses, its fields are checked, each may name
+a type declared elsewhere, and a struct with no fields is refused because a
+struct is its fields. What is not enabled is a *value* of one: a binding, a
+parameter or a return of a struct type is refused as `L0304`, at the binding
+rather than at the declaration, so the report names the thing that cannot be
+made rather than the type that can.
+
+That boundary is where the work actually is. Carrying an aggregate needs a
+frame cell wider than a register, an ABI rule for passing one, an initialiser
+and field access, and each is its own slice. `Landin.Types` grew one literal
+for it — `Aggregate`, in `Settled` and outside `Scalar_Name` — and nothing
+else changed, which is the point: every place that handles a scalar takes a
+`Scalar_Name` and an aggregate reaching one fails a precondition rather than
+being quietly mistreated. Which aggregate is not in `Landin.Types` either;
+[0710] makes two of them one type when they came from one declaration, so
+identity is which declaration wrote it, and that belongs where what every
+node has already lives.
+
 Implement arrays, ordinary/C/packed structs, variants, tags, payload alignment
 and the policy for spare-bit folding. Use measured fixtures rather than host
 Ada representation as authority.
