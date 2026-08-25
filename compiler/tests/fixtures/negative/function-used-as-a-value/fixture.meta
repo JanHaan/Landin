@@ -1,6 +1,6 @@
 class: negative
 summary: [1920] a function name outside the callee position is a function value [1000], which [1790] does not spell
-constructs: 1920, 1000, 1790
+constructs: 0870, 1000, 1790, 1920
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0304

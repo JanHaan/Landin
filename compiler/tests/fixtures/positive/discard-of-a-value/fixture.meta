@@ -1,5 +1,5 @@
 class: positive
 summary: [1930] anything with a type may be thrown away, including a value nobody computed for the purpose
-constructs: 1930
+constructs: 1020, 1930
 program: program.ldn
 targets: linux-x86-64, macos-arm64

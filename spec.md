@@ -810,6 +810,18 @@ of the lowest signed value by -1 on x86-64. The second can give a stable report,
 but makes that report an interface the language must preserve and a runtime
 every freestanding target must supply.
 
+**What the tour also said, and this does not yet do:** [1670] states the
+mechanism a failed check eventually uses -- a call to a fixed never-returning
+`panic_handler`, taking an atom for the kind and a compiler-assigned `site`
+number, with file and line in a side table a constrained build omits. That is
+not an alternative this decision declined; it is a paragraph the kernel cannot
+reach. `panic_kind` is a `type` over atoms and `noreturn` is a return form,
+and [1790]'s type rule enables none of the three, so there is nothing to call
+and no way to spell it. `ud2` is what a compiler that cannot write [1670] can
+do, and R6.70 is where panic behaviour is implemented; the alternative
+declined above is calling a runtime routine *instead of* [1670]'s, not
+[1670] itself.
+
 **Evidence:** `runtime/checked-overflow-traps` and
 `runtime/a-zero-divisor-traps` run on Linux x86-64 and are held to having
 ended without returning a status, which is the whole of what this decision

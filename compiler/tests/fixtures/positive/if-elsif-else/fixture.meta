@@ -1,5 +1,5 @@
 class: positive
 summary: [1810] every arm of a branch
-constructs: 1810
+constructs: 1050, 1810
 program: program.ldn
 targets: linux-x86-64, macos-arm64
