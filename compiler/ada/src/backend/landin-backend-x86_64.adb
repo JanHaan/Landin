@@ -285,6 +285,27 @@ package body Landin.Backend.X86_64 is
                            & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Measure_Size | Landin.IR.Measure_Align =>
+                  --  [0370]: the answer is a target fact, and this is the
+                  --  first place in the compiler that has one.
+                  declare
+                     Asked : constant Landin.Types.Scalar_Name :=
+                       Landin.IR.Measured_Of (Of_Unit, Item, Value);
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                     Answer : constant Natural :=
+                       (if Op = Landin.IR.Measure_Size
+                        then Landin.Targets.Bytes (Size_Of (Asked, Facts))
+                        else Natural
+                               (Landin.Targets.Alignment_Of
+                                  (Facts, Size_Of (Asked, Facts))));
+                  begin
+                     Emit ("movabsq $" & Trimmed (Natural'Image (Answer))
+                           & ", %rax");
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", "
+                           & Value_Cell (Value));
+                  end;
+
                when Landin.IR.Truth =>
                   --  [1870]'s two literals, and the one byte
                   --  Landin.Backend gives a bool.
@@ -917,6 +938,25 @@ package body Landin.Backend.X86_64 is
                         Held (Natural (Value)) :=
                           (if Landin.IR.Truth_Of (Of_Unit, Item, Value)
                            then 1 else 0);
+
+                     --  [0370] in a module value, folded here for the
+                     --  same reason the shifts are: it needs a target.
+                     when Landin.IR.Measure_Size
+                        | Landin.IR.Measure_Align =>
+                        declare
+                           Asked : constant Landin.Types.Scalar_Name :=
+                             Landin.IR.Measured_Of (Of_Unit, Item, Value);
+                        begin
+                           Held (Natural (Value)) :=
+                             Landin.Types.Folded
+                               (if Op = Landin.IR.Measure_Size
+                                then Landin.Targets.Bytes
+                                       (Size_Of (Asked, Facts))
+                                else Natural
+                                       (Landin.Targets.Alignment_Of
+                                          (Facts,
+                                           Size_Of (Asked, Facts))));
+                        end;
 
                      when Landin.IR.Load_Datum =>
                         --  [0130] makes a module a set, so one module value

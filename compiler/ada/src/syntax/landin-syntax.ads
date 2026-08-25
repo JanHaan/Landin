@@ -104,6 +104,12 @@ package Landin.Syntax is
       Integer_Literal,
       True_Literal,
       False_Literal,
+      --  [0370]'s measurements.  They take a type where every other
+      --  expression takes an expression, which is why they are their own
+      --  node kind and not a call: the kernel has no way to pass a type
+      --  to anything else.
+      Size_Of,
+      Align_Of,
       Negation,
       Complement,
       Logical_Not,
@@ -440,6 +446,13 @@ package Landin.Syntax is
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) in Unary_Kind,
           Post => Contains (Of_Tree, Operand_Of'Result);
+
+   --  The type [0370] is asked about.  A type and not an expression, which
+   --  is why it is not Operand_Of.
+   function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) in Size_Of | Align_Of,
+          Post => Contains (Of_Tree, Measured_Type'Result);
 
    function Left_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)

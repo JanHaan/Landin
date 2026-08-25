@@ -1,0 +1,17 @@
+--  [0370] and D14: a measurement is a usize the target decides, and this
+--  is the first program that can ask the machine about itself.  The
+--  answers are checked against what the System V ABI says for x86-64.
+public main: () -> (code: i32) =
+    if sizeof u8 == 1 and alignof u8 == 1
+        and sizeof u16 == 2 and alignof u16 == 2
+        and sizeof u32 == 4 and alignof u32 == 4
+        and sizeof u64 == 8 and alignof u64 == 8
+        and sizeof i8 == 1 and sizeof i64 == 8
+        and sizeof bool == 1 and alignof bool == 1
+        and sizeof usize == 8 and sizeof isize == 8
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

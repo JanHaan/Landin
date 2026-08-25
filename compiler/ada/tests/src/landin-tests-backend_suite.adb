@@ -1014,6 +1014,56 @@ package body Landin.Tests.Backend_Suite is
          "one source emits one text");
    end The_Same_Source_Emits_The_Same_Bytes;
 
+   --  D14: a measurement is answered from the target description and
+   --  nowhere else, which is the whole reason `Landin.IR` carries the type
+   --  asked about rather than the answer.  One source, two descriptions,
+   --  two answers -- and the host this runs on is neither of them.
+   procedure A_Measurement_Follows_The_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Measurement_Follows_The_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "here: usize = sizeof usize" & LF
+        & "wide: usize = sizeof u32" & LF;
+
+      Native : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Narrow : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Synthetic_32);
+      Ran    : Natural;
+   begin
+      Lower (Native, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Lower (Narrow, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "and four again");
+
+      declare
+         Wide : constant String := Emitted (Native);
+         Thin : constant String :=
+           Landin.Backend.X86_64.Text
+             (Landin.Stages.Code (Narrow).all,
+              Landin.Stages.Meanings (Narrow).all,
+              Landin.Stages.Identities (Narrow).all,
+              Landin.Targets.Synthetic_32);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Wide, "here:" & LF & HT & ".quad 8" & LF),
+            "usize is eight bytes on the 64-bit description");
+         Landin.Testing.Check
+           (Item, Contains (Thin, "here:" & LF & HT & ".long 4" & LF),
+            "and four on the 32-bit one, from the same source");
+         --  A type whose width no target argues about, so the difference
+         --  above is the pointer width and not the whole model moving.
+         Landin.Testing.Check
+           (Item, Contains (Wide, "wide:" & LF & HT & ".quad 4" & LF)
+                  and then Contains (Thin, "wide:" & LF & HT & ".long 4"
+                                           & LF),
+            "u32 is four bytes on both");
+      end;
+   end A_Measurement_Follows_The_Target;
+
    --  x86-64 divides its implicit full-width dividend.  An unknown zero
    --  divisor therefore reaches Landin's explicit trap before `div`, while a
    --  valid u8 dividend has its high byte cleared and stores the quotient.
@@ -1605,6 +1655,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "signed subtract follows the target width",
          Signed_Subtract_Follows_The_Target_Width'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a measurement follows the target",
+         A_Measurement_Follows_The_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "the same source emits the same bytes",
          The_Same_Source_Emits_The_Same_Bytes'Access);

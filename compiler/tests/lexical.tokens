@@ -635,6 +635,31 @@ file positive/local-shadows-a-parameter/program.ldn tokens 24
   49 50 x
   51 54 end
   55 56 f
+file positive/measurement-of-a-type/program.ldn tokens 24
+  0 5 width
+  5 6 :
+  7 12 usize
+  13 14 =
+  15 21 sizeof
+  22 25 u32
+  26 30 step
+  30 31 :
+  32 37 usize
+  38 39 =
+  40 47 alignof
+  48 51 u64
+  52 56 flag
+  56 57 :
+  58 63 usize
+  64 65 =
+  66 72 sizeof
+  73 77 bool
+  78 82 here
+  82 83 :
+  84 89 usize
+  90 91 =
+  92 98 sizeof
+  99 104 usize
 file positive/module-binding-with-no-value-reads-zero/program.ldn tokens 44
   0 5 later
   5 6 :
@@ -2021,6 +2046,24 @@ file negative/keyword-as-name/program.ldn tokens 5
   8 9 =
   10 11 1
 file negative/latin1-byte-in-name/program.ldn refused no rule spells 'é'
+file negative/lenof-not-enabled/program.ldn tokens 17
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 10 (
+  10 11 r
+  11 12 :
+  13 18 usize
+  18 19 )
+  20 21 =
+  26 27 r
+  28 29 =
+  30 35 lenof
+  36 40 grid
+  41 44 end
+  45 46 f
 file negative/literal-above-its-type/program.ldn tokens 5
   0 4 over
   4 5 :

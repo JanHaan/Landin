@@ -434,6 +434,24 @@ package body Landin.Stages.Lowering is
             when Syn.False_Literal =>
                return IR.Emit_Truth (Unit.all, Filling, False, Site);
 
+            --  [0370]: the type asked about is carried into the IR and
+            --  the answer is not.  A size needs a width and a width needs
+            --  a target, and this stage is target-neutral by design.
+            when Syn.Size_Of | Syn.Align_Of =>
+               declare
+                  Asked : constant Syn.Node_Id :=
+                    Syn.Measured_Type (Of_Tree, Node);
+               begin
+                  return IR.Emit_Measurement
+                           (Unit.all, Filling,
+                            (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
+                             then IR.Measure_Size else IR.Measure_Align),
+                            Landin.Checking.Type_Of
+                              (Types.all, Of_Tree, Asked),
+                            Scalar_At (Of_Tree, Node),
+                            Site);
+               end;
+
             when Syn.Negation =>
                declare
                   Under : constant Syn.Node_Id :=

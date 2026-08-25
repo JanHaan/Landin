@@ -1,0 +1,4 @@
+width: usize = sizeof u32
+step: usize = alignof u64
+flag: usize = sizeof bool
+here: usize = sizeof usize

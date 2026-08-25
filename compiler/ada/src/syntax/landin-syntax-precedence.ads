@@ -139,6 +139,8 @@ package Landin.Syntax.Precedence is
      is (Landin.Tokens.Is_Literal (Of_Kind)
          or else Of_Kind in Landin.Tokens.Identifier
                             | Landin.Tokens.Left_Paren
+                            | Landin.Tokens.Kw_Sizeof
+                            | Landin.Tokens.Kw_Alignof
          or else Is_Prefix (Of_Kind));
 
    --  `statement ::= binding | assignment | increment | discard | call

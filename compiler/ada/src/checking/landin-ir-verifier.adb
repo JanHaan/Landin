@@ -65,6 +65,8 @@ package body Landin.IR.Verifier is
    function Wanted (Of_Code : Opcode) return Natural
      is (case Of_Code is
             when Constant_Kind => 0,
+            --  [0370] carries a type and not an operand.
+            when Measure_Size | Measure_Align => 0,
             when Load          => 0,
             when Load_Datum    => 0,
             when Store         => 1,
