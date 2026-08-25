@@ -1174,41 +1174,46 @@ file positive/statement-inc-dec/program.ldn tokens 19
   53 54 n
   55 58 end
   59 60 f
-file positive/struct-type-is-declared/program.ldn tokens 34
-  0 5 point
-  5 6 :
-  7 11 type
-  12 13 =
-  14 20 struct
-  25 26 x
-  26 27 :
-  28 31 i32
-  36 37 y
-  37 38 :
-  39 42 i32
-  43 46 end
-  47 52 point
-  264 270 offset
-  270 271 :
-  272 276 type
-  277 278 =
-  279 282 i32
-  284 288 span
-  288 289 :
-  290 294 type
-  295 296 =
-  297 303 struct
-  308 312 from
-  312 313 :
-  314 320 offset
-  325 327 to
-  327 328 :
-  331 337 offset
-  342 345 tag
-  345 346 :
-  348 350 u8
-  351 354 end
-  355 359 span
+file positive/struct-type-is-declared/program.ldn tokens 39
+  72 77 ahead
+  77 78 :
+  79 83 type
+  84 85 =
+  86 91 point
+  93 98 point
+  98 99 :
+  100 104 type
+  105 106 =
+  107 113 struct
+  118 119 x
+  119 120 :
+  121 124 i32
+  129 130 y
+  130 131 :
+  132 135 i32
+  136 139 end
+  140 145 point
+  357 363 offset
+  363 364 :
+  365 369 type
+  370 371 =
+  372 375 i32
+  377 381 span
+  381 382 :
+  383 387 type
+  388 389 =
+  390 396 struct
+  401 405 from
+  405 406 :
+  407 413 offset
+  418 420 to
+  420 421 :
+  424 430 offset
+  435 438 tag
+  438 439 :
+  441 443 u8
+  444 447 end
+  448 452 span
 file positive/token-separation/program.ldn tokens 17
   0 1 f
   1 2 :
@@ -2694,6 +2699,17 @@ file negative/text-type-not-enabled/program.ldn tokens 5
   6 10 utf8
   11 12 =
   13 14 1
+file negative/type-alias-cycle/program.ldn tokens 10
+  0 1 a
+  1 2 :
+  3 7 type
+  8 9 =
+  10 11 b
+  12 13 b
+  13 14 :
+  15 19 type
+  20 21 =
+  22 23 a
 file negative/type-name-is-not-a-type/program.ldn tokens 10
   0 1 v
   1 2 :

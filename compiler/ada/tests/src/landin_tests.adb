@@ -12,6 +12,7 @@ with Ada.Text_IO;
 with Landin.Testing;
 with Landin.Tests.Backend_Suite;
 with Landin.Tests.Catalogue_Suite;
+with Landin.Tests.Checking_Suite;
 with Landin.Tests.Diagnostics_Suite;
 with Landin.Tests.Driver_Suite;
 with Landin.Tests.Fixture_Execution_Suite;
@@ -52,6 +53,7 @@ procedure Landin_Tests is
 
    Expected_Suites : constant array (Positive range <>) of Suite_Name :=
      ["backend          ",
+      "checking         ",
       "diagnostics      ",
       "driver           ",
       "fixture execution",
@@ -136,6 +138,7 @@ begin
 
    Landin.Tests.Backend_Suite.Register (Cases);
    Landin.Tests.Catalogue_Suite.Register (Cases);
+   Landin.Tests.Checking_Suite.Register (Cases);
    Landin.Tests.Diagnostics_Suite.Register (Cases);
    Landin.Tests.Driver_Suite.Register (Cases);
    Landin.Tests.Fixture_Execution_Suite.Register (Cases);

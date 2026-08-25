@@ -88,6 +88,7 @@ package Landin.Diagnostics.Catalogue is
       Unsupported_Use,
       Not_Known_At_Compile_Time,
       Impossible_Operand,
+      Cyclic_Type_Alias,
       --  The backend and its toolchain, assigned at R1.80.  None of
       --  the four is about a construct a program wrote: two are the
       --  host failing to finish a program it accepted, the third is a
@@ -136,6 +137,7 @@ package Landin.Diagnostics.Catalogue is
             when Unsupported_Use          => "L0304",
             when Not_Known_At_Compile_Time => "L0305",
             when Impossible_Operand        => "L0306",
+            when Cyclic_Type_Alias         => "L0307",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -156,7 +158,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Error,
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
-            when Literal_Out_Of_Range .. Impossible_Operand => Error,
+            when Literal_Out_Of_Range .. Cyclic_Type_Alias => Error,
             when No_Toolchain .. Argument_Not_In_A_Register => Error);
 
    function State (Of_Code : Code_Name) return Disposition
@@ -178,7 +180,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Live,
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
-            when Literal_Out_Of_Range .. Impossible_Operand => Live,
+            when Literal_Out_Of_Range .. Cyclic_Type_Alias => Live,
             when No_Toolchain .. Argument_Not_In_A_Register => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
@@ -251,6 +253,8 @@ package Landin.Diagnostics.Catalogue is
             when Impossible_Operand    =>
                "[1950]: an operand the operation cannot take, where the"
                & " compiler knows it",
+            when Cyclic_Type_Alias     =>
+               "[1795]: a chain of aliases that reaches no type",
             when No_Toolchain          =>
                "[1550]: no assembler and linker for the target on this"
                & " host",
@@ -288,7 +292,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => True,
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
-            when Literal_Out_Of_Range .. Impossible_Operand => True,
+            when Literal_Out_Of_Range .. Cyclic_Type_Alias => True,
             --  None of the three is about a place in a file.  Two are
             --  the host failing to finish an accepted program, and the
             --  third is a declaration the module never made, which has
@@ -317,7 +321,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
             --  Every one of these points at something a program wrote.
-            when Literal_Out_Of_Range .. Impossible_Operand =>
+            when Literal_Out_Of_Range .. Cyclic_Type_Alias =>
                True,
             when No_Toolchain .. Argument_Not_In_A_Register => False);
 
@@ -383,6 +387,7 @@ package Landin.Diagnostics.Catalogue is
             when Unsupported_Use       => 2,
             when Not_Known_At_Compile_Time => 1,
             when Impossible_Operand    => 1,
+            when Cyclic_Type_Alias     => 1,
             --  The one diagnostic here a user is stuck on rather than
             --  informed by, so it owes them the way out: which program
             --  was looked for, and how to name another.
