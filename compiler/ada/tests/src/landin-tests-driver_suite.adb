@@ -598,6 +598,47 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Killed_Toolchain_Is_Reported;
 
+   --  [1650] hands six integer arguments in registers and the rest on the
+   --  stack, and this backend has only the first half.  Nothing in the
+   --  kernel bounds a parameter list, so a seventh is a program the
+   --  frontend accepts and the backend cannot emit -- which must be a
+   --  report naming the parameter, and not an internal defect.
+   procedure A_Seventh_Parameter_Is_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Seventh_Parameter_Is_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File
+        ("wide.ldn",
+         "seven: (a: i32, b: i32, c: i32, d: i32, e: i32, f: i32,"
+         & " g: i32) -> (r: i32) =" & LF
+         & "    r = a + g" & LF
+         & "end seven" & LF);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("wide.ldn", "--emit=asm"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "a seventh parameter is a reported refusal");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0503"), "and says which rule");
+         Landin.Testing.Check
+           (Item, Contains (Report, "seven"),
+            "naming the routine that has one");
+         Landin.Testing.Check
+           (Item, not Host.Exists ("wide.s"),
+            "and nothing is written");
+      end;
+   end A_Seventh_Parameter_Is_Reported;
+
    --  A target with no backend cannot be asked for a file at all, which is
    --  the same fact Landin.Targets.Capabilities already states.
    procedure A_Target_With_No_Backend_Emits_Nothing
@@ -760,6 +801,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a killed toolchain is reported",
          A_Killed_Toolchain_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a seventh parameter is reported",
+         A_Seventh_Parameter_Is_Reported'Access);
       Landin.Testing.Register
         (Into, "driver", "a target with no backend emits nothing",
          A_Target_With_No_Backend_Emits_Nothing'Access);

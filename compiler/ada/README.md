@@ -118,7 +118,11 @@ division, remainder, negation, complement, logical not, the three bitwise
 operators, both shifts, comparisons, calls, jumps, branches, returns, and
 module values as folded data reached by name. That is every opcode `Landin.IR`
 spells, so the case that dispatches them is exhaustive: a new opcode fails to
-compile rather than raising `Compiler_Defect` at run time.
+compile rather than raising `Compiler_Defect` at run time. What it cannot do
+is pass a seventh argument: [1650] hands six in registers and the stack half
+is not written, so the driver refuses a wider routine as `L0503` before
+anything is emitted rather than letting an accepted program meet an internal
+defect. `ROADMAP.md` R4.40 owns the stack arguments that retire it.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver

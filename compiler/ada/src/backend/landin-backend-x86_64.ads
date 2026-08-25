@@ -67,6 +67,13 @@ with Landin.Targets;
 
 package Landin.Backend.X86_64 is
 
+   --  How many arguments [1650]'s ABI hands in registers, and so how many
+   --  this backend can pass at all: the rest go on the stack and that is
+   --  not written yet.  Named here because the driver refuses a wider
+   --  routine before anything is emitted, and a number in two places is a
+   --  number that will disagree with itself.
+   Register_Arguments : constant := 6;
+
    --  Meanings and Names put a symbol on an item and say whether [1740]
    --  made it `public`, for the same reason `Landin.IR.Dump` is handed
    --  them: `Landin.IR` holds identities and refers to R1.50's table

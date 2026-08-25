@@ -1324,6 +1324,27 @@ Their programs are held to the grammar exactly as a positive fixture's is,
 since they are legal source the compiler must accept; `check.py` derives each
 and reports a fixture the grammar cannot.
 
+The audit found one more, and it is the shape of defect this item can produce
+at all: a program the frontend accepts and the backend cannot emit. Nothing in
+the kernel bounds a parameter list, [1650] hands six integer arguments in
+registers and the rest on the stack, and the stack half is not written -- so a
+seventh parameter met `Argument_Register`'s compiler defect and `refine`
+exited 70 saying "internal compiler defect". That is the one answer an
+accepted program must never get: it is neither a compilation nor a diagnostic,
+and it reads as a bug in the compiler rather than as a limit of it. `L0503`
+now names the routine and says what it exceeded, the driver asks before
+anything is written for [1970]'s reason, and `Register_Arguments` is a single
+constant so the number cannot disagree with itself. Stack arguments belong
+with the rest of the ABI at R4.40; until then this is a stated limit rather
+than a crash.
+
+It has no home in the negative corpus, which is worth recording because the
+next backend-only refusal will meet the same wall. A negative fixture is run
+as `refine program.ldn` with no `--emit`, and this program is accepted there:
+it is refused only when something is asked to be emitted for a target. So it
+is an end-to-end fixture, which runs `refine` with the fixture's own arguments
+and compares the bytes.
+
 What none of this shows is that the language works. The enabled kernel is
 [1740]-[1830] and the tour is the whole language, so `while`, `for`, `loop`,
 `match`, `defer`, `undo`, `try`, `fail`, `break`, `continue`, `type` and every
@@ -1699,7 +1720,9 @@ Depends on: R2.30, R4.30
 Cover `c_int` and related types, `char` signedness, aggregate arguments and
 returns, enums, unions, bitfields, varargs, callbacks, thread-local storage,
 `errno`, foreign ownership, failure boundaries and calling convention as part
-of function identity. Provide binding generation sufficient to avoid a
+of function identity. Stack arguments arrive here too: R1.80 emits [1650]'s
+six register arguments and refuses a seventh as `L0503` rather than passing
+one, so this is the item that has to make that refusal stop being needed. Provide binding generation sufficient to avoid a
 hand-written-declaration workflow, without turning the compiler into a header
 parser.
 
