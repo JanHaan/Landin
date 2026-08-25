@@ -40,6 +40,7 @@ import html
 import json
 import re
 import sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -200,7 +201,7 @@ CSS = """
   --accent:#a03526; --accent-soft:#c4705f; --accent-bg:#f6ece9;
   --code-bg:#fbfaf6; --code-rule:#e4e0d5;
   --k:#9a2f6b; --t:#0f6f68; --f:#2c4c8c; --d:#243b6b; --n:#7a4bab;
-  --q:#4a6a1f; --c:#8a8880; --cd:#5f6f4a; --o:#7b7f88; --b:#8a5a12;
+  --q:#4a6a1f; --c:#72716a; --cd:#5f6f4a; --o:#6d7179; --b:#8a5a12;
   --sh:0 1px 2px rgba(20,20,20,.05), 0 6px 20px rgba(20,20,20,.04);
   /*  The two faces, named so a `font:` shorthand can reach them.  The
       interface one was used in three of those and defined in none, and a
@@ -259,7 +260,7 @@ CSS = """
   html{scroll-behavior:auto}
   *{transition-duration:.01ms !important; animation-duration:.01ms !important}
 }
-a:focus-visible, button:focus-visible, input:focus-visible{
+a:focus-visible, button:focus-visible, input:focus-visible, summary:focus-visible{
   outline:2px solid var(--accent-soft); outline-offset:2px; border-radius:3px;
 }
 /*  The keyboard route past a sidebar that is ~200 links deep on the tour. */
@@ -355,10 +356,11 @@ input.theme-x:focus-visible + label{outline:2px solid var(--accent); outline-off
     touch target.  The changing document/section label is expendable here;
     the page heading says the same thing below the bar.  */
 @media (max-width:35rem){
+  :root{--bar:3.75rem}
   header.bar{gap:.45rem; padding:.45rem .65rem}
   header.bar .where{display:none}
   header.bar .src, header.bar button, header.bar label[for="theme"]{
-    width:2.25rem; height:2.25rem; justify-content:center; gap:0; padding:0;
+    width:2.75rem; height:2.75rem; justify-content:center; gap:0; padding:0;
   }
   header.bar .src span, header.bar button span,
   header.bar label[for="theme"] span{
@@ -375,11 +377,11 @@ nav.side{
   height:calc(100vh - var(--bar)); overflow:auto;
   padding:1.4rem 1rem 3rem 1.4rem; border-right:1px solid var(--rule);
 }
-nav.side h3{
+nav.side .nav-group{
   margin:1.4rem 0 .45rem; font-size:.66rem; letter-spacing:.14em;
   text-transform:uppercase; color:var(--ink-faint); font-weight:600;
 }
-nav.side h3:first-child{margin-top:0}
+nav.side .nav-group:first-child{margin-top:0}
 nav.side a{
   display:block; padding:.22rem .45rem; margin-left:-.45rem;
   color:var(--ink-soft); text-decoration:none; font-size:.86rem;
@@ -474,9 +476,10 @@ section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
 .listing .copy{
   position:absolute; top:.4rem; right:.4rem; opacity:0;
   display:inline-flex; align-items:center; justify-content:center;
+  min-width:2rem; min-height:2rem; padding:0;
   font:inherit; font-size:.8rem; line-height:1;
   color:var(--ink-faint); background:var(--panel); cursor:pointer;
-  border:1px solid var(--rule); border-radius:4px; padding:.25rem;
+  border:1px solid var(--rule); border-radius:4px;
   transition:opacity .12s;
 }
 .listing .copy:hover{color:var(--ink); border-color:var(--ink-faint)}
@@ -485,6 +488,10 @@ section > h2::after{content:""; flex:1; height:1px; background:var(--rule)}
 .listing .copy.done .i{display:none}
 .listing .copy.done .done{display:inline-block; color:var(--q)}
 .listing:hover .copy, .listing .copy:focus{opacity:1}
+@media (hover:none), (pointer:coarse){
+  .listing .copy{opacity:1}
+  .listing pre{padding-right:2.8rem}
+}
 /*  A sample inside a listing is a listing: .listing pre and pre.sample
     have the same specificity, so this rule used to win and the
     highlighted Landin blocks -- the ones that carry the argument -- got
@@ -596,12 +603,23 @@ JS = """
 (function(){
   var side=document.querySelector('nav.side');
   var menu=document.getElementById('menu');
+  function closeMenu(focus){
+    if(!side || !menu) return;
+    side.classList.remove('open');
+    menu.setAttribute('aria-expanded','false');
+    if(focus) menu.focus();
+  }
   if(menu) menu.addEventListener('click',function(){
     var open=side.classList.toggle('open');
     menu.setAttribute('aria-expanded',open?'true':'false');
   });
   if(side) side.addEventListener('click',function(e){
-    if(e.target.closest('a')) side.classList.remove('open');
+    if(e.target.closest('a')) closeMenu(false);
+  });
+  document.addEventListener('keydown',function(e){
+    if(e.key==='Escape' && side && side.classList.contains('open')){
+      closeMenu(true);
+    }
   });
 
   /* copy a listing */
@@ -697,18 +715,33 @@ JS = """
   function filter(){
     var here=scope(), chosen=pick(here), units=chosen.list;
     var secs=[].slice.call(here.querySelectorAll('main section'));
+    var shelves=[].slice.call(here.querySelectorAll('details.shelf'));
     var q=find.value.trim().toLowerCase();
     if(!q){
       units.forEach(function(u){ u.classList.remove('hide'); });
       secs.forEach(function(s){ s.classList.remove('hide'); });
+      shelves.forEach(function(s){
+        if(s.dataset.filterOpen!==undefined){
+          s.open=s.dataset.filterOpen==='true'; delete s.dataset.filterOpen;
+        }
+      });
       syncNav();
       count.textContent=''; return;
     }
+    shelves.forEach(function(s){
+      if(s.dataset.filterOpen===undefined) s.dataset.filterOpen=String(s.open);
+    });
     var hits=0;
     units.forEach(function(u){
       if(!u.dataset.text) u.dataset.text=(u.textContent||'').toLowerCase();
       var ok=u.dataset.text.indexOf(q)>=0 || (u.id||'').indexOf(q)===0;
       u.classList.toggle('hide',!ok); if(ok) hits++;
+    });
+    /* A shelf opens for a result it would otherwise conceal, then returns
+       to the state the reader left it in when the query is cleared. */
+    shelves.forEach(function(s){
+      s.open=!!s.querySelector('.card:not(.hide)')
+             || s.dataset.filterOpen==='true';
     });
     /*  A section that held units and now shows none goes too -- unless the
         sections are themselves what is being filtered. */
@@ -728,7 +761,9 @@ JS = """
   if(find){
     find.addEventListener('input',filter);
     find.addEventListener('keydown',function(e){
-      if(e.key==='Escape'){ find.value=''; filter(); find.blur(); }
+      if(e.key==='Escape'){
+        e.stopPropagation(); find.value=''; filter(); find.blur();
+      }
     });
   }
   /* A bare '/' used to be swallowed anywhere on the page, which breaks
@@ -959,10 +994,28 @@ GUIDE_CSS = """
 .cards h3.group:first-child{margin-top:0}
 
 /* ---- the front page ---- */
-.hero p.status{
-  margin-top:1rem; padding-left:.9rem; border-left:2px solid var(--accent-soft);
+.hero.wide h1{
+  font-size:clamp(1.75rem, 1.35rem + 1.8vw, 2.5rem); text-wrap:balance;
+}
+.hero.wide p:first-of-type{font-size:1.125rem; text-wrap:pretty}
+.hero-actions{display:flex; flex-wrap:wrap; gap:.65rem; margin:1.15rem 0}
+.hero-actions a{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height:2.5rem; padding:.45rem .8rem; border:1px solid var(--rule);
+  border-radius:5px; background:var(--panel); font-size:.88rem;
+  font-weight:600; text-decoration:none;
+}
+.hero-actions a.primary{
+  color:var(--panel); background:var(--accent); border-color:var(--accent);
+}
+.hero-actions a:hover{border-color:var(--accent-soft); box-shadow:var(--sh)}
+.hero details.status{
+  max-width:44rem; margin-top:1rem; padding:.65rem .8rem;
+  border-left:2px solid var(--accent-soft); background:var(--panel-2);
   color:var(--ink-soft); font-size:.93rem;
 }
+.hero details.status summary{cursor:pointer; color:var(--ink); font-weight:600}
+.hero details.status p{margin:.5rem 0 0; color:var(--ink-soft); font-size:1em}
 section.landing{padding-top:2.6rem}
 figure.shown{margin:0 0 1.1rem}
 figure.shown figcaption{
@@ -979,7 +1032,18 @@ section.landing p.more{color:var(--ink-soft); font-size:.93rem; max-width:44rem}
 .routes{display:grid; gap:1rem; margin:0 0 1rem;
   grid-template-columns:repeat(auto-fit,minmax(17rem,1fr))}
 .route{border-left:2px solid var(--accent-soft)}
-.route strong{color:var(--accent)}
+.route strong{color:var(--accent); text-wrap:balance}
+details.shelf > summary{
+  width:max-content; max-width:100%; cursor:pointer; color:var(--accent);
+  font-weight:600; text-decoration:underline;
+  text-decoration-color:color-mix(in srgb, var(--accent) 35%, transparent);
+  text-underline-offset:2px;
+}
+details.shelf[open] > summary{margin-bottom:1rem}
+details.shelf .cards{margin-top:0}
+@media (max-width:35rem){
+  figure.shown .listing pre{white-space:pre-wrap; overflow-wrap:anywhere}
+}
 """
 
 #  A hyphen is not \w, and the documents tag a fence `landin-grammar`.
@@ -1300,21 +1364,22 @@ def render_guide(text, links, targets, hl):
 
 
 def nav_html(docs, current, sections):
-    out = ['<h3>documents</h3>']
+    out = ['<div class="nav-group">documents</div>']
     out.append(f'<a class="doc" href="index.html">the front page</a>')
     for d in docs:
         here = ' here' if d["out"] == current else ""
         now = ' aria-current="page"' if d["out"] == current else ""
         out.append(f'<a class="doc{here}"{now} href="{d["out"]}">'
                    f'{esc(d["nav"])}</a>')
-    out.append('<h3>find</h3>')
+    out.append('<div class="nav-group">filter this page</div>')
     out.append('<div class="finder">' + icons.use("search", "i")
-               + '<input id="find" type="search" placeholder="filter — press /" '
-                 'aria-label="filter this document" '
+               + '<input id="find" type="search" '
+                 'placeholder="filter this page — press /" '
+                 'aria-label="filter this page" '
                  'autocomplete="off" spellcheck="false"></div>')
     out.append('<div id="found" role="status" aria-live="polite"></div>')
     if sections:
-        out.append('<h3>in this document</h3>')
+        out.append('<div class="nav-group">in this document</div>')
         for sid, title, count in sections:
             label = esc(title.split("  —  ")[0])
             n = str(count) if count else ""
@@ -1393,7 +1458,6 @@ def page(title, kind, heading, hero, body, nav, docname, logo=False,
 <footer>
 Generated from <code>{esc(docname)}</code> by <code>render_html.py</code>.
 The text file is the specification; this page is a reading of it.
-Regenerate with <code>python3 render_html.py</code>.
 The repository is at <a href="{REPO}">git.sr.ht/~sinnfrei/landin</a>.
 <br>Copyright &#169; 2026 Jan Haan.
 Licensed under <a href="{REPO}/tree/main/item/LICENSE-MIT">MIT</a> or
@@ -1443,6 +1507,24 @@ def readme_status(text):
     """The README's own status line, so the front page cannot claim more."""
     m = re.search(r"\*\*(Status:.*?)\*\*", text, re.S)
     return " ".join(m.group(1).split()) if m else ""
+
+
+def status_parts(text):
+    """The short truth shown before the README's fuller status is opened."""
+    prefix = f"Status: {VERSION_LINE}."
+    if not text.startswith(prefix):
+        raise SystemExit("render_html: README.md's status does not begin with "
+                         f"{prefix!r}")
+    remainder = text[len(prefix):].strip()
+    if not remainder:
+        return prefix, ""
+    m = re.match(r"^(.+?\.)(?:\s+(.+))$", remainder)
+    if m:
+        return f"{prefix} {m.group(1)}", m.group(2)
+    if remainder.endswith("."):
+        return f"{prefix} {remainder}", ""
+    raise SystemExit("render_html: status_parts cannot find a complete "
+                     f"compiler-status sentence after {prefix!r} in README.md")
 
 
 def landing_samples(text, ids=LANDING_IDS):
@@ -1553,7 +1635,7 @@ def tab_title(title, nav):
     return f"{t} — Landin"
 
 
-def index_page(docs, counts, intro, status, samples, symbols, total=0):
+def index_page(docs, counts, intro, status, samples, symbols):
     """The front door: what the language is, what it looks like, where to go.
 
     The contents remain, at the bottom, because a reader who came back for
@@ -1571,7 +1653,6 @@ def index_page(docs, counts, intro, status, samples, symbols, total=0):
     #  What it looks like, in constructs taken from the tour itself.  Each
     #  keeps its number, and the number is the link back to the full entry.
     if samples:
-        rest = f"{total - len(samples)}" if total else "rest"
         shown = []
         for cid, title, code in samples:
             hl = Highlighter(*symbols, links=lambda ref: None)
@@ -1586,7 +1667,7 @@ def index_page(docs, counts, intro, status, samples, symbols, total=0):
             f'{chr(10).join(shown)}'
             '<p class="more">Every construct is numbered, and the '
             'numbers do not move. <a href="tour.html">Read the tour</a> '
-            f'for the other {rest}.</p></section>')
+            'for the rest.</p></section>')
 
     #  Three ways in, because the documents answer different questions and
     #  a reader who starts in the wrong one finds it slow going.
@@ -1601,13 +1682,6 @@ def index_page(docs, counts, intro, status, samples, symbols, total=0):
         ("handoff.html", "understand the design",
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
-        ("roadmap.html", "see what is left",
-         "The roadmap owns every open item, dependency and gate. It is the "
-         "only place work is tracked."),
-        (REPO, "read the source",
-         "The repository: these documents, the Ada bootstrap compiler, the "
-         "fixtures, and the build. Everything on this site is generated "
-         "from it."),
     ]
     cards = "".join(
         f'<a class="route" href="{href}"><strong>{esc(head)}</strong>'
@@ -1627,13 +1701,22 @@ def index_page(docs, counts, intro, status, samples, symbols, total=0):
                 f'</strong><span>{esc(d["blurb"])}</span>'
                 f'<em>{esc(n)}</em></a>')
     body.append('<section class="landing" id="every-document">'
-                '<h2>every document</h2>'
-                f'<div class="cards">{chr(10).join(cards)}</div></section>')
+                '<h2>every document</h2><details class="shelf">'
+                '<summary>browse every document</summary>'
+                f'<div class="cards">{chr(10).join(cards)}</div>'
+                '</details></section>')
 
     hero = "".join(f"<p>{esc(t)}</p>" for t in intro)
+    hero += ('<div class="hero-actions">'
+             '<a class="primary" href="tour.html">read the tour</a>'
+             '<a href="spec.html">browse the specification</a></div>')
     if status:
-        hero += (f'<p class="status">'
-                 f'{prose_html(status, lambda ref: None)}</p>')
+        brief, detail = status_parts(status)
+        hero += ('<details class="status"><summary>'
+                 f'{prose_html(brief, lambda ref: None)}</summary>')
+        if detail:
+            hero += f'<p>{prose_html(detail, lambda ref: None)}</p>'
+        hero += '</details>'
 
     nav = nav_html(docs, "index.html", [
         ("what-it-looks-like", "what it looks like", 0),
@@ -1678,6 +1761,49 @@ ATTR = re.compile(r'\s(?:href|src)="([^"]*)"')
 
 MAIN = re.compile(r"<main\b[^>]*>(.*)</main>", re.S)
 ASIDE = re.compile(r"<(nav|header|footer)\b[^>]*>.*?</\1>", re.S)
+
+
+class PageShape(HTMLParser):
+    """The few generated-HTML relationships whose semantics must not drift."""
+
+    def __init__(self):
+        super().__init__()
+        self.headings = []
+        self.shelf = []
+        self.sections = []
+
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        if re.fullmatch(r"h[1-6]", tag):
+            self.headings.append(tag)
+        if tag == "section":
+            self.sections.append(values.get("id") == "every-document")
+        if (tag == "a" and any(self.sections)
+                and "card" in values.get("class", "").split()):
+            self.shelf.append(values.get("href", ""))
+
+    def handle_endtag(self, tag):
+        if tag == "section" and self.sections:
+            self.sections.pop()
+
+
+def page_shape(out):
+    shape = PageShape()
+    shape.feed(out.read_text())
+    return shape
+
+
+def verify_structure(out: Path):
+    """A page title is the root of its heading outline, exactly once."""
+    headings = page_shape(out).headings
+    failures = []
+    if headings.count("h1") != 1:
+        failures.append(f"has {headings.count('h1')} h1 headings")
+    if not headings or headings[0] != "h1":
+        failures.append("does not begin its heading outline with h1")
+    if failures:
+        print(f"  {out.name}: " + "; ".join(failures))
+    return not failures
 
 
 def body_region(page_html):
@@ -1728,7 +1854,7 @@ def verify(src: Path, out: Path):
     return not lost
 
 
-def verify_front(out: Path, pieces):
+def verify_front(out: Path, pieces, docs):
     """The front page holds no document of its own, so it is checked
     against the pieces it was built from.
 
@@ -1754,7 +1880,19 @@ def verify_front(out: Path, pieces):
     else:
         print(f"  {out.name}: the pitch, the status and "
               f"{len(pieces) - 2} samples are on the page")
-    return not short
+
+    want_shelf = Counter(d["out"] for d in docs)
+    got_shelf = Counter(page_shape(out).shelf)
+    shelf_ok = got_shelf == want_shelf
+    if not shelf_ok:
+        missing = list((want_shelf - got_shelf).elements())
+        extra = list((got_shelf - want_shelf).elements())
+        print(f"  {out.name}: its document shelf does not match its pages")
+        if missing:
+            print("    missing: " + ", ".join(missing))
+        if extra:
+            print("    extra: " + ", ".join(extra))
+    return not short and shelf_ok
 
 
 USAGE = """render the documentation as HTML
@@ -1913,9 +2051,7 @@ def main(argv):
 
         (SITE / "index.html").write_text(
             index_page(DOCS + GUIDES, counts, intro, status, samples,
-                       guide_symbols,
-                       total=len(re.findall(r"(?m)^### \[\d{4}\]",
-                                            tour_text))))
+                       guide_symbols))
         print(f"{SITE.name}/index.html")
         for name in write_resources(DOCS + GUIDES):
             print(f"{SITE.name}/{name}")
@@ -1925,10 +2061,15 @@ def main(argv):
 
     if check:
         print("checking that nothing was dropped:")
-        ok = all(verify(source / d["src"], SITE / d["out"])
-                 for d in docs + guides)
+        ok = all([verify(source / d["src"], SITE / d["out"])
+                  for d in docs + guides])
+        structure = all([verify_structure(SITE / d["out"])
+                         for d in docs + guides])
         if front:
-            ok = verify_front(SITE / "index.html", front) and ok
+            structure = verify_structure(SITE / "index.html") and structure
+            ok = verify_front(SITE / "index.html", front,
+                              DOCS + GUIDES) and ok
+        ok = structure and ok
         if not ok:
             print("some content is missing from the pages")
             return 1
