@@ -1,5 +1,5 @@
 class: positive
 summary: [1790] a binding with a type and a value
-constructs: 1790
+constructs: 0110, 1790
 program: program.ldn
 targets: linux-x86-64, macos-arm64

@@ -1,5 +1,5 @@
 class: positive
 summary: [1770] the two booleans
-constructs: 1770
+constructs: 0180, 1770
 program: program.ldn
 targets: linux-x86-64, macos-arm64

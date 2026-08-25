@@ -1,0 +1,6 @@
+class: negative
+summary: [0150] names u128 and i128 and [1790]'s type rule does not, so the kernel refuses one by name rather than reading it as an unknown name
+constructs: 0150, 1790
+program: program.ldn
+codes: L0101
+targets: linux-x86-64, macos-arm64

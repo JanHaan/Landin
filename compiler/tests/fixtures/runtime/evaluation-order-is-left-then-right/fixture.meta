@@ -1,0 +1,6 @@
+class: runtime
+summary: [0410] the left operand runs before the right, observed through module state rather than asserted about a value
+constructs: 0410, 1770, 1800, 1900, 1920, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

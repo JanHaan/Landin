@@ -1,6 +1,6 @@
 class: negative
 summary: [1870] each of the eleven is its own type, so usize is not u64 on a machine whose pointer is eight bytes wide
-constructs: 1870
+constructs: 0160, 1870
 program: program.ldn
 targets: linux-x86-64, macos-arm64
 codes: L0301
