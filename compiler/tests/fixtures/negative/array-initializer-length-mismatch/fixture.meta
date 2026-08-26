@@ -1,6 +1,6 @@
 class: negative
-summary: [0520] leaves a local array initializer for a later R2.20 slice
+summary: D17 makes the length part of a D21 initializer's type identity
 constructs: 0080, 0110, 0520, 1810
 program: program.ldn
-codes: L0304
+codes: L0301
 targets: linux-x86-64, macos-arm64

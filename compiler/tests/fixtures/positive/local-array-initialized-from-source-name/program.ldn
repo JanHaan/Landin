@@ -1,0 +1,18 @@
+source: [2]u32
+
+f: () -> none =
+    --  Mutable local, initialized from a module datum.
+    mut from_mut_module: [2]u32 = source
+
+    --  Immutable local, initialized from a module datum.
+    from_immutable_module: [2]u32 = source
+
+    --  Mutable local, initialized from a prior local wholly assigned by
+    --  its own initializer (D21 makes the source assigned by the copy).
+    mut from_mut_local: [2]u32 = from_mut_module
+
+    --  Immutable local, initialized from a prior local -- either kind of
+    --  binding accepts the initializer because a declaration is not an
+    --  assignment.
+    from_immutable_local: [2]u32 = from_immutable_module
+end f

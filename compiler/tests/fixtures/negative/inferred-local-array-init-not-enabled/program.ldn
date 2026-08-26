@@ -1,5 +1,5 @@
 source: [2]u32
 
 f: () -> none =
-    mut words: [2]u32 = source
+    mut words := source
 end f

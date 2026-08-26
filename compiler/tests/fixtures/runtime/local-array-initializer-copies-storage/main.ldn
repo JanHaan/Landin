@@ -1,0 +1,26 @@
+pair: type = [2]u32
+mut module_source: pair
+
+public main: () -> (code: i32) =
+    module_source[0] = 17
+    module_source[1] = 25
+
+    --  D21 admits every combination of mutable/immutable destination and
+    --  module/prior-local source in the one initializer form.
+    mut mut_from_module: pair = module_source
+    immutable_from_module: [2]u32 = module_source
+    mut mut_from_local: pair = mut_from_module
+    immutable_from_local: [2]u32 = immutable_from_module
+
+    if mut_from_module[0] == 17 and mut_from_module[1] == 25
+        and immutable_from_module[0] == 17
+        and immutable_from_module[1] == 25
+        and mut_from_local[0] == 17 and mut_from_local[1] == 25
+        and immutable_from_local[0] == 17
+        and immutable_from_local[1] == 25
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
