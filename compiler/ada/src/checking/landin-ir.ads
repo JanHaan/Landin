@@ -299,6 +299,10 @@ package Landin.IR is
    --  or Landin.Types.No_Value for `-> none` -- and the declared type for
    --  a Datum.  No_Value is not a new spelling: Landin.Types already
    --  means by it "what a call to a `-> none` function hands back".
+   --
+   --  A Datum may also be [0670]'s aggregate, whose fields are added
+   --  below.  A Routine may not: passing or returning one is an ABI rule
+   --  and its own slice.
    function Add_Item
      (Into     : in out Unit;
       Kind     : Item_Kind;
@@ -313,7 +317,10 @@ package Landin.IR is
                   and then (Result in Landin.Types.Scalar_Name
                             or else (Kind = Routine
                                      and then Result
-                                              = Landin.Types.No_Value))
+                                              = Landin.Types.No_Value)
+                            or else (Kind = Datum
+                                     and then Result
+                                              = Landin.Types.Aggregate))
                   and then Landin.Provenance.Is_Known (Site),
           Post => Item_Count (Into) = Item_Count (Into)'Old + 1
                   and then Holds (Into, Add_Item'Result)
@@ -344,6 +351,37 @@ package Landin.IR is
      return Item_Id
      with Pre => Is_Prepared (Of_Unit)
                  and then Natural (Declared) <= Declaration_Limit (Of_Unit);
+
+   ------------------------------------------------------------------
+   --  An aggregate item's fields
+   ------------------------------------------------------------------
+
+   --  [0750]: the scalar fields of an aggregate datum, in the order they
+   --  were written.  The types and not the offsets, for the reason
+   --  Measure_Size carries a type rather than an answer: an offset needs
+   --  a target and this package has none.  Whoever holds a description
+   --  lays them out with Landin.Targets.Placement and gets what the
+   --  checker got, because it is the same arithmetic over the same run.
+   function Field_Count (Of_Unit : Unit; Item : Item_Id) return Natural
+     with Pre => Holds (Of_Unit, Item);
+
+   procedure Add_Field
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Of_Type : Landin.Types.Scalar_Name)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item) = Landin.Types.Aggregate,
+          Post => Field_Count (Into, Item)
+                    = Field_Count (Into, Item)'Old + 1
+                  and then Nth_Field
+                             (Into, Item, Field_Count (Into, Item))
+                           = Of_Type;
+
+   function Nth_Field
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive)
+     return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item)
+                 and then Index <= Field_Count (Of_Unit, Item);
 
    ------------------------------------------------------------------
    --  Slots
@@ -899,6 +937,7 @@ private
       Returns_To  : Slot_Id                   := No_Slot;
       Blocks      : Run;
       Values      : Run;
+      Fields      : Run;
       Open        : Block_Id                  := No_Block;
    end record;
 
@@ -923,6 +962,11 @@ private
    package Item_Ref_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Item_Id);
 
+   package Field_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Landin.Types.Scalar_Name,
+      "="          => Landin.Types."=");
+
    type Unit is tagged limited record
       Ready      : Boolean := False;
       Items      : Item_Vectors.Vector;
@@ -931,6 +975,7 @@ private
       Blocks     : Block_Vectors.Vector;
       Code       : Code_Vectors.Vector;
       Operands   : Value_Ref_Vectors.Vector;
+      Fields     : Field_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
    end record;
 

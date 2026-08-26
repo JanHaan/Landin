@@ -1,0 +1,9 @@
+counters: type = struct
+    hits: u32
+    misses: u32
+    ready: bool
+end counters
+
+--  D10: a binding with no value holds zero, false for a bool, so
+--  [1740]'s module state of a struct type needs nothing to carry it.
+mut state: counters

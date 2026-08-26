@@ -194,6 +194,7 @@ package body Landin.Checking is
                Landin.Types.Storage_Size (Fields (Field), Facts),
                Facts, At_Offset);
             Into.Field_Offsets.Append (At_Offset);
+            Into.Field_Types.Append (Fields (Field));
          end;
       end loop;
 
@@ -211,6 +212,17 @@ package body Landin.Checking is
    begin
       return Of_Table.Field_Offsets (Layout.First + Field - 1);
    end Field_Offset;
+
+   function Field_Type
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Landin.Types.Scalar_Name
+   is
+      Layout : Aggregate_Layout renames
+        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+   begin
+      return Of_Table.Field_Types (Layout.First + Field - 1);
+   end Field_Type;
 
    function Layout_Extent (Of_Table : Table; Id : Declaration_Id)
      return Landin.Targets.Byte_Count

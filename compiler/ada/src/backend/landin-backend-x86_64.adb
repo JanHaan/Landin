@@ -13,6 +13,7 @@ package body Landin.Backend.X86_64 is
    use type Landin.IR.Opcode;
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
+   use type Landin.Types.Type_Kind;
 
    LF : constant Character := Character'Val (10);
 
@@ -1143,6 +1144,51 @@ package body Landin.Backend.X86_64 is
 
       procedure Emit_Datum (Item : Landin.IR.Item_Id);
 
+      procedure Emit_Aggregate_Datum (Item : Landin.IR.Item_Id);
+
+      --  [0670]'s module state.  The item carries its fields' types and
+      --  this works out the same placement the checker did, because it is
+      --  Landin.Targets.Placement over the same run against the same
+      --  description.  D10 makes the whole of it zero, so the assembler is
+      --  asked for that many zero bytes rather than for a value per field.
+      procedure Emit_Aggregate_Datum (Item : Landin.IR.Item_Id) is
+         Placed : Landin.Targets.Placement :=
+           Landin.Targets.Empty_Placement;
+      begin
+         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
+            declare
+               Held : constant Held_Size :=
+                 Size_Of (Landin.IR.Nth_Field (Of_Unit, Item, Field), Facts);
+               At_Offset : Landin.Targets.Byte_Count;
+            begin
+               Landin.Targets.Place (Placed, Held, Facts, At_Offset);
+            end;
+         end loop;
+
+         if Landin.Resolution.Is_Public
+              (Meanings, Landin.IR.Declares (Of_Unit, Item))
+         then
+            Put (Character'Val (9) & ".globl " & Symbol (Item));
+         end if;
+
+         declare
+            Bytes : constant String :=
+              Trimmed
+                (Landin.Targets.Byte_Count'Image
+                   (Landin.Targets.Size_Of (Placed)));
+         begin
+            Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+            Put (Character'Val (9) & ".align "
+                 & Trimmed
+                     (Landin.Targets.Byte_Alignment'Image
+                        (Landin.Targets.Alignment_Of (Placed))));
+            Put (Symbol (Item) & ":");
+            Emit (".zero " & Bytes);
+            Put (Character'Val (9) & ".size " & Symbol (Item)
+                 & ", " & Bytes);
+         end;
+      end Emit_Aggregate_Datum;
+
       procedure Emit_Datum (Item : Landin.IR.Item_Id) is
          Kind : constant Landin.Types.Scalar_Name :=
            Landin.IR.Result_Of (Of_Unit, Item);
@@ -1200,7 +1246,13 @@ package body Landin.Backend.X86_64 is
                  Landin.IR.Item_Id (Index);
             begin
                if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
-                  Emit_Datum (Item);
+                  if Landin.IR.Result_Of (Of_Unit, Item)
+                     = Landin.Types.Aggregate
+                  then
+                     Emit_Aggregate_Datum (Item);
+                  else
+                     Emit_Datum (Item);
+                  end if;
                end if;
             end;
          end loop;
