@@ -1,0 +1,5 @@
+class: positive
+summary: [0370] sizeof and alignof measure inline fixed arrays and chains of aliases to them
+constructs: 0370, 0520, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

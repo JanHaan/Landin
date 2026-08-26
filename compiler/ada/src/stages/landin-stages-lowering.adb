@@ -20,6 +20,7 @@ package body Landin.Stages.Lowering is
    use type IR.Slot_Id;
    use type IR.Part_Position;
    use type IR.Value_Id;
+   use type Landin.Checking.Element_Count;
    use type Landin.Source.Source_Id;
    use type Res.Declaration_Id;
    use type Res.Declaration_Sort;
@@ -527,22 +528,64 @@ package body Landin.Stages.Lowering is
             when Syn.False_Literal =>
                return IR.Emit_Truth (Unit.all, Filling, False, Site);
 
-            --  [0370]: the type asked about is carried into the IR and
-            --  the answer is not.  A size needs a width and a width needs
-            --  a target, and this stage is target-neutral by design.
+            --  [0370]: the type asked about is carried into the IR and the
+            --  target-dependent answer is not.  D17 decomposes a fixed array
+            --  into operations the IR already has: element measurement and a
+            --  target-neutral element count, multiplied for size.  A nonempty
+            --  array has its element's alignment; the internal empty shape
+            --  has size zero and alignment one.
             when Syn.Size_Of | Syn.Align_Of =>
                declare
                   Asked : constant Syn.Node_Id :=
                     Syn.Measured_Type (Of_Tree, Node);
+                  Held : constant Ty.Type_Kind :=
+                    Landin.Checking.Type_Of (Types.all, Of_Tree, Asked);
+                  Result : constant Ty.Scalar_Name :=
+                    Scalar_At (Of_Tree, Node);
                begin
-                  return IR.Emit_Measurement
-                           (Unit.all, Filling,
-                            (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
-                             then IR.Measure_Size else IR.Measure_Align),
-                            Landin.Checking.Type_Of
-                              (Types.all, Of_Tree, Asked),
-                            Scalar_At (Of_Tree, Node),
-                            Site);
+                  if Held /= Ty.Fixed_Array then
+                     return IR.Emit_Measurement
+                              (Unit.all, Filling,
+                               (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
+                                then IR.Measure_Size else IR.Measure_Align),
+                               Ty.Scalar_Name (Held), Result, Site);
+                  end if;
+
+                  declare
+                     Length : constant Landin.Checking.Element_Count :=
+                       Landin.Checking.Array_Length
+                         (Types.all, Of_Tree, Asked);
+                     Element : constant Ty.Scalar_Name :=
+                       Landin.Checking.Array_Element
+                         (Types.all, Of_Tree, Asked);
+                  begin
+                     if Syn.Kind (Of_Tree, Node) = Syn.Align_Of then
+                        if Length = 0 then
+                           return IR.Emit_Number
+                                    (Unit.all, Filling, Result,
+                                     1, False, Site);
+                        end if;
+
+                        return IR.Emit_Measurement
+                                 (Unit.all, Filling, IR.Measure_Align,
+                                  Element, Result, Site);
+                     end if;
+
+                     declare
+                        Element_Size : constant IR.Value_Id :=
+                          IR.Emit_Measurement
+                            (Unit.all, Filling, IR.Measure_Size,
+                             Element, Result, Site);
+                        Count : constant IR.Value_Id :=
+                          IR.Emit_Number
+                            (Unit.all, Filling, Result,
+                             Ty.Magnitude (Length), False, Site);
+                     begin
+                        return IR.Emit_Binary
+                                 (Unit.all, Filling, IR.Multiply,
+                                  Count, Element_Size, Result, Site);
+                     end;
+                  end;
                end;
 
             --  [0370]: unlike byte measurements, an array's element count is

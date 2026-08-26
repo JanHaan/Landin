@@ -2241,6 +2241,22 @@ and the migrated `negative/lenof-unresolved-name` pin those boundaries;
 `runtime/lenof-named-fixed-arrays` observes the same constant for module and
 uninitialized local storage declared through one array alias.
 
+The next slice enables [0370]'s `sizeof` and `alignof` for a fixed-array type,
+both inline and through any chain of D15 aliases. The checker dispatches the
+resolved checked type rather than the syntax kind: scalars and fixed arrays are
+accepted, an unresolved type keeps its one owning report, and a struct remains
+`L0304`. Lowering needs no opcode and no target fact of its own. `sizeof`
+emits the scalar element's `Measure_Size`, the array length as an existing
+`usize` Number, and Multiply; nonempty `alignof` emits the element's
+`Measure_Align`. The internally represented zero-element shape keeps zero size
+and alignment one without deciding whether `[0]T` is source programmers may
+write. `positive/measurement-of-fixed-arrays` pins the inline and alias-chain
+forms, `negative/measuring-refused-types` pins both refusal boundaries without
+duplicate diagnostics, and `runtime/measurements-answer-for-the-target`
+observes nonzero array answers. The focused backend case emits an aliased size
+and inline alignment from one source against the 64-bit and synthetic 32-bit
+target descriptions.
+
 What is still refused: module array initializers, inferred array
 initializers, general whole-array value positions, an array literal [0520],
 the inferred length [0530], `zeroed` [0540], repetition [0560], slices
@@ -2262,9 +2278,11 @@ because [0370]'s measurement had only ever met one of the eleven and read
 anything else as a hole the parser had already reported. A struct with an array
 field went from `L0010` to being accepted silently, and then to a defect at the
 first value of that struct, because the field loop named an aggregate field and
-let every other unlayable field through. Both are refused by name again, both
-have fixtures, and the measurement one covers a declared name as well, which had
-the same hole before arrays existed.
+let every other unlayable field through. At that boundary both were refused by
+name again and both had fixtures; the measurement fixture covered a declared
+name as well, which had the same hole before arrays existed. The later
+measurement slice above migrated that array refusal to positive evidence while
+keeping the struct boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

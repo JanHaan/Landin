@@ -1,0 +1,8 @@
+row: type = [4]u16
+line: type = row
+packet: type = line
+
+inline_size: usize = sizeof [4]u16
+inline_align: usize = alignof [4]u16
+aliased_size: usize = sizeof packet
+aliased_align: usize = alignof packet
