@@ -72,15 +72,18 @@ package Landin.Backend is
       Item     : Landin.IR.Item_Id;
       Of_Frame : Frame;
       Slot     : Landin.IR.Slot_Id;
-      Field    : Positive;
+      Field    : Landin.IR.Part_Position;
       Facts    : Landin.Targets.Target_Facts)
      return Landin.Targets.Byte_Count
      with Pre => Landin.IR.Holds (Of_Unit, Item)
                  and then Landin.IR.Holds (Of_Unit, Item, Slot)
-                 and then Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
-                 and then Field
-                          <= Landin.IR.Slot_Field_Count
-                               (Of_Unit, Item, Slot);
+                 and then (Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                           or else Landin.IR.Is_Array
+                                     (Of_Unit, Item, Slot))
+                 and then Landin.IR."<="
+                            (Landin.IR.Element_Total (Field),
+                             Landin.IR.Slot_Part_Count
+                               (Of_Unit, Item, Slot));
 
    --  How much room an aggregate slot takes, and how it must be aligned:
    --  [0750]'s whole placement over the slot's own field run.
@@ -93,7 +96,9 @@ package Landin.Backend is
       Alignment : out Landin.Targets.Byte_Alignment)
      with Pre => Landin.IR.Holds (Of_Unit, Item)
                  and then Landin.IR.Holds (Of_Unit, Item, Slot)
-                 and then Landin.IR.Is_Aggregate (Of_Unit, Item, Slot);
+                 and then (Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                           or else Landin.IR.Is_Array
+                                     (Of_Unit, Item, Slot));
 
    function Value_Offset
      (Of_Frame : Frame; Value : Landin.IR.Value_Id)

@@ -316,6 +316,20 @@ package body Landin.Stages.Lowering is
 
          Held := Landin.Checking.Type_Of (Types.all, Id);
 
+         --  D19's local array is one compact frame cell.  Its shape derives
+         --  every known element operation without one IR field per element.
+         if Held = Ty.Fixed_Array then
+            Slots (Positive (Id)) :=
+              IR.Add_Array_Slot
+                (Unit.all, Filling,
+                 Landin.Checking.Array_Element (Types.all, Id),
+                 IR.Element_Total
+                   (Landin.Checking.Array_Length (Types.all, Id)),
+                 Id,
+                 Site_Of (Of_Tree, Node));
+            return Slots (Positive (Id));
+         end if;
+
          --  [0670]'s local: a cell holding a whole struct, carrying its
          --  fields' types the way an aggregate datum does.
          if Held = Ty.Aggregate then
@@ -578,18 +592,33 @@ package body Landin.Stages.Lowering is
                     Syn.Target_Of (Of_Tree, Node);
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, From);
-                  Datum : constant IR.Item_Id :=
-                    IR.Item_For (Unit.all, Means);
                begin
+                  if Res.Sort_Of (Meanings.all, Means)
+                     = Res.Local_Binding
+                  then
+                     if not Is_Constant_Index (Of_Tree, Node) then
+                        raise Landin.Compiler_Defect with
+                          "a computed local array index reached lowering";
+                     end if;
+
+                     return IR.Emit_Load_Slot_Field
+                              (Unit.all, Filling,
+                               Slot_For (Of_Tree, From, Means),
+                               Constant_Index (Of_Tree, Node),
+                               Scalar_At (Of_Tree, Node), Site);
+                  end if;
+
                   if Is_Constant_Index (Of_Tree, Node) then
                      return IR.Emit_Load_Field
-                              (Unit.all, Filling, Datum,
+                              (Unit.all, Filling,
+                               IR.Item_For (Unit.all, Means),
                                Constant_Index (Of_Tree, Node),
                                Scalar_At (Of_Tree, Node), Site);
                   end if;
 
                   return IR.Emit_Load_Element
-                           (Unit.all, Filling, Datum,
+                           (Unit.all, Filling,
+                            IR.Item_For (Unit.all, Means),
                             Lower_Expression
                               (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope),
                             Scalar_At (Of_Tree, Node), Site);
@@ -897,23 +926,28 @@ package body Landin.Stages.Lowering is
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
                   if Syn.Kind (Of_Tree, Place) = Syn.Element_Index then
-                     declare
-                        Datum : constant IR.Item_Id :=
-                          IR.Item_For
-                            (Unit.all,
-                             Res.Bound_To
-                               (Meanings.all, Of_Tree,
-                                Syn.Target_Of (Of_Tree, Place)));
-                     begin
-                        if Index = IR.No_Value then
-                           IR.Emit_Store_Field
-                             (Unit.all, Filling, Datum,
-                              Constant_Index (Of_Tree, Place), Value, Site);
-                        else
-                           IR.Emit_Store_Element
-                             (Unit.all, Filling, Datum, Index, Value, Site);
+                     if Res.Sort_Of (Meanings.all, Means)
+                        = Res.Local_Binding
+                     then
+                        if Index /= IR.No_Value then
+                           raise Landin.Compiler_Defect with
+                             "a computed local array index reached lowering";
                         end if;
-                     end;
+
+                        IR.Emit_Store_Slot_Field
+                          (Unit.all, Filling,
+                           Slot_For (Of_Tree, Named, Means),
+                           Constant_Index (Of_Tree, Place), Value, Site);
+                     elsif Index = IR.No_Value then
+                        IR.Emit_Store_Field
+                          (Unit.all, Filling,
+                           IR.Item_For (Unit.all, Means),
+                           Constant_Index (Of_Tree, Place), Value, Site);
+                     else
+                        IR.Emit_Store_Element
+                          (Unit.all, Filling, IR.Item_For (Unit.all, Means),
+                           Index, Value, Site);
+                     end if;
                      return;
                   end if;
 

@@ -255,11 +255,12 @@ package body Landin.IR.Verifier is
                                                Value => V);
                                     end if;
 
-                                    if not Is_Aggregate
-                                             (Of_Unit, Id, Cell)
-                                      or else Natural
+                                    if (not Is_Aggregate (Of_Unit, Id, Cell)
+                                        and then not Is_Array
+                                                       (Of_Unit, Id, Cell))
+                                      or else Element_Total
                                                 (Field_Of (Of_Unit, Id, V))
-                                              > Slot_Field_Count
+                                              > Slot_Part_Count
                                                   (Of_Unit, Id, Cell)
                                     then
                                        return (Kind => Field_Out_Of_Range,
@@ -269,11 +270,10 @@ package body Landin.IR.Verifier is
 
                                     if Op = Load_Field
                                       and then Result_Of (Of_Unit, Id, V)
-                                               /= Nth_Slot_Field
+                                               /= Nth_Slot_Part
                                                     (Of_Unit, Id, Cell,
-                                                     Positive
-                                                       (Field_Of
-                                                          (Of_Unit, Id, V)))
+                                                     Field_Of
+                                                       (Of_Unit, Id, V))
                                     then
                                        return (Kind => Result_Disagrees,
                                                Item => Id, Block => Block,
@@ -640,11 +640,10 @@ package body Landin.IR.Verifier is
                                  Wants : constant Landin.Types.Scalar_Name
                                    :=
                                      (if Reaches_A_Slot (Of_Unit, Id, V)
-                                      then Nth_Slot_Field
+                                      then Nth_Slot_Part
                                              (Of_Unit, Id,
                                               Slot_Of (Of_Unit, Id, V),
-                                              Positive
-                                                (Field_Of (Of_Unit, Id, V)))
+                                              Field_Of (Of_Unit, Id, V))
                                       else Nth_Part
                                              (Of_Unit,
                                               Datum_Of (Of_Unit, Id, V),

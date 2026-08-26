@@ -1,3 +1,4 @@
+with Ada.Containers.Ordered_Sets;
 with Ada.Strings.Fixed;
 
 with Landin.Checking;
@@ -441,26 +442,6 @@ package body Landin.Stages.Checking is
          end;
       end Type_At;
 
-      --  Is this node one of [1840]'s module declarations?  A binding at
-      --  module level is a datum and one inside a block is a frame cell,
-      --  and D10 is about the first: it says a binding with no value
-      --  holds zero, and [1460] leaves no moment at module level in which
-      --  anything could assign one.  A local has both.
-      function Is_Module_Declaration
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-
-      function Is_Module_Declaration
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
-      begin
-         for Position in 1 .. Syn.Declaration_Count (Of_Tree) loop
-            if Syn.Nth_Declaration (Of_Tree, Position) = Node then
-               return True;
-            end if;
-         end loop;
-
-         return False;
-      end Is_Module_Declaration;
-
       function Declared_As_Node
         (Of_Tree        : Syn.Tree;
          Node           : Syn.Node_Id;
@@ -499,16 +480,14 @@ package body Landin.Stages.Checking is
                        in Syn.Type_Reference | Syn.Array_Type;
          begin
             --  [1795] declares the type; most *values* of one wait for the
-            --  rest of R2.20.  Refused where the value is declared, so
-            --  the report names the binding rather than the type.
-            --  An array local is a frame cell and waits for the slice
-            --  that gives it one, so only module state may be an array
-            --  today; a struct's local is enabled and this is the one
-            --  place the two still differ.
+            --  rest of R2.20.  A declaration-only module array is zeroed by
+            --  D10, and a declaration-only local array is frame storage whose
+            --  compiler-known elements D19 assigns independently.  Neither
+            --  form needs a whole-array value.  Parameters, returns and
+            --  bindings with initializers still do and are refused here.
             if Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
-              and then not (Is_Zeroed_State
-                            and then Is_Module_Declaration (Of_Tree, Node))
+              and then not Is_Zeroed_State
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -965,6 +944,12 @@ package body Landin.Stages.Checking is
       --  trap the backend emits -- which is what the divisor and the shift
       --  amount already do, in the same paragraph and for the same reason.
       --  Known is [1880]'s: a literal, or a unary minus over one.
+      function Is_Known_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      function Known_Index_Value
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Value   : out Ty.Magnitude) return Boolean;
       procedure Check_Index_Bound
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -1034,6 +1019,42 @@ package body Landin.Stages.Checking is
                      (Of_Tree.all,
                       Syn.Nth_Field (Of_Tree.all, Written, Index)));
       end Field_Named;
+
+      --  [1880]'s compiler-known form is deliberately syntactic: a literal
+      --  or unary minus over one, independent of later folding.
+      function Is_Known_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is (Syn.Kind (Of_Tree, Node) = Syn.Integer_Literal
+          or else
+            (Syn.Kind (Of_Tree, Node) = Syn.Negation
+             and then Syn.Kind
+                        (Of_Tree, Syn.Operand_Of (Of_Tree, Node))
+                      = Syn.Integer_Literal));
+
+      function Known_Index_Value
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Value   : out Ty.Magnitude) return Boolean
+      is
+         Negated : constant Boolean :=
+           Syn.Kind (Of_Tree, Node) = Syn.Negation;
+         Literal : constant Syn.Node_Id :=
+           (if Negated then Syn.Operand_Of (Of_Tree, Node) else Node);
+         Snap : constant Landin.Source.Snapshot :=
+           Source (Context, Syn.Source_Of (Of_Tree));
+         Overflowed : Boolean;
+      begin
+         if not Is_Known_Index (Of_Tree, Node) then
+            Value := 0;
+            return False;
+         end if;
+
+         Ty.Evaluate
+           (Landin.Source.Slice
+              (Snap, Syn.Digit_Span (Of_Tree, Literal)),
+            Syn.Base (Of_Tree, Literal), Value, Overflowed);
+         return not Overflowed and then (not Negated or else Value = 0);
+      end Known_Index_Value;
 
       procedure Check_Index_Bound
         (Of_Tree : Syn.Tree;
@@ -1273,6 +1294,19 @@ package body Landin.Stages.Checking is
                      return Kept (Ty.Ill_Typed);
                   end if;
 
+                  if Held = Ty.Fixed_Array then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
+                                   & "` names an array, and a value of one"
+                                   & " is not enabled yet",
+                        Refused => Bad.Array_Value,
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
                   return Kept (Held);
                end;
 
@@ -1345,6 +1379,38 @@ package body Landin.Stages.Checking is
                   end if;
 
                   Check_Index_Bound (Of_Tree, Node, From, Where);
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                       = Ty.Ill_Typed
+                  then
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  --  D19 gives a local array one definite-assignment fact per
+                  --  compiler-known element.  What a computed local write
+                  --  establishes is deliberately left for a later slice;
+                  --  module arrays already have D10's complete state and keep
+                  --  their runtime-index path.
+                  if not Is_Known_Index (Of_Tree, Where)
+                    and then Syn.Kind (Of_Tree, From) = Syn.Name_Reference
+                    and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
+                             = Res.Bound
+                    and then Res.Sort_Of
+                               (Meanings.all,
+                                Res.Bound_To (Meanings.all, Of_Tree, From))
+                             = Res.Local_Binding
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "a local array index the compiler does not"
+                                   & " know is not enabled yet",
+                        Refused => Bad.Array_Value,
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
                   return Kept
                     (Landin.Checking.Array_Element
                        (Types.all, Of_Tree, From));
@@ -1644,7 +1710,10 @@ package body Landin.Stages.Checking is
                   Wants : constant Ty.Type_Kind :=
                     Declared_As_Node (Of_Tree, Node);
                begin
-                  if Value = Syn.No_Node then
+                  if Value = Syn.No_Node or else Wants = Ty.Ill_Typed then
+                     --  The declaration has already explained why this value
+                     --  form is refused; checking the initializer as another
+                     --  whole-array value would only repeat L0304.
                      null;
                   elsif Wants = Ty.Undecided then
                      --  [0050]: the inferred form takes the value's type,
@@ -2460,10 +2529,30 @@ package body Landin.Stages.Checking is
 
       subtype Tracked_Field is Natural range 0 .. Widest_Struct;
 
-      type Assigned_Set is array (Tracked, Tracked_Field) of Boolean;
+      type Assigned_Fields is array (Tracked, Tracked_Field) of Boolean;
+
+      type Element_Fact is record
+         Declaration : Res.Declaration_Id;
+         Position    : Ty.Magnitude;
+      end record;
+
+      function "<" (Left, Right : Element_Fact) return Boolean
+      is (Left.Declaration < Right.Declaration
+          or else
+            (Left.Declaration = Right.Declaration
+             and then Left.Position < Right.Position));
+
+      package Element_Sets is new Ada.Containers.Ordered_Sets
+        (Element_Type => Element_Fact);
+
+      type Assigned_Set is record
+         Fields   : Assigned_Fields := [others => [others => False]];
+         Elements : Element_Sets.Set;
+      end record;
 
       Nothing_Assigned : constant Assigned_Set :=
-        [others => [others => False]];
+        (Fields => [others => [others => False]],
+         Elements => Element_Sets.Empty_Set);
 
       --  Which declarations [1910] is about.  A parameter arrives assigned
       --  and a module binding is [1940]'s, so what is left is a local
@@ -2490,6 +2579,12 @@ package body Landin.Stages.Checking is
          State     : Assigned_Set;
          Message   : String;
          Field     : Tracked_Field := 0);
+      procedure Require_Element
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Id      : Res.Declaration_Id;
+         Position : Ty.Magnitude;
+         State   : Assigned_Set);
 
       --  Which declaration a declaring node is.  Landin.Resolution
       --  publishes the other direction only, so this is a scan: over a
@@ -2557,7 +2652,7 @@ package body Landin.Stages.Checking is
               1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
             loop
                if Each in 1 .. Widest_Struct
-                 and then not State (Positive (Id), Each)
+                 and then not State.Fields (Positive (Id), Each)
                then
                   Require_Assigned
                     (At_Source, At_Span, Id, State,
@@ -2576,7 +2671,9 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         if not Is_Tracked (Id) or else State (Positive (Id), Field) then
+         if not Is_Tracked (Id)
+           or else State.Fields (Positive (Id), Field)
+         then
             return;
          end if;
 
@@ -2603,6 +2700,45 @@ package body Landin.Stages.Checking is
          end;
       end Require_Assigned;
 
+      procedure Require_Element
+        (Of_Tree  : Syn.Tree;
+         Node     : Syn.Node_Id;
+         Id       : Res.Declaration_Id;
+         Position : Ty.Magnitude;
+         State    : Assigned_Set) is
+      begin
+         if not Is_Tracked (Id)
+           or else Element_Sets.Contains
+                     (State.Elements, (Id, Position))
+         then
+            return;
+         end if;
+
+         declare
+            Their_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Id));
+            Their_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Id);
+         begin
+            Bad.Report
+              (Item    => Bad.Not_Definitely_Assigned,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "`" & Spelled (Res.Name_Of (Meanings.all, Id))
+                          & "[" & Written (Ty.Folded (Position))
+                          & "]` is read here and no path that arrives"
+                          & " assigned it",
+               Note    => "D19: compiler-known elements of a local array"
+                          & " are assigned independently",
+               Related => Landin.Provenance.Origin'
+                            (Source => Res.Source_Of (Meanings.all, Id),
+                             Where  => Syn.Anchor
+                                         (Their_Tree.all, Their_Node)),
+               Because => "declared here with no value",
+               Into    => Found);
+         end;
+      end Require_Element;
+
       --  Every read in an expression.  A place an assignment writes is not
       --  a read and is not walked here; `inc` is both and is walked.
       procedure Read_Names
@@ -2614,8 +2750,42 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         --  D19: reaching a known element is not a read of the whole array.
+         --  The index is still an expression and is read first.  A refused
+         --  or out-of-bounds selection establishes no additional diagnostic.
+         if Syn.Kind (Of_Tree, Node) = Syn.Element_Index then
+            declare
+               From  : constant Syn.Node_Id :=
+                 Syn.Target_Of (Of_Tree, Node);
+               Where : constant Syn.Node_Id := Syn.Index_Of (Of_Tree, Node);
+               Position : Ty.Magnitude;
+            begin
+               Read_Names (Of_Tree, Where, State);
+               if Syn.Kind (Of_Tree, From) = Syn.Name_Reference
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
+                          = Res.Bound
+                 and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                          /= Ty.Ill_Typed
+                 and then Known_Index_Value
+                            (Of_Tree, Where, Position)
+               then
+                  Require_Element
+                    (Of_Tree, Node,
+                     Res.Bound_To (Meanings.all, Of_Tree, From),
+                     Position, State);
+               elsif Syn.Kind (Of_Tree, From) /= Syn.Name_Reference then
+                  Read_Names (Of_Tree, From, State);
+               end if;
+            end;
+
+            return;
+         end if;
+
          if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference then
-            if Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                 /= Ty.Ill_Typed
+              and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
+                         = Res.Bound
             then
                Require_Assigned
                  (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Node),
@@ -2672,10 +2842,73 @@ package body Landin.Stages.Checking is
          Exits   : out Boolean)
       is
          procedure Mark (Node : Syn.Node_Id);
+         procedure Merge
+           (Into   : in out Assigned_Set;
+            First  : Boolean;
+            Branch : Assigned_Set);
+
+         procedure Merge
+           (Into   : in out Assigned_Set;
+            First  : Boolean;
+            Branch : Assigned_Set) is
+         begin
+            if First then
+               Into := Branch;
+               return;
+            end if;
+
+            for Which in Tracked loop
+               for Part in Tracked_Field loop
+                  Into.Fields (Which, Part) :=
+                    Into.Fields (Which, Part)
+                    and Branch.Fields (Which, Part);
+               end loop;
+            end loop;
+            Into.Elements :=
+              Element_Sets.Intersection (Into.Elements, Branch.Elements);
+         end Merge;
 
          --  A place written is assigned from here on.
          procedure Mark (Node : Syn.Node_Id) is
          begin
+            if Node /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Node) = Syn.Element_Index
+            then
+               declare
+                  From  : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+                  Where : constant Syn.Node_Id :=
+                    Syn.Index_Of (Of_Tree, Node);
+                  Position : Ty.Magnitude;
+               begin
+                  --  Reaching an element destination reads its index even
+                  --  though it does not read the element being selected.
+                  Read_Names (Of_Tree, Where, State);
+                  if Syn.Kind (Of_Tree, From) = Syn.Name_Reference
+                    and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
+                             = Res.Bound
+                    and then Landin.Checking.Type_Of
+                               (Types.all, Of_Tree, Node) /= Ty.Ill_Typed
+                    and then Known_Index_Value
+                               (Of_Tree, Where, Position)
+                  then
+                     declare
+                        Id : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Of_Tree, From);
+                     begin
+                        if Is_Tracked (Id) then
+                           Element_Sets.Include
+                             (State.Elements, (Id, Position));
+                        end if;
+                     end;
+                  elsif Syn.Kind (Of_Tree, From) /= Syn.Name_Reference then
+                     Read_Names (Of_Tree, From, State);
+                  end if;
+               end;
+
+               return;
+            end if;
+
             if Node /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
             then
@@ -2695,7 +2928,7 @@ package body Landin.Stages.Checking is
                           Res.Bound_To (Meanings.all, Of_Tree, From);
                      begin
                         if Is_Tracked (Id) then
-                           State (Positive (Id), Which) := True;
+                           State.Fields (Positive (Id), Which) := True;
                         end if;
                      end;
                   end if;
@@ -2714,7 +2947,7 @@ package body Landin.Stages.Checking is
                     Res.Bound_To (Meanings.all, Of_Tree, Node);
                begin
                   if Is_Tracked (Id) then
-                     State (Positive (Id), 0) := True;
+                     State.Fields (Positive (Id), 0) := True;
 
                      --  A whole struct copied into a place assigns every
                      --  field of it at once, which is the one way a
@@ -2726,7 +2959,7 @@ package body Landin.Stages.Checking is
                                  (Types.all, Id)
                         loop
                            if Each in 1 .. Widest_Struct then
-                              State (Positive (Id), Each) := True;
+                              State.Fields (Positive (Id), Each) := True;
                            end if;
                         end loop;
                      end if;
@@ -2792,8 +3025,7 @@ package body Landin.Stages.Checking is
 
                   when Syn.If_Statement =>
                      declare
-                        Merged   : Assigned_Set :=
-                          [others => [others => True]];
+                        Merged   : Assigned_Set := Nothing_Assigned;
                         Any_Path : Boolean := False;
                         All_Exit : Boolean := True;
                      begin
@@ -2812,16 +3044,9 @@ package body Landin.Stages.Checking is
                                  Result, Owner, Branch, Left);
 
                               if not Left then
+                                 Merge (Merged, not Any_Path, Branch);
                                  Any_Path := True;
                                  All_Exit := False;
-
-                                 for Which in Tracked loop
-                                    for Part in Tracked_Field loop
-                                       Merged (Which, Part) :=
-                                         Merged (Which, Part)
-                                         and Branch (Which, Part);
-                                    end loop;
-                                 end loop;
                               end if;
                            end;
                         end loop;
@@ -2837,32 +3062,18 @@ package body Landin.Stages.Checking is
                                  Result, Owner, Branch, Left);
 
                               if not Left then
+                                 Merge (Merged, not Any_Path, Branch);
                                  Any_Path := True;
                                  All_Exit := False;
-
-                                 for Which in Tracked loop
-                                    for Part in Tracked_Field loop
-                                       Merged (Which, Part) :=
-                                         Merged (Which, Part)
-                                         and Branch (Which, Part);
-                                    end loop;
-                                 end loop;
                               end if;
                            end;
                         else
                            --  [1910]: no condition is believed, so a
                            --  branch with no `else` has a path that runs
                            --  none of its arms and changes nothing.
+                           Merge (Merged, not Any_Path, State);
                            Any_Path := True;
                            All_Exit := False;
-
-                           for Which in Tracked loop
-                              for Part in Tracked_Field loop
-                                 Merged (Which, Part) :=
-                                   Merged (Which, Part)
-                                   and State (Which, Part);
-                              end loop;
-                           end loop;
                         end if;
 
                         if Any_Path then

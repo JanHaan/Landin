@@ -19,6 +19,8 @@ with Ada.Strings.Fixed;
 with Landin.Backend;
 with Landin.Backend.X86_64;
 with Landin.IR;
+with Landin.Provenance;
+with Landin.Resolution;
 with Landin.Source;
 with Landin.Stages.Checking;
 with Landin.Stages.Lowering;
@@ -1114,6 +1116,72 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_Local_Is_A_Cell_In_The_Frame;
 
+   procedure Constant_Array_Parts_Address_One_Frame_Cell
+     (Item : in out Landin.Testing.Context);
+
+   procedure Constant_Array_Parts_Address_One_Frame_Cell
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower (Work, "use: () -> none = end use" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Unit : IR.Unit;
+         Routine : IR.Item_Id;
+         Slot : IR.Slot_Id;
+         Block : IR.Block_Id;
+         Value : IR.Value_Id;
+         Site : constant Landin.Provenance.Origin :=
+           (Source => 1, Where => Landin.Source.Empty_Span);
+      begin
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+         Slot := IR.Add_Array_Slot
+           (Unit, Routine, Landin.Types.U32, 3, IR.No_Declaration, Site);
+         Block := IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Routine, Block);
+         Value := IR.Emit_Number
+           (Unit, Routine, Landin.Types.U32, 1, False, Site);
+         IR.Emit_Store_Slot_Field (Unit, Routine, Slot, 1, Value, Site);
+         Value := IR.Emit_Number
+           (Unit, Routine, Landin.Types.U32, 3, False, Site);
+         IR.Emit_Store_Slot_Field (Unit, Routine, Slot, 3, Value, Site);
+         IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+         IR.Leave_Block (Unit, Routine);
+
+         declare
+            Layout : constant Landin.Backend.Frame :=
+              Landin.Backend.Laid_Out
+                (Unit, Routine, Landin.Targets.Linux_X86_64);
+            Text : constant String :=
+              Landin.Backend.X86_64.Text
+                (Unit, Landin.Stages.Meanings (Work).all,
+                 Landin.Stages.Identities (Work).all,
+                 Landin.Targets.Linux_X86_64);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Landin.Backend.Slot_Offset (Layout, Slot) = 12
+               and then Landin.Backend.Field_Offset
+                          (Unit, Routine, Layout, Slot, 3,
+                           Landin.Targets.Linux_X86_64) = 4,
+               "generic layout reserves one cell and scales its parts");
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & "movl %eax, -12(%rbp)"),
+               "the first element starts at the bottom of the array cell");
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & "movl %eax, -4(%rbp)"),
+               "a constant index is scaled inside the same array cell");
+         end;
+      end;
+   end Constant_Array_Parts_Address_One_Frame_Cell;
+
    --  D10 zeroes a module binding with no value, and zero bytes do not
    --  have to be in the image to be zero: `.bss` reserves them and `.data`
    --  carries them.  A 32 KB part is in this compiler's range, so a
@@ -2195,6 +2263,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a struct local is a cell in the frame",
          A_Struct_Local_Is_A_Cell_In_The_Frame'Access);
+      Landin.Testing.Register
+        (Into, "backend", "constant array parts share one frame cell",
+         Constant_Array_Parts_Address_One_Frame_Cell'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value folds every level",
          A_Module_Value_Folds_Every_Level'Access);

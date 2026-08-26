@@ -1,0 +1,25 @@
+public main: () -> (code: i32) =
+    mut words: [4]u32
+    mut bytes: [2]u8
+
+    words[0] = 10
+    words[3] = 31
+    bytes[0] = 1
+    bytes[1] = 2
+    inc words[3]
+
+    mut selected: [1]u16
+    if words[0] == 10 then
+        selected[0] = 7
+    else
+        selected[0] = 8
+    end if
+
+    if words[0] == 10 and words[3] == 32
+        and bytes[0] == 1 and bytes[1] == 2 and selected[0] == 7
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
