@@ -1209,6 +1209,16 @@ package body Landin.Stages.Checking is
                         return Kept (Ty.Ill_Typed);
                      end if;
 
+                     --  A struct one of whose fields was refused has no
+                     --  layout, so it has no field types either.  The
+                     --  refusal already named the field that stopped it,
+                     --  and a second report about a field that is fine
+                     --  would send a reader to the wrong line.
+                     if not Landin.Checking.Has_Layout (Types.all, Wrote)
+                     then
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+
                      Landin.Checking.Note_Field
                        (Types.all, Of_Tree, Node, Which);
                      return Kept

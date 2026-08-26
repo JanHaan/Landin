@@ -1,0 +1,17 @@
+inner: type = struct
+    q: u32
+end inner
+
+--  A field of a struct type waits for the rest of R2.20, and this hole is
+--  older than the arrays: a struct refused for its field has no layout,
+--  and reading a field that is fine used to ask it for one anyway.
+outer: type = struct
+    part: inner
+    count: u32
+end outer
+
+mut here: outer
+
+f: () -> (r: u32) =
+    r = here.count
+end f
