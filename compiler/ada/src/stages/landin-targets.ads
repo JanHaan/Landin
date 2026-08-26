@@ -77,7 +77,12 @@ package Landin.Targets is
    --  compiler, and a target offset must not inherit it.  The bound is one
    --  below a power of two so that rounding up near the top really can
    --  overflow, and is therefore a case a test can reach.
-   type Byte_Count is range 0 .. 2 ** 48 - 1;
+   type Byte_Count is range 0 .. 2 ** 64 - 1;
+
+   --  D18 bounds one array by the greatest byte count `usize` can hold on
+   --  the target.  This is a target fact, not the width of the compiler host.
+   function Maximum_Object_Size (Facts : Target_Facts) return Byte_Count
+     with Pre => Pointer_Width (Facts) <= 64;
 
    --  Layout arithmetic that refuses to guess.  Alignment must be a power
    --  of two, and rounding up must not silently wrap.  Both rules are

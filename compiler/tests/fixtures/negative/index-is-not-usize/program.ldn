@@ -1,0 +1,7 @@
+mut words: [4]u32
+
+--  D18 accepts exactly usize: using u32 would require an implicit conversion,
+--  even on a target where the two happen to have the same width.
+f: (i: u32) -> (r: u32) =
+    r = words[i]
+end f

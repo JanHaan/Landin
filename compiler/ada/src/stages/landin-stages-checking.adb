@@ -275,23 +275,43 @@ package body Landin.Stages.Checking is
                   Ty.Evaluate
                     (Text, Syn.Base (Of_Tree, Bound), Value, Overflowed);
 
-                  if Overflowed
-                    or else Value
-                            > Ty.Magnitude
-                                (Landin.Checking.Element_Count'Last)
-                  then
+                  if Overflowed then
                      Bad.Report
                        (Item    => Bad.Literal_Out_Of_Range,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Bound),
                         Message => "this is more elements than an array"
                                    & " may have",
-                        Note    => "[0520]: the length is part of the"
-                                   & " type, and this compiler counts"
-                                   & " them in a u32",
+                        Note    => "D18: an array's byte extent must fit the"
+                                   & " target's usize",
                         Into    => Found);
                      return Ty.Ill_Typed;
                   end if;
+
+                  declare
+                     Element_Bytes : constant Ty.Magnitude :=
+                       Ty.Magnitude
+                         (Landin.Targets.Bytes
+                            (Ty.Storage_Size (Ty.Scalar_Name (Held), Facts)));
+                     Maximum_Bytes : constant Ty.Magnitude :=
+                       Ty.Magnitude
+                         (Landin.Targets.Maximum_Object_Size (Facts));
+                  begin
+                     if Element_Bytes /= 0
+                       and then Value > Maximum_Bytes / Element_Bytes
+                     then
+                        Bad.Report
+                          (Item    => Bad.Literal_Out_Of_Range,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Bound),
+                           Message => "this array is larger than the target"
+                                      & " can address",
+                           Note    => "D18: an array's byte extent must fit"
+                                      & " the target's usize",
+                           Into    => Found);
+                        return Ty.Ill_Typed;
+                     end if;
+                  end;
 
                   Length := Landin.Checking.Element_Count (Value);
                end;
@@ -1055,9 +1075,8 @@ package body Landin.Stages.Checking is
             Ty.Evaluate
               (Text, Syn.Base (Of_Tree, Literal), Value, Overflowed);
 
-            --  A negative index is outside every length, which is why
-            --  [1950] gives it no row of its own.  `-0` is not one:
-            --  [1880] makes it known and its value is zero, which an
+            --  D18's `usize` context has already refused every negative
+            --  value.  `-0` survives because its value is zero, which an
             --  array with any element at all has.
             if not Overflowed
               and then (not Negated or else Value = 0)
@@ -1296,32 +1315,43 @@ package body Landin.Stages.Checking is
                      return Kept (Ty.Ill_Typed);
                   end if;
 
-                  --  [0900]: an index is an integer, and [1950] says a
-                  --  negative one is outside every length.  An untyped
-                  --  literal takes [0200]'s default like any other.
+                  --  D18: the index is exactly `usize`; accepting every
+                  --  integer here would be an implicit conversion.  An
+                  --  untyped literal receives that context rather than
+                  --  [0200]'s context-free default.
                   declare
                      Got : constant Ty.Type_Kind :=
                        Synthesise (Of_Tree, Where);
                   begin
                      if Got = Ty.Untyped_Integer then
-                        Commit_To (Of_Tree, Where, Ty.Default_Integer);
-                     elsif Decidable (Got)
-                       and then Got not in Ty.Integer_Name
-                     then
+                        Commit_To (Of_Tree, Where, Ty.Usize);
+                     elsif Decidable (Got) and then Got /= Ty.Usize then
                         Bad.Report
                           (Item    => Bad.Type_Mismatch,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Where),
                            Message => "this indexes with " & Shown (Got)
-                                      & ", and an index is a number",
-                           Note    => "[0900]: an index is an integer,"
-                                      & " and every one of them may be",
+                                      & ", and an index is a usize",
+                           Note    => "D18: indexing accepts exactly usize"
+                                      & " and performs no implicit conversion",
                            Related => Syn.Origin (Of_Tree, From),
                            Because => "the array indexed here",
                            Into    => Found);
                         return Kept (Ty.Ill_Typed);
                      end if;
                   end;
+
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, Where)
+                       = Ty.Ill_Typed
+                    or else
+                      (Syn.Kind (Of_Tree, Where) = Syn.Negation
+                       and then Landin.Checking.Type_Of
+                                  (Types.all, Of_Tree,
+                                   Syn.Operand_Of (Of_Tree, Where))
+                                  = Ty.Ill_Typed)
+                  then
+                     return Kept (Ty.Ill_Typed);
+                  end if;
 
                   Check_Index_Bound (Of_Tree, Node, From, Where);
                   return Kept

@@ -113,8 +113,8 @@ package Landin.Syntax is
       Member_Selection,
       --  [0570]'s index, which takes what a selection named and one
       --  expression inside the brackets.  Two slots: what is indexed and
-      --  the index, which is an expression like any other -- [1950] says
-      --  what happens when the compiler knows it and when it does not.
+      --  the index, which D18 gives `usize` context -- [1950] says what
+      --  happens when the compiler knows it and when it does not.
       Element_Index,
       Integer_Literal,
       True_Literal,

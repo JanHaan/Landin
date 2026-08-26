@@ -550,6 +550,56 @@ package body Landin.Tests.Checking_Suite is
       Check_Target (Landin.Targets.Synthetic_32, 16, 4);
    end Array_Types_Are_Their_Length_And_Element;
 
+   --  D18: an array may occupy every byte a target's `usize` can name, and
+   --  not one beyond it.  The same 2**32-byte array therefore belongs to a
+   --  64-bit target and is refused by a 32-bit one; neither answer comes from
+   --  the host running this test.
+   procedure Array_Extent_Follows_Usize
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Extent_Follows_Usize
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Target
+        (Facts    : Landin.Targets.Target_Facts;
+         Length   : String;
+         Element  : String;
+         Accepted : Boolean);
+
+      procedure Check_Target
+        (Facts    : Landin.Targets.Target_Facts;
+         Length   : String;
+         Element  : String;
+         Accepted : Boolean)
+      is
+         Work  : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Order : Landin.Stages.Pipeline;
+         Ran   : Natural;
+         Src   : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "extent.ldn",
+            "huge: type = [" & Length & "]" & Element & LF);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+
+         Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) /= Accepted,
+            "the array extent follows the target's usize");
+      end Check_Target;
+   begin
+      Check_Target
+        (Landin.Targets.Synthetic_32, "4294967295", "u8", True);
+      Check_Target
+        (Landin.Targets.Synthetic_32, "2147483648", "u16", False);
+      Check_Target
+        (Landin.Targets.Linux_X86_64, "2147483648", "u16", True);
+   end Array_Extent_Follows_Usize;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -558,6 +608,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array types are their length and element",
          Array_Types_Are_Their_Length_And_Element'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array extent follows usize",
+         Array_Extent_Follows_Usize'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);

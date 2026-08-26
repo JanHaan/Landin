@@ -305,8 +305,9 @@ package Landin.Checking is
    --  A length is a count of elements and not of bytes, so it is not a
    --  Byte_Count: [0520] makes the length part of the type and [0370]'s
    --  `lenof` asks for it, while how many bytes that comes to needs a
-   --  target.
-   type Element_Count is range 0 .. 2 ** 32 - 1;
+   --  target.  Its range holds every enabled target's `usize`; D18 applies
+   --  the particular target's byte-extent limit before one is recorded.
+   type Element_Count is range 0 .. 2 ** 64 - 1;
 
    function Array_Length
      (Of_Table : Table;

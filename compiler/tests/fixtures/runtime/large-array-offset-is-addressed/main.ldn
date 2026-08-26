@@ -1,0 +1,13 @@
+mut far: [2147483648]u8
+
+--  D18 admits an offset at x86-64's signed displacement limit.  Adding the
+--  datum-to-instruction distance makes the relocation too wide, so the
+--  backend must form this address without truncating the target usize.
+public main: () -> (code: i32) =
+    far[2147483647] = 42
+    if far[2147483647] == 42 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
