@@ -82,6 +82,11 @@ package body Landin.Testing.Fakes is
         and then Host.Items.Element (Index).Kind = A_Directory;
    end Is_Directory;
 
+   procedure Raise_On_Read (Host : in out Fake_Filesystem) is
+   begin
+      Host.Writes.Raises := True;
+   end Raise_On_Read;
+
    overriding procedure Read_File
      (Host    : Fake_Filesystem;
       Path    : String;
@@ -91,6 +96,12 @@ package body Landin.Testing.Fakes is
       Index : constant Natural := Find (Host, Path);
    begin
       Content := Unbounded.Null_Unbounded_String;
+
+      if Host.Writes.Raises then
+         Host.Writes.Raises := False;
+         raise Compiler_Defect
+           with "a fake read was asked to stand in for a compiler defect";
+      end if;
 
       if Index = 0 then
          Status := Landin.Platform.Not_Found;
@@ -278,6 +289,11 @@ package body Landin.Testing.Fakes is
       return Host.State.Calls.Last_Element.Capture;
    end Last_Capture;
 
+   procedure Raise_On_Run (Host : in out Fake_Tool_Runner) is
+   begin
+      Host.State.Raises := True;
+   end Raise_On_Run;
+
    overriding procedure Run
      (Host      : Fake_Tool_Runner;
       Program   : String;
@@ -286,6 +302,12 @@ package body Landin.Testing.Fakes is
       Capture   : Landin.Platform.Capture_Mode := Landin.Platform.Merged)
    is
    begin
+      if Host.State.Raises then
+         Host.State.Raises := False;
+         raise Compiler_Defect
+           with "a fake tool was asked to stand in for a compiler defect";
+      end if;
+
       if Host.State.Mode = Ordered then
          if Host.State.Next_Result > Natural (Host.State.Script.Length) then
             raise Compiler_Defect

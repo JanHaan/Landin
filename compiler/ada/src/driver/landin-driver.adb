@@ -545,6 +545,22 @@ package body Landin.Driver is
          elsif Landin.Stages.Failed (Context) then
             Result.Status := Status_Reported;
          end if;
+
+      exception
+         --  A defect is the compiler finding itself wrong, and it arrives
+         --  after the run has usually already decided several things about
+         --  the source.  Letting it escape threw those away and left a
+         --  reader with one sentence about the compiler and nothing about
+         --  their program; twice in one afternoon that sentence was the
+         --  only thing a refused field produced.  So the report is
+         --  rendered from what the context holds, the defect is written
+         --  under it, and the status says which of the two happened.
+         when Landin.Compiler_Defect =>
+            Result.Report :=
+              Unbounded.To_Unbounded_String
+                (Landin.Stages.Rendered_Report (Context)
+                 & "refine: internal compiler defect" & LF);
+            Result.Status := Status_Defect;
       end;
 
       return Result;
