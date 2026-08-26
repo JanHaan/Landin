@@ -30,6 +30,16 @@ item 1 ROUTINE f result u32 params 1 slots 4 blocks 5 values 17
     13 LOAD u32 slot 4
     14 STORE slot 2 <- 13
     15 JUMP target 2
+file positive/array-module-state/program.ldn
+unit items 2
+item 1 DATUM buffer result array params 0 slots 0 blocks 1 values 1
+  elements 4 of u32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM flags result array params 0 slots 0 blocks 1 values 1
+  elements 8 of bool
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/array-type-is-declared/program.ldn
 unit items 0
 file positive/array-types-alias-and-agree/program.ldn

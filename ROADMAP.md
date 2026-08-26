@@ -2018,11 +2018,43 @@ alignment does not, because an empty array has no element to be aligned as. It
 is [0580]'s shape one step early — an empty slice still has a base — and the
 rule it belongs to arrives with the value slices that can make one.
 
-What is still refused: a value of an array type anywhere, an array literal
+Whether a program may *write* `[0]u8` is a different question and is not
+decided: the checker accepts one today because nothing refuses it, and no
+fixture pins that, deliberately. The arithmetic is pinned at the seam instead,
+so the answer can be either without the layout moving. It belongs with [0580],
+which is about what an empty thing still has rather than whether one may be
+written.
+
+Module state came first among the values, as it did for structs and for the
+same reason: D10 supplies the value and `.bss` already supplies the storage, so
+`mut buffer: [4]u32` needs nothing that does not exist. The extent is one
+multiplication rather than a run — an aggregate item carries its fields' types,
+but a length reaches four billion, so an array item carries one element and a
+count and the backend multiplies. D17 is why an array may be written inline
+where a struct may not: `[3]usize` carries its identity wherever it stands,
+while an anonymous struct body declares none, so the one is state and the other
+is not.
+
+An array local is still refused, which is the one place arrays and structs now
+differ: a struct local has a frame cell and an array's is the next slice. That
+refusal had to be written rather than inherited — the module-level test that
+D10 needs had been deleted when struct locals were enabled, and without it an
+array local was accepted and reached the frame as a defect. The suite caught it
+as a status of seventy rather than a silent crash, which is the report-keeping
+from the slice before this one doing its job the first time it was needed.
+
+What is still refused: an array local, an array literal
 [0520], the inferred length [0530], `zeroed` [0540], repetition [0560],
 indexing and slices [0570], `lenof`, and an array as a struct field. Each is its
 own slice, and the value slices need the same frame and data work the struct
 ones did.
+
+[0540] is worth naming now rather than when it bites: it says a type *has* a
+zero image when all-zero is a valid value for it, which is what lets a
+surrounding array be zeroed at all. Every element this kernel admits is a
+scalar and every scalar has one, so the check is vacuous today; it stops being
+vacuous when a pointer can be an element, because [0540] gives a pointer no
+zero image and there is no null to stand for one.
 
 Promoting `[` took away more refusals than the three that are obvious, and a
 third review round measured what each one used to do. `sizeof [4]u8` — the very

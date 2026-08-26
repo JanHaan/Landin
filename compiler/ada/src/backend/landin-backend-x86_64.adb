@@ -11,6 +11,7 @@ package body Landin.Backend.X86_64 is
    use type Landin.Targets.Byte_Count;
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Opcode;
+   use type Landin.IR.Element_Total;
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
@@ -1260,6 +1261,8 @@ package body Landin.Backend.X86_64 is
 
       procedure Emit_Aggregate_Datum (Item : Landin.IR.Item_Id);
 
+      procedure Emit_Array_Datum (Item : Landin.IR.Item_Id);
+
       procedure Emit_Reserved
         (Item      : Landin.IR.Item_Id;
          Size      : Landin.Targets.Byte_Count;
@@ -1290,7 +1293,8 @@ package body Landin.Backend.X86_64 is
 
       function Is_All_Zero (Item : Landin.IR.Item_Id) return Boolean is
       begin
-         if Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.Aggregate
+         if Landin.IR.Result_Of (Of_Unit, Item)
+            in Landin.Types.Aggregate | Landin.Types.Fixed_Array
          then
             return True;
          end if;
@@ -1322,6 +1326,24 @@ package body Landin.Backend.X86_64 is
          Emit (".zero " & Bytes);
          Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
       end Emit_Reserved;
+
+      --  [0520]'s array: the element repeated, so its extent is one
+      --  multiplication and its alignment is the element's own.  A length
+      --  of zero takes no room and aligns to a byte, having no element to
+      --  be aligned as.
+      procedure Emit_Array_Datum (Item : Landin.IR.Item_Id) is
+         Length : constant Landin.IR.Element_Total :=
+           Landin.IR.Array_Length (Of_Unit, Item);
+         Held : constant Held_Size :=
+           Size_Of (Landin.IR.Array_Element (Of_Unit, Item), Facts);
+      begin
+         Emit_Reserved
+           (Item,
+            Landin.Targets.Byte_Count (Length)
+            * Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held)),
+            (if Length = 0 then 1
+             else Landin.Targets.Alignment_Of (Facts, Held)));
+      end Emit_Array_Datum;
 
       procedure Emit_Datum (Item : Landin.IR.Item_Id) is
          Kind : constant Landin.Types.Scalar_Name :=
@@ -1408,6 +1430,10 @@ package body Landin.Backend.X86_64 is
                      = Landin.Types.Aggregate
                   then
                      Emit_Aggregate_Datum (Item);
+                  elsif Landin.IR.Result_Of (Of_Unit, Item)
+                        = Landin.Types.Fixed_Array
+                  then
+                     Emit_Array_Datum (Item);
                   else
                      Emit_Reserved
                        (Item,
