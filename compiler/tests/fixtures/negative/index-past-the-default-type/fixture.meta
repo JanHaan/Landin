@@ -1,6 +1,6 @@
 class: negative
-summary: [0200] gives an index literal the default type, so one past what that type holds is refused for its type and not for the length
-constructs: 0200, 0520, 0570
+summary: D18 gives an index literal usize context, so a large one is refused for the length and not for the default integer type
+constructs: 0160, 0200, 0520, 0570, 1950
 program: program.ldn
-codes: L0300
+codes: L0306
 targets: linux-x86-64, macos-arm64

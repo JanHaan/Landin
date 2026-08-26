@@ -93,6 +93,13 @@ package body Landin.Tests.Targets_Suite is
          Stack_Align   => 8,
          Widest        => 8,
          Pointer_Bytes => 4);
+
+      Landin.Testing.Check
+        (Item, Maximum_Object_Size (Linux_X86_64) = Byte_Count'Last,
+         "a 64-bit target admits a 64-bit byte extent");
+      Landin.Testing.Check
+        (Item, Maximum_Object_Size (Synthetic_32) = 2 ** 32 - 1,
+         "a 32-bit target admits only a 32-bit byte extent");
    end Descriptions_Do_Not_Follow_The_Host;
 
    procedure Backends_Are_Stated_Per_Target

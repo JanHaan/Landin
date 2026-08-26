@@ -141,18 +141,18 @@ package Landin.IR is
 
    subtype Scope_Id is Landin.Resolution.Scope_Id;
 
-   --  A count of parts, and a position among them.  As wide as a length
-   --  rather than a host Natural: [0520] admits an array of 2**32-1
-   --  elements and this compiler's Natural does not reach that on every
-   --  host, so counting parts in one would make a declared length the
-   --  host's business.  One-based, like every other run here.
-   type Element_Total is range 0 .. 2 ** 32 - 1;
+   --  A count of parts, and a position among them.  As wide as every
+   --  enabled target's `usize` rather than a host Natural: D18 admits an
+   --  array of 2**64-1 byte elements on a 64-bit target, and counting parts
+   --  in one must not make its declared length the host's business.
+   --  One-based, like every other run here.
+   type Element_Total is range 0 .. 2 ** 64 - 1;
 
    --  One past the last is not a position: the longest array has
-   --  2**32-1 elements, so every conversion between this and a count is
-   --  total and a malformed part reaches the verifier as a verdict
-   --  rather than as a range check.
-   type Part_Position is range 1 .. 2 ** 32 - 1;
+   --  2**64-1 elements, so every actual one-based position is in this range
+   --  and a malformed part reaches the verifier as a verdict rather than as
+   --  a range check.
+   type Part_Position is range 1 .. 2 ** 64 - 1;
 
 
    ------------------------------------------------------------------

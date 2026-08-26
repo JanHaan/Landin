@@ -596,9 +596,10 @@ package body Landin.Backend.X86_64 is
                   end if;
 
                   --  [0750] puts the field where the same placement the
-                  --  checker used puts it, and the assembler adds that
-                  --  many bytes to the name.  A displacement and not a
-                  --  computed address: the datum is one symbol.
+                  --  checker used puts it.  A small offset is a displacement
+                  --  from the datum's symbol; D18 can make an array offset
+                  --  wider than that instruction field, so a large one is
+                  --  added to the symbol address in registers.
                   declare
                      Datum : constant Landin.IR.Item_Id :=
                        Landin.IR.Datum_Of (Of_Unit, Item, Value);
@@ -612,19 +613,50 @@ package body Landin.Backend.X86_64 is
                         else Size_Of
                                (Landin.IR.Nth_Part
                                   (Of_Unit, Datum, Which), Facts));
-                     Place : constant String :=
-                       Symbol (Datum)
-                       & (if At_Offset = 0 then ""
-                          else "+"
-                               & Trimmed
-                                   (Landin.Targets.Byte_Count'Image
-                                      (At_Offset)))
-                       & "(%rip)";
                   begin
-                     if Op = Landin.IR.Load_Field then
-                        Carry (Held, Place, Value_Cell (Value));
+                     --  A RIP-relative memory operand has a signed 32-bit
+                     --  displacement, and its relocation is symbol plus
+                     --  offset minus instruction: the offset alone cannot
+                     --  prove that it fits.  D18 lets an array span the full
+                     --  target range, so form every nonzero element address
+                     --  in registers rather than leave that placement
+                     --  question to an unencodable relocation.
+                     if Landin.IR.Result_Of (Of_Unit, Datum)
+                          = Landin.Types.Fixed_Array
+                       and then At_Offset > 0
+                     then
+                        Emit ("leaq " & Symbol (Datum) & "(%rip), %rcx");
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (At_Offset))
+                           & ", %rdx");
+                        Emit ("addq %rdx, %rcx");
+
+                        if Op = Landin.IR.Load_Field then
+                           Carry (Held, "(%rcx)", Value_Cell (Value));
+                        else
+                           Carry
+                             (Held, Value_Cell (Operand (1)), "(%rcx)");
+                        end if;
                      else
-                        Carry (Held, Value_Cell (Operand (1)), Place);
+                        declare
+                           Place : constant String :=
+                             Symbol (Datum)
+                             & (if At_Offset = 0 then ""
+                                else "+"
+                                     & Trimmed
+                                         (Landin.Targets.Byte_Count'Image
+                                            (At_Offset)))
+                             & "(%rip)";
+                        begin
+                           if Op = Landin.IR.Load_Field then
+                              Carry (Held, Place, Value_Cell (Value));
+                           else
+                              Carry
+                                (Held, Value_Cell (Operand (1)), Place);
+                           end if;
+                        end;
                      end if;
                   end;
 

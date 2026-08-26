@@ -1,6 +1,6 @@
 class: negative
-summary: [1950] refuses an index it knows to be outside the length, and a negative one is outside every length
-constructs: 0520, 0570, 1950
+summary: [1950] refuses a known index outside the length, while D18 refuses a negative index as no usize
+constructs: 0160, 0520, 0570, 1950
 program: program.ldn
-codes: L0306, L0306
+codes: L0306, L0300
 targets: linux-x86-64, macos-arm64

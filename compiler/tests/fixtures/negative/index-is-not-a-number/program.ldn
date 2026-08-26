@@ -1,6 +1,6 @@
 mut words: [4]u32
 
---  [0900]: an index is an integer.
+--  D18: an array index is usize.
 f: () -> (r: u32) =
     r = words[true]
 end f

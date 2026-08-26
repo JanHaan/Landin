@@ -1,7 +1,7 @@
 mut words: [4]u32
 
 --  [1950]: an index the compiler knows is refused where it cannot be
---  taken, and a negative one is outside every length.
+--  taken.  D18 makes a negative index fail its `usize` context first.
 f: () -> (r: u32) =
     r = words[4]
 end f
