@@ -164,10 +164,14 @@ not enabled yet. A type position holds a name either way, since
 [1760] makes the eleven ordinary declared names the kernel
 predeclares; the grammar spells them out because they are the
 only ones a program does not have to declare for itself.
+An array [0520] is a type position too, and its length is part
+of it: the bound is [1770]'s integer, written in whatever base,
+and the element is a type like any other.
 ```landin-grammar
 binding     ::= "mut"? identifier ":" type ("=" expression)?
               | "mut"? identifier ":=" expression
-type        ::= scalar_name | identifier
+type        ::= array_type | scalar_name | identifier
+array_type  ::= "[" integer "]" type
 scalar_name ::= "u8" | "u16" | "u32" | "u64"
               | "i8" | "i16" | "i32" | "i64"
               | "usize" | "isize" | "bool"
@@ -1029,3 +1033,41 @@ mention, and this language does not do work a reader cannot see.
 **Pinned by** `negative/struct-field-not-assigned`,
 `negative/struct-field-not-assigned-on-every-path`,
 `runtime/struct-locals-hold-their-fields`.
+
+### D17 — An array's identity is its length and its element
+
+**The tour said** that an array is a value, that assignment copies it and
+that its size is part of its type [0520]. It says what an array *is* and
+never says when two of them are the same type, which for a struct [0710]
+answers by naming the declaration that wrote it.
+
+**Chosen:** structural. `[4]u8` and `[4]u8` are one type wherever they are
+written, and `[4]u8` and `[8]u8` are two, and so are `[4]u8` and `[4]i8`.
+D15's alias keeps that identity like any other, so `row: type = [4]u8`
+gives the same type a second name. The evidence is [0520]'s own sentence:
+size is part of the type, which is a description of a shape and not of a
+declaration — and [0370]'s `sizeof` and `lenof` ask a type what it measures
+without asking where it was written.
+
+**Why not [0710]'s rule:** that paragraph is about a struct, and it gives
+its reason in the same breath — a value typed as an anonymous struct "never
+becomes a same-shaped named type", because a struct body introduces a type
+where no existing type was. `[4]u8` introduces nothing: it describes a
+shape that the length and the element already determine. D15 makes a
+declaration without `distinct` name an existing type, and this is one.
+
+**The alternative:** nominal, one type per declaration, which would make
+two `[4]u8` declarations different types and put arrays under [0710] with
+structs. It was declined because nothing in the tour reaches for it and
+because it would leave a program no way to write the type of something it
+did not declare: `sizeof [4]u8` and a parameter of `[16]u8` both name a
+shape rather than a declaration, and under a nominal rule neither would
+mean anything.
+
+**What this does not decide:** an array of a struct, whose element is
+nominal and carries its declaration's identity into the array's. The array
+is still structural; two `[4]point` are one type exactly when the two
+`point`s are, which is [0710] doing its own work inside this rule.
+
+**Pinned by** `positive/array-type-is-declared`,
+`positive/array-types-alias-and-agree`.

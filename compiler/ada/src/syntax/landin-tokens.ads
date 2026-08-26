@@ -58,13 +58,13 @@ package Landin.Tokens is
       Kw_When,
       --  The signs the kernel productions spell.
       Ampersand, Bar, Caret, Colon, Colon_Equal, Comma, Dot, Equal,
-      Equal_Equal, Greater, Greater_Equal, Greater_Greater, Left_Paren,
-      Less, Less_Equal, Less_Greater, Less_Less, Minus, Minus_Greater,
-      Minus_Percent, Percent, Plus, Plus_Percent, Right_Paren, Slash,
-      Star, Star_Percent, Tilde, Underscore,
+      Equal_Equal, Greater, Greater_Equal, Greater_Greater, Left_Bracket,
+      Left_Paren, Less, Less_Equal, Less_Greater, Less_Less, Minus,
+      Minus_Greater, Minus_Percent, Percent, Plus, Plus_Percent,
+      Right_Bracket, Right_Paren, Slash, Star, Star_Percent, Tilde,
+      Underscore,
       --  Signs the tour spells and the kernel omits.
-      Bang, Dot_Dot, Dot_Dot_Dot, Dot_Dot_Less, Left_Bracket,
-      Right_Bracket,
+      Bang, Dot_Dot, Dot_Dot_Dot, Dot_Dot_Less,
       --  Lexemes with more than one spelling that the kernel omits.
       Compound_Assign, Character_Literal, Float_Literal, Raw_Literal,
       Text_Literal,
@@ -88,7 +88,7 @@ package Landin.Tokens is
    --  One spelling each, which is what makes Spelling total here and absent
    --  elsewhere: Compound_Assign covers thirteen spellings [0390], and a
    --  literal has as many as there are programs.
-   subtype Spelled_Kind is Token_Kind range Kw_Alignof .. Right_Bracket;
+   subtype Spelled_Kind is Token_Kind range Kw_Alignof .. Dot_Dot_Less;
 
    --  `literal ::= integer | "true" | "false"` [1770]. true and false are
    --  reserved words and literals at once, so this is a predicate rather

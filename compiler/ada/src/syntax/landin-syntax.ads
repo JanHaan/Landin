@@ -151,6 +151,9 @@ package Landin.Syntax is
       --  the kernel predeclares because those are known to the parser and
       --  this one is a name only resolution can answer for.
       Type_Reference,
+      --  [0520]'s array, whose length is part of it.  Two slots: the
+      --  bound, which is [1770]'s integer literal, and the element type.
+      Array_Type,
       --  [0670]'s block form, which a type declaration may give instead
       --  of a name, and one of its fields.  A field is a binding without
       --  a value [0750] and keeps the position it was written in,
@@ -173,7 +176,7 @@ package Landin.Syntax is
    subtype Expression_Kind is Node_Kind range Call .. Logical_Or;
 
    subtype Type_Reference_Kind is Node_Kind
-     range Error_Type .. Type_Reference;
+     range Error_Type .. Array_Type;
 
    --  What a type declaration may name: a type, or a body of its own.
    subtype Type_Body_Kind is Node_Kind range Error_Type .. Struct_Body;
@@ -491,6 +494,20 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Struct_Body
                   and then Index <= Field_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Field'Result);
+
+   --  [0520]'s length, as the integer literal the program wrote, and the
+   --  type of one element.  The length is a node and not a number here for
+   --  Landin.Syntax's own reason: what a literal means is [1880]'s and the
+   --  span it was written at is what a report about it points to.
+   function Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Array_Type,
+          Post => Contains (Of_Tree, Bound_Of'Result);
+
+   function Element_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Array_Type,
+          Post => Contains (Of_Tree, Element_Of'Result);
 
    function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)

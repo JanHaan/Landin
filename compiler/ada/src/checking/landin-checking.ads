@@ -293,6 +293,79 @@ package Landin.Checking is
                   and then Landin.Syntax.Contains (Of_Tree, Node),
           Post => Field_Index (Into, Of_Tree, Node) = Which;
 
+   ------------------------------------------------------------------
+   --  What an array is
+   ------------------------------------------------------------------
+
+   --  D17 makes an array structural, so its identity is what it is made
+   --  of: a length and an element type.  Both are kept per node, beside
+   --  what type the node has, for the reason a struct's declaration
+   --  identity is -- a Type_Kind says the category and never which one.
+   --
+   --  A length is a count of elements and not of bytes, so it is not a
+   --  Byte_Count: [0520] makes the length part of the type and [0370]'s
+   --  `lenof` asks for it, while how many bytes that comes to needs a
+   --  target.
+   type Element_Count is range 0 .. 2 ** 32 - 1;
+
+   function Array_Length
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Element_Count
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Array_Element
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Landin.Types.Scalar_Name
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   procedure Note_Array
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Length  : Element_Count;
+      Element : Landin.Types.Scalar_Name)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node),
+          Post => Array_Length (Into, Of_Tree, Node) = Length
+                  and then Array_Element (Into, Of_Tree, Node) = Element;
+
+   --  The same, for a declaration whose type is an array.
+   function Array_Length
+     (Of_Table : Table; Id : Declaration_Id) return Element_Count
+     with Pre => Is_Prepared (Of_Table) and then Contains (Of_Table, Id);
+
+   function Array_Element
+     (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Types.Scalar_Name
+     with Pre => Is_Prepared (Of_Table) and then Contains (Of_Table, Id);
+
+   procedure Note_Array
+     (Into    : in out Table;
+      Id      : Declaration_Id;
+      Length  : Element_Count;
+      Element : Landin.Types.Scalar_Name)
+     with Pre  => Is_Prepared (Into) and then Contains (Into, Id),
+          Post => Array_Length (Into, Id) = Length
+                  and then Array_Element (Into, Id) = Element;
+
+   --  How much room one takes and how it must be aligned.  [0520] says an
+   --  array is a value and [0750] lays its elements out end to end, so
+   --  this is the element's own size repeated and the element's own
+   --  alignment; a length of zero takes no room and aligns to a byte.
+   procedure Array_Extent
+     (Length    : Element_Count;
+      Element   : Landin.Types.Scalar_Name;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment);
+
    --  Says what a node synthesised.  Once: a second Note on one node is a
    --  pass that walked it twice, which is the defect this refuses rather
    --  than the last write silently winning.
@@ -426,6 +499,17 @@ private
    package Index_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Natural);
 
+   --  What an array is made of, or a length of zero and a default element
+   --  where the node is not one.  A record and not two vectors, because
+   --  the two are one answer and are always written together.
+   type Array_Shape is record
+      Length  : Element_Count            := 0;
+      Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
+   end record;
+
+   package Shape_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Array_Shape);
+
    package Field_Type_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Landin.Types.Scalar_Name,
@@ -453,6 +537,8 @@ private
       Node_Bodies  : Body_Vectors.Vector;
       --  Which field a selection node names, in the same run.
       Node_Fields  : Index_Vectors.Vector;
+      Node_Shapes  : Shape_Vectors.Vector;
+      Shapes       : Shape_Vectors.Vector;
       Runs         : Run_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
       Bodies       : Body_Vectors.Vector;

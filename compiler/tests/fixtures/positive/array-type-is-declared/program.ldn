@@ -1,0 +1,6 @@
+--  [0520]: an array is a value and its size is part of its type, so the
+--  length belongs to the type rather than to anything holding one.
+row: type = [4]u8
+
+--  [1770]'s integer is the bound in whatever base it was written.
+page: type = [0x100]u8

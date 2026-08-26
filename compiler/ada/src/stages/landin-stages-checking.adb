@@ -23,6 +23,7 @@ package body Landin.Stages.Checking is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Types.Type_Kind;
    use type Landin.Types.Folded;
+   use type Landin.Types.Magnitude;
    use type Landin.Checking.Progress;
    use type Res.Verdict;
    use type Res.Declaration_Sort;
@@ -216,6 +217,78 @@ package body Landin.Stages.Checking is
             return Ty.Aggregate;
          end if;
 
+         --  array_type ::= "[" integer "]" type              [1790]
+         --
+         --  D17 makes it structural, so what is recorded is the length and
+         --  the element and never where it was written.  An element the
+         --  kernel cannot lay out end to end is refused here rather than
+         --  in the grammar, which derives `[2][3]u8` on purpose.
+         if Syn.Kind (Of_Tree, Written) = Syn.Array_Type then
+            declare
+               Bound   : constant Syn.Node_Id :=
+                 Syn.Bound_Of (Of_Tree, Written);
+               Element : constant Syn.Node_Id :=
+                 Syn.Element_Of (Of_Tree, Written);
+               Held : constant Ty.Type_Kind := Type_At (Of_Tree, Element);
+               Length : Landin.Checking.Element_Count := 0;
+            begin
+               if Held not in Ty.Scalar_Name then
+                  if Held /= Ty.Ill_Typed then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Element),
+                        Message => "an array of this is not enabled yet",
+                        Refused => Bad.Array_Element,
+                        Into    => Found);
+                  end if;
+
+                  return Ty.Ill_Typed;
+               end if;
+
+               if Syn.Kind (Of_Tree, Bound) /= Syn.Integer_Literal then
+                  return Ty.Ill_Typed;
+               end if;
+
+               declare
+                  Snap : constant Landin.Source.Snapshot :=
+                    Source (Context, Syn.Source_Of (Of_Tree));
+                  Text : constant String :=
+                    Landin.Source.Slice
+                      (Snap, Syn.Digit_Span (Of_Tree, Bound));
+                  Value      : Ty.Magnitude;
+                  Overflowed : Boolean;
+               begin
+                  Ty.Evaluate
+                    (Text, Syn.Base (Of_Tree, Bound), Value, Overflowed);
+
+                  if Overflowed
+                    or else Value
+                            > Ty.Magnitude
+                                (Landin.Checking.Element_Count'Last)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Literal_Out_Of_Range,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Bound),
+                        Message => "this is more elements than an array"
+                                   & " may have",
+                        Note    => "[0520]: the length is part of the"
+                                   & " type, and this compiler counts"
+                                   & " them in a u32",
+                        Into    => Found);
+                     return Ty.Ill_Typed;
+                  end if;
+
+                  Length := Landin.Checking.Element_Count (Value);
+               end;
+
+               Landin.Checking.Note_Array
+                 (Types.all, Of_Tree, Written, Length, Held);
+               return Ty.Fixed_Array;
+            end;
+         end if;
+
          if Syn.Kind (Of_Tree, Written) = Syn.Type_Name then
             return Landin.Checking.Named
               (Types.all, Syn.Name (Of_Tree, Written));
@@ -363,6 +436,27 @@ package body Landin.Stages.Checking is
             --  [1795] declares the type; most *values* of one wait for the
             --  rest of R2.20.  Refused where the value is declared, so
             --  the report names the binding rather than the type.
+            if Held = Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
+            then
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                  = Ty.Undecided
+               then
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message => "a value of an array type is not enabled"
+                                & " yet",
+                     Refused => Bad.Array_Value,
+                     Into    => Found);
+               end if;
+
+               return Ty.Ill_Typed;
+            end if;
+
             if Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State

@@ -1992,6 +1992,35 @@ the name it selects from is a read because that is where the field is. Nothing
 tracked can be a struct yet — a local of one is still refused — so this is the
 rule written down before it can be reached rather than a behaviour change.
 
+Arrays begin where structs began: a type a program can declare and lay out,
+with a value of one still refused. [1790]'s `type` gained `array_type ::= "["
+integer "]" type`, so `[` and `]` left the refused band the way `.` did, and the
+bound is [1770]'s integer in whatever base. The element is a type like any
+other, so the grammar derives an array of an array on purpose and the checker
+refuses the element it cannot yet lay out end to end — the [1830] split again, with the
+grammar saying what derives and the checker saying what is enabled.
+
+D17 settles what two arrays being one type means, and it is not [0710]'s rule.
+An array is structural: its identity is its length and its element, so `[4]u8`
+written twice is one type, and D15's alias keeps that identity like any other.
+[0710] is about a struct because a struct body introduces a type where no
+existing type was; `[4]u8` introduces nothing, it describes a shape the length
+and the element already determine. The alternative — one type per declaration —
+would leave a program no way to write the type of something it did not declare,
+which `sizeof [4]u8` and a parameter of `[16]u8` both need.
+
+Layout is the element repeated, which needs a target and so is asked with one:
+`[4]usize` is thirty-two bytes aligned to eight against Linux x86-64 and sixteen
+aligned to four against the synthetic 32-bit description. A length of zero takes
+no room and aligns to a byte, which is what the arithmetic says rather than a
+case anyone wrote.
+
+What is still refused: a value of an array type anywhere, an array literal
+[0520], the inferred length [0530], `zeroed` [0540], repetition [0560],
+indexing and slices [0570], `lenof`, and an array as a struct field. Each is its
+own slice, and the value slices need the same frame and data work the struct
+ones did.
+
 Complete ordinary structs and implement arrays, C/packed structs, variants,
 tags, payload alignment
 and the policy for spare-bit folding. Use measured fixtures rather than host
