@@ -75,6 +75,7 @@ package body Landin.IR.Verifier is
             when Load          => 0,
             when Load_Datum    => 0,
             when Load_Field    => 0,
+            when Store_Field   => 1,
             when Store         => 1,
             when Store_Datum   => 1,
             when Unary_Kind    => 1,
@@ -231,7 +232,7 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
-                           when Load_Field =>
+                           when Load_Field | Store_Field =>
                               declare
                                  D : constant Item_Id :=
                                    Datum_Of (Of_Unit, Id, V);
@@ -259,10 +260,11 @@ package body Landin.IR.Verifier is
                                        Value => V);
                                  end if;
 
-                                 if Result_Of (Of_Unit, Id, V)
-                                    /= Nth_Field
-                                         (Of_Unit, D,
-                                          Field_Of (Of_Unit, Id, V))
+                                 if Op = Load_Field
+                                   and then Result_Of (Of_Unit, Id, V)
+                                            /= Nth_Field
+                                                 (Of_Unit, D,
+                                                  Field_Of (Of_Unit, Id, V))
                                  then
                                     return
                                       (Kind => Result_Disagrees,
@@ -508,6 +510,19 @@ package body Landin.IR.Verifier is
                            when Store_Datum =>
                               if Result_Of
                                    (Of_Unit, Datum_Of (Of_Unit, Id, V))
+                                 /= Result_Of
+                                      (Of_Unit, Id,
+                                       Nth_Operand (Of_Unit, Id, V, 1))
+                              then
+                                 return (Kind => Store_Datum_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                           when Store_Field =>
+                              if Nth_Field
+                                   (Of_Unit, Datum_Of (Of_Unit, Id, V),
+                                    Field_Of (Of_Unit, Id, V))
                                  /= Result_Of
                                       (Of_Unit, Id,
                                        Nth_Operand (Of_Unit, Id, V, 1))

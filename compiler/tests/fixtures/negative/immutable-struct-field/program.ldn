@@ -1,0 +1,11 @@
+counters: type = struct
+    hits: u32
+end counters
+
+state: counters
+
+--  [1900] decides what may be written, and a field is writable exactly
+--  when the binding holding it is.
+f: () -> none =
+    state.hits = 1
+end f

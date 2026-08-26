@@ -240,6 +240,10 @@ returning none has nothing to bind and [1020] wants a result
 discarded on purpose rather than by omission. A call whose result
 is dropped that way is the one place the kernel accepts an
 expression standing alone.
+A place is [1820]'s selection, so a field of a struct is written
+and stepped exactly as the binding holding it is. What may be
+written is [1900]'s and not this rule's: a field is writable when
+the binding it belongs to is.
 ```landin-grammar
 statement   ::= binding | assignment | increment | discard | call
               | return | if
@@ -251,7 +255,7 @@ if          ::= "if" expression "then" statement*
                 ("elsif" expression "then" statement*)*
                 ("else" statement*)?
                 "end" "if"
-place       ::= identifier
+place       ::= selection
 
 ```
 

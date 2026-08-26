@@ -664,9 +664,25 @@ package body Landin.Stages.Lowering is
 
                procedure Write (Place : Syn.Node_Id; Value : IR.Value_Id)
                is
+                  --  [1810]'s place is [1820]'s selection, so a field is
+                  --  written where the binding holding it is named.
+                  Named : constant Syn.Node_Id :=
+                    (if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection
+                     then Syn.Target_Of (Of_Tree, Place)
+                     else Place);
                   Means : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, Place);
+                    Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
+                  if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection then
+                     IR.Emit_Store_Field
+                       (Unit.all, Filling,
+                        IR.Item_For (Unit.all, Means),
+                        Landin.Checking.Field_Index
+                          (Types.all, Of_Tree, Place),
+                        Value, Site);
+                     return;
+                  end if;
+
                   if Res.Sort_Of (Meanings.all, Means)
                      = Res.Module_Binding
                   then
