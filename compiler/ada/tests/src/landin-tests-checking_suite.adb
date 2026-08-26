@@ -522,6 +522,16 @@ package body Landin.Tests.Checking_Suite is
                   3, "and a different array keeps its own");
             end;
 
+            --  A length of zero: no room, and a byte's alignment
+            --  because there is no element to be aligned as.
+            Landin.Checking.Array_Extent
+              (0, Landin.Types.U32, Facts, Size, Alignment);
+            Landin.Testing.Check_Equal
+              (Item, Natural (Size), 0, "no elements take no room");
+            Landin.Testing.Check_Equal
+              (Item, Natural (Alignment), 1,
+               "and align to a byte, having no element to align as");
+
             --  The one that follows the target rather than the host.
             Landin.Checking.Array_Extent
               (Landin.Checking.Array_Length (Types.all, Of_Tree.all, Wide),

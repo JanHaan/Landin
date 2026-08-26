@@ -103,7 +103,11 @@ package Landin.Diagnostics.Checking is
       --  [0520] declares one; a value of one waits, as a struct's did,
       --  and so does an element the kernel cannot lay out end to end.
       Array_Value,
-      Array_Element);
+      Array_Element,
+      --  [0370] measures a type, and this kernel measures the eleven:
+      --  a declared name and an array each need the answer a later
+      --  slice records for them.
+      Measured_Type);
 
    function Construct (Item : Refused_Use)
      return Landin.Tokens.Construct_Reference
@@ -116,7 +120,8 @@ package Landin.Diagnostics.Checking is
             when Text_Type          => "[0600]",
             when Struct_Value       => "[0670]",
             when Array_Value        => "[0520]",
-            when Array_Element      => "[0520]")
+            when Array_Element      => "[0520]",
+            when Measured_Type      => "[0370]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  The type names above, spelled once.  A name that is not here is a
@@ -176,6 +181,7 @@ private
                | Text_Type         => "R4.10",
             when Struct_Value
                | Array_Value
-               | Array_Element     => "R2.20");
+               | Array_Element
+               | Measured_Type     => "R2.20");
 
 end Landin.Diagnostics.Checking;

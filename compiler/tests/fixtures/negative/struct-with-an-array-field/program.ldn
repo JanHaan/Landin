@@ -1,0 +1,7 @@
+--  [0750] lays a struct out from its fields, and an array field waits for
+--  the slice that can lay one out inside another.
+holder: type = struct
+    row: [4]u8
+end holder
+
+mut here: holder
