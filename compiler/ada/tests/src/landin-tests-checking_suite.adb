@@ -462,6 +462,66 @@ package body Landin.Tests.Checking_Suite is
             Landin.Testing.Check_Equal
               (Item, Natural (Alignment), 4, "aligned as a u32 is");
 
+            --  The declaration carries the shape too, and so does an
+            --  alias of it: a later stage asks the declaration and not
+            --  the node it was written at.
+            declare
+               function Declared (Position : Positive)
+                 return Landin.Provenance.Declaration_Id;
+
+               function Declared (Position : Positive)
+                 return Landin.Provenance.Declaration_Id
+               is
+                  Meanings : constant not null access
+                    Landin.Resolution.Table := Landin.Stages.Meanings (Work);
+                  Node : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Nth_Declaration (Of_Tree.all, Position);
+               begin
+                  for Id in Landin.Provenance.Declaration_Id'(1)
+                            .. Landin.Provenance.Declaration_Id
+                                 (Landin.Resolution.Declaration_Count
+                                    (Meanings.all))
+                  loop
+                     if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                       and then Landin.Resolution.Node_Of (Meanings.all, Id)
+                                = Node
+                     then
+                        return Id;
+                     end if;
+                  end loop;
+
+                  return Landin.Provenance.No_Declaration;
+               end Declared;
+            begin
+               Landin.Testing.Check_Equal
+                 (Item,
+                  Natural
+                    (Landin.Checking.Array_Length (Types.all, Declared (1))),
+                  4, "the declaration carries the length");
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Array_Element (Types.all, Declared (1))
+                    = Landin.Types.U8,
+                  "and the element");
+
+               --  D15's alias, which has no shape of its own to carry.
+               Landin.Testing.Check_Equal
+                 (Item,
+                  Natural
+                    (Landin.Checking.Array_Length (Types.all, Declared (3))),
+                  4, "an alias carries the shape it names");
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Array_Element (Types.all, Declared (3))
+                    = Landin.Types.U8,
+                  "including its element");
+               Landin.Testing.Check_Equal
+                 (Item,
+                  Natural
+                    (Landin.Checking.Array_Length (Types.all, Declared (4))),
+                  3, "and a different array keeps its own");
+            end;
+
             --  The one that follows the target rather than the host.
             Landin.Checking.Array_Extent
               (Landin.Checking.Array_Length (Types.all, Of_Tree.all, Wide),
