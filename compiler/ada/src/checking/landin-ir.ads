@@ -192,6 +192,9 @@ package Landin.IR is
       Store_Field,
       --  An element selected by a runtime `usize`.  Unlike Load_Field, the
       --  position is an operand because [1950] checks its value at runtime.
+      --  D22 lets this reach either [1740]'s module array or [1810]'s
+      --  local array in this item's own frame, the same way Load_Field
+      --  does: which is which is Reaches_A_Slot's answer.
       Load_Element,
       Store_Element,
       --  One whole [0520] array copied between two storage places.  The
@@ -812,6 +815,7 @@ package Landin.IR is
                  and then (Op_Of (Of_Unit, Item, Value) in Load | Store
                            or else (Op_Of (Of_Unit, Item, Value)
                                       in Load_Field | Store_Field
+                                         | Load_Element | Store_Element
                                     and then Reaches_A_Slot
                                                (Of_Unit, Item, Value)));
 
@@ -820,21 +824,23 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item, Value)
                  and then (Op_Of (Of_Unit, Item, Value)
                              in Load_Datum | Store_Datum
-                                | Load_Element | Store_Element
                            or else (Op_Of (Of_Unit, Item, Value)
                                       in Load_Field | Store_Field
+                                         | Load_Element | Store_Element
                                     and then not Reaches_A_Slot
                                                    (Of_Unit, Item, Value)));
 
-   --  Where a field operation reaches: [1740]'s module state, or
-   --  [1810]'s local binding in a frame.  Two spellings of one question,
-   --  because a field is selected the same way in the source and it is
-   --  the base that differs.
+   --  Where a field or element operation reaches: [1740]'s module state,
+   --  or [1810]'s local binding in a frame.  Two spellings of one
+   --  question, because a field is selected the same way in the source
+   --  and it is the base that differs; D22 gives a computed element the
+   --  same reach.
    function Reaches_A_Slot
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Field | Store_Field;
+                          in Load_Field | Store_Field
+                             | Load_Element | Store_Element;
 
    function Source_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
@@ -854,6 +860,38 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
+
+   --  Which array a slot-reaching element operation names.  Only
+   --  meaningful when Reaches_A_Slot is true; a computed module-array
+   --  element carries no slot and asks Datum_Of instead.  The reached
+   --  slot must hold an Add_Array_Slot shape rather than a scalar or an
+   --  aggregate: Slot_Array_Length and Slot_Array_Element have that
+   --  requirement in their own preconditions, and putting it here lets
+   --  the caller be caught above the raise those two would emit.
+   function Slot_Element_Length
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Element_Total
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Load_Element | Store_Element
+                 and then Reaches_A_Slot (Of_Unit, Item, Value)
+                 and then Holds (Of_Unit, Item,
+                                 Slot_Of (Of_Unit, Item, Value))
+                 and then Is_Array
+                            (Of_Unit, Item,
+                             Slot_Of (Of_Unit, Item, Value));
+
+   function Slot_Element_Type
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+     return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Load_Element | Store_Element
+                 and then Reaches_A_Slot (Of_Unit, Item, Value)
+                 and then Holds (Of_Unit, Item,
+                                 Slot_Of (Of_Unit, Item, Value))
+                 and then Is_Array
+                            (Of_Unit, Item,
+                             Slot_Of (Of_Unit, Item, Value));
 
    function Callee_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
@@ -1076,6 +1114,38 @@ package Landin.IR is
       Site  : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Datum)
+                 and then Holds (Into, Item, Index)
+                 and then Holds (Into, Item, Value)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   --  The same element operations reaching a fixed-array slot in this
+   --  item's own frame [1810].  D22 admits the computed-index path for a
+   --  local array as well; the slot is the frame cell whose Add_Array_Slot
+   --  declared its element type and length.
+   function Emit_Load_Slot_Element
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Slot   : Slot_Id;
+      Index  : Value_Id;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Slot)
+                  and then Holds (Into, Item, Index)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Load_Slot_Element'Result,
+                     Load_Element);
+
+   procedure Emit_Store_Slot_Element
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Slot  : Slot_Id;
+      Index : Value_Id;
+      Value : Value_Id;
+      Site  : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Slot)
                  and then Holds (Into, Item, Index)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);

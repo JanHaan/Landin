@@ -558,6 +558,89 @@ package body Landin.Tests.IR_Suite is
       end;
    end An_Array_Copy_Carries_Two_Compact_Places;
 
+   ------------------------------------------------------------------
+   --  D22: a slot-reaching element operation
+   ------------------------------------------------------------------
+
+   procedure A_Slot_Element_Reaches_The_Frame
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Slot_Element_Reaches_The_Frame
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Unit : Landin.IR.Unit;
+         Routine : Landin.IR.Item_Id;
+         Slot : Landin.IR.Slot_Id;
+         Block : Landin.IR.Block_Id;
+         Index, Stored, Loaded, Store : Landin.IR.Value_Id;
+      begin
+         Landin.IR.Prepare (Unit, Meanings.all);
+         Routine := Landin.IR.Add_Item
+                      (Unit, Landin.IR.Routine, 1, Landin.Types.U32, Site);
+         Slot := Landin.IR.Add_Array_Slot
+                   (Unit, Routine, Landin.Types.U32, 4,
+                    Landin.IR.No_Declaration, Site);
+         Block := Landin.IR.Add_Block
+                    (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         Landin.IR.Enter (Unit, Routine, Block);
+         Index := Landin.IR.Emit_Number
+                    (Unit, Routine, Landin.Types.Usize, 2, False, Site);
+         Stored := Landin.IR.Emit_Number
+                     (Unit, Routine, Landin.Types.U32, 9, False, Site);
+         Loaded := Landin.IR.Emit_Load_Slot_Element
+                     (Unit, Routine, Slot, Index, Landin.Types.U32, Site);
+         Landin.IR.Emit_Store_Slot_Element
+           (Unit, Routine, Slot, Index, Stored, Site);
+         Store := Landin.IR.Nth_Value (Unit, Routine, Block, 4);
+
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Loaded)
+              = Landin.IR.Load_Element
+            and then Landin.IR.Reaches_A_Slot (Unit, Routine, Loaded)
+            and then Landin.IR.Slot_Of (Unit, Routine, Loaded) = Slot
+            and then Landin.IR.Slot_Element_Length (Unit, Routine, Loaded)
+                       = 4
+            and then Landin.IR.Slot_Element_Type (Unit, Routine, Loaded)
+                       = Landin.Types.U32
+            and then Landin.IR.Nth_Operand (Unit, Routine, Loaded, 1)
+                       = Index,
+            "a slot element load carries its slot and its runtime index");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Store)
+              = Landin.IR.Store_Element
+            and then Landin.IR.Reaches_A_Slot (Unit, Routine, Store)
+            and then Landin.IR.Slot_Of (Unit, Routine, Store) = Slot
+            and then Landin.IR.Nth_Operand (Unit, Routine, Store, 1) = Index
+            and then Landin.IR.Nth_Operand (Unit, Routine, Store, 2) = Stored,
+            "a slot element store carries its index before the value");
+
+         declare
+            Text : constant String :=
+              Landin.IR.Dump.Text
+                (Unit, Meanings.all,
+                 Landin.Stages.Identities (Work).all);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Ada.Strings.Fixed.Index (Text, "LOAD_ELEMENT u32 slot 1") /= 0
+               and then Ada.Strings.Fixed.Index
+                          (Text, "STORE_ELEMENT slot 1") /= 0,
+               "the dump prints the slot form of an element operation");
+         end;
+      end;
+   end A_Slot_Element_Reaches_The_Frame;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -584,6 +667,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "an array copy carries two compact places",
          An_Array_Copy_Carries_Two_Compact_Places'Access);
+      Landin.Testing.Register
+        (Into, "ir", "a slot element reaches the frame",
+         A_Slot_Element_Reaches_The_Frame'Access);
    end Register;
 
 end Landin.Tests.IR_Suite;

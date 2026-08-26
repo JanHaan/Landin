@@ -1,0 +1,15 @@
+mut source: [4]u32
+
+at_local: (i: usize) -> (r: u32) =
+    mut words: [4]u32
+    words = source
+    r = words[i]
+end at_local
+
+public main: () -> (code: i32) =
+    if at_local(4) == 0 then
+        code = 1
+    else
+        code = 2
+    end if
+end main

@@ -1,0 +1,12 @@
+mut source: [4]u32
+
+write_at: (i: usize, value: u32) -> none =
+    mut words: [4]u32
+    words = source
+    words[i] = value
+end write_at
+
+public main: () -> (code: i32) =
+    write_at(4, 99)
+    code = 1
+end main

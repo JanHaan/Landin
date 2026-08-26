@@ -1,0 +1,6 @@
+class: runtime
+summary: D22 traps a computed local array store outside the length before it forms an address
+constructs: 0080, 0160, 0520, 0570, 0580, 1800, 1810, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

@@ -1,6 +1,0 @@
-class: negative
-summary: D19 leaves computed local array indexes for a later R2.20 slice
-constructs: 0080, 0520, 1810, 1830
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

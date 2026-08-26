@@ -2154,12 +2154,10 @@ permits an array whose target extent cannot be enumerated by the compiler host.
 The Linux runtime case lays out `u32`, `u8`, and `u16` locals together, updates a
 known element, and reads an element assigned in both branch arms.
 
-Computed local indexes remain refused deliberately. Module state begins wholly
-assigned by D10, while a computed write into an uninitialized local raises a
-new semantic question — whether it establishes one unknown fact, a range, or
-none useful to a later read. This slice does not answer that question by
-accident. Whole-array local values and initializers also remain refused;
-declaration-only storage needs neither.
+D19 leaves that computed local case for D22 below to answer, once the
+whole-array fact D20 records is what a computed read can require. Whole-array
+local values and initializers also remain refused here; declaration-only
+storage needs neither.
 
 D20 admits the one whole-array value position that can stay between storage
 places: `destination = source`. D17 decides agreement from length and element
@@ -2200,12 +2198,41 @@ with an initializer, the inferred `:=` form, an array literal, `zeroed`, a
 slice, a call, and every other value shape stay refused; each is its own
 later slice.
 
-What is still refused: computed local indexes, module array initializers,
-inferred array initializers, general whole-array value positions, an array
-literal [0520], the inferred length [0530], `zeroed` [0540], repetition
-[0560], slices [0570], `lenof`, and an array as a struct field. Each is its
-own slice, and the remaining value slices need the initialization work D21
-did not settle.
+D22 answers the question D19 left open and enables a computed index into a
+local fixed-array frame slot on the same [1950] terms module arrays met. A
+runtime `usize` reads the element only when every arriving path has assigned
+the whole array, whether by D20's copy, by D21's initializer, or by D19's
+sparse facts filling the declared length; a write establishes no element
+fact on its own, and — the useful half of the answer — it preserves an
+existing whole-array fact, so a computed write between two reads does not
+undo an earlier copy or initializer. The alternatives, treating one write as
+a whole assignment or as an unknown range, were declined for the same reason
+D19 refused to widen one element write to the whole local: both would admit
+uninitialized reads from positions no path assigned.
+
+The IR extends `Load_Element` and `Store_Element` to reach either a datum
+or a frame slot, the way `Load_Field` and `Store_Field` already did; no new
+opcode is needed and `Reaches_A_Slot` decides. The verifier holds the
+slot-reaching form to naming a fixed-array cell of this item, and both
+forms still hold the index to `usize` and the value or result to the array's
+element type. The x86-64 backend computes the same bounds check and scaling
+either way, and then either forms a RIP-relative datum address or reads the
+slot's own `%rbp` displacement; the trap and the scaling precede the
+address so [0580]'s ordering stays visible in the instructions rather than
+being asserted by prose. A positive fixture pins accepting the pair,
+`negative/local-array-computed-read-not-whole-assigned` and
+`negative/local-array-computed-write-establishes-no-fact` pin the two DA
+refusals, and `runtime/local-array-computed-index-reads-and-writes` reads
+and writes both ends of a computed local after copying from a module
+source, while `runtime/local-array-computed-index-traps` and
+`runtime/local-array-computed-store-traps` pin the trap at the length on
+both sides of the operation.
+
+What is still refused: module array initializers, inferred array
+initializers, general whole-array value positions, an array literal [0520],
+the inferred length [0530], `zeroed` [0540], repetition [0560], slices
+[0570], `lenof`, and an array as a struct field. Each is its own slice, and
+the remaining value slices need the initialization work D21 did not settle.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a
 zero image when all-zero is a valid value for it, which is what lets a

@@ -156,6 +156,9 @@ package body Landin.Tests.Verifier_Suite is
       Element_Index_Is_Not_Usize,
       Element_Load_Of_The_Wrong_Type,
       Element_Store_Of_The_Wrong_Type,
+      Slot_Element_Reaches_A_Nonarray_Slot,
+      Slot_Element_Load_Of_The_Wrong_Type,
+      Slot_Element_Store_Of_The_Wrong_Type,
       Array_Copy_Endpoint_Is_Scalar,
       Array_Copy_Lengths_Disagree,
       Array_Copy_Elements_Disagree,
@@ -375,6 +378,38 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Slot_Element_Reaches_A_Nonarray_Slot =>
+            --  S is a plain scalar cell.  A computed element operation
+            --  on it is not a shape D22 admits.
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.Usize, 1, False, Site);
+            M := IR.Emit_Load_Slot_Element
+                   (Unit, A, S, N, Landin.Types.U32, Site);
+            pragma Assert (M /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Slot_Element_Load_Of_The_Wrong_Type =>
+            --  Q holds u32 elements; the load claims a bool.
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.Usize, 1, False, Site);
+            M := IR.Emit_Load_Slot_Element
+                   (Unit, A, Q, N, Landin.Types.Bool, Site);
+            pragma Assert (M /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Slot_Element_Store_Of_The_Wrong_Type =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.Usize, 1, False, Site);
+            M := IR.Emit_Truth (Unit, A, True, Site);
+            IR.Emit_Store_Slot_Element (Unit, A, Q, N, M, Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Array_Copy_Endpoint_Is_Scalar =>
             IR.Emit_Array_Copy
               (Unit, A, (Kind => IR.Module_Datum, Datum => D),
@@ -493,6 +528,11 @@ package body Landin.Tests.Verifier_Suite is
          (Element_Index_Is_Not_Usize, V.Element_Index_Is_Not_Usize),
          (Element_Load_Of_The_Wrong_Type, V.Result_Disagrees),
          (Element_Store_Of_The_Wrong_Type, V.Store_Datum_Disagrees),
+         (Slot_Element_Reaches_A_Nonarray_Slot,
+          V.Element_Datum_Is_Not_An_Array),
+         (Slot_Element_Load_Of_The_Wrong_Type, V.Result_Disagrees),
+         (Slot_Element_Store_Of_The_Wrong_Type,
+          V.Store_Datum_Disagrees),
          (Array_Copy_Endpoint_Is_Scalar,
           V.Array_Copy_Endpoint_Is_Not_An_Array),
          (Array_Copy_Lengths_Disagree, V.Array_Copy_Shapes_Disagree),

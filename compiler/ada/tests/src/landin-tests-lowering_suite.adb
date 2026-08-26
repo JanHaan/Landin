@@ -989,6 +989,80 @@ package body Landin.Tests.Lowering_Suite is
    end An_Element_Update_Evaluates_Its_Index_Once;
 
    ------------------------------------------------------------------
+   --  D22: a computed local array element reaches its frame slot
+   ------------------------------------------------------------------
+
+   procedure A_Computed_Local_Element_Reaches_Its_Slot
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Computed_Local_Element_Reaches_Its_Slot
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "source: [4]u32" & LF
+         & "f: (at: usize, value: u32) -> (r: u32) =" & LF
+         & "    mut words: [4]u32" & LF
+         & "    words = source" & LF
+         & "    words[at] = value" & LF
+         & "    r = words[at]" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "D22 accepts the computed local read after a whole copy");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         F : constant IR.Item_Id := 2;
+         Loads, Stores : Natural := 0;
+         All_Slot : Boolean := True;
+      begin
+         for V in 1 .. IR.Value_Count (Unit, F) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+               Op : constant IR.Opcode := IR.Op_Of (Unit, F, Value);
+            begin
+               if Op = IR.Load_Element then
+                  Loads := Loads + 1;
+                  if not IR.Reaches_A_Slot (Unit, F, Value) then
+                     All_Slot := False;
+                  end if;
+               elsif Op = IR.Store_Element then
+                  Stores := Stores + 1;
+                  if not IR.Reaches_A_Slot (Unit, F, Value) then
+                     All_Slot := False;
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check_Equal
+           (Item, Loads, 1,
+            "the computed local read becomes one element load");
+         Landin.Testing.Check_Equal
+           (Item, Stores, 1,
+            "the computed local write becomes one element store");
+         Landin.Testing.Check
+           (Item, All_Slot,
+            "every element operation on a local reaches its own frame slot");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Verifier.Check (Unit).Kind
+              = Landin.IR.Verifier.Nothing_Wrong,
+            "the verifier accepts a slot-reaching element operation");
+         Check_Terminators
+           (Item, Unit, "a computed local element");
+      end;
+   end A_Computed_Local_Element_Reaches_Its_Slot;
+
+   ------------------------------------------------------------------
    --  The recorded artefact
    ------------------------------------------------------------------
 
@@ -1158,6 +1232,10 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "an element update evaluates its index once",
          An_Element_Update_Evaluates_Its_Index_Once'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a computed local element reaches its slot",
+         A_Computed_Local_Element_Reaches_Its_Slot'Access);
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);

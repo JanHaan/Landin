@@ -1,0 +1,22 @@
+mut source: [4]u32
+
+at_local: (i: usize, value: u32) -> (r: u32) =
+    mut words: [4]u32
+    words = source
+    words[i] = value
+    inc words[i]
+    r = words[i]
+end at_local
+
+public main: () -> (code: i32) =
+    source[0] = 10
+    source[1] = 20
+    source[2] = 30
+    source[3] = 40
+
+    if at_local(0, 11) == 12 and at_local(3, 44) == 45 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

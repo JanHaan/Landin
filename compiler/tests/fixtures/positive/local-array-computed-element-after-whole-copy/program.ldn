@@ -1,0 +1,9 @@
+source: [2]u32
+
+f: (at: usize, value: u32) -> (r: u32) =
+    mut words: [2]u32
+    words = source
+    r = words[at]
+    words[at] = value
+    r = words[at]
+end f
