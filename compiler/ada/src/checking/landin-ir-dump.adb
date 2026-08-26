@@ -81,6 +81,19 @@ package body Landin.IR.Dump is
          return " <-" & Unbounded.To_String (Run);
       end Operands;
 
+      function Endpoint (Place : Storage) return String;
+
+      function Endpoint (Place : Storage) return String is
+      begin
+         case Place.Kind is
+            when Module_Datum =>
+               return "datum " & Trimmed (Item_Id'Image (Place.Datum))
+                 & " " & Item_Named (Place.Datum);
+            when Frame_Slot =>
+               return "slot " & Trimmed (Slot_Id'Image (Place.Slot));
+         end case;
+      end Endpoint;
+
       function Rendered (Item : Item_Id; Value : Value_Id) return String;
 
       function Rendered (Item : Item_Id; Value : Value_Id) return String
@@ -119,6 +132,11 @@ package body Landin.IR.Dump is
                          & " " & Item_Named (D)
                          & Operands (Item, Value);
                end;
+
+            when Copy_Array =>
+               return Lead & " from "
+                 & Endpoint (Source_Of (Of_Unit, Item, Value))
+                 & " to " & Endpoint (Destination_Of (Of_Unit, Item, Value));
 
             when Call =>
                declare

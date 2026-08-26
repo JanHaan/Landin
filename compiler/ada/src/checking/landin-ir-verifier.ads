@@ -70,6 +70,9 @@ package Landin.IR.Verifier is
       Field_Out_Of_Range,
       Element_Datum_Is_Not_An_Array,
       Element_Index_Is_Not_Usize,
+      Array_Copy_Endpoint_Is_Not_An_Array,
+      Array_Copy_Shapes_Disagree,
+      Array_Copy_Inside_A_Datum,
       --  Calls [1920].
       Callee_Is_Not_A_Routine,
       Call_Inside_A_Datum,

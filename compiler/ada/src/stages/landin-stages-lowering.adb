@@ -833,6 +833,27 @@ package body Landin.Stages.Lowering is
                   From    : Syn.Node_Id;
                   Field   : Positive);
 
+               function Storage_For
+                 (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
+
+               function Storage_For
+                 (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage
+               is
+                  Means : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Node);
+               begin
+                  if Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
+                  then
+                     return
+                       (Kind => IR.Module_Datum,
+                        Datum => IR.Item_For (Unit.all, Means));
+                  end if;
+
+                  return
+                    (Kind => IR.Frame_Slot,
+                     Slot => Slot_For (Of_Tree, Node, Means));
+               end Storage_For;
+
                procedure Copy_Field
                  (Of_Tree : Syn.Tree;
                   Place   : Syn.Node_Id;
@@ -1033,6 +1054,24 @@ package body Landin.Stages.Lowering is
                            loop
                               Copy_Field (Of_Tree, Place, From, Field);
                            end loop;
+                        end;
+                     elsif Landin.Checking.Type_Of
+                             (Types.all, Of_Tree,
+                              Syn.Target_Of (Of_Tree, Stmt)) = Ty.Fixed_Array
+                     then
+                        --  D20 is one compact storage operation: D18 permits
+                        --  a length the compiler host cannot enumerate.  The
+                        --  destination is still reached first as [0410] says.
+                        declare
+                           Destination : constant IR.Storage :=
+                             Storage_For
+                               (Of_Tree, Syn.Target_Of (Of_Tree, Stmt));
+                           Source : constant IR.Storage :=
+                             Storage_For
+                               (Of_Tree, Syn.Value_Of (Of_Tree, Stmt));
+                        begin
+                           IR.Emit_Array_Copy
+                             (Unit.all, Filling, Source, Destination, Site);
                         end;
                      else
                         declare

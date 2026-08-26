@@ -1,0 +1,10 @@
+state: [2]u32
+
+f: (condition: bool) -> none =
+    mut source: [2]u32
+    mut destination: [2]u32
+    if condition then
+        source = state
+    end if
+    destination = source
+end f

@@ -504,6 +504,14 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      is (Held (Of_Unit, Item, Value).Slot /= No_Slot);
 
+   function Source_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
+     is (Held (Of_Unit, Item, Value).Source);
+
+   function Destination_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
+     is (Held (Of_Unit, Item, Value).Destination);
+
    function Callee_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Item_Id
      is (Held (Of_Unit, Item, Value).Named);
@@ -781,6 +789,25 @@ package body Landin.IR is
       Where := Append (Into, Item, Made);
       pragma Assert (Where /= No_Value);
    end Emit_Store_Element;
+
+   procedure Emit_Array_Copy
+     (Into        : in out Unit;
+      Item        : Item_Id;
+      Source      : Storage;
+      Destination : Storage;
+      Site        : Landin.Provenance.Origin)
+   is
+      Where : constant Value_Id :=
+        Append
+          (Into, Item,
+           Instruction'(Op          => Copy_Array,
+                        Site        => Site,
+                        Source      => Source,
+                        Destination => Destination,
+                        others      => <>));
+   begin
+      pragma Assert (Where /= No_Value);
+   end Emit_Array_Copy;
 
    procedure Emit_Store_Datum
      (Into  : in out Unit;

@@ -63,6 +63,12 @@ package body Landin.IR.Verifier is
             when Element_Index_Is_Not_Usize =>
                "an element load or store indexes with a value other than"
                & " usize",
+            when Array_Copy_Endpoint_Is_Not_An_Array =>
+               "an array copy endpoint is not fixed-array storage",
+            when Array_Copy_Shapes_Disagree =>
+               "an array copy's endpoints differ in length or element type",
+            when Array_Copy_Inside_A_Datum =>
+               "a datum contains an array copy, and [1940] admits none",
             when Callee_Is_Not_A_Routine =>
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
@@ -83,6 +89,7 @@ package body Landin.IR.Verifier is
             when Store_Field   => 1,
             when Load_Element  => 1,
             when Store_Element => 2,
+            when Copy_Array    => 0,
             when Store         => 1,
             when Store_Datum   => 1,
             when Unary_Kind    => 1,
@@ -93,6 +100,52 @@ package body Landin.IR.Verifier is
             when Leave         => 0);
 
    function Check (Of_Unit : Unit) return Fault is
+
+      function Shape_Of
+        (Item    : Item_Id;
+         Place   : Storage;
+         Element : out Landin.Types.Scalar_Name;
+         Length  : out Element_Total) return Fault_Kind;
+
+      function Shape_Of
+        (Item    : Item_Id;
+         Place   : Storage;
+         Element : out Landin.Types.Scalar_Name;
+         Length  : out Element_Total) return Fault_Kind
+      is
+      begin
+         Element := Landin.Types.Bool;
+         Length := 0;
+
+         case Place.Kind is
+            when Module_Datum =>
+               if not Holds (Of_Unit, Place.Datum)
+                 or else Kind_Of (Of_Unit, Place.Datum) /= Datum
+               then
+                  return Named_Item_Is_Not_A_Datum;
+               elsif Result_Of (Of_Unit, Place.Datum)
+                     /= Landin.Types.Fixed_Array
+               then
+                  return Array_Copy_Endpoint_Is_Not_An_Array;
+               end if;
+
+               Element := Array_Element (Of_Unit, Place.Datum);
+               Length := Array_Length (Of_Unit, Place.Datum);
+
+            when Frame_Slot =>
+               if not Holds (Of_Unit, Item, Place.Slot) then
+                  return Slot_Out_Of_Range;
+               elsif not Is_Array (Of_Unit, Item, Place.Slot) then
+                  return Array_Copy_Endpoint_Is_Not_An_Array;
+               end if;
+
+               Element := Slot_Array_Element (Of_Unit, Item, Place.Slot);
+               Length := Slot_Array_Length (Of_Unit, Item, Place.Slot);
+         end case;
+
+         return Nothing_Wrong;
+      end Shape_Of;
+
    begin
       if not Is_Prepared (Of_Unit) then
          return (Kind => Unprepared_Unit, others => <>);
@@ -348,6 +401,47 @@ package body Landin.IR.Verifier is
                                          Element_Datum_Is_Not_An_Array,
                                        Item => Id, Block => Block,
                                        Value => V);
+                                 end if;
+                              end;
+
+                           when Copy_Array =>
+                              if Is_Datum then
+                                 return
+                                   (Kind  => Array_Copy_Inside_A_Datum,
+                                    Item  => Id,
+                                    Block => Block,
+                                    Value => V);
+                              end if;
+
+                              declare
+                                 Source_Element, Destination_Element :
+                                   Landin.Types.Scalar_Name;
+                                 Source_Length, Destination_Length :
+                                   Element_Total;
+                                 Bad : Fault_Kind;
+                              begin
+                                 Bad := Shape_Of
+                                   (Id, Source_Of (Of_Unit, Id, V),
+                                    Source_Element, Source_Length);
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
+
+                                 Bad := Shape_Of
+                                   (Id, Destination_Of (Of_Unit, Id, V),
+                                    Destination_Element, Destination_Length);
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
+
+                                 if Source_Element /= Destination_Element
+                                   or else Source_Length /= Destination_Length
+                                 then
+                                    return
+                                      (Kind => Array_Copy_Shapes_Disagree,
+                                       Item => Id, Block => Block, Value => V);
                                  end if;
                               end;
 

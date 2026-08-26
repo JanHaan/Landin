@@ -1,0 +1,6 @@
+short: [1]u32
+mut long: [2]u32
+
+f: () -> none =
+    long = short
+end f
