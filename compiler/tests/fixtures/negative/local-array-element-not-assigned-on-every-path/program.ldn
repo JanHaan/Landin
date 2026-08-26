@@ -1,0 +1,7 @@
+f: (choose: bool) -> none =
+    mut words: [1]u32
+    if choose then
+        words[0] = 1
+    end if
+    _ = words[0]
+end f

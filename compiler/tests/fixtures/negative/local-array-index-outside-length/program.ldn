@@ -1,0 +1,4 @@
+f: () -> none =
+    mut words: [2]u32
+    _ = words[2]
+end f

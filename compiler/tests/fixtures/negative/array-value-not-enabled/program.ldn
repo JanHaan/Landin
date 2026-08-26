@@ -1,8 +1,8 @@
 row: type = [4]u8
 
---  [1740]'s module state is D10's zero and needs nothing to carry it; a
---  local of one is a frame cell and waits for the rest of R2.20, exactly
---  as a struct local did before it.
+--  A declaration-only local has frame storage now, while the whole array
+--  value still waits for copying and initialization in a later R2.20 slice.
 f: () -> none =
     mut here: row
+    _ = here
 end f

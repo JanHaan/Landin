@@ -1,0 +1,4 @@
+f: () -> none =
+    mut words: [1]u32
+    inc words[0]
+end f

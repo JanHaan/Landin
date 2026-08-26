@@ -79,6 +79,16 @@ package Landin.Backend.X86_64 is
    --  number that will disagree with itself.
    Register_Arguments : constant := 6;
 
+   --  Every frame cell is addressed from %rbp and the prologue subtracts the
+   --  whole extent as an immediate.  Both encodings carry a signed 32-bit
+   --  displacement; the driver asks this before writing assembly so a larger
+   --  verified frame is an explicit backend refusal rather than bad text or
+   --  host arithmetic overflow.
+   function Frame_Is_Addressable
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts) return Boolean;
+
    --  Meanings and Names put a symbol on an item and say whether [1740]
    --  made it `public`, for the same reason `Landin.IR.Dump` is handed
    --  them: `Landin.IR` holds identities and refers to R1.50's table

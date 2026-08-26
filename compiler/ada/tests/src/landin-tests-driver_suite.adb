@@ -666,6 +666,44 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Seventh_Parameter_Is_Reported;
 
+   procedure A_Frame_Outside_Its_Encoding_Is_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Frame_Outside_Its_Encoding_Is_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File
+        ("wide.ldn",
+         "edge: () -> none =" & LF
+         & "    mut bytes: [2147483648]u8" & LF
+         & "end edge" & LF
+         & "overflow: () -> none =" & LF
+         & "    mut bytes: [18446744073709551615]u8" & LF
+         & "end overflow" & LF);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("wide.ldn", "--emit=asm"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "an unencodable frame is a reported refusal");
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0504"), "and says which limit");
+         Landin.Testing.Check
+           (Item,
+            Contains (Report, "edge") and then Contains (Report, "overflow"),
+            "naming both the encoding edge and target-width overflow");
+         Landin.Testing.Check
+           (Item, not Host.Exists ("wide.s"), "and writes nothing");
+      end;
+   end A_Frame_Outside_Its_Encoding_Is_Reported;
+
    --  A target with no backend cannot be asked for a file at all, which is
    --  the same fact Landin.Targets.Capabilities already states.
    procedure A_Target_With_No_Backend_Emits_Nothing
@@ -961,6 +999,9 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a seventh parameter is reported",
          A_Seventh_Parameter_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a frame outside its encoding is reported",
+         A_Frame_Outside_Its_Encoding_Is_Reported'Access);
       Landin.Testing.Register
         (Into, "driver", "a target with no backend emits nothing",
          A_Target_With_No_Backend_Emits_Nothing'Access);

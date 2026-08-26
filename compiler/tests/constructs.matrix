@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 92 with evidence, 106 with neither.
+#  198 constructs, 93 with evidence, 105 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -21,10 +21,10 @@
 0050   tour        accepted emitted                   Type inferred from the value
 0060   tour        accepted emitted                   Mutable binding
 0070   tour        -                                  Two questions about a reference
-0080   tour        accepted emitted                   Declaration only
+0080   tour        accepted emitted executed refused  Declaration only
 0090   tour        accepted emitted                   Exported from the module
 0100   tour        -                                  Several names may share one declaration
-0110   tour        accepted emitted                   Left of ':' is always the name being introduced
+0110   tour        accepted emitted refused           Left of ':' is always the name being introduced
 0120   tour        accepted emitted refused refused-by-name Types are declared like any other value, with 'type'
 0130   tour        accepted emitted executed          Order inside a module does not matter
 0140   tour        accepted emitted                   An inner scope may shadow an outer name
@@ -53,10 +53,10 @@
 0370   tour        accepted emitted executed refused refused-by-name sizeof, alignof and lenof
 0380   tour        -                                  addr takes an address
 0390   tour        refused                            Assignment is a statement
-0400   tour        accepted emitted                   No `++` and no `--`
-0410   tour        accepted emitted executed          Evaluation order is fixed
+0400   tour        accepted emitted refused           No `++` and no `--`
+0410   tour        accepted emitted executed refused  Evaluation order is fixed
 0420   tour        accepted emitted executed refused  The dot is not only field access
-0430   tour        -                                  Pointer type, address, dereference
+0430   tour        refused                            Pointer type, address, dereference
 0440   tour        -                                  A mut reference satisfies a plain one, never the reverse
 0450   tour        -                                  Permission is shallow
 0460   tour        -                                  Address literal

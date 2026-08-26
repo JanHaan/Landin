@@ -24,8 +24,10 @@ with Landin.Types;
 
 package body Landin.Tests.IR_Suite is
 
+   use type Landin.IR.Element_Total;
    use type Landin.IR.Item_Id;
    use type Landin.IR.Opcode;
+   use type Landin.IR.Part_Position;
    use type Landin.IR.Slot_Id;
    use type Landin.IR.Value_Id;
    use type Landin.Types.Type_Kind;
@@ -437,6 +439,48 @@ package body Landin.Tests.IR_Suite is
       end;
    end An_Element_Carries_Its_Operands;
 
+   procedure An_Array_Slot_Has_A_Compact_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_Slot_Has_A_Compact_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+      declare
+         Unit : Landin.IR.Unit;
+         Routine : Landin.IR.Item_Id;
+         Slot : Landin.IR.Slot_Id;
+      begin
+         Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Routine := Landin.IR.Add_Item
+           (Unit, Landin.IR.Routine, 1, Landin.Types.U32, Site);
+         Slot := Landin.IR.Add_Array_Slot
+           (Unit, Routine, Landin.Types.U16, 2 ** 32 - 1, 2, Site);
+
+         Landin.Testing.Check
+           (Item, Landin.IR.Is_Array (Unit, Routine, Slot),
+            "the slot records an array shape");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Slot_Array_Length (Unit, Routine, Slot) = 2 ** 32 - 1
+            and then Landin.IR.Slot_Part_Count (Unit, Routine, Slot)
+                       = 2 ** 32 - 1,
+            "the target-width length is kept without a field run");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Nth_Slot_Part
+              (Unit, Routine, Slot, 2 ** 32 - 1) = Landin.Types.U16,
+            "the last part derives its type from the compact element");
+         Landin.Testing.Check_Equal
+           (Item, Landin.IR.Slot_Field_Count (Unit, Routine, Slot), 0,
+            "an array slot allocates no per-element field entries");
+      end;
+   end An_Array_Slot_Has_A_Compact_Shape;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -457,6 +501,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "an element carries its operands",
          An_Element_Carries_Its_Operands'Access);
+      Landin.Testing.Register
+        (Into, "ir", "an array slot has a compact shape",
+         An_Array_Slot_Has_A_Compact_Shape'Access);
    end Register;
 
 end Landin.Tests.IR_Suite;
