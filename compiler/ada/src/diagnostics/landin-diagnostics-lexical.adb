@@ -48,7 +48,6 @@ package body Landin.Diagnostics.Lexical is
                | Landin.Tokens.Raw_Literal      => "R4.10",
             when Landin.Tokens.Bang
                | Landin.Tokens.Dot_Dot_Dot      => "R2.30",
-            when Landin.Tokens.Dot              => "R2.20",
             when Landin.Tokens.Dot_Dot
                | Landin.Tokens.Dot_Dot_Less     => "R2.20",
             when Landin.Tokens.Left_Bracket

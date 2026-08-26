@@ -270,6 +270,29 @@ package Landin.Checking is
                  and then Contains (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
+   --  Which field of its target a selection [1820] names, by [0750]'s
+   --  order, or zero for every other node.  Recorded here for the reason
+   --  the aggregate's identity is: the lookup is by name against a struct
+   --  body, the checker is the stage that does it, and a later stage that
+   --  redid it would be a second authority on the same question.
+   function Field_Index
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   procedure Note_Field
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Which   : Positive)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node),
+          Post => Field_Index (Into, Of_Tree, Node) = Which;
+
    --  Says what a node synthesised.  Once: a second Note on one node is a
    --  pass that walked it twice, which is the defect this refuses rather
    --  than the last write silently winning.
@@ -400,6 +423,9 @@ private
       Element_Type => Landin.Targets.Byte_Count,
       "="          => Landin.Targets."=");
 
+   package Index_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Natural);
+
    package Field_Type_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Landin.Types.Scalar_Name,
@@ -425,6 +451,8 @@ private
       --  it is, and [0710] makes two aggregates one type exactly when
       --  they came from one declaration.
       Node_Bodies  : Body_Vectors.Vector;
+      --  Which field a selection node names, in the same run.
+      Node_Fields  : Index_Vectors.Vector;
       Runs         : Run_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
       Bodies       : Body_Vectors.Vector;

@@ -1,0 +1,9 @@
+counters: type = struct
+    hits: u32
+end counters
+
+mut state: counters
+
+f: () -> none =
+    n: u32 = state.misses
+end f

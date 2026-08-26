@@ -194,6 +194,57 @@ package body Landin.Backend.X86_64 is
         is ("-" & Trimmed (Landin.Targets.Byte_Count'Image (Offset))
             & "(%rbp)");
 
+      --  Where a field of [0670]'s state sits, and how much room the
+      --  whole of it takes.  Worked out here from the item's own field
+      --  types rather than read from a table the IR would have had to
+      --  carry, because an offset needs a target: this is
+      --  Landin.Targets.Placement over the same run against the same
+      --  description the checker used, so the two cannot disagree.
+      procedure Place_Fields
+        (Item   : Landin.IR.Item_Id;
+         Placed : out Landin.Targets.Placement;
+         Wanted : Natural;
+         Offset : out Landin.Targets.Byte_Count);
+
+      procedure Place_Fields
+        (Item   : Landin.IR.Item_Id;
+         Placed : out Landin.Targets.Placement;
+         Wanted : Natural;
+         Offset : out Landin.Targets.Byte_Count) is
+      begin
+         Placed := Landin.Targets.Empty_Placement;
+         Offset := 0;
+
+         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
+            declare
+               Held : constant Held_Size :=
+                 Size_Of (Landin.IR.Nth_Field (Of_Unit, Item, Field), Facts);
+               At_Offset : Landin.Targets.Byte_Count;
+            begin
+               Landin.Targets.Place (Placed, Held, Facts, At_Offset);
+
+               if Field = Wanted then
+                  Offset := At_Offset;
+               end if;
+            end;
+         end loop;
+      end Place_Fields;
+
+      function Field_Offset
+        (Item : Landin.IR.Item_Id; Field : Positive)
+        return Landin.Targets.Byte_Count;
+
+      function Field_Offset
+        (Item : Landin.IR.Item_Id; Field : Positive)
+        return Landin.Targets.Byte_Count
+      is
+         Placed : Landin.Targets.Placement;
+         Offset : Landin.Targets.Byte_Count;
+      begin
+         Place_Fields (Item, Placed, Field, Offset);
+         return Offset;
+      end Field_Offset;
+
       procedure Emit_Routine (Item : Landin.IR.Item_Id);
 
       procedure Emit_Routine (Item : Landin.IR.Item_Id) is
@@ -490,6 +541,32 @@ package body Landin.Backend.X86_64 is
                      else
                         Carry (Held, Value_Cell (Operand (1)), Place);
                      end if;
+                  end;
+
+               when Landin.IR.Load_Field =>
+                  --  [0750] puts the field where the same placement the
+                  --  checker used puts it, and the assembler adds that
+                  --  many bytes to the name.  A displacement and not a
+                  --  computed address: the datum is one symbol.
+                  declare
+                     Datum : constant Landin.IR.Item_Id :=
+                       Landin.IR.Datum_Of (Of_Unit, Item, Value);
+                     Which : constant Positive :=
+                       Landin.IR.Field_Of (Of_Unit, Item, Value);
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                     At_Offset : constant Landin.Targets.Byte_Count :=
+                       Field_Offset (Datum, Which);
+                  begin
+                     Carry
+                       (Held,
+                        Symbol (Datum)
+                        & (if At_Offset = 0 then ""
+                           else "+"
+                                & Trimmed
+                                    (Landin.Targets.Byte_Count'Image
+                                       (At_Offset)))
+                        & "(%rip)",
+                        Value_Cell (Value));
                   end;
 
                when Landin.IR.Add | Landin.IR.Subtract =>
@@ -1118,6 +1195,7 @@ package body Landin.Backend.X86_64 is
                         Answer := Of_Value (Operand_Of (Value, 1));
 
                      when Landin.IR.Call | Landin.IR.Store_Datum
+                        | Landin.IR.Load_Field
                         | Landin.IR.Jump | Landin.IR.Branch =>
                         --  [1940] admits none of these in a module value,
                         --  and [1830] refuses a call there by name.
@@ -1152,18 +1230,10 @@ package body Landin.Backend.X86_64 is
       --  description.  D10 makes the whole of it zero, so the assembler is
       --  asked for that many zero bytes rather than for a value per field.
       procedure Emit_Aggregate_Datum (Item : Landin.IR.Item_Id) is
-         Placed : Landin.Targets.Placement :=
-           Landin.Targets.Empty_Placement;
+         Placed  : Landin.Targets.Placement;
+         Ignored : Landin.Targets.Byte_Count;
       begin
-         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
-            declare
-               Held : constant Held_Size :=
-                 Size_Of (Landin.IR.Nth_Field (Of_Unit, Item, Field), Facts);
-               At_Offset : Landin.Targets.Byte_Count;
-            begin
-               Landin.Targets.Place (Placed, Held, Facts, At_Offset);
-            end;
-         end loop;
+         Place_Fields (Item, Placed, 0, Ignored);
 
          if Landin.Resolution.Is_Public
               (Meanings, Landin.IR.Declares (Of_Unit, Item))

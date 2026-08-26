@@ -170,6 +170,11 @@ package Landin.IR is
       --  module binding carry `mut`.
       Load_Datum,
       Store_Datum,
+      --  One field of [0670]'s module state read.  It carries which
+      --  field and never where the field sits: an offset needs a target
+      --  and this package has none, which is Measure_Size's reason and
+      --  the reason an aggregate item carries its fields' types.
+      Load_Field,
       --  [0370]'s measurements.  The type they ask about is carried, not
       --  the answer: a size needs a width and a width needs a target, so
       --  the answer belongs to whoever has one.  This is the same seam
@@ -627,7 +632,13 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Datum | Store_Datum;
+                          in Load_Datum | Store_Datum | Load_Field;
+
+   --  Which field of that datum, by [0750]'s order.
+   function Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Positive
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Load_Field;
 
    function Callee_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
@@ -764,6 +775,27 @@ package Landin.IR is
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
 
+   --  [0750]'s field of [0670]'s state.  The result is the field's own
+   --  type, which the caller has from the same table the field run came
+   --  from, and the verifier holds the two to each other.
+   function Emit_Load_Field
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Datum  : Item_Id;
+      Field  : Positive;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Datum)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted (Into, Item, Emit_Load_Field'Result, Load_Field);
+   --  That the datum is an aggregate, that it has that field, and that
+   --  the result is the field's own type are the verifier's, exactly as
+   --  a datum load naming a routine is: a builder checks that what it is
+   --  handed exists, and the rules about agreement are checked in every
+   --  build mode by Landin.IR.Verifier rather than by a precondition a
+   --  release build removes.
+
    --  Result is stated by the caller and not derived from the operand,
    --  so a mutation can make it disagree and the verifier can say so.
    function Emit_Unary
@@ -896,6 +928,9 @@ private
       Target      : Block_Id                  := No_Block;
       Alternative : Block_Id                  := No_Block;
       Number      : Landin.Types.Magnitude    := 0;
+      --  Which field of Named, by [0750]'s order.  A Positive would make
+      --  "no field" unspellable and every other instruction carries one.
+      Field       : Natural                   := 0;
       Measured    : Landin.Types.Scalar_Name  := Landin.Types.Bool;
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;

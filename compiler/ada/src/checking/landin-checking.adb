@@ -49,6 +49,7 @@ package body Landin.Checking is
             for Unused in 1 .. Held loop
                Into.Node_Types.Append (Landin.Types.Undecided);
                Into.Node_Bodies.Append (Landin.Provenance.No_Declaration);
+               Into.Node_Fields.Append (0);
             end loop;
          end;
       end loop;
@@ -241,6 +242,21 @@ package body Landin.Checking is
      is (Landin.Targets.Size_Of
            (Of_Table.Layouts
               (Natural (Body_Of (Of_Table, Id))).Placed));
+
+   function Field_Index
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural
+     is (Of_Table.Node_Fields (Slot (Of_Table, Of_Tree, Node)));
+
+   procedure Note_Field
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Which   : Positive) is
+   begin
+      Into.Node_Fields (Slot (Into, Of_Tree, Node)) := Which;
+   end Note_Field;
 
    procedure Note
      (Into    : in out Table;
