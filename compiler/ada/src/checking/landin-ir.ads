@@ -175,6 +175,7 @@ package Landin.IR is
       --  and this package has none, which is Measure_Size's reason and
       --  the reason an aggregate item carries its fields' types.
       Load_Field,
+      Store_Field,
       --  [0370]'s measurements.  The type they ask about is carried, not
       --  the answer: a size needs a width and a width needs a target, so
       --  the answer belongs to whoever has one.  This is the same seam
@@ -234,7 +235,7 @@ package Landin.IR is
    --  defines a value exactly when its callee has a result [1920], so the
    --  instruction's own Result answers that and an opcode cannot.
    function Defines_Nothing (Of_Code : Opcode) return Boolean
-     is (Of_Code in Store | Store_Datum | Terminator_Kind);
+     is (Of_Code in Store | Store_Datum | Store_Field | Terminator_Kind);
 
    ------------------------------------------------------------------
    --  Identities
@@ -632,13 +633,15 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Datum | Store_Datum | Load_Field;
+                          in Load_Datum | Store_Datum
+                             | Load_Field | Store_Field;
 
    --  Which field of that datum, by [0750]'s order.
    function Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Positive
      with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value) = Load_Field;
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Load_Field | Store_Field;
 
    function Callee_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
@@ -795,6 +798,18 @@ package Landin.IR is
    --  handed exists, and the rules about agreement are checked in every
    --  build mode by Landin.IR.Verifier rather than by a precondition a
    --  release build removes.
+
+   procedure Emit_Store_Field
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Datum : Item_Id;
+      Field : Positive;
+      Value : Value_Id;
+      Site  : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Datum)
+                 and then Holds (Into, Item, Value)
+                 and then Landin.Provenance.Is_Known (Site);
 
    --  Result is stated by the caller and not derived from the operand,
    --  so a mutation can make it disagree and the verifier can say so.

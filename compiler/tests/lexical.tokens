@@ -2169,6 +2169,34 @@ file negative/function-used-as-a-value/program.ldn tokens 24
   51 54 end
   55 56 f
 file negative/generic-not-enabled/program.ldn refused no rule spells 'T'
+file negative/immutable-struct-field/program.ldn tokens 27
+  0 8 counters
+  8 9 :
+  10 14 type
+  15 16 =
+  17 23 struct
+  28 32 hits
+  32 33 :
+  34 37 u32
+  38 41 end
+  42 50 counters
+  52 57 state
+  57 58 :
+  59 67 counters
+  177 178 f
+  178 179 :
+  180 181 (
+  181 182 )
+  183 185 ->
+  186 190 none
+  191 192 =
+  197 202 state
+  202 203 .
+  203 207 hits
+  208 209 =
+  210 211 1
+  212 215 end
+  216 217 f
 file negative/keyword-as-name/program.ldn tokens 5
   0 2 if
   2 3 :

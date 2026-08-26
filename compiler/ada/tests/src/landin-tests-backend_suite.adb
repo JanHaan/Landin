@@ -993,6 +993,54 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Field_Is_Read_At_Its_Own_Offset;
 
+   --  A field is written where it is read [1810], and `inc` on one says
+   --  what `x += 1` says [1900]: a load at the offset, a one, a trapping
+   --  add and a store back to the same offset.
+   procedure A_Field_Is_Written_At_Its_Own_Offset
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Field_Is_Written_At_Its_Own_Offset
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "counters: type = struct" & LF
+         & "    hits: u32" & LF
+         & "    misses: u32" & LF
+         & "    ready: bool" & LF
+         & "end counters" & LF
+         & "mut state: counters" & LF
+         & "write: () -> none =" & LF
+         & "    state.hits = 7" & LF
+         & "    state.ready = true" & LF
+         & "    inc state.misses" & LF
+         & "end write" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl %eax, state(%rip)"),
+            "the first field is written at the datum's own address");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movb %al, state+8(%rip)"),
+            "and the bool is one byte at eight");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl state+4(%rip), %eax"),
+            "a step reads the field it steps");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl %eax, state+4(%rip)"),
+            "and writes the answer back to the same bytes");
+      end;
+   end A_Field_Is_Written_At_Its_Own_Offset;
+
    --  A module value is reached by name rather than through a frame, and
    --  x86-64's position-independent form of that name is RIP-relative.
    --  [1900] lets a `mut` module binding be written as well as read.
@@ -1809,6 +1857,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a field is read at its own offset",
          A_Field_Is_Read_At_Its_Own_Offset'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a field is written at its own offset",
+         A_Field_Is_Written_At_Its_Own_Offset'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value folds every level",
          A_Module_Value_Folds_Every_Level'Access);

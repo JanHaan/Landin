@@ -543,7 +543,7 @@ package body Landin.Backend.X86_64 is
                      end if;
                   end;
 
-               when Landin.IR.Load_Field =>
+               when Landin.IR.Load_Field | Landin.IR.Store_Field =>
                   --  [0750] puts the field where the same placement the
                   --  checker used puts it, and the assembler adds that
                   --  many bytes to the name.  A displacement and not a
@@ -553,20 +553,28 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Datum_Of (Of_Unit, Item, Value);
                      Which : constant Positive :=
                        Landin.IR.Field_Of (Of_Unit, Item, Value);
-                     Held : constant Held_Size := Size_Of_Value (Value);
                      At_Offset : constant Landin.Targets.Byte_Count :=
                        Field_Offset (Datum, Which);
+                     Held : constant Held_Size :=
+                       (if Op = Landin.IR.Load_Field
+                        then Size_Of_Value (Value)
+                        else Size_Of
+                               (Landin.IR.Nth_Field
+                                  (Of_Unit, Datum, Which), Facts));
+                     Place : constant String :=
+                       Symbol (Datum)
+                       & (if At_Offset = 0 then ""
+                          else "+"
+                               & Trimmed
+                                   (Landin.Targets.Byte_Count'Image
+                                      (At_Offset)))
+                       & "(%rip)";
                   begin
-                     Carry
-                       (Held,
-                        Symbol (Datum)
-                        & (if At_Offset = 0 then ""
-                           else "+"
-                                & Trimmed
-                                    (Landin.Targets.Byte_Count'Image
-                                       (At_Offset)))
-                        & "(%rip)",
-                        Value_Cell (Value));
+                     if Op = Landin.IR.Load_Field then
+                        Carry (Held, Place, Value_Cell (Value));
+                     else
+                        Carry (Held, Value_Cell (Operand (1)), Place);
+                     end if;
                   end;
 
                when Landin.IR.Add | Landin.IR.Subtract =>
@@ -1195,7 +1203,7 @@ package body Landin.Backend.X86_64 is
                         Answer := Of_Value (Operand_Of (Value, 1));
 
                      when Landin.IR.Call | Landin.IR.Store_Datum
-                        | Landin.IR.Load_Field
+                        | Landin.IR.Load_Field | Landin.IR.Store_Field
                         | Landin.IR.Jump | Landin.IR.Branch =>
                         --  [1940] admits none of these in a module value,
                         --  and [1830] refuses a call there by name.
