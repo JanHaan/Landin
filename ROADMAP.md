@@ -2029,7 +2029,11 @@ names each where it now has to tell them apart — a slice by having nothing
 between the brackets, a literal by a `[` where a value belongs, and an index by
 a `[` at any postfix boundary, which is what `a`, `a.b` and `f()` each are: the
 first attempt asked only after a bare name, so an index after a selection or a
-call still fell through, and a second review caught it. A refused bracketed run is stepped over by nesting so one
+call still fell through, and a second review caught it. The third caught the
+overcorrection: routing a call through the selection loop made `size().x`
+derive, where [1820] spells a selection from a name and gives a call its own
+production. The index refusal is its own step now, and a fixture pins that
+nothing selects from a call. A refused bracketed run is stepped over by nesting so one
 report does not become three.
 
 Complete ordinary structs and implement arrays, C/packed structs, variants,
