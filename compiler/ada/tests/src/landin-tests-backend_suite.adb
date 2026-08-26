@@ -1263,10 +1263,12 @@ package body Landin.Tests.Backend_Suite is
         (Work,
          "mut words: [4]u32" & LF
          & "mut flags: [8]bool" & LF
+         & "mut far: [2147483649]u8" & LF
          & "use: () -> none =" & LF
          & "    a: u32 = words[0]" & LF
          & "    b: u32 = words[2]" & LF
          & "    c: bool = flags[5]" & LF
+         & "    d: u8 = far[2147483648]" & LF
          & "    words[3] = 7" & LF
          & "end use" & LF,
          Ran);
@@ -1280,14 +1282,26 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "movl words(%rip), %eax"),
             "the first element needs no displacement");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movl words+8(%rip), %eax"),
+           (Item, Contains (Text, HT & "movabsq $8, %rdx")
+                  and then Contains (Text, HT & "movl (%rcx), %eax"),
             "the third is two elements along");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movb flags+5(%rip), %al"),
+           (Item, Contains (Text, HT & "movabsq $5, %rdx")
+                  and then Contains (Text, HT & "movb (%rcx), %al"),
             "and a one-byte element counts in ones");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "movl %eax, words+12(%rip)"),
+           (Item, Contains (Text, HT & "movabsq $12, %rdx")
+                  and then Contains (Text, HT & "movl %eax, (%rcx)"),
             "a written element reaches the same bytes");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "leaq far(%rip), %rcx"),
+            "a displacement too wide for RIP-relative addressing starts"
+            & " from the symbol");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movabsq $2147483648, %rdx")
+                  and then Contains (Text, HT & "addq %rdx, %rcx")
+                  and then Contains (Text, HT & "movb (%rcx), %al"),
+            "and adds the full target offset in registers");
       end;
    end An_Element_Is_Read_At_Its_Own_Offset;
 

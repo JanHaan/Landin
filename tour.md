@@ -905,7 +905,7 @@ register image, with the same bounds check any index gets.
 On an image, that is — never straight through the volatile
 pointer, for the reason [0740] gives.
 ```landin
-set_pin: (inout m: moder, n: u32, mode: pin_mode) -> none =
+set_pin: (inout m: moder, n: usize, mode: pin_mode) -> none =
     m.pins[n] = mode
 end set_pin
 

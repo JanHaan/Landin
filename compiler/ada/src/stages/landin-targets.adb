@@ -77,6 +77,9 @@ package body Landin.Targets is
       end case;
    end Pointer_Size;
 
+   function Maximum_Object_Size (Facts : Target_Facts) return Byte_Count
+     is (2 ** Natural (Facts.Pointer) - 1);
+
    function Is_Power_Of_Two (Value : Byte_Alignment) return Boolean is
       Remaining : Natural := Natural (Value);
    begin

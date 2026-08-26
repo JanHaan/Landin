@@ -582,8 +582,9 @@ checks the length before it computes an address, so what was
 left unsaid is only which of refusing and trapping applies
 where — and that is what the rest of this paragraph already
 decides for the other two.
-An index is any integer [0900], and a negative one is
-outside every length, so it is this row and not a fourth.
+D18 makes an array index `usize`, so a negative expression is refused by
+its type before this row applies. The row asks only whether a well-typed
+index is below the array's length.
 
 This is not [0300]'s question, and the difference decides
 both answers. An overflow is a good operation whose result
@@ -1093,3 +1094,38 @@ element.
 
 **Pinned by** `positive/array-type-is-declared`,
 `positive/array-types-alias-and-agree`.
+
+### D18 — An array index is `usize`, and an array fits the target's `usize`
+
+**The tour said** that `usize` is the unsigned integer for byte counts and
+indices [0160], that an array's size is part of its type [0520], and that an
+index is checked before its address is computed [0580]. It did not say
+whether every integer type could index an array or how large an array type
+could be. Its packed-register example used `u32`, which answered differently
+on targets of different widths without stating that it meant to.
+
+**Chosen:** an array index is exactly `usize`. An untyped literal in the index
+position receives `usize` as its context; a value already typed `u32`, `u64`,
+`isize`, or any other integer is refused rather than converted. The byte
+extent of an array must be no greater than the largest value the target's
+`usize` can hold. Thus `[4294967296]u8` is a type on a 64-bit target and is
+refused on a 32-bit one, while `[4294967295]u8` fits both.
+
+**Why the two answers are one rule:** [0580]'s address computation consumes a
+byte offset. Its index and its greatest object extent therefore share the
+one target width [0160] gives for addressing; neither inherits a fixed width
+from the compiler host. The count is not itself bytes — an element may occupy
+more than one — so legality is decided from `length * sizeof element`, without
+performing that multiplication after it has already overflowed.
+
+**The alternative:** accept any integer and compare it with the length. That
+looks permissive, but using a `u32` where the operation consumes `usize` is an
+implicit conversion, which [0190] does not provide, and using `i32` gives a
+negative case that the type of an index need not have. A fixed `u32` limit was
+also declined: it needlessly truncates a 64-bit address space and cannot
+follow a target narrower than 32 bits.
+
+**Pinned by** `negative/index-is-not-usize`,
+`negative/index-past-the-default-type`, the target-parametric checker case
+`array extent follows usize`, and
+`runtime/large-array-offset-is-addressed` on Linux x86-64.

@@ -1,10 +1,8 @@
 mut big: [4294967295]u8
 
---  [0200] gives an integer literal with no context the default type, and
---  an index has no declared type to take instead, so an index past what
---  that type holds is refused for its type rather than for the length.
---  The element exists; reaching it waits for the slice that decides what
---  type an index has.
+--  D18 gives an index literal `usize` context rather than [0200]'s default.
+--  This value is well beyond i32 and is therefore refused for the array's
+--  length, not for the type of the literal.
 f: () -> (r: u8) =
-    r = big[4294967293]
+    r = big[4294967295]
 end f

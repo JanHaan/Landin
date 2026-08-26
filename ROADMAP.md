@@ -2055,9 +2055,9 @@ because it is the same question with the same answer: [1720] says this language
 checks bounds and [0580] says indexing checks the length before it computes an
 address, so what was left unsaid was only which of refusing and trapping applies
 where — and the paragraph already decided that for the divisor and the shift.
-`a[4]` on a `[4]u8` is refused exactly as `x / 0` is, a negative index is that
-same row because it is outside every length, and `a[i]` is left to the trap. So
-this needed no decision of its own, only the row written down.
+`a[4]` on a `[4]u8` is refused exactly as `x / 0` is and `a[i]` is left
+to the trap. D18 later made an array index exactly `usize`, so a negative
+expression is refused by its type before this row applies.
 
 What the trap needs is the next slice, so an index the compiler cannot work out
 is named rather than reaching one — including `0 - 1`, which looks known and is
@@ -2079,18 +2079,22 @@ is refused by name now; `-0` was refused as outside the length, which it is not,
 since [1880] makes it known and its value is zero; and a part position was a
 host `Natural`, so an array of four billion elements — a length this compiler
 accepts and reserves — could not be indexed at all. Positions are as wide as
-lengths now.
+the widest enabled target index now.
 
-One consequence is written down rather than fixed, because fixing it is a
-decision and not a repair. [0200] gives an integer literal with no context the
-default type, and an index has no declared type to take instead, so an index
-above what an `i32` holds is refused for its type before the length is
-consulted: on an array of four billion elements the last two billion cannot be
-reached by a literal at all. The element is there and [1950] promises a refusal
-only where an index cannot be taken, so this is [0200] meeting [0520] in a place
-neither paragraph anticipated. A fixture pins the verdict so the computed-index
-slice inherits the question deliberately — that slice has to decide what type an
-index has anyway, and this is the same decision seen from the constant side.
+The literal exposed the semantic question D18 settles. [0200]'s `i32` default
+is for a literal with no context, while an index participates in address
+arithmetic and [0160] names `usize` for that job. An untyped index literal
+therefore receives `usize` context, and a value already typed `u32` or any
+other integer is refused rather than converted implicitly. The fixture with an
+index above `i32` now reaches [1950]'s length refusal, while a separate fixture
+pins the typed-`u32` mismatch.
+
+The same decision removed the fixed 32-bit array-count ceiling. The internal
+count and IR part ranges hold every enabled 64-bit `usize`, while legality is
+target-parametric: `length * sizeof element` must fit the target's `usize`,
+checked by division before multiplication can overflow. Thus a 2**32-byte
+array is accepted by the Linux x86-64 description and refused by the synthetic
+32-bit description, independent of the host running the compiler.
 
 The IR needed one idea rather than a new opcode. A field of a struct and an
 element of an array are one question to everything downstream — which one, by
@@ -2098,7 +2102,12 @@ position, and what type it is — so `Load_Field` and `Store_Field` carry both a
 an item answers `Part_Count` and `Nth_Part` whichever it is. Only the recording
 differs, because a struct's fields each have their own type and an array's do
 not, and the backend turns a part into an offset by walking the fields or by one
-multiplication accordingly.
+multiplication accordingly. D18 exposed one target limit there: an x86-64
+RIP-relative memory operand has only a signed 32-bit displacement. A larger
+valid constant offset now materialises the datum address and full offset in
+registers; `runtime/large-array-offset-is-addressed` writes and reads byte
+2147483647 on Linux, where the symbol-to-instruction distance pushes the
+relocation beyond that signed limit, rather than leaving it to the linker.
 
 What is still refused: an array local, an array literal
 [0520], the inferred length [0530], `zeroed` [0540], repetition [0560],

@@ -1,0 +1,6 @@
+class: runtime
+summary: D18 carries an array offset whose x86-64 relocation exceeds RIP-relative displacement without truncating it
+constructs: 0160, 0520, 0570, 1460, 1950
+program: main.ldn
+status: 42
+targets: linux-x86-64
