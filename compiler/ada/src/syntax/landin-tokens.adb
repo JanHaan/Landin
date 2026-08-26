@@ -65,8 +65,6 @@ package body Landin.Tokens is
          when Dot_Dot           => "[0360]",   --  ranges
          when Dot_Dot_Less      => "[0360]",   --  a narrowed range
          when Dot_Dot_Dot       => "[0960]",   --  plus what callees fail with
-         when Left_Bracket      => "[0520]",   --  arrays
-         when Right_Bracket     => "[0520]",
          when Compound_Assign   => "[0390]",   --  x += 1 says x = x + 1
          when Character_Literal => "[0250]",
          when Float_Literal     => "[0210]",

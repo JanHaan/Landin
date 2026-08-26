@@ -15,12 +15,15 @@ with Landin.Stages.Syntax;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
+with Landin.Types;
 
 package body Landin.Tests.Checking_Suite is
 
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
+   use type Landin.Checking.Element_Count;
+   use type Landin.Types.Type_Kind;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
@@ -346,11 +349,145 @@ package body Landin.Tests.Checking_Suite is
       Check_Target (Landin.Targets.Synthetic_32, 4, 5, 4, 8);
    end Declared_Structs_Follow_Target_Layout;
 
+   --  D17: an array's identity is its length and its element, so two
+   --  written the same way are one type and an alias keeps that identity.
+   --  Its extent is the element repeated, which needs a target: `usize`
+   --  is four elements of four bytes on a 32-bit description and of eight
+   --  on Linux x86-64.
+   procedure Array_Types_Are_Their_Length_And_Element
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Types_Are_Their_Length_And_Element
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "row: type = [4]u8" & LF
+        & "same: type = [4]u8" & LF
+        & "alias: type = row" & LF
+        & "words: type = [3]u32" & LF
+        & "wide: type = [4]usize" & LF;
+
+      procedure Check_Target
+        (Facts      : Landin.Targets.Target_Facts;
+         Wide_Size  : Natural;
+         Wide_Align : Natural);
+
+      procedure Check_Target
+        (Facts      : Landin.Targets.Target_Facts;
+         Wide_Size  : Natural;
+         Wide_Align : Natural)
+      is
+         Work  : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Order : Landin.Stages.Pipeline;
+         Ran   : Natural;
+         Src   : Landin.Source.Source_Id;
+      begin
+         Src := Landin.Stages.Add_Source (Work, "arrays.ldn", Source_Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+
+         Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+         Landin.Testing.Check
+           (Item, not Landin.Stages.Failed (Work),
+            "the array declarations are accepted");
+
+         declare
+            Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Work).all, Src);
+            Types : constant not null access Landin.Checking.Table :=
+              Landin.Stages.Types (Work);
+
+            function Written_At (Position : Positive)
+              return Landin.Syntax.Node_Id
+              is (Landin.Syntax.Declared_Type
+                    (Of_Tree.all,
+                     Landin.Syntax.Nth_Declaration (Of_Tree.all, Position)));
+
+            Row   : constant Landin.Syntax.Node_Id := Written_At (1);
+            Same  : constant Landin.Syntax.Node_Id := Written_At (2);
+            Words : constant Landin.Syntax.Node_Id := Written_At (4);
+            Wide  : constant Landin.Syntax.Node_Id := Written_At (5);
+
+            Size      : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            Landin.Testing.Check_Equal
+              (Item,
+               Natural
+                 (Landin.Checking.Array_Length (Types.all, Of_Tree.all, Row)),
+               4, "the length is the bound that was written");
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Array_Element (Types.all, Of_Tree.all, Row)
+                 = Landin.Types.U8,
+               "and the element is the type that was written");
+
+            --  D17's whole point: the same shape twice is one type.
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Array_Length (Types.all, Of_Tree.all, Row)
+                 = Landin.Checking.Array_Length
+                     (Types.all, Of_Tree.all, Same)
+               and then Landin.Checking.Array_Element
+                          (Types.all, Of_Tree.all, Row)
+                        = Landin.Checking.Array_Element
+                            (Types.all, Of_Tree.all, Same),
+               "two arrays written the same way agree");
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Array_Length (Types.all, Of_Tree.all, Words)
+                 /= Landin.Checking.Array_Length
+                      (Types.all, Of_Tree.all, Row),
+               "and two written differently do not");
+
+            Landin.Checking.Array_Extent
+              (Landin.Checking.Array_Length (Types.all, Of_Tree.all, Row),
+               Landin.Checking.Array_Element (Types.all, Of_Tree.all, Row),
+               Facts, Size, Alignment);
+            Landin.Testing.Check_Equal
+              (Item, Natural (Size), 4, "four bytes end to end");
+            Landin.Testing.Check_Equal
+              (Item, Natural (Alignment), 1, "aligned as one of them is");
+
+            Landin.Checking.Array_Extent
+              (Landin.Checking.Array_Length (Types.all, Of_Tree.all, Words),
+               Landin.Checking.Array_Element
+                 (Types.all, Of_Tree.all, Words),
+               Facts, Size, Alignment);
+            Landin.Testing.Check_Equal
+              (Item, Natural (Size), 12, "three u32 reach twelve bytes");
+            Landin.Testing.Check_Equal
+              (Item, Natural (Alignment), 4, "aligned as a u32 is");
+
+            --  The one that follows the target rather than the host.
+            Landin.Checking.Array_Extent
+              (Landin.Checking.Array_Length (Types.all, Of_Tree.all, Wide),
+               Landin.Checking.Array_Element (Types.all, Of_Tree.all, Wide),
+               Facts, Size, Alignment);
+            Landin.Testing.Check_Equal
+              (Item, Natural (Size), Wide_Size,
+               "a pointer-width element follows the target");
+            Landin.Testing.Check_Equal
+              (Item, Natural (Alignment), Wide_Align,
+               "and so does its alignment");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, 32, 8);
+      Check_Target (Landin.Targets.Synthetic_32, 16, 4);
+   end Array_Types_Are_Their_Length_And_Element;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
         (Into, "checking", "declarations give structs their identity",
          Declarations_Give_Structs_Their_Identity'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array types are their length and element",
+         Array_Types_Are_Their_Length_And_Element'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);

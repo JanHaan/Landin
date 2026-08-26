@@ -937,6 +937,67 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Type, At_Type);
                end if;
 
+               --  array_type ::= "[" integer "]" type            [1790]
+               --
+               --  The element is a type like any other, so this recurses
+               --  and `[2][3]u8` derives; which elements the kernel can
+               --  lay out is the checker's to say, not this stage's.
+               if Peek = Tok.Left_Bracket then
+                  declare
+                     Bound   : Node_Id := No_Node;
+                     Element : Node_Id := No_Node;
+                  begin
+                     Advance;
+
+                     if Peek = Tok.Integer_Literal then
+                        declare
+                           Item : constant Tok.Token :=
+                             Tok.Token_At (From, Index);
+                        begin
+                           Bound :=
+                             Add (Integer_Literal, Here,
+                                  Radix     => Tok.Base (Item),
+                                  Digits_At => Tok.Digit_Span (Item));
+                        end;
+
+                        Advance;
+                     else
+                        Complain
+                          (Item    => Syn.Type_Expected,
+                           Where   => (if Peek = Tok.End_Of_Input
+                                       then After_Previous else Here),
+                           Message => "an array's length belongs here",
+                           Note    => "[1790]: the bound is an integer"
+                                      & " literal and the length is part"
+                                      & " of the type [0520]",
+                           Related => At_Type,
+                           Because => "this array");
+                        Bound := Add (Error_Expression, Point);
+                     end if;
+
+                     if not Expect
+                              (Wanted  => Tok.Right_Bracket,
+                               Message => "an array's length is closed"
+                                          & " with `]`",
+                               Note    => "[1790]: `[` opens the length"
+                                          & " and `]` closes it",
+                               Related => At_Type,
+                               Because => "opened here")
+                     then
+                        return Add
+                          (Array_Type, At_Type,
+                           Extent   => Join (At_Type, After_Previous),
+                           Children => [Bound, Add (Error_Type, Point)]);
+                     end if;
+
+                     Element := Parse_Type (In_Parameter, Declared_At);
+                     return Add
+                       (Array_Type, At_Type,
+                        Extent   => Join (At_Type, After_Previous),
+                        Children => [Bound, Element]);
+                  end;
+               end if;
+
                --  [0650]'s `distinct` is not reserved, so only the parser
                --  can meet it, and [1795] made a type position somewhere a
                --  name may stand -- without this it reads as a type name

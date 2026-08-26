@@ -1,0 +1,5 @@
+class: positive
+summary: [0520] declares an array type, and [1770]'s integer is its bound in any base
+constructs: 0520, 1770, 1790, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

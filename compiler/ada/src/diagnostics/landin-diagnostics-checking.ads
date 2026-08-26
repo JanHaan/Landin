@@ -99,7 +99,11 @@ package Landin.Diagnostics.Checking is
       --  [0670] declares one; a value of one waits for the rest of
       --  R2.20, which is what carries an aggregate through a frame, an
       --  ABI and an initialiser.
-      Struct_Value);
+      Struct_Value,
+      --  [0520] declares one; a value of one waits, as a struct's did,
+      --  and so does an element the kernel cannot lay out end to end.
+      Array_Value,
+      Array_Element);
 
    function Construct (Item : Refused_Use)
      return Landin.Tokens.Construct_Reference
@@ -110,7 +114,9 @@ package Landin.Diagnostics.Checking is
             when Wide_Integer_Type  => "[0150]",
             when Float_Type         => "[0170]",
             when Text_Type          => "[0600]",
-            when Struct_Value       => "[0670]")
+            when Struct_Value       => "[0670]",
+            when Array_Value        => "[0520]",
+            when Array_Element      => "[0520]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  The type names above, spelled once.  A name that is not here is a
@@ -168,6 +174,8 @@ private
             when Wide_Integer_Type
                | Float_Type
                | Text_Type         => "R4.10",
-            when Struct_Value      => "R2.20");
+            when Struct_Value
+               | Array_Value
+               | Array_Element     => "R2.20");
 
 end Landin.Diagnostics.Checking;

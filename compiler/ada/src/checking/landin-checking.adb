@@ -2,6 +2,7 @@ package body Landin.Checking is
 
    use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
+   use type Landin.Targets.Byte_Count;
 
    ------------------------------------------------------------------
    --  Building
@@ -50,6 +51,7 @@ package body Landin.Checking is
                Into.Node_Types.Append (Landin.Types.Undecided);
                Into.Node_Bodies.Append (Landin.Provenance.No_Declaration);
                Into.Node_Fields.Append (0);
+               Into.Node_Shapes.Append (Array_Shape'(others => <>));
             end loop;
          end;
       end loop;
@@ -57,6 +59,7 @@ package body Landin.Checking is
       for Unused in 1 .. Landin.Resolution.Declaration_Count (Meanings) loop
          Into.Declarations.Append (Settlement'(others => <>));
          Into.Layouts.Append (Aggregate_Layout'(others => <>));
+         Into.Shapes.Append (Array_Shape'(others => <>));
       end loop;
 
       --  Interned once, so a Type_Name node costs eleven integer
@@ -257,6 +260,66 @@ package body Landin.Checking is
    begin
       Into.Node_Fields (Slot (Into, Of_Tree, Node)) := Which;
    end Note_Field;
+
+   function Array_Length
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Element_Count
+     is (Of_Table.Node_Shapes (Slot (Of_Table, Of_Tree, Node)).Length);
+
+   function Array_Element
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Landin.Types.Scalar_Name
+     is (Of_Table.Node_Shapes (Slot (Of_Table, Of_Tree, Node)).Element);
+
+   procedure Note_Array
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Length  : Element_Count;
+      Element : Landin.Types.Scalar_Name) is
+   begin
+      Into.Node_Shapes (Slot (Into, Of_Tree, Node)) :=
+        Array_Shape'(Length => Length, Element => Element);
+   end Note_Array;
+
+   function Array_Length
+     (Of_Table : Table; Id : Declaration_Id) return Element_Count
+     is (Of_Table.Shapes (Natural (Id)).Length);
+
+   function Array_Element
+     (Of_Table : Table; Id : Declaration_Id)
+     return Landin.Types.Scalar_Name
+     is (Of_Table.Shapes (Natural (Id)).Element);
+
+   procedure Note_Array
+     (Into    : in out Table;
+      Id      : Declaration_Id;
+      Length  : Element_Count;
+      Element : Landin.Types.Scalar_Name) is
+   begin
+      Into.Shapes (Natural (Id)) :=
+        Array_Shape'(Length => Length, Element => Element);
+   end Note_Array;
+
+   procedure Array_Extent
+     (Length    : Element_Count;
+      Element   : Landin.Types.Scalar_Name;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+   is
+      Held : constant Landin.Targets.Scalar_Size :=
+        Landin.Types.Storage_Size (Element, Facts);
+   begin
+      Alignment :=
+        (if Length = 0 then 1
+         else Landin.Targets.Alignment_Of (Facts, Held));
+      Size :=
+        Landin.Targets.Byte_Count (Length)
+        * Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held));
+   end Array_Extent;
 
    procedure Note
      (Into    : in out Table;

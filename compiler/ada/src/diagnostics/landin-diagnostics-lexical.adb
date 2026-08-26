@@ -50,8 +50,6 @@ package body Landin.Diagnostics.Lexical is
                | Landin.Tokens.Dot_Dot_Dot      => "R2.30",
             when Landin.Tokens.Dot_Dot
                | Landin.Tokens.Dot_Dot_Less     => "R2.20",
-            when Landin.Tokens.Left_Bracket
-               | Landin.Tokens.Right_Bracket    => "R2.20",
             when Landin.Tokens.Compound_Assign  => "R4.10");
 
    procedure Report
