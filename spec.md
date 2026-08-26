@@ -1064,10 +1064,14 @@ did not declare: `sizeof [4]u8` and a parameter of `[16]u8` both name a
 shape rather than a declaration, and under a nominal rule neither would
 mean anything.
 
-**What this does not decide:** an array of a struct, whose element is
-nominal and carries its declaration's identity into the array's. The array
-is still structural; two `[4]point` are one type exactly when the two
-`point`s are, which is [0710] doing its own work inside this rule.
+**An array of a struct** follows from this rather than needing its own
+answer, and is stated here so nobody reads the gap as a question. The array
+is structural and the element is whatever it is: two `[4]point` are one type
+exactly when the two `point`s are, which is [0710] doing its own work inside
+this rule and not an exception to it. No implementation carries it yet —
+this kernel lays out an array of a scalar and refuses any other element by
+name — so the rule is written and the fixture that pins it arrives with the
+element.
 
 **Pinned by** `positive/array-type-is-declared`,
 `positive/array-types-alias-and-agree`.

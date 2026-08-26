@@ -395,6 +395,14 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Body_Of (Types.all, Means));
                end if;
 
+               --  D17: and which array, which is its shape.
+               if Held = Ty.Fixed_Array then
+                  Landin.Checking.Note_Array
+                    (Types.all, Of_Tree, Written,
+                     Landin.Checking.Array_Length (Types.all, Means),
+                     Landin.Checking.Array_Element (Types.all, Means));
+               end if;
+
                return Held;
             end;
          end;
@@ -520,6 +528,19 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note_Body
                     (Types.all, Id,
                      Landin.Checking.Body_Of
+                       (Types.all, Of_Tree.all, Written));
+               end if;
+
+               --  D17: an array's identity is its shape, so the
+               --  declaration carries the shape the type position was
+               --  given -- and an alias of one carries the same shape,
+               --  because that is all there is to carry.
+               if Held = Ty.Fixed_Array then
+                  Landin.Checking.Note_Array
+                    (Types.all, Id,
+                     Landin.Checking.Array_Length
+                       (Types.all, Of_Tree.all, Written),
+                     Landin.Checking.Array_Element
                        (Types.all, Of_Tree.all, Written));
                end if;
 

@@ -1,0 +1,3 @@
+--  [0570]'s slice is a view and not an array: nothing between the
+--  brackets is what tells the two apart.
+view: type = []u8

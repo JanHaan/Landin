@@ -1,6 +1,0 @@
-class: negative
-summary: [0520] makes the length part of the type, so an array written without one is refused
-constructs: 0520, 1790
-program: program.ldn
-codes: L0101
-targets: linux-x86-64, macos-arm64

@@ -2021,6 +2021,17 @@ indexing and slices [0570], `lenof`, and an array as a struct field. Each is its
 own slice, and the value slices need the same frame and data work the struct
 ones did.
 
+Three of those had been refused by the brackets being a lexeme the kernel
+omitted, and enabling `[` took that away: review found `[]f32`, `[1, 2]` and
+`g[0]` reporting a missing length, a missing expression and a stray token
+instead of naming themselves. [1830] promises better than that, so the parser
+names each where it now has to tell them apart — a slice by having nothing
+between the brackets, a literal by a `[` where a value belongs, and an index by
+a `[` at any postfix boundary, which is what `a`, `a.b` and `f()` each are: the
+first attempt asked only after a bare name, so an index after a selection or a
+call still fell through, and a second review caught it. A refused bracketed run is stepped over by nesting so one
+report does not become three.
+
 Complete ordinary structs and implement arrays, C/packed structs, variants,
 tags, payload alignment
 and the policy for spare-bit folding. Use measured fixtures rather than host
