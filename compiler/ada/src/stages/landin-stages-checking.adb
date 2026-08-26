@@ -1239,42 +1239,41 @@ package body Landin.Stages.Checking is
                   Asked : constant Syn.Node_Id :=
                     Syn.Measured_Type (Of_Tree, Node);
                begin
-                  --  [0370] measures a type, and [1790]'s `type` reaches
-                  --  further than the eleven now: an array and a declared
-                  --  name both stand here and neither is measured yet.
-                  --  An Error_Type is the parser's refusal, already named,
-                  --  and is the one shape that says nothing further.
-                  if Syn.Kind (Of_Tree, Asked) = Syn.Array_Type
-                    or else Syn.Kind (Of_Tree, Asked) = Syn.Type_Reference
-                  then
-                     if Landin.Checking.Type_Of (Types.all, Of_Tree, Asked)
-                        = Ty.Undecided
+                  --  D14 and D17: legality follows the resolved checked
+                  --  type, not the syntax that happened to spell it.  Type_At
+                  --  also carries an array's structural shape onto this node,
+                  --  including through a chain of aliases.
+                  declare
+                     Held : constant Ty.Type_Kind := Type_At (Of_Tree, Asked);
+                  begin
+                     if Landin.Checking.Type_Of
+                          (Types.all, Of_Tree, Asked) = Ty.Undecided
                      then
                         Landin.Checking.Note
-                          (Types.all, Of_Tree, Asked, Ty.Ill_Typed);
-                        Bad.Report
-                          (Item    => Bad.Unsupported_Use,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Asked),
-                           Message => "measuring this is not enabled yet",
-                           Refused => Bad.Measured_Type,
-                           Into    => Found);
+                          (Types.all, Of_Tree, Asked, Held);
                      end if;
 
-                     return Kept (Ty.Ill_Typed);
-                  end if;
+                     if Held in Ty.Scalar_Name or else Held = Ty.Fixed_Array
+                     then
+                        return Kept (Ty.Usize);
+                     end if;
 
-                  if Syn.Kind (Of_Tree, Asked) /= Syn.Type_Name then
-                     --  An Error_Type: the parser refused what stood
-                     --  there and named it.
-                     return Kept (Ty.Ill_Typed);
-                  end if;
+                     --  An unresolved or malformed type was already named by
+                     --  its owning stage.  In particular, do not add a second
+                     --  measurement report for it.
+                     if Held = Ty.Ill_Typed then
+                        return Kept (Ty.Ill_Typed);
+                     end if;
 
-                  Landin.Checking.Note
-                    (Types.all, Of_Tree, Asked,
-                     Landin.Checking.Named
-                       (Types.all, Syn.Name (Of_Tree, Asked)));
-                  return Kept (Ty.Usize);
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Asked),
+                        Message => "measuring this is not enabled yet",
+                        Refused => Bad.Measured_Type,
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end;
                end;
 
             --  [0370]: the length belongs to the fixed-array type, not to

@@ -1,6 +1,0 @@
-class: negative
-summary: [0370] measures a type and this kernel measures the eleven, so an array and a declared name are refused by name
-constructs: 0370, 0520, 1830
-program: program.ldn
-codes: L0304, L0304
-targets: linux-x86-64, macos-arm64

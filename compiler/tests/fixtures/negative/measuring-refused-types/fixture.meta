@@ -1,0 +1,6 @@
+class: negative
+summary: [0370] keeps a struct measurement refused and leaves an unresolved measured type to its one owning diagnostic
+constructs: 0370, 0670, 1830, 1860
+program: program.ldn
+codes: L0304, L0304
+targets: linux-x86-64, macos-arm64
