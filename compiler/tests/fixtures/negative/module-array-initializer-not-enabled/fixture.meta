@@ -1,6 +1,6 @@
 class: negative
-summary: D21 enables an array initializer at local scope only, not module scope
-constructs: 0060, 0080, 0110, 0520, 1740
+summary: D21 enables typed and inferred direct-name array initializers only at local scope
+constructs: 0050, 0060, 0080, 0110, 0520, 1740
 program: program.ldn
-codes: L0304
+codes: L0304, L0304
 targets: linux-x86-64, macos-arm64

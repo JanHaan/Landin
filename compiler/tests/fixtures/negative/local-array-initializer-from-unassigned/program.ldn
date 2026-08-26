@@ -1,4 +1,4 @@
 f: () -> none =
     mut source: [2]u32
-    mut destination: [2]u32 = source
+    mut destination := source
 end f

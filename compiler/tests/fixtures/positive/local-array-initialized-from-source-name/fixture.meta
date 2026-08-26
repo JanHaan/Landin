@@ -1,5 +1,5 @@
 class: positive
-summary: D21 initializes a local array from a module or a prior local whole-array name
-constructs: 0060, 0080, 0110, 0410, 0520, 1795, 1810
+summary: D21 infers a local array's exact D17 shape from a module or prior local whole-array name
+constructs: 0050, 0060, 0080, 0110, 0410, 0520, 1795, 1810
 program: program.ldn
 targets: linux-x86-64, macos-arm64
