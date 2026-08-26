@@ -24,6 +24,8 @@ with Landin.Types;
 
 package body Landin.Tests.IR_Suite is
 
+   use type Landin.IR.Item_Id;
+   use type Landin.IR.Opcode;
    use type Landin.IR.Slot_Id;
    use type Landin.IR.Value_Id;
    use type Landin.Types.Type_Kind;
@@ -371,6 +373,70 @@ package body Landin.Tests.IR_Suite is
       end;
    end A_Call_Reads_Its_Own_Arguments;
 
+   ------------------------------------------------------------------
+   --  A runtime element carries its index before its stored value
+   ------------------------------------------------------------------
+
+   procedure An_Element_Carries_Its_Operands
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Element_Carries_Its_Operands
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Unit : Landin.IR.Unit;
+         Datum, Routine : Landin.IR.Item_Id;
+         Block : Landin.IR.Block_Id;
+         Index, Stored, Loaded, Store : Landin.IR.Value_Id;
+      begin
+         Landin.IR.Prepare (Unit, Meanings.all);
+         Datum := Landin.IR.Add_Item
+                    (Unit, Landin.IR.Datum, 1,
+                     Landin.Types.Fixed_Array, Site);
+         Landin.IR.Set_Array (Unit, Datum, Landin.Types.U32, 4);
+         Routine := Landin.IR.Add_Item
+                      (Unit, Landin.IR.Routine, 2, Landin.Types.U32, Site);
+         Block := Landin.IR.Add_Block
+                    (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         Landin.IR.Enter (Unit, Routine, Block);
+         Index := Landin.IR.Emit_Number
+                    (Unit, Routine, Landin.Types.Usize, 2, False, Site);
+         Stored := Landin.IR.Emit_Number
+                     (Unit, Routine, Landin.Types.U32, 9, False, Site);
+         Loaded := Landin.IR.Emit_Load_Element
+                     (Unit, Routine, Datum, Index, Landin.Types.U32, Site);
+         Landin.IR.Emit_Store_Element
+           (Unit, Routine, Datum, Index, Stored, Site);
+         Store := Landin.IR.Nth_Value (Unit, Routine, Block, 4);
+
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Loaded)
+              = Landin.IR.Load_Element
+            and then Landin.IR.Datum_Of (Unit, Routine, Loaded) = Datum
+            and then Landin.IR.Operand_Count (Unit, Routine, Loaded) = 1
+            and then Landin.IR.Nth_Operand (Unit, Routine, Loaded, 1) = Index,
+            "a load carries its array and runtime index");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Store)
+              = Landin.IR.Store_Element
+            and then Landin.IR.Datum_Of (Unit, Routine, Store) = Datum
+            and then Landin.IR.Operand_Count (Unit, Routine, Store) = 2
+            and then Landin.IR.Nth_Operand (Unit, Routine, Store, 1) = Index
+            and then Landin.IR.Nth_Operand (Unit, Routine, Store, 2) = Stored,
+            "a store carries its index before the value");
+      end;
+   end An_Element_Carries_Its_Operands;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -388,6 +454,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "a call reads its own arguments",
          A_Call_Reads_Its_Own_Arguments'Access);
+      Landin.Testing.Register
+        (Into, "ir", "an element carries its operands",
+         An_Element_Carries_Its_Operands'Access);
    end Register;
 
 end Landin.Tests.IR_Suite;

@@ -68,6 +68,8 @@ package Landin.IR.Verifier is
       Store_Datum_Disagrees,
       Aggregate_Datum_Is_Not_A_Value,
       Field_Out_Of_Range,
+      Element_Datum_Is_Not_An_Array,
+      Element_Index_Is_Not_Usize,
       --  Calls [1920].
       Callee_Is_Not_A_Routine,
       Call_Inside_A_Datum,

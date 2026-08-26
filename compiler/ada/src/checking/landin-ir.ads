@@ -190,6 +190,10 @@ package Landin.IR is
       --  the reason an aggregate item carries its fields' types.
       Load_Field,
       Store_Field,
+      --  An element selected by a runtime `usize`.  Unlike Load_Field, the
+      --  position is an operand because [1950] checks its value at runtime.
+      Load_Element,
+      Store_Element,
       --  [0370]'s measurements.  The type they ask about is carried, not
       --  the answer: a size needs a width and a width needs a target, so
       --  the answer belongs to whoever has one.  This is the same seam
@@ -249,7 +253,8 @@ package Landin.IR is
    --  defines a value exactly when its callee has a result [1920], so the
    --  instruction's own Result answers that and an opcode cannot.
    function Defines_Nothing (Of_Code : Opcode) return Boolean
-     is (Of_Code in Store | Store_Datum | Store_Field | Terminator_Kind);
+     is (Of_Code in Store | Store_Datum | Store_Field | Store_Element
+                    | Terminator_Kind);
 
    ------------------------------------------------------------------
    --  Identities
@@ -752,6 +757,7 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item, Value)
                  and then (Op_Of (Of_Unit, Item, Value)
                              in Load_Datum | Store_Datum
+                                | Load_Element | Store_Element
                            or else (Op_Of (Of_Unit, Item, Value)
                                       in Load_Field | Store_Field
                                     and then not Reaches_A_Slot
@@ -967,6 +973,37 @@ package Landin.IR is
       Site  : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Datum)
+                 and then Holds (Into, Item, Value)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   --  [1950]'s runtime-selected array element.  Index is operand one; a
+   --  store's value is operand two.  The verifier holds the former to
+   --  `usize`, the latter and the result to the array's element type, and
+   --  Datum to an array item.
+   function Emit_Load_Element
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Datum  : Item_Id;
+      Index  : Value_Id;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Datum)
+                  and then Holds (Into, Item, Index)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Load_Element'Result, Load_Element);
+
+   procedure Emit_Store_Element
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Datum : Item_Id;
+      Index : Value_Id;
+      Value : Value_Id;
+      Site  : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Datum)
+                 and then Holds (Into, Item, Index)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
 

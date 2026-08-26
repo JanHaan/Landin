@@ -1,6 +1,0 @@
-class: negative
-summary: [1950] leaves an index the compiler does not know to the trap, and emitting one is not enabled yet
-constructs: 0570, 1830, 1950
-program: program.ldn
-codes: L0304, L0304
-targets: linux-x86-64, macos-arm64

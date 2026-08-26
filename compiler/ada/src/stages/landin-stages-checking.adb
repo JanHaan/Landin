@@ -1049,18 +1049,9 @@ package body Landin.Stages.Checking is
            (if Negated then Syn.Operand_Of (Of_Tree, Where) else Where);
       begin
          if Syn.Kind (Of_Tree, Literal) /= Syn.Integer_Literal then
-            --  [1950] leaves this one to the trap, and the trap is the
-            --  next slice: naming it is what keeps it from reaching the
-            --  lowering, which has no computed index to lower.
-            Bad.Report
-              (Item    => Bad.Unsupported_Use,
-               Source  => Syn.Source_Of (Of_Tree),
-               Where   => Syn.Where (Of_Tree, Where),
-               Message => "an index the compiler cannot work out is not"
-                          & " enabled yet",
-               Refused => Bad.Computed_Index,
-               Into    => Found);
-            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            --  [1950] leaves this one to the runtime bounds check.  It is
+            --  not folded here: [1880]'s known line stays a literal or a
+            --  unary minus over one, independent of compiler cleverness.
             return;
          end if;
 

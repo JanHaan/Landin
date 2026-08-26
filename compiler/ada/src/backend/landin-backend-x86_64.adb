@@ -565,6 +565,48 @@ package body Landin.Backend.X86_64 is
                      end if;
                   end;
 
+               when Landin.IR.Load_Element | Landin.IR.Store_Element =>
+                  --  [0580] requires the bounds check before any address
+                  --  computation.  Keep the index in %rax through the
+                  --  unsigned comparison, trap on index >= length, and only
+                  --  then scale it and add it to the datum's address.
+                  declare
+                     Datum : constant Landin.IR.Item_Id :=
+                       Landin.IR.Datum_Of (Of_Unit, Item, Value);
+                     Index : constant Landin.IR.Value_Id :=
+                       Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1);
+                     Length : constant Landin.IR.Element_Total :=
+                       Landin.IR.Array_Length (Of_Unit, Datum);
+                     Kind : constant Landin.Types.Scalar_Name :=
+                       Landin.IR.Array_Element (Of_Unit, Datum);
+                     Held : constant Held_Size := Size_Of (Kind, Facts);
+                     Safe : constant String := Value_Label (Value) & "_index";
+                  begin
+                     Emit ("movq " & Value_Cell (Index) & ", %rax");
+                     Emit
+                       ("movabsq $"
+                        & Trimmed (Landin.IR.Element_Total'Image (Length))
+                        & ", %rdx");
+                     Emit ("cmpq %rdx, %rax");
+                     Emit ("jb " & Safe);
+                     Emit ("ud2");
+                     Put (Safe & ":");
+                     Emit
+                       ("imulq $"
+                        & Trimmed
+                            (Natural'Image (Landin.Targets.Bytes (Held)))
+                        & ", %rax, %rax");
+                     Emit ("leaq " & Symbol (Datum) & "(%rip), %rcx");
+                     Emit ("addq %rax, %rcx");
+
+                     if Op = Landin.IR.Load_Element then
+                        Carry (Held, "(%rcx)", Value_Cell (Value));
+                     else
+                        Carry
+                          (Held, Value_Cell (Operand (2)), "(%rcx)");
+                     end if;
+                  end;
+
                when Landin.IR.Load_Field | Landin.IR.Store_Field =>
                   if Landin.IR.Reaches_A_Slot (Of_Unit, Item, Value) then
                      --  [1810]'s local: a cell in this frame, reached the
@@ -1287,6 +1329,7 @@ package body Landin.Backend.X86_64 is
 
                      when Landin.IR.Call | Landin.IR.Store_Datum
                         | Landin.IR.Load_Field | Landin.IR.Store_Field
+                        | Landin.IR.Load_Element | Landin.IR.Store_Element
                         | Landin.IR.Jump | Landin.IR.Branch =>
                         --  [1940] admits none of these in a module value,
                         --  and [1830] refuses a call there by name.

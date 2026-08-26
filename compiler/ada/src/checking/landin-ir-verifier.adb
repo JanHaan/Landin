@@ -58,6 +58,11 @@ package body Landin.IR.Verifier is
                & " storage and not a value yet",
             when Field_Out_Of_Range =>
                "a field load names a field the aggregate does not have",
+            when Element_Datum_Is_Not_An_Array =>
+               "an element load or store names a datum that is not an array",
+            when Element_Index_Is_Not_Usize =>
+               "an element load or store indexes with a value other than"
+               & " usize",
             when Callee_Is_Not_A_Routine =>
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
@@ -76,6 +81,8 @@ package body Landin.IR.Verifier is
             when Load_Datum    => 0,
             when Load_Field    => 0,
             when Store_Field   => 1,
+            when Load_Element  => 1,
+            when Store_Element => 2,
             when Store         => 1,
             when Store_Datum   => 1,
             when Unary_Kind    => 1,
@@ -318,6 +325,31 @@ package body Landin.IR.Verifier is
                                     end if;
                                  end;
                               end if;
+
+                           when Load_Element | Store_Element =>
+                              declare
+                                 D : constant Item_Id :=
+                                   Datum_Of (Of_Unit, Id, V);
+                              begin
+                                 if not Holds (Of_Unit, D)
+                                   or else Kind_Of (Of_Unit, D) /= Datum
+                                 then
+                                    return
+                                      (Kind => Named_Item_Is_Not_A_Datum,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+
+                                 if Result_Of (Of_Unit, D)
+                                      /= Landin.Types.Fixed_Array
+                                 then
+                                    return
+                                      (Kind =>
+                                         Element_Datum_Is_Not_An_Array,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+                              end;
 
                            when Load_Datum | Store_Datum =>
                               declare
@@ -564,6 +596,44 @@ package body Landin.IR.Verifier is
                                          Item => Id, Block => Block,
                                          Value => V);
                               end if;
+
+                           when Load_Element | Store_Element =>
+                              declare
+                                 D : constant Item_Id :=
+                                   Datum_Of (Of_Unit, Id, V);
+                                 Index : constant Value_Id :=
+                                   Nth_Operand (Of_Unit, Id, V, 1);
+                                 Element : constant Landin.Types.Scalar_Name :=
+                                   Array_Element (Of_Unit, D);
+                              begin
+                                 if Result_Of (Of_Unit, Id, Index)
+                                      /= Landin.Types.Usize
+                                 then
+                                    return
+                                      (Kind => Element_Index_Is_Not_Usize,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+
+                                 if Op = Load_Element then
+                                    if Result_Of (Of_Unit, Id, V) /= Element
+                                    then
+                                       return
+                                         (Kind => Result_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 elsif Result_Of
+                                         (Of_Unit, Id,
+                                          Nth_Operand (Of_Unit, Id, V, 2))
+                                       /= Element
+                                 then
+                                    return
+                                      (Kind => Store_Datum_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+                              end;
 
                            when Store_Field =>
                               declare

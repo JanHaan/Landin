@@ -1,0 +1,13 @@
+mut words: [4]u32
+
+at: (i: usize) -> (r: u32) =
+    r = words[i]
+end at
+
+public main: () -> (code: i32) =
+    if at(4) == 0 then
+        code = 1
+    else
+        code = 2
+    end if
+end main

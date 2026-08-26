@@ -111,7 +111,7 @@ package body Landin.IR.Dump is
                           (Slot_Id'Image (Slot_Of (Of_Unit, Item, Value)))
                       & Operands (Item, Value);
 
-            when Load_Datum | Store_Datum =>
+            when Load_Datum | Store_Datum | Load_Element | Store_Element =>
                declare
                   D : constant Item_Id := Datum_Of (Of_Unit, Item, Value);
                begin

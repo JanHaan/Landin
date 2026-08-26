@@ -15,6 +15,7 @@ with Ada.Strings.Unbounded;
 
 with Landin.IR;
 with Landin.IR.Dump;
+with Landin.IR.Verifier;
 with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Testing.Fixtures;
@@ -31,6 +32,7 @@ package body Landin.Tests.Lowering_Suite is
    package IR renames Landin.IR;
 
    use type IR.Block_Id;
+   use type IR.Item_Id;
    use type IR.Item_Kind;
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Write_Status;
@@ -39,6 +41,7 @@ package body Landin.Tests.Lowering_Suite is
    use type IR.Slot_Id;
    use type IR.Part_Position;
    use type IR.Value_Id;
+   use type Landin.IR.Verifier.Fault_Kind;
    use type Landin.Source.Source_Id;
    use type Landin.Types.Type_Kind;
 
@@ -764,6 +767,137 @@ package body Landin.Tests.Lowering_Suite is
    end A_Logical_Module_Value_Becomes_Blocks;
 
    ------------------------------------------------------------------
+   --  A computed destination is evaluated in source order
+   ------------------------------------------------------------------
+
+   procedure A_Computed_Destination_Precedes_Its_Value
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Computed_Destination_Precedes_Its_Value
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut flags: [4]bool" & LF
+         & "index: () -> (r: usize) = r = 0 end index" & LF
+         & "left: () -> (r: bool) = r = true end left" & LF
+         & "right: () -> (r: bool) = r = false end right" & LF
+         & "set: () -> none =" & LF
+         & "    flags[index()] = left() and right()" & LF
+         & "end set" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Setter : constant IR.Item_Id := 5;
+         First, Second, Third : IR.Value_Id := IR.No_Value;
+      begin
+         for V in 1 .. IR.Value_Count (Unit, Setter) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+            begin
+               if IR.Op_Of (Unit, Setter, Value) = IR.Call then
+                  if First = IR.No_Value then
+                     First := Value;
+                  elsif Second = IR.No_Value then
+                     Second := Value;
+                  else
+                     Third := Value;
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            First /= IR.No_Value and then Second /= IR.No_Value
+            and then Third /= IR.No_Value
+            and then IR.Callee_Of (Unit, Setter, First) = 2
+            and then IR.Callee_Of (Unit, Setter, Second) = 3
+            and then IR.Callee_Of (Unit, Setter, Third) = 4
+            and then First < Second and then Second < Third,
+            "the destination index call precedes both right-hand-side calls");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Verifier.Check (Unit).Kind
+              = Landin.IR.Verifier.Nothing_Wrong,
+            "the saved destination index remains local to the final block");
+         Check_Terminators (Item, Unit, "a computed destination");
+      end;
+   end A_Computed_Destination_Precedes_Its_Value;
+
+   --  An increment reads and writes one source place.  The index expression
+   --  is therefore lowered once and the same value names both element
+   --  instructions rather than evaluating the place a second time.
+   procedure An_Element_Update_Evaluates_Its_Index_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Element_Update_Evaluates_Its_Index_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut words: [4]u32" & LF
+         & "bump: (i: usize) -> none = inc words[i] end bump" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Bump : constant IR.Item_Id := 2;
+         Index, Loaded, Stored : IR.Value_Id := IR.No_Value;
+         Index_Loads, Element_Loads, Element_Stores : Natural := 0;
+      begin
+         for V in 1 .. IR.Value_Count (Unit, Bump) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+               Op : constant IR.Opcode := IR.Op_Of (Unit, Bump, Value);
+            begin
+               case Op is
+                  when IR.Load =>
+                     Index_Loads := Index_Loads + 1;
+                     Index := Value;
+                  when IR.Load_Element =>
+                     Element_Loads := Element_Loads + 1;
+                     Loaded := Value;
+                  when IR.Store_Element =>
+                     Element_Stores := Element_Stores + 1;
+                     Stored := Value;
+                  when others =>
+                     null;
+               end case;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            Index_Loads = 1 and then Element_Loads = 1
+            and then Element_Stores = 1,
+            "one index load feeds one element load and one element store");
+         Landin.Testing.Check
+           (Item,
+            Index /= IR.No_Value and then Loaded /= IR.No_Value
+            and then Stored /= IR.No_Value
+            and then IR.Nth_Operand (Unit, Bump, Loaded, 1) = Index
+            and then IR.Nth_Operand (Unit, Bump, Stored, 1) = Index
+            and then Index < Loaded and then Loaded < Stored,
+            "the update reuses its one evaluated index in source order");
+         Check_Terminators (Item, Unit, "an element update");
+      end;
+   end An_Element_Update_Evaluates_Its_Index_Once;
+
+   ------------------------------------------------------------------
    --  The recorded artefact
    ------------------------------------------------------------------
 
@@ -924,6 +1058,12 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a struct copy becomes its fields",
          A_Struct_Copy_Becomes_Its_Fields'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a computed destination precedes its value",
+         A_Computed_Destination_Precedes_Its_Value'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "an element update evaluates its index once",
+         An_Element_Update_Evaluates_Its_Index_Once'Access);
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);
