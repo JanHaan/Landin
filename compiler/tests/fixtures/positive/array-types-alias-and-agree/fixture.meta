@@ -1,0 +1,5 @@
+class: positive
+summary: D17 makes an array's identity its length and its element, and D15's alias keeps it
+constructs: 0520, 1790, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

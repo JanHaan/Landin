@@ -73,7 +73,12 @@ package Landin.Types is
       --  which is Landin.Checking's to keep for the same reason what
       --  every node has is.  Two aggregates are one type when they came
       --  from one declaration and never otherwise [0710].
-      Aggregate);
+      Aggregate,
+      --  [0520]'s array, whose length is part of it.  Which one is not
+      --  here either, and for the opposite reason: D17 makes an array
+      --  structural, so its identity is a length and an element type and
+      --  those are two more facts than a Type_Kind holds.
+      Fixed_Array);
 
    subtype Scalar_Name is Type_Kind range U8 .. Bool;
 
@@ -83,7 +88,7 @@ package Landin.Types is
 
    --  A type a value can actually have, which is what an expression node
    --  must end the pass with when its subtree is sound.
-   subtype Settled is Type_Kind range Untyped_Integer .. Aggregate;
+   subtype Settled is Type_Kind range Untyped_Integer .. Fixed_Array;
 
    function Spelling (Item : Scalar_Name) return String
      is (case Item is

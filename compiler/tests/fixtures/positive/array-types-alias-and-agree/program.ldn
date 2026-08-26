@@ -1,0 +1,12 @@
+row: type = [4]u8
+
+--  D17: an array's identity is its length and its element, so this names
+--  the same type as `row` does without naming `row`.
+same: type = [4]u8
+
+--  D15's alias keeps that identity like any other.
+also: type = row
+
+--  A different length and a different element are different types.
+longer: type = [8]u8
+other: type = [4]i8

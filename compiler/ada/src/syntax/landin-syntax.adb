@@ -30,6 +30,8 @@ package body Landin.Syntax is
             when Binary_Kind              => 2,
             when Error_Type | Type_Name
                | Type_Reference           => 0,
+            --  The bound and the element type.
+            when Array_Type               => 2,
             --  A struct body's fields are its trailing run; a field's
             --  one slot is its type.
             when Struct_Body              => 0,
@@ -115,6 +117,12 @@ package body Landin.Syntax is
 
    function Declared_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
+
+   function Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Element_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 2));
 
    function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));

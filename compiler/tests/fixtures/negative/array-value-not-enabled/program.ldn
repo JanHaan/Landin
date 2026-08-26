@@ -1,0 +1,5 @@
+row: type = [4]u8
+
+--  [0520] declares one; carrying a value of one waits for the rest of
+--  R2.20, exactly as a struct's did.
+mut buffer: row
