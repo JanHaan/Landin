@@ -19,6 +19,10 @@ package body Landin.IR.Dump is
      is (if Item in Landin.Types.Scalar_Name
          then Landin.Types.Spelling (Item)
          elsif Item = Landin.Types.No_Value then "none"
+         --  [0710]'s identity is which declaration wrote it, and the item
+         --  is named on this line already, so the category is what a dump
+         --  can say without repeating the name beside it.
+         elsif Item = Landin.Types.Aggregate then "struct"
          else "");
 
    function Text
@@ -168,6 +172,15 @@ package body Landin.IR.Dump is
                  & Trimmed (Natural'Image (Block_Count (Of_Unit, Id)))
                  & " values "
                  & Trimmed (Natural'Image (Value_Count (Of_Unit, Id))));
+
+            --  [0750]'s order, which is the whole of what an aggregate
+            --  item says about itself: where each field sits needs a
+            --  target and a dump has none.
+            for F in 1 .. Field_Count (Of_Unit, Id) loop
+               Put ("  field " & Trimmed (Natural'Image (F)) & " "
+                    & Landin.Types.Spelling
+                        (Nth_Field (Of_Unit, Id, F)));
+            end loop;
 
             for S in 1 .. Slot_Count (Of_Unit, Id) loop
                declare

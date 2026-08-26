@@ -34,9 +34,12 @@ package body Landin.Tests.Verifier_Suite is
 
    LF : constant Character := Character'Val (10);
 
+   --  Four declarations and then a fifth, which is what an item that is
+   --  not a routine is built against below.
    Program : constant String :=
      "f: () -> (r: u32) = r = 1 end f" & LF
-     & "g: () -> (r: u32) = r = 2 end g" & LF;
+     & "g: () -> (r: u32) = r = 2 end g" & LF
+     & "h: u32 = 3" & LF;
 
    procedure Ready
      (Work : in out Landin.Stages.Compilation;
@@ -132,6 +135,7 @@ package body Landin.Tests.Verifier_Suite is
       Store_To_A_Parameter,
       Callee_Is_A_Datum,
       Datum_Load_Names_A_Routine,
+      Datum_Load_Names_An_Aggregate,
       Condition_Is_A_Number,
       Call_Missing_An_Argument,
       Unreachable_Block,
@@ -145,13 +149,15 @@ package body Landin.Tests.Verifier_Suite is
                    Site : Landin.Provenance.Origin;
                    Harm : Damage) return V.Fault
    is
-      A, D : IR.Item_Id;
+      A, D, G : IR.Item_Id;
       S, P : IR.Slot_Id;
       B, C : IR.Block_Id;
       N, M : IR.Value_Id;
    begin
       A := IR.Add_Item (Unit, IR.Routine, 1, Landin.Types.U32, Site);
       D := IR.Add_Item (Unit, IR.Datum, 3, Landin.Types.U32, Site);
+      G := IR.Add_Item (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
+      IR.Add_Field (Unit, G, Landin.Types.U32);
 
       if Harm = No_Block_At_All then
          return V.Check (Unit);
@@ -246,6 +252,13 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Datum_Load_Names_An_Aggregate =>
+            N := IR.Emit_Load_Datum (Unit, A, G, Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Condition_Is_A_Number =>
             C := IR.Add_Block
                    (Unit, A, Landin.Resolution.Program_Scope, Site);
@@ -313,6 +326,8 @@ package body Landin.Tests.Verifier_Suite is
          (Store_To_A_Parameter,       V.Store_To_A_Parameter),
          (Callee_Is_A_Datum,          V.Callee_Is_Not_A_Routine),
          (Datum_Load_Names_A_Routine, V.Named_Item_Is_Not_A_Datum),
+         (Datum_Load_Names_An_Aggregate,
+          V.Aggregate_Datum_Is_Not_A_Value),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
          (Call_Missing_An_Argument,   V.Wrong_Operand_Count),
          (Unreachable_Block,          V.Block_Unreachable),

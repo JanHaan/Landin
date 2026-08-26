@@ -1174,6 +1174,27 @@ file positive/statement-inc-dec/program.ldn tokens 19
   53 54 n
   55 58 end
   59 60 f
+file positive/struct-module-state/program.ldn tokens 20
+  0 8 counters
+  8 9 :
+  10 14 type
+  15 16 =
+  17 23 struct
+  28 32 hits
+  32 33 :
+  34 37 u32
+  42 48 misses
+  48 49 :
+  50 53 u32
+  58 63 ready
+  63 64 :
+  65 69 bool
+  70 73 end
+  74 82 counters
+  220 223 mut
+  224 229 state
+  229 230 :
+  231 239 counters
 file positive/struct-type-is-declared/program.ldn tokens 39
   72 77 ahead
   77 78 :
@@ -2678,7 +2699,34 @@ file negative/struct-not-enabled/program.ldn tokens 13
   24 25 :
   26 29 i32
   29 30 )
-file negative/struct-value-not-enabled/program.ldn tokens 13
+file negative/struct-state-read-as-a-value/program.ldn tokens 26
+  0 8 counters
+  8 9 :
+  10 14 type
+  15 16 =
+  17 23 struct
+  28 32 hits
+  32 33 :
+  34 37 u32
+  38 41 end
+  42 50 counters
+  52 55 mut
+  56 61 state
+  61 62 :
+  63 71 counters
+  221 222 f
+  222 223 :
+  224 225 (
+  225 226 )
+  227 229 ->
+  230 234 none
+  235 236 =
+  241 242 _
+  243 244 =
+  245 250 state
+  251 254 end
+  255 256 f
+file negative/struct-value-not-enabled/program.ldn tokens 30
   0 5 point
   5 6 :
   7 11 type
@@ -2689,9 +2737,26 @@ file negative/struct-value-not-enabled/program.ldn tokens 13
   28 31 i32
   32 35 end
   36 41 point
-  43 47 here
-  47 48 :
-  49 54 point
+  181 187 public
+  188 192 main
+  192 193 :
+  194 195 (
+  195 196 )
+  197 199 ->
+  200 201 (
+  201 205 code
+  205 206 :
+  207 210 i32
+  210 211 )
+  212 213 =
+  218 222 here
+  222 223 :
+  224 229 point
+  234 238 code
+  239 240 =
+  241 242 0
+  243 246 end
+  247 251 main
 file negative/text-literal-not-enabled/program.ldn refused no rule spells '"'
 file negative/text-type-not-enabled/program.ldn tokens 5
   0 4 name

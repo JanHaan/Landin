@@ -1845,6 +1845,41 @@ to offsets 0, 4 and 8, extent 9, alignment 4 and size 12, then checks
 first source-declared layout and proves both source order and target dependence
 through the frontend seam while values remain deliberately refused.
 
+The first value of one follows, and it is the one that needs nothing this
+kernel cannot already emit: [1740]'s module state with no initialiser. D10
+makes a binding with no value zero and `false` for a `bool`, so its whole
+storage is zero and no aggregate has to be constructed, copied, passed or
+returned to have it. The checker enables exactly that shape — a module binding,
+no value, a declared type name rather than an inline body — and every other
+place a struct type could stand is still `L0304`, which the negative fixture
+now pins at a local binding instead. An aggregate `Datum` carries its fields'
+types in declaration order rather than their offsets, for the reason
+`Measure_Size` carries a type: an offset needs a target and `Landin.IR` has
+none. The backend lays those fields out with the same `Landin.Targets.Placement`
+the checker used and emits `.zero` of the whole size at the aggregate's own
+alignment, so `u32 u32 bool` is twelve bytes aligned to four and a `usize`
+field widens the state to sixteen on Linux x86-64. A datum's block ends in a
+leave that carries no value at all, which the verifier now reads as the
+aggregate case rather than as a missing operand.
+
+Reading the whole of one is a value like any other and is refused where the
+name stands, which review found accepted: `_ = state` passed the checker, became
+a `Load_Datum` of an aggregate, and reached a backend that reads a datum's type
+as a scalar. It is `L0304` now, with its own fixture, and the verifier refuses a
+datum load or store that names an aggregate as well — the stage that cannot be
+wrong about it is the one that checks the IR rather than the one that emits it.
+
+That defect also found one in `check.py`: the token dump recovered each
+token's offset by searching the source for its spelling, so a token whose
+spelling occurred in a comment above it was recorded at the comment's bytes.
+The tokeniser now carries its own offsets. Nothing had noticed because no
+fixture had written a word in a comment and then as a token.
+
+Field access is the next slice and is deliberately absent: reading or writing
+`state.hits` needs member syntax, a checker lookup, load and store operations
+that carry an offset, and addressing in the backend. Nothing here anticipates
+it, so the state is storage a program can declare and not yet reach.
+
 Complete ordinary structs and implement arrays, C/packed structs, variants,
 tags, payload alignment
 and the policy for spare-bit folding. Use measured fixtures rather than host

@@ -860,6 +860,93 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Module_Value_Becomes_Initialized_Data;
 
+   --  [1740]'s module state of [0670]'s struct type.  D10 zeroes it, so
+   --  what is emitted is [0750]'s whole size at [0750]'s own alignment and
+   --  not a value per field.  `u32 u32 bool` reaches nine bytes and rounds
+   --  to twelve, which is the tail padding an array of them would need.
+   procedure A_Struct_State_Becomes_Zeroed_Data
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_State_Becomes_Zeroed_Data
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "counters: type = struct" & LF
+         & "    hits: u32" & LF
+         & "    misses: u32" & LF
+         & "    ready: bool" & LF
+         & "end counters" & LF
+         & "public mut state: counters" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Expected : constant String :=
+           HT & ".data" & LF
+           & HT & ".globl state" & LF
+           & HT & ".type state, @object" & LF
+           & HT & ".align 4" & LF
+           & "state:" & LF
+           & HT & ".zero 12" & LF
+           & HT & ".size state, 12" & LF;
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, Expected),
+            "a struct state is emitted as its whole zeroed layout");
+      end;
+   end A_Struct_State_Becomes_Zeroed_Data;
+
+   --  The same declaration against a 32-bit description, so the size
+   --  follows the target rather than the host: `usize bool` is sixteen
+   --  bytes on Linux x86-64 and eight here.
+   procedure A_Struct_State_Follows_Its_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_State_Follows_Its_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "machine: type = struct" & LF
+        & "    word: usize" & LF
+        & "    ready: bool" & LF
+        & "end machine" & LF
+        & "mut state: machine" & LF;
+   begin
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Synthetic_32);
+         Ran  : Natural;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran  : Natural;
+      begin
+         Lower (Work, Source, Ran);
+
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains (Text, HT & ".align 8" & LF & "state:" & LF
+                               & HT & ".zero 16" & LF),
+               "a pointer-width field widens the state it is in");
+         end;
+      end;
+   end A_Struct_State_Follows_Its_Target;
+
    --  A module value is reached by name rather than through a frame, and
    --  x86-64's position-independent form of that name is RIP-relative.
    --  [1900] lets a `mut` module binding be written as well as read.
@@ -1667,6 +1754,12 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a module binding is reached through rip",
          A_Module_Binding_Is_Reached_Through_Rip'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a struct state becomes zeroed data",
+         A_Struct_State_Becomes_Zeroed_Data'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a struct state follows its target",
+         A_Struct_State_Follows_Its_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value folds every level",
          A_Module_Value_Folds_Every_Level'Access);

@@ -880,13 +880,25 @@ package body Landin.Stages.Lowering is
          Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree, Node);
          Answer : IR.Value_Id;
       begin
-         if Held not in Ty.Scalar_Name then
+         if Held not in Ty.Scalar_Name and then Held /= Ty.Aggregate then
             raise Landin.Compiler_Defect with
-              "a module binding reached the lowering with no scalar type";
+              "a module binding reached the lowering with no storable type";
          end if;
 
          Filling := IR.Item_For (Unit.all, Id);
          Slots := No_Slots;
+
+         --  [0670]'s state: D10 zeroes it and the checker refused every
+         --  written value of one, so its block carries no value at all and
+         --  its storage is described by the fields the item was given.
+         if Held = Ty.Aggregate then
+            Open (Fresh (Of_Tree, Node, Res.Program_Scope));
+            IR.Emit_Leave (Unit.all, Filling, IR.No_Value, Site);
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+            Filling := IR.No_Item;
+            return;
+         end if;
 
          --  [1840]: a module value is read in the module scope, and
          --  [1800]'s expression body is the only other thing that opens
@@ -963,11 +975,31 @@ package body Landin.Stages.Lowering is
                         end;
 
                      when Syn.Binding =>
-                        Made :=
-                          IR.Add_Item
-                            (Unit.all, IR.Datum, Id,
-                             Landin.Checking.Type_Of (Types.all, Id),
-                             Site_Of (Of_Tree.all, Node));
+                        declare
+                           Held : constant Ty.Type_Kind :=
+                             Landin.Checking.Type_Of (Types.all, Id);
+                        begin
+                           Made :=
+                             IR.Add_Item
+                               (Unit.all, IR.Datum, Id, Held,
+                                Site_Of (Of_Tree.all, Node));
+
+                           --  [0750]'s fields, in the order they were
+                           --  written.  The types and not the offsets: a
+                           --  backend has a description and works out the
+                           --  same placement the checker did.
+                           if Held = Ty.Aggregate then
+                              for Field in
+                                1 .. Landin.Checking.Layout_Field_Count
+                                       (Types.all, Id)
+                              loop
+                                 IR.Add_Field
+                                   (Unit.all, Made,
+                                    Landin.Checking.Field_Type
+                                      (Types.all, Id, Field));
+                              end loop;
+                           end if;
+                        end;
 
                      when others =>
                         Made := IR.No_Item;

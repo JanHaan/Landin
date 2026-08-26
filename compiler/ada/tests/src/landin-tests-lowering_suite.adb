@@ -597,6 +597,66 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
+   --  [0670]'s state carries its fields' types and no value at all: D10
+   --  zeroes the whole of it, and where each field sits needs a target
+   --  this stage deliberately does not have.
+   procedure A_Struct_State_Carries_Its_Fields
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_State_Carries_Its_Fields
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "counters: type = struct" & LF
+         & "    hits: u32" & LF
+         & "    ready: bool" & LF
+         & "end counters" & LF
+         & "mut state: counters" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Item_Count (Unit), 1, "the type declares no item");
+         Landin.Testing.Check
+           (Item, IR.Kind_Of (Unit, 1) = IR.Datum,
+            "module state is a datum");
+         Landin.Testing.Check
+           (Item, IR.Result_Of (Unit, 1) = Landin.Types.Aggregate,
+            "and its type is the aggregate it was declared with");
+
+         Landin.Testing.Check_Equal
+           (Item, IR.Field_Count (Unit, 1), 2, "both fields are carried");
+         Landin.Testing.Check
+           (Item, IR.Nth_Field (Unit, 1, 1) = Landin.Types.U32,
+            "the first field keeps its type");
+         Landin.Testing.Check
+           (Item, IR.Nth_Field (Unit, 1, 2) = Landin.Types.Bool,
+            "and so does the second, in the order they were written");
+
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 1), 1, "a leave and nothing else");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 1, 1) = IR.Leave, "which is the leave");
+         Landin.Testing.Check_Equal
+           (Item, IR.Operand_Count (Unit, 1, 1), 0,
+            "and it hands back no value");
+
+         Check_Terminators (Item, Unit, "one struct state");
+      end;
+   end A_Struct_State_Carries_Its_Fields;
+
+   ------------------------------------------------------------------
+
    procedure A_Logical_Module_Value_Becomes_Blocks
      (Item : in out Landin.Testing.Context);
 
@@ -795,6 +855,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a logical module value becomes blocks",
          A_Logical_Module_Value_Becomes_Blocks'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a struct state carries its fields",
+         A_Struct_State_Carries_Its_Fields'Access);
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);

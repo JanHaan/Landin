@@ -53,6 +53,9 @@ package body Landin.IR.Verifier is
             when Store_Datum_Disagrees =>
                "a datum store writes a value the datum's type does not"
                & " hold",
+            when Aggregate_Datum_Is_Not_A_Value =>
+               "a datum load or store names an aggregate, which is"
+               & " storage and not a value yet",
             when Callee_Is_Not_A_Routine =>
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
@@ -92,6 +95,7 @@ package body Landin.IR.Verifier is
          Parameters : Natural := 0;
          Blocks     : Natural := 0;
          Values     : Natural := 0;
+         Fields     : Natural := 0;
       begin
          for Which in 1 .. Item_Count (Of_Unit) loop
             declare
@@ -126,10 +130,18 @@ package body Landin.IR.Verifier is
                           Item => Item_Id (Which), others => <>);
                end if;
 
+               if Held.Fields.Count /= 0
+                 and then Held.Fields.First /= Fields
+               then
+                  return (Kind => Item_Runs_Overlap,
+                          Item => Item_Id (Which), others => <>);
+               end if;
+
                Slots      := Slots + Held.Slots.Count;
                Parameters := Parameters + Held.Parameters.Count;
                Blocks     := Blocks + Held.Blocks.Count;
                Values     := Values + Held.Values.Count;
+               Fields     := Fields + Held.Fields.Count;
             end;
          end loop;
       end;
@@ -229,6 +241,21 @@ package body Landin.IR.Verifier is
                                        Item => Id, Block => Block,
                                        Value => V);
                                  end if;
+
+                                 --  [0670]'s state is storage and not a
+                                 --  value yet: reading or writing the
+                                 --  whole of one needs a rule for
+                                 --  carrying it that R2.20 has not
+                                 --  written, so the IR may not say it.
+                                 if Result_Of (Of_Unit, D)
+                                    = Landin.Types.Aggregate
+                                 then
+                                    return
+                                      (Kind =>
+                                         Aggregate_Datum_Is_Not_A_Value,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
                               end;
 
                            when Call =>
@@ -299,7 +326,8 @@ package body Landin.IR.Verifier is
                         --  every opcode but two: a call takes what its
                         --  callee declares [1920], and a leave carries
                         --  what its item gives back, which is nothing
-                        --  for `-> none`.
+                        --  for `-> none` and nothing for [0670]'s state,
+                        --  whose storage its fields describe.
                         declare
                            Expect : constant Natural :=
                              (case Op is
@@ -309,8 +337,8 @@ package body Landin.IR.Verifier is
                                        Callee_Of (Of_Unit, Id, V)),
                                  when Leave =>
                                     (if Result_Of (Of_Unit, Id)
-                                        = Landin.Types.No_Value
-                                     then 0 else 1),
+                                        in Landin.Types.Scalar_Name
+                                     then 1 else 0),
                                  when others => Wanted (Op));
                         begin
                            if Operand_Count (Of_Unit, Id, V) /= Expect
@@ -491,8 +519,14 @@ package body Landin.IR.Verifier is
                               end;
 
                            when Leave =>
+                              --  An aggregate item hands nothing back:
+                              --  [0670]'s state is storage the fields
+                              --  describe, and a value of one is not
+                              --  lowered yet.  So only a scalar result is
+                              --  a result a leave has to carry.
                               if Result_Of (Of_Unit, Id)
-                                 /= Landin.Types.No_Value
+                                 in Landin.Types.Scalar_Name
+                                and then Operand_Count (Of_Unit, Id, V) >= 1
                                 and then Result_Of
                                            (Of_Unit, Id,
                                             Nth_Operand

@@ -1,0 +1,5 @@
+class: positive
+summary: [1740]'s module state may have a struct type, and D10 zeroes the whole of [0750]'s layout
+constructs: 0670, 0750, 1740
+program: program.ldn
+targets: linux-x86-64, macos-arm64

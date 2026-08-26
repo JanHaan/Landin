@@ -326,6 +326,24 @@ package body Landin.Stages.Checking is
          end;
       end Type_At;
 
+      --  Is this node one of [1840]'s module declarations?  A binding at
+      --  module level is a datum and a binding inside a block is a frame
+      --  cell, and this slice enables the first and not the second.
+      function Is_Module_Declaration
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Is_Module_Declaration
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+      begin
+         for Position in 1 .. Syn.Declaration_Count (Of_Tree) loop
+            if Syn.Nth_Declaration (Of_Tree, Position) = Node then
+               return True;
+            end if;
+         end loop;
+
+         return False;
+      end Is_Module_Declaration;
+
       function Declared_As_Node
         (Of_Tree        : Syn.Tree;
          Node           : Syn.Node_Id;
@@ -341,12 +359,25 @@ package body Landin.Stages.Checking is
          declare
             Held : constant Ty.Type_Kind :=
               Type_At (Of_Tree, Written, For_Declaration);
+            --  [1740]'s module binding with no value is the one aggregate
+            --  place that needs nothing this kernel cannot emit: D10 makes
+            --  it zero, and zeroed storage is what a datum already is.  A
+            --  parameter, a return, a local or a written value each need a
+            --  rule this slice does not have, so each is still refused.
+            Is_Zeroed_State : constant Boolean :=
+              Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then Is_Module_Declaration (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) = Syn.No_Node
+              --  A name and not an inline body: [0710]'s identity is what
+              --  carries the layout, and an anonymous body declares none.
+              and then Syn.Kind (Of_Tree, Written) = Syn.Type_Reference;
          begin
-            --  [1795] declares the type; a *value* of one waits for the
+            --  [1795] declares the type; most *values* of one wait for the
             --  rest of R2.20.  Refused where the value is declared, so
             --  the report names the binding rather than the type.
             if Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
+              and then not Is_Zeroed_State
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -843,6 +874,23 @@ package body Landin.Stages.Checking is
                                    & "` names a function, and a function"
                                    & " used as a value is not enabled yet",
                         Refused => Bad.Function_Value,
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  --  [1740]'s state of [0670]'s type is storage a program
+                  --  may declare and not yet reach: reading the whole of
+                  --  one is a value, and carrying one waits for the rest
+                  --  of R2.20 exactly as a binding of one does.
+                  if Held = Ty.Aggregate then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
+                                   & "` names a struct, and a value of one"
+                                   & " is not enabled yet",
+                        Refused => Bad.Struct_Value,
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;

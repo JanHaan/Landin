@@ -595,7 +595,14 @@ def lexical_matches(trees, rule, text):
 
 
 def landin_tokens(source, signs, trees=None):
-    """(kind, spelling) per token, or (None, complaint).
+    """(kind, spelling, first) per token, or (None, complaint).
+
+    The offset is the tokeniser's own, and it is in the tuple rather than
+    recovered afterwards for the reason the dump exists at all: searching
+    the text for a spelling finds it wherever it first occurs, which is
+    inside a comment above the token as readily as at the token, and the
+    dump then disagreed with the lexer about bytes neither had read
+    wrongly.
 
     Written from the lexical rules rather than generated from them.  A
     tokeniser generated from the grammar could not catch a grammar whose
@@ -643,7 +650,7 @@ def landin_tokens(source, signs, trees=None):
             run = source[start:i]
             if trees and not lexical_matches(trees, "integer", run):
                 return None, "%r is not an integer the rules spell" % run
-            out.append(("integer", run))
+            out.append(("integer", run, start))
             continue
 
         if char in LETTERS or char == "_":
@@ -656,17 +663,17 @@ def landin_tokens(source, signs, trees=None):
             #  deliberately refuses a lone '_', so nothing else would take
             #  it.
             if run == "_":
-                out.append(("sign", "_"))
+                out.append(("sign", "_", start))
                 continue
             if trees and not lexical_matches(trees, "keyword", run) \
                     and not lexical_matches(trees, "identifier", run):
                 return None, "%r is neither a keyword nor a name" % run
-            out.append(("word", run))
+            out.append(("word", run, start))
             continue
 
         for sign in ordered:
             if source.startswith(sign, i):
-                out.append(("sign", sign))
+                out.append(("sign", sign, i))
                 i += len(sign)
                 break
         else:
@@ -698,7 +705,7 @@ def grammar_recognises(rules, trees, tokens, start="program"):
             if name in TOKEN_KIND_RULES:
                 ends = ()
                 if at < len(tokens):
-                    token_kind, text = tokens[at]
+                    token_kind, text = tokens[at][0], tokens[at][1]
                     wanted = TOKEN_KIND_RULES[name]
                     if wanted == "name":
                         ends = ((at + 1,) if token_kind == "word"
@@ -1274,12 +1281,9 @@ def token_dump():
                     continue
 
                 lines.append("file %s tokens %d" % (where, len(tokens)))
-                at = 0
-                for token_kind, spelling in tokens:
-                    at = text.index(spelling, at)
+                for token_kind, spelling, at in tokens:
                     lines.append("  %d %d %s"
                                  % (at, at + len(spelling), spelling))
-                    at += len(spelling)
 
     return "\n".join(lines) + "\n"
 

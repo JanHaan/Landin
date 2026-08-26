@@ -240,6 +240,18 @@ package Landin.Checking is
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id);
 
+   --  What a field holds, kept beside where it sits so that a stage which
+   --  has neither the tree nor a target can still say what an aggregate is
+   --  made of.
+   function Field_Type
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Landin.Types.Scalar_Name
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id)
+                 and then Field <= Layout_Field_Count (Of_Table, Id);
+
    function Layout_Extent (Of_Table : Table; Id : Declaration_Id)
      return Landin.Targets.Byte_Count
      with Pre => Is_Prepared (Of_Table)
@@ -388,6 +400,11 @@ private
       Element_Type => Landin.Targets.Byte_Count,
       "="          => Landin.Targets."=");
 
+   package Field_Type_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Landin.Types.Scalar_Name,
+      "="          => Landin.Types."=");
+
    type Aggregate_Layout is record
       Ready  : Boolean := False;
       First  : Natural := 0;
@@ -413,6 +430,7 @@ private
       Bodies       : Body_Vectors.Vector;
       Layouts      : Layout_Vectors.Vector;
       Field_Offsets : Offset_Vectors.Vector;
+      Field_Types  : Field_Type_Vectors.Vector;
       Scalars      : Scalar_Identities :=
         [others => Landin.Source.Names.No_Name];
    end record;
