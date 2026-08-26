@@ -405,6 +405,12 @@ package Landin.IR is
    --  A slot has no address, no offset and no size.  Where it lives is
    --  R1.80's frame question and how wide it is comes from
    --  Landin.Types.Width against a target description.
+   --
+   --  A slot may also hold [0670]'s aggregate, and then it carries its
+   --  fields' types the way an aggregate item does and for the same
+   --  reason: where each one sits needs a target and this package has
+   --  none.  Only a local binding [1810] is one today, because a
+   --  parameter and a named return are an ABI question R2.30 owns.
    function Slot_Count (Of_Unit : Unit; Item : Item_Id) return Natural
      with Pre => Holds (Of_Unit, Item);
 
@@ -426,6 +432,51 @@ package Landin.IR is
                     = Slot_Count (Into, Item)'Old + 1
                   and then Holds (Into, Item, Add_Slot'Result)
                   and then Type_Of (Into, Item, Add_Slot'Result) = Of_Type;
+
+   --  A cell holding [0670]'s aggregate.  Its fields are added below, in
+   --  the order [0750] wrote them, and it has no scalar type at all:
+   --  Type_Of is the wrong question to ask one, which its precondition
+   --  says rather than answering Bool by default.
+   function Add_Aggregate_Slot
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+     with Pre  => Holds (Into, Item)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Slot_Count (Into, Item)
+                    = Slot_Count (Into, Item)'Old + 1
+                  and then Holds (Into, Item, Add_Aggregate_Slot'Result)
+                  and then Is_Aggregate
+                             (Into, Item, Add_Aggregate_Slot'Result);
+
+   function Is_Aggregate
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+
+   function Slot_Field_Count
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Natural
+     with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+
+   procedure Add_Slot_Field
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Slot    : Slot_Id;
+      Of_Type : Landin.Types.Scalar_Name)
+     with Pre  => Holds (Into, Item)
+                  and then Holds (Into, Item, Slot)
+                  and then Is_Aggregate (Into, Item, Slot),
+          Post => Slot_Field_Count (Into, Item, Slot)
+                    = Slot_Field_Count (Into, Item, Slot)'Old + 1;
+
+   function Nth_Slot_Field
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Slot    : Slot_Id;
+      Index   : Positive) return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item)
+                 and then Holds (Of_Unit, Item, Slot)
+                 and then Index <= Slot_Field_Count (Of_Unit, Item, Slot);
 
    --  Adds a slot and makes it the next parameter [1800].  A parameter
    --  is a slot the caller filled, so the ABI has somewhere to put an
@@ -475,7 +526,9 @@ package Landin.IR is
 
    function Type_Of (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
      return Landin.Types.Scalar_Name
-     with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+     with Pre => Holds (Of_Unit, Item)
+                 and then Holds (Of_Unit, Item, Slot)
+                 and then not Is_Aggregate (Of_Unit, Item, Slot);
 
    function Declares
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Declaration_Id
@@ -627,16 +680,33 @@ package Landin.IR is
    function Slot_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Slot_Id
      with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value) in Load | Store;
+                 and then (Op_Of (Of_Unit, Item, Value) in Load | Store
+                           or else (Op_Of (Of_Unit, Item, Value)
+                                      in Load_Field | Store_Field
+                                    and then Reaches_A_Slot
+                                               (Of_Unit, Item, Value)));
 
    function Datum_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
      with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Datum | Store_Datum
-                             | Load_Field | Store_Field;
+                 and then (Op_Of (Of_Unit, Item, Value)
+                             in Load_Datum | Store_Datum
+                           or else (Op_Of (Of_Unit, Item, Value)
+                                      in Load_Field | Store_Field
+                                    and then not Reaches_A_Slot
+                                                   (Of_Unit, Item, Value)));
 
-   --  Which field of that datum, by [0750]'s order.
+   --  Where a field operation reaches: [1740]'s module state, or
+   --  [1810]'s local binding in a frame.  Two spellings of one question,
+   --  because a field is selected the same way in the source and it is
+   --  the base that differs.
+   function Reaches_A_Slot
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Load_Field | Store_Field;
+
+   --  Which field of that base, by [0750]'s order.
    function Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Positive
      with Pre => Holds (Of_Unit, Item, Value)
@@ -792,6 +862,32 @@ package Landin.IR is
                   and then Holds (Into, Datum)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted (Into, Item, Emit_Load_Field'Result, Load_Field);
+
+   --  The same field of a cell in this item's own frame [1810].
+   function Emit_Load_Slot_Field
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Slot   : Slot_Id;
+      Field  : Positive;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Slot)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Load_Slot_Field'Result, Load_Field);
+
+   procedure Emit_Store_Slot_Field
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Slot  : Slot_Id;
+      Field : Positive;
+      Value : Value_Id;
+      Site  : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Slot)
+                 and then Holds (Into, Item, Value)
+                 and then Landin.Provenance.Is_Known (Site);
    --  That the datum is an aggregate, that it has that field, and that
    --  the result is the field's own type are the verifier's, exactly as
    --  a datum load naming a routine is: a builder checks that what it is
@@ -951,8 +1047,21 @@ private
       Truth       : Boolean                   := False;
    end record;
 
+   --  One run per item, end to end in one vector, which is what
+   --  Landin.Syntax does with a node's children and Landin.Resolution
+   --  and Landin.Checking with a node's meaning and its type.  First is
+   --  where entry 1 of that item sits, so a reference is one addition.
+   type Run is record
+      First : Natural := 0;
+      Count : Natural := 0;
+   end record;
+
    type Slot_Record is record
       Of_Type     : Landin.Types.Scalar_Name  := Landin.Types.Bool;
+      --  True when the cell holds [0670]'s aggregate, whose fields are a
+      --  run of their own; Of_Type says nothing then.
+      Aggregate   : Boolean                   := False;
+      Fields      : Run;
       Declaration : Declaration_Id            := No_Declaration;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
@@ -965,15 +1074,6 @@ private
                       Landin.Provenance.No_Origin;
       First_Value : Natural                   := 0;
       Values      : Natural                   := 0;
-   end record;
-
-   --  One run per item, end to end in one vector, which is what
-   --  Landin.Syntax does with a node's children and Landin.Resolution
-   --  and Landin.Checking with a node's meaning and its type.  First is
-   --  where entry 1 of that item sits, so a reference is one addition.
-   type Run is record
-      First : Natural := 0;
-      Count : Natural := 0;
    end record;
 
    type Item_Record is record
@@ -1026,6 +1126,7 @@ private
       Code       : Code_Vectors.Vector;
       Operands   : Value_Ref_Vectors.Vector;
       Fields     : Field_Vectors.Vector;
+      Slot_Fields : Field_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
    end record;
 

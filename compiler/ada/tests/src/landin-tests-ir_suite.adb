@@ -250,6 +250,52 @@ package body Landin.Tests.IR_Suite is
       end;
    end Interleaved_Fill_Is_Refused;
 
+   --  An aggregate slot's fields are a run of the same kind, so going
+   --  back to one after another has started is refused the same way.
+   --  Without this, a slot's recorded run would take in the next slot's
+   --  field and leave its own last one orphaned, and the layout and every
+   --  access would then read the wrong type at the wrong offset.
+   procedure Interleaved_Slot_Fields_Are_Refused
+     (Item : in out Landin.Testing.Context);
+
+   procedure Interleaved_Slot_Fields_Are_Refused
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Unit : Landin.IR.Unit;
+         A    : Landin.IR.Item_Id;
+         P, Q : Landin.IR.Slot_Id;
+      begin
+         Landin.IR.Prepare (Unit, Meanings.all);
+         A := Landin.IR.Add_Item
+                (Unit, Landin.IR.Routine, 1, Landin.Types.U32, Site);
+
+         P := Landin.IR.Add_Aggregate_Slot (Unit, A, 1, Site);
+         Q := Landin.IR.Add_Aggregate_Slot (Unit, A, 2, Site);
+
+         Landin.IR.Add_Slot_Field (Unit, A, P, Landin.Types.U32);
+         Landin.IR.Add_Slot_Field (Unit, A, Q, Landin.Types.Bool);
+
+         --  Back to P, whose field run is no longer at the end.
+         Landin.IR.Add_Slot_Field (Unit, A, P, Landin.Types.U32);
+
+         Landin.Testing.Fail
+           (Item, "going back to a slot should have been refused");
+      exception
+         when Landin.Compiler_Defect =>
+            Landin.Testing.Check
+              (Item, True, "two slots filled at once are refused");
+      end;
+   end Interleaved_Slot_Fields_Are_Refused;
+
    ------------------------------------------------------------------
    --  A call's arguments are its own
    ------------------------------------------------------------------
@@ -336,6 +382,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "interleaved fill is refused",
          Interleaved_Fill_Is_Refused'Access);
+      Landin.Testing.Register
+        (Into, "ir", "interleaved slot fields are refused",
+         Interleaved_Slot_Fields_Are_Refused'Access);
       Landin.Testing.Register
         (Into, "ir", "a call reads its own arguments",
          A_Call_Reads_Its_Own_Arguments'Access);

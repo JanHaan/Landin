@@ -2,9 +2,7 @@ point: type = struct
     x: i32
 end point
 
---  [1740]'s module state is zero and needs nothing to carry it, but a
---  local binding is a frame cell and waits for the rest of R2.20.
-public main: () -> (code: i32) =
-    here: point
-    code = 0
-end main
+--  [1740]'s module state and [1810]'s local are enabled; carrying one
+--  into or out of a function is an ABI rule R2.30 owns.
+f: (here: point) -> none =
+end f

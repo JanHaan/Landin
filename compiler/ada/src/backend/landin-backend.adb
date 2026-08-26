@@ -13,6 +13,88 @@ package body Landin.Backend is
      is (Landin.Types.Storage_Size (Item, Facts));
 
    ------------------------------------------------------------------
+   --  An aggregate cell
+   ------------------------------------------------------------------
+
+   --  [0750] over a slot's own field run, which is the same arithmetic
+   --  Landin.Checking did over the same types: the placement is a
+   --  function of the run and the description and of nothing else.
+   procedure Place_Slot_Fields
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Slot    : Landin.IR.Slot_Id;
+      Facts   : Landin.Targets.Target_Facts;
+      Wanted  : Natural;
+      Placed  : out Landin.Targets.Placement;
+      Offset  : out Landin.Targets.Byte_Count);
+
+   procedure Place_Slot_Fields
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Slot    : Landin.IR.Slot_Id;
+      Facts   : Landin.Targets.Target_Facts;
+      Wanted  : Natural;
+      Placed  : out Landin.Targets.Placement;
+      Offset  : out Landin.Targets.Byte_Count) is
+   begin
+      Placed := Landin.Targets.Empty_Placement;
+      Offset := 0;
+
+      for Field in
+        1 .. Landin.IR.Slot_Field_Count (Of_Unit, Item, Slot)
+      loop
+         declare
+            At_Offset : Landin.Targets.Byte_Count;
+         begin
+            Landin.Targets.Place
+              (Placed,
+               Size_Of
+                 (Landin.IR.Nth_Slot_Field (Of_Unit, Item, Slot, Field),
+                  Facts),
+               Facts, At_Offset);
+
+            if Field = Wanted then
+               Offset := At_Offset;
+            end if;
+         end;
+      end loop;
+   end Place_Slot_Fields;
+
+   procedure Aggregate_Extent
+     (Of_Unit   : Landin.IR.Unit;
+      Item      : Landin.IR.Item_Id;
+      Slot      : Landin.IR.Slot_Id;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+   is
+      Placed  : Landin.Targets.Placement;
+      Ignored : Landin.Targets.Byte_Count;
+   begin
+      Place_Slot_Fields
+        (Of_Unit, Item, Slot, Facts, 0, Placed, Ignored);
+      Size := Landin.Targets.Size_Of (Placed);
+      Alignment := Landin.Targets.Alignment_Of (Placed);
+   end Aggregate_Extent;
+
+   function Field_Offset
+     (Of_Unit  : Landin.IR.Unit;
+      Item     : Landin.IR.Item_Id;
+      Of_Frame : Frame;
+      Slot     : Landin.IR.Slot_Id;
+      Field    : Positive;
+      Facts    : Landin.Targets.Target_Facts)
+     return Landin.Targets.Byte_Count
+   is
+      Placed : Landin.Targets.Placement;
+      Offset : Landin.Targets.Byte_Count;
+   begin
+      Place_Slot_Fields
+        (Of_Unit, Item, Slot, Facts, Field, Placed, Offset);
+      return Slot_Offset (Of_Frame, Slot) - Offset;
+   end Field_Offset;
+
+   ------------------------------------------------------------------
    --  Laid_Out
    ------------------------------------------------------------------
 
@@ -55,10 +137,28 @@ package body Landin.Backend is
       end if;
 
       for Slot in 1 .. Landin.IR.Slot_Count (Of_Unit, Item) loop
-         Built.Slots.Append
-           (Placed
-              (Landin.IR.Type_Of
-                 (Of_Unit, Item, Landin.IR.Slot_Id (Slot))));
+         if Landin.IR.Is_Aggregate
+              (Of_Unit, Item, Landin.IR.Slot_Id (Slot))
+         then
+            --  A whole [0750] placement, rounded up to its own alignment
+            --  so the cell holds an aggregate the way an array element
+            --  would, and then aligned as a cell like any other.
+            declare
+               Size : Landin.Targets.Byte_Count;
+               Alignment : Landin.Targets.Byte_Alignment;
+            begin
+               Aggregate_Extent
+                 (Of_Unit, Item, Landin.IR.Slot_Id (Slot), Facts,
+                  Size, Alignment);
+               Below := Landin.Targets.Align_Up (Below + Size, Alignment);
+               Built.Slots.Append (Below);
+            end;
+         else
+            Built.Slots.Append
+              (Placed
+                 (Landin.IR.Type_Of
+                    (Of_Unit, Item, Landin.IR.Slot_Id (Slot))));
+         end if;
       end loop;
 
       --  A cell for every value, including the ones that define nothing:

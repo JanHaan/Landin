@@ -1862,6 +1862,36 @@ field widens the state to sixteen on Linux x86-64. A datum's block ends in a
 leave that carries no value at all, which the verifier now reads as the
 aggregate case rather than as a missing operand.
 
+A local of one came next, and it is the first aggregate to need a frame cell
+rather than a data symbol. An IR slot could hold only one of [1790]'s eleven,
+so it now holds [0670]'s aggregate too and carries its fields' types the way an
+aggregate item does — the types and not the offsets, for the reason
+`Measure_Size` carries a type. `Landin.Backend` gives such a cell the whole
+[0750] placement its fields ask for and answers where one field sits inside it,
+and because a cell grows downward while a struct lays out upward, field 1 is
+furthest below the frame pointer and the last field is nearest: `u32 u32 bool`
+fills a twelve-byte cell from -12 to -4, so a hexdump of it reads in source
+order. A field operation now carries either a datum or a slot, and the verifier
+holds both to naming an aggregate that has the field and to the field's own
+type.
+
+D16 is the rule that made this possible and it was a decision rather than a
+transcription: [1910] tracks the thing an assignment writes, and for a struct
+that is the field, so `p.x = 1` assigns `p.x` and nothing else and reading `p.y`
+after it is refused and names `p.y`. Every arm of an `if` merges its fields the
+way [1910] already merges its names, so a field assigned in one arm and not
+another is not assigned after it. The alternatives — treating the binding as
+assigned once every field is, or zeroing a struct local where it is declared —
+are recorded with it: the first refuses a function that fills two fields of
+three and reads only those two, and the second is a store per field at a place
+the source does not mention. The flow set grew a column per field to carry it,
+which is a declarations-by-fields rectangle and both small and simple to merge.
+
+The boundary moved with it. A struct value is now a module binding or a local,
+each without a value; a parameter of one is what `negative/struct-value-not-enabled`
+pins now, because carrying an aggregate into or out of a function is an ABI rule
+R2.30 owns. Construction, whole-value reads, copies and returns stay refused.
+
 Reading the whole of one is a value like any other and is refused where the
 name stands, which review found accepted: `_ = state` passed the checker, became
 a `Load_Datum` of an aggregate, and reached a backend that reads a datum's type

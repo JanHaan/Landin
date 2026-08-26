@@ -327,24 +327,6 @@ package body Landin.Stages.Checking is
          end;
       end Type_At;
 
-      --  Is this node one of [1840]'s module declarations?  A binding at
-      --  module level is a datum and a binding inside a block is a frame
-      --  cell, and this slice enables the first and not the second.
-      function Is_Module_Declaration
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-
-      function Is_Module_Declaration
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
-      begin
-         for Position in 1 .. Syn.Declaration_Count (Of_Tree) loop
-            if Syn.Nth_Declaration (Of_Tree, Position) = Node then
-               return True;
-            end if;
-         end loop;
-
-         return False;
-      end Is_Module_Declaration;
-
       function Declared_As_Node
         (Of_Tree        : Syn.Tree;
          Node           : Syn.Node_Id;
@@ -365,9 +347,14 @@ package body Landin.Stages.Checking is
             --  it zero, and zeroed storage is what a datum already is.  A
             --  parameter, a return, a local or a written value each need a
             --  rule this slice does not have, so each is still refused.
+            --  [1740]'s module state and [1810]'s local binding, each
+            --  without a value: D10 zeroes the first and D16 makes every
+            --  field of the second assigned before it is read, so neither
+            --  needs a value of a struct type to exist.  A parameter, a
+            --  return and a written value each need a rule this slice
+            --  does not have, so each is still refused.
             Is_Zeroed_State : constant Boolean :=
               Syn.Kind (Of_Tree, Node) = Syn.Binding
-              and then Is_Module_Declaration (Of_Tree, Node)
               and then Syn.Value_Of (Of_Tree, Node) = Syn.No_Node
               --  A name and not an inline body: [0710]'s identity is what
               --  carries the layout, and an anonymous body declares none.
@@ -1979,16 +1966,54 @@ package body Landin.Stages.Checking is
       --  [1910]: assigned before it is read
       ------------------------------------------------------------
 
+      --  The widest struct the program writes, which is how many field
+      --  bits a row of the set below needs.  Read from the trees rather
+      --  than from the layouts, because this sizes a type and so is
+      --  elaborated before the pass that lays anything out; a struct body
+      --  is [0750]'s field list either way.
+      function Widest_Struct return Natural;
+
+      function Widest_Struct return Natural is
+         Most : Natural := 0;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Nth_Source (Context, Index));
+            begin
+               for Node in Syn.Node_Id'(1)
+                           .. Syn.Node_Id (Syn.Node_Count (Of_Tree.all))
+               loop
+                  if Syn.Kind (Of_Tree.all, Node) = Syn.Struct_Body then
+                     Most :=
+                       Natural'Max
+                         (Most, Syn.Field_Count (Of_Tree.all, Node));
+                  end if;
+               end loop;
+            end;
+         end loop;
+
+         return Most;
+      end Widest_Struct;
+
       --  One Boolean per declaration, copied at a branch and merged after
       --  it.  A set and not a counter, because [1910] is about paths: a
       --  name assigned in one arm and not another is not assigned after
       --  the branch, and nothing but the per-declaration answer says that.
+      --
+      --  D16 makes a field of a struct local its own answer, so a row is
+      --  the name at column zero and its fields at the columns after it.
+      --  A scalar uses column zero alone; a struct never uses it, because
+      --  a value of one is not a thing this kernel can read.
       subtype Tracked is Positive range
         1 .. Positive'Max (1, Res.Declaration_Count (Meanings.all));
 
-      type Assigned_Set is array (Tracked) of Boolean;
+      subtype Tracked_Field is Natural range 0 .. Widest_Struct;
 
-      Nothing_Assigned : constant Assigned_Set := [others => False];
+      type Assigned_Set is array (Tracked, Tracked_Field) of Boolean;
+
+      Nothing_Assigned : constant Assigned_Set :=
+        [others => [others => False]];
 
       --  Which declarations [1910] is about.  A parameter arrives assigned
       --  and a module binding is [1940]'s, so what is left is a local
@@ -2013,7 +2038,8 @@ package body Landin.Stages.Checking is
          At_Span   : Landin.Source.Span;
          Id        : Res.Declaration_Id;
          State     : Assigned_Set;
-         Message   : String);
+         Message   : String;
+         Field     : Tracked_Field := 0);
 
       --  Which declaration a declaring node is.  Landin.Resolution
       --  publishes the other direction only, so this is a scan: over a
@@ -2067,9 +2093,10 @@ package body Landin.Stages.Checking is
          At_Span   : Landin.Source.Span;
          Id        : Res.Declaration_Id;
          State     : Assigned_Set;
-         Message   : String) is
+         Message   : String;
+         Field     : Tracked_Field := 0) is
       begin
-         if not Is_Tracked (Id) or else State (Positive (Id)) then
+         if not Is_Tracked (Id) or else State (Positive (Id), Field) then
             return;
          end if;
 
@@ -2120,6 +2147,37 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         --  D16: a field is assigned on its own, so reading one asks
+         --  about that field and not about the name it is selected from.
+         --  Reaching the field is not a read of the whole struct, which
+         --  is why this does not walk into the base.
+         if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection then
+            declare
+               From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
+               Which : constant Natural :=
+                 Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
+            begin
+               if Which in 1 .. Widest_Struct
+                 and then Syn.Kind (Of_Tree, From) = Syn.Name_Reference
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
+                          = Res.Bound
+               then
+                  Require_Assigned
+                    (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Node),
+                     Res.Bound_To (Meanings.all, Of_Tree, From), State,
+                     "`" & Spelled (Syn.Name (Of_Tree, From)) & "."
+                     & Spelled (Syn.Name (Of_Tree, Node))
+                     & "` is read here and no path that arrives assigned"
+                     & " it",
+                     Field => Which);
+               else
+                  Read_Names (Of_Tree, From, State);
+               end if;
+            end;
+
+            return;
+         end if;
+
          for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
             Read_Names (Of_Tree, Syn.Slot (Of_Tree, Node, Position), State);
          end loop;
@@ -2139,6 +2197,34 @@ package body Landin.Stages.Checking is
          procedure Mark (Node : Syn.Node_Id) is
          begin
             if Node /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+            then
+               declare
+                  From : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+                  Which : constant Natural :=
+                    Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
+               begin
+                  if Which in 1 .. Widest_Struct
+                    and then Syn.Kind (Of_Tree, From) = Syn.Name_Reference
+                    and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
+                             = Res.Bound
+                  then
+                     declare
+                        Id : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Of_Tree, From);
+                     begin
+                        if Is_Tracked (Id) then
+                           State (Positive (Id), Which) := True;
+                        end if;
+                     end;
+                  end if;
+               end;
+
+               return;
+            end if;
+
+            if Node /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
               and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
                        = Res.Bound
@@ -2148,7 +2234,7 @@ package body Landin.Stages.Checking is
                     Res.Bound_To (Meanings.all, Of_Tree, Node);
                begin
                   if Is_Tracked (Id) then
-                     State (Positive (Id)) := True;
+                     State (Positive (Id), 0) := True;
                   end if;
                end;
             end if;
@@ -2180,17 +2266,10 @@ package body Landin.Stages.Checking is
                      Read_Names (Of_Tree, Syn.Value_Of (Of_Tree, Item),
                                  State);
 
-                     --  Writing one field is not assigning the binding,
-                     --  so a selection marks nothing; the name it selects
-                     --  from is read, because that is where the field is.
-                     if Syn.Kind (Of_Tree, Syn.Target_Of (Of_Tree, Item))
-                        = Syn.Member_Selection
-                     then
-                        Read_Names
-                          (Of_Tree, Syn.Target_Of (Of_Tree, Item), State);
-                     else
-                        Mark (Syn.Target_Of (Of_Tree, Item));
-                     end if;
+                     --  D16: writing one field assigns that field and
+                     --  says nothing about the others, and reaching it is
+                     --  not a read of the struct it is in.
+                     Mark (Syn.Target_Of (Of_Tree, Item));
 
                   when Syn.Increment | Syn.Decrement =>
                      --  [0400]: `inc x` is `x += 1`, so it reads x too.
@@ -2218,7 +2297,8 @@ package body Landin.Stages.Checking is
 
                   when Syn.If_Statement =>
                      declare
-                        Merged   : Assigned_Set := [others => True];
+                        Merged   : Assigned_Set :=
+                          [others => [others => True]];
                         Any_Path : Boolean := False;
                         All_Exit : Boolean := True;
                      begin
@@ -2241,8 +2321,11 @@ package body Landin.Stages.Checking is
                                  All_Exit := False;
 
                                  for Which in Tracked loop
-                                    Merged (Which) :=
-                                      Merged (Which) and Branch (Which);
+                                    for Part in Tracked_Field loop
+                                       Merged (Which, Part) :=
+                                         Merged (Which, Part)
+                                         and Branch (Which, Part);
+                                    end loop;
                                  end loop;
                               end if;
                            end;
@@ -2263,8 +2346,11 @@ package body Landin.Stages.Checking is
                                  All_Exit := False;
 
                                  for Which in Tracked loop
-                                    Merged (Which) :=
-                                      Merged (Which) and Branch (Which);
+                                    for Part in Tracked_Field loop
+                                       Merged (Which, Part) :=
+                                         Merged (Which, Part)
+                                         and Branch (Which, Part);
+                                    end loop;
                                  end loop;
                               end if;
                            end;
@@ -2276,8 +2362,11 @@ package body Landin.Stages.Checking is
                            All_Exit := False;
 
                            for Which in Tracked loop
-                              Merged (Which) :=
-                                Merged (Which) and State (Which);
+                              for Part in Tracked_Field loop
+                                 Merged (Which, Part) :=
+                                   Merged (Which, Part)
+                                   and State (Which, Part);
+                              end loop;
                            end loop;
                         end if;
 

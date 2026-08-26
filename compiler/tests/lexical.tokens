@@ -2726,6 +2726,103 @@ file negative/shift-amount-takes-the-left-type/program.ldn tokens 21
   37 40 300
   41 44 end
   45 46 f
+file negative/struct-field-not-assigned/program.ldn tokens 40
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 u32
+  36 37 y
+  37 38 :
+  39 42 u32
+  43 46 end
+  47 52 point
+  197 198 f
+  198 199 :
+  200 201 (
+  201 202 )
+  203 205 ->
+  206 207 (
+  207 208 r
+  208 209 :
+  210 213 u32
+  213 214 )
+  215 216 =
+  221 224 mut
+  225 226 p
+  226 227 :
+  228 233 point
+  238 239 p
+  239 240 .
+  240 241 x
+  242 243 =
+  244 245 1
+  250 251 r
+  252 253 =
+  254 255 p
+  255 256 .
+  256 257 y
+  258 261 end
+  262 263 f
+file negative/struct-field-not-assigned-on-every-path/program.ldn tokens 55
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 u32
+  36 37 y
+  37 38 :
+  39 42 u32
+  43 46 end
+  47 52 point
+  194 195 f
+  195 196 :
+  197 198 (
+  198 199 n
+  199 200 :
+  201 204 u32
+  204 205 )
+  206 208 ->
+  209 210 (
+  210 211 r
+  211 212 :
+  213 216 u32
+  216 217 )
+  218 219 =
+  224 227 mut
+  228 229 p
+  229 230 :
+  231 236 point
+  241 242 p
+  242 243 .
+  243 244 x
+  245 246 =
+  247 248 n
+  254 256 if
+  257 258 n
+  259 260 >
+  261 262 0
+  263 267 then
+  276 277 p
+  277 278 .
+  278 279 y
+  280 281 =
+  282 283 1
+  288 291 end
+  292 294 if
+  300 301 r
+  302 303 =
+  304 305 p
+  305 306 .
+  306 307 y
+  308 311 end
+  312 313 f
 file negative/struct-field-not-declared/program.ldn tokens 30
   0 8 counters
   8 9 :
@@ -2806,7 +2903,7 @@ file negative/struct-state-read-as-a-value/program.ldn tokens 26
   245 250 state
   251 254 end
   255 256 f
-file negative/struct-value-not-enabled/program.ldn tokens 30
+file negative/struct-value-not-enabled/program.ldn tokens 22
   0 5 point
   5 6 :
   7 11 type
@@ -2817,26 +2914,18 @@ file negative/struct-value-not-enabled/program.ldn tokens 30
   28 31 i32
   32 35 end
   36 41 point
-  181 187 public
-  188 192 main
-  192 193 :
-  194 195 (
-  195 196 )
-  197 199 ->
-  200 201 (
-  201 205 code
-  205 206 :
-  207 210 i32
-  210 211 )
-  212 213 =
-  218 222 here
-  222 223 :
-  224 229 point
-  234 238 code
-  239 240 =
-  241 242 0
-  243 246 end
-  247 251 main
+  171 172 f
+  172 173 :
+  174 175 (
+  175 179 here
+  179 180 :
+  181 186 point
+  186 187 )
+  188 190 ->
+  191 195 none
+  196 197 =
+  198 201 end
+  202 203 f
 file negative/text-literal-not-enabled/program.ldn refused no rule spells '"'
 file negative/text-type-not-enabled/program.ldn tokens 5
   0 4 name
