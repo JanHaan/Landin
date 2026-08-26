@@ -23,6 +23,7 @@ package body Landin.IR.Dump is
          --  is named on this line already, so the category is what a dump
          --  can say without repeating the name beside it.
          elsif Item = Landin.Types.Aggregate then "struct"
+         elsif Item = Landin.Types.Fixed_Array then "array"
          else "");
 
    function Text
@@ -172,6 +173,17 @@ package body Landin.IR.Dump is
                  & Trimmed (Natural'Image (Block_Count (Of_Unit, Id)))
                  & " values "
                  & Trimmed (Natural'Image (Value_Count (Of_Unit, Id))));
+
+            --  [0520]'s shape, which is the whole of what an array item
+            --  says about itself: how many bytes that comes to needs a
+            --  target and a dump has none.
+            if Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array then
+               Put ("  elements "
+                    & Trimmed (Element_Total'Image
+                                 (Array_Length (Of_Unit, Id)))
+                    & " of "
+                    & Landin.Types.Spelling (Array_Element (Of_Unit, Id)));
+            end if;
 
             --  [0750]'s order, which is the whole of what an aggregate
             --  item says about itself: where each field sits needs a

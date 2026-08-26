@@ -196,6 +196,27 @@ package body Landin.IR is
       return Slot_Id (Held.Slots.Count);
    end Add_Aggregate_Slot;
 
+   procedure Set_Array
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Of_Type : Landin.Types.Scalar_Name;
+      Length  : Element_Total)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Element := Of_Type;
+      Held.Length := Length;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Array;
+
+   function Array_Element
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Scalar_Name
+     is (Element (Of_Unit, Item).Element);
+
+   function Array_Length
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     is (Element (Of_Unit, Item).Length);
+
    function Is_Aggregate
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Aggregate);

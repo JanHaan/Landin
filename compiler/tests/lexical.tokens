@@ -43,6 +43,26 @@ file positive/arm-scopes-are-siblings/program.ldn tokens 41
   134 136 if
   137 140 end
   141 142 f
+file positive/array-module-state/program.ldn tokens 19
+  0 3 row
+  3 4 :
+  5 9 type
+  10 11 =
+  12 13 [
+  13 14 4
+  14 15 ]
+  15 18 u32
+  160 163 mut
+  164 170 buffer
+  170 171 :
+  172 175 row
+  299 302 mut
+  303 308 flags
+  308 309 :
+  310 311 [
+  311 312 8
+  312 313 ]
+  313 317 bool
 file positive/array-type-is-declared/program.ldn tokens 16
   141 144 row
   144 145 :
@@ -1917,7 +1937,7 @@ file negative/array-of-an-array-not-enabled/program.ldn tokens 11
   163 164 3
   164 165 ]
   165 167 u8
-file negative/array-value-not-enabled/program.ldn tokens 12
+file negative/array-value-not-enabled/program.ldn tokens 21
   0 3 row
   3 4 :
   5 9 type
@@ -1926,10 +1946,19 @@ file negative/array-value-not-enabled/program.ldn tokens 12
   13 14 4
   14 15 ]
   15 17 u8
-  128 131 mut
-  132 138 buffer
-  138 139 :
-  140 143 row
+  203 204 f
+  204 205 :
+  206 207 (
+  207 208 )
+  209 211 ->
+  212 216 none
+  217 218 =
+  223 226 mut
+  227 231 here
+  231 232 :
+  233 236 row
+  237 240 end
+  241 242 f
 file negative/assigned-on-one-path-only/program.ldn tokens 24
   0 1 f
   1 2 :

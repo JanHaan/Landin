@@ -1,0 +1,5 @@
+class: positive
+summary: [1740]'s module state may have an array type, and D10 zeroes the whole of it
+constructs: 0520, 1740, 1790
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1042,7 +1042,9 @@ package body Landin.Stages.Lowering is
          Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree, Node);
          Answer : IR.Value_Id;
       begin
-         if Held not in Ty.Scalar_Name and then Held /= Ty.Aggregate then
+         if Held not in Ty.Scalar_Name
+           and then Held not in Ty.Aggregate | Ty.Fixed_Array
+         then
             raise Landin.Compiler_Defect with
               "a module binding reached the lowering with no storable type";
          end if;
@@ -1053,7 +1055,7 @@ package body Landin.Stages.Lowering is
          --  [0670]'s state: D10 zeroes it and the checker refused every
          --  written value of one, so its block carries no value at all and
          --  its storage is described by the fields the item was given.
-         if Held = Ty.Aggregate then
+         if Held in Ty.Aggregate | Ty.Fixed_Array then
             Open (Fresh (Of_Tree, Node, Res.Program_Scope));
             IR.Emit_Leave (Unit.all, Filling, IR.No_Value, Site);
             IR.Leave_Block (Unit.all, Filling);
@@ -1145,6 +1147,20 @@ package body Landin.Stages.Lowering is
                              IR.Add_Item
                                (Unit.all, IR.Datum, Id, Held,
                                 Site_Of (Of_Tree.all, Node));
+
+                           --  [0520]'s shape: one element and a count,
+                           --  because an array is its element repeated
+                           --  and a run of them would be as long as the
+                           --  count, which reaches four billion.
+                           if Held = Ty.Fixed_Array then
+                              IR.Set_Array
+                                (Unit.all, Made,
+                                 Landin.Checking.Array_Element
+                                   (Types.all, Id),
+                                 IR.Element_Total
+                                   (Landin.Checking.Array_Length
+                                      (Types.all, Id)));
+                           end if;
 
                            --  [0750]'s fields, in the order they were
                            --  written.  The types and not the offsets: a

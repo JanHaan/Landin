@@ -1,5 +1,8 @@
 row: type = [4]u8
 
---  [0520] declares one; carrying a value of one waits for the rest of
---  R2.20, exactly as a struct's did.
-mut buffer: row
+--  [1740]'s module state is D10's zero and needs nothing to carry it; a
+--  local of one is a frame cell and waits for the rest of R2.20, exactly
+--  as a struct local did before it.
+f: () -> none =
+    mut here: row
+end f

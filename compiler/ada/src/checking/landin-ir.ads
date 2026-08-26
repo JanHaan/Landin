@@ -307,8 +307,8 @@ package Landin.IR is
    --  means by it "what a call to a `-> none` function hands back".
    --
    --  A Datum may also be [0670]'s aggregate, whose fields are added
-   --  below.  A Routine may not: passing or returning one is an ABI rule
-   --  and its own slice.
+   --  below, or [0520]'s array, whose shape is set below.  A Routine may
+   --  not: passing or returning one is an ABI rule and its own slice.
    function Add_Item
      (Into     : in out Unit;
       Kind     : Item_Kind;
@@ -326,7 +326,8 @@ package Landin.IR is
                                               = Landin.Types.No_Value)
                             or else (Kind = Datum
                                      and then Result
-                                              = Landin.Types.Aggregate))
+                                              in Landin.Types.Aggregate
+                                                 | Landin.Types.Fixed_Array))
                   and then Landin.Provenance.Is_Known (Site),
           Post => Item_Count (Into) = Item_Count (Into)'Old + 1
                   and then Holds (Into, Add_Item'Result)
@@ -388,6 +389,40 @@ package Landin.IR is
      return Landin.Types.Scalar_Name
      with Pre => Holds (Of_Unit, Item)
                  and then Index <= Field_Count (Of_Unit, Item);
+
+   ------------------------------------------------------------------
+   --  An array item's shape
+   ------------------------------------------------------------------
+
+   --  [0520]'s array is its element repeated, so it is carried as one
+   --  element and a count rather than as a run of them.  D17 makes that
+   --  the whole of its identity, and the count reaches 2**32-1: a run
+   --  would be four billion entries for a type whose layout is one
+   --  multiplication.
+   type Element_Total is range 0 .. 2 ** 32 - 1;
+
+   procedure Set_Array
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Of_Type : Landin.Types.Scalar_Name;
+      Length  : Element_Total)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item)
+                           = Landin.Types.Fixed_Array,
+          Post => Array_Element (Into, Item) = Of_Type
+                  and then Array_Length (Into, Item) = Length;
+
+   function Array_Element
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array;
+
+   function Array_Length
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array;
 
    ------------------------------------------------------------------
    --  Slots
@@ -1088,6 +1123,9 @@ private
       Blocks      : Run;
       Values      : Run;
       Fields      : Run;
+      --  [0520]'s shape, when Result says the item is an array.
+      Element     : Landin.Types.Scalar_Name  := Landin.Types.Bool;
+      Length      : Element_Total             := 0;
       Open        : Block_Id                  := No_Block;
    end record;
 
