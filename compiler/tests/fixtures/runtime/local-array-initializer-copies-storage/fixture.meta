@@ -1,0 +1,6 @@
+class: runtime
+summary: D21 initializes a mutable and an immutable local array from module and prior local names
+constructs: 0060, 0080, 0110, 0410, 0520, 1795, 1810, 1910
+program: main.ldn
+status: 42
+targets: linux-x86-64

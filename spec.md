@@ -1210,3 +1210,54 @@ program never assigned. Both were declined.
 `negative/local-array-copy-from-unassigned`,
 `negative/local-array-copy-not-assigned-on-every-path`, and
 `runtime/whole-arrays-copy-between-storage` on Linux x86-64.
+
+### D21 — A local array is initialized from a whole-array storage name
+
+**The tour said** that a binding may name its type and give it a value in one
+form [0040], that an inferred form takes the value's type [0050], and that a
+local declared without a value is assigned before it is read [1910]. It said
+nothing about what value a local array binding could receive at its
+declaration.
+
+**Chosen:** an explicitly typed local array binding — `[mut] name: [N]T =
+source` — is initialized by copying every element of `source`, exactly as
+D20's assignment does between two storage places. `source` names a whole
+array whose D17 identity agrees with the declared type: a module binding, a
+prior local wholly assigned by D19's sparse facts or by a D20 copy, or a
+prior local likewise initialized from a name. The destination is wholly
+assigned by the copy alone, and both mutable and immutable binding forms
+accept it because a declaration is not an assignment [0080].
+
+Every other value position in a local array binding remains refused: the
+inferred `:=` form [0050], an array literal [0520], `zeroed` [0540],
+repetition [0560], a slice [0570], a call, an indexed or selected
+subexpression, and every module-scope array initializer are each their own
+later slice. This decision does not enable an array as a parameter, a
+return, a discard, or a struct field. The initializer is read before the
+name it initializes exists [0110], so a local cannot initialize itself.
+
+**Why:** D20 already lowered a whole-array copy to one `Copy_Array`
+instruction, D18's storage semantics already reached every ordinary local,
+and D19's flow state already gave a fully-copied array the single
+whole-array fact it needs. The one shape left to give a local array is the
+one shape a scalar local already has, and reusing the storage rule keeps
+compiler work and IR size independent of the target-sized D18 extent. The
+restriction to a direct source name keeps the check symmetric with D20 and
+defers every value form whose own semantic rule is a later slice.
+
+**The alternative:** widen the initializer to any array-typed expression, or
+enable the inferred form. The first admits constructs the checker cannot
+recognise yet — an array literal, `zeroed`, a slice — and each is its own
+decision; the second commits to inferring an array's identity from a value
+before the value forms it takes are settled. Both were declined for the
+same reason a scalar local's `:=` and `= 7` were kept apart in R1: writing
+the type down is what the reader has, and every deferred form has to travel
+through it.
+
+**Pinned by** `positive/local-array-initialized-from-source-name`,
+`negative/module-array-initializer-not-enabled`,
+`negative/inferred-local-array-init-not-enabled`,
+`negative/local-array-initializer-from-unassigned`,
+`negative/array-initializer-length-mismatch`,
+`negative/array-initializer-element-mismatch`, and
+`runtime/local-array-initializer-copies-storage` on Linux x86-64.

@@ -1021,7 +1021,24 @@ package body Landin.Stages.Lowering is
                         Value : constant Syn.Node_Id :=
                           Syn.Value_Of (Of_Tree, Stmt);
                      begin
-                        if Value /= Syn.No_Node then
+                        if Value = Syn.No_Node then
+                           null;
+                        elsif Landin.Checking.Type_Of (Types.all, Id)
+                                = Ty.Fixed_Array
+                        then
+                           --  D21: the initializer copies a whole array from
+                           --  a storage name into this fresh local slot, the
+                           --  same one compact operation D20's assignment
+                           --  emits.  No opcode of its own is needed and no
+                           --  operand run proportional to D18's length.
+                           IR.Emit_Array_Copy
+                             (Unit.all, Filling,
+                              Source      => Storage_For (Of_Tree, Value),
+                              Destination =>
+                                IR.Storage'
+                                  (Kind => IR.Frame_Slot, Slot => Where),
+                              Site        => Site);
+                        else
                            IR.Emit_Store
                              (Unit.all, Filling, Where,
                               Lower_Expression (Of_Tree, Value, Scope),

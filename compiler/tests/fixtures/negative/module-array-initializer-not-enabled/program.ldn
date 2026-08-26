@@ -1,0 +1,3 @@
+source: [2]u32
+
+mut buffer: [2]u32 = source

@@ -711,6 +711,56 @@ file positive/local-array-copy/program.ldn tokens 25
   66 72 source
   73 76 end
   77 78 f
+file positive/local-array-initialized-from-source-name/program.ldn tokens 49
+  0 6 source
+  6 7 :
+  8 9 [
+  9 10 2
+  10 11 ]
+  11 14 u32
+  16 17 f
+  17 18 :
+  19 20 (
+  20 21 )
+  22 24 ->
+  25 29 none
+  30 31 =
+  92 95 mut
+  96 111 from_mut_module
+  111 112 :
+  113 114 [
+  114 115 2
+  115 116 ]
+  116 119 u32
+  120 121 =
+  122 128 source
+  192 213 from_immutable_module
+  213 214 :
+  215 216 [
+  216 217 2
+  217 218 ]
+  218 221 u32
+  222 223 =
+  224 230 source
+  382 385 mut
+  386 400 from_mut_local
+  400 401 :
+  402 403 [
+  403 404 2
+  404 405 ]
+  405 408 u32
+  409 410 =
+  411 426 from_mut_module
+  598 618 from_immutable_local
+  618 619 :
+  620 621 [
+  621 622 2
+  622 623 ]
+  623 626 u32
+  627 628 =
+  629 650 from_immutable_module
+  651 654 end
+  655 656 f
 file positive/local-shadows-a-parameter/program.ldn tokens 24
   0 1 f
   1 2 :
@@ -1985,6 +2035,56 @@ file negative/array-copy-length-mismatch/program.ldn tokens 25
   59 64 short
   65 68 end
   69 70 f
+file negative/array-initializer-element-mismatch/program.ldn tokens 24
+  0 6 source
+  6 7 :
+  8 9 [
+  9 10 2
+  10 11 ]
+  11 13 u8
+  15 16 f
+  16 17 :
+  18 19 (
+  19 20 )
+  21 23 ->
+  24 28 none
+  29 30 =
+  35 38 mut
+  39 50 destination
+  50 51 :
+  52 53 [
+  53 54 2
+  54 55 ]
+  55 58 u32
+  59 60 =
+  61 67 source
+  68 71 end
+  72 73 f
+file negative/array-initializer-length-mismatch/program.ldn tokens 24
+  0 6 source
+  6 7 :
+  8 9 [
+  9 10 4
+  10 11 ]
+  11 14 u32
+  16 17 f
+  17 18 :
+  19 20 (
+  20 21 )
+  22 24 ->
+  25 29 none
+  30 31 =
+  36 39 mut
+  40 51 destination
+  51 52 :
+  53 54 [
+  54 55 2
+  55 56 ]
+  56 59 u32
+  60 61 =
+  62 68 source
+  69 72 end
+  73 74 f
 file negative/array-literal-not-enabled/program.ldn tokens 18
   0 1 f
   1 2 :
@@ -2721,6 +2821,26 @@ file negative/indexing-not-enabled/program.ldn tokens 45
   242 243 ]
   244 247 end
   248 249 f
+file negative/inferred-local-array-init-not-enabled/program.ldn tokens 19
+  0 6 source
+  6 7 :
+  8 9 [
+  9 10 2
+  10 11 ]
+  11 14 u32
+  16 17 f
+  17 18 :
+  19 20 (
+  20 21 )
+  22 24 ->
+  25 29 none
+  30 31 =
+  36 39 mut
+  40 45 words
+  46 48 :=
+  49 55 source
+  56 59 end
+  60 61 f
 file negative/keyword-as-name/program.ldn tokens 5
   0 2 if
   2 3 :
@@ -2919,31 +3039,32 @@ file negative/local-array-index-outside-length/program.ldn tokens 22
   53 54 ]
   55 58 end
   59 60 f
-file negative/local-array-initializer-not-enabled/program.ldn tokens 24
-  0 6 source
-  6 7 :
-  8 9 [
-  9 10 2
-  10 11 ]
-  11 14 u32
-  16 17 f
-  17 18 :
-  19 20 (
-  20 21 )
-  22 24 ->
-  25 29 none
-  30 31 =
-  36 39 mut
-  40 45 words
-  45 46 :
-  47 48 [
-  48 49 2
-  49 50 ]
-  50 53 u32
-  54 55 =
-  56 62 source
-  63 66 end
-  67 68 f
+file negative/local-array-initializer-from-unassigned/program.ldn tokens 25
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 mut
+  24 30 source
+  30 31 :
+  32 33 [
+  33 34 2
+  34 35 ]
+  35 38 u32
+  43 46 mut
+  47 58 destination
+  58 59 :
+  60 61 [
+  61 62 2
+  62 63 ]
+  63 66 u32
+  67 68 =
+  69 75 source
+  76 79 end
+  80 81 f
 file negative/local-used-above-its-declaration/program.ldn tokens 21
   0 1 f
   1 2 :
@@ -3118,6 +3239,22 @@ file negative/missing-then/program.ldn tokens 25
   61 63 if
   64 67 end
   68 69 f
+file negative/module-array-initializer-not-enabled/program.ldn tokens 15
+  0 6 source
+  6 7 :
+  8 9 [
+  9 10 2
+  10 11 ]
+  11 14 u32
+  16 19 mut
+  20 26 buffer
+  26 27 :
+  28 29 [
+  29 30 2
+  30 31 ]
+  31 34 u32
+  35 36 =
+  37 43 source
 file negative/module-fold-no-type-holds/program.ldn tokens 7
   0 4 over
   4 5 :

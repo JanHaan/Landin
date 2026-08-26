@@ -722,6 +722,97 @@ package body Landin.Tests.Lowering_Suite is
    end A_Struct_Copy_Becomes_Its_Fields;
 
    ------------------------------------------------------------------
+   --  D21: a local array initialized from a whole-array name becomes one
+   --  Copy_Array from the source's storage to the destination's slot.  The
+   --  same instruction serves an assignment: what changes is where.
+   procedure A_Local_Array_Initializer_Becomes_A_Copy
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Local_Array_Initializer_Becomes_A_Copy
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      --  D21 across every combination of destination mutability and source
+      --  kind: module-to-mut, module-to-immutable, local-to-mut,
+      --  local-to-immutable.  Each becomes one Copy_Array whose source and
+      --  destination storage tell that combination apart.
+      Lower
+        (Work,
+         "source: [2]u32" & LF
+         & "f: () -> none =" & LF
+         & "    mut mut_from_module: [2]u32 = source" & LF
+         & "    immutable_from_module: [2]u32 = source" & LF
+         & "    mut mut_from_local: [2]u32 = mut_from_module" & LF
+         & "    immutable_from_local: [2]u32 = immutable_from_module" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Slot_Count (Unit, 2), 4,
+            "four frame cells, one per initialized local");
+
+         --  Module -> mutable local.
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 2, 1) = IR.Copy_Array,
+            "the mutable binding from a module is one array copy");
+         Landin.Testing.Check
+           (Item, IR.Source_Of (Unit, 2, 1).Kind = IR.Module_Datum
+                  and then IR.Source_Of (Unit, 2, 1).Datum = 1
+                  and then IR.Destination_Of (Unit, 2, 1).Kind
+                             = IR.Frame_Slot
+                  and then IR.Destination_Of (Unit, 2, 1).Slot = 1,
+            "reading the module datum into the first slot");
+
+         --  Module -> immutable local.
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 2, 2) = IR.Copy_Array,
+            "the immutable binding from a module is another array copy");
+         Landin.Testing.Check
+           (Item, IR.Source_Of (Unit, 2, 2).Kind = IR.Module_Datum
+                  and then IR.Source_Of (Unit, 2, 2).Datum = 1
+                  and then IR.Destination_Of (Unit, 2, 2).Kind
+                             = IR.Frame_Slot
+                  and then IR.Destination_Of (Unit, 2, 2).Slot = 2,
+            "reading the module datum into the second slot");
+
+         --  Prior local -> mutable local.
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 2, 3) = IR.Copy_Array,
+            "the mutable binding from a prior local is a slot-to-slot copy");
+         Landin.Testing.Check
+           (Item, IR.Source_Of (Unit, 2, 3).Kind = IR.Frame_Slot
+                  and then IR.Source_Of (Unit, 2, 3).Slot = 1
+                  and then IR.Destination_Of (Unit, 2, 3).Kind
+                             = IR.Frame_Slot
+                  and then IR.Destination_Of (Unit, 2, 3).Slot = 3,
+            "reading slot 1 into slot 3");
+
+         --  Prior local -> immutable local.
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 2, 4) = IR.Copy_Array,
+            "the immutable binding from a prior local is another copy");
+         Landin.Testing.Check
+           (Item, IR.Source_Of (Unit, 2, 4).Kind = IR.Frame_Slot
+                  and then IR.Source_Of (Unit, 2, 4).Slot = 2
+                  and then IR.Destination_Of (Unit, 2, 4).Kind
+                             = IR.Frame_Slot
+                  and then IR.Destination_Of (Unit, 2, 4).Slot = 4,
+            "reading slot 2 into slot 4");
+      end;
+   end A_Local_Array_Initializer_Becomes_A_Copy;
+
+   ------------------------------------------------------------------
 
    procedure A_Logical_Module_Value_Becomes_Blocks
      (Item : in out Landin.Testing.Context);
@@ -1058,6 +1149,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a struct copy becomes its fields",
          A_Struct_Copy_Becomes_Its_Fields'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a local array initializer becomes a copy",
+         A_Local_Array_Initializer_Becomes_A_Copy'Access);
       Landin.Testing.Register
         (Into, "lowering", "a computed destination precedes its value",
          A_Computed_Destination_Precedes_Its_Value'Access);

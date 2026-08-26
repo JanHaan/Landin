@@ -2187,11 +2187,25 @@ computes the target byte extent, and emits `rep movsb`; the fixed instruction
 sequence copies a D18 extent without enumerating it and exact self-copy is the
 only overlap current source forms can express.
 
-What is still refused: computed local indexes, initialized array locals and
-general whole-array value positions, an array literal [0520], the inferred
-length [0530], `zeroed` [0540], repetition [0560], slices [0570], `lenof`, and
-an array as a struct field. Each is its own slice, and the remaining value
-slices need initialization work.
+D21 turns the same `Copy_Array` into a local array's initializer: an
+explicitly typed local `[mut] name: [N]T = source` is lowered exactly as
+`name = source` is once the slot has been reserved, and the destination is
+wholly assigned by the copy alone rather than by any subsequent element
+writes. D17 is the same identity check the assignment case makes, and the
+initializer is read before the local's name exists [0110], so a local
+cannot initialize itself. Both binding forms accept the value because a
+declaration is not an assignment [0080], which is what preserves the
+immutable initialization the scalar path already permits. Module bindings
+with an initializer, the inferred `:=` form, an array literal, `zeroed`, a
+slice, a call, and every other value shape stay refused; each is its own
+later slice.
+
+What is still refused: computed local indexes, module array initializers,
+inferred array initializers, general whole-array value positions, an array
+literal [0520], the inferred length [0530], `zeroed` [0540], repetition
+[0560], slices [0570], `lenof`, and an array as a struct field. Each is its
+own slice, and the remaining value slices need the initialization work D21
+did not settle.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a
 zero image when all-zero is a valid value for it, which is what lets a
