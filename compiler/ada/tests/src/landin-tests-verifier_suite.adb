@@ -139,6 +139,9 @@ package body Landin.Tests.Verifier_Suite is
       Datum_Load_Names_An_Aggregate,
       Field_Beyond_The_Aggregate,
       Field_Store_Of_The_Wrong_Type,
+      Local_Array_Part_Is_Out_Of_Range,
+      Local_Array_Load_Has_The_Wrong_Type,
+      Local_Array_Store_Has_The_Wrong_Type,
       Element_Datum_Is_Not_An_Array,
       Element_Index_Is_Not_Usize,
       Element_Load_Of_The_Wrong_Type,
@@ -157,7 +160,7 @@ package body Landin.Tests.Verifier_Suite is
                    Harm : Damage) return V.Fault
    is
       A, D, G, E : IR.Item_Id;
-      S, P : IR.Slot_Id;
+      S, P, Q : IR.Slot_Id;
       B, C : IR.Block_Id;
       N, M : IR.Value_Id;
    begin
@@ -174,6 +177,8 @@ package body Landin.Tests.Verifier_Suite is
 
       P := IR.Add_Parameter (Unit, A, Landin.Types.U32, 2, Site);
       S := IR.Add_Slot (Unit, A, Landin.Types.U32, 4, Site);
+      Q := IR.Add_Array_Slot
+        (Unit, A, Landin.Types.U32, 4, IR.No_Declaration, Site);
       IR.Set_Result_Slot (Unit, A, S);
       B := IR.Add_Block (Unit, A, Landin.Resolution.Program_Scope, Site);
       IR.Enter (Unit, A, B);
@@ -281,6 +286,29 @@ package body Landin.Tests.Verifier_Suite is
             --  G's one field is a u32, and this writes a bool to it.
             N := IR.Emit_Truth (Unit, A, True, Site);
             IR.Emit_Store_Field (Unit, A, G, 1, N, Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Local_Array_Part_Is_Out_Of_Range =>
+            N := IR.Emit_Load_Slot_Field
+              (Unit, A, Q, 5, Landin.Types.U32, Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Local_Array_Load_Has_The_Wrong_Type =>
+            N := IR.Emit_Load_Slot_Field
+              (Unit, A, Q, 4, Landin.Types.Bool, Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Local_Array_Store_Has_The_Wrong_Type =>
+            N := IR.Emit_Truth (Unit, A, True, Site);
+            IR.Emit_Store_Slot_Field (Unit, A, Q, 4, N, Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -395,6 +423,10 @@ package body Landin.Tests.Verifier_Suite is
           V.Aggregate_Datum_Is_Not_A_Value),
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
          (Field_Store_Of_The_Wrong_Type, V.Store_Datum_Disagrees),
+         (Local_Array_Part_Is_Out_Of_Range, V.Field_Out_Of_Range),
+         (Local_Array_Load_Has_The_Wrong_Type, V.Result_Disagrees),
+         (Local_Array_Store_Has_The_Wrong_Type,
+          V.Store_Datum_Disagrees),
          (Element_Datum_Is_Not_An_Array,
           V.Element_Datum_Is_Not_An_Array),
          (Element_Index_Is_Not_Usize, V.Element_Index_Is_Not_Usize),

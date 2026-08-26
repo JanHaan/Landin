@@ -213,12 +213,22 @@ package body Landin.IR.Dump is
                      Unbounded.Append (Marks, " return");
                   end if;
 
-                  Put ("  slot " & Trimmed (Slot_Id'Image (Slot))
-                       & " " & Named (Declares (Of_Unit, Id, Slot))
-                       & " "
-                       & Landin.Types.Spelling
-                           (Type_Of (Of_Unit, Id, Slot))
-                       & Unbounded.To_String (Marks));
+                  Put
+                    ("  slot " & Trimmed (Slot_Id'Image (Slot))
+                     & " " & Named (Declares (Of_Unit, Id, Slot)) & " "
+                     & (if Is_Array (Of_Unit, Id, Slot)
+                        then "elements "
+                             & Trimmed
+                                 (Element_Total'Image
+                                    (Slot_Array_Length (Of_Unit, Id, Slot)))
+                             & " of "
+                             & Landin.Types.Spelling
+                                 (Slot_Array_Element (Of_Unit, Id, Slot))
+                        elsif Is_Aggregate (Of_Unit, Id, Slot)
+                        then "aggregate"
+                        else Landin.Types.Spelling
+                               (Type_Of (Of_Unit, Id, Slot)))
+                     & Unbounded.To_String (Marks));
                end;
             end loop;
 

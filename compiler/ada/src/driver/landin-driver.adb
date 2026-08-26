@@ -58,6 +58,8 @@ package body Landin.Driver is
      Rows.Code (Rows.Entry_Point_Missing);
    Code_Wide_Call : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Argument_Not_In_A_Register);
+   Code_Wide_Frame : constant Landin.Diagnostics.Code_String :=
+     Rows.Code (Rows.Frame_Not_Addressable);
 
    --  What a request asked to be left behind.  Nothing is the state every
    --  request had before R1.80 and most still have: a program is read,
@@ -352,6 +354,23 @@ package body Landin.Driver is
                            & Natural'Image
                                (Landin.Backend.X86_64.Register_Arguments)
                            & " this backend passes in registers");
+                        Refused := True;
+                     end if;
+
+                     if Landin.IR.Kind_Of (Unit, Item) = Landin.IR.Routine
+                       and then not Landin.Backend.X86_64.Frame_Is_Addressable
+                                      (Unit, Item, Facts)
+                     then
+                        Note_Failure
+                          (Code_Wide_Frame,
+                           "`"
+                           & Landin.Source.Names.Spelling
+                               (Spellings,
+                                Landin.Resolution.Name_Of
+                                  (Known,
+                                   Landin.IR.Declares (Unit, Item)))
+                           & "` needs a frame outside the signed 32-bit"
+                           & " offsets this backend addresses");
                         Refused := True;
                      end if;
                   end;

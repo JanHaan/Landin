@@ -90,15 +90,15 @@ package Landin.Diagnostics.Catalogue is
       Impossible_Operand,
       Cyclic_Type_Alias,
       Unresolved_Field,
-      --  The backend and its toolchain, assigned at R1.80.  None of
-      --  the four is about a construct a program wrote: two are the
-      --  host failing to finish a program it accepted, the third is a
-      --  shape [1970] requires and the module does not have, and the
-      --  fourth is a call this backend cannot make yet.
+      --  The backend and its toolchain, assigned from R1.80 onwards.  None
+      --  is about a frontend construct: two are the host failing to finish
+      --  an accepted program, one is [1970]'s missing entry shape, and two
+      --  are verified shapes this backend cannot encode yet.
       No_Toolchain,
       Toolchain_Failed,
       Entry_Point_Missing,
-      Argument_Not_In_A_Register);
+      Argument_Not_In_A_Register,
+      Frame_Not_Addressable);
 
    --  Live, or kept so its number is never reused. A code is retired when
    --  the rule it names stops existing: `No_Frontend` retires when the
@@ -143,7 +143,8 @@ package Landin.Diagnostics.Catalogue is
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
-            when Argument_Not_In_A_Register => "L0503");
+            when Argument_Not_In_A_Register => "L0503",
+            when Frame_Not_Addressable      => "L0504");
 
    function Level (Of_Code : Code_Name) return Severity
      is (case Of_Code is
@@ -161,7 +162,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
             when Literal_Out_Of_Range .. Unresolved_Field => Error,
-            when No_Toolchain .. Argument_Not_In_A_Register => Error);
+            when No_Toolchain .. Frame_Not_Addressable => Error);
 
    function State (Of_Code : Code_Name) return Disposition
      is (case Of_Code is
@@ -183,7 +184,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
             when Literal_Out_Of_Range .. Unresolved_Field => Live,
-            when No_Toolchain .. Argument_Not_In_A_Register => Live);
+            when No_Toolchain .. Frame_Not_Addressable => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
    --  user reads: the message at the raise site is what a user reads.
@@ -270,7 +271,10 @@ package Landin.Diagnostics.Catalogue is
                & " `public main: () -> (code: i32)`",
             when Argument_Not_In_A_Register =>
                "[1650]: a parameter past the six the ABI hands in"
-               & " registers");
+               & " registers",
+            when Frame_Not_Addressable =>
+               "a verified frame outside x86-64's signed displacement"
+               & " encoding");
 
    ------------------------------------------------------------------
    --  What every occurrence of a code must carry
@@ -301,7 +305,7 @@ package Landin.Diagnostics.Catalogue is
             --  the host failing to finish an accepted program, and the
             --  third is a declaration the module never made, which has
             --  no span by definition.
-            when No_Toolchain .. Argument_Not_In_A_Register => False);
+            when No_Toolchain .. Frame_Not_Addressable => False);
 
    --  Whether the primary span must cover at least one byte. An empty span
    --  points between two bytes, which is right for a missing token and
@@ -327,7 +331,7 @@ package Landin.Diagnostics.Catalogue is
             --  Every one of these points at something a program wrote.
             when Literal_Out_Of_Range .. Unresolved_Field =>
                True,
-            when No_Toolchain .. Argument_Not_In_A_Register => False);
+            when No_Toolchain .. Frame_Not_Addressable => False);
 
    --  How many secondary labels the diagnostic must carry. An unterminated
    --  block comment needs one: the end of the file is where it was noticed

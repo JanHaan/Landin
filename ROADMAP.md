@@ -2035,13 +2035,14 @@ where a struct may not: `[3]usize` carries its identity wherever it stands,
 while an anonymous struct body declares none, so the one is state and the other
 is not.
 
-An array local is still refused, which is the one place arrays and structs now
-differ: a struct local has a frame cell and an array's is the next slice. That
-refusal had to be written rather than inherited — the module-level test that
-D10 needs had been deleted when struct locals were enabled, and without it an
-array local was accepted and reached the frame as a defect. The suite caught it
-as a status of seventy rather than a silent crash, which is the report-keeping
-from the slice before this one doing its job the first time it was needed.
+An array local was initially refused, which was then the one place arrays and
+structs differed: a struct local had a frame cell and an array's was a later
+slice. That refusal had to be written rather than inherited — the module-level
+test that D10 needs had been deleted when struct locals were enabled, and
+without it an array local was accepted and reached the frame as a defect. The
+suite caught it as a status of seventy rather than a silent crash, which is the
+report-keeping from the slice before this one doing its job the first time it
+was needed. The known-element local slice below has now replaced that refusal.
 
 An element by an index the compiler knows came next, and it is the first
 construct to reach [1950]'s table since the shifts. [1820]'s `primary` gained
@@ -2131,10 +2132,39 @@ and other effectful index expressions arrive. The former
 cases that read and write both ends of an array, carry an index across a
 short-circuiting value, and deliberately trap at the length.
 
-What is still refused: an array local, an array literal [0520], the inferred
-length [0530], `zeroed` [0540], repetition [0560], slices [0570], `lenof`, and
-an array as a struct field. Each is its own slice, and the value slices need the
-same frame and data work the struct ones did.
+A declaration-only fixed-array local now has one compact frame cell and may be
+reached through compiler-known indexes. As for module arrays, its slot records
+one element type and one target-width length rather than a field per element;
+the generic frame layout reserves `length * sizeof element` bytes and derives a
+known part's offset by multiplication. Constant local element loads and stores
+therefore reuse the slot-targeted `Load_Field` and `Store_Field` operations,
+with the verifier accepting either a struct field or an in-range array element.
+No opcode or metadata grows with the declared length. The current x86-64
+backend still addresses every frame cell with a signed 32-bit `%rbp`
+displacement and subtracts the extent in the prologue; `L0504` refuses a
+verified routine whose complete lowered frame exceeds that encoding before any
+assembly is written. This is an explicit backend limit, not a smaller limit on
+D18's array type, and replaces an arithmetic exception or assembler failure.
+
+D19 supplies the source-level state rule: each known element has its own sparse
+definite-assignment fact. Writing element zero does not assign element one, a
+read or `inc` requires its selected element on every arriving path, and branch
+merge intersects the facts. The sparse representation matters because D18
+permits an array whose target extent cannot be enumerated by the compiler host.
+The Linux runtime case lays out `u32`, `u8`, and `u16` locals together, updates a
+known element, and reads an element assigned in both branch arms.
+
+Computed local indexes remain refused deliberately. Module state begins wholly
+assigned by D10, while a computed write into an uninitialized local raises a
+new semantic question — whether it establishes one unknown fact, a range, or
+none useful to a later read. This slice does not answer that question by
+accident. Whole-array local values, copies, and initializers also remain
+refused; declaration-only storage needs none of them.
+
+What is still refused: those computed and whole-array local forms, an array
+literal [0520], the inferred length [0530], `zeroed` [0540], repetition [0560],
+slices [0570], `lenof`, and an array as a struct field. Each is its own slice,
+and the value slices need the remaining copying and initialization work.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a
 zero image when all-zero is a valid value for it, which is what lets a

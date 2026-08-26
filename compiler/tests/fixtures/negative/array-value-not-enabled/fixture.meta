@@ -1,5 +1,5 @@
 class: negative
-summary: [0520] declares an array type and a local of one waits for the rest of R2.20
+summary: [0520] leaves a whole local array value for a later R2.20 slice
 constructs: 0520, 1810, 1830
 program: program.ldn
 codes: L0304

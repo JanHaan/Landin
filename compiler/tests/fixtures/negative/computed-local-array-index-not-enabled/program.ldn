@@ -1,0 +1,4 @@
+f: (at: usize) -> none =
+    mut words: [2]u32
+    _ = words[at]
+end f

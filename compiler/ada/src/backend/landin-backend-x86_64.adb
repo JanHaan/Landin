@@ -148,6 +148,27 @@ package body Landin.Backend.X86_64 is
    --  Text
    ------------------------------------------------------------------
 
+   function Frame_Is_Addressable
+     (Of_Unit : Landin.IR.Unit;
+      Item    : Landin.IR.Item_Id;
+      Facts   : Landin.Targets.Target_Facts) return Boolean
+   is
+      Largest_Displacement : constant Landin.Targets.Byte_Count :=
+        2 ** 31 - 1;
+      Layout : Frame;
+   begin
+      Layout := Laid_Out (Of_Unit, Item, Facts);
+      return Extent (Layout) <= Largest_Displacement;
+   exception
+      when Constraint_Error | Landin.Compiler_Defect =>
+         --  Laid_Out uses target-width arithmetic.  Overflow says the frame
+         --  does not fit even the target address space, and is a backend
+         --  capability answer here rather than a compiler failure.  Align_Up
+         --  names that overflow a defect in general; this preflight is the
+         --  place where an accepted, too-wide frame makes it expected.
+         return False;
+   end Frame_Is_Addressable;
+
    function Text
      (Of_Unit  : Landin.IR.Unit;
       Meanings : Landin.Resolution.Table;
@@ -619,13 +640,12 @@ package body Landin.Backend.X86_64 is
                           Landin.IR.Field_Of (Of_Unit, Item, Value);
                         Held : constant Held_Size :=
                           Size_Of
-                            (Landin.IR.Nth_Slot_Field
-                               (Of_Unit, Item, Slot,
-                                Positive (Which)), Facts);
+                            (Landin.IR.Nth_Slot_Part
+                               (Of_Unit, Item, Slot, Which), Facts);
                         Place : constant String :=
                           Cell (Field_Offset
-                                  (Of_Unit, Item, Layout, Slot,
-                                   Positive (Which), Facts));
+                                  (Of_Unit, Item, Layout, Slot, Which,
+                                   Facts));
                      begin
                         if Op = Landin.IR.Load_Field then
                            Carry (Held, Place, Value_Cell (Value));

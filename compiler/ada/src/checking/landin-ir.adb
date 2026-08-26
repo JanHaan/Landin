@@ -233,6 +233,57 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Aggregate);
 
+   function Add_Array_Slot
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Of_Type  : Landin.Types.Scalar_Name;
+      Length   : Element_Total;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Slots, Natural (Into.Slots.Length));
+      Into.Slots.Append
+        (Slot_Record'(Array_Shape => True,
+                      Element     => Of_Type,
+                      Length      => Length,
+                      Declaration => Declares,
+                      Site        => Site,
+                      others      => <>));
+      Held.Slots.Count := Held.Slots.Count + 1;
+      Into.Items (Positive (Item)) := Held;
+      return Slot_Id (Held.Slots.Count);
+   end Add_Array_Slot;
+
+   function Is_Array
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Array_Shape);
+
+   function Slot_Array_Element
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
+      return Landin.Types.Scalar_Name
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element);
+
+   function Slot_Array_Length
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Length);
+
+   function Slot_Part_Count
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total
+     is (if Is_Array (Of_Unit, Item, Slot)
+         then Slot_Array_Length (Of_Unit, Item, Slot)
+         elsif Is_Aggregate (Of_Unit, Item, Slot)
+         then Element_Total (Slot_Field_Count (Of_Unit, Item, Slot))
+         else 0);
+
+   function Nth_Slot_Part
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id;
+      Index : Part_Position) return Landin.Types.Scalar_Name
+     is (if Is_Array (Of_Unit, Item, Slot)
+         then Slot_Array_Element (Of_Unit, Item, Slot)
+         else Nth_Slot_Field (Of_Unit, Item, Slot, Positive (Index)));
+
    function Slot_Field_Count
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Natural
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Fields.Count);

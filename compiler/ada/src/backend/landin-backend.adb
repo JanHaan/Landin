@@ -1,5 +1,6 @@
 package body Landin.Backend is
 
+   use type Landin.IR.Element_Total;
    use type Landin.Targets.Byte_Count;
 
    ------------------------------------------------------------------
@@ -71,10 +72,25 @@ package body Landin.Backend is
       Placed  : Landin.Targets.Placement;
       Ignored : Landin.Targets.Byte_Count;
    begin
-      Place_Slot_Fields
-        (Of_Unit, Item, Slot, Facts, 0, Placed, Ignored);
-      Size := Landin.Targets.Size_Of (Placed);
-      Alignment := Landin.Targets.Alignment_Of (Placed);
+      if Landin.IR.Is_Array (Of_Unit, Item, Slot) then
+         declare
+            Element_Size : constant Landin.Targets.Scalar_Size :=
+              Size_Of
+                (Landin.IR.Slot_Array_Element (Of_Unit, Item, Slot), Facts);
+         begin
+            Size :=
+              Landin.Targets.Byte_Count
+                (Landin.IR.Slot_Array_Length (Of_Unit, Item, Slot))
+              * Landin.Targets.Byte_Count
+                  (Landin.Targets.Bytes (Element_Size));
+            Alignment := Landin.Targets.Alignment_Of (Facts, Element_Size);
+         end;
+      else
+         Place_Slot_Fields
+           (Of_Unit, Item, Slot, Facts, 0, Placed, Ignored);
+         Size := Landin.Targets.Size_Of (Placed);
+         Alignment := Landin.Targets.Alignment_Of (Placed);
+      end if;
    end Aggregate_Extent;
 
    function Field_Offset
@@ -82,15 +98,26 @@ package body Landin.Backend is
       Item     : Landin.IR.Item_Id;
       Of_Frame : Frame;
       Slot     : Landin.IR.Slot_Id;
-      Field    : Positive;
+      Field    : Landin.IR.Part_Position;
       Facts    : Landin.Targets.Target_Facts)
      return Landin.Targets.Byte_Count
    is
       Placed : Landin.Targets.Placement;
       Offset : Landin.Targets.Byte_Count;
    begin
-      Place_Slot_Fields
-        (Of_Unit, Item, Slot, Facts, Field, Placed, Offset);
+      if Landin.IR.Is_Array (Of_Unit, Item, Slot) then
+         Offset :=
+           Landin.Targets.Byte_Count
+             (Landin.IR.Element_Total (Field) - 1)
+           * Landin.Targets.Byte_Count
+               (Landin.Targets.Bytes
+                  (Size_Of
+                     (Landin.IR.Slot_Array_Element (Of_Unit, Item, Slot),
+                      Facts)));
+      else
+         Place_Slot_Fields
+           (Of_Unit, Item, Slot, Facts, Positive (Field), Placed, Offset);
+      end if;
       return Slot_Offset (Of_Frame, Slot) - Offset;
    end Field_Offset;
 
@@ -139,6 +166,8 @@ package body Landin.Backend is
       for Slot in 1 .. Landin.IR.Slot_Count (Of_Unit, Item) loop
          if Landin.IR.Is_Aggregate
               (Of_Unit, Item, Landin.IR.Slot_Id (Slot))
+           or else Landin.IR.Is_Array
+                     (Of_Unit, Item, Landin.IR.Slot_Id (Slot))
          then
             --  A whole [0750] placement, rounded up to its own alignment
             --  so the cell holds an aggregate the way an array element

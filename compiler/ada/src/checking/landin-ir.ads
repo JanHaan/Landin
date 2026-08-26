@@ -520,6 +520,51 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
      with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
 
+   --  A fixed-array cell carries the repeated element once and its target-
+   --  width length, never a length-sized field run.
+   function Add_Array_Slot
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Of_Type  : Landin.Types.Scalar_Name;
+      Length   : Element_Total;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+     with Pre  => Holds (Into, Item)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Slot_Count (Into, Item) = Slot_Count (Into, Item)'Old + 1
+                  and then Holds (Into, Item, Add_Array_Slot'Result)
+                  and then Is_Array (Into, Item, Add_Array_Slot'Result)
+                  and then Slot_Array_Element
+                             (Into, Item, Add_Array_Slot'Result) = Of_Type
+                  and then Slot_Array_Length
+                             (Into, Item, Add_Array_Slot'Result) = Length;
+
+   function Is_Array
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+
+   function Slot_Array_Element
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
+      return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item, Slot)
+                 and then Is_Array (Of_Unit, Item, Slot);
+
+   function Slot_Array_Length
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total
+     with Pre => Holds (Of_Unit, Item, Slot)
+                 and then Is_Array (Of_Unit, Item, Slot);
+
+   function Slot_Part_Count
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total
+     with Pre => Holds (Of_Unit, Item, Slot);
+
+   function Nth_Slot_Part
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id;
+      Index : Part_Position) return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item, Slot)
+                 and then Element_Total (Index)
+                            <= Slot_Part_Count (Of_Unit, Item, Slot);
+
    function Slot_Field_Count
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Natural
      with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
@@ -594,7 +639,8 @@ package Landin.IR is
      return Landin.Types.Scalar_Name
      with Pre => Holds (Of_Unit, Item)
                  and then Holds (Of_Unit, Item, Slot)
-                 and then not Is_Aggregate (Of_Unit, Item, Slot);
+                 and then not Is_Aggregate (Of_Unit, Item, Slot)
+                 and then not Is_Array (Of_Unit, Item, Slot);
 
    function Declares
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Declaration_Id
@@ -1159,7 +1205,10 @@ private
       --  True when the cell holds [0670]'s aggregate, whose fields are a
       --  run of their own; Of_Type says nothing then.
       Aggregate   : Boolean                   := False;
+      Array_Shape : Boolean                   := False;
       Fields      : Run;
+      Element     : Landin.Types.Scalar_Name  := Landin.Types.Bool;
+      Length      : Element_Total             := 0;
       Declaration : Declaration_Id            := No_Declaration;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;

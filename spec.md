@@ -1129,3 +1129,41 @@ follow a target narrower than 32 bits.
 `negative/index-past-the-default-type`, the target-parametric checker case
 `array extent follows usize`, and
 `runtime/large-array-offset-is-addressed` on Linux x86-64.
+
+### D19 — A known element of a local array is assigned independently
+
+**The tour said** that a local declared without a value has to be assigned on
+all paths before it is read [1910], that an array's elements are indexed from
+zero [0520], and that a compiler-known index is a literal or unary minus over
+one [1880]. It did not say whether assigning one element assigned the local or
+what fact a later element read required.
+
+**Chosen:** a declaration-only fixed-array local has one definite-assignment
+fact for each compiler-known element that the function reaches. Writing
+`items[2]` establishes only element two; reading or stepping `items[2]`
+requires that same fact on every arriving path, and says nothing about any
+other element. Branches intersect these facts exactly as they intersect a
+scalar local's fact. The compiler keeps only facts the function actually
+reaches, rather than allocating bookkeeping proportional to the array length.
+
+This decision does not define what a write through a computed local index
+establishes. Computed local indexing remains refused in this R2.20 slice;
+computed indexing of module arrays remains enabled because D10 gives module
+state every element from the start. Whole-array local values, copies, and
+initializers remain refused as well.
+
+**Why:** treating one element write as assignment of the whole local would
+permit an uninitialized read from every other element. Requiring every element
+to be written before any one can be read would make large arrays unusable and
+would contradict [1910]'s local, path-sensitive question. Sparse facts preserve
+both the element boundary and D18's target-sized array lengths.
+
+**The alternative:** one fact for the whole array, or a dense bit for every
+position. The first loses the safety check at the first partial write; the
+second makes compiler memory consumption depend on a target object that may be
+far larger than the host can enumerate. Both were declined.
+
+**Pinned by** `negative/local-array-element-not-assigned`,
+`negative/local-array-element-not-assigned-on-every-path`,
+`negative/increment-unassigned-local-array-element`, and
+`runtime/local-array-elements-are-independent` on Linux x86-64.
