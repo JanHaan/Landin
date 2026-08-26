@@ -1041,6 +1041,53 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Field_Is_Written_At_Its_Own_Offset;
 
+   --  [1810]'s local of a struct type is a cell in the frame, and a cell
+   --  grows downward while [0750] lays a struct out upward: field 1 is
+   --  furthest below the frame pointer and the last field is nearest, so
+   --  a hexdump of the cell reads in source order.  Two of them in one
+   --  frame do not overlap, which the second cell's own offsets say.
+   procedure A_Struct_Local_Is_A_Cell_In_The_Frame
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Local_Is_A_Cell_In_The_Frame
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "counters: type = struct" & LF
+         & "    hits: u32" & LF
+         & "    misses: u32" & LF
+         & "    ready: bool" & LF
+         & "end counters" & LF
+         & "use: () -> none =" & LF
+         & "    mut p: counters" & LF
+         & "    p.hits = 1" & LF
+         & "    p.misses = 2" & LF
+         & "    p.ready = true" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl %eax, -12(%rbp)"),
+            "the first field is at the bottom of the cell");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl %eax, -8(%rbp)"),
+            "the second is four bytes above it");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movb %al, -4(%rbp)"),
+            "and the bool is one byte at eight");
+      end;
+   end A_Struct_Local_Is_A_Cell_In_The_Frame;
+
    --  A module value is reached by name rather than through a frame, and
    --  x86-64's position-independent form of that name is RIP-relative.
    --  [1900] lets a `mut` module binding be written as well as read.
@@ -1860,6 +1907,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a field is written at its own offset",
          A_Field_Is_Written_At_Its_Own_Offset'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a struct local is a cell in the frame",
+         A_Struct_Local_Is_A_Cell_In_The_Frame'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value folds every level",
          A_Module_Value_Folds_Every_Level'Access);

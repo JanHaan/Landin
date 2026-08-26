@@ -1,0 +1,12 @@
+point: type = struct
+    x: u32
+    y: u32
+end point
+
+--  D16: a field is assigned on its own, so writing `x` says nothing
+--  about `y` and reading `y` here reads what the frame happened to hold.
+f: () -> (r: u32) =
+    mut p: point
+    p.x = 1
+    r = p.y
+end f

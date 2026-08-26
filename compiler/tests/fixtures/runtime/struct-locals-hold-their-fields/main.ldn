@@ -1,0 +1,42 @@
+counters: type = struct
+    hits: u32
+    misses: u32
+    ready: bool
+end counters
+
+wide: type = struct
+    first: u64
+    tag: u8
+    second: u64
+end wide
+
+--  A struct local is a cell in a frame [1810], and each field reaches its
+--  own [0750] offset inside it: a write that landed on the padding, or on
+--  the neighbour, would leave one of these unchanged.  Two locals in one
+--  frame also prove the cells do not overlap.
+public main: () -> (code: i32) =
+    mut p: counters
+    mut q: wide
+
+    p.hits = 7
+    p.misses = 2
+    p.ready = true
+    inc p.misses
+    p.hits = p.hits + 1
+
+    q.first = 18446744073709551615
+    q.tag = 255
+    q.second = 1
+
+    if p.hits == 8
+        and p.misses == 3
+        and p.ready
+        and q.first == 18446744073709551615
+        and q.tag == 255
+        and q.second == 1
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

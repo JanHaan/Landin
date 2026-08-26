@@ -988,3 +988,44 @@ give a type a second name at all.
 
 **Pinned by** `positive/type-declaration-aliases-a-scalar`,
 `negative/distinct-not-enabled`.
+
+### D16 — A field of a struct local is assigned on its own
+
+**The tour said** that a binding declared with no value must be assigned
+before use [0080], and [1910] made that a rule about a name: at every read,
+the name has to have been assigned by every path that arrives there. It does
+not say what the thing tracked is when the binding has fields, because until
+a struct could be a local nothing written in a body had any.
+
+**Chosen:** the field. `p.x = 1` assigns `p.x` and nothing else, a read of
+`p.x` asks whether `p.x` was assigned, and a read of `p.y` after only `p.x`
+was written is refused and names `p.y`. `inc p.x` reads and writes the same
+field, so it wants that field assigned above it, exactly as `inc n` wants
+`n`. Every arm of an `if` merges its fields the way [1910] already merges
+its names, and no condition is believed there either.
+
+**Why the field and not the binding:** [1910] tracks the thing an assignment
+writes, and an assignment to a place writes a field. It is also the answer
+that survives: a parameter of struct type arrives assigned in every field, a
+named return of one has to be filled in every field before [0930]'s return,
+and a construction assigns them all at once — each of those is a statement
+about fields, and a rule about the binding would have to be replaced to say
+any of them.
+
+**What this does not decide:** a module binding of a struct type. D10 already
+says a binding with no value holds zero and [1460] leaves no moment in which
+anything could assign one, so its fields read zero and there is nothing here
+to check. This rule is about a body.
+
+**The alternative:** two. Treat the binding as assigned once every field has
+been, which is one bit instead of one per field and never reads a field
+nobody wrote — declined because it refuses a function that fills two fields
+of three and reads only those two, which is ordinary code whose workaround is
+assigning a field the program does not use. Or zero a struct local where it
+is declared, extending D10 into a body, which removes the question entirely —
+declined because it is a store per field at a place the source does not
+mention, and this language does not do work a reader cannot see.
+
+**Pinned by** `negative/struct-field-not-assigned`,
+`negative/struct-field-not-assigned-on-every-path`,
+`runtime/struct-locals-hold-their-fields`.

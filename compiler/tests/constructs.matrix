@@ -205,7 +205,7 @@
 1880   spec        accepted emitted executed refused  Where a literal's type comes from, and what a context is
 1890   spec        accepted emitted executed refused  What each operator takes and what it gives
 1900   spec        accepted emitted executed refused  What may be written, and what may not
-1910   spec        accepted emitted refused           Assigned before it is read
+1910   spec        accepted emitted executed refused  Assigned before it is read
 1920   spec        accepted emitted executed refused  What a call means
 1930   spec        accepted emitted executed refused  What may be discarded
 1940   spec        accepted emitted executed refused  A module value is known when the compiler reads it
