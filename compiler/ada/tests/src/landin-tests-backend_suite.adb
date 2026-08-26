@@ -1305,6 +1305,60 @@ package body Landin.Tests.Backend_Suite is
       end;
    end An_Element_Is_Read_At_Its_Own_Offset;
 
+   --  [0580] makes bounds checking an ordering rule, not just a comparison:
+   --  the unsigned index must be below the length before scaling it or
+   --  forming an address.  Both a read and a write take that guarded path.
+   procedure A_Computed_Element_Is_Checked_Before_Its_Address
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Computed_Element_Is_Checked_Before_Its_Address
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut words: [4]u32" & LF
+         & "at: (i: usize) -> (r: u32) =" & LF
+         & "    words[i] = 7" & LF
+         & "    r = words[i]" & LF
+         & "end at" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Compare : constant Natural := Index (Text, HT & "cmpq %rdx, %rax");
+         Trap : constant Natural := Index (Text, HT & "ud2");
+         Scale : constant Natural := Index (Text, HT & "imulq $4, %rax, %rax");
+         Address : constant Natural :=
+           Index (Text, HT & "leaq words(%rip), %rcx");
+      begin
+         Landin.Testing.Check
+           (Item,
+            Compare > 0 and then Compare < Trap
+            and then Trap < Scale and then Scale < Address,
+            "the unsigned bounds check and trap precede scaling and address");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "cmpq %rdx, %rax"), 2,
+            "the store and load each check the runtime index");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "jb "), 2,
+            "both checks use unsigned below");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "ud2"), 2,
+            "both out-of-bounds paths trap deliberately");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "movl %eax, (%rcx)")
+            and then Contains (Text, HT & "movl (%rcx), %eax"),
+            "the guarded addresses carry a u32 write and read");
+      end;
+   end A_Computed_Element_Is_Checked_Before_Its_Address;
+
    --  A module value is reached by name rather than through a frame, and
    --  x86-64's position-independent form of that name is RIP-relative.
    --  [1900] lets a `mut` module binding be written as well as read.
@@ -2111,6 +2165,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "an element is read at its own offset",
          An_Element_Is_Read_At_Its_Own_Offset'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a computed element is checked before its address",
+         A_Computed_Element_Is_Checked_Before_Its_Address'Access);
       Landin.Testing.Register
         (Into, "backend", "an array state is reserved whole",
          An_Array_State_Is_Reserved_Whole'Access);

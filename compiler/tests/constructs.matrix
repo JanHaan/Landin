@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 91 with evidence, 107 with neither.
+#  198 constructs, 92 with evidence, 106 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -71,7 +71,7 @@
 0550   tour        -                                  The first of those two properties is also a concept
 0560   tour        -                                  Repetition, for static patterns that live in flash
 0570   tour        accepted emitted executed refused refused-by-name Slice: a view
-0580   tour        -                                  An empty slice still has a base
+0580   tour        accepted emitted executed          An empty slice still has a base
 0590   tour        -                                  Fixed arrays are the vector type
 0600   tour        refused refused-by-name            Text types are distinct views
 0610   tour        -                                  Indexing utf8 by an integer yields the bytes of one

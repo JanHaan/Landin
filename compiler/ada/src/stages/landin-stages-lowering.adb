@@ -240,10 +240,26 @@ package body Landin.Stages.Lowering is
         is (IR.Add_Block
               (Unit.all, Filling, Scope, Site_Of (Of_Tree, Node)));
 
-      --  What the brackets held, as the position it names.  The checker
-      --  has already refused every index it knew to be outside the
-      --  length, so this reads the literal it settled and nothing else;
-      --  a computed index does not reach here yet.
+      --  [1880]'s known index: a literal, or unary minus over one.  The
+      --  checker has refused every such value outside the array; every
+      --  other expression becomes [1950]'s checked runtime operand.
+      function Is_Constant_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Is_Constant_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Written : constant Syn.Node_Id := Syn.Index_Of (Of_Tree, Node);
+      begin
+         return Syn.Kind (Of_Tree, Written) = Syn.Integer_Literal
+           or else
+             (Syn.Kind (Of_Tree, Written) = Syn.Negation
+              and then Syn.Kind
+                         (Of_Tree, Syn.Operand_Of (Of_Tree, Written))
+                         = Syn.Integer_Literal);
+      end Is_Constant_Index;
+
+      --  What known brackets held, as the position it names.
       function Constant_Index
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Part_Position;
 
@@ -553,20 +569,29 @@ package body Landin.Stages.Lowering is
                return Lower_Short_Circuit (Of_Tree, Node, Scope);
 
             when Syn.Element_Index =>
-               --  [0570]'s element of [1740]'s module array.  The checker
-               --  refused every index it knew to be outside the length, so
-               --  a constant one that reaches here is one the array has;
-               --  a computed one is the next slice and is refused above.
+               --  [0570]'s element of [1740]'s module array.  A known
+               --  position stays the compact static part operation; every
+               --  other `usize` is an operand the backend checks before it
+               --  forms an address [1950].
                declare
                   From : constant Syn.Node_Id :=
                     Syn.Target_Of (Of_Tree, Node);
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, From);
+                  Datum : constant IR.Item_Id :=
+                    IR.Item_For (Unit.all, Means);
                begin
-                  return IR.Emit_Load_Field
-                           (Unit.all, Filling,
-                            IR.Item_For (Unit.all, Means),
-                            Constant_Index (Of_Tree, Node),
+                  if Is_Constant_Index (Of_Tree, Node) then
+                     return IR.Emit_Load_Field
+                              (Unit.all, Filling, Datum,
+                               Constant_Index (Of_Tree, Node),
+                               Scalar_At (Of_Tree, Node), Site);
+                  end if;
+
+                  return IR.Emit_Load_Element
+                           (Unit.all, Filling, Datum,
+                            Lower_Expression
+                              (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope),
                             Scalar_At (Of_Tree, Node), Site);
                end;
 
@@ -752,9 +777,22 @@ package body Landin.Stages.Lowering is
                Site : constant Landin.Provenance.Origin :=
                  Site_Of (Of_Tree, Stmt);
 
+               --  [0410] evaluates a destination place before its value.
+               --  A computed index is the enabled place operation that can
+               --  do work, so lower it once and carry that same IR value
+               --  through a read-modify-write.
+               function Index_For (Place : Syn.Node_Id) return IR.Value_Id;
+
+               function Read_Place
+                 (Place : Syn.Node_Id; Index : IR.Value_Id)
+                  return IR.Value_Id;
+
                --  [1900]: a place is a name, and which of the two kinds
                --  it is decides whether a Store or a Store_Datum says it.
-               procedure Write (Place : Syn.Node_Id; Value : IR.Value_Id);
+               procedure Write
+                 (Place : Syn.Node_Id;
+                  Value : IR.Value_Id;
+                  Index : IR.Value_Id := IR.No_Value);
 
                --  One field of [0710]'s copy, read from the place on the
                --  right and written to the one on the left.  Each side is
@@ -813,7 +851,40 @@ package body Landin.Stages.Lowering is
                   end if;
                end Copy_Field;
 
-               procedure Write (Place : Syn.Node_Id; Value : IR.Value_Id)
+               function Index_For (Place : Syn.Node_Id) return IR.Value_Id is
+               begin
+                  if Syn.Kind (Of_Tree, Place) /= Syn.Element_Index
+                    or else Is_Constant_Index (Of_Tree, Place)
+                  then
+                     return IR.No_Value;
+                  end if;
+
+                  return Lower_Expression
+                           (Of_Tree, Syn.Index_Of (Of_Tree, Place), Scope);
+               end Index_For;
+
+               function Read_Place
+                 (Place : Syn.Node_Id; Index : IR.Value_Id)
+                  return IR.Value_Id
+               is
+                  From : Syn.Node_Id;
+                  Means : Res.Declaration_Id;
+               begin
+                  if Index = IR.No_Value then
+                     return Lower_Expression (Of_Tree, Place, Scope);
+                  end if;
+
+                  From := Syn.Target_Of (Of_Tree, Place);
+                  Means := Res.Bound_To (Meanings.all, Of_Tree, From);
+                  return IR.Emit_Load_Element
+                           (Unit.all, Filling, IR.Item_For (Unit.all, Means),
+                            Index, Scalar_At (Of_Tree, Place), Site);
+               end Read_Place;
+
+               procedure Write
+                 (Place : Syn.Node_Id;
+                  Value : IR.Value_Id;
+                  Index : IR.Value_Id := IR.No_Value)
                is
                   --  [1810]'s place is [1820]'s selection, so a field is
                   --  written where the binding holding it is named.
@@ -826,14 +897,23 @@ package body Landin.Stages.Lowering is
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
                   if Syn.Kind (Of_Tree, Place) = Syn.Element_Index then
-                     IR.Emit_Store_Field
-                       (Unit.all, Filling,
-                        IR.Item_For
-                          (Unit.all,
-                           Res.Bound_To
-                             (Meanings.all, Of_Tree,
-                              Syn.Target_Of (Of_Tree, Place))),
-                        Constant_Index (Of_Tree, Place), Value, Site);
+                     declare
+                        Datum : constant IR.Item_Id :=
+                          IR.Item_For
+                            (Unit.all,
+                             Res.Bound_To
+                               (Meanings.all, Of_Tree,
+                                Syn.Target_Of (Of_Tree, Place)));
+                     begin
+                        if Index = IR.No_Value then
+                           IR.Emit_Store_Field
+                             (Unit.all, Filling, Datum,
+                              Constant_Index (Of_Tree, Place), Value, Site);
+                        else
+                           IR.Emit_Store_Element
+                             (Unit.all, Filling, Datum, Index, Value, Site);
+                        end if;
+                     end;
                      return;
                   end if;
 
@@ -921,11 +1001,40 @@ package body Landin.Stages.Lowering is
                            end loop;
                         end;
                      else
-                        Write
-                          (Syn.Target_Of (Of_Tree, Stmt),
-                           Lower_Expression
-                             (Of_Tree, Syn.Value_Of (Of_Tree, Stmt),
-                              Scope));
+                        declare
+                           Place : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree, Stmt);
+                           Index : constant IR.Value_Id := Index_For (Place);
+                           Saved_Index : IR.Slot_Id := IR.No_Slot;
+                        begin
+                           --  The right-hand side can cross blocks through a
+                           --  short circuit.  Save the already-evaluated
+                           --  destination index before it runs, then reload it
+                           --  in the block where the store is emitted.
+                           if Index /= IR.No_Value then
+                              Saved_Index :=
+                                IR.Add_Slot
+                                  (Unit.all, Filling, Ty.Usize,
+                                   Res.No_Declaration, Site);
+                              IR.Emit_Store
+                                (Unit.all, Filling, Saved_Index, Index, Site);
+                           end if;
+
+                           declare
+                              Value : constant IR.Value_Id :=
+                                Lower_Expression
+                                  (Of_Tree, Syn.Value_Of (Of_Tree, Stmt),
+                                   Scope);
+                              Carried_Index : constant IR.Value_Id :=
+                                (if Saved_Index = IR.No_Slot
+                                 then IR.No_Value
+                                 else IR.Emit_Load
+                                        (Unit.all, Filling, Saved_Index,
+                                         Site));
+                           begin
+                              Write (Place, Value, Carried_Index);
+                           end;
+                        end;
                      end if;
 
                   when Syn.Increment | Syn.Decrement =>
@@ -936,8 +1045,9 @@ package body Landin.Stages.Lowering is
                           Syn.Target_Of (Of_Tree, Stmt);
                         Held : constant Ty.Scalar_Name :=
                           Scalar_At (Of_Tree, Place);
+                        Index : constant IR.Value_Id := Index_For (Place);
                         Was : constant IR.Value_Id :=
-                          Lower_Expression (Of_Tree, Place, Scope);
+                          Read_Place (Place, Index);
                         One : constant IR.Value_Id :=
                           IR.Emit_Number
                             (Unit.all, Filling, Held, 1, False, Site);
@@ -949,7 +1059,8 @@ package body Landin.Stages.Lowering is
                           (Place,
                            IR.Emit_Binary
                              (Unit.all, Filling, Op, Was, One, Held,
-                              Site));
+                              Site),
+                           Index);
                      end;
 
                   when Syn.Discard =>

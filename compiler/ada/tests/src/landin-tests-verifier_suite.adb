@@ -34,12 +34,13 @@ package body Landin.Tests.Verifier_Suite is
 
    LF : constant Character := Character'Val (10);
 
-   --  Four declarations and then a fifth, which is what an item that is
-   --  not a routine is built against below.
+   --  The declarations give each hand-built routine and datum its own
+   --  identity, including both aggregate shapes used by malformed accesses.
    Program : constant String :=
      "f: () -> (r: u32) = r = 1 end f" & LF
      & "g: () -> (r: u32) = r = 2 end g" & LF
-     & "h: u32 = 3" & LF;
+     & "h: u32 = 3" & LF
+     & "k: u32 = 4" & LF;
 
    procedure Ready
      (Work : in out Landin.Stages.Compilation;
@@ -138,6 +139,10 @@ package body Landin.Tests.Verifier_Suite is
       Datum_Load_Names_An_Aggregate,
       Field_Beyond_The_Aggregate,
       Field_Store_Of_The_Wrong_Type,
+      Element_Datum_Is_Not_An_Array,
+      Element_Index_Is_Not_Usize,
+      Element_Load_Of_The_Wrong_Type,
+      Element_Store_Of_The_Wrong_Type,
       Condition_Is_A_Number,
       Call_Missing_An_Argument,
       Unreachable_Block,
@@ -151,7 +156,7 @@ package body Landin.Tests.Verifier_Suite is
                    Site : Landin.Provenance.Origin;
                    Harm : Damage) return V.Fault
    is
-      A, D, G : IR.Item_Id;
+      A, D, G, E : IR.Item_Id;
       S, P : IR.Slot_Id;
       B, C : IR.Block_Id;
       N, M : IR.Value_Id;
@@ -160,6 +165,8 @@ package body Landin.Tests.Verifier_Suite is
       D := IR.Add_Item (Unit, IR.Datum, 3, Landin.Types.U32, Site);
       G := IR.Add_Item (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
       IR.Add_Field (Unit, G, Landin.Types.U32);
+      E := IR.Add_Item (Unit, IR.Datum, 6, Landin.Types.Fixed_Array, Site);
+      IR.Set_Array (Unit, E, Landin.Types.U32, 4);
 
       if Harm = No_Block_At_All then
          return V.Check (Unit);
@@ -278,6 +285,45 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Element_Datum_Is_Not_An_Array =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.Usize, 1, False, Site);
+            M := IR.Emit_Load_Element
+                   (Unit, A, D, N, Landin.Types.U32, Site);
+            pragma Assert (M /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Element_Index_Is_Not_Usize =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.U32, 1, False, Site);
+            M := IR.Emit_Load_Element
+                   (Unit, A, E, N, Landin.Types.U32, Site);
+            pragma Assert (M /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Element_Load_Of_The_Wrong_Type =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.Usize, 1, False, Site);
+            M := IR.Emit_Load_Element
+                   (Unit, A, E, N, Landin.Types.Bool, Site);
+            pragma Assert (M /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Element_Store_Of_The_Wrong_Type =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.Usize, 1, False, Site);
+            M := IR.Emit_Truth (Unit, A, True, Site);
+            IR.Emit_Store_Element (Unit, A, E, N, M, Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Condition_Is_A_Number =>
             C := IR.Add_Block
                    (Unit, A, Landin.Resolution.Program_Scope, Site);
@@ -349,6 +395,11 @@ package body Landin.Tests.Verifier_Suite is
           V.Aggregate_Datum_Is_Not_A_Value),
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
          (Field_Store_Of_The_Wrong_Type, V.Store_Datum_Disagrees),
+         (Element_Datum_Is_Not_An_Array,
+          V.Element_Datum_Is_Not_An_Array),
+         (Element_Index_Is_Not_Usize, V.Element_Index_Is_Not_Usize),
+         (Element_Load_Of_The_Wrong_Type, V.Result_Disagrees),
+         (Element_Store_Of_The_Wrong_Type, V.Store_Datum_Disagrees),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
          (Call_Missing_An_Argument,   V.Wrong_Operand_Count),
          (Unreachable_Block,          V.Block_Unreachable),
