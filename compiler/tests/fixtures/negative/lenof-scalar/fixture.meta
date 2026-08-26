@@ -1,0 +1,6 @@
+class: negative
+summary: [0370] refuses a scalar operand with the ordinary type mismatch
+constructs: 0370
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

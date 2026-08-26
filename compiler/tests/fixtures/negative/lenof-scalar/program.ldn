@@ -1,0 +1,3 @@
+f: (value: u32) -> (r: usize) =
+    r = lenof value
+end f

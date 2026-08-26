@@ -125,6 +125,9 @@ package Landin.Syntax is
       --  to anything else.
       Size_Of,
       Align_Of,
+      --  [0370]'s array-length query.  Its one operand is deliberately only
+      --  a direct name in the first R2.20 slice.
+      Len_Of,
       Negation,
       Complement,
       Logical_Not,
@@ -186,7 +189,7 @@ package Landin.Syntax is
    --  What a type declaration may name: a type, or a body of its own.
    subtype Type_Body_Kind is Node_Kind range Error_Type .. Struct_Body;
 
-   subtype Unary_Kind is Node_Kind range Negation .. Logical_Not;
+   subtype Unary_Kind is Node_Kind range Len_Of .. Logical_Not;
 
    subtype Binary_Kind is Node_Kind range Multiply .. Logical_Or;
 

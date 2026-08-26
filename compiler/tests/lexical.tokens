@@ -571,6 +571,61 @@ file positive/if-plain/program.ldn tokens 29
   76 78 if
   79 82 end
   83 84 f
+file positive/lenof-remains-a-name/program.ldn tokens 30
+  0 5 lenof
+  5 6 :
+  7 8 (
+  8 9 )
+  10 12 ->
+  13 14 (
+  14 15 r
+  15 16 :
+  17 22 usize
+  22 23 )
+  24 25 =
+  26 27 3
+  28 31 end
+  32 37 lenof
+  39 40 f
+  40 41 :
+  42 43 (
+  43 44 )
+  45 47 ->
+  48 49 (
+  49 50 r
+  50 51 :
+  52 57 usize
+  57 58 )
+  59 60 =
+  61 66 lenof
+  66 67 (
+  67 68 )
+  69 72 end
+  73 74 f
+file positive/lenof-uninitialized-fixed-array/program.ldn tokens 23
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 10 (
+  10 11 r
+  11 12 :
+  13 18 usize
+  18 19 )
+  20 21 =
+  26 30 grid
+  30 31 :
+  32 33 [
+  33 34 7
+  34 35 ]
+  35 38 u16
+  43 44 r
+  45 46 =
+  47 52 lenof
+  53 57 grid
+  58 61 end
+  62 63 f
 file positive/line-ends-crlf/program.ldn tokens 16
   0 1 f
   1 2 :
@@ -2877,7 +2932,28 @@ file negative/keyword-as-name/program.ldn tokens 5
   8 9 =
   10 11 1
 file negative/latin1-byte-in-name/program.ldn refused no rule spells 'é'
-file negative/lenof-not-enabled/program.ldn tokens 17
+file negative/lenof-scalar/program.ldn tokens 20
+  0 1 f
+  1 2 :
+  3 4 (
+  4 9 value
+  9 10 :
+  11 14 u32
+  14 15 )
+  16 18 ->
+  19 20 (
+  20 21 r
+  21 22 :
+  23 28 usize
+  28 29 )
+  30 31 =
+  36 37 r
+  38 39 =
+  40 45 lenof
+  46 51 value
+  52 55 end
+  56 57 f
+file negative/lenof-unresolved-name/program.ldn tokens 17
   0 1 f
   1 2 :
   3 4 (

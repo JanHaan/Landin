@@ -67,7 +67,7 @@ package body Landin.Syntax.Parser is
      (Word_None,
       Word_Loop, Word_While, Word_For, Word_Match, Word_Defer,
       Word_Undo, Word_Try, Word_Fail, Word_Break, Word_Continue,
-      Word_Lenof, Word_Distinct);
+      Word_Distinct);
 
    subtype Real_Word is Refused_Word range Word_Loop .. Word_Distinct;
 
@@ -83,7 +83,6 @@ package body Landin.Syntax.Parser is
             when Word_Fail     => "fail",
             when Word_Break    => "break",
             when Word_Continue => "continue",
-            when Word_Lenof    => "lenof",
             when Word_Distinct => "distinct");
 
    function Refusal (Item : Real_Word) return Syn.Refused_Construct
@@ -98,7 +97,6 @@ package body Landin.Syntax.Parser is
             when Word_Fail     => Syn.Fail_Statement,
             when Word_Break    => Syn.Break_Statement,
             when Word_Continue => Syn.Continue_Statement,
-            when Word_Lenof    => Syn.Length_Of,
             when Word_Distinct => Syn.Distinct_Type);
 
    --  The kernel's types are the scalar names only [1790].  These are
@@ -183,6 +181,9 @@ package body Landin.Syntax.Parser is
               of Landin.Source.Names.Name_Id :=
                 [for W in Real_Word =>
                    Landin.Source.Names.Intern (Names, Spelling (W))];
+
+            Lenof_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "lenof");
 
             Scalar_Id : constant array (Scalar_Name)
               of Landin.Source.Names.Name_Id :=
@@ -2297,32 +2298,27 @@ package body Landin.Syntax.Parser is
                   end;
                end if;
 
-               --  [0370]'s third measurement.  `lenof` is not reserved,
-               --  so only the parser can meet it, and an expression is
-               --  where it is written: without this it reads as a name
-               --  followed by another name and the report is about a
-               --  statement shape rather than about what was asked for.
-               if Word_At_Hand = Word_Lenof then
+               --  [0370]'s third measurement.  `lenof` stays contextual:
+               --  only this expression position meets its spelling.  This
+               --  first R2.20 slice takes one direct identifier, not a
+               --  selection or another general expression.
+               if Peek = Tok.Identifier
+                 and then Named_Here = Lenof_Id
+                 and then Ahead (1) = Tok.Identifier
+               then
+                  Advance;
+
                   declare
-                     Refused : constant Landin.Source.Span := Here;
+                     At_Name : constant Landin.Source.Span := Here;
+                     Named   : constant Landin.Source.Names.Name_Id :=
+                       Named_Here;
                   begin
-                     Refuse
-                       (Item    => Refusal (Word_Lenof),
-                        Where   => Refused,
-                        Message => "`" & Spelling (Word_Lenof)
-                                   & "` is not enabled yet");
                      Advance;
-
-                     --  `lenof xs` is one construct, so the thing it was
-                     --  measuring goes with it.  Leaving the name behind
-                     --  makes the next rule complain about a statement
-                     --  shape, which is two more reports about one
-                     --  sentence the reader already had an answer for.
-                     if Peek = Tok.Identifier then
-                        Advance;
-                     end if;
-
-                     return Add (Error_Expression, Refused);
+                     return Add
+                       (Len_Of, At_Item,
+                        Children =>
+                          [1 => Add
+                             (Name_Reference, At_Name, Named => Named)]);
                   end;
                end if;
 
