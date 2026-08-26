@@ -1210,10 +1210,11 @@ sparse facts on the other keeps those sparse facts; sparse on both keeps their
 intersection. Completeness is decided by counting the sparse facts already
 present, never by walking an array extent that D18 permits to fill the target.
 
-This kernel admits an array name as a whole value only in this direct copy.
-Array initializers, parameters, returns, discards, and other general value
-positions remain refused until their own R2.20 or R2.30 slices. No array
-literal is enabled by this decision.
+This kernel admits an array name as a whole value only in this direct copy;
+D21 reuses the same storage read for its direct-name local initializers.
+Parameters, returns, discards, and other general value positions remain refused
+until their own R2.20 or R2.30 slices. No array literal is enabled by this
+decision.
 
 **Why:** expanding a copy into one operation per element would make compiler
 work and IR size proportional to a target object that the host may not be able
@@ -1239,22 +1240,25 @@ local declared without a value is assigned before it is read [1910]. It said
 nothing about what value a local array binding could receive at its
 declaration.
 
-**Chosen:** an explicitly typed local array binding — `[mut] name: [N]T =
-source` — is initialized by copying every element of `source`, exactly as
+**Chosen:** a local array binding is initialized from a direct storage name
+in either its explicitly typed form — `[mut] name: [N]T = source` — or its
+inferred form — `[mut] name := source`. Both copy every element exactly as
 D20's assignment does between two storage places. `source` names a whole
-array whose D17 identity agrees with the declared type: a module binding, a
-prior local wholly assigned by D19's sparse facts or by a D20 copy, or a
-prior local likewise initialized from a name. The destination is wholly
-assigned by the copy alone, and both mutable and immutable binding forms
-accept it because a declaration is not an assignment [0080].
+array: a module binding, a prior local wholly assigned by D19's sparse facts
+or by a D20 copy, or a prior local likewise initialized from a name. The
+explicit form requires the source's D17 identity to agree with its written
+type; the inferred form gives the destination the source's exact D17 length
+and element type. The destination is wholly assigned by the copy alone, and
+both mutable and immutable binding forms accept it because a declaration is
+not an assignment [0080].
 
-Every other value position in a local array binding remains refused: the
-inferred `:=` form [0050], an array literal [0520], `zeroed` [0540],
-repetition [0560], a slice [0570], a call, an indexed or selected
-subexpression, and every module-scope array initializer are each their own
-later slice. This decision does not enable an array as a parameter, a
-return, a discard, or a struct field. The initializer is read before the
-name it initializes exists [0110], so a local cannot initialize itself.
+Every other value position in a local array binding remains refused: an array
+literal [0520], `zeroed` [0540], repetition [0560], a slice [0570], a call,
+an indexed or selected subexpression, and every module-scope array
+initializer are each their own later slice. This decision does not enable a
+general array value or an array as a parameter, return, discard, or struct
+field. The source is read before the binding's scope begins [0110], so a
+local cannot initialize itself and an outer storage name may be shadowed.
 
 **Why:** D20 already lowered a whole-array copy to one `Copy_Array`
 instruction, D18's storage semantics already reached every ordinary local,
@@ -1266,17 +1270,15 @@ restriction to a direct source name keeps the check symmetric with D20 and
 defers every value form whose own semantic rule is a later slice.
 
 **The alternative:** widen the initializer to any array-typed expression, or
-enable the inferred form. The first admits constructs the checker cannot
-recognise yet — an array literal, `zeroed`, a slice — and each is its own
-decision; the second commits to inferring an array's identity from a value
-before the value forms it takes are settled. Both were declined for the
-same reason a scalar local's `:=` and `= 7` were kept apart in R1: writing
-the type down is what the reader has, and every deferred form has to travel
-through it.
+make the inferred spelling synthesize a general array value. Either admits
+constructs the checker cannot recognise yet — an array literal, `zeroed`, a
+slice, a call result, a selection or an index result — and each is its own
+decision. Reading D17's shape directly from named storage instead keeps the
+same narrow source rule as the explicit form without synthesizing an array
+`Name_Reference` anywhere else.
 
 **Pinned by** `positive/local-array-initialized-from-source-name`,
 `negative/module-array-initializer-not-enabled`,
-`negative/inferred-local-array-init-not-enabled`,
 `negative/local-array-initializer-from-unassigned`,
 `negative/array-initializer-length-mismatch`,
 `negative/array-initializer-element-mismatch`, and
@@ -1307,8 +1309,9 @@ the whole-array fact because it reads and writes.
 Module arrays are unchanged: D10 gives their state every element from
 declaration, so their computed reads meet no assignment requirement and
 their computed writes still assign nothing tracked. Every other refused
-value form — the inferred initializer, a slice, `zeroed`, repetition, an
-array literal, `lenof`, an array as a struct field — stays refused.
+value form — an inferred initializer not sourced by a direct storage name, a
+slice, `zeroed`, repetition, an array literal, `lenof`, an array as a struct
+field — stays refused.
 
 **Why:** treating one computed write as a whole assignment would admit
 uninitialized reads from every other position, exactly the failure D19

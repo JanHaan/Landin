@@ -1,3 +1,4 @@
 source: [2]u32
 
-mut buffer: [2]u32 = source
+mut typed_buffer: [2]u32 = source
+mut inferred_buffer := source

@@ -486,8 +486,9 @@ package body Landin.Stages.Checking is
             --  needs no value at all -- D10 zeroes it -- so the caller must
             --  say the scope is local before this admits the initializer.
             --  Every other value form (an array literal, a call, `zeroed`,
-            --  a slice, the inferred `:=`) is deferred: none of them is a
-            --  Name_Reference.
+            --  or a slice) is deferred: none of them is a Name_Reference.
+            --  An inferred direct-name binding has no Written node and is
+            --  admitted separately by Infer.
             Is_Direct_Name_Init : constant Boolean :=
               In_Local_Scope
               and then Held = Ty.Fixed_Array
@@ -1147,6 +1148,9 @@ package body Landin.Stages.Checking is
       function Selected_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
+      function Is_Direct_Array_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
       function Selected_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind is
       begin
@@ -1193,6 +1197,21 @@ package body Landin.Stages.Checking is
 
          return Synthesise (Of_Tree, Node);
       end Selected_From;
+
+      --  D21's inferred array initializer is deliberately narrower than an
+      --  inferred value: it recognizes only a resolved direct storage name.
+      --  Keeping that question here prevents Selected_From from admitting a
+      --  struct name, or any expression that merely produces an array.
+      function Is_Direct_Array_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+      begin
+         return Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+           and then Settled_Type
+                      (Res.Bound_To (Meanings.all, Of_Tree, Node))
+                    = Ty.Fixed_Array;
+      end Is_Direct_Array_Name;
 
       function Synthesise
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
@@ -1763,10 +1782,16 @@ package body Landin.Stages.Checking is
                      null;
                   elsif Wants = Ty.Undecided then
                      --  [0050]: the inferred form takes the value's type,
-                     --  and [0200] settles a literal that has none.
+                     --  and [0200] settles a literal that has none.  D21's
+                     --  narrow array case reads the shape from a direct
+                     --  storage name without making array names general
+                     --  values; every other form still goes through
+                     --  Synthesise and keeps its existing refusal.
                      declare
                         Got : constant Ty.Type_Kind :=
-                          Synthesise (Of_Tree, Value);
+                          (if Is_Direct_Array_Name (Of_Tree, Value)
+                           then Selected_From (Of_Tree, Value)
+                           else Synthesise (Of_Tree, Value));
                      begin
                         if Got = Ty.Untyped_Integer then
                            Commit_To (Of_Tree, Value, Ty.Default_Integer);
@@ -2106,13 +2131,32 @@ package body Landin.Stages.Checking is
          end if;
 
          declare
-            Got : constant Ty.Type_Kind := Synthesise (Of_Tree.all, Value);
+            --  Only a local binding may infer D17's shape from storage.  A
+            --  module initializer remains a general array value and follows
+            --  Synthesise's refusal, as do literals, calls, selections,
+            --  indexes and every other expression form.
+            Direct_Local_Array : constant Boolean :=
+              Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
+              and then Is_Direct_Array_Name (Of_Tree.all, Value);
+            Got : constant Ty.Type_Kind :=
+              (if Direct_Local_Array
+               then Selected_From (Of_Tree.all, Value)
+               else Synthesise (Of_Tree.all, Value));
          begin
             if Got = Ty.Untyped_Integer then
                Commit_To (Of_Tree.all, Value, Ty.Default_Integer);
                Landin.Checking.Settle
                  (Types.all, Id, Ty.Type_Kind (Ty.Default_Integer));
             else
+               if Got = Ty.Fixed_Array and then Direct_Local_Array then
+                  Landin.Checking.Note_Array
+                    (Types.all, Id,
+                     Landin.Checking.Array_Length
+                       (Types.all, Of_Tree.all, Value),
+                     Landin.Checking.Array_Element
+                       (Types.all, Of_Tree.all, Value));
+               end if;
+
                Landin.Checking.Settle (Types.all, Id, Got);
             end if;
          end;
