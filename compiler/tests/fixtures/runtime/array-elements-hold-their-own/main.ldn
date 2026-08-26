@@ -1,0 +1,29 @@
+mut words: [4]u32
+mut flags: [8]bool
+
+--  Each element is at its own offset, so a write that landed on its
+--  neighbour would leave one of these unchanged.  D10 zeroes the rest,
+--  which is what the untouched ones are read for.
+public main: () -> (code: i32) =
+    words[0] = 11
+    words[3] = 44
+    flags[5] = true
+    inc words[0]
+
+    --  [1880] makes `-0` known and its value is zero, so this is the
+    --  first element and not a negative index.
+    words[-0] = words[-0] + 1
+
+    if words[0] == 13
+        and words[1] == 0
+        and words[2] == 0
+        and words[3] == 44
+        and flags[5]
+        and not flags[4]
+        and not flags[6]
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

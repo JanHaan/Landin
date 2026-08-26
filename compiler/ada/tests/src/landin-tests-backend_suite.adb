@@ -1244,6 +1244,53 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "12", "4");
    end An_Array_State_Is_Reserved_Whole;
 
+   --  [0520]'s element, reached by an index the compiler knows.  It sits
+   --  where the element size puts it, so `[4]u32` reads its third at four
+   --  bytes times two, and a `[8]bool` reads its fifth one byte along at
+   --  a time -- which is what says the offset is the element's and not a
+   --  number this backend invented.
+   procedure An_Element_Is_Read_At_Its_Own_Offset
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Element_Is_Read_At_Its_Own_Offset
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut words: [4]u32" & LF
+         & "mut flags: [8]bool" & LF
+         & "use: () -> none =" & LF
+         & "    a: u32 = words[0]" & LF
+         & "    b: u32 = words[2]" & LF
+         & "    c: bool = flags[5]" & LF
+         & "    words[3] = 7" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl words(%rip), %eax"),
+            "the first element needs no displacement");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl words+8(%rip), %eax"),
+            "the third is two elements along");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movb flags+5(%rip), %al"),
+            "and a one-byte element counts in ones");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl %eax, words+12(%rip)"),
+            "a written element reaches the same bytes");
+      end;
+   end An_Element_Is_Read_At_Its_Own_Offset;
+
    --  A module value is reached by name rather than through a frame, and
    --  x86-64's position-independent form of that name is RIP-relative.
    --  [1900] lets a `mut` module binding be written as well as read.
@@ -2047,6 +2094,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "the same source emits the same bytes",
          The_Same_Source_Emits_The_Same_Bytes'Access);
+      Landin.Testing.Register
+        (Into, "backend", "an element is read at its own offset",
+         An_Element_Is_Read_At_Its_Own_Offset'Access);
       Landin.Testing.Register
         (Into, "backend", "an array state is reserved whole",
          An_Array_State_Is_Reserved_Whole'Access);

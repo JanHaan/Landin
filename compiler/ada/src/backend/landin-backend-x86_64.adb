@@ -204,17 +204,37 @@ package body Landin.Backend.X86_64 is
       procedure Place_Fields
         (Item   : Landin.IR.Item_Id;
          Placed : out Landin.Targets.Placement;
-         Wanted : Natural;
+         Wanted : Landin.IR.Element_Total;
          Offset : out Landin.Targets.Byte_Count);
 
       procedure Place_Fields
         (Item   : Landin.IR.Item_Id;
          Placed : out Landin.Targets.Placement;
-         Wanted : Natural;
+         Wanted : Landin.IR.Element_Total;
          Offset : out Landin.Targets.Byte_Count) is
       begin
          Placed := Landin.Targets.Empty_Placement;
          Offset := 0;
+
+         --  [0520]'s array is its element repeated, so where a part sits
+         --  is one multiplication rather than a walk: the count reaches
+         --  four billion and placing each in turn would take as long.
+         if Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
+         then
+            declare
+               Held : constant Held_Size :=
+                 Size_Of (Landin.IR.Array_Element (Of_Unit, Item), Facts);
+            begin
+               if Wanted > 0 then
+                  Offset :=
+                    Landin.Targets.Byte_Count (Wanted - 1)
+                    * Landin.Targets.Byte_Count
+                        (Landin.Targets.Bytes (Held));
+               end if;
+            end;
+
+            return;
+         end if;
 
          for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
             declare
@@ -224,7 +244,7 @@ package body Landin.Backend.X86_64 is
             begin
                Landin.Targets.Place (Placed, Held, Facts, At_Offset);
 
-               if Field = Wanted then
+               if Landin.IR.Element_Total (Field) = Wanted then
                   Offset := At_Offset;
                end if;
             end;
@@ -232,17 +252,18 @@ package body Landin.Backend.X86_64 is
       end Place_Fields;
 
       function Field_Offset
-        (Item : Landin.IR.Item_Id; Field : Positive)
+        (Item : Landin.IR.Item_Id; Field : Landin.IR.Part_Position)
         return Landin.Targets.Byte_Count;
 
       function Field_Offset
-        (Item : Landin.IR.Item_Id; Field : Positive)
+        (Item : Landin.IR.Item_Id; Field : Landin.IR.Part_Position)
         return Landin.Targets.Byte_Count
       is
          Placed : Landin.Targets.Placement;
          Offset : Landin.Targets.Byte_Count;
       begin
-         Place_Fields (Item, Placed, Field, Offset);
+         Place_Fields
+           (Item, Placed, Landin.IR.Element_Total (Field), Offset);
          return Offset;
       end Field_Offset;
 
@@ -552,16 +573,17 @@ package body Landin.Backend.X86_64 is
                      declare
                         Slot : constant Landin.IR.Slot_Id :=
                           Landin.IR.Slot_Of (Of_Unit, Item, Value);
-                        Which : constant Positive :=
+                        Which : constant Landin.IR.Part_Position :=
                           Landin.IR.Field_Of (Of_Unit, Item, Value);
                         Held : constant Held_Size :=
                           Size_Of
                             (Landin.IR.Nth_Slot_Field
-                               (Of_Unit, Item, Slot, Which), Facts);
+                               (Of_Unit, Item, Slot,
+                                Positive (Which)), Facts);
                         Place : constant String :=
                           Cell (Field_Offset
-                                  (Of_Unit, Item, Layout, Slot, Which,
-                                   Facts));
+                                  (Of_Unit, Item, Layout, Slot,
+                                   Positive (Which), Facts));
                      begin
                         if Op = Landin.IR.Load_Field then
                            Carry (Held, Place, Value_Cell (Value));
@@ -580,7 +602,7 @@ package body Landin.Backend.X86_64 is
                   declare
                      Datum : constant Landin.IR.Item_Id :=
                        Landin.IR.Datum_Of (Of_Unit, Item, Value);
-                     Which : constant Positive :=
+                     Which : constant Landin.IR.Part_Position :=
                        Landin.IR.Field_Of (Of_Unit, Item, Value);
                      At_Offset : constant Landin.Targets.Byte_Count :=
                        Field_Offset (Datum, Which);
@@ -588,7 +610,7 @@ package body Landin.Backend.X86_64 is
                        (if Op = Landin.IR.Load_Field
                         then Size_Of_Value (Value)
                         else Size_Of
-                               (Landin.IR.Nth_Field
+                               (Landin.IR.Nth_Part
                                   (Of_Unit, Datum, Which), Facts));
                      Place : constant String :=
                        Symbol (Datum)

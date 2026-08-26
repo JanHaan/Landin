@@ -1,0 +1,6 @@
+class: negative
+summary: [0200] gives an index literal the default type, so one past what that type holds is refused for its type and not for the length
+constructs: 0200, 0520, 0570
+program: program.ldn
+codes: L0300
+targets: linux-x86-64, macos-arm64

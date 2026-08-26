@@ -1,0 +1,6 @@
+class: negative
+summary: [1820] indexes an array, so a scalar and a scalar field have no element to index
+constructs: 0520, 0570, 1820
+program: program.ldn
+codes: L0301, L0301
+targets: linux-x86-64, macos-arm64

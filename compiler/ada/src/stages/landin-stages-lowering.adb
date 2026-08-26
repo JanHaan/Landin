@@ -18,10 +18,12 @@ package body Landin.Stages.Lowering is
    use type IR.Block_Id;
    use type IR.Item_Id;
    use type IR.Slot_Id;
+   use type IR.Part_Position;
    use type IR.Value_Id;
    use type Landin.Source.Source_Id;
    use type Res.Declaration_Id;
    use type Res.Declaration_Sort;
+   use type Ty.Magnitude;
    use type Syn.Node_Id;
    use type Syn.Node_Kind;
    use type Ty.Type_Kind;
@@ -237,6 +239,49 @@ package body Landin.Stages.Lowering is
          Scope   : Res.Scope_Id) return IR.Block_Id
         is (IR.Add_Block
               (Unit.all, Filling, Scope, Site_Of (Of_Tree, Node)));
+
+      --  What the brackets held, as the position it names.  The checker
+      --  has already refused every index it knew to be outside the
+      --  length, so this reads the literal it settled and nothing else;
+      --  a computed index does not reach here yet.
+      function Constant_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Part_Position;
+
+      function Constant_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Part_Position
+      is
+         Written : constant Syn.Node_Id := Syn.Index_Of (Of_Tree, Node);
+
+         --  `-0` is an index like any other: [1880] makes it known, its
+         --  value is zero, and the checker refused every other negated
+         --  one as outside the length.  So the minus is read through.
+         Where : constant Syn.Node_Id :=
+           (if Syn.Kind (Of_Tree, Written) = Syn.Negation
+            then Syn.Operand_Of (Of_Tree, Written)
+            else Written);
+         Snap  : constant Landin.Source.Snapshot :=
+           Source (Context, Syn.Source_Of (Of_Tree));
+         Text  : constant String :=
+           Landin.Source.Slice (Snap, Syn.Digit_Span (Of_Tree, Where));
+         Value      : Ty.Magnitude;
+         Overflowed : Boolean;
+      begin
+         if Syn.Kind (Of_Tree, Where) /= Syn.Integer_Literal then
+            raise Landin.Compiler_Defect with
+              "an index the checker did not settle reached the lowering";
+         end if;
+
+         Ty.Evaluate (Text, Syn.Base (Of_Tree, Where), Value, Overflowed);
+
+         --  One-based here, zero-based in the source: [0520] counts an
+         --  array's elements from zero and every run in this compiler
+         --  counts from one, and this is the one place the two meet.
+         --  Zero-based in the source [0520] and one-based in every run
+         --  this compiler keeps, and this is the one place the two meet.
+         --  Added before converting, because a Part_Position starts at
+         --  one and index zero is the first element.
+         return IR.Part_Position (Value + 1);
+      end Constant_Index;
 
       --  A declaration's slot, made the first time it is wanted.  A local
       --  [1810], a parameter and the named return [1840] all become one;
@@ -507,6 +552,24 @@ package body Landin.Stages.Lowering is
             when Syn.Logical_And | Syn.Logical_Or =>
                return Lower_Short_Circuit (Of_Tree, Node, Scope);
 
+            when Syn.Element_Index =>
+               --  [0570]'s element of [1740]'s module array.  The checker
+               --  refused every index it knew to be outside the length, so
+               --  a constant one that reaches here is one the array has;
+               --  a computed one is the next slice and is refused above.
+               declare
+                  From : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+                  Means : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, From);
+               begin
+                  return IR.Emit_Load_Field
+                           (Unit.all, Filling,
+                            IR.Item_For (Unit.all, Means),
+                            Constant_Index (Of_Tree, Node),
+                            Scalar_At (Of_Tree, Node), Site);
+               end;
+
             when Syn.Member_Selection =>
                --  [0750]'s field of a struct.  The checker settled which
                --  field the name selects, so this carries the answer
@@ -518,8 +581,10 @@ package body Landin.Stages.Lowering is
                     Syn.Target_Of (Of_Tree, Node);
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, From);
-                  Which : constant Positive :=
-                    Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
+                  Which : constant IR.Part_Position :=
+                    IR.Part_Position
+                      (Landin.Checking.Field_Index
+                         (Types.all, Of_Tree, Node));
                begin
                   if Res.Sort_Of (Meanings.all, Means)
                      = Res.Module_Binding
@@ -723,14 +788,14 @@ package body Landin.Stages.Lowering is
                      Taken :=
                        IR.Emit_Load_Field
                          (Unit.all, Filling,
-                          IR.Item_For (Unit.all, Source), Field, Held,
-                          Site);
+                          IR.Item_For (Unit.all, Source),
+                          IR.Part_Position (Field), Held, Site);
                   else
                      Taken :=
                        IR.Emit_Load_Slot_Field
                          (Unit.all, Filling,
-                          Slot_For (Of_Tree, From, Source), Field, Held,
-                          Site);
+                          Slot_For (Of_Tree, From, Source),
+                          IR.Part_Position (Field), Held, Site);
                   end if;
 
                   if Res.Sort_Of (Meanings.all, Target)
@@ -738,13 +803,13 @@ package body Landin.Stages.Lowering is
                   then
                      IR.Emit_Store_Field
                        (Unit.all, Filling,
-                        IR.Item_For (Unit.all, Target), Field, Taken,
-                        Site);
+                        IR.Item_For (Unit.all, Target),
+                        IR.Part_Position (Field), Taken, Site);
                   else
                      IR.Emit_Store_Slot_Field
                        (Unit.all, Filling,
-                        Slot_For (Of_Tree, Place, Target), Field, Taken,
-                        Site);
+                        Slot_For (Of_Tree, Place, Target),
+                        IR.Part_Position (Field), Taken, Site);
                   end if;
                end Copy_Field;
 
@@ -753,17 +818,31 @@ package body Landin.Stages.Lowering is
                   --  [1810]'s place is [1820]'s selection, so a field is
                   --  written where the binding holding it is named.
                   Named : constant Syn.Node_Id :=
-                    (if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection
+                    (if Syn.Kind (Of_Tree, Place)
+                        in Syn.Member_Selection | Syn.Element_Index
                      then Syn.Target_Of (Of_Tree, Place)
                      else Place);
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
+                  if Syn.Kind (Of_Tree, Place) = Syn.Element_Index then
+                     IR.Emit_Store_Field
+                       (Unit.all, Filling,
+                        IR.Item_For
+                          (Unit.all,
+                           Res.Bound_To
+                             (Meanings.all, Of_Tree,
+                              Syn.Target_Of (Of_Tree, Place))),
+                        Constant_Index (Of_Tree, Place), Value, Site);
+                     return;
+                  end if;
+
                   if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection then
                      declare
-                        Which : constant Positive :=
-                          Landin.Checking.Field_Index
-                            (Types.all, Of_Tree, Place);
+                        Which : constant IR.Part_Position :=
+                          IR.Part_Position
+                            (Landin.Checking.Field_Index
+                               (Types.all, Of_Tree, Place));
                      begin
                         if Res.Sort_Of (Meanings.all, Means)
                            = Res.Module_Binding
