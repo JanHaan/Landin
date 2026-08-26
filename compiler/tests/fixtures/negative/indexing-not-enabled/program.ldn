@@ -1,0 +1,15 @@
+point: type = struct
+    x: u32
+end point
+
+mut here: point
+
+size: () -> (r: u32) = r = 1 end size
+
+--  [0570] indexes what a name, a selection and a call each name, so each
+--  of these is the same refusal and not a stray token after the first.
+f: (n: u32) -> none =
+    a := n[0]
+    b := here.x[0]
+    c := size()[0]
+end f

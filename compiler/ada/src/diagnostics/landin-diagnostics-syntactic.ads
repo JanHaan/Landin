@@ -109,7 +109,13 @@ package Landin.Diagnostics.Syntactic is
       Distinct_Type,
       Break_Statement,
       Match_Statement,
-      Type_Parameter);
+      Type_Parameter,
+      --  The three the brackets used to refuse by being a lexeme
+      --  the kernel omitted.  [1790] spells one array now, so
+      --  only the parser can tell these from it.
+      Slice_Type,
+      Array_Literal,
+      Indexing);
 
    --  Where the tour describes it.  Ordered by construct so that a reader
    --  can check the column against tour.md by running down it, and
@@ -136,7 +142,10 @@ package Landin.Diagnostics.Syntactic is
             when Distinct_Type        => "[0650]",
             when Break_Statement      => "[1190]",
             when Match_Statement      => "[1210]",
-            when Type_Parameter       => "[1290]")
+            when Type_Parameter       => "[1290]",
+            when Slice_Type           => "[0570]",
+            when Array_Literal        => "[0520]",
+            when Indexing             => "[0570]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  What the parser hands over: a rule, a place, and the sentence a user
@@ -185,7 +194,10 @@ private
             --  to ask about yet.
             when Length_Of
                | Struct_Type
-               | Distinct_Type        => "R2.20",
+               | Distinct_Type
+               | Slice_Type
+               | Array_Literal
+               | Indexing             => "R2.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter       => "R2.40",
             --  R2.50 sources [0900] for the parameter conventions.

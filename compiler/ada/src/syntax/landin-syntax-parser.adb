@@ -846,10 +846,49 @@ package body Landin.Syntax.Parser is
             --  Name_Reference: no scope [1090] answers for a field.
             function Parse_Selectors (From : Node_Id) return Node_Id;
 
+            --  Steps over a refused bracketed run so one report does not
+            --  become three: the brackets are kernel tokens now, so what
+            --  is between them parses as ordinary tokens and only the
+            --  nesting says where it ends.
+            procedure Resync_Brackets;
+
+            procedure Resync_Brackets is
+               Depth : Natural := 0;
+            begin
+               while Peek /= Tok.End_Of_Input loop
+                  if Peek = Tok.Left_Bracket then
+                     Depth := Depth + 1;
+                  elsif Peek = Tok.Right_Bracket then
+                     Depth := Depth - 1;
+                     Advance;
+                     exit when Depth = 0;
+                     goto Continue;
+                  end if;
+
+                  Advance;
+                  <<Continue>>
+               end loop;
+            end Resync_Brackets;
+
             function Parse_Selectors (From : Node_Id) return Node_Id is
                Selected : Node_Id := From;
             begin
-               while Peek = Tok.Dot loop
+               --  Every postfix boundary, and not only the one after a
+               --  bare name: [0570] indexes what `a`, `a.b` and `f()`
+               --  each name, so the loop below asks after each step and
+               --  the callers that return a call route through here too.
+               loop
+                  if Peek = Tok.Left_Bracket then
+                     Refuse
+                       (Item    => Syn.Indexing,
+                        Where   => Here,
+                        Message => "indexing is not enabled yet");
+                     Resync_Brackets;
+                     return Selected;
+                  end if;
+
+                  exit when Peek /= Tok.Dot;
+
                   declare
                      Named   : Landin.Source.Names.Name_Id;
                      At_Name : Landin.Source.Span;
@@ -943,6 +982,28 @@ package body Landin.Syntax.Parser is
                --  and `[2][3]u8` derives; which elements the kernel can
                --  lay out is the checker's to say, not this stage's.
                if Peek = Tok.Left_Bracket then
+                  --  [0570]'s slice is a view and not an array: it is
+                  --  written with nothing between the brackets, so the
+                  --  parser can tell the two apart and name this one
+                  --  rather than reporting a length that is missing.
+                  if Ahead (1) = Tok.Right_Bracket then
+                     Type_Refused := True;
+                     Refuse
+                       (Item    => Syn.Slice_Type,
+                        Where   => At_Type,
+                        Message => "a slice is not enabled yet");
+                     Advance;
+                     Advance;
+                     declare
+                        Ignored : constant Node_Id :=
+                          Parse_Type (In_Parameter, Declared_At);
+                     begin
+                        pragma Unreferenced (Ignored);
+                     end;
+
+                     return Add (Error_Type, At_Type);
+                  end if;
+
                   declare
                      Bound   : Node_Id := No_Node;
                      Element : Node_Id := No_Node;
@@ -2113,6 +2174,18 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Expression, At_Item);
                end if;
 
+               --  [0520]'s literal, and [0560]'s repetition inside one.
+               --  A `[` where a value belongs is one of those and never
+               --  an array type, which only a type position holds.
+               if Peek = Tok.Left_Bracket then
+                  Refuse
+                    (Item    => Syn.Array_Literal,
+                     Where   => At_Item,
+                     Message => "an array literal is not enabled yet");
+                  Resync_Brackets;
+                  return Add (Error_Expression, At_Item);
+               end if;
+
                if Peek = Tok.Integer_Literal then
                   declare
                      Item : constant Tok.Token :=
@@ -2259,7 +2332,7 @@ package body Landin.Syntax.Parser is
                      Advance;
 
                      if Peek = Tok.Left_Paren then
-                        return Parse_Call (At_Item, Named);
+                        return Parse_Selectors (Parse_Call (At_Item, Named));
                      end if;
 
                      --  selection ::= identifier ("." identifier)*

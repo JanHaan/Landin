@@ -1886,14 +1886,25 @@ file negative/a-fold-deeper-than-any-limit/program.ldn tokens 495
   1502 1505 a69
   1506 1507 +
   1508 1509 1
-file negative/array-length-is-missing/program.ldn tokens 7
-  0 3 row
-  3 4 :
-  5 9 type
-  10 11 =
-  12 13 [
-  13 14 ]
-  14 16 u8
+file negative/array-literal-not-enabled/program.ldn tokens 18
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  140 143 row
+  144 146 :=
+  147 148 [
+  148 149 1
+  149 150 ,
+  151 152 2
+  152 153 ,
+  154 155 3
+  155 156 ]
+  157 160 end
+  161 162 f
 file negative/array-of-an-array-not-enabled/program.ldn tokens 11
   146 150 grid
   150 151 :
@@ -2285,6 +2296,71 @@ file negative/immutable-struct-field/program.ldn tokens 27
   210 211 1
   212 215 end
   216 217 f
+file negative/indexing-not-enabled/program.ldn tokens 64
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 u32
+  32 35 end
+  36 41 point
+  43 46 mut
+  47 51 here
+  51 52 :
+  53 58 point
+  60 64 size
+  64 65 :
+  66 67 (
+  67 68 )
+  69 71 ->
+  72 73 (
+  73 74 r
+  74 75 :
+  76 79 u32
+  79 80 )
+  81 82 =
+  83 84 r
+  85 86 =
+  87 88 1
+  89 92 end
+  93 97 size
+  245 246 f
+  246 247 :
+  248 249 (
+  249 250 n
+  250 251 :
+  252 255 u32
+  255 256 )
+  257 259 ->
+  260 264 none
+  265 266 =
+  271 272 a
+  273 275 :=
+  276 277 n
+  277 278 [
+  278 279 0
+  279 280 ]
+  285 286 b
+  287 289 :=
+  290 294 here
+  294 295 .
+  295 296 x
+  296 297 [
+  297 298 0
+  298 299 ]
+  304 305 c
+  306 308 :=
+  309 313 size
+  313 314 (
+  314 315 )
+  315 316 [
+  316 317 0
+  317 318 ]
+  319 322 end
+  323 324 f
 file negative/keyword-as-name/program.ldn tokens 5
   0 2 if
   2 3 :
@@ -2814,6 +2890,14 @@ file negative/shift-amount-takes-the-left-type/program.ldn tokens 21
   37 40 300
   41 44 end
   45 46 f
+file negative/slice-not-enabled/program.ldn tokens 7
+  109 113 view
+  113 114 :
+  115 119 type
+  120 121 =
+  122 123 [
+  123 124 ]
+  124 126 u8
 file negative/struct-copy-across-types/program.ldn tokens 45
   0 4 here
   4 5 :
