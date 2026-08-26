@@ -2012,8 +2012,11 @@ which `sizeof [4]u8` and a parameter of `[16]u8` both need.
 Layout is the element repeated, which needs a target and so is asked with one:
 `[4]usize` is thirty-two bytes aligned to eight against Linux x86-64 and sixteen
 aligned to four against the synthetic 32-bit description. A length of zero takes
-no room and aligns to a byte, which is what the arithmetic says rather than a
-case anyone wrote.
+no room and aligns to a byte, which is a case that is written down rather than
+one the arithmetic gives: the size falls out of the multiplication, and the
+alignment does not, because an empty array has no element to be aligned as. It
+is [0580]'s shape one step early — an empty slice still has a base — and the
+rule it belongs to arrives with the value slices that can make one.
 
 What is still refused: a value of an array type anywhere, an array literal
 [0520], the inferred length [0530], `zeroed` [0540], repetition [0560],
@@ -2021,7 +2024,18 @@ indexing and slices [0570], `lenof`, and an array as a struct field. Each is its
 own slice, and the value slices need the same frame and data work the struct
 ones did.
 
-Three of those had been refused by the brackets being a lexeme the kernel
+Promoting `[` took away more refusals than the three that are obvious, and a
+third review round measured what each one used to do. `sizeof [4]u8` — the very
+expression D17 cites as its evidence — went from `L0010` to an internal defect,
+because [0370]'s measurement had only ever met one of the eleven and read
+anything else as a hole the parser had already reported. A struct with an array
+field went from `L0010` to being accepted silently, and then to a defect at the
+first value of that struct, because the field loop named an aggregate field and
+let every other unlayable field through. Both are refused by name again, both
+have fixtures, and the measurement one covers a declared name as well, which had
+the same hole before arrays existed.
+
+Three more had been refused by the brackets being a lexeme the kernel
 omitted, and enabling `[` took that away: review found `[]f32`, `[1, 2]` and
 `g[0]` reporting a missing length, a missing expression and a stray token
 instead of naming themselves. [1830] promises better than that, so the parser
@@ -2029,11 +2043,12 @@ names each where it now has to tell them apart — a slice by having nothing
 between the brackets, a literal by a `[` where a value belongs, and an index by
 a `[` at any postfix boundary, which is what `a`, `a.b` and `f()` each are: the
 first attempt asked only after a bare name, so an index after a selection or a
-call still fell through, and a second review caught it. The third caught the
-overcorrection: routing a call through the selection loop made `size().x`
+call still fell through, and a second review caught it. The second overcorrected: routing a call through the selection loop made `size().x`
 derive, where [1820] spells a selection from a name and gives a call its own
 production. The index refusal is its own step now, and a fixture pins that
-nothing selects from a call. A refused bracketed run is stepped over by nesting so one
+nothing selects from a call. The third round found two positions still missing —
+an assignment target and a parenthesised value — so the fixture now writes an
+index in all five places one can be written and reads five refusals back. A refused bracketed run is stepped over by nesting so one
 report does not become three.
 
 Complete ordinary structs and implement arrays, C/packed structs, variants,

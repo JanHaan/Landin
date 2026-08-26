@@ -12,4 +12,9 @@ f: (n: u32) -> none =
     a := n[0]
     b := here.x[0]
     c := size()[0]
+    d := (n)[0]
+
+    --  Writing an element is [0570] as much as reading one is.
+    n[0] = 1
+    here.x[0] = 2
 end f

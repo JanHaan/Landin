@@ -190,6 +190,10 @@ package body Landin.Stages.Checking is
                         Can_Lay_Out := False;
                      end if;
 
+                     --  Every field the kernel cannot lay out is named,
+                     --  and not only the struct one: a field it accepted
+                     --  silently would leave the struct with no layout
+                     --  and the first value of it reaching a defect.
                      if Held = Ty.Aggregate then
                         Bad.Report
                           (Item    => Bad.Unsupported_Use,
@@ -198,6 +202,15 @@ package body Landin.Stages.Checking is
                            Message => "a field of a struct type is not"
                                       & " enabled yet",
                            Refused => Bad.Struct_Value,
+                           Into    => Found);
+                     elsif Held = Ty.Fixed_Array then
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Each),
+                           Message => "a field of an array type is not"
+                                      & " enabled yet",
+                           Refused => Bad.Array_Value,
                            Into    => Found);
                      end if;
                   end;
@@ -1041,6 +1054,31 @@ package body Landin.Stages.Checking is
                   Asked : constant Syn.Node_Id :=
                     Syn.Measured_Type (Of_Tree, Node);
                begin
+                  --  [0370] measures a type, and [1790]'s `type` reaches
+                  --  further than the eleven now: an array and a declared
+                  --  name both stand here and neither is measured yet.
+                  --  An Error_Type is the parser's refusal, already named,
+                  --  and is the one shape that says nothing further.
+                  if Syn.Kind (Of_Tree, Asked) = Syn.Array_Type
+                    or else Syn.Kind (Of_Tree, Asked) = Syn.Type_Reference
+                  then
+                     if Landin.Checking.Type_Of (Types.all, Of_Tree, Asked)
+                        = Ty.Undecided
+                     then
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Asked, Ty.Ill_Typed);
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Asked),
+                           Message => "measuring this is not enabled yet",
+                           Refused => Bad.Measured_Type,
+                           Into    => Found);
+                     end if;
+
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
                   if Syn.Kind (Of_Tree, Asked) /= Syn.Type_Name then
                      --  An Error_Type: the parser refused what stood
                      --  there and named it.
