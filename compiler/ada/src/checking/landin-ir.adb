@@ -360,6 +360,10 @@ package body Landin.IR is
      return Item_Id
      is (Held (Of_Unit, Item, Value).Named);
 
+   function Field_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+     return Positive
+     is (Held (Of_Unit, Item, Value).Field);
+
    function Callee_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Item_Id
      is (Held (Of_Unit, Item, Value).Named);
@@ -514,6 +518,22 @@ package body Landin.IR is
                          Result => Result_Of (Into, Datum),
                          Site   => Site,
                          Named  => Datum,
+                         others => <>)));
+
+   function Emit_Load_Field
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Datum  : Item_Id;
+      Field  : Positive;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+     is (Append
+           (Into, Item,
+            Instruction'(Op     => Load_Field,
+                         Result => Result,
+                         Site   => Site,
+                         Named  => Datum,
+                         Field  => Field,
                          others => <>)));
 
    procedure Emit_Store_Datum

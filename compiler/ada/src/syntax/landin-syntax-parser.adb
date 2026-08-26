@@ -830,6 +830,36 @@ package body Landin.Syntax.Parser is
                return Add (Name_Reference, At_Name, Named => Named);
             end Parse_Place;
 
+            --  The `("." identifier)*` of [1820]'s selection, read after
+            --  whatever named the thing being selected from.  Left to
+            --  right, so `a.b.c` selects from what `a.b` named, and the
+            --  name is carried on the selection rather than being a
+            --  Name_Reference: no scope [1090] answers for a field.
+            function Parse_Selectors (From : Node_Id) return Node_Id;
+
+            function Parse_Selectors (From : Node_Id) return Node_Id is
+               Selected : Node_Id := From;
+            begin
+               while Peek = Tok.Dot loop
+                  declare
+                     Named   : Landin.Source.Names.Name_Id;
+                     At_Name : Landin.Source.Span;
+                  begin
+                     Advance;
+
+                     --  The anchor is the field's own name, because that
+                     --  is what a report about the selection points at.
+                     At_Name := Parse_Declared_Name (Named);
+                     Selected :=
+                       Add (Member_Selection, At_Name,
+                            Children => [Selected],
+                            Named    => Named);
+                  end;
+               end loop;
+
+               return Selected;
+            end Parse_Selectors;
+
             --  type ::= the eleven scalar names                   [1790]
             --
             --  Not a closed set of keywords: [1760] says u32 and bool are
@@ -2137,8 +2167,9 @@ package body Landin.Syntax.Parser is
                         return Parse_Call (At_Item, Named);
                      end if;
 
-                     return Add
-                       (Name_Reference, At_Item, Named => Named);
+                     --  selection ::= identifier ("." identifier)*
+                     return Parse_Selectors
+                       (Add (Name_Reference, At_Item, Named => Named));
                   end;
                end if;
 

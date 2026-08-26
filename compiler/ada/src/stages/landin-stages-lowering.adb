@@ -489,6 +489,24 @@ package body Landin.Stages.Lowering is
             when Syn.Logical_And | Syn.Logical_Or =>
                return Lower_Short_Circuit (Of_Tree, Node, Scope);
 
+            when Syn.Member_Selection =>
+               --  [0750]'s field of [0670]'s state.  The checker settled
+               --  which field the name selects, so this carries the
+               --  answer rather than looking a name up a second time.
+               declare
+                  From : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+                  Means : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, From);
+               begin
+                  return IR.Emit_Load_Field
+                           (Unit.all, Filling,
+                            IR.Item_For (Unit.all, Means),
+                            Landin.Checking.Field_Index
+                              (Types.all, Of_Tree, Node),
+                            Scalar_At (Of_Tree, Node), Site);
+               end;
+
             when Syn.Name_Reference =>
                declare
                   Means : constant Res.Declaration_Id :=

@@ -20,6 +20,9 @@ package body Landin.Syntax is
             when Call                     => 1,
             when Error_Expression         => 0,
             when Name_Reference           => 0,
+            --  The one slot is what it selects from; the name it selects
+            --  is the node's own.
+            when Member_Selection         => 1,
             when Literal_Kind             => 0,
             --  The one slot is [1790]'s type, not an expression.
             when Size_Of | Align_Of       => 1,

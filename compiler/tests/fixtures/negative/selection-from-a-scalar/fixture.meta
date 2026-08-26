@@ -1,0 +1,6 @@
+class: negative
+summary: [1820] selects a field of a struct [0670], and a scalar has none to select
+constructs: 0420, 1820
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

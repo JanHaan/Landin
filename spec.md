@@ -268,11 +268,17 @@ Comparison takes at most one operator, so 'a < b < c' is not a
 sentence in this grammar rather than a fold: a chain that read
 left to right would compare a bool with a number, and [0310]
 refuses that anyway.
+A selection is [0420]'s member selection, which the kernel enables
+for one member: a field of a struct [0670]. It binds tighter than
+every operator because it is part of naming a thing rather than an
+operation on one, and it is left to right, so 'a.b.c' selects from
+what 'a.b' named.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
-primary     ::= literal | identifier | call | measurement
+primary     ::= literal | selection | call | measurement
               | "(" expression ")"
+selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
 measurement ::= ("sizeof" | "alignof") type
 arguments   ::= expression ("," expression)*

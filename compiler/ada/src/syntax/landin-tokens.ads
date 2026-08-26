@@ -57,13 +57,13 @@ package Landin.Tokens is
       Kw_Return, Kw_Sizeof, Kw_Struct, Kw_Then, Kw_True, Kw_Type,
       Kw_When,
       --  The signs the kernel productions spell.
-      Ampersand, Bar, Caret, Colon, Colon_Equal, Comma, Equal,
+      Ampersand, Bar, Caret, Colon, Colon_Equal, Comma, Dot, Equal,
       Equal_Equal, Greater, Greater_Equal, Greater_Greater, Left_Paren,
       Less, Less_Equal, Less_Greater, Less_Less, Minus, Minus_Greater,
       Minus_Percent, Percent, Plus, Plus_Percent, Right_Paren, Slash,
       Star, Star_Percent, Tilde, Underscore,
       --  Signs the tour spells and the kernel omits.
-      Bang, Dot, Dot_Dot, Dot_Dot_Dot, Dot_Dot_Less, Left_Bracket,
+      Bang, Dot_Dot, Dot_Dot_Dot, Dot_Dot_Less, Left_Bracket,
       Right_Bracket,
       --  Lexemes with more than one spelling that the kernel omits.
       Compound_Assign, Character_Literal, Float_Literal, Raw_Literal,

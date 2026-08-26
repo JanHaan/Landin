@@ -56,6 +56,8 @@ package body Landin.IR.Verifier is
             when Aggregate_Datum_Is_Not_A_Value =>
                "a datum load or store names an aggregate, which is"
                & " storage and not a value yet",
+            when Field_Out_Of_Range =>
+               "a field load names a field the aggregate does not have",
             when Callee_Is_Not_A_Routine =>
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
@@ -72,6 +74,7 @@ package body Landin.IR.Verifier is
             when Measure_Size | Measure_Align => 0,
             when Load          => 0,
             when Load_Datum    => 0,
+            when Load_Field    => 0,
             when Store         => 1,
             when Store_Datum   => 1,
             when Unary_Kind    => 1,
@@ -227,6 +230,46 @@ package body Landin.IR.Verifier is
                                          Item => Id, Block => Block,
                                          Value => V);
                               end if;
+
+                           when Load_Field =>
+                              declare
+                                 D : constant Item_Id :=
+                                   Datum_Of (Of_Unit, Id, V);
+                              begin
+                                 if not Holds (Of_Unit, D)
+                                   or else Kind_Of (Of_Unit, D) /= Datum
+                                 then
+                                    return
+                                      (Kind => Named_Item_Is_Not_A_Datum,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+
+                                 --  [0750]: a struct has the fields it
+                                 --  was declared with, so a selection of
+                                 --  any other is an IR nobody may build.
+                                 if Result_Of (Of_Unit, D)
+                                    /= Landin.Types.Aggregate
+                                   or else Field_Of (Of_Unit, Id, V)
+                                           > Field_Count (Of_Unit, D)
+                                 then
+                                    return
+                                      (Kind => Field_Out_Of_Range,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+
+                                 if Result_Of (Of_Unit, Id, V)
+                                    /= Nth_Field
+                                         (Of_Unit, D,
+                                          Field_Of (Of_Unit, Id, V))
+                                 then
+                                    return
+                                      (Kind => Result_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+                              end;
 
                            when Load_Datum | Store_Datum =>
                               declare

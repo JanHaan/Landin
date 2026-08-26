@@ -105,6 +105,12 @@ package Landin.Syntax is
       --  Expressions [1820].
       Error_Expression,
       Name_Reference,
+      --  [0420]'s member selection, of which the kernel enables one
+      --  member: a field of a struct [0670].  It carries what it selects
+      --  from and the name it selects, and the name is not a
+      --  Name_Reference because no scope [1090] answers for it -- which
+      --  field it is depends on the type of what stands to its left.
+      Member_Selection,
       Integer_Literal,
       True_Literal,
       False_Literal,
@@ -192,7 +198,8 @@ package Landin.Syntax is
    function Has_Name (Of_Kind : Node_Kind) return Boolean
      is (Of_Kind in Function_Declaration | Binding | Parameter
                     | Named_Return | Name_Reference | Type_Name
-                    | Type_Declaration | Type_Reference | Field);
+                    | Type_Declaration | Type_Reference | Field
+                    | Member_Selection);
 
    ------------------------------------------------------------------
    --  Trees
@@ -376,11 +383,13 @@ package Landin.Syntax is
                  and then Kind (Of_Tree, Id)
                           in Binding | Assignment | Discard;
 
-   --  `place` [1810], the one an assignment writes or an increment steps.
+   --  `place` [1810], the one an assignment writes or an increment steps,
+   --  and what a selection [1820] selects from.
    function Target_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                          in Assignment | Increment | Decrement;
+                          in Assignment | Increment | Decrement
+                             | Member_Selection;
 
    --  The condition of a branch [1810], or an exit's `when` guard.
    --  No_Node for a bare `return`.
