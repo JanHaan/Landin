@@ -2296,7 +2296,7 @@ file negative/immutable-struct-field/program.ldn tokens 27
   210 211 1
   212 215 end
   216 217 f
-file negative/indexing-not-enabled/program.ldn tokens 64
+file negative/indexing-not-enabled/program.ldn tokens 86
   0 5 point
   5 6 :
   7 11 type
@@ -2359,8 +2359,30 @@ file negative/indexing-not-enabled/program.ldn tokens 64
   315 316 [
   316 317 0
   317 318 ]
-  319 322 end
-  323 324 f
+  323 324 d
+  325 327 :=
+  328 329 (
+  329 330 n
+  330 331 )
+  331 332 [
+  332 333 0
+  333 334 ]
+  404 405 n
+  405 406 [
+  406 407 0
+  407 408 ]
+  409 410 =
+  411 412 1
+  417 421 here
+  421 422 .
+  422 423 x
+  423 424 [
+  424 425 0
+  425 426 ]
+  427 428 =
+  429 430 2
+  431 434 end
+  435 436 f
 file negative/keyword-as-name/program.ldn tokens 5
   0 2 if
   2 3 :
@@ -2486,6 +2508,52 @@ file negative/match-not-enabled/program.ldn tokens 26
   65 70 match
   71 74 end
   75 76 f
+file negative/measuring-an-array/program.ldn tokens 45
+  0 3 row
+  3 4 :
+  5 9 type
+  10 11 =
+  12 13 [
+  13 14 4
+  14 15 ]
+  15 17 u8
+  178 179 f
+  179 180 :
+  181 182 (
+  182 183 )
+  184 186 ->
+  187 188 (
+  188 189 r
+  189 190 :
+  191 196 usize
+  196 197 )
+  198 199 =
+  204 205 r
+  206 207 =
+  208 214 sizeof
+  215 216 [
+  216 217 4
+  217 218 ]
+  218 220 u8
+  221 224 end
+  225 226 f
+  228 229 g
+  229 230 :
+  231 232 (
+  232 233 )
+  234 236 ->
+  237 238 (
+  238 239 r
+  239 240 :
+  241 246 usize
+  246 247 )
+  248 249 =
+  254 255 r
+  256 257 =
+  258 265 alignof
+  266 269 row
+  270 273 end
+  274 275 g
 file negative/missing-end/program.ldn tokens 14
   0 1 f
   1 2 :
@@ -3177,6 +3245,24 @@ file negative/struct-value-not-enabled/program.ldn tokens 22
   196 197 =
   198 201 end
   202 203 f
+file negative/struct-with-an-array-field/program.ldn tokens 17
+  126 132 holder
+  132 133 :
+  134 138 type
+  139 140 =
+  141 147 struct
+  152 155 row
+  155 156 :
+  157 158 [
+  158 159 4
+  159 160 ]
+  160 162 u8
+  163 166 end
+  167 173 holder
+  175 178 mut
+  179 183 here
+  183 184 :
+  185 191 holder
 file negative/text-literal-not-enabled/program.ldn refused no rule spells '"'
 file negative/text-type-not-enabled/program.ldn tokens 5
   0 4 name

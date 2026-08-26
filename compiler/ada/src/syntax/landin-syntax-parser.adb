@@ -931,9 +931,15 @@ package body Landin.Syntax.Parser is
                Named   : Landin.Source.Names.Name_Id;
                At_Name : constant Landin.Source.Span :=
                  Parse_Declared_Name (Named);
+               Place : constant Node_Id :=
+                 Parse_Selectors
+                   (Add (Name_Reference, At_Name, Named => Named));
             begin
-               return Parse_Selectors
-                        (Add (Name_Reference, At_Name, Named => Named));
+               --  Writing an element is [0570] as much as reading one is,
+               --  and the statement dispatch looks past dots only, so the
+               --  `[` of `xs[0] = 1` arrives here rather than there.
+               Refuse_Any_Index;
+               return Place;
             end Parse_Place;
 
             --  type ::= the eleven scalar names                   [1790]
@@ -1900,7 +1906,11 @@ package body Landin.Syntax.Parser is
 
                      --  A place is a selection [1810], so what follows
                      --  the whole chain is what makes this an assignment.
-                     if After_Selectors = Tok.Equal then
+                     --  A `[` counts too: writing an element is [0570]'s
+                     --  and reaching Parse_Place is what names it, rather
+                     --  than complaining that this begins no statement.
+                     if After_Selectors in Tok.Equal | Tok.Left_Bracket
+                     then
                         declare
                            Target : constant Node_Id := Parse_Place;
                            At_Op  : Landin.Source.Span;
@@ -2188,6 +2198,8 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Expression, At_Item);
                end if;
 
+               --  [0570] indexes whatever named a value, and a closing
+               --  `)` is one of the places that does.
                --  [0520]'s literal, and [0560]'s repetition inside one.
                --  A `[` where a value belongs is one of those and never
                --  an array type, which only a type position holds.
@@ -2307,6 +2319,9 @@ package body Landin.Syntax.Parser is
                         end if;
                      end if;
 
+                     --  A closing `)` names a value, so [0570] can index
+                     --  it and this is the last place one can be written.
+                     Refuse_Any_Index;
                      return Inner;
                   end;
                end if;
