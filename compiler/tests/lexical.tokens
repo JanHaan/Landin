@@ -2798,6 +2798,39 @@ file negative/return-with-value/program.ldn tokens 15
   31 32 1
   33 36 end
   37 38 f
+file negative/selection-from-a-call/program.ldn tokens 32
+  0 4 size
+  4 5 :
+  6 7 (
+  7 8 )
+  9 11 ->
+  12 13 (
+  13 14 r
+  14 15 :
+  16 19 u32
+  19 20 )
+  21 22 =
+  23 24 r
+  25 26 =
+  27 28 1
+  29 32 end
+  33 37 size
+  217 218 f
+  218 219 :
+  220 221 (
+  221 222 )
+  223 225 ->
+  226 230 none
+  231 232 =
+  237 238 y
+  239 241 :=
+  242 246 size
+  246 247 (
+  247 248 )
+  248 249 .
+  249 250 x
+  251 254 end
+  255 256 f
 file negative/selection-from-a-scalar/program.ldn tokens 20
   0 3 mut
   4 9 count

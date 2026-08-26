@@ -1,0 +1,6 @@
+class: negative
+summary: [1820] selects from a name and a call is its own production, so a selection from a call derives in no rule
+constructs: 1820
+program: program.ldn
+codes: L0110
+targets: linux-x86-64, macos-arm64

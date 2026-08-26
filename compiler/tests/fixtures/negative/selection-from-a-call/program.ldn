@@ -1,0 +1,8 @@
+size: () -> (r: u32) = r = 1 end size
+
+--  [1820] spells `selection ::= identifier ("." identifier)*` and a call
+--  is its own production, so nothing selects from one and this derives in
+--  no rule the grammar has.
+f: () -> none =
+    y := size().x
+end f
