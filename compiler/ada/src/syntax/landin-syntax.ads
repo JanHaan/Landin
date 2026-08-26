@@ -111,6 +111,11 @@ package Landin.Syntax is
       --  Name_Reference because no scope [1090] answers for it -- which
       --  field it is depends on the type of what stands to its left.
       Member_Selection,
+      --  [0570]'s index, which takes what a selection named and one
+      --  expression inside the brackets.  Two slots: what is indexed and
+      --  the index, which is an expression like any other -- [1950] says
+      --  what happens when the compiler knows it and when it does not.
+      Element_Index,
       Integer_Literal,
       True_Literal,
       False_Literal,
@@ -392,7 +397,13 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                           in Assignment | Increment | Decrement
-                             | Member_Selection;
+                             | Member_Selection | Element_Index;
+
+   --  The expression between the brackets [0570].
+   function Index_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Element_Index,
+          Post => Contains (Of_Tree, Index_Of'Result);
 
    --  The condition of a branch [1810], or an exit's `when` guard.
    --  No_Node for a bare `return`.

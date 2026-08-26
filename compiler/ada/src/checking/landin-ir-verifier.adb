@@ -250,7 +250,8 @@ package body Landin.IR.Verifier is
 
                                     if not Is_Aggregate
                                              (Of_Unit, Id, Cell)
-                                      or else Field_Of (Of_Unit, Id, V)
+                                      or else Natural
+                                                (Field_Of (Of_Unit, Id, V))
                                               > Slot_Field_Count
                                                   (Of_Unit, Id, Cell)
                                     then
@@ -263,8 +264,9 @@ package body Landin.IR.Verifier is
                                       and then Result_Of (Of_Unit, Id, V)
                                                /= Nth_Slot_Field
                                                     (Of_Unit, Id, Cell,
-                                                     Field_Of
-                                                       (Of_Unit, Id, V))
+                                                     Positive
+                                                       (Field_Of
+                                                          (Of_Unit, Id, V)))
                                     then
                                        return (Kind => Result_Disagrees,
                                                Item => Id, Block => Block,
@@ -285,13 +287,17 @@ package body Landin.IR.Verifier is
                                           Value => V);
                                     end if;
 
-                                    --  [0750]: a struct has the fields it
-                                    --  was declared with, so a selection of
-                                    --  any other is an IR nobody may build.
+                                    --  A part of an aggregate item is a
+                                    --  field of [0670]'s struct or an
+                                    --  element of [0520]'s array, and the
+                                    --  two differ only in how many there
+                                    --  are and what they hold.
                                     if Result_Of (Of_Unit, D)
-                                       /= Landin.Types.Aggregate
-                                      or else Field_Of (Of_Unit, Id, V)
-                                              > Field_Count (Of_Unit, D)
+                                       not in Landin.Types.Aggregate
+                                              | Landin.Types.Fixed_Array
+                                      or else Element_Total
+                                                (Field_Of (Of_Unit, Id, V))
+                                              > Part_Count (Of_Unit, D)
                                     then
                                        return
                                          (Kind => Field_Out_Of_Range,
@@ -301,7 +307,7 @@ package body Landin.IR.Verifier is
 
                                     if Op = Load_Field
                                       and then Result_Of (Of_Unit, Id, V)
-                                               /= Nth_Field
+                                               /= Nth_Part
                                                     (Of_Unit, D,
                                                      Field_Of (Of_Unit, Id, V))
                                     then
@@ -567,8 +573,9 @@ package body Landin.IR.Verifier is
                                       then Nth_Slot_Field
                                              (Of_Unit, Id,
                                               Slot_Of (Of_Unit, Id, V),
-                                              Field_Of (Of_Unit, Id, V))
-                                      else Nth_Field
+                                              Positive
+                                                (Field_Of (Of_Unit, Id, V)))
+                                      else Nth_Part
                                              (Of_Unit,
                                               Datum_Of (Of_Unit, Id, V),
                                               Field_Of (Of_Unit, Id, V)));

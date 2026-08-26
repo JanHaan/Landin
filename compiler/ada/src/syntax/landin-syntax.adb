@@ -23,6 +23,8 @@ package body Landin.Syntax is
             --  The one slot is what it selects from; the name it selects
             --  is the node's own.
             when Member_Selection         => 1,
+            --  What is indexed, and the index.
+            when Element_Index            => 2,
             when Literal_Kind             => 0,
             --  The one slot is [1790]'s type, not an expression.
             when Size_Of | Align_Of       => 1,
@@ -120,6 +122,9 @@ package body Landin.Syntax is
 
    function Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
+
+   function Index_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 2));
 
    function Element_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 2));

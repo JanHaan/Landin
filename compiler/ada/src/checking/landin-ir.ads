@@ -141,6 +141,20 @@ package Landin.IR is
 
    subtype Scope_Id is Landin.Resolution.Scope_Id;
 
+   --  A count of parts, and a position among them.  As wide as a length
+   --  rather than a host Natural: [0520] admits an array of 2**32-1
+   --  elements and this compiler's Natural does not reach that on every
+   --  host, so counting parts in one would make a declared length the
+   --  host's business.  One-based, like every other run here.
+   type Element_Total is range 0 .. 2 ** 32 - 1;
+
+   --  One past the last is not a position: the longest array has
+   --  2**32-1 elements, so every conversion between this and a count is
+   --  total and a malformed part reaches the verifier as a verdict
+   --  rather than as a range check.
+   type Part_Position is range 1 .. 2 ** 32 - 1;
+
+
    ------------------------------------------------------------------
    --  Opcodes
    ------------------------------------------------------------------
@@ -390,6 +404,20 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item)
                  and then Index <= Field_Count (Of_Unit, Item);
 
+   --  How many parts an aggregate item has, and what one holds, whether
+   --  it is [0670]'s struct or [0520]'s array.  A field and an element
+   --  are one question to everything downstream: which one, by position,
+   --  and what type it is.  Only how they are recorded differs, because
+   --  a struct's fields each have their own type and an array's do not.
+   function Part_Count (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     with Pre => Holds (Of_Unit, Item);
+
+   function Nth_Part
+     (Of_Unit : Unit; Item : Item_Id; Index : Part_Position)
+     return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item)
+                 and then Element_Total (Index) <= Part_Count (Of_Unit, Item);
+
    ------------------------------------------------------------------
    --  An array item's shape
    ------------------------------------------------------------------
@@ -399,8 +427,6 @@ package Landin.IR is
    --  the whole of its identity, and the count reaches 2**32-1: a run
    --  would be four billion entries for a type whose layout is one
    --  multiplication.
-   type Element_Total is range 0 .. 2 ** 32 - 1;
-
    procedure Set_Array
      (Into    : in out Unit;
       Item    : Item_Id;
@@ -741,9 +767,11 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
 
-   --  Which field of that base, by [0750]'s order.
+   --  Which part of that base, by [0750]'s order for a struct and by
+   --  [0520]'s for an array.
    function Field_Of
-     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Positive
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+     return Part_Position
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
@@ -890,7 +918,7 @@ package Landin.IR is
      (Into   : in out Unit;
       Item   : Item_Id;
       Datum  : Item_Id;
-      Field  : Positive;
+      Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
@@ -903,7 +931,7 @@ package Landin.IR is
      (Into   : in out Unit;
       Item   : Item_Id;
       Slot   : Slot_Id;
-      Field  : Positive;
+      Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
@@ -916,7 +944,7 @@ package Landin.IR is
      (Into  : in out Unit;
       Item  : Item_Id;
       Slot  : Slot_Id;
-      Field : Positive;
+      Field : Part_Position;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
@@ -934,7 +962,7 @@ package Landin.IR is
      (Into  : in out Unit;
       Item  : Item_Id;
       Datum : Item_Id;
-      Field : Positive;
+      Field : Part_Position;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
@@ -1074,9 +1102,7 @@ private
       Target      : Block_Id                  := No_Block;
       Alternative : Block_Id                  := No_Block;
       Number      : Landin.Types.Magnitude    := 0;
-      --  Which field of Named, by [0750]'s order.  A Positive would make
-      --  "no field" unspellable and every other instruction carries one.
-      Field       : Natural                   := 0;
+      Part        : Part_Position              := 1;
       Measured    : Landin.Types.Scalar_Name  := Landin.Types.Bool;
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;

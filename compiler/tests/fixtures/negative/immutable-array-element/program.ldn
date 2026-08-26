@@ -1,0 +1,7 @@
+words: [4]u32
+
+--  [1900]: an element is written exactly when the binding holding it is,
+--  which is the same rule a field of a struct answers to.
+f: () -> none =
+    words[0] = 1
+end f

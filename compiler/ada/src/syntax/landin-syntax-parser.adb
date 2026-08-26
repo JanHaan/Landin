@@ -327,12 +327,37 @@ package body Landin.Syntax.Parser is
             --  expression is the token after the whole chain and never
             --  the one after the name.
             function After_Selectors return Tok.Token_Kind is
-               Step : Tok.Token_Index := 1;
+               Step  : Tok.Token_Index := 1;
+               Depth : Natural := 0;
             begin
-               while Ahead (Step) = Tok.Dot
-                 and then Ahead (Step + 1) = Tok.Identifier
                loop
-                  Step := Step + 2;
+                  if Ahead (Step) = Tok.Dot
+                    and then Ahead (Step + 1) = Tok.Identifier
+                  then
+                     Step := Step + 2;
+
+                  elsif Ahead (Step) = Tok.Left_Bracket then
+                     --  Past the whole index, however it nests, because
+                     --  what makes `a[i] = 1` an assignment is the `=`
+                     --  after the brackets and not the `[` before them.
+                     Depth := 1;
+                     Step := Step + 1;
+
+                     while Depth > 0
+                       and then Ahead (Step) /= Tok.End_Of_Input
+                     loop
+                        if Ahead (Step) = Tok.Left_Bracket then
+                           Depth := Depth + 1;
+                        elsif Ahead (Step) = Tok.Right_Bracket then
+                           Depth := Depth - 1;
+                        end if;
+
+                        Step := Step + 1;
+                     end loop;
+
+                  else
+                     exit;
+                  end if;
                end loop;
 
                return Ahead (Step);
@@ -839,11 +864,11 @@ package body Landin.Syntax.Parser is
                return At_Name;
             end Parse_Declared_Name;
 
-            --  The `("." identifier)*` of [1820]'s selection, read after
-            --  whatever named the thing being selected from.  Left to
-            --  right, so `a.b.c` selects from what `a.b` named, and the
-            --  name is carried on the selection rather than being a
-            --  Name_Reference: no scope [1090] answers for a field.
+            --  [1820]'s `indexed`, read after whatever named the thing:
+            --  the dots first and then the brackets, left to right, so
+            --  `a.b[i]` indexes what `a.b` named.  A selected name is
+            --  carried on the node rather than being a Name_Reference,
+            --  because no scope [1090] answers for a field.
             function Parse_Selectors (From : Node_Id) return Node_Id;
 
             --  Steps over a refused bracketed run so one report does not
@@ -890,18 +915,68 @@ package body Landin.Syntax.Parser is
 
             function Parse_Selectors (From : Node_Id) return Node_Id is
                Selected : Node_Id := From;
+
+               --  [1820] spells `selection ("[" expression "]")*`, so the
+               --  brackets come after the whole selection and nothing
+               --  derives a dot after one.  Once a bracket has been read
+               --  the dots are over, and saying so here is what keeps the
+               --  parser and the grammar agreeing about legal source.
+               Indexed : Boolean := False;
             begin
-               --  Every postfix boundary, and not only the one after a
-               --  bare name: [0570] indexes what `a`, `a.b` and `f()`
-               --  each name, so the loop below asks after each step and
-               --  the callers that return a call route through here too.
+               --  [1820]'s order: the dots, then the brackets, and no
+               --  dot after a bracket.  A call and a parenthesis are each
+               --  their own production and neither reaches this loop, so
+               --  what it reads is exactly what `indexed` derives.
                loop
+                  --  indexed ::= selection ("[" expression "]")*  [1820]
                   if Peek = Tok.Left_Bracket then
-                     Refuse_Any_Index;
-                     return Selected;
+                     declare
+                        At_Open : constant Landin.Source.Span := Here;
+                        Index   : Node_Id;
+                     begin
+                        Advance;
+                        Index := Parse_Expression;
+
+                        if not Expect
+                                 (Wanted  => Tok.Right_Bracket,
+                                  Message => "an index is closed with `]`",
+                                  Note    => "[1820]: `[` opens an index"
+                                             & " and `]` closes it",
+                                  Related => At_Open,
+                                  Because => "opened here")
+                        then
+                           return Add
+                             (Element_Index, At_Open,
+                              Extent   => Join (At_Open, After_Previous),
+                              Children => [Selected, Index]);
+                        end if;
+
+                        Selected :=
+                          Add (Element_Index, At_Open,
+                               Extent   => Join (At_Open, After_Previous),
+                               Children => [Selected, Index]);
+                     end;
+
+                     Indexed := True;
+                     goto Next;
                   end if;
 
                   exit when Peek /= Tok.Dot;
+
+                  if Indexed then
+                     Refuse
+                       (Item    => Syn.Selection_From_An_Index,
+                        Where   => Here,
+                        Message => "selecting from an index is not"
+                                   & " enabled yet");
+                     Advance;
+
+                     if Peek = Tok.Identifier then
+                        Advance;
+                     end if;
+
+                     return Selected;
+                  end if;
 
                   declare
                      Named   : Landin.Source.Names.Name_Id;
@@ -917,6 +992,8 @@ package body Landin.Syntax.Parser is
                             Children => [Selected],
                             Named    => Named);
                   end;
+
+                  <<Next>>
                end loop;
 
                return Selected;
@@ -935,10 +1012,6 @@ package body Landin.Syntax.Parser is
                  Parse_Selectors
                    (Add (Name_Reference, At_Name, Named => Named));
             begin
-               --  Writing an element is [0570] as much as reading one is,
-               --  and the statement dispatch looks past dots only, so the
-               --  `[` of `xs[0] = 1` arrives here rather than there.
-               Refuse_Any_Index;
                return Place;
             end Parse_Place;
 
@@ -1904,13 +1977,11 @@ package body Landin.Syntax.Parser is
                           (False, Landin.Source.Empty_Span);
                      end if;
 
-                     --  A place is a selection [1810], so what follows
-                     --  the whole chain is what makes this an assignment.
-                     --  A `[` counts too: writing an element is [0570]'s
-                     --  and reaching Parse_Place is what names it, rather
-                     --  than complaining that this begins no statement.
-                     if After_Selectors in Tok.Equal | Tok.Left_Bracket
-                     then
+                     --  A place is [1820]'s indexed selection [1810], so
+                     --  what follows the whole of it -- every dot and
+                     --  every bracket group -- is what makes this an
+                     --  assignment.
+                     if After_Selectors = Tok.Equal then
                         declare
                            Target : constant Node_Id := Parse_Place;
                            At_Op  : Landin.Source.Span;
@@ -2319,8 +2390,9 @@ package body Landin.Syntax.Parser is
                         end if;
                      end if;
 
-                     --  A closing `)` names a value, so [0570] can index
-                     --  it and this is the last place one can be written.
+                     --  Nothing indexes a parenthesised expression: [1820]
+                     --  indexes what a selection named, and a call and a
+                     --  parenthesis are each their own production.
                      Refuse_Any_Index;
                      return Inner;
                   end;

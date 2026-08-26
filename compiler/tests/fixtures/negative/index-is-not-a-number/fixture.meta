@@ -1,0 +1,6 @@
+class: negative
+summary: [0900] makes an index an integer, so indexing with a bool is refused
+constructs: 0570, 0900
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

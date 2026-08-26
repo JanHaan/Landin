@@ -259,7 +259,7 @@ if          ::= "if" expression "then" statement*
                 ("elsif" expression "then" statement*)*
                 ("else" statement*)?
                 "end" "if"
-place       ::= selection
+place       ::= indexed
 
 ```
 
@@ -281,11 +281,16 @@ for one member: a field of a struct [0670]. It binds tighter than
 every operator because it is part of naming a thing rather than an
 operation on one, and it is left to right, so 'a.b.c' selects from
 what 'a.b' named.
+An index [0570] binds the same way and for the same reason, and it
+takes what a selection named: 'a[i]' and 'a.b[i]' are both written
+and neither derives from a call, because nothing selects from one
+[1820] and nothing indexes one either.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
-primary     ::= literal | selection | call | measurement
+primary     ::= literal | indexed | call | measurement
               | "(" expression ")"
+indexed     ::= selection ("[" expression "]")*
 selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
 measurement ::= ("sizeof" | "alignof") type
@@ -568,6 +573,17 @@ does.
 |---|---|
 | `/` `%` | a divisor of zero [0290] |
 | `<<` `>>` | a negative amount [0320] |
+| `[ ]` | an index outside the length [0520] |
+
+The third is not a binary operator and belongs here anyway,
+because it is the same question with the same answer. [1720]
+says this language checks bounds and [0580] says indexing
+checks the length before it computes an address, so what was
+left unsaid is only which of refusing and trapping applies
+where — and that is what the rest of this paragraph already
+decides for the other two.
+An index is any integer [0900], and a negative one is
+outside every length, so it is this row and not a fourth.
 
 This is not [0300]'s question, and the difference decides
 both answers. An overflow is a good operation whose result
@@ -582,6 +598,8 @@ level the whole of [1940]'s fold. So 'x / 0' is refused and
 'x / y' traps, and which of the two a program gets does not
 move when an implementation gets better at folding, which
 is the objection D7 raised against believing a condition.
+'a[4]' on a '[4]u8' is refused for the same reason 'x / 0'
+is, and 'a[i]' checks its length at run time.
 A negative amount is writable only where the left operand
 is signed, because [1890] gives the amount that type. No
 unsigned shift carries this check, on any target.

@@ -37,6 +37,7 @@ package body Landin.Tests.Lowering_Suite is
    use type Landin.Testing.Fixtures.Fixture_Class;
    use type IR.Opcode;
    use type IR.Slot_Id;
+   use type IR.Part_Position;
    use type IR.Value_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Types.Type_Kind;

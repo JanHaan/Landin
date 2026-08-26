@@ -2043,9 +2043,66 @@ array local was accepted and reached the frame as a defect. The suite caught it
 as a status of seventy rather than a silent crash, which is the report-keeping
 from the slice before this one doing its job the first time it was needed.
 
+An element by an index the compiler knows came next, and it is the first
+construct to reach [1950]'s table since the shifts. [1820]'s `primary` gained
+`indexed ::= selection ("[" expression "]")*`, and [1810]'s `place` is the same
+rule, so an element is written where it is read; neither derives from a call or
+a parenthesis, because [1820] indexes what a selection named and each of those
+is its own production.
+
+[1950] gained a third row. It is not a binary operator and belongs there anyway,
+because it is the same question with the same answer: [1720] says this language
+checks bounds and [0580] says indexing checks the length before it computes an
+address, so what was left unsaid was only which of refusing and trapping applies
+where — and the paragraph already decided that for the divisor and the shift.
+`a[4]` on a `[4]u8` is refused exactly as `x / 0` is, a negative index is that
+same row because it is outside every length, and `a[i]` is left to the trap. So
+this needed no decision of its own, only the row written down.
+
+What the trap needs is the next slice, so an index the compiler cannot work out
+is named rather than reaching one — including `0 - 1`, which looks known and is
+not: [1880] makes a literal and a unary minus over one known and nothing else,
+which is the same line D7 drew against believing a condition.
+
+Review found four things wrong with the first attempt, and one of them was the
+worst kind. `Check_Place` walked past a field to the binding holding it and did
+not walk past an element, so an element of a binding that is not `mut` was
+written with no complaint at all — [1900] silently not enforced, where the same
+program through a struct field was refused. The same omission left `inc
+words[0]` reaching a defect, because the place was never typed. Both are one
+line: a place reached through a bracket is a place in the binding at the end of
+it, exactly as one reached through a dot is.
+
+The other three: `words[0].x` parsed although [1820] derives no dot after a
+bracket, which is the parser and the grammar disagreeing about legal source and
+is refused by name now; `-0` was refused as outside the length, which it is not,
+since [1880] makes it known and its value is zero; and a part position was a
+host `Natural`, so an array of four billion elements — a length this compiler
+accepts and reserves — could not be indexed at all. Positions are as wide as
+lengths now.
+
+One consequence is written down rather than fixed, because fixing it is a
+decision and not a repair. [0200] gives an integer literal with no context the
+default type, and an index has no declared type to take instead, so an index
+above what an `i32` holds is refused for its type before the length is
+consulted: on an array of four billion elements the last two billion cannot be
+reached by a literal at all. The element is there and [1950] promises a refusal
+only where an index cannot be taken, so this is [0200] meeting [0520] in a place
+neither paragraph anticipated. A fixture pins the verdict so the computed-index
+slice inherits the question deliberately — that slice has to decide what type an
+index has anyway, and this is the same decision seen from the constant side.
+
+The IR needed one idea rather than a new opcode. A field of a struct and an
+element of an array are one question to everything downstream — which one, by
+position, and what type it is — so `Load_Field` and `Store_Field` carry both and
+an item answers `Part_Count` and `Nth_Part` whichever it is. Only the recording
+differs, because a struct's fields each have their own type and an array's do
+not, and the backend turns a part into an offset by walking the fields or by one
+multiplication accordingly.
+
 What is still refused: an array local, an array literal
 [0520], the inferred length [0530], `zeroed` [0540], repetition [0560],
-indexing and slices [0570], `lenof`, and an array as a struct field. Each is its
+a computed index and slices [0570], `lenof`, and an array as a struct field. Each is its
 own slice, and the value slices need the same frame and data work the struct
 ones did.
 

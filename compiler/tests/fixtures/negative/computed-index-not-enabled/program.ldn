@@ -1,0 +1,12 @@
+mut words: [4]u32
+
+--  [1950] leaves an index the compiler does not know to the trap, and
+--  emitting that trap is its own slice.  `0 - 1` is one of these: [1880]
+--  makes a literal and a unary minus over one known, and nothing else.
+f: (i: u32) -> (r: u32) =
+    r = words[i]
+end f
+
+g: () -> (r: u32) =
+    r = words[0 - 1]
+end g
