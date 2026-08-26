@@ -2035,6 +2035,16 @@ let every other unlayable field through. Both are refused by name again, both
 have fixtures, and the measurement one covers a declared name as well, which had
 the same hole before arrays existed.
 
+A third hole was older still and the arrays only added a second way into it: a
+struct one of whose fields was refused has no layout, and reading a field that
+is fine asked it for one anyway, which reached a precondition rather than a
+report — and the defect took the refusal down with it, because a defect
+discards what the run had already accumulated. Reading a field of a struct that
+has none now answers with the type it cannot have, and the refusal above it
+stands as the one report. Two fixtures pin it, one entered through an array
+field and one through a struct field, because the second is the shape that
+predates this work.
+
 Three more had been refused by the brackets being a lexeme the kernel
 omitted, and enabling `[` took that away: review found `[]f32`, `[1, 2]` and
 `g[0]` reporting a missing length, a missing expression and a stray token

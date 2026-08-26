@@ -1,5 +1,5 @@
 class: negative
-summary: [0750] lays a struct out from its fields and an array field is not enabled yet, so the field is refused and the state does not reach a defect
+summary: [0750] lays a struct out from its fields, so a struct with an array field is refused once and reading another field does not ask it for a layout it has not got
 constructs: 0520, 0670, 0750, 1830
 program: program.ldn
 codes: L0304

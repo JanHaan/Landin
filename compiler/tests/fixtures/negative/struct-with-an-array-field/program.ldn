@@ -2,6 +2,14 @@
 --  the slice that can lay one out inside another.
 holder: type = struct
     row: [4]u8
+    count: u32
 end holder
 
 mut here: holder
+
+--  A struct whose field was refused has no layout, so reading a field
+--  that is fine asks it for one it does not have.  The refusal above is
+--  the answer, and this reads back one report rather than a defect.
+f: () -> (r: u32) =
+    r = here.count
+end f
