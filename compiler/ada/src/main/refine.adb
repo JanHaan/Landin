@@ -56,10 +56,15 @@ begin
    end;
 
 exception
+   --  A defect the driver already turned into an outcome does not reach
+   --  here: Landin.Driver.Execute renders what the run had decided and
+   --  returns Status_Defect, so a reader sees their program's report and
+   --  the compiler's failure under it.  This stays as the backstop for
+   --  one raised outside that boundary, where there is nothing to render.
    when Landin.Compiler_Defect =>
       Text_IO.Put_Line
         (Text_IO.Standard_Error, "refine: internal compiler defect");
-      Command_Line.Set_Exit_Status (70);
+      Command_Line.Set_Exit_Status (Landin.Driver.Status_Defect);
 
    when Landin.Host_Exhausted =>
       Text_IO.Put_Line
@@ -84,5 +89,5 @@ exception
    when others =>
       Text_IO.Put_Line
         (Text_IO.Standard_Error, "refine: internal compiler defect");
-      Command_Line.Set_Exit_Status (70);
+      Command_Line.Set_Exit_Status (Landin.Driver.Status_Defect);
 end Refine;

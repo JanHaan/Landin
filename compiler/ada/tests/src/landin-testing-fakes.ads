@@ -31,6 +31,12 @@ package Landin.Testing.Fakes is
    overriding function Is_Directory
      (Host : Fake_Filesystem; Path : String) return Boolean;
 
+   --  The same injection, at the read.  A tool runs only on a
+   --  compilation that was not refused, so a defect there can never have
+   --  a diagnostic before it; a read happens after the driver has already
+   --  reported an unknown option, which is where the promise bites.
+   procedure Raise_On_Read (Host : in out Fake_Filesystem);
+
    overriding procedure Read_File
      (Host    : Fake_Filesystem;
       Path    : String;
@@ -77,6 +83,17 @@ package Landin.Testing.Fakes is
       Output    : String;
       Ended     : Landin.Platform.Termination := Landin.Platform.Exited);
 
+   --  Make the next run raise a compiler defect instead of answering,
+   --  and only the next: a case that arms this and then keeps using the
+   --  runner is asking about what happens after one, not about two.
+   --
+   --  A defect is what a compiler does when it finds itself wrong, so no
+   --  source can be relied on to cause one -- every one that could is a
+   --  bug to be fixed rather than a case to keep.  Injecting it is how
+   --  the driver's promise about a defect is held to: the report a run
+   --  had already decided survives it.
+   procedure Raise_On_Run (Host : in out Fake_Tool_Runner);
+
    type Tool_Call is record
       Program   : Ada.Strings.Unbounded.Unbounded_String;
       Arguments : Landin.Platform.Path_List;
@@ -118,6 +135,11 @@ private
 
    type Store is record
       Items : File_Vectors.Vector;
+      --  Armed by Raise_On_Read and cleared by the read it fires on, so
+      --  one arming is one defect.  It lives here rather than in the
+      --  record because Read_File takes its host as a constant view, the
+      --  same reason the writes do.
+      Raises : Boolean := False;
    end record;
 
    type Store_Access is access Store;
@@ -145,6 +167,7 @@ private
       Mode        : Result_Mode := Repeating;
       Repeat      : Landin.Platform.Tool_Result;
       Script      : Result_Vectors.Vector;
+      Raises      : Boolean := False;
       Next_Result : Positive := 1;
       Calls       : Call_Vectors.Vector;
    end record;
