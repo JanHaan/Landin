@@ -3245,7 +3245,53 @@ file negative/struct-value-not-enabled/program.ldn tokens 22
   196 197 =
   198 201 end
   202 203 f
-file negative/struct-with-an-array-field/program.ldn tokens 17
+file negative/struct-with-a-struct-field/program.ldn tokens 45
+  0 5 inner
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 q
+  26 27 :
+  28 31 u32
+  32 35 end
+  36 41 inner
+  259 264 outer
+  264 265 :
+  266 270 type
+  271 272 =
+  273 279 struct
+  284 288 part
+  288 289 :
+  290 295 inner
+  300 305 count
+  305 306 :
+  307 310 u32
+  311 314 end
+  315 320 outer
+  322 325 mut
+  326 330 here
+  330 331 :
+  332 337 outer
+  339 340 f
+  340 341 :
+  342 343 (
+  343 344 )
+  345 347 ->
+  348 349 (
+  349 350 r
+  350 351 :
+  352 355 u32
+  355 356 )
+  357 358 =
+  363 364 r
+  365 366 =
+  367 371 here
+  371 372 .
+  372 377 count
+  378 381 end
+  382 383 f
+file negative/struct-with-an-array-field/program.ldn tokens 38
   126 132 holder
   132 133 :
   134 138 type
@@ -3257,12 +3303,33 @@ file negative/struct-with-an-array-field/program.ldn tokens 17
   158 159 4
   159 160 ]
   160 162 u8
-  163 166 end
-  167 173 holder
-  175 178 mut
-  179 183 here
-  183 184 :
-  185 191 holder
+  167 172 count
+  172 173 :
+  174 177 u32
+  178 181 end
+  182 188 holder
+  190 193 mut
+  194 198 here
+  198 199 :
+  200 206 holder
+  421 422 f
+  422 423 :
+  424 425 (
+  425 426 )
+  427 429 ->
+  430 431 (
+  431 432 r
+  432 433 :
+  434 437 u32
+  437 438 )
+  439 440 =
+  445 446 r
+  447 448 =
+  449 453 here
+  453 454 .
+  454 459 count
+  460 463 end
+  464 465 f
 file negative/text-literal-not-enabled/program.ldn refused no rule spells '"'
 file negative/text-type-not-enabled/program.ldn tokens 5
   0 4 name
