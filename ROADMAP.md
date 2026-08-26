@@ -1911,6 +1911,19 @@ not work and do: a copy across D15's alias, which is a copy within one type
 because an alias keeps the identity, and a copy into the place it came from,
 which carries the same bytes to the same bytes and changes nothing.
 
+Zeroed module state is reserved rather than written, which is a defect the
+aggregate work introduced and a review of the cost found. D10 makes a binding
+with no value zero, and the backend emitted that zero into `.data` — a PROGBITS
+section, so every byte of it was a byte of the object and of the image. `.bss`
+reserves the same addresses and costs nothing in either. Three 32-byte zeroed
+structs and one non-zero scalar measure 116 bytes of `.data` before and 20
+after, with the 96 moving to `.bss` and the executable 96 bytes smaller. That
+matters at the 32 KB end of the range this compiler is for, where a zeroed
+buffer would otherwise be paid for twice, once in flash and once in RAM. A
+scalar whose fold reaches zero is reserved too, so what decides is the value and
+not the type. Each section is still one run with its directive written once,
+written data first.
+
 Reading the whole of one is a value like any other and is refused where the
 name stands, which review found accepted: `_ = state` passed the checker, became
 a `Load_Datum` of an aggregate, and reached a backend that reads a datum's type

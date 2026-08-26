@@ -34,6 +34,32 @@ package body Landin.Tests.Backend_Suite is
    function Contains (Text : String; Needle : String) return Boolean is
      (Ada.Strings.Fixed.Index (Text, Needle) > 0);
 
+   function Index (Text : String; Needle : String) return Natural is
+     (Ada.Strings.Fixed.Index (Text, Needle));
+
+   --  How many times a needle occurs, which is how a case says a section
+   --  directive was written once rather than once per object in it.
+   function Occurrences (Text : String; Needle : String) return Natural;
+
+   function Occurrences (Text : String; Needle : String) return Natural is
+      Seen : Natural := 0;
+      From : Positive := Text'First;
+   begin
+      loop
+         declare
+            At_Next : constant Natural :=
+              Ada.Strings.Fixed.Index (Text (From .. Text'Last), Needle);
+         begin
+            exit when At_Next = 0;
+            Seen := Seen + 1;
+            exit when At_Next + Needle'Length > Text'Last;
+            From := At_Next + Needle'Length;
+         end;
+      end loop;
+
+      return Seen;
+   end Occurrences;
+
    use type Landin.Source.Source_Id;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.Scalar_Size;
@@ -889,7 +915,7 @@ package body Landin.Tests.Backend_Suite is
       declare
          Text : constant String := Emitted (Work);
          Expected : constant String :=
-           HT & ".data" & LF
+           HT & ".bss" & LF
            & HT & ".globl state" & LF
            & HT & ".type state, @object" & LF
            & HT & ".align 4" & LF
@@ -1088,6 +1114,75 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_Local_Is_A_Cell_In_The_Frame;
 
+   --  D10 zeroes a module binding with no value, and zero bytes do not
+   --  have to be in the image to be zero: `.bss` reserves them and `.data`
+   --  carries them.  A 32 KB part is in this compiler's range, so a
+   --  zeroed buffer must not be paid for twice, once in flash and once in
+   --  RAM.  A value that is not zero has to be written down, so it stays.
+   procedure Zero_Data_Is_Reserved_And_Not_Written
+     (Item : in out Landin.Testing.Context);
+
+   procedure Zero_Data_Is_Reserved_And_Not_Written
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "counters: type = struct" & LF
+         & "    hits: u32" & LF
+         & "    ready: bool" & LF
+         & "end counters" & LF
+         & "public mut state: counters" & LF
+         & "mut counter: u32" & LF
+         & "public answer: i32 = 42" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text,
+                      HT & ".globl state" & LF
+                      & HT & ".type state, @object" & LF
+                      & HT & ".align 4" & LF
+                      & "state:" & LF
+                      & HT & ".zero 8" & LF
+                      & HT & ".size state, 8" & LF),
+            "a zeroed struct is reserved whole");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text,
+                      "counter:" & LF
+                      & HT & ".zero 4" & LF),
+            "and so is a zeroed scalar, rather than being written as 0");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text,
+                      "answer:" & LF
+                      & HT & ".long 42" & LF),
+            "a value that is not zero is still written down");
+
+         --  The sections are one run each, so each directive is written
+         --  once however many objects it holds.
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & ".bss" & LF), 1,
+            "the reserved section is opened once");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & ".data" & LF), 1,
+            "and the written one is too");
+         Landin.Testing.Check
+           (Item,
+            Index (Text, HT & ".data" & LF) < Index (Text, HT & ".bss" & LF),
+            "written data comes before reserved, so each stays one run");
+      end;
+   end Zero_Data_Is_Reserved_And_Not_Written;
+
    --  A module value is reached by name rather than through a frame, and
    --  x86-64's position-independent form of that name is RIP-relative.
    --  [1900] lets a `mut` module binding be written as well as read.
@@ -1121,8 +1216,8 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "movl %eax, counter(%rip)"),
             "and written back the same way");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & ".long 0" & LF),
-            "D10's binding with no value holds zero");
+           (Item, Contains (Text, "counter:" & LF & HT & ".zero 4" & LF),
+            "D10's binding with no value holds zero, reserved not written");
       end;
    end A_Module_Binding_Is_Reached_Through_Rip;
 
@@ -1165,8 +1260,10 @@ package body Landin.Tests.Backend_Suite is
          Landin.Testing.Check
            (Item, Contains (Text, "derived:" & LF & HT & ".long 43" & LF),
             "a module value may name one folded above it");
+         --  Reserved rather than written, because the fold reached zero:
+         --  what the case is about is the answer, not the section.
          Landin.Testing.Check
-           (Item, Contains (Text, "beyond:" & LF & HT & ".long 0" & LF),
+           (Item, Contains (Text, "beyond:" & LF & HT & ".zero 4" & LF),
             "D13's zero beyond the width holds at module level too");
          Landin.Testing.Check
            (Item, Contains (Text, "masked:" & LF & HT & ".byte 240" & LF),
@@ -1889,6 +1986,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "the same source emits the same bytes",
          The_Same_Source_Emits_The_Same_Bytes'Access);
+      Landin.Testing.Register
+        (Into, "backend", "zero data is reserved and not written",
+         Zero_Data_Is_Reserved_And_Not_Written'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value becomes initialized data",
          A_Module_Value_Becomes_Initialized_Data'Access);
