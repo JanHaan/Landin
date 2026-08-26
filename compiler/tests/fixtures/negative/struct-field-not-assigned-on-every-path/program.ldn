@@ -1,0 +1,17 @@
+point: type = struct
+    x: u32
+    y: u32
+end point
+
+--  [1910] believes no condition, and D16 merges a field the way it
+--  merges a name: assigned in one arm and not another is not assigned.
+f: (n: u32) -> (r: u32) =
+    mut p: point
+    p.x = n
+
+    if n > 0 then
+        p.y = 1
+    end if
+
+    r = p.y
+end f

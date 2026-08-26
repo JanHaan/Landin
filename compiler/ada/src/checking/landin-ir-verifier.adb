@@ -233,45 +233,85 @@ package body Landin.IR.Verifier is
                               end if;
 
                            when Load_Field | Store_Field =>
-                              declare
-                                 D : constant Item_Id :=
-                                   Datum_Of (Of_Unit, Id, V);
-                              begin
-                                 if not Holds (Of_Unit, D)
-                                   or else Kind_Of (Of_Unit, D) /= Datum
-                                 then
-                                    return
-                                      (Kind => Named_Item_Is_Not_A_Datum,
-                                       Item => Id, Block => Block,
-                                       Value => V);
-                                 end if;
+                              if Reaches_A_Slot (Of_Unit, Id, V) then
+                                 --  [1810]'s local: a cell of this item,
+                                 --  which has to be one it has, has to
+                                 --  hold an aggregate, and has to have
+                                 --  the field named.
+                                 declare
+                                    Cell : constant Slot_Id :=
+                                      Slot_Of (Of_Unit, Id, V);
+                                 begin
+                                    if not Holds (Of_Unit, Id, Cell) then
+                                       return (Kind => Slot_Out_Of_Range,
+                                               Item => Id, Block => Block,
+                                               Value => V);
+                                    end if;
 
-                                 --  [0750]: a struct has the fields it
-                                 --  was declared with, so a selection of
-                                 --  any other is an IR nobody may build.
-                                 if Result_Of (Of_Unit, D)
-                                    /= Landin.Types.Aggregate
-                                   or else Field_Of (Of_Unit, Id, V)
-                                           > Field_Count (Of_Unit, D)
-                                 then
-                                    return
-                                      (Kind => Field_Out_Of_Range,
-                                       Item => Id, Block => Block,
-                                       Value => V);
-                                 end if;
+                                    if not Is_Aggregate
+                                             (Of_Unit, Id, Cell)
+                                      or else Field_Of (Of_Unit, Id, V)
+                                              > Slot_Field_Count
+                                                  (Of_Unit, Id, Cell)
+                                    then
+                                       return (Kind => Field_Out_Of_Range,
+                                               Item => Id, Block => Block,
+                                               Value => V);
+                                    end if;
 
-                                 if Op = Load_Field
-                                   and then Result_Of (Of_Unit, Id, V)
-                                            /= Nth_Field
-                                                 (Of_Unit, D,
-                                                  Field_Of (Of_Unit, Id, V))
-                                 then
-                                    return
-                                      (Kind => Result_Disagrees,
-                                       Item => Id, Block => Block,
-                                       Value => V);
-                                 end if;
-                              end;
+                                    if Op = Load_Field
+                                      and then Result_Of (Of_Unit, Id, V)
+                                               /= Nth_Slot_Field
+                                                    (Of_Unit, Id, Cell,
+                                                     Field_Of
+                                                       (Of_Unit, Id, V))
+                                    then
+                                       return (Kind => Result_Disagrees,
+                                               Item => Id, Block => Block,
+                                               Value => V);
+                                    end if;
+                                 end;
+                              else
+                                 declare
+                                    D : constant Item_Id :=
+                                      Datum_Of (Of_Unit, Id, V);
+                                 begin
+                                    if not Holds (Of_Unit, D)
+                                      or else Kind_Of (Of_Unit, D) /= Datum
+                                    then
+                                       return
+                                         (Kind => Named_Item_Is_Not_A_Datum,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+
+                                    --  [0750]: a struct has the fields it
+                                    --  was declared with, so a selection of
+                                    --  any other is an IR nobody may build.
+                                    if Result_Of (Of_Unit, D)
+                                       /= Landin.Types.Aggregate
+                                      or else Field_Of (Of_Unit, Id, V)
+                                              > Field_Count (Of_Unit, D)
+                                    then
+                                       return
+                                         (Kind => Field_Out_Of_Range,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+
+                                    if Op = Load_Field
+                                      and then Result_Of (Of_Unit, Id, V)
+                                               /= Nth_Field
+                                                    (Of_Unit, D,
+                                                     Field_Of (Of_Unit, Id, V))
+                                    then
+                                       return
+                                         (Kind => Result_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
+                              end if;
 
                            when Load_Datum | Store_Datum =>
                               declare
@@ -520,17 +560,30 @@ package body Landin.IR.Verifier is
                               end if;
 
                            when Store_Field =>
-                              if Nth_Field
-                                   (Of_Unit, Datum_Of (Of_Unit, Id, V),
-                                    Field_Of (Of_Unit, Id, V))
-                                 /= Result_Of
-                                      (Of_Unit, Id,
-                                       Nth_Operand (Of_Unit, Id, V, 1))
-                              then
-                                 return (Kind => Store_Datum_Disagrees,
-                                         Item => Id, Block => Block,
-                                         Value => V);
-                              end if;
+                              declare
+                                 Wants : constant Landin.Types.Scalar_Name
+                                   :=
+                                     (if Reaches_A_Slot (Of_Unit, Id, V)
+                                      then Nth_Slot_Field
+                                             (Of_Unit, Id,
+                                              Slot_Of (Of_Unit, Id, V),
+                                              Field_Of (Of_Unit, Id, V))
+                                      else Nth_Field
+                                             (Of_Unit,
+                                              Datum_Of (Of_Unit, Id, V),
+                                              Field_Of (Of_Unit, Id, V)));
+                              begin
+                                 if Wants
+                                    /= Result_Of
+                                         (Of_Unit, Id,
+                                          Nth_Operand (Of_Unit, Id, V, 1))
+                                 then
+                                    return
+                                      (Kind => Store_Datum_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+                              end;
 
                            when Branch =>
                               if Result_Of

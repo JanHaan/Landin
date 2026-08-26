@@ -61,6 +61,40 @@ package Landin.Backend is
      (Of_Frame : Frame; Slot : Landin.IR.Slot_Id)
      return Landin.Targets.Byte_Count;
 
+   --  Where one field of an aggregate slot sits, as a distance below the
+   --  frame pointer like any other cell.  A cell grows downward and
+   --  [0750] lays a struct out upward, so field 1 is furthest from the
+   --  frame pointer and the last field is nearest: this subtracts the
+   --  field's own offset from the cell's, which is what keeps a hexdump
+   --  of the cell matching the source.
+   function Field_Offset
+     (Of_Unit  : Landin.IR.Unit;
+      Item     : Landin.IR.Item_Id;
+      Of_Frame : Frame;
+      Slot     : Landin.IR.Slot_Id;
+      Field    : Positive;
+      Facts    : Landin.Targets.Target_Facts)
+     return Landin.Targets.Byte_Count
+     with Pre => Landin.IR.Holds (Of_Unit, Item)
+                 and then Landin.IR.Holds (Of_Unit, Item, Slot)
+                 and then Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                 and then Field
+                          <= Landin.IR.Slot_Field_Count
+                               (Of_Unit, Item, Slot);
+
+   --  How much room an aggregate slot takes, and how it must be aligned:
+   --  [0750]'s whole placement over the slot's own field run.
+   procedure Aggregate_Extent
+     (Of_Unit   : Landin.IR.Unit;
+      Item      : Landin.IR.Item_Id;
+      Slot      : Landin.IR.Slot_Id;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+     with Pre => Landin.IR.Holds (Of_Unit, Item)
+                 and then Landin.IR.Holds (Of_Unit, Item, Slot)
+                 and then Landin.IR.Is_Aggregate (Of_Unit, Item, Slot);
+
    function Value_Offset
      (Of_Frame : Frame; Value : Landin.IR.Value_Id)
      return Landin.Targets.Byte_Count;

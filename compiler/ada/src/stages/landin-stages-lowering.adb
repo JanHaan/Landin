@@ -255,6 +255,24 @@ package body Landin.Stages.Lowering is
 
          Held := Landin.Checking.Type_Of (Types.all, Id);
 
+         --  [0670]'s local: a cell holding a whole struct, carrying its
+         --  fields' types the way an aggregate datum does.
+         if Held = Ty.Aggregate then
+            Slots (Positive (Id)) :=
+              IR.Add_Aggregate_Slot
+                (Unit.all, Filling, Id, Site_Of (Of_Tree, Node));
+
+            for Field in
+              1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
+            loop
+               IR.Add_Slot_Field
+                 (Unit.all, Filling, Slots (Positive (Id)),
+                  Landin.Checking.Field_Type (Types.all, Id, Field));
+            end loop;
+
+            return Slots (Positive (Id));
+         end if;
+
          if Held not in Ty.Scalar_Name then
             raise Landin.Compiler_Defect with
               "a declaration reached the lowering with no scalar type";
@@ -490,20 +508,31 @@ package body Landin.Stages.Lowering is
                return Lower_Short_Circuit (Of_Tree, Node, Scope);
 
             when Syn.Member_Selection =>
-               --  [0750]'s field of [0670]'s state.  The checker settled
-               --  which field the name selects, so this carries the
-               --  answer rather than looking a name up a second time.
+               --  [0750]'s field of a struct.  The checker settled which
+               --  field the name selects, so this carries the answer
+               --  rather than looking a name up a second time; what it
+               --  is a field *of* decides whether the base is [1740]'s
+               --  module state or a cell in this frame.
                declare
                   From : constant Syn.Node_Id :=
                     Syn.Target_Of (Of_Tree, Node);
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, From);
+                  Which : constant Positive :=
+                    Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
                begin
-                  return IR.Emit_Load_Field
+                  if Res.Sort_Of (Meanings.all, Means)
+                     = Res.Module_Binding
+                  then
+                     return IR.Emit_Load_Field
+                              (Unit.all, Filling,
+                               IR.Item_For (Unit.all, Means), Which,
+                               Scalar_At (Of_Tree, Node), Site);
+                  end if;
+
+                  return IR.Emit_Load_Slot_Field
                            (Unit.all, Filling,
-                            IR.Item_For (Unit.all, Means),
-                            Landin.Checking.Field_Index
-                              (Types.all, Of_Tree, Node),
+                            Slot_For (Of_Tree, From, Means), Which,
                             Scalar_At (Of_Tree, Node), Site);
                end;
 
@@ -674,12 +703,26 @@ package body Landin.Stages.Lowering is
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
                   if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection then
-                     IR.Emit_Store_Field
-                       (Unit.all, Filling,
-                        IR.Item_For (Unit.all, Means),
-                        Landin.Checking.Field_Index
-                          (Types.all, Of_Tree, Place),
-                        Value, Site);
+                     declare
+                        Which : constant Positive :=
+                          Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, Place);
+                     begin
+                        if Res.Sort_Of (Meanings.all, Means)
+                           = Res.Module_Binding
+                        then
+                           IR.Emit_Store_Field
+                             (Unit.all, Filling,
+                              IR.Item_For (Unit.all, Means), Which,
+                              Value, Site);
+                        else
+                           IR.Emit_Store_Slot_Field
+                             (Unit.all, Filling,
+                              Slot_For (Of_Tree, Named, Means), Which,
+                              Value, Site);
+                        end if;
+                     end;
+
                      return;
                   end if;
 

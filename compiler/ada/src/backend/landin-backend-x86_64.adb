@@ -544,6 +544,34 @@ package body Landin.Backend.X86_64 is
                   end;
 
                when Landin.IR.Load_Field | Landin.IR.Store_Field =>
+                  if Landin.IR.Reaches_A_Slot (Of_Unit, Item, Value) then
+                     --  [1810]'s local: a cell in this frame, reached the
+                     --  way every other cell is and at the field's own
+                     --  displacement inside it.
+                     declare
+                        Slot : constant Landin.IR.Slot_Id :=
+                          Landin.IR.Slot_Of (Of_Unit, Item, Value);
+                        Which : constant Positive :=
+                          Landin.IR.Field_Of (Of_Unit, Item, Value);
+                        Held : constant Held_Size :=
+                          Size_Of
+                            (Landin.IR.Nth_Slot_Field
+                               (Of_Unit, Item, Slot, Which), Facts);
+                        Place : constant String :=
+                          Cell (Field_Offset
+                                  (Of_Unit, Item, Layout, Slot, Which,
+                                   Facts));
+                     begin
+                        if Op = Landin.IR.Load_Field then
+                           Carry (Held, Place, Value_Cell (Value));
+                        else
+                           Carry (Held, Value_Cell (Operand (1)), Place);
+                        end if;
+                     end;
+
+                     return;
+                  end if;
+
                   --  [0750] puts the field where the same placement the
                   --  checker used puts it, and the assembler adds that
                   --  many bytes to the name.  A displacement and not a

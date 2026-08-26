@@ -1,0 +1,6 @@
+class: negative
+summary: D16 assigns a field on its own, so a field nothing wrote is not assigned when it is read
+constructs: 0670, 0750, 1810, 1910
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64
