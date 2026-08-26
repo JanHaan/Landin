@@ -687,6 +687,50 @@ package body Landin.IR is
       pragma Assert (Where /= No_Value);
    end Emit_Store_Field;
 
+   function Emit_Load_Element
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Datum  : Item_Id;
+      Index  : Value_Id;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op     => Load_Element,
+                     Result => Result,
+                     Site   => Site,
+                     Named  => Datum,
+                     others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Index);
+      return Append (Into, Item, Made);
+   end Emit_Load_Element;
+
+   procedure Emit_Store_Element
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Datum : Item_Id;
+      Index : Value_Id;
+      Value : Value_Id;
+      Site  : Landin.Provenance.Origin)
+   is
+      Made : Instruction :=
+        Instruction'(Op     => Store_Element,
+                     Site   => Site,
+                     Named  => Datum,
+                     others => <>);
+      Where : Value_Id;
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 2;
+      Into.Operands.Append (Index);
+      Into.Operands.Append (Value);
+      Where := Append (Into, Item, Made);
+      pragma Assert (Where /= No_Value);
+   end Emit_Store_Element;
+
    procedure Emit_Store_Datum
      (Into  : in out Unit;
       Item  : Item_Id;

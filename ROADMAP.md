@@ -2059,10 +2059,10 @@ where — and the paragraph already decided that for the divisor and the shift.
 to the trap. D18 later made an array index exactly `usize`, so a negative
 expression is refused by its type before this row applies.
 
-What the trap needs is the next slice, so an index the compiler cannot work out
-is named rather than reaching one — including `0 - 1`, which looks known and is
-not: [1880] makes a literal and a unary minus over one known and nothing else,
-which is the same line D7 drew against believing a condition.
+At that point the trap was still the next slice, so an index the compiler could
+not work out was named rather than reaching one — including `0 - 1`, which looks
+known and is not: [1880] makes a literal and a unary minus over one known and
+nothing else, which is the same line D7 drew against believing a condition.
 
 Review found four things wrong with the first attempt, and one of them was the
 worst kind. `Check_Place` walked past a field to the binding holding it and did
@@ -2109,11 +2109,32 @@ registers; `runtime/large-array-offset-is-addressed` writes and reads byte
 2147483647 on Linux, where the symbol-to-instruction distance pushes the
 relocation beyond that signed limit, rather than leaving it to the linker.
 
-What is still refused: an array local, an array literal
-[0520], the inferred length [0530], `zeroed` [0540], repetition [0560],
-a computed index and slices [0570], `lenof`, and an array as a struct field. Each is its
-own slice, and the value slices need the same frame and data work the struct
-ones did.
+A computed `usize` index now completes the other half of [1950]'s row for a
+module array. Unlike a known position it is a value in the IR, so
+`Load_Element` carries that operand and `Store_Element` carries it before the
+value to store; the verifier requires the operand to be `usize` and both result
+and stored value to be the array's element type. The x86-64 backend compares
+index and length as unsigned values, traps with `ud2` unless the index is below
+the length, and only beyond that branch scales the index or forms the address,
+which makes [0580]'s ordering visible in the instructions rather than merely in
+the checker.
+
+Lowering performs the destination's computed index before an assignment's
+right-hand side, as [0410] requires. If that value crosses blocks because the
+right-hand side short-circuits, a temporary cell carries it to the final store;
+otherwise the verifier would rightly reject an operand defined in the earlier
+block. `inc words[i]` and its decrement sibling lower that index once, then use
+the same IR value for both the element load and the store; evaluating it twice
+would turn one source place into two potentially different places once calls
+and other effectful index expressions arrive. The former
+`computed-index-not-enabled` refusal is consequently replaced by Linux runtime
+cases that read and write both ends of an array, carry an index across a
+short-circuiting value, and deliberately trap at the length.
+
+What is still refused: an array local, an array literal [0520], the inferred
+length [0530], `zeroed` [0540], repetition [0560], slices [0570], `lenof`, and
+an array as a struct field. Each is its own slice, and the value slices need the
+same frame and data work the struct ones did.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a
 zero image when all-zero is a valid value for it, which is what lets a

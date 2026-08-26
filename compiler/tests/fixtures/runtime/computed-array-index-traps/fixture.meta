@@ -1,0 +1,6 @@
+class: runtime
+summary: [1950] traps a computed usize index outside the array before computing its address
+constructs: 0160, 0520, 0570, 0580, 1800, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64
