@@ -115,7 +115,11 @@ package Landin.Diagnostics.Syntactic is
       --  only the parser can tell these from it.
       Slice_Type,
       Array_Literal,
-      Indexing);
+      Indexing,
+      --  [1820] indexes what a selection named, so the brackets come
+      --  last: a field of an element is [0670]'s struct inside [0520]'s
+      --  array, which is the element the layout cannot hold yet.
+      Selection_From_An_Index);
 
    --  Where the tour describes it.  Ordered by construct so that a reader
    --  can check the column against tour.md by running down it, and
@@ -145,7 +149,8 @@ package Landin.Diagnostics.Syntactic is
             when Type_Parameter       => "[1290]",
             when Slice_Type           => "[0570]",
             when Array_Literal        => "[0520]",
-            when Indexing             => "[0570]")
+            when Indexing             => "[0570]",
+            when Selection_From_An_Index => "[0520]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  What the parser hands over: a rule, a place, and the sentence a user
@@ -197,7 +202,8 @@ private
                | Distinct_Type
                | Slice_Type
                | Array_Literal
-               | Indexing             => "R2.20",
+               | Indexing
+               | Selection_From_An_Index => "R2.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter       => "R2.40",
             --  R2.50 sources [0900] for the parameter conventions.

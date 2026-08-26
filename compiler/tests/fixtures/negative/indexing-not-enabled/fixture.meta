@@ -1,6 +1,6 @@
 class: negative
-summary: [0570] indexes an array or a slice and the kernel omits both, so an index is refused by name after a name, a selection, a call, a parenthesis and at a place
-constructs: 0570, 1830
+summary: [1820] indexes what a selection named, so a call and a parenthesis are refused by name
+constructs: 0570, 1820, 1830
 program: program.ldn
-codes: L0010, L0010, L0010, L0010, L0010, L0010
+codes: L0010, L0010
 targets: linux-x86-64, macos-arm64

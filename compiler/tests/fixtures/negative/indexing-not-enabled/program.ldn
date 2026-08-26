@@ -1,20 +1,10 @@
-point: type = struct
-    x: u32
-end point
-
-mut here: point
-
 size: () -> (r: u32) = r = 1 end size
 
---  [0570] indexes what a name, a selection and a call each name, so each
---  of these is the same refusal and not a stray token after the first.
-f: (n: u32) -> none =
-    a := n[0]
-    b := here.x[0]
-    c := size()[0]
-    d := (n)[0]
+mut n: u32
 
-    --  Writing an element is [0570] as much as reading one is.
-    n[0] = 1
-    here.x[0] = 2
+--  [1820] indexes what a selection named, so a call and a parenthesised
+--  expression are each their own production and neither is indexed.
+f: () -> none =
+    a := size()[0]
+    b := (n)[0]
 end f

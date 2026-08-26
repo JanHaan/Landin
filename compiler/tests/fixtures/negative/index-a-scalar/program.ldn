@@ -1,0 +1,14 @@
+mut n: u32
+
+p: type = struct
+    x: u32
+end p
+
+mut here: p
+
+--  [1820] indexes an array [0520], and neither a scalar nor a field of
+--  one is an array.
+f: () -> none =
+    a := n[0]
+    b := here.x[0]
+end f

@@ -1,0 +1,6 @@
+class: runtime
+summary: each element of module array state is written and read at its own offset, and the rest stay D10 zero
+constructs: 0520, 0570, 1740, 1820
+program: main.ldn
+status: 42
+targets: linux-x86-64

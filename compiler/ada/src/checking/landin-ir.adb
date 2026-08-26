@@ -196,6 +196,18 @@ package body Landin.IR is
       return Slot_Id (Held.Slots.Count);
    end Add_Aggregate_Slot;
 
+   function Part_Count (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     is (if Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
+         then Array_Length (Of_Unit, Item)
+         else Element_Total (Field_Count (Of_Unit, Item)));
+
+   function Nth_Part
+     (Of_Unit : Unit; Item : Item_Id; Index : Part_Position)
+     return Landin.Types.Scalar_Name
+     is (if Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
+         then Array_Element (Of_Unit, Item)
+         else Nth_Field (Of_Unit, Item, Positive (Index)));
+
    procedure Set_Array
      (Into    : in out Unit;
       Item    : Item_Id;
@@ -434,8 +446,8 @@ package body Landin.IR is
      is (Held (Of_Unit, Item, Value).Named);
 
    function Field_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
-     return Positive
-     is (Held (Of_Unit, Item, Value).Field);
+     return Part_Position
+     is (Held (Of_Unit, Item, Value).Part);
 
    function Reaches_A_Slot
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
@@ -601,7 +613,7 @@ package body Landin.IR is
      (Into   : in out Unit;
       Item   : Item_Id;
       Datum  : Item_Id;
-      Field  : Positive;
+      Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin) return Value_Id
      is (Append
@@ -610,14 +622,14 @@ package body Landin.IR is
                          Result => Result,
                          Site   => Site,
                          Named  => Datum,
-                         Field  => Field,
+                         Part   => Field,
                          others => <>)));
 
    function Emit_Load_Slot_Field
      (Into   : in out Unit;
       Item   : Item_Id;
       Slot   : Slot_Id;
-      Field  : Positive;
+      Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin) return Value_Id
      is (Append
@@ -626,14 +638,14 @@ package body Landin.IR is
                          Result => Result,
                          Site   => Site,
                          Slot   => Slot,
-                         Field  => Field,
+                         Part   => Field,
                          others => <>)));
 
    procedure Emit_Store_Slot_Field
      (Into  : in out Unit;
       Item  : Item_Id;
       Slot  : Slot_Id;
-      Field : Positive;
+      Field : Part_Position;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin)
    is
@@ -641,7 +653,7 @@ package body Landin.IR is
         Instruction'(Op     => Store_Field,
                      Site   => Site,
                      Slot   => Slot,
-                     Field  => Field,
+                     Part   => Field,
                      others => <>);
       Where : Value_Id;
    begin
@@ -656,7 +668,7 @@ package body Landin.IR is
      (Into  : in out Unit;
       Item  : Item_Id;
       Datum : Item_Id;
-      Field : Positive;
+      Field : Part_Position;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin)
    is
@@ -664,7 +676,7 @@ package body Landin.IR is
         Instruction'(Op     => Store_Field,
                      Site   => Site,
                      Named  => Datum,
-                     Field  => Field,
+                     Part   => Field,
                      others => <>);
       Where : Value_Id;
    begin

@@ -940,6 +940,17 @@ package body Landin.Stages.Checking is
          return Declared_As_Node (Their_Tree.all, Result);
       end Check_Call;
 
+      --  [1950]'s third row.  An index the compiler knows is refused when
+      --  it is outside the length, and one it does not know is left to the
+      --  trap the backend emits -- which is what the divisor and the shift
+      --  amount already do, in the same paragraph and for the same reason.
+      --  Known is [1880]'s: a literal, or a unary minus over one.
+      procedure Check_Index_Bound
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         From    : Syn.Node_Id;
+         Where   : Syn.Node_Id);
+
       --  Which field of an aggregate a name selects, by [0750]'s order,
       --  or zero when the aggregate has no field of that name.  The names
       --  are read from the struct body the identity names rather than
@@ -1004,6 +1015,72 @@ package body Landin.Stages.Checking is
                       Syn.Nth_Field (Of_Tree.all, Written, Index)));
       end Field_Named;
 
+      procedure Check_Index_Bound
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         From    : Syn.Node_Id;
+         Where   : Syn.Node_Id)
+      is
+         Length : constant Landin.Checking.Element_Count :=
+           Landin.Checking.Array_Length (Types.all, Of_Tree, From);
+         Negated : constant Boolean :=
+           Syn.Kind (Of_Tree, Where) = Syn.Negation;
+         Literal : constant Syn.Node_Id :=
+           (if Negated then Syn.Operand_Of (Of_Tree, Where) else Where);
+      begin
+         if Syn.Kind (Of_Tree, Literal) /= Syn.Integer_Literal then
+            --  [1950] leaves this one to the trap, and the trap is the
+            --  next slice: naming it is what keeps it from reaching the
+            --  lowering, which has no computed index to lower.
+            Bad.Report
+              (Item    => Bad.Unsupported_Use,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Where),
+               Message => "an index the compiler cannot work out is not"
+                          & " enabled yet",
+               Refused => Bad.Computed_Index,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+
+         declare
+            Snap : constant Landin.Source.Snapshot :=
+              Source (Context, Syn.Source_Of (Of_Tree));
+            Text : constant String :=
+              Landin.Source.Slice (Snap, Syn.Digit_Span (Of_Tree, Literal));
+            Value      : Ty.Magnitude;
+            Overflowed : Boolean;
+         begin
+            Ty.Evaluate
+              (Text, Syn.Base (Of_Tree, Literal), Value, Overflowed);
+
+            --  A negative index is outside every length, which is why
+            --  [1950] gives it no row of its own.  `-0` is not one:
+            --  [1880] makes it known and its value is zero, which an
+            --  array with any element at all has.
+            if not Overflowed
+              and then (not Negated or else Value = 0)
+              and then Value < Ty.Magnitude (Length)
+            then
+               return;
+            end if;
+
+            Bad.Report
+              (Item    => Bad.Impossible_Operand,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Where),
+               Message => "this index is outside the "
+                          & Written (Ty.Folded (Length))
+                          & " this array has",
+               Note    => "[1950]: an index the compiler knows is refused"
+                          & " where it cannot be taken, and one it does"
+                          & " not know traps",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+         end;
+      end Check_Index_Bound;
+
       --  The type of a place, and of what a selection selects from.
       --  Separate from Synthesise because a bare aggregate name is a
       --  value this kernel refuses in an expression, while the same name
@@ -1031,6 +1108,23 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Note_Body
                        (Types.all, Of_Tree, Node,
                         Landin.Checking.Body_Of (Types.all, Means));
+                  end if;
+
+                  return Held;
+               end if;
+
+               --  D17: an array's identity is its shape, so a name that
+               --  holds one carries the shape to wherever it is indexed.
+               if Held = Ty.Fixed_Array then
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                     = Ty.Undecided
+                  then
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Node, Held);
+                     Landin.Checking.Note_Array
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Array_Length (Types.all, Means),
+                        Landin.Checking.Array_Element (Types.all, Means));
                   end if;
 
                   return Held;
@@ -1170,6 +1264,69 @@ package body Landin.Stages.Checking is
                   end if;
 
                   return Kept (Held);
+               end;
+
+            when Syn.Element_Index =>
+               declare
+                  From : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+                  Where : constant Syn.Node_Id := Syn.Index_Of (Of_Tree, Node);
+                  Held : constant Ty.Type_Kind :=
+                    Selected_From (Of_Tree, From);
+               begin
+                  if Held = Ty.Ill_Typed then
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  --  [1820] indexes an array, and the kernel has one kind
+                  --  of indexable thing: [0570]'s slice is not enabled and
+                  --  [0610]'s text is not either.
+                  if Held /= Ty.Fixed_Array then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, From),
+                        Message => "this is not an array, so it has no"
+                                   & " element to index",
+                        Note    => "[1820]: the kernel indexes an array"
+                                   & " [0520] and nothing else",
+                        Related => Syn.Origin (Of_Tree, From),
+                        Because => "what it names",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  --  [0900]: an index is an integer, and [1950] says a
+                  --  negative one is outside every length.  An untyped
+                  --  literal takes [0200]'s default like any other.
+                  declare
+                     Got : constant Ty.Type_Kind :=
+                       Synthesise (Of_Tree, Where);
+                  begin
+                     if Got = Ty.Untyped_Integer then
+                        Commit_To (Of_Tree, Where, Ty.Default_Integer);
+                     elsif Decidable (Got)
+                       and then Got not in Ty.Integer_Name
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Where),
+                           Message => "this indexes with " & Shown (Got)
+                                      & ", and an index is a number",
+                           Note    => "[0900]: an index is an integer,"
+                                      & " and every one of them may be",
+                           Related => Syn.Origin (Of_Tree, From),
+                           Because => "the array indexed here",
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+                  end;
+
+                  Check_Index_Bound (Of_Tree, Node, From, Where);
+                  return Kept
+                    (Landin.Checking.Array_Element
+                       (Types.all, Of_Tree, From));
                end;
 
             when Syn.Member_Selection =>
@@ -1364,13 +1521,16 @@ package body Landin.Stages.Checking is
       is
          Held : Ty.Type_Kind;
 
-         --  What a place is a place *in*.  A field is written exactly as
-         --  the binding holding it is [1810], so which binding that is is
-         --  the question [1900] answers about, and it is the name at the
-         --  left of however many dots were written.
+         --  What a place is a place *in*.  A field and an element are
+         --  written exactly as the binding holding them is [1810], so
+         --  which binding that is is the question [1900] answers about,
+         --  and it is the name at the left of however many dots and
+         --  brackets were written.
          Base : Syn.Node_Id := Node;
       begin
-         while Syn.Kind (Of_Tree, Base) = Syn.Member_Selection loop
+         while Syn.Kind (Of_Tree, Base)
+               in Syn.Member_Selection | Syn.Element_Index
+         loop
             Base := Syn.Target_Of (Of_Tree, Base);
          end loop;
 

@@ -1,0 +1,10 @@
+mut big: [4294967295]u8
+
+--  [0200] gives an integer literal with no context the default type, and
+--  an index has no declared type to take instead, so an index past what
+--  that type holds is refused for its type rather than for the length.
+--  The element exists; reaching it waits for the slice that decides what
+--  type an index has.
+f: () -> (r: u8) =
+    r = big[4294967293]
+end f
