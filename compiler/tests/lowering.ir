@@ -603,6 +603,28 @@ item 5 ROUTINE pointer_width result usize params 0 slots 1 blocks 1 values 4
     2 STORE slot 1 <- 1
     3 LOAD usize slot 1
     4 LEAVE <- 3
+file positive/measurement-of-fixed-arrays/program.ldn
+unit items 4
+item 1 DATUM inline_size result usize params 0 slots 0 blocks 1 values 4
+  block 1 scope 1 PROGRAM length 4
+    1 MEASURE_SIZE usize
+    2 NUMBER usize 4
+    3 MULTIPLY usize <- 2 1
+    4 LEAVE <- 3
+item 2 DATUM inline_align result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 MEASURE_ALIGN usize
+    2 LEAVE <- 1
+item 3 DATUM aliased_size result usize params 0 slots 0 blocks 1 values 4
+  block 1 scope 1 PROGRAM length 4
+    1 MEASURE_SIZE usize
+    2 NUMBER usize 4
+    3 MULTIPLY usize <- 2 1
+    4 LEAVE <- 3
+item 4 DATUM aliased_align result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 MEASURE_ALIGN usize
+    2 LEAVE <- 1
 file positive/module-binding-with-no-value-reads-zero/program.ldn
 unit items 4
 item 1 DATUM later result i32 params 0 slots 0 blocks 1 values 2

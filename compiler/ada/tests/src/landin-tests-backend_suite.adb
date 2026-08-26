@@ -1740,8 +1740,12 @@ package body Landin.Tests.Backend_Suite is
      (Item : in out Landin.Testing.Context)
    is
       Source : constant String :=
-        "here: usize = sizeof usize" & LF
-        & "wide: usize = sizeof u32" & LF;
+        "row: type = [3]usize" & LF
+        & "packet: type = row" & LF
+        & "here: usize = sizeof usize" & LF
+        & "wide: usize = sizeof u32" & LF
+        & "array_size: usize = sizeof packet" & LF
+        & "array_align: usize = alignof [3]usize" & LF;
 
       Native : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -1776,6 +1780,18 @@ package body Landin.Tests.Backend_Suite is
                   and then Contains (Thin, "wide:" & LF & HT & ".long 4"
                                            & LF),
             "u32 is four bytes on both");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, "array_size:" & LF & HT & ".quad 24" & LF)
+              and then Contains
+                (Thin, "array_size:" & LF & HT & ".long 12" & LF),
+            "an aliased array multiplies its target element size");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, "array_align:" & LF & HT & ".quad 8" & LF)
+              and then Contains
+                (Thin, "array_align:" & LF & HT & ".long 4" & LF),
+            "an inline array keeps its target element alignment");
       end;
    end A_Measurement_Follows_The_Target;
 

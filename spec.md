@@ -963,15 +963,26 @@ literals and general expression operands remain deferred. The spelling stays
 contextual rather than joining [1760]'s reserved words.
 
 **Where the answer comes from** is the other half of this decision and the
-half with teeth. `sizeof` and `alignof` are not folded by the checker or the
-lowering: `Landin.IR` carries `Measure_Size` and `Measure_Align` with the type
-asked about, and the backend answers, because a byte size needs a target.
+half with teeth. A scalar `sizeof` or `alignof` is not folded by the checker or
+the lowering: `Landin.IR` carries `Measure_Size` or `Measure_Align` with the
+type asked about, and the backend answers, because a byte size needs a target.
 That is the seam [0320]'s zero-fill already sits on, and it keeps the IR
 target-neutral — the same source emits 8 for `sizeof usize` against the Linux
-x86-64 description and 4 against the synthetic 32-bit one. A fixed array's
-element count is already part of its type (D17), so `lenof name` lowers to the
-existing `usize` Number IR with that count. It does not read the named storage
-and does not require the binding to be definitely assigned.
+x86-64 description and 4 against the synthetic 32-bit one.
+
+A fixed array is measured from its resolved structural type, whether [1790]
+writes it inline or D15 reaches it through aliases. Its size is its element
+count multiplied by the target's size for the scalar element, and a nonempty
+array's alignment is that element's target alignment. Lowering preserves those
+questions as the existing scalar measurement, `usize` Number and Multiply IR;
+it adds no array-measurement opcode and asks no host question. The internal
+zero-element shape keeps size zero and alignment one; this says what a shape
+already representable inside the checker means and does not decide whether
+source may spell one.
+
+A fixed array's element count is already part of its type (D17), so `lenof
+name` lowers to the existing `usize` Number IR with that count. It does not read
+the named storage and does not require the binding to be definitely assigned.
 
 **The alternative:** `i32`, which is what an untyped literal would default
 to and so the least surprising answer for a reader who has only read [0200];
@@ -982,9 +993,10 @@ on purpose, and which `Landin.IR`'s own header already argues against for
 the shifts.
 
 **Pinned by** `positive/measurement-of-a-type`,
+`positive/measurement-of-fixed-arrays`,
 `positive/lenof-uninitialized-fixed-array`,
-`negative/lenof-scalar`, `negative/lenof-unresolved-name`,
-`runtime/lenof-named-fixed-arrays`,
+`negative/measuring-refused-types`, `negative/lenof-scalar`,
+`negative/lenof-unresolved-name`, `runtime/lenof-named-fixed-arrays`,
 `runtime/measurements-answer-for-the-target`, and the backend case that emits
 one source against two target descriptions.
 
@@ -1100,7 +1112,8 @@ name — so the rule is written and the fixture that pins it arrives with the
 element.
 
 **Pinned by** `positive/array-type-is-declared`,
-`positive/array-types-alias-and-agree`.
+`positive/array-types-alias-and-agree`,
+`positive/measurement-of-fixed-arrays`.
 
 ### D18 — An array index is `usize`, and an array fits the target's `usize`
 

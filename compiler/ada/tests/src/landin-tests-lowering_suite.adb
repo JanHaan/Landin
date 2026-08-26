@@ -13,6 +13,7 @@
 
 with Ada.Strings.Unbounded;
 
+with Landin.Checking;
 with Landin.IR;
 with Landin.IR.Dump;
 with Landin.IR.Verifier;
@@ -20,6 +21,8 @@ with Landin.Platform;
 with Landin.Platform.Native;
 with Landin.Testing.Fixtures;
 with Landin.Source;
+with Landin.Syntax;
+with Landin.Syntax.Forest;
 with Landin.Stages.Checking;
 with Landin.Stages.Lowering;
 with Landin.Stages.Resolution;
@@ -43,6 +46,7 @@ package body Landin.Tests.Lowering_Suite is
    use type IR.Value_Id;
    use type Landin.IR.Verifier.Fault_Kind;
    use type Landin.Source.Source_Id;
+   use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
@@ -1063,6 +1067,103 @@ package body Landin.Tests.Lowering_Suite is
    end A_Computed_Local_Element_Reaches_Its_Slot;
 
    ------------------------------------------------------------------
+   --  An internal array shape the source does not pin
+   ------------------------------------------------------------------
+
+   --  D17's checked table represents a zero-element shape, while source
+   --  legality for `[0]T` remains deliberately undecided.  Start from source
+   --  the frontend accepts, then use that public table seam to ask lowering
+   --  the internal question without making `[0]T` a corpus fixture.
+   procedure An_Internal_Empty_Array_Has_Identity_Measurements
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Internal_Empty_Array_Has_Identity_Measurements
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Front : Landin.Stages.Pipeline;
+      Back  : Landin.Stages.Pipeline;
+      Src   : constant Landin.Source.Source_Id :=
+        Landin.Stages.Add_Source
+          (Work, "empty-measurement.ldn",
+           "array_align: usize = alignof [2]u16" & LF
+           & "array_size: usize = sizeof [2]u16" & LF);
+      Ran : Natural;
+   begin
+      Landin.Stages.Append (Front, Frontend'Access);
+      Landin.Stages.Append (Front, Names'Access);
+      Landin.Stages.Append (Front, Checker'Access);
+      Ran := Landin.Stages.Run (Front, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "three stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the nonempty source measurements are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Align_Type : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Measured_Type
+             (Of_Tree.all,
+              Landin.Syntax.Value_Of
+                (Of_Tree.all,
+                 Landin.Syntax.Nth_Declaration (Of_Tree.all, 1)));
+         Size_Type : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Measured_Type
+             (Of_Tree.all,
+              Landin.Syntax.Value_Of
+                (Of_Tree.all,
+                 Landin.Syntax.Nth_Declaration (Of_Tree.all, 2)));
+      begin
+         Landin.Checking.Note_Array
+           (Types.all, Of_Tree.all, Align_Type, 0,
+            Landin.Checking.Array_Element
+              (Types.all, Of_Tree.all, Align_Type));
+         Landin.Checking.Note_Array
+           (Types.all, Of_Tree.all, Size_Type, 0,
+            Landin.Checking.Array_Element
+              (Types.all, Of_Tree.all, Size_Type));
+      end;
+
+      Landin.Stages.Append (Back, Lowerer'Access);
+      Ran := Landin.Stages.Run (Back, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 1, "lowering ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the internal empty shapes are lowered");
+
+      declare
+         Unit  : IR.Unit renames Landin.Stages.Code (Work).all;
+         Align : constant IR.Item_Id := 1;
+         Size  : constant IR.Item_Id := 2;
+      begin
+         Landin.Testing.Check
+           (Item, IR.Result_Of (Unit, Align) = Landin.Types.Usize,
+            "empty-array alignment remains usize");
+         Landin.Testing.Check
+           (Item, IR.Value_Count (Unit, Align) = 2
+                  and then IR.Op_Of (Unit, Align, 1) = IR.Number
+                  and then IR.Number_Of (Unit, Align, 1) = 1,
+            "empty-array alignment is Number usize one with no measurement");
+         Landin.Testing.Check
+           (Item, IR.Result_Of (Unit, Size) = Landin.Types.Usize,
+            "empty-array size remains usize");
+         Landin.Testing.Check
+           (Item, IR.Value_Count (Unit, Size) = 4
+                  and then IR.Op_Of (Unit, Size, 1) = IR.Measure_Size
+                  and then IR.Op_Of (Unit, Size, 2) = IR.Number
+                  and then IR.Number_Of (Unit, Size, 2) = 0
+                  and then IR.Op_Of (Unit, Size, 3) = IR.Multiply,
+            "empty-array size multiplies its element measurement by zero");
+      end;
+   end An_Internal_Empty_Array_Has_Identity_Measurements;
+
+   ------------------------------------------------------------------
    --  The recorded artefact
    ------------------------------------------------------------------
 
@@ -1236,6 +1337,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a computed local element reaches its slot",
          A_Computed_Local_Element_Reaches_Its_Slot'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "an internal empty array has identity measurements",
+         An_Internal_Empty_Array_Has_Identity_Measurements'Access);
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);
