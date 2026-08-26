@@ -1,0 +1,45 @@
+counters: type = struct
+    hits: u32
+    misses: u32
+    ready: bool
+end counters
+
+wide: type = struct
+    first: u64
+    tag: u8
+    second: u64
+end wide
+
+mut state: counters
+mut spread: wide
+
+--  [1800]'s expression body is a whole expression, and a selection is one,
+--  so this is the body rather than a place that lost its `=`.
+hits_now: () -> (r: u32) = state.hits end hits_now
+
+--  A field is written and stepped exactly as the binding holding it is
+--  [1810], and each reaches its own [0750] offset: a write that landed on
+--  the padding, or on the neighbour, would leave one of these unchanged.
+public main: () -> (code: i32) =
+    state.hits = 7
+    state.ready = true
+    inc state.misses
+    inc state.misses
+    state.hits = state.hits + 1
+
+    spread.first = 18446744073709551615
+    spread.tag = 255
+    spread.second = 1
+
+    if hits_now() == 8
+        and state.misses == 2
+        and state.ready
+        and spread.first == 18446744073709551615
+        and spread.tag == 255
+        and spread.second == 1
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

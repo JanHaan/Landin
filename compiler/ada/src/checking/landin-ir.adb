@@ -536,6 +536,29 @@ package body Landin.IR is
                          Field  => Field,
                          others => <>)));
 
+   procedure Emit_Store_Field
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Datum : Item_Id;
+      Field : Positive;
+      Value : Value_Id;
+      Site  : Landin.Provenance.Origin)
+   is
+      Made : Instruction :=
+        Instruction'(Op     => Store_Field,
+                     Site   => Site,
+                     Named  => Datum,
+                     Field  => Field,
+                     others => <>);
+      Where : Value_Id;
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Value);
+      Where := Append (Into, Item, Made);
+      pragma Assert (Where /= No_Value);
+   end Emit_Store_Field;
+
    procedure Emit_Store_Datum
      (Into  : in out Unit;
       Item  : Item_Id;

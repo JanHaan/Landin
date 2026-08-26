@@ -1154,14 +1154,24 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Stepping : Boolean)
       is
          Held : Ty.Type_Kind;
+
+         --  What a place is a place *in*.  A field is written exactly as
+         --  the binding holding it is [1810], so which binding that is is
+         --  the question [1900] answers about, and it is the name at the
+         --  left of however many dots were written.
+         Base : Syn.Node_Id := Node;
       begin
-         if Res.Verdict_Of (Meanings.all, Of_Tree, Node) /= Res.Bound then
+         while Syn.Kind (Of_Tree, Base) = Syn.Member_Selection loop
+            Base := Syn.Target_Of (Of_Tree, Base);
+         end loop;
+
+         if Res.Verdict_Of (Meanings.all, Of_Tree, Base) /= Res.Bound then
             return;
          end if;
 
          declare
             Means : constant Res.Declaration_Id :=
-              Res.Bound_To (Meanings.all, Of_Tree, Node);
+              Res.Bound_To (Meanings.all, Of_Tree, Base);
             Sort  : constant Res.Declaration_Sort :=
               Res.Sort_Of (Meanings.all, Means);
             Their_Tree : constant not null access constant Syn.Tree :=
@@ -1186,7 +1196,7 @@ package body Landin.Stages.Checking is
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
                   Message =>
-                    "`" & Spelled (Syn.Name (Of_Tree, Node)) & "` "
+                    "`" & Spelled (Syn.Name (Of_Tree, Base)) & "` "
                     & (case Sort is
                           when Res.Parameter =>
                              "is a parameter, and a parameter is taken in",
@@ -1203,7 +1213,12 @@ package body Landin.Stages.Checking is
                                             (Their_Tree.all, Their_Node)),
                   Because => "declared here",
                   Into    => Found);
-               Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Base);
+
+               if Base /= Node then
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+               end if;
+
                return;
             end if;
 
@@ -2164,7 +2179,18 @@ package body Landin.Stages.Checking is
                   when Syn.Assignment =>
                      Read_Names (Of_Tree, Syn.Value_Of (Of_Tree, Item),
                                  State);
-                     Mark (Syn.Target_Of (Of_Tree, Item));
+
+                     --  Writing one field is not assigning the binding,
+                     --  so a selection marks nothing; the name it selects
+                     --  from is read, because that is where the field is.
+                     if Syn.Kind (Of_Tree, Syn.Target_Of (Of_Tree, Item))
+                        = Syn.Member_Selection
+                     then
+                        Read_Names
+                          (Of_Tree, Syn.Target_Of (Of_Tree, Item), State);
+                     else
+                        Mark (Syn.Target_Of (Of_Tree, Item));
+                     end if;
 
                   when Syn.Increment | Syn.Decrement =>
                      --  [0400]: `inc x` is `x += 1`, so it reads x too.

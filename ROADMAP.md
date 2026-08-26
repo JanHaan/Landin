@@ -1901,9 +1901,34 @@ integer, a selection and an integer, which the scanner never produces — it tak
 [0210]'s float as one lexeme and refuses it. The tokeniser refuses it too now, so
 the dump still agrees with the scanner about the fixture that pins it.
 
-Writing a field is the next slice: `place` [1810] has to gain the same selection,
-which brings a store that carries an offset and [1900]'s rule about what may be
-written applied to a field of a `mut` binding.
+Writing a field completed the pair, and it needed no new rule: [1810]'s `place`
+became the same `selection` an expression reads, because a field is written
+exactly as the binding holding it is, and what may be written stayed [1900]'s.
+So `Check_Place` walks left through however many dots were written and asks
+about the binding at the end of them — a field of a binding that is not `mut`
+is the same `L0303` the binding itself would be, pointing at the declaration.
+`Store_Field` is `Load_Field`'s pair and carries the same field index and no
+offset, and `inc state.misses` is what it always was: a load, a one, a trapping
+add and a store, now all at the field's own displacement.
+
+Enabling it moved one boundary in the parser that had nothing to do with
+fields. [1800] offers an expression body instead of a block, and the parser
+decided between them by looking at the token after a leading name: `:` or `:=`
+opened a binding and `=` an assignment, and anything else was an expression. A
+dot is now part of the name being looked past, because `state.hits = 7` is an
+assignment and reading it as an expression made it [0390]'s
+assignment-in-an-expression instead. What decides is the token after the whole
+selector chain and never the one after the first name: review caught the first
+attempt, which read a dot itself as the signal and so turned
+`get: () -> (r: u32) = state.hits end get` — a selection standing as [1800]'s
+expression body — into a place that had lost its `=`. The statement dispatch
+asks the same question, so a place is parsed as a place in both positions.
+
+Definite assignment [1910] was left alone deliberately and says so in code:
+writing one field does not assign the binding, so a selection marks nothing, and
+the name it selects from is a read because that is where the field is. Nothing
+tracked can be a struct yet — a local of one is still refused — so this is the
+rule written down before it can be reached rather than a behaviour change.
 
 Complete ordinary structs and implement arrays, C/packed structs, variants,
 tags, payload alignment

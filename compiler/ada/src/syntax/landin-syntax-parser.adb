@@ -201,6 +201,7 @@ package body Landin.Syntax.Parser is
             function Peek return Tok.Token_Kind;
             function Ahead (Distance : Tok.Token_Index)
               return Tok.Token_Kind;
+            function After_Selectors return Tok.Token_Kind;
             function Here return Landin.Source.Span;
             function Point return Landin.Source.Span;
             function After_Previous return Landin.Source.Span;
@@ -319,6 +320,23 @@ package body Landin.Syntax.Parser is
               is (if Index + Distance <= Last
                   then Tok.Kind (From, Index + Distance)
                   else Tok.End_Of_Input);
+
+            --  What follows the selection [1820] beginning at the token
+            --  in hand.  A name and a name with fields selected from it
+            --  are the same production, so what tells a place from an
+            --  expression is the token after the whole chain and never
+            --  the one after the name.
+            function After_Selectors return Tok.Token_Kind is
+               Step : Tok.Token_Index := 1;
+            begin
+               while Ahead (Step) = Tok.Dot
+                 and then Ahead (Step + 1) = Tok.Identifier
+               loop
+                  Step := Step + 2;
+               end loop;
+
+               return Ahead (Step);
+            end After_Selectors;
 
             function Here return Landin.Source.Span
               is (Tok.Where (From, Index));
@@ -821,15 +839,6 @@ package body Landin.Syntax.Parser is
                return At_Name;
             end Parse_Declared_Name;
 
-            --  place ::= identifier                               [1810]
-            function Parse_Place return Node_Id is
-               Named   : Landin.Source.Names.Name_Id;
-               At_Name : constant Landin.Source.Span :=
-                 Parse_Declared_Name (Named);
-            begin
-               return Add (Name_Reference, At_Name, Named => Named);
-            end Parse_Place;
-
             --  The `("." identifier)*` of [1820]'s selection, read after
             --  whatever named the thing being selected from.  Left to
             --  right, so `a.b.c` selects from what `a.b` named, and the
@@ -859,6 +868,20 @@ package body Landin.Syntax.Parser is
 
                return Selected;
             end Parse_Selectors;
+
+            --  place ::= selection                                [1810]
+            --
+            --  The same rule an expression reads, because a field is
+            --  written exactly as it is read and [1900] decides which
+            --  places may be written rather than this production.
+            function Parse_Place return Node_Id is
+               Named   : Landin.Source.Names.Name_Id;
+               At_Name : constant Landin.Source.Span :=
+                 Parse_Declared_Name (Named);
+            begin
+               return Parse_Selectors
+                        (Add (Name_Reference, At_Name, Named => Named));
+            end Parse_Place;
 
             --  type ::= the eleven scalar names                   [1790]
             --
@@ -1332,10 +1355,14 @@ package body Landin.Syntax.Parser is
                      return Parse_Expression;
                   end if;
 
+                  --  A selection [1820] is an expression and a place at
+                  --  once, so the `=` after the whole chain is what says
+                  --  this is an assignment rather than the expression
+                  --  body [1800] offers instead of a block.
                   if Peek = Tok.Identifier
                     and then Word_At_Hand = Word_None
                     and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
-                                              | Tok.Equal
+                    and then After_Selectors /= Tok.Equal
                   then
                      if Ahead (1) /= Tok.Left_Paren then
                         return Parse_Expression;
@@ -1735,21 +1762,28 @@ package body Landin.Syntax.Parser is
                           (False, Landin.Source.Empty_Span);
                      end if;
 
-                     if Ahead (1) = Tok.Equal then
+                     --  A place is a selection [1810], so what follows
+                     --  the whole chain is what makes this an assignment.
+                     if After_Selectors = Tok.Equal then
                         declare
-                           At_Name : constant Landin.Source.Span := Here;
-                           Named   : constant
-                             Landin.Source.Names.Name_Id := Named_Here;
-                           Target  : constant Node_Id :=
-                             Add (Name_Reference, At_Name,
-                                  Named => Named);
-                           At_Op   : Landin.Source.Span;
-                           Value   : Node_Id;
+                           Target : constant Node_Id := Parse_Place;
+                           At_Op  : Landin.Source.Span;
+                           Value  : Node_Id := No_Node;
                         begin
-                           Advance;
                            At_Op := Here;
-                           Advance;
-                           Value := Parse_Expression;
+
+                           if Expect
+                                (Wanted  => Tok.Equal,
+                                 Message => "an assignment writes a place"
+                                            & " with `=`",
+                                 Note    => "[1810]: `=` assigns and `==`"
+                                            & " compares [0390]",
+                                 Related => Start,
+                                 Because => "the place written")
+                           then
+                              Value := Parse_Expression;
+                           end if;
+
                            return Add
                              (Of_Kind  => Assignment,
                               At_Token => At_Op,

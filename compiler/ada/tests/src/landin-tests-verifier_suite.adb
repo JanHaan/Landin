@@ -137,6 +137,7 @@ package body Landin.Tests.Verifier_Suite is
       Datum_Load_Names_A_Routine,
       Datum_Load_Names_An_Aggregate,
       Field_Beyond_The_Aggregate,
+      Field_Store_Of_The_Wrong_Type,
       Condition_Is_A_Number,
       Call_Missing_An_Argument,
       Unreachable_Block,
@@ -269,6 +270,14 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Field_Store_Of_The_Wrong_Type =>
+            --  G's one field is a u32, and this writes a bool to it.
+            N := IR.Emit_Truth (Unit, A, True, Site);
+            IR.Emit_Store_Field (Unit, A, G, 1, N, Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Condition_Is_A_Number =>
             C := IR.Add_Block
                    (Unit, A, Landin.Resolution.Program_Scope, Site);
@@ -339,6 +348,7 @@ package body Landin.Tests.Verifier_Suite is
          (Datum_Load_Names_An_Aggregate,
           V.Aggregate_Datum_Is_Not_A_Value),
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
+         (Field_Store_Of_The_Wrong_Type, V.Store_Datum_Disagrees),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
          (Call_Missing_An_Argument,   V.Wrong_Operand_Count),
          (Unreachable_Block,          V.Block_Unreachable),
