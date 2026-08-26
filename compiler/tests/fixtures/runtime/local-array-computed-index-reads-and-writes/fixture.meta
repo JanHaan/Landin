@@ -1,0 +1,6 @@
+class: runtime
+summary: D22 lowers a computed index over a local array to a frame-slot element load and store that carries the whole-array fact through a copy
+constructs: 0080, 0160, 0410, 0520, 0570, 0580, 1800, 1810, 1950
+program: main.ldn
+status: 42
+targets: linux-x86-64

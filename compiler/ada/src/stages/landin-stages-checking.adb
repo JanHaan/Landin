@@ -1414,31 +1414,12 @@ package body Landin.Stages.Checking is
                   end if;
 
                   --  D19 gives a local array one definite-assignment fact per
-                  --  compiler-known element.  What a computed local write
-                  --  establishes is deliberately left for a later slice;
-                  --  module arrays already have D10's complete state and keep
-                  --  their runtime-index path.
-                  if not Is_Known_Index (Of_Tree, Where)
-                    and then Syn.Kind (Of_Tree, From) = Syn.Name_Reference
-                    and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
-                             = Res.Bound
-                    and then Res.Sort_Of
-                               (Meanings.all,
-                                Res.Bound_To (Meanings.all, Of_Tree, From))
-                             = Res.Local_Binding
-                  then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Node),
-                        Message => "a local array index the compiler does not"
-                                   & " know is not enabled yet",
-                        Refused => Bad.Array_Value,
-                        Into    => Found);
-                     Landin.Checking.Refuse (Types.all, Of_Tree, Node);
-                     return Kept (Ty.Ill_Typed);
-                  end if;
-
+                  --  compiler-known element.  D22 leaves the read of a
+                  --  computed local element to the flow walk below, which
+                  --  requires the whole-array fact D20 records; a computed
+                  --  write is a place operation and establishes no element
+                  --  fact of its own.  Module arrays keep D10's complete
+                  --  state and their runtime-index path is unchanged.
                   return Kept
                     (Landin.Checking.Array_Element
                        (Types.all, Of_Tree, From));
@@ -2717,6 +2698,11 @@ package body Landin.Stages.Checking is
          Id      : Res.Declaration_Id;
          Position : Ty.Magnitude;
          State   : Assigned_Set);
+      procedure Require_Computed_Element
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Id      : Res.Declaration_Id;
+         State   : Assigned_Set);
       function Array_Is_Assigned
         (Id : Res.Declaration_Id; State : Assigned_Set) return Boolean;
       procedure Require_Array
@@ -2904,6 +2890,50 @@ package body Landin.Stages.Checking is
          end;
       end Require_Array;
 
+      procedure Require_Computed_Element
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Id      : Res.Declaration_Id;
+         State   : Assigned_Set) is
+      begin
+         --  D22: a computed local index cannot be covered by D19's sparse
+         --  facts, so the array must be assigned as a whole -- either by
+         --  D20's copy or by D21's initializer, or by having as many sparse
+         --  D19 facts as the array's declared length.  Only the local
+         --  declared without a value is tracked; a parameter and a module
+         --  binding fall through here as not tracked, and no tracked
+         --  entity of an array type is anything else this kernel admits.
+         if not Is_Tracked (Id)
+           or else Array_Is_Assigned (Id, State)
+         then
+            return;
+         end if;
+
+         declare
+            Their_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Id));
+            Their_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Id);
+         begin
+            Bad.Report
+              (Item    => Bad.Not_Definitely_Assigned,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "`" & Spelled (Res.Name_Of (Meanings.all, Id))
+                          & "` is read at a computed index and no path"
+                          & " that arrives assigned it as a whole",
+               Note    => "D22: a computed local array read requires the"
+                          & " whole-array fact, because D19's element facts"
+                          & " are compiler-known positions",
+               Related => Landin.Provenance.Origin'
+                            (Source => Res.Source_Of (Meanings.all, Id),
+                             Where  => Syn.Anchor
+                                         (Their_Tree.all, Their_Node)),
+               Because => "declared here with no value",
+               Into    => Found);
+         end;
+      end Require_Computed_Element;
+
       procedure Require_Element
         (Of_Tree  : Syn.Tree;
          Node     : Syn.Node_Id;
@@ -2957,6 +2987,9 @@ package body Landin.Stages.Checking is
          end if;
 
          --  D19: reaching a known element is not a read of the whole array.
+         --  D22: reaching a computed element of a tracked local *does*
+         --  require the whole-array fact, because element facts are D19's
+         --  compiler-known ones and no sparse fact covers a runtime index.
          --  The index is still an expression and is read first.  A refused
          --  or out-of-bounds selection establishes no additional diagnostic.
          if Syn.Kind (Of_Tree, Node) = Syn.Element_Index then
@@ -2972,13 +3005,18 @@ package body Landin.Stages.Checking is
                           = Res.Bound
                  and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                           /= Ty.Ill_Typed
-                 and then Known_Index_Value
-                            (Of_Tree, Where, Position)
                then
-                  Require_Element
-                    (Of_Tree, Node,
-                     Res.Bound_To (Meanings.all, Of_Tree, From),
-                     Position, State);
+                  if Known_Index_Value (Of_Tree, Where, Position) then
+                     Require_Element
+                       (Of_Tree, Node,
+                        Res.Bound_To (Meanings.all, Of_Tree, From),
+                        Position, State);
+                  else
+                     Require_Computed_Element
+                       (Of_Tree, Node,
+                        Res.Bound_To (Meanings.all, Of_Tree, From),
+                        State);
+                  end if;
                elsif Syn.Kind (Of_Tree, From) /= Syn.Name_Reference then
                   Read_Names (Of_Tree, From, State);
                end if;

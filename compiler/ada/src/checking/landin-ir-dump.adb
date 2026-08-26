@@ -124,7 +124,23 @@ package body Landin.IR.Dump is
                           (Slot_Id'Image (Slot_Of (Of_Unit, Item, Value)))
                       & Operands (Item, Value);
 
-            when Load_Datum | Store_Datum | Load_Element | Store_Element =>
+            when Load_Datum | Store_Datum =>
+               declare
+                  D : constant Item_Id := Datum_Of (Of_Unit, Item, Value);
+               begin
+                  return Lead & " datum " & Trimmed (Item_Id'Image (D))
+                         & " " & Item_Named (D)
+                         & Operands (Item, Value);
+               end;
+
+            when Load_Element | Store_Element =>
+               if Reaches_A_Slot (Of_Unit, Item, Value) then
+                  return Lead & " slot "
+                         & Trimmed
+                             (Slot_Id'Image (Slot_Of (Of_Unit, Item, Value)))
+                         & Operands (Item, Value);
+               end if;
+
                declare
                   D : constant Item_Id := Datum_Of (Of_Unit, Item, Value);
                begin

@@ -1261,3 +1261,56 @@ through it.
 `negative/array-initializer-length-mismatch`,
 `negative/array-initializer-element-mismatch`, and
 `runtime/local-array-initializer-copies-storage` on Linux x86-64.
+
+### D22 — Computed local array indexes use the whole-array fact
+
+**The tour said** that indexing an array checks the bound at runtime [1950],
+that an index is `usize` [0160], that a local declared without a value is
+assigned before it is read [1910], that an array is a value and assignment
+copies it [0520], and that its elements are indexed from zero [0520]. D19
+introduced one definite-assignment fact per compiler-known element and D20
+introduced the whole-array fact a copy assigns, and neither answered what
+a computed local read must require or a computed local write must
+establish.
+
+**Chosen:** a computed local array index is admitted where a compiler-known
+one is. Reading `local[i]` for a runtime `usize` requires the whole-array
+fact to hold on every arriving path — the same fact D20's copy and D21's
+initializer record, and the fact D19's element facts add up to once every
+declared position has been assigned. Writing `local[i] = v` for a runtime
+`usize` establishes no element fact of its own, and does not clear an
+existing whole-array fact: a copy followed by a computed write followed by
+a computed read is legal, and a computed write into an uninitialized local
+followed by a whole-array read is still refused. `inc local[i]` requires
+the whole-array fact because it reads and writes.
+
+Module arrays are unchanged: D10 gives their state every element from
+declaration, so their computed reads meet no assignment requirement and
+their computed writes still assign nothing tracked. Every other refused
+value form — the inferred initializer, a slice, `zeroed`, repetition, an
+array literal, `lenof`, an array as a struct field — stays refused.
+
+**Why:** treating one computed write as a whole assignment would admit
+uninitialized reads from every other position, exactly the failure D19
+declined to introduce for known indexes. Requiring the whole-array fact
+before any computed read is the minimum rule that keeps [1910] path-
+sensitive without inventing element-range tracking the compiler would then
+have to compute for expressions no target can enumerate. Preserving an
+existing whole fact through a computed write is what makes D20 and D21
+usable: without it, a copy followed by any computed update would need to be
+re-established a position at a time, and no sparse column of D19's fits an
+extent D18 permits.
+
+**The alternative:** admit a computed read without a prior whole assignment
+(and leave every out-of-order write undiagnosed until R6.70's runtime), or
+have a computed write clear the whole-array fact. Both were declined for
+the same reason D19 refused to widen one element write to the whole local:
+they trade a compile-time refusal for a runtime that this compiler has no
+way to observe.
+
+**Pinned by** `positive/local-array-computed-element-after-whole-copy`,
+`negative/local-array-computed-read-not-whole-assigned`,
+`negative/local-array-computed-write-establishes-no-fact`,
+`runtime/local-array-computed-index-reads-and-writes`,
+`runtime/local-array-computed-index-traps`, and
+`runtime/local-array-computed-store-traps` on Linux x86-64.

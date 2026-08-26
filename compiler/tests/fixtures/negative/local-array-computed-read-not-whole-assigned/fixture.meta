@@ -1,0 +1,6 @@
+class: negative
+summary: D22 refuses a computed read of a local array unless every path assigns it as a whole
+constructs: 0080, 0520, 1810, 1910, 1950
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64

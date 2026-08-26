@@ -685,6 +685,61 @@ file positive/literal-takes-a-sibling-type/program.ldn tokens 19
   28 29 1
   30 33 end
   34 35 f
+file positive/local-array-computed-element-after-whole-copy/program.ldn tokens 54
+  0 6 source
+  6 7 :
+  8 9 [
+  9 10 2
+  10 11 ]
+  11 14 u32
+  16 17 f
+  17 18 :
+  19 20 (
+  20 22 at
+  22 23 :
+  24 29 usize
+  29 30 ,
+  31 36 value
+  36 37 :
+  38 41 u32
+  41 42 )
+  43 45 ->
+  46 47 (
+  47 48 r
+  48 49 :
+  50 53 u32
+  53 54 )
+  55 56 =
+  61 64 mut
+  65 70 words
+  70 71 :
+  72 73 [
+  73 74 2
+  74 75 ]
+  75 78 u32
+  83 88 words
+  89 90 =
+  91 97 source
+  102 103 r
+  104 105 =
+  106 111 words
+  111 112 [
+  112 114 at
+  114 115 ]
+  120 125 words
+  125 126 [
+  126 128 at
+  128 129 ]
+  130 131 =
+  132 137 value
+  142 143 r
+  144 145 =
+  146 151 words
+  151 152 [
+  152 154 at
+  154 155 ]
+  156 159 end
+  160 161 f
 file positive/local-array-copy/program.ldn tokens 25
   0 6 source
   6 7 :
@@ -2297,32 +2352,6 @@ file negative/chained-comparison/program.ldn tokens 28
   49 50 <
   51 52 c
   53 56 end
-file negative/computed-local-array-index-not-enabled/program.ldn tokens 25
-  0 1 f
-  1 2 :
-  3 4 (
-  4 6 at
-  6 7 :
-  8 13 usize
-  13 14 )
-  15 17 ->
-  18 22 none
-  23 24 =
-  29 32 mut
-  33 38 words
-  38 39 :
-  40 41 [
-  41 42 2
-  42 43 ]
-  43 46 u32
-  51 52 _
-  53 54 =
-  55 60 words
-  60 61 [
-  61 63 at
-  63 64 ]
-  65 68 end
-  69 70 f
 file negative/condition-is-not-believed/program.ldn tokens 21
   0 1 f
   1 2 :
@@ -2879,6 +2908,82 @@ file negative/literal-below-its-type/program.ldn tokens 6
   10 11 =
   12 13 -
   13 16 129
+file negative/local-array-computed-read-not-whole-assigned/program.ldn tokens 35
+  0 1 f
+  1 2 :
+  3 4 (
+  4 6 at
+  6 7 :
+  8 13 usize
+  13 14 )
+  15 17 ->
+  18 19 (
+  19 20 r
+  20 21 :
+  22 25 u32
+  25 26 )
+  27 28 =
+  33 36 mut
+  37 42 words
+  42 43 :
+  44 45 [
+  45 46 2
+  46 47 ]
+  47 50 u32
+  55 60 words
+  60 61 [
+  61 62 0
+  62 63 ]
+  64 65 =
+  66 67 1
+  72 73 r
+  74 75 =
+  76 81 words
+  81 82 [
+  82 84 at
+  84 85 ]
+  86 89 end
+  90 91 f
+file negative/local-array-computed-write-establishes-no-fact/program.ldn tokens 39
+  0 3 mut
+  4 15 destination
+  15 16 :
+  17 18 [
+  18 19 2
+  19 20 ]
+  20 23 u32
+  25 26 f
+  26 27 :
+  28 29 (
+  29 31 at
+  31 32 :
+  33 38 usize
+  38 39 ,
+  40 45 value
+  45 46 :
+  47 50 u32
+  50 51 )
+  52 54 ->
+  55 59 none
+  60 61 =
+  66 69 mut
+  70 75 words
+  75 76 :
+  77 78 [
+  78 79 2
+  79 80 ]
+  80 83 u32
+  88 93 words
+  93 94 [
+  94 96 at
+  96 97 ]
+  98 99 =
+  100 105 value
+  110 121 destination
+  122 123 =
+  124 129 words
+  130 133 end
+  134 135 f
 file negative/local-array-copy-from-unassigned/program.ldn tokens 26
   0 1 f
   1 2 :
