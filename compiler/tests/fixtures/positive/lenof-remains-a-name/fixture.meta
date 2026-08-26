@@ -1,0 +1,5 @@
+class: positive
+summary: [1760] leaves contextual lenof available as an ordinary declared name
+constructs: 1760
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,4 @@
+f: () -> (r: usize) =
+    grid: [7]u16
+    r = lenof grid
+end f

@@ -1,0 +1,5 @@
+class: positive
+summary: [0370] gives a named fixed array's length as usize without reading its storage
+constructs: 0370
+program: program.ldn
+targets: linux-x86-64, macos-arm64

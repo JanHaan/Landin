@@ -50,7 +50,7 @@
 0340   tour        accepted emitted executed refused  Logical: and, or, not
 0350   tour        accepted emitted executed          Comparison
 0360   tour        -                                  Ranges
-0370   tour        accepted emitted executed refused refused-by-name sizeof, alignof and lenof
+0370   tour        accepted emitted executed refused  sizeof, alignof and lenof
 0380   tour        -                                  addr takes an address
 0390   tour        refused                            Assignment is a statement
 0400   tour        accepted emitted refused           No `++` and no `--`
