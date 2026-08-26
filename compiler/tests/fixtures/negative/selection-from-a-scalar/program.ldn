@@ -1,0 +1,5 @@
+mut count: u32
+
+f: () -> none =
+    n: u32 = count.hits
+end f

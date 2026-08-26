@@ -7,14 +7,15 @@
 --  against that code's row before it leaves, and the stage that found the
 --  fault therefore contains no code at all.
 --
---  Eight rules, each with its own paragraph in the specification, because
+--  Nine rules, each with its own paragraph in the specification, because
 --  none of them could be read out of the older ones.  [1880] says where a
 --  literal's type comes from and that a value the type does not hold is
 --  refused; [1890] says what each operator takes and gives; [1900] says
 --  what may be written; [1910] says a name must be assigned by every path
 --  that reaches a read; [1920] says what a call means and what a name may
---  be used as; [1950] says which operand an operation cannot take; and
---  [1795] says an alias chain has to reach a type.
+--  be used as; [1950] says which operand an operation cannot take; [1795]
+--  says an alias chain has to reach a type; and [0750] says a struct has
+--  the fields it was declared with, which is what a selection may name.
 --
 --  Impossible_Operand is the operand half of what Literal_Out_Of_Range is
 --  the result half of, and the two must not be merged.  A literal out of
@@ -56,7 +57,8 @@ package Landin.Diagnostics.Checking is
       Unsupported_Use,
       Not_Known_At_Compile_Time,
       Impossible_Operand,
-      Cyclic_Type_Alias);
+      Cyclic_Type_Alias,
+      Unresolved_Field);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -76,7 +78,9 @@ package Landin.Diagnostics.Checking is
             when Impossible_Operand   =>
                Catalogue.Impossible_Operand,
             when Cyclic_Type_Alias    =>
-               Catalogue.Cyclic_Type_Alias);
+               Catalogue.Cyclic_Type_Alias,
+            when Unresolved_Field     =>
+               Catalogue.Unresolved_Field);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

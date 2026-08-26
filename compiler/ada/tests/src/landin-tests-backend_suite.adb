@@ -947,6 +947,52 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_State_Follows_Its_Target;
 
+   --  [0750] puts each field at its own offset, and a selection reaches
+   --  one by adding that many bytes to the datum's name.  The first field
+   --  needs no displacement at all, which is what says the offset is the
+   --  layout's and not a number this backend invented.
+   procedure A_Field_Is_Read_At_Its_Own_Offset
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Field_Is_Read_At_Its_Own_Offset
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "counters: type = struct" & LF
+         & "    hits: u32" & LF
+         & "    misses: u32" & LF
+         & "    ready: bool" & LF
+         & "end counters" & LF
+         & "mut state: counters" & LF
+         & "read: () -> none =" & LF
+         & "    a: u32 = state.hits" & LF
+         & "    b: u32 = state.misses" & LF
+         & "    c: bool = state.ready" & LF
+         & "end read" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl state(%rip), %eax"),
+            "the first field is the datum's own address");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movl state+4(%rip), %eax"),
+            "the second field is four bytes along");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movb state+8(%rip), %al"),
+            "and the bool is one byte at eight");
+      end;
+   end A_Field_Is_Read_At_Its_Own_Offset;
+
    --  A module value is reached by name rather than through a frame, and
    --  x86-64's position-independent form of that name is RIP-relative.
    --  [1900] lets a `mut` module binding be written as well as read.
@@ -1760,6 +1806,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a struct state follows its target",
          A_Struct_State_Follows_Its_Target'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a field is read at its own offset",
+         A_Field_Is_Read_At_Its_Own_Offset'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value folds every level",
          A_Module_Value_Folds_Every_Level'Access);

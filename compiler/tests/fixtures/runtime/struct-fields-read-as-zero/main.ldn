@@ -1,0 +1,40 @@
+counters: type = struct
+    hits: u32
+    misses: u32
+    ready: bool
+end counters
+
+wide: type = struct
+    first: u64
+    tag: u8
+    second: u64
+end wide
+
+mut state: counters
+mut spread: wide
+
+--  D10 zeroes the whole of [1740]'s state, so every field reads as zero
+--  and a bool field reads as false.  Each field is at its own [0750]
+--  offset, so a selection that reached the wrong bytes would find the
+--  padding between them rather than the field.
+public main: () -> (code: i32) =
+    hits: u32 = state.hits
+    misses: u32 = state.misses
+    ready: bool = state.ready
+
+    first: u64 = spread.first
+    tag: u8 = spread.tag
+    second: u64 = spread.second
+
+    if hits == 0
+        and misses == 0
+        and not ready
+        and first == 0
+        and tag == 0
+        and second == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

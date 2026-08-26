@@ -1,0 +1,6 @@
+class: negative
+summary: [0750] gives a struct the fields it was declared with, so selecting another is refused
+constructs: 0420, 0750, 1820
+program: program.ldn
+codes: L0308
+targets: linux-x86-64, macos-arm64

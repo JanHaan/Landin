@@ -648,6 +648,15 @@ def landin_tokens(source, signs, trees=None):
                              or source[i] in UPPER or source[i] == "_"):
                 i += 1
             run = source[start:i]
+
+            #  A digit run, a dot and a digit is [0210]'s float literal,
+            #  which the scanner takes as one lexeme and no rule here
+            #  spells.  Reading it as an integer, a selection dot and
+            #  another integer would be three tokens the real scanner
+            #  never produces, and the dump exists to agree with it.
+            if i + 1 < n and source[i] == "." and source[i + 1] in DIGITS:
+                return None, "no rule spells a float literal"
+
             if trees and not lexical_matches(trees, "integer", run):
                 return None, "%r is not an integer the rules spell" % run
             out.append(("integer", run, start))

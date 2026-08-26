@@ -1875,10 +1875,35 @@ spelling occurred in a comment above it was recorded at the comment's bytes.
 The tokeniser now carries its own offsets. Nothing had noticed because no
 fixture had written a word in a comment and then as a token.
 
-Field access is the next slice and is deliberately absent: reading or writing
-`state.hits` needs member syntax, a checker lookup, load and store operations
-that carry an offset, and addressing in the backend. Nothing here anticipates
-it, so the state is storage a program can declare and not yet reach.
+Reading a field came next, and it is the first construct the kernel gained
+since R1.40 that the grammar did not already spell. [1820]'s `primary` became
+a `selection`, `identifier ("." identifier)*`, so the dot is a kernel sign
+rather than one [1830] refuses by name — the first of [0420]'s four kinds of
+member selection to be enabled, and the only one this kernel can make sense of.
+A selection is its own node kind and carries the name it selects, because no
+scope [1090] answers for a field: which field it is depends on the type of what
+stands to its left, so the resolver walks past it and the checker looks the name
+up against the struct body [0750] the identity names. A field the struct was not
+declared with is `L0308`, and a selection from anything but a struct is `L0301`.
+
+The IR gained one opcode, `Load_Field`, carrying which field and never where it
+sits — an offset needs a target, which is `Measure_Size`'s reason and the reason
+an aggregate item carries its fields' types. The backend places those fields with
+the same `Landin.Targets.Placement` the checker used and adds the offset to the
+datum's own symbol, so `u32 u32 bool` reads at `state`, `state+4` and `state+8`
+and the first field needs no displacement at all. The verifier holds a field load
+to naming an aggregate, to a field that aggregate has, and to the field's own
+type; the builder checks only that what it is handed exists, which is where that
+line already sat for a datum load naming a routine.
+
+Enabling the dot found that `check.py`'s tokeniser would have read `1.5` as an
+integer, a selection and an integer, which the scanner never produces — it takes
+[0210]'s float as one lexeme and refuses it. The tokeniser refuses it too now, so
+the dump still agrees with the scanner about the fixture that pins it.
+
+Writing a field is the next slice: `place` [1810] has to gain the same selection,
+which brings a store that carries an offset and [1900]'s rule about what may be
+written applied to a field of a `mut` binding.
 
 Complete ordinary structs and implement arrays, C/packed structs, variants,
 tags, payload alignment

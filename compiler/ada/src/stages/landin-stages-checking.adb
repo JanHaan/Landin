@@ -27,6 +27,7 @@ package body Landin.Stages.Checking is
    use type Res.Verdict;
    use type Res.Declaration_Sort;
    use type Landin.Source.Source_Id;
+   use type Landin.Source.Names.Name_Id;
 
    overriding function Name (Item : Instance) return String is
       pragma Unreferenced (Item);
@@ -792,6 +793,80 @@ package body Landin.Stages.Checking is
          return Declared_As_Node (Their_Tree.all, Result);
       end Check_Call;
 
+      --  Which field of an aggregate a name selects, by [0750]'s order,
+      --  or zero when the aggregate has no field of that name.  The names
+      --  are read from the struct body the identity names rather than
+      --  kept beside the layout: a field's name is a fact about the
+      --  source and Landin.Checking holds what a thing's type is.
+      function Field_At
+        (Wrote : Res.Declaration_Id;
+         Named : Landin.Source.Names.Name_Id) return Natural;
+
+      function Field_At
+        (Wrote : Res.Declaration_Id;
+         Named : Landin.Source.Names.Name_Id) return Natural
+      is
+         Of_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Wrote));
+         Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Wrote);
+         Written : constant Syn.Node_Id :=
+           Syn.Declared_Type (Of_Tree.all, Node);
+      begin
+         if Written = Syn.No_Node
+           or else Syn.Kind (Of_Tree.all, Written) /= Syn.Struct_Body
+         then
+            return 0;
+         end if;
+
+         for Index in 1 .. Syn.Field_Count (Of_Tree.all, Written) loop
+            if Syn.Name
+                 (Of_Tree.all,
+                  Syn.Nth_Field (Of_Tree.all, Written, Index)) = Named
+            then
+               return Index;
+            end if;
+         end loop;
+
+         return 0;
+      end Field_At;
+
+      --  The type of what a selection selects from.  Separate from
+      --  Synthesise because a bare aggregate name is a value this kernel
+      --  refuses while the same name to the left of a dot is how a field
+      --  is reached at all.
+      function Selected_From
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+
+      function Selected_From
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind is
+      begin
+         if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+         then
+            declare
+               Means : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Node);
+               Held  : constant Ty.Type_Kind := Settled_Type (Means);
+            begin
+               if Held = Ty.Aggregate then
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                     = Ty.Undecided
+                  then
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Node, Held);
+                     Landin.Checking.Note_Body
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Body_Of (Types.all, Means));
+                  end if;
+
+                  return Held;
+               end if;
+            end;
+         end if;
+
+         return Synthesise (Of_Tree, Node);
+      end Selected_From;
+
       function Synthesise
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
       is
@@ -896,6 +971,83 @@ package body Landin.Stages.Checking is
                   end if;
 
                   return Kept (Held);
+               end;
+
+            when Syn.Member_Selection =>
+               declare
+                  From : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+                  Held : constant Ty.Type_Kind :=
+                    Selected_From (Of_Tree, From);
+               begin
+                  if Held = Ty.Ill_Typed then
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  --  [0420] names four kinds of member and [1820] enables
+                  --  one, so anything but a struct to the left of the dot
+                  --  is a selection this kernel cannot make.
+                  if Held /= Ty.Aggregate then
+                     declare
+                        Means : constant Res.Declaration_Id :=
+                          (if Syn.Kind (Of_Tree, From) = Syn.Name_Reference
+                             and then Res.Verdict_Of
+                                        (Meanings.all, Of_Tree, From)
+                                      = Res.Bound
+                           then Res.Bound_To (Meanings.all, Of_Tree, From)
+                           else Res.No_Declaration);
+                     begin
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, From),
+                           Message => "this is not a struct, so it has no"
+                                      & " field to select",
+                           Note    => "[1820]: the kernel selects a field"
+                                      & " of a struct [0670] and nothing"
+                                      & " else",
+                           Related =>
+                             (if Means = Res.No_Declaration
+                              then Syn.Origin (Of_Tree, From)
+                              else Syn.Origin
+                                     (Tree_For
+                                        (Res.Source_Of
+                                           (Meanings.all, Means)).all,
+                                      Res.Node_Of (Meanings.all, Means))),
+                           Because => "what it names",
+                           Into    => Found);
+                     end;
+
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  declare
+                     Wrote : constant Res.Declaration_Id :=
+                       Landin.Checking.Body_Of (Types.all, Of_Tree, From);
+                     Which : constant Natural :=
+                       (if Wrote = Res.No_Declaration then 0
+                        else Field_At (Wrote, Syn.Name (Of_Tree, Node)));
+                  begin
+                     if Which = 0 then
+                        Bad.Report
+                          (Item    => Bad.Unresolved_Field,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Anchor (Of_Tree, Node),
+                           Message => "this struct has no field called `"
+                                      & Spelled (Syn.Name (Of_Tree, Node))
+                                      & "`",
+                           Note    => "[0750]: a struct has the fields it"
+                                      & " was declared with, and no others",
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+
+                     Landin.Checking.Note_Field
+                       (Types.all, Of_Tree, Node, Which);
+                     return Kept
+                       (Landin.Checking.Field_Type
+                          (Types.all, Wrote, Which));
+                  end;
                end;
 
             when Syn.Call =>
