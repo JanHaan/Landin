@@ -74,6 +74,7 @@ package body Landin.IR is
       Made.Parameters := Run'(First => 0, Count => 0);
       Made.Blocks     := Run'(First => 0, Count => 0);
       Made.Values     := Run'(First => 0, Count => 0);
+      Made.Fields     := Run'(First => 0, Count => 0);
 
       Into.Items.Append (Made);
 
@@ -104,6 +105,19 @@ package body Landin.IR is
      is (Of_Unit.Standing (Positive (Declared)));
 
    ------------------------------------------------------------------
+   --  An aggregate item's fields
+   ------------------------------------------------------------------
+
+   function Field_Count (Of_Unit : Unit; Item : Item_Id) return Natural
+     is (Element (Of_Unit, Item).Fields.Count);
+
+   function Nth_Field
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive)
+     return Landin.Types.Scalar_Name
+     is (Of_Unit.Fields
+           (Element (Of_Unit, Item).Fields.First + Index));
+
+   ------------------------------------------------------------------
    --  Slots
    ------------------------------------------------------------------
 
@@ -129,6 +143,19 @@ package body Landin.IR is
            & " items were filled at once";
       end if;
    end Open_Run;
+
+   procedure Add_Field
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Of_Type : Landin.Types.Scalar_Name)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Fields, Natural (Into.Fields.Length));
+      Into.Fields.Append (Of_Type);
+      Held.Fields.Count := Held.Fields.Count + 1;
+      Into.Items (Positive (Item)) := Held;
+   end Add_Field;
 
    function Add_Slot
      (Into     : in out Unit;

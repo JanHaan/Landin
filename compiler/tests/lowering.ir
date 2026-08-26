@@ -928,6 +928,14 @@ item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 11
     9 SUBTRACT u32 <- 7 8
     10 STORE slot 1 <- 9
     11 LEAVE
+file positive/struct-module-state/program.ldn
+unit items 1
+item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 u32
+  field 2 u32
+  field 3 bool
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/struct-type-is-declared/program.ldn
 unit items 0
 file positive/token-separation/program.ldn
