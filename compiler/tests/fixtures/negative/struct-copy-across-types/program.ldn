@@ -1,0 +1,16 @@
+here: type = struct
+    x: u32
+end here
+
+there: type = struct
+    x: u32
+end there
+
+--  [0710]: two structs are one type when one declaration wrote both, so
+--  these two are different types however alike they read.
+f: () -> none =
+    mut p: here
+    p.x = 1
+    mut q: there
+    q = p
+end f

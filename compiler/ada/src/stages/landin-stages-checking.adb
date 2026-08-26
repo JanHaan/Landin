@@ -789,6 +789,11 @@ package body Landin.Stages.Checking is
         (Wrote : Res.Declaration_Id;
          Named : Landin.Source.Names.Name_Id) return Natural;
 
+      --  How a field of that struct is spelt, by [0750]'s order.  The
+      --  other direction of Field_At, and read from the same body.
+      function Field_Named
+        (Wrote : Res.Declaration_Id; Index : Positive) return String;
+
       function Field_At
         (Wrote : Res.Declaration_Id;
          Named : Landin.Source.Names.Name_Id) return Natural
@@ -817,10 +822,32 @@ package body Landin.Stages.Checking is
          return 0;
       end Field_At;
 
-      --  The type of what a selection selects from.  Separate from
-      --  Synthesise because a bare aggregate name is a value this kernel
-      --  refuses while the same name to the left of a dot is how a field
-      --  is reached at all.
+      function Field_Named
+        (Wrote : Res.Declaration_Id; Index : Positive) return String
+      is
+         Of_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Wrote));
+         Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Wrote);
+         Written : constant Syn.Node_Id :=
+           Syn.Declared_Type (Of_Tree.all, Node);
+      begin
+         if Written = Syn.No_Node
+           or else Syn.Kind (Of_Tree.all, Written) /= Syn.Struct_Body
+           or else Index > Syn.Field_Count (Of_Tree.all, Written)
+         then
+            return "";
+         end if;
+
+         return Spelled
+                  (Syn.Name
+                     (Of_Tree.all,
+                      Syn.Nth_Field (Of_Tree.all, Written, Index)));
+      end Field_Named;
+
+      --  The type of a place, and of what a selection selects from.
+      --  Separate from Synthesise because a bare aggregate name is a
+      --  value this kernel refuses in an expression, while the same name
+      --  is how a field is reached and how a whole struct is copied.
       function Selected_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
@@ -1209,7 +1236,7 @@ package body Landin.Stages.Checking is
                return;
             end if;
 
-            Held := Synthesise (Of_Tree, Node);
+            Held := Selected_From (Of_Tree, Node);
 
             --  [0400]: `inc` says what `x += 1` says, so it wants a number.
             if Stepping and then Decidable (Held)
@@ -1277,11 +1304,58 @@ package body Landin.Stages.Checking is
                Check_Place
                  (Of_Tree, Syn.Target_Of (Of_Tree, Node),
                   Stepping => False);
-               Require
-                 (Of_Tree, Syn.Value_Of (Of_Tree, Node),
-                  Synthesise (Of_Tree, Syn.Target_Of (Of_Tree, Node)),
-                  Syn.Origin (Of_Tree, Syn.Target_Of (Of_Tree, Node)),
-                  "the place written here");
+
+               declare
+                  Place : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+                  Value : constant Syn.Node_Id :=
+                    Syn.Value_Of (Of_Tree, Node);
+                  Wants : constant Ty.Type_Kind :=
+                    Selected_From (Of_Tree, Place);
+               begin
+                  --  [0710]: a whole struct is copied into a place of the
+                  --  same type, and two are the same type exactly when one
+                  --  declaration wrote both.  A copy is the one expression
+                  --  position a struct may stand in, because the bytes go
+                  --  straight from one place to another and nothing has to
+                  --  carry them anywhere.
+                  if Wants = Ty.Aggregate then
+                     declare
+                        Got : constant Ty.Type_Kind :=
+                          Selected_From (Of_Tree, Value);
+                     begin
+                        if Got = Ty.Ill_Typed then
+                           null;
+                        elsif Got /= Ty.Aggregate
+                          or else Landin.Checking.Body_Of
+                                    (Types.all, Of_Tree, Place)
+                                  /= Landin.Checking.Body_Of
+                                       (Types.all, Of_Tree, Value)
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this is not a value of the"
+                                         & " struct type written here",
+                              Note    => "[0710]: two structs are one type"
+                                         & " when one declaration wrote"
+                                         & " both, and never otherwise",
+                              Related => Syn.Origin (Of_Tree, Place),
+                              Because => "the place written here",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        end if;
+                     end;
+
+                     return;
+                  end if;
+
+                  Require
+                    (Of_Tree, Value, Wants, Syn.Origin (Of_Tree, Place),
+                     "the place written here");
+               end;
 
             when Syn.Increment | Syn.Decrement =>
                Check_Place
@@ -2096,6 +2170,36 @@ package body Landin.Stages.Checking is
          Message   : String;
          Field     : Tracked_Field := 0) is
       begin
+         --  D16 assigns a struct a field at a time, so reading the whole
+         --  of one wants every field: the first one no path assigned is
+         --  the one to name, because a reader fixes them one at a time.
+         if Field = 0
+           and then Is_Tracked (Id)
+           and then Landin.Checking.Has_Layout (Types.all, Id)
+         then
+            for Each in
+              1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
+            loop
+               if Each in 1 .. Widest_Struct
+                 and then not State (Positive (Id), Each)
+               then
+                  Require_Assigned
+                    (At_Source, At_Span, Id, State,
+                     "the whole of `"
+                     & Spelled (Res.Name_Of (Meanings.all, Id))
+                     & "` is read here and no path that arrives assigned"
+                     & " its `"
+                     & Field_Named
+                         (Landin.Checking.Body_Of (Types.all, Id), Each)
+                     & "`",
+                     Each);
+                  return;
+               end if;
+            end loop;
+
+            return;
+         end if;
+
          if not Is_Tracked (Id) or else State (Positive (Id), Field) then
             return;
          end if;
@@ -2235,6 +2339,21 @@ package body Landin.Stages.Checking is
                begin
                   if Is_Tracked (Id) then
                      State (Positive (Id), 0) := True;
+
+                     --  A whole struct copied into a place assigns every
+                     --  field of it at once, which is the one way a
+                     --  struct becomes assigned other than a field at a
+                     --  time.
+                     if Landin.Checking.Has_Layout (Types.all, Id) then
+                        for Each in
+                          1 .. Landin.Checking.Layout_Field_Count
+                                 (Types.all, Id)
+                        loop
+                           if Each in 1 .. Widest_Struct then
+                              State (Positive (Id), Each) := True;
+                           end if;
+                        end loop;
+                     end if;
                   end if;
                end;
             end if;

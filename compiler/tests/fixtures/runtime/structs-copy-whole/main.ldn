@@ -1,0 +1,49 @@
+point: type = struct
+    x: u32
+    y: u32
+    on: bool
+end point
+
+--  D15 makes this another name for the same type, so [0710] agrees and a
+--  copy across the two names is a copy within one type.
+same: type = point
+
+mut saved: point
+
+--  A copy carries every field and nothing else: writing the copy after it
+--  is made leaves the original alone, which is what says the bytes were
+--  moved rather than the name.
+public main: () -> (code: i32) =
+    mut p: point
+    p.x = 3
+    p.y = 4
+    p.on = true
+
+    mut q: point
+    q = p
+    saved = q
+    q.x = 9
+    q.on = false
+
+    mut back: same
+    back = saved
+
+    --  A copy into the place it came from carries the same bytes to the
+    --  same bytes, so it changes nothing.
+    back = back
+
+    if q.x == 9
+        and q.y == 4
+        and not q.on
+        and p.x == 3
+        and p.on
+        and saved.x == 3
+        and saved.on
+        and back.y == 4
+        and back.x == 3
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
