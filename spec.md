@@ -293,7 +293,7 @@ primary     ::= literal | indexed | call | measurement
 indexed     ::= selection ("[" expression "]")*
 selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
-measurement ::= ("sizeof" | "alignof") type
+measurement ::= ("sizeof" | "alignof") type | "lenof" identifier
 arguments   ::= expression ("," expression)*
 unary       ::= ("-" | "~" | "not")* primary
 product     ::= unary (("*" | "/" | "%" | "*%") unary)*
@@ -957,17 +957,21 @@ than about this.
 **Chosen:** `usize`. A size and an alignment are counts of bytes on the
 machine being compiled for, which is what [0160] says `usize` is for, and a
 measurement that defaulted to `i32` would need a conversion at every use
-where a width is wanted. `lenof` is not enabled with them: it measures an
-array or a slice and [1790]'s type rule has neither, so it is refused by
-name and cites [0370].
+where a width is wanted. `lenof` has the same result type. In this R2.20
+slice it takes only a direct identifier naming a fixed array; slices,
+literals and general expression operands remain deferred. The spelling stays
+contextual rather than joining [1760]'s reserved words.
 
 **Where the answer comes from** is the other half of this decision and the
-half with teeth. The value is not folded by the checker or the lowering:
-`Landin.IR` carries `Measure_Size` and `Measure_Align` with the type asked
-about, and the backend answers, because a size needs a width and a width
-needs a target. That is the seam [0320]'s zero-fill already sits on, and it
-keeps the IR target-neutral — the same source emits 8 for `sizeof usize`
-against the Linux x86-64 description and 4 against the synthetic 32-bit one.
+half with teeth. `sizeof` and `alignof` are not folded by the checker or the
+lowering: `Landin.IR` carries `Measure_Size` and `Measure_Align` with the type
+asked about, and the backend answers, because a byte size needs a target.
+That is the seam [0320]'s zero-fill already sits on, and it keeps the IR
+target-neutral — the same source emits 8 for `sizeof usize` against the Linux
+x86-64 description and 4 against the synthetic 32-bit one. A fixed array's
+element count is already part of its type (D17), so `lenof name` lowers to the
+existing `usize` Number IR with that count. It does not read the named storage
+and does not require the binding to be definitely assigned.
 
 **The alternative:** `i32`, which is what an untyped literal would default
 to and so the least surprising answer for a reader who has only read [0200];
@@ -978,8 +982,11 @@ on purpose, and which `Landin.IR`'s own header already argues against for
 the shifts.
 
 **Pinned by** `positive/measurement-of-a-type`,
-`runtime/measurements-answer-for-the-target`, and the backend case that
-emits one source against two target descriptions.
+`positive/lenof-uninitialized-fixed-array`,
+`negative/lenof-scalar`, `negative/lenof-unresolved-name`,
+`runtime/lenof-named-fixed-arrays`,
+`runtime/measurements-answer-for-the-target`, and the backend case that emits
+one source against two target descriptions.
 
 ### D15 — A type declaration without `distinct` is an alias
 

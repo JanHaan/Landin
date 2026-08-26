@@ -1826,6 +1826,16 @@ def check_precedence_table(full_run):
     first, _ = grammar_first(trees)
     literals = kinds_in(body_of(token_text, "Is_Literal") or "")
     prefixes = kinds_in(prefix_body or "")
+    reserved = set(re.findall(r'"([a-z]+)"', rules.get("keyword", "")))
+
+    #  A quoted contextual word in a production still arrives from the
+    #  scanner as Identifier.  Compare the parser's token first set rather
+    #  than mistaking that spelling for a reserved token kind.
+    def scanned(item):
+        kind, spelling = item
+        if kind == "lit" and spelling.isalpha() and spelling not in reserved:
+            return ("token", "identifier")
+        return item
 
     for name, rule in (("Begins_Expression", "expression"),
                        ("Begins_Statement", "statement"),
@@ -1840,7 +1850,7 @@ def check_precedence_table(full_run):
         if "Is_Prefix" in body:
             kinds |= prefixes
         said = {item_of(k) for k in kinds}
-        meant = {i for i in first.get(rule, set())
+        meant = {scanned(i) for i in first.get(rule, set())
                  if i[0] in ("lit", "token")}
         if said != meant:
             def shown(items):

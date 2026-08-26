@@ -2228,11 +2228,25 @@ source, while `runtime/local-array-computed-index-traps` and
 `runtime/local-array-computed-store-traps` pin the trap at the length on
 both sides of the operation.
 
+The next slice enables [0370]'s `lenof identifier` when that direct name holds
+a fixed array. D17 already records the element count on the declaration, so
+the checker gives the expression `usize` and lowering emits that count as the
+existing Number IR: there is no measurement opcode, target query, or storage
+read. In particular, an uninitialized local array may be measured without
+satisfying definite assignment. A scalar reaches the ordinary type mismatch,
+and a missing name remains resolution's one report. `lenof` stays contextual;
+slices, literals, selections and general expression operands remain for later
+slices. `positive/lenof-uninitialized-fixed-array`, `negative/lenof-scalar`,
+and the migrated `negative/lenof-unresolved-name` pin those boundaries;
+`runtime/lenof-named-fixed-arrays` observes the same constant for module and
+uninitialized local storage declared through one array alias.
+
 What is still refused: module array initializers, inferred array
 initializers, general whole-array value positions, an array literal [0520],
 the inferred length [0530], `zeroed` [0540], repetition [0560], slices
-[0570], `lenof`, and an array as a struct field. Each is its own slice, and
-the remaining value slices need the initialization work D21 did not settle.
+[0570], non-identifier `lenof` operands, and an array as a struct field. Each
+is its own slice, and the remaining value slices need the initialization work
+D21 did not settle.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a
 zero image when all-zero is a valid value for it, which is what lets a

@@ -1,0 +1,3 @@
+lenof: () -> (r: usize) = 3 end lenof
+
+f: () -> (r: usize) = lenof() end f

@@ -1,0 +1,11 @@
+row: type = [21]u8
+mut module_words: row
+
+public main: () -> (code: i32) =
+    local_words: row
+    if lenof module_words == 21 and lenof local_words == 21 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

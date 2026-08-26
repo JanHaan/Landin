@@ -1,0 +1,6 @@
+class: negative
+summary: [0370] leaves an unresolved lenof operand for [1860] resolution to diagnose
+constructs: 0370, 1860
+program: program.ldn
+codes: L0201
+targets: linux-x86-64, macos-arm64

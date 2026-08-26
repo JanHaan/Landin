@@ -545,6 +545,24 @@ package body Landin.Stages.Lowering is
                             Site);
                end;
 
+            --  [0370]: unlike byte measurements, an array's element count is
+            --  target-neutral and was fixed by its declared type.  Materialise
+            --  it as the existing usize Number; no storage is read.
+            when Syn.Len_Of =>
+               declare
+                  Asked : constant Syn.Node_Id :=
+                    Syn.Operand_Of (Of_Tree, Node);
+                  Means : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Asked);
+               begin
+                  return IR.Emit_Number
+                           (Unit.all, Filling, Scalar_At (Of_Tree, Node),
+                            Ty.Magnitude
+                              (Landin.Checking.Array_Length
+                                 (Types.all, Means)),
+                            False, Site);
+               end;
+
             when Syn.Negation =>
                declare
                   Under : constant Syn.Node_Id :=

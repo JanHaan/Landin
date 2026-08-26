@@ -103,7 +103,6 @@ package Landin.Diagnostics.Syntactic is
       While_Statement,
       For_Statement,
       Continue_Statement,
-      Length_Of,
       Struct_Type,
       Wide_Integer_Type,
       Distinct_Type,
@@ -140,7 +139,6 @@ package Landin.Diagnostics.Syntactic is
             when While_Statement      => "[1140]",
             when For_Statement        => "[1150]",
             when Continue_Statement   => "[1180]",
-            when Length_Of            => "[0370]",
             when Struct_Type          => "[0670]",
             when Wide_Integer_Type    => "[0150]",
             when Distinct_Type        => "[0650]",
@@ -194,11 +192,9 @@ private
                | Break_Statement
                | Match_Statement
                | Multiple_Returns     => "R2.30",
-            --  R2.20 brings the arrays and slices `lenof` measures; the
-            --  other two of [0370] are enabled and this one has nothing
-            --  to ask about yet.
-            when Length_Of
-               | Struct_Type
+            --  The remaining R2.20 constructs each wait for their own
+            --  aggregate slice.
+            when Struct_Type
                | Distinct_Type
                | Slice_Type
                | Array_Literal

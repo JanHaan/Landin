@@ -1277,6 +1277,40 @@ package body Landin.Stages.Checking is
                   return Kept (Ty.Usize);
                end;
 
+            --  [0370]: the length belongs to the fixed-array type, not to
+            --  its storage.  Selected_From carries a named array's shape
+            --  without treating the whole array as a value read.
+            when Syn.Len_Of =>
+               declare
+                  Asked : constant Syn.Node_Id :=
+                    Syn.Operand_Of (Of_Tree, Node);
+                  Held  : constant Ty.Type_Kind :=
+                    Selected_From (Of_Tree, Asked);
+               begin
+                  if Held = Ty.Ill_Typed then
+                     --  In particular, an unresolved name was already
+                     --  reported by resolution and remains resolution-owned.
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  if Held /= Ty.Fixed_Array then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Asked),
+                        Message => "this is not a fixed array, so it has no"
+                                   & " array length",
+                        Note    => "[0370]: this kernel's `lenof` measures a"
+                                   & " named fixed array",
+                        Related => Syn.Origin (Of_Tree, Asked),
+                        Because => "what it names",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  return Kept (Ty.Usize);
+               end;
+
             when Syn.Name_Reference =>
                if Res.Verdict_Of (Meanings.all, Of_Tree, Node)
                   /= Res.Bound
@@ -3022,6 +3056,12 @@ package body Landin.Stages.Checking is
                end if;
             end;
 
+            return;
+         end if;
+
+         --  `lenof name` asks the name's fixed-array type for a constant;
+         --  it neither reads nor reaches the array's storage.
+         if Syn.Kind (Of_Tree, Node) = Syn.Len_Of then
             return;
          end if;
 
