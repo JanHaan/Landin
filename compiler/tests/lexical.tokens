@@ -2726,6 +2726,52 @@ file negative/shift-amount-takes-the-left-type/program.ldn tokens 21
   37 40 300
   41 44 end
   45 46 f
+file negative/struct-copy-across-types/program.ldn tokens 45
+  0 4 here
+  4 5 :
+  6 10 type
+  11 12 =
+  13 19 struct
+  24 25 x
+  25 26 :
+  27 30 u32
+  31 34 end
+  35 39 here
+  41 46 there
+  46 47 :
+  48 52 type
+  53 54 =
+  55 61 struct
+  66 67 x
+  67 68 :
+  69 72 u32
+  73 76 end
+  77 82 there
+  216 217 f
+  217 218 :
+  219 220 (
+  220 221 )
+  222 224 ->
+  225 229 none
+  230 231 =
+  236 239 mut
+  240 241 p
+  241 242 :
+  243 247 here
+  252 253 p
+  253 254 .
+  254 255 x
+  256 257 =
+  258 259 1
+  264 267 mut
+  268 269 q
+  269 270 :
+  271 276 there
+  281 282 q
+  283 284 =
+  285 286 p
+  287 290 end
+  291 292 f
 file negative/struct-field-not-assigned/program.ldn tokens 40
   0 5 point
   5 6 :

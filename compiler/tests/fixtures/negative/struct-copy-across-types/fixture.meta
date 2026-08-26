@@ -1,0 +1,6 @@
+class: negative
+summary: [0710] makes two same-shaped structs different types, so a copy between them is refused
+constructs: 0670, 0710, 1810
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

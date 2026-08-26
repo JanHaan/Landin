@@ -657,6 +657,68 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
+   --  [0710]'s copy is a field read and a field write each, in [0750]'s
+   --  order, and no opcode of its own: two fields make four instructions
+   --  and the last of them is the store of the second field.
+   procedure A_Struct_Copy_Becomes_Its_Fields
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Copy_Becomes_Its_Fields
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "point: type = struct" & LF
+         & "    x: u32" & LF
+         & "    on: bool" & LF
+         & "end point" & LF
+         & "copy: () -> none =" & LF
+         & "    mut p: point" & LF
+         & "    p.x = 1" & LF
+         & "    p.on = true" & LF
+         & "    mut q: point" & LF
+         & "    q = p" & LF
+         & "end copy" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Slot_Count (Unit, 1), 2, "two cells, one per local");
+         Landin.Testing.Check
+           (Item, IR.Is_Aggregate (Unit, 1, 1)
+                  and then IR.Is_Aggregate (Unit, 1, 2),
+            "and both hold a struct");
+
+         --  Two writes of two values each, then the copy's four.
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 1, 5) = IR.Load_Field,
+            "the copy reads the first field");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 1, 6) = IR.Store_Field,
+            "and writes it before reading the second");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 1, 7) = IR.Load_Field,
+            "then reads the second field");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 1, 8) = IR.Store_Field,
+            "and writes that one too");
+         Landin.Testing.Check
+           (Item, IR.Field_Of (Unit, 1, 7) = 2,
+            "which is field two, in the order [0750] wrote them");
+      end;
+   end A_Struct_Copy_Becomes_Its_Fields;
+
+   ------------------------------------------------------------------
+
    procedure A_Logical_Module_Value_Becomes_Blocks
      (Item : in out Landin.Testing.Context);
 
@@ -858,6 +920,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a struct state carries its fields",
          A_Struct_State_Carries_Its_Fields'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a struct copy becomes its fields",
+         A_Struct_Copy_Becomes_Its_Fields'Access);
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);

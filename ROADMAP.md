@@ -1892,6 +1892,25 @@ each without a value; a parameter of one is what `negative/struct-value-not-enab
 pins now, because carrying an aggregate into or out of a function is an ABI rule
 R2.30 owns. Construction, whole-value reads, copies and returns stay refused.
 
+Copying one whole came last of the four, and it is the one expression position a
+struct may stand in: `q = p` moves the bytes from one place straight to another,
+so nothing has to carry an aggregate anywhere. [0710] decides what agrees —
+two structs are one type when one declaration wrote both — so the checker
+compares the nominal identities rather than the shapes, and two same-shaped
+declarations are refused with `L0301`. It is lowered as a field read and a field
+write each, in [0750]'s order, and needs no opcode of its own: a whole-struct
+move would say nothing these do not, and either side is module state or a frame
+cell without the copy having to know which.
+
+D16 extends to it without a new rule. A copy assigns every field of the place at
+once, which is the one way a struct becomes assigned other than a field at a
+time, and reading one whole wants every field — so the report names the first
+field no path assigned rather than the binding, because that is what a reader
+fixes next. The runtime fixture carries the two shapes that look like they might
+not work and do: a copy across D15's alias, which is a copy within one type
+because an alias keeps the identity, and a copy into the place it came from,
+which carries the same bytes to the same bytes and changes nothing.
+
 Reading the whole of one is a value like any other and is refused where the
 name stands, which review found accepted: `_ = state` passed the checker, became
 a `Load_Datum` of an aggregate, and reached a backend that reads a datum's type

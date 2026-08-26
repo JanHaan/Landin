@@ -691,6 +691,63 @@ package body Landin.Stages.Lowering is
                --  it is decides whether a Store or a Store_Datum says it.
                procedure Write (Place : Syn.Node_Id; Value : IR.Value_Id);
 
+               --  One field of [0710]'s copy, read from the place on the
+               --  right and written to the one on the left.  Each side is
+               --  a name of a struct, so each is either [1740]'s module
+               --  state or a cell in this frame.
+               procedure Copy_Field
+                 (Of_Tree : Syn.Tree;
+                  Place   : Syn.Node_Id;
+                  From    : Syn.Node_Id;
+                  Field   : Positive);
+
+               procedure Copy_Field
+                 (Of_Tree : Syn.Tree;
+                  Place   : Syn.Node_Id;
+                  From    : Syn.Node_Id;
+                  Field   : Positive)
+               is
+                  Wrote : constant Res.Declaration_Id :=
+                    Landin.Checking.Body_Of (Types.all, Of_Tree, Place);
+                  Held : constant Ty.Scalar_Name :=
+                    Landin.Checking.Field_Type (Types.all, Wrote, Field);
+                  Source : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, From);
+                  Target : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Place);
+                  Taken : IR.Value_Id;
+               begin
+                  if Res.Sort_Of (Meanings.all, Source)
+                     = Res.Module_Binding
+                  then
+                     Taken :=
+                       IR.Emit_Load_Field
+                         (Unit.all, Filling,
+                          IR.Item_For (Unit.all, Source), Field, Held,
+                          Site);
+                  else
+                     Taken :=
+                       IR.Emit_Load_Slot_Field
+                         (Unit.all, Filling,
+                          Slot_For (Of_Tree, From, Source), Field, Held,
+                          Site);
+                  end if;
+
+                  if Res.Sort_Of (Meanings.all, Target)
+                     = Res.Module_Binding
+                  then
+                     IR.Emit_Store_Field
+                       (Unit.all, Filling,
+                        IR.Item_For (Unit.all, Target), Field, Taken,
+                        Site);
+                  else
+                     IR.Emit_Store_Slot_Field
+                       (Unit.all, Filling,
+                        Slot_For (Of_Tree, Place, Target), Field, Taken,
+                        Site);
+                  end if;
+               end Copy_Field;
+
                procedure Write (Place : Syn.Node_Id; Value : IR.Value_Id)
                is
                   --  [1810]'s place is [1820]'s selection, so a field is
@@ -759,10 +816,38 @@ package body Landin.Stages.Lowering is
                      end;
 
                   when Syn.Assignment =>
-                     Write
-                       (Syn.Target_Of (Of_Tree, Stmt),
-                        Lower_Expression
-                          (Of_Tree, Syn.Value_Of (Of_Tree, Stmt), Scope));
+                     --  [0710]'s copy: the same fields at the same
+                     --  offsets on both sides, so it is a field read and
+                     --  a field write each, in [0750]'s order.  No
+                     --  opcode of its own, because there is nothing a
+                     --  whole-struct move would say that these do not.
+                     if Landin.Checking.Type_Of
+                          (Types.all, Of_Tree,
+                           Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate
+                     then
+                        declare
+                           Place : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree, Stmt);
+                           From : constant Syn.Node_Id :=
+                             Syn.Value_Of (Of_Tree, Stmt);
+                           Wrote : constant Res.Declaration_Id :=
+                             Landin.Checking.Body_Of
+                               (Types.all, Of_Tree, Place);
+                        begin
+                           for Field in
+                             1 .. Landin.Checking.Layout_Field_Count
+                                    (Types.all, Wrote)
+                           loop
+                              Copy_Field (Of_Tree, Place, From, Field);
+                           end loop;
+                        end;
+                     else
+                        Write
+                          (Syn.Target_Of (Of_Tree, Stmt),
+                           Lower_Expression
+                             (Of_Tree, Syn.Value_Of (Of_Tree, Stmt),
+                              Scope));
+                     end if;
 
                   when Syn.Increment | Syn.Decrement =>
                      --  [1900]: `inc` says what `x += 1` says, which is a
