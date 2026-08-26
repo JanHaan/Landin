@@ -1,0 +1,6 @@
+source: [2]u32
+held: [2]u32
+
+f: () -> none =
+    held = source
+end f

@@ -25,6 +25,7 @@ package body Landin.Tests.Verifier_Suite is
    package IR renames Landin.IR;
    package V  renames Landin.IR.Verifier;
 
+   use type IR.Element_Total;
    use type IR.Value_Id;
    use type V.Fault_Kind;
 
@@ -98,17 +99,26 @@ package body Landin.Tests.Verifier_Suite is
            Landin.Stages.Meanings (Work);
          Unit : IR.Unit;
          A    : IR.Item_Id;
-         S    : IR.Slot_Id;
-         B    : IR.Block_Id;
+         S, Q, R : IR.Slot_Id;
+         B       : IR.Block_Id;
          N    : IR.Value_Id;
       begin
          IR.Prepare (Unit, Meanings.all);
          A := IR.Add_Item (Unit, IR.Routine, 1, Landin.Types.U32, Site);
          S := IR.Add_Slot (Unit, A, Landin.Types.U32, 2, Site);
+         Q := IR.Add_Array_Slot
+           (Unit, A, Landin.Types.U16, 2 ** 32 - 1,
+            IR.No_Declaration, Site);
+         R := IR.Add_Array_Slot
+           (Unit, A, Landin.Types.U16, 2 ** 32 - 1,
+            IR.No_Declaration, Site);
          IR.Set_Result_Slot (Unit, A, S);
          B := IR.Add_Block (Unit, A, Landin.Resolution.Program_Scope,
                             Site);
          IR.Enter (Unit, A, B);
+         IR.Emit_Array_Copy
+           (Unit, A, (Kind => IR.Frame_Slot, Slot => Q),
+            (Kind => IR.Frame_Slot, Slot => R), Site);
          N := IR.Emit_Number (Unit, A, Landin.Types.U32, 1, False, Site);
          IR.Emit_Store (Unit, A, S, N, Site);
          N := IR.Emit_Load (Unit, A, S, Site);
@@ -146,6 +156,11 @@ package body Landin.Tests.Verifier_Suite is
       Element_Index_Is_Not_Usize,
       Element_Load_Of_The_Wrong_Type,
       Element_Store_Of_The_Wrong_Type,
+      Array_Copy_Endpoint_Is_Scalar,
+      Array_Copy_Lengths_Disagree,
+      Array_Copy_Elements_Disagree,
+      Array_Copy_Slot_Is_Not_Owned,
+      Array_Copy_Inside_A_Datum,
       Condition_Is_A_Number,
       Call_Missing_An_Argument,
       Unreachable_Block,
@@ -160,16 +175,18 @@ package body Landin.Tests.Verifier_Suite is
                    Harm : Damage) return V.Fault
    is
       A, D, G, E : IR.Item_Id;
-      S, P, Q : IR.Slot_Id;
+      S, P, Q, R : IR.Slot_Id;
       B, C : IR.Block_Id;
       N, M : IR.Value_Id;
    begin
       A := IR.Add_Item (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+      --  E precedes the deliberately blockless helper datums so the
+      --  datum-copy case reaches the instruction it is about first.
+      E := IR.Add_Item (Unit, IR.Datum, 6, Landin.Types.Fixed_Array, Site);
+      IR.Set_Array (Unit, E, Landin.Types.U32, 4);
       D := IR.Add_Item (Unit, IR.Datum, 3, Landin.Types.U32, Site);
       G := IR.Add_Item (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
       IR.Add_Field (Unit, G, Landin.Types.U32);
-      E := IR.Add_Item (Unit, IR.Datum, 6, Landin.Types.Fixed_Array, Site);
-      IR.Set_Array (Unit, E, Landin.Types.U32, 4);
 
       if Harm = No_Block_At_All then
          return V.Check (Unit);
@@ -179,6 +196,12 @@ package body Landin.Tests.Verifier_Suite is
       S := IR.Add_Slot (Unit, A, Landin.Types.U32, 4, Site);
       Q := IR.Add_Array_Slot
         (Unit, A, Landin.Types.U32, 4, IR.No_Declaration, Site);
+      R := IR.Add_Array_Slot
+        (Unit, A,
+         (if Harm = Array_Copy_Elements_Disagree
+          then Landin.Types.U16 else Landin.Types.U32),
+         (if Harm = Array_Copy_Lengths_Disagree then 5 else 4),
+         IR.No_Declaration, Site);
       IR.Set_Result_Slot (Unit, A, S);
       B := IR.Add_Block (Unit, A, Landin.Resolution.Program_Scope, Site);
       IR.Enter (Unit, A, B);
@@ -352,6 +375,44 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Array_Copy_Endpoint_Is_Scalar =>
+            IR.Emit_Array_Copy
+              (Unit, A, (Kind => IR.Module_Datum, Datum => D),
+               (Kind => IR.Frame_Slot, Slot => Q), Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Copy_Lengths_Disagree
+            | Array_Copy_Elements_Disagree =>
+            IR.Emit_Array_Copy
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => Q),
+               (Kind => IR.Frame_Slot, Slot => R), Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Copy_Slot_Is_Not_Owned =>
+            IR.Emit_Array_Copy
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => 5),
+               (Kind => IR.Frame_Slot, Slot => Q), Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Copy_Inside_A_Datum =>
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+            B := IR.Add_Block
+              (Unit, E, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, E, B);
+            IR.Emit_Array_Copy
+              (Unit, E, (Kind => IR.Module_Datum, Datum => E),
+               (Kind => IR.Module_Datum, Datum => E), Site);
+            IR.Emit_Leave (Unit, E, IR.No_Value, Site);
+            IR.Leave_Block (Unit, E);
+
          when Condition_Is_A_Number =>
             C := IR.Add_Block
                    (Unit, A, Landin.Resolution.Program_Scope, Site);
@@ -432,6 +493,12 @@ package body Landin.Tests.Verifier_Suite is
          (Element_Index_Is_Not_Usize, V.Element_Index_Is_Not_Usize),
          (Element_Load_Of_The_Wrong_Type, V.Result_Disagrees),
          (Element_Store_Of_The_Wrong_Type, V.Store_Datum_Disagrees),
+         (Array_Copy_Endpoint_Is_Scalar,
+          V.Array_Copy_Endpoint_Is_Not_An_Array),
+         (Array_Copy_Lengths_Disagree, V.Array_Copy_Shapes_Disagree),
+         (Array_Copy_Elements_Disagree, V.Array_Copy_Shapes_Disagree),
+         (Array_Copy_Slot_Is_Not_Owned, V.Slot_Out_Of_Range),
+         (Array_Copy_Inside_A_Datum, V.Array_Copy_Inside_A_Datum),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
          (Call_Missing_An_Argument,   V.Wrong_Operand_Count),
          (Unreachable_Block,          V.Block_Unreachable),

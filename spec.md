@@ -1149,8 +1149,8 @@ reaches, rather than allocating bookkeeping proportional to the array length.
 This decision does not define what a write through a computed local index
 establishes. Computed local indexing remains refused in this R2.20 slice;
 computed indexing of module arrays remains enabled because D10 gives module
-state every element from the start. Whole-array local values, copies, and
-initializers remain refused as well.
+state every element from the start. Whole-array local values and initializers
+remain refused as well; D20 admits the one direct storage-to-storage copy.
 
 **Why:** treating one element write as assignment of the whole local would
 permit an uninitialized read from every other element. Requiring every element
@@ -1167,3 +1167,46 @@ far larger than the host can enumerate. Both were declined.
 `negative/local-array-element-not-assigned-on-every-path`,
 `negative/increment-unassigned-local-array-element`, and
 `runtime/local-array-elements-are-independent` on Linux x86-64.
+
+### D20 — A whole-array copy reads and assigns every element
+
+**The tour said** that an array is a value and assignment copies it [0520],
+that two arrays are one type when their length and element type agree (D17),
+and that a local declared without a value is assigned before it is read
+[1910]. It did not say how a whole copy interacts with the independent sparse
+element facts D19 later introduced.
+
+**Chosen:** `destination = source`, where both sides name fixed-array storage,
+reads every element of the source and assigns every element of the destination.
+The two array types must have the same D17 identity. A source local is wholly
+assigned when an earlier whole copy assigned it or when its sparse D19 facts
+cover its length; a zero-length source is therefore assigned vacuously. Module
+state is wholly assigned by D10. Self-copy follows the same rule, so it cannot
+turn unassigned storage into an assigned value.
+
+A branch merge intersects what the facts *mean*, not merely how they happen to
+be represented. Whole on both paths remains whole; whole on one path and
+sparse facts on the other keeps those sparse facts; sparse on both keeps their
+intersection. Completeness is decided by counting the sparse facts already
+present, never by walking an array extent that D18 permits to fill the target.
+
+This kernel admits an array name as a whole value only in this direct copy.
+Array initializers, parameters, returns, discards, and other general value
+positions remain refused until their own R2.20 or R2.30 slices. No array
+literal is enabled by this decision.
+
+**Why:** expanding a copy into one operation per element would make compiler
+work and IR size proportional to a target object that the host may not be able
+to enumerate. Treating a copy as one compact storage operation preserves
+[0520]'s value semantics while the sparse whole fact preserves [1910] without
+pretending that a partial local was initialized.
+
+**The alternative:** enumerate every copied element in definite-assignment
+state and IR, or let any one element write establish the whole. The first is
+not representable for every D18 array and the second permits reads of bytes the
+program never assigned. Both were declined.
+
+**Pinned by** `positive/local-array-copy`,
+`negative/local-array-copy-from-unassigned`,
+`negative/local-array-copy-not-assigned-on-every-path`, and
+`runtime/whole-arrays-copy-between-storage` on Linux x86-64.

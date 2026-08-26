@@ -12,7 +12,10 @@
 --  what keeps this case inside the rule that every stage case runs against
 --  a fake filesystem.
 
+with Ada.Strings.Fixed;
+
 with Landin.IR;
+with Landin.IR.Dump;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -29,6 +32,7 @@ package body Landin.Tests.IR_Suite is
    use type Landin.IR.Opcode;
    use type Landin.IR.Part_Position;
    use type Landin.IR.Slot_Id;
+   use type Landin.IR.Storage_Kind;
    use type Landin.IR.Value_Id;
    use type Landin.Types.Type_Kind;
 
@@ -481,6 +485,79 @@ package body Landin.Tests.IR_Suite is
       end;
    end An_Array_Slot_Has_A_Compact_Shape;
 
+   procedure An_Array_Copy_Carries_Two_Compact_Places
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_Copy_Carries_Two_Compact_Places
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+      declare
+         Unit    : Landin.IR.Unit;
+         Datum   : Landin.IR.Item_Id;
+         Routine : Landin.IR.Item_Id;
+         Slot    : Landin.IR.Slot_Id;
+         Block   : Landin.IR.Block_Id;
+         Copy    : Landin.IR.Value_Id;
+      begin
+         Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := Landin.IR.Add_Item
+           (Unit, Landin.IR.Datum, 1, Landin.Types.Fixed_Array, Site);
+         Landin.IR.Set_Array
+           (Unit, Datum, Landin.Types.U16, 2 ** 32 - 1);
+         Routine := Landin.IR.Add_Item
+           (Unit, Landin.IR.Routine, 2, Landin.Types.U32, Site);
+         Slot := Landin.IR.Add_Array_Slot
+           (Unit, Routine, Landin.Types.U16, 2 ** 32 - 1,
+            Landin.IR.No_Declaration, Site);
+         Block := Landin.IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         Landin.IR.Enter (Unit, Routine, Block);
+         Landin.IR.Emit_Array_Copy
+           (Unit, Routine,
+            (Kind => Landin.IR.Module_Datum, Datum => Datum),
+            (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site);
+         Copy := Landin.IR.Nth_Value (Unit, Routine, Block, 1);
+
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Copy) = Landin.IR.Copy_Array
+            and then Landin.IR.Defines_Nothing (Landin.IR.Copy_Array)
+            and then Landin.IR.Result_Of (Unit, Routine, Copy)
+                       = Landin.Types.Not_Typed,
+            "a whole-array copy is one instruction defining no value");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Source_Of (Unit, Routine, Copy).Kind
+              = Landin.IR.Module_Datum
+            and then Landin.IR.Source_Of (Unit, Routine, Copy).Datum = Datum
+            and then Landin.IR.Destination_Of (Unit, Routine, Copy).Kind
+              = Landin.IR.Frame_Slot
+            and then Landin.IR.Destination_Of
+                       (Unit, Routine, Copy).Slot = Slot,
+            "its discriminated endpoints retain datum and slot identities");
+         Landin.Testing.Check_Equal
+           (Item, Landin.IR.Operand_Count (Unit, Routine, Copy), 0,
+            "its metadata does not grow with the array length");
+
+         declare
+            Text : constant String := Landin.IR.Dump.Text
+              (Unit, Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Ada.Strings.Fixed.Index
+                 (Text, "COPY_ARRAY from datum 1 f to slot 1") /= 0,
+               "the dump names both kinds of storage endpoint");
+         end;
+      end;
+   end An_Array_Copy_Carries_Two_Compact_Places;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -504,6 +581,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "an array slot has a compact shape",
          An_Array_Slot_Has_A_Compact_Shape'Access);
+      Landin.Testing.Register
+        (Into, "ir", "an array copy carries two compact places",
+         An_Array_Copy_Carries_Two_Compact_Places'Access);
    end Register;
 
 end Landin.Tests.IR_Suite;

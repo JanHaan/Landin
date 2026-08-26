@@ -484,6 +484,17 @@ item 1 ROUTINE f result u8 params 1 slots 3 blocks 1 values 8
     6 STORE slot 2 <- 5
     7 LOAD u8 slot 2
     8 LEAVE <- 7
+file positive/local-array-copy/program.ldn
+unit items 2
+item 1 DATUM source result array params 0 slots 0 blocks 1 values 1
+  elements 2 of u32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 ROUTINE f result none params 0 slots 1 blocks 1 values 2
+  slot 1 words elements 2 of u32
+  block 1 scope 3 BLOCK length 2
+    1 COPY_ARRAY from datum 1 source to slot 1
+    2 LEAVE
 file positive/local-shadows-a-parameter/program.ldn
 unit items 1
 item 1 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6

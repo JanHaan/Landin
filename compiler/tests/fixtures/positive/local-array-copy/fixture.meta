@@ -1,0 +1,5 @@
+class: positive
+summary: [0520] copies one whole fixed array between storage places
+constructs: 0080, 0410, 0520, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -2158,13 +2158,40 @@ Computed local indexes remain refused deliberately. Module state begins wholly
 assigned by D10, while a computed write into an uninitialized local raises a
 new semantic question — whether it establishes one unknown fact, a range, or
 none useful to a later read. This slice does not answer that question by
-accident. Whole-array local values, copies, and initializers also remain
-refused; declaration-only storage needs none of them.
+accident. Whole-array local values and initializers also remain refused;
+declaration-only storage needs neither.
 
-What is still refused: those computed and whole-array local forms, an array
-literal [0520], the inferred length [0530], `zeroed` [0540], repetition [0560],
-slices [0570], `lenof`, and an array as a struct field. Each is its own slice,
-and the value slices need the remaining copying and initialization work.
+D20 admits the one whole-array value position that can stay between storage
+places: `destination = source`. D17 decides agreement from length and element
+type, so aliases copy and either mismatch is `L0301`; every other expression
+position still meets `L0304`. The source may be module state or a local whose
+every element is definitely assigned, and the destination may be either kind
+of mutable storage. A copy reads every source element and assigns every
+destination element, including exact self-copy once the source was assigned.
+
+The flow state represents that with one whole-array fact beside D19's sparse
+element facts. Completeness is either that fact or a count of sparse facts
+equal to the declared length — never a walk through the target-sized extent.
+Branch merge intersects meanings rather than encodings: whole with sparse
+keeps the sparse side, while two whole paths stay whole. The negative cases pin
+an untouched local and a copy present on only one branch; the Linux runtime
+case makes the other merge arm assign each element independently and exercises
+module-to-module, module-to-local, local-to-local, local-to-module, alias, and
+self copies.
+
+The IR likewise has one `Copy_Array` instruction with two discriminated storage
+references — datum or frame slot — and no operand run proportional to the
+length. Its verifier proves both ends are arrays of the same shape and that a
+slot belongs to the routine. The x86-64 backend forms the two addresses,
+computes the target byte extent, and emits `rep movsb`; the fixed instruction
+sequence copies a D18 extent without enumerating it and exact self-copy is the
+only overlap current source forms can express.
+
+What is still refused: computed local indexes, initialized array locals and
+general whole-array value positions, an array literal [0520], the inferred
+length [0530], `zeroed` [0540], repetition [0560], slices [0570], `lenof`, and
+an array as a struct field. Each is its own slice, and the remaining value
+slices need initialization work.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a
 zero image when all-zero is a valid value for it, which is what lets a

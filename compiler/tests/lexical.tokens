@@ -685,6 +685,32 @@ file positive/literal-takes-a-sibling-type/program.ldn tokens 19
   28 29 1
   30 33 end
   34 35 f
+file positive/local-array-copy/program.ldn tokens 25
+  0 6 source
+  6 7 :
+  8 9 [
+  9 10 2
+  10 11 ]
+  11 14 u32
+  16 17 f
+  17 18 :
+  19 20 (
+  20 21 )
+  22 24 ->
+  25 29 none
+  30 31 =
+  36 39 mut
+  40 45 words
+  45 46 :
+  47 48 [
+  48 49 2
+  49 50 ]
+  50 53 u32
+  58 63 words
+  64 65 =
+  66 72 source
+  73 76 end
+  77 78 f
 file positive/local-shadows-a-parameter/program.ldn tokens 24
   0 1 f
   1 2 :
@@ -1906,6 +1932,59 @@ file negative/a-fold-deeper-than-any-limit/program.ldn tokens 495
   1502 1505 a69
   1506 1507 +
   1508 1509 1
+file negative/array-copy-element-mismatch/program.ldn tokens 26
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 mut
+  24 29 bytes
+  29 30 :
+  31 32 [
+  32 33 2
+  33 34 ]
+  34 36 u8
+  41 44 mut
+  45 50 words
+  50 51 :
+  52 53 [
+  53 54 2
+  54 55 ]
+  55 58 u32
+  63 68 words
+  69 70 =
+  71 76 bytes
+  77 80 end
+  81 82 f
+file negative/array-copy-length-mismatch/program.ldn tokens 25
+  0 5 short
+  5 6 :
+  7 8 [
+  8 9 1
+  9 10 ]
+  10 13 u32
+  14 17 mut
+  18 22 long
+  22 23 :
+  24 25 [
+  25 26 2
+  26 27 ]
+  27 30 u32
+  32 33 f
+  33 34 :
+  35 36 (
+  36 37 )
+  38 40 ->
+  41 45 none
+  46 47 =
+  52 56 long
+  57 58 =
+  59 64 short
+  65 68 end
+  69 70 f
 file negative/array-literal-not-enabled/program.ldn tokens 18
   0 1 f
   1 2 :
@@ -2326,6 +2405,31 @@ file negative/function-used-as-a-value/program.ldn tokens 24
   51 54 end
   55 56 f
 file negative/generic-not-enabled/program.ldn refused no rule spells 'T'
+file negative/immutable-array-copy/program.ldn tokens 24
+  0 6 source
+  6 7 :
+  8 9 [
+  9 10 2
+  10 11 ]
+  11 14 u32
+  15 19 held
+  19 20 :
+  21 22 [
+  22 23 2
+  23 24 ]
+  24 27 u32
+  29 30 f
+  30 31 :
+  32 33 (
+  33 34 )
+  35 37 ->
+  38 42 none
+  43 44 =
+  49 53 held
+  54 55 =
+  56 62 source
+  63 66 end
+  67 68 f
 file negative/immutable-array-element/program.ldn tokens 21
   0 5 words
   5 6 :
@@ -2655,32 +2759,77 @@ file negative/literal-below-its-type/program.ldn tokens 6
   10 11 =
   12 13 -
   13 16 129
-file negative/local-array-copy-not-enabled/program.ldn tokens 25
-  0 6 source
-  6 7 :
-  8 9 [
-  9 10 2
-  10 11 ]
-  11 14 u32
-  16 17 f
-  17 18 :
-  19 20 (
-  20 21 )
-  22 24 ->
-  25 29 none
-  30 31 =
-  36 39 mut
-  40 45 words
-  45 46 :
-  47 48 [
-  48 49 2
-  49 50 ]
-  50 53 u32
-  58 63 words
-  64 65 =
-  66 72 source
-  73 76 end
-  77 78 f
+file negative/local-array-copy-from-unassigned/program.ldn tokens 26
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 mut
+  24 30 source
+  30 31 :
+  32 33 [
+  33 34 2
+  34 35 ]
+  35 38 u32
+  43 46 mut
+  47 58 destination
+  58 59 :
+  60 61 [
+  61 62 2
+  62 63 ]
+  63 66 u32
+  71 82 destination
+  83 84 =
+  85 91 source
+  92 95 end
+  96 97 f
+file negative/local-array-copy-not-assigned-on-every-path/program.ldn tokens 43
+  0 5 state
+  5 6 :
+  7 8 [
+  8 9 2
+  9 10 ]
+  10 13 u32
+  15 16 f
+  16 17 :
+  18 19 (
+  19 28 condition
+  28 29 :
+  30 34 bool
+  34 35 )
+  36 38 ->
+  39 43 none
+  44 45 =
+  50 53 mut
+  54 60 source
+  60 61 :
+  62 63 [
+  63 64 2
+  64 65 ]
+  65 68 u32
+  73 76 mut
+  77 88 destination
+  88 89 :
+  90 91 [
+  91 92 2
+  92 93 ]
+  93 96 u32
+  101 103 if
+  104 113 condition
+  114 118 then
+  127 133 source
+  134 135 =
+  136 141 state
+  146 149 end
+  150 152 if
+  157 168 destination
+  169 170 =
+  171 177 source
+  178 181 end
+  182 183 f
 file negative/local-array-element-not-assigned/program.ldn tokens 28
   0 1 f
   1 2 :

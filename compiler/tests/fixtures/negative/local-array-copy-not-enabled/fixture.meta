@@ -1,6 +1,0 @@
-class: negative
-summary: [0520] leaves a whole local array copy for a later R2.20 slice
-constructs: 0080, 0410, 0520, 1810
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64
