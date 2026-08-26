@@ -1260,6 +1260,11 @@ package body Landin.Backend.X86_64 is
 
       procedure Emit_Aggregate_Datum (Item : Landin.IR.Item_Id);
 
+      procedure Emit_Reserved
+        (Item      : Landin.IR.Item_Id;
+         Size      : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment);
+
       --  [0670]'s module state.  The item carries its fields' types and
       --  this works out the same placement the checker did, because it is
       --  Landin.Targets.Placement over the same run against the same
@@ -1270,30 +1275,53 @@ package body Landin.Backend.X86_64 is
          Ignored : Landin.Targets.Byte_Count;
       begin
          Place_Fields (Item, Placed, 0, Ignored);
+         Emit_Reserved
+           (Item,
+            Landin.Targets.Size_Of (Placed),
+            Landin.Targets.Alignment_Of (Placed));
+      end Emit_Aggregate_Datum;
 
+      --  Whether a module value is all zero, and so is storage to reserve
+      --  rather than bytes to carry.  An aggregate always is: D10 zeroes a
+      --  binding with no value and [1940] admits no other way to write one
+      --  at module level, which is why this asks the type before it asks
+      --  the fold -- an aggregate datum has no scalar answer to fold.
+      function Is_All_Zero (Item : Landin.IR.Item_Id) return Boolean;
+
+      function Is_All_Zero (Item : Landin.IR.Item_Id) return Boolean is
+      begin
+         if Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.Aggregate
+         then
+            return True;
+         end if;
+
+         return Folded (Item) = 0;
+      end Is_All_Zero;
+
+      --  Reserved and not written: `.zero` in a section the assembler
+      --  marks NOBITS costs no bytes in the object or the image, while
+      --  the same directive in `.data` costs every one of them.
+      procedure Emit_Reserved
+        (Item      : Landin.IR.Item_Id;
+         Size      : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment)
+      is
+         Bytes : constant String :=
+           Trimmed (Landin.Targets.Byte_Count'Image (Size));
+      begin
          if Landin.Resolution.Is_Public
               (Meanings, Landin.IR.Declares (Of_Unit, Item))
          then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
-         declare
-            Bytes : constant String :=
-              Trimmed
-                (Landin.Targets.Byte_Count'Image
-                   (Landin.Targets.Size_Of (Placed)));
-         begin
-            Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
-            Put (Character'Val (9) & ".align "
-                 & Trimmed
-                     (Landin.Targets.Byte_Alignment'Image
-                        (Landin.Targets.Alignment_Of (Placed))));
-            Put (Symbol (Item) & ":");
-            Emit (".zero " & Bytes);
-            Put (Character'Val (9) & ".size " & Symbol (Item)
-                 & ", " & Bytes);
-         end;
-      end Emit_Aggregate_Datum;
+         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put (Character'Val (9) & ".align "
+              & Trimmed (Landin.Targets.Byte_Alignment'Image (Alignment)));
+         Put (Symbol (Item) & ":");
+         Emit (".zero " & Bytes);
+         Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
+      end Emit_Reserved;
 
       procedure Emit_Datum (Item : Landin.IR.Item_Id) is
          Kind : constant Landin.Types.Scalar_Name :=
@@ -1324,7 +1352,8 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
       end Emit_Datum;
 
-      Any_Data : Boolean := False;
+      Any_Written  : Boolean := False;
+      Any_Reserved : Boolean := False;
 
    begin
       Put (Character'Val (9) & ".text");
@@ -1335,15 +1364,19 @@ package body Landin.Backend.X86_64 is
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine then
                Emit_Routine (Item);
+            elsif Is_All_Zero (Item) then
+               Any_Reserved := True;
             else
-               Any_Data := True;
+               Any_Written := True;
             end if;
          end;
       end loop;
 
-      --  Data follows every routine rather than interrupting them, so the
-      --  section directive is written once and the text stays one run.
-      if Any_Data then
+      --  Data follows every routine rather than interrupting them, and each
+      --  section is one run, so each directive is written once however many
+      --  objects it holds.  Written first and reserved second, in the order
+      --  the declarations were made inside each.
+      if Any_Written then
          Put (Character'Val (9) & ".data");
 
          for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
@@ -1351,13 +1384,43 @@ package body Landin.Backend.X86_64 is
                Item : constant Landin.IR.Item_Id :=
                  Landin.IR.Item_Id (Index);
             begin
-               if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum then
+               if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
+                 and then not Is_All_Zero (Item)
+               then
+                  Emit_Datum (Item);
+               end if;
+            end;
+         end loop;
+      end if;
+
+      if Any_Reserved then
+         Put (Character'Val (9) & ".bss");
+
+         for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
+            declare
+               Item : constant Landin.IR.Item_Id :=
+                 Landin.IR.Item_Id (Index);
+            begin
+               if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
+                 and then Is_All_Zero (Item)
+               then
                   if Landin.IR.Result_Of (Of_Unit, Item)
                      = Landin.Types.Aggregate
                   then
                      Emit_Aggregate_Datum (Item);
                   else
-                     Emit_Datum (Item);
+                     Emit_Reserved
+                       (Item,
+                        Landin.Targets.Byte_Count
+                          (Landin.Targets.Bytes
+                             (Size_Of
+                                (Landin.IR.Result_Of (Of_Unit, Item),
+                                 Facts))),
+                        Landin.Targets.Alignment_Of
+                          (Facts,
+                           Size_Of
+                             (Landin.IR.Result_Of (Of_Unit, Item),
+                              Facts)));
                   end if;
                end if;
             end;
