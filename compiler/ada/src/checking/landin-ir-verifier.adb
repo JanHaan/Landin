@@ -380,29 +380,54 @@ package body Landin.IR.Verifier is
                               end if;
 
                            when Load_Element | Store_Element =>
-                              declare
-                                 D : constant Item_Id :=
-                                   Datum_Of (Of_Unit, Id, V);
-                              begin
-                                 if not Holds (Of_Unit, D)
-                                   or else Kind_Of (Of_Unit, D) /= Datum
-                                 then
-                                    return
-                                      (Kind => Named_Item_Is_Not_A_Datum,
-                                       Item => Id, Block => Block,
-                                       Value => V);
-                                 end if;
+                              if Reaches_A_Slot (Of_Unit, Id, V) then
+                                 --  D22: a computed element of an
+                                 --  [1810] local array in this item's
+                                 --  frame.  The slot has to exist and
+                                 --  has to be one Add_Array_Slot made.
+                                 declare
+                                    Cell : constant Slot_Id :=
+                                      Slot_Of (Of_Unit, Id, V);
+                                 begin
+                                    if not Holds (Of_Unit, Id, Cell) then
+                                       return (Kind => Slot_Out_Of_Range,
+                                               Item => Id, Block => Block,
+                                               Value => V);
+                                    end if;
 
-                                 if Result_Of (Of_Unit, D)
-                                      /= Landin.Types.Fixed_Array
-                                 then
-                                    return
-                                      (Kind =>
-                                         Element_Datum_Is_Not_An_Array,
-                                       Item => Id, Block => Block,
-                                       Value => V);
-                                 end if;
-                              end;
+                                    if not Is_Array (Of_Unit, Id, Cell) then
+                                       return
+                                         (Kind =>
+                                            Element_Datum_Is_Not_An_Array,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
+                              else
+                                 declare
+                                    D : constant Item_Id :=
+                                      Datum_Of (Of_Unit, Id, V);
+                                 begin
+                                    if not Holds (Of_Unit, D)
+                                      or else Kind_Of (Of_Unit, D) /= Datum
+                                    then
+                                       return
+                                         (Kind => Named_Item_Is_Not_A_Datum,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+
+                                    if Result_Of (Of_Unit, D)
+                                         /= Landin.Types.Fixed_Array
+                                    then
+                                       return
+                                         (Kind =>
+                                            Element_Datum_Is_Not_An_Array,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
+                              end if;
 
                            when Copy_Array =>
                               if Is_Datum then
@@ -693,12 +718,17 @@ package body Landin.IR.Verifier is
 
                            when Load_Element | Store_Element =>
                               declare
-                                 D : constant Item_Id :=
-                                   Datum_Of (Of_Unit, Id, V);
                                  Index : constant Value_Id :=
                                    Nth_Operand (Of_Unit, Id, V, 1);
-                                 Element : constant Landin.Types.Scalar_Name :=
-                                   Array_Element (Of_Unit, D);
+                                 Element : constant Landin.Types.Scalar_Name
+                                   :=
+                                     (if Reaches_A_Slot (Of_Unit, Id, V)
+                                      then Slot_Array_Element
+                                             (Of_Unit, Id,
+                                              Slot_Of (Of_Unit, Id, V))
+                                      else Array_Element
+                                             (Of_Unit,
+                                              Datum_Of (Of_Unit, Id, V)));
                               begin
                                  if Result_Of (Of_Unit, Id, Index)
                                       /= Landin.Types.Usize

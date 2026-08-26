@@ -1507,6 +1507,72 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Computed_Element_Is_Checked_Before_Its_Address;
 
+   --  D22: a computed local array element traps like the module one and
+   --  then reaches its own frame slot rather than a datum symbol.  The
+   --  cell's `%rbp` displacement is where Landin.Backend already places
+   --  the array's element zero.
+   procedure A_Computed_Local_Element_Reaches_Its_Slot
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Computed_Local_Element_Reaches_Its_Slot
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "source: [4]u32" & LF
+         & "at: (i: usize, value: u32) -> (r: u32) =" & LF
+         & "    mut words: [4]u32" & LF
+         & "    words = source" & LF
+         & "    words[i] = value" & LF
+         & "    r = words[i]" & LF
+         & "end at" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+         Compare : constant Natural := Index (Text, HT & "cmpq %rdx, %rax");
+         Trap : constant Natural := Index (Text, HT & "ud2");
+         Scale : constant Natural :=
+           Index (Text, HT & "imulq $4, %rax, %rax");
+         --  The frame layout puts a [4]u32 slot at -32(%rbp) on this
+         --  routine: eight bytes for the `at` parameter, then four for
+         --  `value`, then the four-word array whose element zero sits
+         --  furthest below the frame pointer.
+         Address : constant Natural :=
+           Index (Text, HT & "leaq -32(%rbp), %rcx");
+      begin
+         Landin.Testing.Check
+           (Item,
+            Compare > 0 and then Compare < Trap
+            and then Trap < Scale and then Scale < Address,
+            "the trap and scaling precede the frame-slot address");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "cmpq %rdx, %rax"), 2,
+            "both the store and the load check the runtime index");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "ud2"), 2,
+            "both out-of-bounds paths trap deliberately");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "leaq -32(%rbp), %rcx"), 2,
+            "each element operation reaches the slot's own base");
+         Landin.Testing.Check
+           (Item,
+            not Contains (Text, HT & "leaq words(%rip), %rcx"),
+            "no datum symbol appears for the local array");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "movl %eax, (%rcx)")
+            and then Contains (Text, HT & "movl (%rcx), %eax"),
+            "the guarded addresses carry a u32 write and read");
+      end;
+   end A_Computed_Local_Element_Reaches_Its_Slot;
+
    --  A module value is reached by name rather than through a frame, and
    --  x86-64's position-independent form of that name is RIP-relative.
    --  [1900] lets a `mut` module binding be written as well as read.
@@ -2316,6 +2382,10 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a computed element is checked before its address",
          A_Computed_Element_Is_Checked_Before_Its_Address'Access);
+      Landin.Testing.Register
+        (Into, "backend",
+         "a computed local element reaches its slot",
+         A_Computed_Local_Element_Reaches_Its_Slot'Access);
       Landin.Testing.Register
         (Into, "backend", "an array state is reserved whole",
          An_Array_State_Is_Reserved_Whole'Access);

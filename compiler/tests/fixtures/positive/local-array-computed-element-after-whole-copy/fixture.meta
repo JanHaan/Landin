@@ -1,0 +1,5 @@
+class: positive
+summary: D22 admits a computed local array element read once a whole-array assignment has run, and a computed write between two reads
+constructs: 0080, 0410, 0520, 0570, 1810, 1910, 1950
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -663,16 +663,29 @@ package body Landin.Backend.X86_64 is
                   --  [0580] requires the bounds check before any address
                   --  computation.  Keep the index in %rax through the
                   --  unsigned comparison, trap on index >= length, and only
-                  --  then scale it and add it to the datum's address.
+                  --  then scale it and add it to the array's base address.
+                  --  D22 lets the base be a module datum's symbol or a
+                  --  frame slot's %rbp-relative address; the trap and the
+                  --  scaling are the same.
                   declare
-                     Datum : constant Landin.IR.Item_Id :=
-                       Landin.IR.Datum_Of (Of_Unit, Item, Value);
+                     Reaches_Slot : constant Boolean :=
+                       Landin.IR.Reaches_A_Slot (Of_Unit, Item, Value);
                      Index : constant Landin.IR.Value_Id :=
                        Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1);
                      Length : constant Landin.IR.Element_Total :=
-                       Landin.IR.Array_Length (Of_Unit, Datum);
+                       (if Reaches_Slot
+                        then Landin.IR.Slot_Element_Length
+                               (Of_Unit, Item, Value)
+                        else Landin.IR.Array_Length
+                               (Of_Unit,
+                                Landin.IR.Datum_Of (Of_Unit, Item, Value)));
                      Kind : constant Landin.Types.Scalar_Name :=
-                       Landin.IR.Array_Element (Of_Unit, Datum);
+                       (if Reaches_Slot
+                        then Landin.IR.Slot_Element_Type
+                               (Of_Unit, Item, Value)
+                        else Landin.IR.Array_Element
+                               (Of_Unit,
+                                Landin.IR.Datum_Of (Of_Unit, Item, Value)));
                      Held : constant Held_Size := Size_Of (Kind, Facts);
                      Safe : constant String := Value_Label (Value) & "_index";
                   begin
@@ -690,8 +703,29 @@ package body Landin.Backend.X86_64 is
                         & Trimmed
                             (Natural'Image (Landin.Targets.Bytes (Held)))
                         & ", %rax, %rax");
-                     Emit ("leaq " & Symbol (Datum) & "(%rip), %rcx");
-                     Emit ("addq %rax, %rcx");
+
+                     if Reaches_Slot then
+                        --  An array slot's recorded displacement is its
+                        --  element-zero base directly.  Use it rather than
+                        --  asking Field_Offset for field 1: a zero-length
+                        --  array has no such field, but every computed index
+                        --  must still compile to the bounds trap above.
+                        Emit
+                          ("leaq "
+                           & Cell
+                               (Landin.Backend.Slot_Offset
+                                  (Layout,
+                                   Landin.IR.Slot_Of
+                                     (Of_Unit, Item, Value)))
+                           & ", %rcx");
+                        Emit ("addq %rax, %rcx");
+                     else
+                        Emit ("leaq "
+                              & Symbol
+                                  (Landin.IR.Datum_Of (Of_Unit, Item, Value))
+                              & "(%rip), %rcx");
+                        Emit ("addq %rax, %rcx");
+                     end if;
 
                      if Op = Landin.IR.Load_Element then
                         Carry (Held, "(%rcx)", Value_Cell (Value));

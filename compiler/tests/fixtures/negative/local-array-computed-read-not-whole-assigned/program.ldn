@@ -1,0 +1,5 @@
+f: (at: usize) -> (r: u32) =
+    mut words: [2]u32
+    words[0] = 1
+    r = words[at]
+end f

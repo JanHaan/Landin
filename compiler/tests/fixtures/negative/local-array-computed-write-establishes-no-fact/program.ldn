@@ -1,0 +1,7 @@
+mut destination: [2]u32
+
+f: (at: usize, value: u32) -> none =
+    mut words: [2]u32
+    words[at] = value
+    destination = words
+end f

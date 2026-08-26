@@ -790,6 +790,61 @@ package body Landin.IR is
       pragma Assert (Where /= No_Value);
    end Emit_Store_Element;
 
+   function Emit_Load_Slot_Element
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Slot   : Slot_Id;
+      Index  : Value_Id;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op     => Load_Element,
+                     Result => Result,
+                     Site   => Site,
+                     Slot   => Slot,
+                     others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Index);
+      return Append (Into, Item, Made);
+   end Emit_Load_Slot_Element;
+
+   procedure Emit_Store_Slot_Element
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Slot  : Slot_Id;
+      Index : Value_Id;
+      Value : Value_Id;
+      Site  : Landin.Provenance.Origin)
+   is
+      Made : Instruction :=
+        Instruction'(Op     => Store_Element,
+                     Site   => Site,
+                     Slot   => Slot,
+                     others => <>);
+      Where : Value_Id;
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 2;
+      Into.Operands.Append (Index);
+      Into.Operands.Append (Value);
+      Where := Append (Into, Item, Made);
+      pragma Assert (Where /= No_Value);
+   end Emit_Store_Slot_Element;
+
+   function Slot_Element_Length
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Element_Total
+     is (Slot_Array_Length
+           (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot));
+
+   function Slot_Element_Type
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+     return Landin.Types.Scalar_Name
+     is (Slot_Array_Element
+           (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot));
+
    procedure Emit_Array_Copy
      (Into        : in out Unit;
       Item        : Item_Id;

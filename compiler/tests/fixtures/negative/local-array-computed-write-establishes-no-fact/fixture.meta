@@ -1,0 +1,6 @@
+class: negative
+summary: D22 lets a computed local array write happen but establishes no whole-array fact for a later reader
+constructs: 0080, 0520, 1810, 1910, 1950
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64
