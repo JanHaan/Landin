@@ -1,0 +1,6 @@
+class: negative
+summary: D17 makes the array length part of a whole copy's type
+constructs: 0410, 0520
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

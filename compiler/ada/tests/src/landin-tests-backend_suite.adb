@@ -1182,6 +1182,86 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Constant_Array_Parts_Address_One_Frame_Cell;
 
+   --  D20's whole-array assignment remains one compact IR operation, so the
+   --  backend forms one address for each endpoint rather than visiting its
+   --  elements.  `usize` makes the byte count come from the target: three
+   --  elements occupy twenty-four bytes on Linux x86-64 and twelve on the
+   --  synthetic 32-bit description.  Even exact self-copy keeps the specified
+   --  operation, with the same frame address in both string registers.
+   procedure An_Array_Copy_Moves_A_Constant_Target_Extent
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_Copy_Moves_A_Constant_Target_Extent
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "mut source: [3]usize" & LF
+        & "mut destination: [3]usize" & LF
+        & "copy: () -> none =" & LF
+        & "    mut local: [3]usize" & LF
+        & "    local = source" & LF
+        & "    destination = local" & LF
+        & "    local = local" & LF
+        & "end copy" & LF;
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Bytes : String);
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Bytes : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran  : Natural;
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check
+           (Item, not Landin.Stages.Failed (Work), "the copies are accepted");
+
+         declare
+            Text : constant String := Emitted (Work);
+            Move : constant String :=
+              HT & "movabsq $" & Bytes & ", %rcx" & LF
+              & HT & "cld" & LF
+              & HT & "rep movsb" & LF;
+            Local : constant String := "-" & Bytes & "(%rbp)";
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  HT & "leaq " & Local & ", %rdi" & LF
+                  & HT & "leaq source(%rip), %rsi" & LF
+                  & Move),
+               "a module-to-local copy forms two compact addresses");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  HT & "leaq destination(%rip), %rdi" & LF
+                  & HT & "leaq " & Local & ", %rsi" & LF
+                  & Move),
+               "a local-to-module copy forms two compact addresses");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  HT & "leaq " & Local & ", %rdi" & LF
+                  & HT & "leaq " & Local & ", %rsi" & LF
+                  & Move),
+               "an exact self-copy names the same address at both endpoints");
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Text, Move), 3,
+               "each fixed-size copy is one forward rep movsb operation");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "24");
+      Check_Target (Landin.Targets.Synthetic_32, "12");
+   end An_Array_Copy_Moves_A_Constant_Target_Extent;
+
    --  D10 zeroes a module binding with no value, and zero bytes do not
    --  have to be in the image to be zero: `.bss` reserves them and `.data`
    --  carries them.  A 32 KB part is in this compiler's range, so a
@@ -2266,6 +2346,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "constant array parts share one frame cell",
          Constant_Array_Parts_Address_One_Frame_Cell'Access);
+      Landin.Testing.Register
+        (Into, "backend", "an array copy moves a constant target extent",
+         An_Array_Copy_Moves_A_Constant_Target_Extent'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value folds every level",
          A_Module_Value_Folds_Every_Level'Access);

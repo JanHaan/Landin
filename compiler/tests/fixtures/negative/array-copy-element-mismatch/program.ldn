@@ -1,0 +1,5 @@
+f: () -> none =
+    mut bytes: [2]u8
+    mut words: [2]u32
+    words = bytes
+end f

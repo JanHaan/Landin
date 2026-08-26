@@ -194,6 +194,9 @@ package Landin.IR is
       --  position is an operand because [1950] checks its value at runtime.
       Load_Element,
       Store_Element,
+      --  One whole [0520] array copied between two storage places.  The
+      --  endpoints carry identities, never one entry per element.
+      Copy_Array,
       --  [0370]'s measurements.  The type they ask about is carried, not
       --  the answer: a size needs a width and a width needs a target, so
       --  the answer belongs to whoever has one.  This is the same seam
@@ -254,7 +257,7 @@ package Landin.IR is
    --  instruction's own Result answers that and an opcode cannot.
    function Defines_Nothing (Of_Code : Opcode) return Boolean
      is (Of_Code in Store | Store_Datum | Store_Field | Store_Element
-                    | Terminator_Kind);
+                    | Copy_Array | Terminator_Kind);
 
    ------------------------------------------------------------------
    --  Identities
@@ -277,6 +280,20 @@ package Landin.IR is
    No_Slot  : constant Slot_Id  := 0;
    No_Block : constant Block_Id := 0;
    No_Value : constant Value_Id := 0;
+
+   --  An array copy reaches either a module datum or a slot in the frame of
+   --  the item containing the instruction.  A discriminant prevents an
+   --  Item_Id and a Slot_Id from becoming interchangeable integers.
+   type Storage_Kind is (Module_Datum, Frame_Slot);
+
+   type Storage (Kind : Storage_Kind := Module_Datum) is record
+      case Kind is
+         when Module_Datum =>
+            Datum : Item_Id := No_Item;
+         when Frame_Slot =>
+            Slot : Slot_Id := No_Slot;
+      end case;
+   end record;
 
    --  Block 1 of every item is where it starts.  Named, so no caller
    --  writes the 1, exactly as Landin.Resolution names Program_Scope.
@@ -819,6 +836,16 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
 
+   function Source_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
+
+   function Destination_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
+
    --  Which part of that base, by [0750]'s order for a struct and by
    --  [0520]'s for an array.
    function Field_Of
@@ -1053,6 +1080,15 @@ package Landin.IR is
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
 
+   procedure Emit_Array_Copy
+     (Into       : in out Unit;
+      Item       : Item_Id;
+      Source     : Storage;
+      Destination : Storage;
+      Site       : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Landin.Provenance.Is_Known (Site);
+
    --  Result is stated by the caller and not derived from the operand,
    --  so a mutation can make it disagree and the verifier can say so.
    function Emit_Unary
@@ -1182,6 +1218,8 @@ private
       Args        : Natural                   := 0;
       Slot        : Slot_Id                   := No_Slot;
       Named       : Item_Id                   := No_Item;
+      Source      : Storage                   := (others => <>);
+      Destination : Storage                   := (others => <>);
       Target      : Block_Id                  := No_Block;
       Alternative : Block_Id                  := No_Block;
       Number      : Landin.Types.Magnitude    := 0;

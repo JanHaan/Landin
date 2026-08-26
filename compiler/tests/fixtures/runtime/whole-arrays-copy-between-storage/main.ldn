@@ -1,0 +1,36 @@
+pair: type = [2]u32
+mut module_source: pair
+mut module_destination: [2]u32
+
+public main: () -> (code: i32) =
+    module_source[0] = 17
+    module_source[1] = 25
+    module_destination = module_source
+
+    mut from_module: pair
+    from_module = module_destination
+
+    mut from_local: [2]u32
+    from_local = from_module
+    from_local = from_local
+    module_destination = from_local
+
+    mut mixed_paths: pair
+    if module_destination[0] == 17 then
+        mixed_paths = module_destination
+    else
+        mixed_paths[0] = 17
+        mixed_paths[1] = 25
+    end if
+
+    mut final_copy: [2]u32
+    final_copy = mixed_paths
+    if final_copy[0] == 17 and final_copy[1] == 25
+        and module_destination[0] == 17
+        and module_destination[1] == 25
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

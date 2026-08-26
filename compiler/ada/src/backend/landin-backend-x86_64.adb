@@ -566,6 +566,79 @@ package body Landin.Backend.X86_64 is
                            & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Copy_Array =>
+                  --  D20 moves bytes directly between storage places.  The
+                  --  instruction stays one operation even when D18 makes the
+                  --  extent too large for the compiler host to enumerate.
+                  declare
+                     Source : constant Landin.IR.Storage :=
+                       Landin.IR.Source_Of (Of_Unit, Item, Value);
+                     Destination : constant Landin.IR.Storage :=
+                       Landin.IR.Destination_Of (Of_Unit, Item, Value);
+
+                     function Length_Of
+                       (Place : Landin.IR.Storage)
+                        return Landin.IR.Element_Total;
+                     function Element_Of
+                       (Place : Landin.IR.Storage)
+                        return Landin.Types.Scalar_Name;
+                     procedure Address_Of
+                       (Place : Landin.IR.Storage; Register : String);
+
+                     function Length_Of
+                       (Place : Landin.IR.Storage)
+                        return Landin.IR.Element_Total is
+                       (case Place.Kind is
+                           when Landin.IR.Module_Datum =>
+                             Landin.IR.Array_Length
+                               (Of_Unit, Place.Datum),
+                           when Landin.IR.Frame_Slot =>
+                             Landin.IR.Slot_Array_Length
+                               (Of_Unit, Item, Place.Slot));
+
+                     function Element_Of
+                       (Place : Landin.IR.Storage)
+                        return Landin.Types.Scalar_Name is
+                       (case Place.Kind is
+                           when Landin.IR.Module_Datum =>
+                             Landin.IR.Array_Element
+                               (Of_Unit, Place.Datum),
+                           when Landin.IR.Frame_Slot =>
+                             Landin.IR.Slot_Array_Element
+                               (Of_Unit, Item, Place.Slot));
+
+                     procedure Address_Of
+                       (Place : Landin.IR.Storage; Register : String) is
+                     begin
+                        case Place.Kind is
+                           when Landin.IR.Module_Datum =>
+                              Emit
+                                ("leaq " & Symbol (Place.Datum) & "(%rip), "
+                                 & Register);
+                           when Landin.IR.Frame_Slot =>
+                              Emit
+                                ("leaq " & Slot_Cell (Place.Slot) & ", "
+                                 & Register);
+                        end case;
+                     end Address_Of;
+
+                     Bytes : constant Landin.Targets.Byte_Count :=
+                       Landin.Targets.Byte_Count (Length_Of (Source))
+                       * Landin.Targets.Byte_Count
+                           (Landin.Targets.Bytes
+                              (Size_Of (Element_Of (Source), Facts)));
+                  begin
+                     Address_Of (Destination, "%rdi");
+                     Address_Of (Source, "%rsi");
+                     Emit
+                       ("movabsq $"
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image (Bytes))
+                        & ", %rcx");
+                     Emit ("cld");
+                     Emit ("rep movsb");
+                  end;
+
                when Landin.IR.Load_Datum | Landin.IR.Store_Datum =>
                   --  A module value is named rather than offset from a
                   --  frame, and RIP-relative is how x86-64 names one
@@ -1350,6 +1423,7 @@ package body Landin.Backend.X86_64 is
                      when Landin.IR.Call | Landin.IR.Store_Datum
                         | Landin.IR.Load_Field | Landin.IR.Store_Field
                         | Landin.IR.Load_Element | Landin.IR.Store_Element
+                        | Landin.IR.Copy_Array
                         | Landin.IR.Jump | Landin.IR.Branch =>
                         --  [1940] admits none of these in a module value,
                         --  and [1830] refuses a call there by name.

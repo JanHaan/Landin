@@ -26,6 +26,7 @@ package body Landin.Stages.Checking is
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
    use type Landin.Checking.Progress;
+   use type Landin.Checking.Element_Count;
    use type Res.Verdict;
    use type Res.Declaration_Sort;
    use type Landin.Source.Source_Id;
@@ -1750,6 +1751,16 @@ package body Landin.Stages.Checking is
                  (Of_Tree, Syn.Target_Of (Of_Tree, Node),
                   Stepping => False);
 
+               --  The place has already explained why no assignment can be
+               --  made.  Do not compare stale aggregate shape metadata and
+               --  add a type mismatch to the mutability report.
+               if Landin.Checking.Type_Of
+                    (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                    = Ty.Ill_Typed
+               then
+                  return;
+               end if;
+
                declare
                   Place : constant Syn.Node_Id :=
                     Syn.Target_Of (Of_Tree, Node);
@@ -1786,6 +1797,46 @@ package body Landin.Stages.Checking is
                               Note    => "[0710]: two structs are one type"
                                          & " when one declaration wrote"
                                          & " both, and never otherwise",
+                              Related => Syn.Origin (Of_Tree, Place),
+                              Because => "the place written here",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        end if;
+                     end;
+
+                     return;
+                  end if;
+
+                  --  D20: an array copy also moves straight from one storage
+                  --  place to another.  D17 makes its length and element type
+                  --  its identity; no general array value is enabled by this
+                  --  one expression position.
+                  if Wants = Ty.Fixed_Array then
+                     declare
+                        Got : constant Ty.Type_Kind :=
+                          Selected_From (Of_Tree, Value);
+                     begin
+                        if Got = Ty.Ill_Typed then
+                           null;
+                        elsif Got /= Ty.Fixed_Array
+                          or else Landin.Checking.Array_Length
+                                    (Types.all, Of_Tree, Place)
+                                  /= Landin.Checking.Array_Length
+                                       (Types.all, Of_Tree, Value)
+                          or else Landin.Checking.Array_Element
+                                    (Types.all, Of_Tree, Place)
+                                  /= Landin.Checking.Array_Element
+                                       (Types.all, Of_Tree, Value)
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this is not an array of the type"
+                                         & " written here",
+                              Note    => "D17: an array's length and element"
+                                         & " type are its identity",
                               Related => Syn.Origin (Of_Tree, Place),
                               Because => "the place written here",
                               Into    => Found);
@@ -2545,14 +2596,19 @@ package body Landin.Stages.Checking is
       package Element_Sets is new Ada.Containers.Ordered_Sets
         (Element_Type => Element_Fact);
 
+      package Declaration_Sets is new Ada.Containers.Ordered_Sets
+        (Element_Type => Res.Declaration_Id);
+
       type Assigned_Set is record
-         Fields   : Assigned_Fields := [others => [others => False]];
-         Elements : Element_Sets.Set;
+         Fields      : Assigned_Fields := [others => [others => False]];
+         Elements    : Element_Sets.Set;
+         Whole_Arrays : Declaration_Sets.Set;
       end record;
 
       Nothing_Assigned : constant Assigned_Set :=
-        (Fields => [others => [others => False]],
-         Elements => Element_Sets.Empty_Set);
+        (Fields       => [others => [others => False]],
+         Elements     => Element_Sets.Empty_Set,
+         Whole_Arrays => Declaration_Sets.Empty_Set);
 
       --  Which declarations [1910] is about.  A parameter arrives assigned
       --  and a module binding is [1940]'s, so what is left is a local
@@ -2584,6 +2640,13 @@ package body Landin.Stages.Checking is
          Node    : Syn.Node_Id;
          Id      : Res.Declaration_Id;
          Position : Ty.Magnitude;
+         State   : Assigned_Set);
+      function Array_Is_Assigned
+        (Id : Res.Declaration_Id; State : Assigned_Set) return Boolean;
+      procedure Require_Array
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Id      : Res.Declaration_Id;
          State   : Assigned_Set);
 
       --  Which declaration a declaring node is.  Landin.Resolution
@@ -2700,6 +2763,63 @@ package body Landin.Stages.Checking is
          end;
       end Require_Assigned;
 
+      function Array_Is_Assigned
+        (Id : Res.Declaration_Id; State : Assigned_Set) return Boolean
+      is
+         Assigned : Landin.Checking.Element_Count := 0;
+      begin
+         if not Is_Tracked (Id)
+           or else Declaration_Sets.Contains (State.Whole_Arrays, Id)
+           or else Landin.Checking.Array_Length (Types.all, Id) = 0
+         then
+            return True;
+         end if;
+
+         --  D20: completeness is a count over the sparse facts that exist,
+         --  never a walk over an array whose D18 length may fill the target.
+         for Fact of State.Elements loop
+            if Fact.Declaration = Id then
+               Assigned := Assigned + 1;
+            end if;
+         end loop;
+
+         return Assigned = Landin.Checking.Array_Length (Types.all, Id);
+      end Array_Is_Assigned;
+
+      procedure Require_Array
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Id      : Res.Declaration_Id;
+         State   : Assigned_Set) is
+      begin
+         if Array_Is_Assigned (Id, State) then
+            return;
+         end if;
+
+         declare
+            Their_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Id));
+            Their_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Id);
+         begin
+            Bad.Report
+              (Item    => Bad.Not_Definitely_Assigned,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "the whole of `"
+                          & Spelled (Res.Name_Of (Meanings.all, Id))
+                          & "` is read here and no path that arrives assigned"
+                          & " every element",
+               Note    => "D20: copying a local array reads every element",
+               Related => Landin.Provenance.Origin'
+                            (Source => Res.Source_Of (Meanings.all, Id),
+                             Where  => Syn.Anchor
+                                         (Their_Tree.all, Their_Node)),
+               Because => "declared here with no value",
+               Into    => Found);
+         end;
+      end Require_Array;
+
       procedure Require_Element
         (Of_Tree  : Syn.Tree;
          Node     : Syn.Node_Id;
@@ -2708,6 +2828,7 @@ package body Landin.Stages.Checking is
          State    : Assigned_Set) is
       begin
          if not Is_Tracked (Id)
+           or else Declaration_Sets.Contains (State.Whole_Arrays, Id)
            or else Element_Sets.Contains
                      (State.Elements, (Id, Position))
          then
@@ -2787,11 +2908,23 @@ package body Landin.Stages.Checking is
               and then Res.Verdict_Of (Meanings.all, Of_Tree, Node)
                          = Res.Bound
             then
-               Require_Assigned
-                 (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Node),
-                  Res.Bound_To (Meanings.all, Of_Tree, Node), State,
-                  "`" & Spelled (Syn.Name (Of_Tree, Node))
-                  & "` is read here and no path that arrives assigned it");
+               declare
+                  Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Node);
+               begin
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                       = Ty.Fixed_Array
+                  then
+                     Require_Array (Of_Tree, Node, Id, State);
+                  else
+                     Require_Assigned
+                       (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Node),
+                        Id, State,
+                        "`" & Spelled (Syn.Name (Of_Tree, Node))
+                        & "` is read here and no path that arrives assigned"
+                        & " it");
+                  end if;
+               end;
             end if;
 
             return;
@@ -2857,15 +2990,56 @@ package body Landin.Stages.Checking is
                return;
             end if;
 
-            for Which in Tracked loop
-               for Part in Tracked_Field loop
-                  Into.Fields (Which, Part) :=
-                    Into.Fields (Which, Part)
-                    and Branch.Fields (Which, Part);
+            declare
+               Left   : constant Assigned_Set := Into;
+               Merged : Assigned_Set :=
+                 (Fields       => Left.Fields,
+                  Elements     => Element_Sets.Intersection
+                                    (Left.Elements, Branch.Elements),
+                  Whole_Arrays => Declaration_Sets.Intersection
+                                    (Left.Whole_Arrays,
+                                     Branch.Whole_Arrays));
+            begin
+               for Which in Tracked loop
+                  for Part in Tracked_Field loop
+                     Merged.Fields (Which, Part) :=
+                       Left.Fields (Which, Part)
+                       and Branch.Fields (Which, Part);
+                  end loop;
                end loop;
-            end loop;
-            Into.Elements :=
-              Element_Sets.Intersection (Into.Elements, Branch.Elements);
+
+               --  D20 gives a whole-array fact the meaning of every sparse
+               --  element fact.  Intersecting whole with sparse therefore
+               --  keeps the sparse side; intersecting two sparse states is
+               --  the ordinary set intersection above.
+               for Which in Tracked loop
+                  declare
+                     Id : constant Res.Declaration_Id :=
+                       Res.Declaration_Id (Which);
+                     Left_Whole : constant Boolean :=
+                       Declaration_Sets.Contains (Left.Whole_Arrays, Id);
+                     Right_Whole : constant Boolean :=
+                       Declaration_Sets.Contains
+                         (Branch.Whole_Arrays, Id);
+                  begin
+                     if Left_Whole and then not Right_Whole then
+                        for Fact of Branch.Elements loop
+                           if Fact.Declaration = Id then
+                              Element_Sets.Include (Merged.Elements, Fact);
+                           end if;
+                        end loop;
+                     elsif Right_Whole and then not Left_Whole then
+                        for Fact of Left.Elements loop
+                           if Fact.Declaration = Id then
+                              Element_Sets.Include (Merged.Elements, Fact);
+                           end if;
+                        end loop;
+                     end if;
+                  end;
+               end loop;
+
+               Into := Merged;
+            end;
          end Merge;
 
          --  A place written is assigned from here on.
@@ -2947,7 +3121,15 @@ package body Landin.Stages.Checking is
                     Res.Bound_To (Meanings.all, Of_Tree, Node);
                begin
                   if Is_Tracked (Id) then
-                     State.Fields (Positive (Id), 0) := True;
+                     if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                          = Ty.Fixed_Array
+                     then
+                        --  One fact stands for an extent D18 permits to be
+                        --  too large for either the IR or the host to list.
+                        Declaration_Sets.Include (State.Whole_Arrays, Id);
+                     else
+                        State.Fields (Positive (Id), 0) := True;
+                     end if;
 
                      --  A whole struct copied into a place assigns every
                      --  field of it at once, which is the one way a
