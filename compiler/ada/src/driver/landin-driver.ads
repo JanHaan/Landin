@@ -24,6 +24,14 @@ package Landin.Driver is
    Status_Reported  : constant := 1;
    Status_Misuse    : constant := 2;
 
+   --  The compiler finding itself wrong, which is not the program being
+   --  wrong and must not be read as it.  Sysexits' EX_SOFTWARE, which is
+   --  what `refine` already exited with, moved here so that a defect is
+   --  an outcome this boundary returns rather than an exception that
+   --  escapes it -- and so that whatever the run had already decided is
+   --  still rendered beside it.
+   Status_Defect    : constant := 70;
+
    type Outcome is record
       Status : Natural := Status_Success;
       Output : Ada.Strings.Unbounded.Unbounded_String;

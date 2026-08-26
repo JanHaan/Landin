@@ -2035,6 +2035,33 @@ let every other unlayable field through. Both are refused by name again, both
 have fixtures, and the measurement one covers a declared name as well, which had
 the same hole before arrays existed.
 
+Both of those reached a defect, and finding them twice in one afternoon showed
+a third thing wrong that was nothing to do with arrays: a defect threw away the
+report. `Landin.Driver.Execute` let one escape, so `refine` printed `internal
+compiler defect` and exited, and everything the run had already decided about
+the source went with it — including, in both cases above, the one sentence a
+reader needed. A defect is now an outcome that boundary returns rather than an
+exception that leaves it: the report is rendered from what the compilation
+holds, the defect is written under it, and `Status_Defect` is sysexits'
+EX_SOFTWARE named where the other three statuses already were. The handler in
+`refine` stays as the backstop for a defect raised outside that boundary, where
+there is nothing to render.
+
+Holding a compiler to that needs a defect to hold it to, and no source can be
+relied on to cause one — every one that could is a bug to be fixed, and the two
+above were. So the fakes grew `Raise_On_Run` and
+`Raise_On_Read`, which is fault injection in the testing library where it
+belongs, each arming one defect and clearing itself on the one it fires.
+
+Which of the two a case uses is not a preference. A tool runs only on a
+compilation that was not refused, so a defect there can never have a diagnostic
+before it; a read happens after the driver has already reported an unknown
+option, which is the only place in this driver where a defect meets a report
+that already exists. Review found the first attempt at this case proving
+nothing — it used an ordinary refused program and no injection at all — and the
+case now fails, as it should, when the handler renders the defect without the
+report under it.
+
 A third hole was older still and the arrays only added a second way into it: a
 struct one of whose fields was refused has no layout, and reading a field that
 is fine asked it for one anyway, which reached a precondition rather than a

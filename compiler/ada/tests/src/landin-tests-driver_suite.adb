@@ -16,6 +16,29 @@ package body Landin.Tests.Driver_Suite is
 
    function Arguments_Of (First : String) return Landin.Platform.Path_List;
 
+   --  How many times a needle occurs, which is how a case says a thing was
+   --  rendered once rather than on both paths.
+   function Occurrences (Text : String; Needle : String) return Natural;
+
+   function Occurrences (Text : String; Needle : String) return Natural is
+      Seen : Natural := 0;
+      From : Positive := Text'First;
+   begin
+      loop
+         declare
+            At_Next : constant Natural :=
+              Ada.Strings.Fixed.Index (Text (From .. Text'Last), Needle);
+         begin
+            exit when At_Next = 0;
+            Seen := Seen + 1;
+            exit when At_Next + Needle'Length > Text'Last;
+            From := At_Next + Needle'Length;
+         end;
+      end loop;
+
+      return Seen;
+   end Occurrences;
+
    function Both (First, Second : String) return Landin.Platform.Path_List;
 
    function Both (First, Second : String)
@@ -373,6 +396,10 @@ package body Landin.Tests.Driver_Suite is
         (Item, Landin.Driver.Status_Reported, 1, "a report is one");
       Landin.Testing.Check_Equal
         (Item, Landin.Driver.Status_Misuse, 2, "misuse is two");
+      --  Sysexits' EX_SOFTWARE, which is what a caller reads to tell the
+      --  compiler being wrong from the program being wrong.
+      Landin.Testing.Check_Equal
+        (Item, Landin.Driver.Status_Defect, 70, "a defect is seventy");
    end Exit_Statuses_Are_Fixed;
 
 
@@ -672,6 +699,136 @@ package body Landin.Tests.Driver_Suite is
    --  A refused program is not emitted, for the same reason the lowering
    --  refuses to run on one: a file written from a failed compilation is a
    --  plausible artefact of nothing.
+   --  A defect is the compiler failing, not the program being wrong, and
+   --  the two arrive together: by the time one is raised the run has
+   --  usually already decided several things about the source.  Losing
+   --  those leaves a user with `internal compiler defect` and nothing to
+   --  act on, when the report already held the sentence that mattered.
+   --
+   --  The unknown option is what puts a diagnostic in the report before
+   --  anything is read, and the read is where the defect is injected: a
+   --  tool runs only on a compilation that was not refused, so a defect
+   --  there could never have one before it.
+   procedure A_Defect_Keeps_What_Was_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Defect_Keeps_What_Was_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File
+        ("fine.ldn",
+         "public main: () -> (code: i32) =" & LF
+         & "    code = 0" & LF & "end main" & LF);
+      Host.Raise_On_Read;
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("--wat", "fine.ldn"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0002"),
+            "what the run had already reported survives the defect");
+         Landin.Testing.Check
+           (Item, Contains (Report, "internal compiler defect"),
+            "and the defect is written under it");
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Defect,
+            "and the status says the compiler failed, not the program");
+
+         --  Once each: the report is rendered on one path or the other
+         --  and never on both.
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Report, "L0002"), 1,
+            "the diagnostic is not rendered twice");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Report, "internal compiler defect"), 1,
+            "and neither is the defect");
+      end;
+   end A_Defect_Keeps_What_Was_Reported;
+
+   --  The regression the driver's promise was found through: a struct one
+   --  of whose fields was refused has no layout, and reading a field that
+   --  is fine used to ask it for one.  Kept as a case because it is what
+   --  a user was left holding when the report went missing.
+   procedure A_Struct_Missing_Its_Layout_Is_Reported
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Missing_Its_Layout_Is_Reported
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File
+        ("holed.ldn",
+         "inner: type = struct" & LF
+         & "    q: u32" & LF
+         & "end inner" & LF
+         & "outer: type = struct" & LF
+         & "    part: inner" & LF
+         & "    count: u32" & LF
+         & "end outer" & LF
+         & "mut here: outer" & LF
+         & "f: () -> (r: u32) =" & LF
+         & "    r = here.count" & LF
+         & "end f" & LF);
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Arguments_Of ("holed.ldn"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Report, "L0304"),
+            "the field that stopped the layout is what is reported");
+         Landin.Testing.Check
+           (Item, not Contains (Report, "internal compiler defect"),
+            "and reading another field of it is not a defect");
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Reported,
+            "so the program is refused rather than the compiler failing");
+      end;
+   end A_Struct_Missing_Its_Layout_Is_Reported;
+
+   --  And the same promise where the defect is the compiler's own: a run
+   --  that raises hands back a status rather than escaping, so the caller
+   --  prints one sentence instead of an unhandled exception.
+   procedure A_Defect_Is_A_Status_And_Not_An_Escape
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Defect_Is_A_Status_And_Not_An_Escape
+     (Item : in out Landin.Testing.Context)
+   is
+      Host  : Landin.Testing.Fakes.Fake_Filesystem;
+      Tools : Landin.Testing.Fakes.Fake_Tool_Runner;
+   begin
+      Host.Add_File
+        ("fine.ldn",
+         "public main: () -> (code: i32) =" & LF
+         & "    code = 0" & LF & "end main" & LF);
+      Tools.Raise_On_Run;
+
+      declare
+         Result : constant Landin.Driver.Outcome :=
+           Landin.Driver.Execute
+             (Both ("fine.ldn", "--emit=exe"), Host, Tools);
+         Report : constant String := Unbounded.To_String (Result.Report);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Result.Status, Landin.Driver.Status_Defect,
+            "a defect is its own status");
+         Landin.Testing.Check
+           (Item, Contains (Report, "internal compiler defect"),
+            "and says so where a reader is looking");
+      end;
+   end A_Defect_Is_A_Status_And_Not_An_Escape;
+
    procedure A_Refused_Program_Writes_Nothing
      (Item : in out Landin.Testing.Context);
 
@@ -807,6 +964,15 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Register
         (Into, "driver", "a target with no backend emits nothing",
          A_Target_With_No_Backend_Emits_Nothing'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a defect is a status and not an escape",
+         A_Defect_Is_A_Status_And_Not_An_Escape'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a defect keeps what was reported",
+         A_Defect_Keeps_What_Was_Reported'Access);
+      Landin.Testing.Register
+        (Into, "driver", "a struct missing its layout is reported",
+         A_Struct_Missing_Its_Layout_Is_Reported'Access);
       Landin.Testing.Register
         (Into, "driver", "a refused program writes nothing",
          A_Refused_Program_Writes_Nothing'Access);
