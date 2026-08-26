@@ -3027,8 +3027,15 @@ def check_stale_backlog(paths, full_run):
     for path in paths:
         if not os.path.exists(path):
             continue
+        #  realpath on both sides, because a repository reached through a
+        #  symbolic link has two names for one file: os.chdir resolves the
+        #  link and __file__ does not, so /tmp/x and /private/tmp/x are the
+        #  same directory and relpath between them climbs out of the tree.
+        #  The allowlist then matches nothing and two preserved citations
+        #  are reported as stale, which is what a worktree under /tmp on
+        #  macOS did to every reading of this check.
         relative = os.path.normpath(
-            os.path.relpath(os.path.abspath(path), ROOT))
+            os.path.relpath(os.path.realpath(path), os.path.realpath(ROOT)))
         text = io.open(path, encoding="utf-8").read()
         for n, line in enumerate(text.splitlines(), 1):
             if (relative, line) in STALE_BACKLOG_ALLOWLIST:
