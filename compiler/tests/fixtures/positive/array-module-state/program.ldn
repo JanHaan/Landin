@@ -1,0 +1,9 @@
+row: type = [4]u32
+
+--  D10 zeroes a binding with no value, so [1740]'s module state of an
+--  array type needs nothing to carry it, exactly as a struct's did.
+mut buffer: row
+
+--  D17 makes the shape the identity, so an array written where the type
+--  belongs is as good a type as a name for one.
+mut flags: [8]bool

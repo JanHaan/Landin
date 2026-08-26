@@ -421,6 +421,26 @@ package body Landin.Stages.Checking is
          end;
       end Type_At;
 
+      --  Is this node one of [1840]'s module declarations?  A binding at
+      --  module level is a datum and one inside a block is a frame cell,
+      --  and D10 is about the first: it says a binding with no value
+      --  holds zero, and [1460] leaves no moment at module level in which
+      --  anything could assign one.  A local has both.
+      function Is_Module_Declaration
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Is_Module_Declaration
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+      begin
+         for Position in 1 .. Syn.Declaration_Count (Of_Tree) loop
+            if Syn.Nth_Declaration (Of_Tree, Position) = Node then
+               return True;
+            end if;
+         end loop;
+
+         return False;
+      end Is_Module_Declaration;
+
       function Declared_As_Node
         (Of_Tree        : Syn.Tree;
          Node           : Syn.Node_Id;
@@ -450,15 +470,25 @@ package body Landin.Stages.Checking is
             Is_Zeroed_State : constant Boolean :=
               Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) = Syn.No_Node
-              --  A name and not an inline body: [0710]'s identity is what
-              --  carries the layout, and an anonymous body declares none.
-              and then Syn.Kind (Of_Tree, Written) = Syn.Type_Reference;
+              --  A name, or an array written where the type belongs.
+              --  [0710]'s identity is a declaration, so an anonymous
+              --  struct body declares none and cannot be state; D17
+              --  makes an array's identity its shape, which `[3]usize`
+              --  carries wherever it is written.
+              and then Syn.Kind (Of_Tree, Written)
+                       in Syn.Type_Reference | Syn.Array_Type;
          begin
             --  [1795] declares the type; most *values* of one wait for the
             --  rest of R2.20.  Refused where the value is declared, so
             --  the report names the binding rather than the type.
+            --  An array local is a frame cell and waits for the slice
+            --  that gives it one, so only module state may be an array
+            --  today; a struct's local is enabled and this is the one
+            --  place the two still differ.
             if Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
+              and then not (Is_Zeroed_State
+                            and then Is_Module_Declaration (Of_Tree, Node))
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -547,7 +577,9 @@ package body Landin.Stages.Checking is
                --  D17: an array's identity is its shape, so the
                --  declaration carries the shape the type position was
                --  given -- and an alias of one carries the same shape,
-               --  because that is all there is to carry.
+               --  because that is all there is to carry.  A binding of
+               --  one carries it for the same reason: what it holds is
+               --  the shape and nothing else names it.
                if Held = Ty.Fixed_Array then
                   Landin.Checking.Note_Array
                     (Types.all, Id,

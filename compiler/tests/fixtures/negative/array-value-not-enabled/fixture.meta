@@ -1,6 +1,6 @@
 class: negative
-summary: [0520] declares an array type and a value of one waits for the rest of R2.20
-constructs: 0520, 1790, 1830
+summary: [0520] declares an array type and a local of one waits for the rest of R2.20
+constructs: 0520, 1810, 1830
 program: program.ldn
 codes: L0304
 targets: linux-x86-64, macos-arm64

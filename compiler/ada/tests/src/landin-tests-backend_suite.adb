@@ -1183,6 +1183,67 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Zero_Data_Is_Reserved_And_Not_Written;
 
+   --  [1740]'s module state of [0520]'s array type.  D10 zeroes it, so it
+   --  is reserved like any other zero, and its extent is the element
+   --  repeated: `[4]u32` is sixteen bytes aligned to four, and `[3]usize`
+   --  follows the target rather than the host.
+   procedure An_Array_State_Is_Reserved_Whole
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_State_Is_Reserved_Whole
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "row: type = [4]u32" & LF
+        & "public mut buffer: row" & LF
+        & "mut wide: [3]usize" & LF;
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Wide  : String;
+         Align : String);
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Wide  : String;
+         Align : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran  : Natural;
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains (Text,
+                         HT & ".globl buffer" & LF
+                         & HT & ".type buffer, @object" & LF
+                         & HT & ".align 4" & LF
+                         & "buffer:" & LF
+                         & HT & ".zero 16" & LF
+                         & HT & ".size buffer, 16" & LF),
+               "four u32 are sixteen bytes reserved whole");
+            Landin.Testing.Check
+              (Item,
+               Contains (Text,
+                         HT & ".align " & Align & LF
+                         & "wide:" & LF
+                         & HT & ".zero " & Wide & LF),
+               "and a pointer-width element follows the target");
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & ".bss" & LF),
+               "a zeroed array is reserved and not written");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "24", "8");
+      Check_Target (Landin.Targets.Synthetic_32, "12", "4");
+   end An_Array_State_Is_Reserved_Whole;
+
    --  A module value is reached by name rather than through a frame, and
    --  x86-64's position-independent form of that name is RIP-relative.
    --  [1900] lets a `mut` module binding be written as well as read.
@@ -1986,6 +2047,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "the same source emits the same bytes",
          The_Same_Source_Emits_The_Same_Bytes'Access);
+      Landin.Testing.Register
+        (Into, "backend", "an array state is reserved whole",
+         An_Array_State_Is_Reserved_Whole'Access);
       Landin.Testing.Register
         (Into, "backend", "zero data is reserved and not written",
          Zero_Data_Is_Reserved_And_Not_Written'Access);
