@@ -103,9 +103,10 @@ package body Landin.Stages.Checking is
       function Settled_Type (Id : Res.Declaration_Id) return Ty.Type_Kind;
       function Declared_As (Id : Res.Declaration_Id) return Ty.Type_Kind;
       function Declared_As_Node
-        (Of_Tree        : Syn.Tree;
-         Node           : Syn.Node_Id;
-         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
+        (Of_Tree         : Syn.Tree;
+         Node            : Syn.Node_Id;
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration;
+         In_Local_Scope  : Boolean := False)
          return Ty.Type_Kind;
       procedure Check_Literal
         (Of_Tree : Syn.Tree;
@@ -444,9 +445,10 @@ package body Landin.Stages.Checking is
       end Type_At;
 
       function Declared_As_Node
-        (Of_Tree        : Syn.Tree;
-         Node           : Syn.Node_Id;
-         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
+        (Of_Tree         : Syn.Tree;
+         Node            : Syn.Node_Id;
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration;
+         In_Local_Scope  : Boolean := False)
          return Ty.Type_Kind
       is
          Written : constant Syn.Node_Id := Syn.Declared_Type (Of_Tree, Node);
@@ -479,16 +481,32 @@ package body Landin.Stages.Checking is
               --  carries wherever it is written.
               and then Syn.Kind (Of_Tree, Written)
                        in Syn.Type_Reference | Syn.Array_Type;
+            --  D21: a local array binding may be initialized directly from
+            --  a whole-array storage name.  A module binding of one still
+            --  needs no value at all -- D10 zeroes it -- so the caller must
+            --  say the scope is local before this admits the initializer.
+            --  Every other value form (an array literal, a call, `zeroed`,
+            --  a slice, the inferred `:=`) is deferred: none of them is a
+            --  Name_Reference.
+            Is_Direct_Name_Init : constant Boolean :=
+              In_Local_Scope
+              and then Held = Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Name_Reference;
          begin
             --  [1795] declares the type; most *values* of one wait for the
             --  rest of R2.20.  A declaration-only module array is zeroed by
-            --  D10, and a declaration-only local array is frame storage whose
-            --  compiler-known elements D19 assigns independently.  Neither
-            --  form needs a whole-array value.  Parameters, returns and
-            --  bindings with initializers still do and are refused here.
+            --  D10, a declaration-only local array is frame storage whose
+            --  compiler-known elements D19 assigns independently, and D21
+            --  admits the one initializer form that copies from a whole-array
+            --  storage name.  Parameters, returns and every other written
+            --  value each need a rule this slice does not have.
             if Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
+              and then not Is_Direct_Name_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -560,10 +578,19 @@ package body Landin.Stages.Checking is
             end if;
 
             declare
+               --  D21 admits the initializer only for a local binding, so
+               --  pass 1's view of a module binding still refuses one:
+               --  Sort_Of tells the two apart before Declared_As_Node sees
+               --  them.  A Parameter or a Named_Return keeps its former
+               --  refusal path because it is a Parameter or Named_Return
+               --  node, not a Binding one.
+               Local : constant Boolean :=
+                 Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding;
                Held : constant Ty.Type_Kind :=
                  Declared_As_Node
                    (Of_Tree.all, Node,
-                    (if Is_Body then Id else Res.No_Declaration));
+                    (if Is_Body then Id else Res.No_Declaration),
+                    In_Local_Scope => Local);
             begin
                --  A declaration that names an existing aggregate is D15's
                --  alias and carries the identity the type position was given.
@@ -1708,8 +1735,12 @@ package body Landin.Stages.Checking is
                declare
                   Value : constant Syn.Node_Id :=
                     Syn.Value_Of (Of_Tree, Node);
+                  --  D21: a body's binding is always a local, so this is
+                  --  where the initializer form is admitted.  Declared_As
+                  --  passes False for a module binding.
                   Wants : constant Ty.Type_Kind :=
-                    Declared_As_Node (Of_Tree, Node);
+                    Declared_As_Node
+                      (Of_Tree, Node, In_Local_Scope => True);
                begin
                   if Value = Syn.No_Node or else Wants = Ty.Ill_Typed then
                      --  The declaration has already explained why this value
@@ -1737,6 +1768,46 @@ package body Landin.Stages.Checking is
                               Related => Syn.Origin (Of_Tree, Node),
                               Because => "this binding",
                               Into    => Found);
+                        end if;
+                     end;
+                  elsif Wants = Ty.Fixed_Array then
+                     --  D21: the one initializer form is a whole-array copy
+                     --  from a storage name, so the identity check is D17's
+                     --  as an assignment's is.  The Selected_From short-cut
+                     --  keeps a Name_Reference to an array from tripping the
+                     --  "not enabled yet" refusal Synthesise raises for the
+                     --  general expression forms this slice defers.
+                     declare
+                        Written : constant Syn.Node_Id :=
+                          Syn.Declared_Type (Of_Tree, Node);
+                        Got : constant Ty.Type_Kind :=
+                          Selected_From (Of_Tree, Value);
+                     begin
+                        if Got = Ty.Ill_Typed then
+                           null;
+                        elsif Got /= Ty.Fixed_Array
+                          or else Landin.Checking.Array_Length
+                                    (Types.all, Of_Tree, Value)
+                                  /= Landin.Checking.Array_Length
+                                       (Types.all, Of_Tree, Written)
+                          or else Landin.Checking.Array_Element
+                                    (Types.all, Of_Tree, Value)
+                                  /= Landin.Checking.Array_Element
+                                       (Types.all, Of_Tree, Written)
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this is not an array of the type"
+                                         & " written here",
+                              Note    => "D17: an array's length and element"
+                                         & " type are its identity",
+                              Related => Syn.Origin (Of_Tree, Node),
+                              Because => "the type declared here",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
                         end if;
                      end;
                   else
@@ -2617,10 +2688,15 @@ package body Landin.Stages.Checking is
       function Declaration_At
         (Src : Landin.Source.Source_Id; Node : Syn.Node_Id)
         return Res.Declaration_Id;
+      --  Whether the whole-array read is a D20 assignment source or a D21
+      --  binding initializer.  Only Require_Array threads through, since
+      --  every other whole-name read (a discard, an `inc`) is neither.
+      type Whole_Array_Read is (Assignment_Source, Initializer_Source);
       procedure Read_Names
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         State   : Assigned_Set);
+        (Of_Tree  : Syn.Tree;
+         Node     : Syn.Node_Id;
+         State    : Assigned_Set;
+         Whole_As : Whole_Array_Read := Assignment_Source);
       procedure Flow_Block
         (Of_Tree : Syn.Tree;
          Block   : Syn.Node_Id;
@@ -2644,10 +2720,11 @@ package body Landin.Stages.Checking is
       function Array_Is_Assigned
         (Id : Res.Declaration_Id; State : Assigned_Set) return Boolean;
       procedure Require_Array
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         Id      : Res.Declaration_Id;
-         State   : Assigned_Set);
+        (Of_Tree  : Syn.Tree;
+         Node     : Syn.Node_Id;
+         Id       : Res.Declaration_Id;
+         State    : Assigned_Set;
+         Whole_As : Whole_Array_Read := Assignment_Source);
 
       --  Which declaration a declaring node is.  Landin.Resolution
       --  publishes the other direction only, so this is a scan: over a
@@ -2787,10 +2864,11 @@ package body Landin.Stages.Checking is
       end Array_Is_Assigned;
 
       procedure Require_Array
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         Id      : Res.Declaration_Id;
-         State   : Assigned_Set) is
+        (Of_Tree  : Syn.Tree;
+         Node     : Syn.Node_Id;
+         Id       : Res.Declaration_Id;
+         State    : Assigned_Set;
+         Whole_As : Whole_Array_Read := Assignment_Source) is
       begin
          if Array_Is_Assigned (Id, State) then
             return;
@@ -2810,7 +2888,13 @@ package body Landin.Stages.Checking is
                           & Spelled (Res.Name_Of (Meanings.all, Id))
                           & "` is read here and no path that arrives assigned"
                           & " every element",
-               Note    => "D20: copying a local array reads every element",
+               Note    =>
+                 (case Whole_As is
+                     when Assignment_Source =>
+                       "D20: copying a local array reads every element",
+                     when Initializer_Source =>
+                       "D21: a local array initializer reads every element"
+                       & " of its source"),
                Related => Landin.Provenance.Origin'
                             (Source => Res.Source_Of (Meanings.all, Id),
                              Where  => Syn.Anchor
@@ -2863,9 +2947,10 @@ package body Landin.Stages.Checking is
       --  Every read in an expression.  A place an assignment writes is not
       --  a read and is not walked here; `inc` is both and is walked.
       procedure Read_Names
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         State   : Assigned_Set) is
+        (Of_Tree  : Syn.Tree;
+         Node     : Syn.Node_Id;
+         State    : Assigned_Set;
+         Whole_As : Whole_Array_Read := Assignment_Source) is
       begin
          if Node = Syn.No_Node then
             return;
@@ -2915,7 +3000,7 @@ package body Landin.Stages.Checking is
                   if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                        = Ty.Fixed_Array
                   then
-                     Require_Array (Of_Tree, Node, Id, State);
+                     Require_Array (Of_Tree, Node, Id, State, Whole_As);
                   else
                      Require_Assigned
                        (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Node),
@@ -3168,9 +3253,12 @@ package body Landin.Stages.Checking is
                      --  assigned -- or not, if there is no value.
                      --  A local declared *with* a value is not tracked at
                      --  all, so there is nothing to mark: [1910] is about
-                     --  the form [0080] describes, which has none.
+                     --  the form [0080] describes, which has none.  D21
+                     --  cites itself when a whole-array source is not
+                     --  assigned, because that is what the reader is doing.
                      Read_Names (Of_Tree, Syn.Value_Of (Of_Tree, Item),
-                                 State);
+                                 State,
+                                 Whole_As => Initializer_Source);
 
                   when Syn.Assignment =>
                      Read_Names (Of_Tree, Syn.Value_Of (Of_Tree, Item),

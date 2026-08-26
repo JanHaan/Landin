@@ -1,0 +1,5 @@
+source: [2]u8
+
+f: () -> none =
+    mut destination: [2]u32 = source
+end f

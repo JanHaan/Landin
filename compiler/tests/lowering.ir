@@ -495,6 +495,23 @@ item 2 ROUTINE f result none params 0 slots 1 blocks 1 values 2
   block 1 scope 3 BLOCK length 2
     1 COPY_ARRAY from datum 1 source to slot 1
     2 LEAVE
+file positive/local-array-initialized-from-source-name/program.ldn
+unit items 2
+item 1 DATUM source result array params 0 slots 0 blocks 1 values 1
+  elements 2 of u32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 ROUTINE f result none params 0 slots 4 blocks 1 values 5
+  slot 1 from_mut_module elements 2 of u32
+  slot 2 from_immutable_module elements 2 of u32
+  slot 3 from_mut_local elements 2 of u32
+  slot 4 from_immutable_local elements 2 of u32
+  block 1 scope 3 BLOCK length 5
+    1 COPY_ARRAY from datum 1 source to slot 1
+    2 COPY_ARRAY from datum 1 source to slot 2
+    3 COPY_ARRAY from slot 1 to slot 3
+    4 COPY_ARRAY from slot 2 to slot 4
+    5 LEAVE
 file positive/local-shadows-a-parameter/program.ldn
 unit items 1
 item 1 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6
