@@ -1,5 +1,5 @@
 class: negative
-summary: D21 requires every element of the source before a whole-array initializer copies it
+summary: D21 requires every element of an inferred initializer source before copying it
 constructs: 0080, 0110, 0520, 1810, 1910
 program: program.ldn
 codes: L0302

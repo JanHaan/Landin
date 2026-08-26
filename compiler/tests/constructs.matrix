@@ -18,7 +18,7 @@
 0020   tour        accepted emitted                   Block comment. Nests properly
 0030   tour        accepted emitted                   Doc comment. Attaches to the declaration that follows
 0040   tour        refused                            Full form: name, type, value
-0050   tour        accepted emitted refused           Type inferred from the value
+0050   tour        accepted emitted executed refused  Type inferred from the value
 0060   tour        accepted emitted executed refused  Mutable binding
 0070   tour        -                                  Two questions about a reference
 0080   tour        accepted emitted executed refused  Declaration only

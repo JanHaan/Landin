@@ -2185,18 +2185,19 @@ computes the target byte extent, and emits `rep movsb`; the fixed instruction
 sequence copies a D18 extent without enumerating it and exact self-copy is the
 only overlap current source forms can express.
 
-D21 turns the same `Copy_Array` into a local array's initializer: an
-explicitly typed local `[mut] name: [N]T = source` is lowered exactly as
-`name = source` is once the slot has been reserved, and the destination is
-wholly assigned by the copy alone rather than by any subsequent element
-writes. D17 is the same identity check the assignment case makes, and the
-initializer is read before the local's name exists [0110], so a local
-cannot initialize itself. Both binding forms accept the value because a
-declaration is not an assignment [0080], which is what preserves the
-immutable initialization the scalar path already permits. Module bindings
-with an initializer, the inferred `:=` form, an array literal, `zeroed`, a
-slice, a call, and every other value shape stay refused; each is its own
-later slice.
+D21 turns the same `Copy_Array` into a local array's initializer. The
+explicitly typed `[mut] name: [N]T = source` checks D17 identity; the inferred
+`[mut] name := source` takes the direct storage name's exact D17 length and
+element type. Either is lowered exactly as `name = source` once the slot has
+been reserved, and the destination is wholly assigned by the copy alone
+rather than by subsequent element writes. The source is read before the
+local's binding scope begins [0110], so a local cannot initialize itself and
+an outer name may be shadowed. Mutable and immutable destinations both accept
+the value because a declaration is not an assignment [0080]. Module bindings
+with an initializer, array literals, `zeroed`, repetition, slices, calls,
+selections, index results, and every other value shape stay refused; no global
+array `Name_Reference` value is synthesized and each broader form remains its
+own later slice.
 
 D22 answers the question D19 left open and enables a computed index into a
 local fixed-array frame slot on the same [1950] terms module arrays met. A
@@ -2257,12 +2258,12 @@ observes nonzero array answers. The focused backend case emits an aliased size
 and inline alignment from one source against the 64-bit and synthetic 32-bit
 target descriptions.
 
-What is still refused: module array initializers, inferred array
-initializers, general whole-array value positions, an array literal [0520],
-the inferred length [0530], `zeroed` [0540], repetition [0560], slices
-[0570], non-identifier `lenof` operands, and an array as a struct field. Each
-is its own slice, and the remaining value slices need the initialization work
-D21 did not settle.
+What is still refused: module array initializers, inferred array initializers
+from anything other than a direct storage name, general whole-array value
+positions, an array literal [0520], the inferred length [0530], `zeroed`
+[0540], repetition [0560], slices [0570], non-identifier `lenof` operands,
+and an array as a struct field. Each is its own slice, and the remaining value
+slices need the initialization work D21 did not settle.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a
 zero image when all-zero is a valid value for it, which is what lets a

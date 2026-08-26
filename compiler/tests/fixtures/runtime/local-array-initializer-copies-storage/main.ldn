@@ -7,17 +7,27 @@ public main: () -> (code: i32) =
 
     --  D21 admits every combination of mutable/immutable destination and
     --  module/prior-local source in the one initializer form.
-    mut mut_from_module: pair = module_source
-    immutable_from_module: [2]u32 = module_source
-    mut mut_from_local: pair = mut_from_module
-    immutable_from_local: [2]u32 = immutable_from_module
+    mut mut_from_module := module_source
+    immutable_from_module := module_source
+    mut mut_from_local := mut_from_module
+    immutable_from_local := immutable_from_module
+    mut typed_mutable: pair = module_source
+    typed_immutable: [2]u32 = module_source
 
-    if mut_from_module[0] == 17 and mut_from_module[1] == 25
+    --  Changing each mutable source after its copies proves that Copy_Array
+    --  made independent storage rather than aliasing either destination.
+    module_source[0] = 99
+    mut_from_module[1] = 88
+    typed_mutable[0] = 77
+
+    if mut_from_module[0] == 17 and mut_from_module[1] == 88
         and immutable_from_module[0] == 17
         and immutable_from_module[1] == 25
         and mut_from_local[0] == 17 and mut_from_local[1] == 25
         and immutable_from_local[0] == 17
         and immutable_from_local[1] == 25
+        and typed_mutable[0] == 77 and typed_mutable[1] == 25
+        and typed_immutable[0] == 17 and typed_immutable[1] == 25
     then
         code = 42
     else

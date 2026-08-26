@@ -749,10 +749,12 @@ package body Landin.Tests.Lowering_Suite is
         (Work,
          "source: [2]u32" & LF
          & "f: () -> none =" & LF
-         & "    mut mut_from_module: [2]u32 = source" & LF
-         & "    immutable_from_module: [2]u32 = source" & LF
-         & "    mut mut_from_local: [2]u32 = mut_from_module" & LF
-         & "    immutable_from_local: [2]u32 = immutable_from_module" & LF
+         & "    mut mut_from_module := source" & LF
+         & "    immutable_from_module := source" & LF
+         & "    mut mut_from_local := mut_from_module" & LF
+         & "    immutable_from_local := immutable_from_module" & LF
+         & "    mut typed_mutable: [2]u32 = source" & LF
+         & "    typed_immutable: [2]u32 = source" & LF
          & "end f" & LF,
          Ran);
 
@@ -763,8 +765,8 @@ package body Landin.Tests.Lowering_Suite is
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
       begin
          Landin.Testing.Check_Equal
-           (Item, IR.Slot_Count (Unit, 2), 4,
-            "four frame cells, one per initialized local");
+           (Item, IR.Slot_Count (Unit, 2), 6,
+            "six frame cells, one per initialized local");
 
          --  Module -> mutable local.
          Landin.Testing.Check
@@ -813,6 +815,20 @@ package body Landin.Tests.Lowering_Suite is
                              = IR.Frame_Slot
                   and then IR.Destination_Of (Unit, 2, 4).Slot = 4,
             "reading slot 2 into slot 4");
+
+         --  The earlier explicitly typed forms remain the same Copy_Array.
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 2, 5) = IR.Copy_Array
+                  and then IR.Op_Of (Unit, 2, 6) = IR.Copy_Array,
+            "typed mutable and immutable bindings remain array copies");
+         Landin.Testing.Check
+           (Item, IR.Source_Of (Unit, 2, 5).Kind = IR.Module_Datum
+                  and then IR.Destination_Of (Unit, 2, 5).Kind = IR.Frame_Slot
+                  and then IR.Destination_Of (Unit, 2, 5).Slot = 5
+                  and then IR.Source_Of (Unit, 2, 6).Kind = IR.Module_Datum
+                  and then IR.Destination_Of (Unit, 2, 6).Kind = IR.Frame_Slot
+                  and then IR.Destination_Of (Unit, 2, 6).Slot = 6,
+            "typed destinations keep their own compact storage");
       end;
    end A_Local_Array_Initializer_Becomes_A_Copy;
 
