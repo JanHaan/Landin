@@ -852,6 +852,24 @@ package body Landin.Syntax.Parser is
             --  nesting says where it ends.
             procedure Resync_Brackets;
 
+            --  [0570]'s index, wherever one can be written.  Separate
+            --  from the selection loop because a call is not a selection
+            --  in [1820] -- `size().x` derives in no rule this grammar
+            --  spells -- while `size()[0]` is an index like any other and
+            --  has to name itself rather than becoming a stray token.
+            procedure Refuse_Any_Index;
+
+            procedure Refuse_Any_Index is
+            begin
+               if Peek = Tok.Left_Bracket then
+                  Refuse
+                    (Item    => Syn.Indexing,
+                     Where   => Here,
+                     Message => "indexing is not enabled yet");
+                  Resync_Brackets;
+               end if;
+            end Refuse_Any_Index;
+
             procedure Resync_Brackets is
                Depth : Natural := 0;
             begin
@@ -879,11 +897,7 @@ package body Landin.Syntax.Parser is
                --  the callers that return a call route through here too.
                loop
                   if Peek = Tok.Left_Bracket then
-                     Refuse
-                       (Item    => Syn.Indexing,
-                        Where   => Here,
-                        Message => "indexing is not enabled yet");
-                     Resync_Brackets;
+                     Refuse_Any_Index;
                      return Selected;
                   end if;
 
@@ -2331,8 +2345,19 @@ package body Landin.Syntax.Parser is
                   begin
                      Advance;
 
+                     --  A call is its own production [1820] and nothing
+                     --  selects from one, so only the index is refused
+                     --  here: routing a call through the selection loop
+                     --  would make `size().x` derive where the grammar
+                     --  spells no rule for it.
                      if Peek = Tok.Left_Paren then
-                        return Parse_Selectors (Parse_Call (At_Item, Named));
+                        declare
+                           Called : constant Node_Id :=
+                             Parse_Call (At_Item, Named);
+                        begin
+                           Refuse_Any_Index;
+                           return Called;
+                        end;
                      end if;
 
                      --  selection ::= identifier ("." identifier)*
