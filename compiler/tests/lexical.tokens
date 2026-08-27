@@ -43,6 +43,43 @@ file positive/arm-scopes-are-siblings/program.ldn tokens 41
   134 136 if
   137 140 end
   141 142 f
+file positive/array-literal-assignment/program.ldn tokens 36
+  0 1 f
+  1 2 :
+  3 4 (
+  4 6 at
+  6 7 :
+  8 13 usize
+  13 14 )
+  15 17 ->
+  18 19 (
+  19 24 value
+  24 25 :
+  26 28 u8
+  28 29 )
+  30 31 =
+  36 39 mut
+  40 43 row
+  43 44 :
+  45 46 [
+  46 47 2
+  47 48 ]
+  48 50 u8
+  55 58 row
+  59 60 =
+  61 62 [
+  62 63 1
+  63 64 ,
+  65 66 2
+  66 67 ]
+  72 77 value
+  78 79 =
+  80 83 row
+  83 84 [
+  84 86 at
+  86 87 ]
+  88 91 end
+  92 93 f
 file positive/array-module-state/program.ldn tokens 19
   0 3 row
   3 4 :
@@ -1281,6 +1318,35 @@ file positive/module-array-literal-1820-operators/program.ldn tokens 119
   447 452 lenof
   453 459 shifts
   459 460 ]
+file positive/module-array-literal-assignment-runtime-elements/program.ldn tokens 28
+  0 3 mut
+  4 9 state
+  9 10 :
+  11 12 [
+  12 13 2
+  13 14 ]
+  14 17 u32
+  19 22 set
+  22 23 :
+  24 25 (
+  25 30 value
+  30 31 :
+  32 35 u32
+  35 36 )
+  37 39 ->
+  40 44 none
+  45 46 =
+  51 56 state
+  57 58 =
+  59 60 [
+  60 65 value
+  65 66 ,
+  67 72 value
+  73 74 +
+  75 76 1
+  76 77 ]
+  78 81 end
+  82 85 set
 file positive/module-array-literal-forward-scalar-reference/program.ldn tokens 24
   99 102 mut
   103 109 buffer
@@ -2822,7 +2888,7 @@ file negative/array-initializer-length-mismatch/program.ldn tokens 24
   62 68 source
   69 72 end
   73 74 f
-file negative/array-literal-assignment-not-enabled/program.ldn tokens 23
+file negative/array-literal-assignment-element-mismatch/program.ldn tokens 23
   0 1 f
   1 2 :
   3 4 (
@@ -2842,10 +2908,106 @@ file negative/array-literal-assignment-not-enabled/program.ldn tokens 23
   45 46 [
   46 47 1
   47 48 ,
-  49 50 2
-  50 51 ]
-  52 55 end
-  56 57 f
+  49 54 false
+  54 55 ]
+  56 59 end
+  60 61 f
+file negative/array-literal-assignment-length-mismatch/program.ldn tokens 39
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 mut
+  24 29 short
+  29 30 :
+  31 32 [
+  32 33 3
+  33 34 ]
+  34 36 u8
+  41 44 mut
+  45 49 long
+  49 50 :
+  51 52 [
+  52 53 2
+  53 54 ]
+  54 56 u8
+  61 66 short
+  67 68 =
+  69 70 [
+  70 71 1
+  71 72 ,
+  73 74 2
+  74 75 ]
+  80 84 long
+  85 86 =
+  87 88 [
+  88 89 1
+  89 90 ,
+  91 92 2
+  92 93 ,
+  94 95 3
+  95 96 ]
+  97 100 end
+  101 102 f
+file negative/array-literal-assignment-reads-incoming-state/program.ldn tokens 55
+  0 5 known
+  5 6 :
+  7 8 (
+  8 9 )
+  10 12 ->
+  13 17 none
+  18 19 =
+  24 27 mut
+  28 31 row
+  31 32 :
+  33 34 [
+  34 35 2
+  35 36 ]
+  36 38 u8
+  43 46 row
+  47 48 =
+  49 50 [
+  50 51 1
+  51 52 ,
+  53 56 row
+  56 57 [
+  57 58 0
+  58 59 ]
+  59 60 ]
+  61 64 end
+  65 70 known
+  72 80 computed
+  80 81 :
+  82 83 (
+  83 85 at
+  85 86 :
+  87 92 usize
+  92 93 )
+  94 96 ->
+  97 101 none
+  102 103 =
+  108 111 mut
+  112 115 row
+  115 116 :
+  117 118 [
+  118 119 2
+  119 120 ]
+  120 122 u8
+  127 130 row
+  131 132 =
+  133 134 [
+  134 135 1
+  135 136 ,
+  137 140 row
+  140 141 [
+  141 143 at
+  143 144 ]
+  144 145 ]
+  146 149 end
+  150 158 computed
 file negative/array-of-an-array-not-enabled/program.ldn tokens 11
   146 150 grid
   150 151 :

@@ -1,0 +1,5 @@
+mut state: [2]u32
+
+set: (value: u32) -> none =
+    state = [value, value + 1]
+end set

@@ -137,11 +137,12 @@ package body Landin.Stages.Checking is
       procedure Check_Place
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Stepping : Boolean);
       procedure Check_Array_Literal
-        (Of_Tree : Syn.Tree;
-         Binding : Syn.Node_Id;
-         Literal : Syn.Node_Id;
-         Expected : Landin.Checking.Element_Count;
-         Element : Ty.Scalar_Name);
+        (Of_Tree      : Syn.Tree;
+         Context      : Syn.Node_Id;
+         Literal      : Syn.Node_Id;
+         Expected     : Landin.Checking.Element_Count;
+         Element      : Ty.Scalar_Name;
+         Static_Image : Boolean);
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Block
@@ -1425,8 +1426,8 @@ package body Landin.Stages.Checking is
                  (Item    => Bad.Unsupported_Use,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
-                  Message => "an array literal needs an explicitly typed"
-                             & " array binding",
+                  Message => "an array literal needs a fixed-array binding"
+                             & " or assignment context",
                   Refused => Bad.Array_Value,
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
@@ -1863,11 +1864,12 @@ package body Landin.Stages.Checking is
       end Check_Place;
 
       procedure Check_Array_Literal
-        (Of_Tree : Syn.Tree;
-         Binding : Syn.Node_Id;
-         Literal : Syn.Node_Id;
-         Expected : Landin.Checking.Element_Count;
-         Element : Ty.Scalar_Name)
+        (Of_Tree      : Syn.Tree;
+         Context      : Syn.Node_Id;
+         Literal      : Syn.Node_Id;
+         Expected     : Landin.Checking.Element_Count;
+         Element      : Ty.Scalar_Name;
+         Static_Image : Boolean)
       is
       begin
          --  Check_Module_Value refuses a call element by [1940] and marks
@@ -1894,11 +1896,11 @@ package body Landin.Stages.Checking is
                Message => "this literal has "
                           & Counted
                               (Syn.Element_Count (Of_Tree, Literal), "element")
-                          & ", and the declared array has a different length",
-               Note    => "D23/D24/D26: an array literal supplies exactly"
-                          & " the number of elements its written type names",
-               Related => Syn.Origin (Of_Tree, Binding),
-               Because => "the type declared here",
+                          & ", and its array context has a different length",
+               Note    => "D23/D24/D26/D29: an array literal supplies exactly"
+                          & " the number of elements its context names",
+               Related => Syn.Origin (Of_Tree, Context),
+               Because => "the array context here",
                Into    => Found);
             Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
          end if;
@@ -1906,7 +1908,7 @@ package body Landin.Stages.Checking is
          for Position in 1 .. Syn.Element_Count (Of_Tree, Literal) loop
             Require
               (Of_Tree, Syn.Nth_Element (Of_Tree, Literal, Position), Element,
-               Syn.Origin (Of_Tree, Binding), "the array element type");
+               Syn.Origin (Of_Tree, Context), "the array element type");
          end loop;
 
          --  D24: an element must be a compile-time known scalar the
@@ -1920,9 +1922,9 @@ package body Landin.Stages.Checking is
          --  recursive because a subtree hides the same construct: `p.x
          --  + 1` and `source[0] & 0xFF` reach the fold as an Add and a
          --  Bitwise_And whose top-level kind is admitted, and only the
-         --  subtree carries the refusal.  A local literal (D23) accepts
-         --  every well-typed expression and does not run this walk.
-         if not Is_Local_Binding (Of_Tree, Binding) then
+         --  subtree carries the refusal.  A runtime literal (D23/D29)
+         --  accepts every well-typed expression and does not run this walk.
+         if Static_Image then
             declare
                procedure Refuse_Excluded_Subtree (Where : Syn.Node_Id);
 
@@ -2010,7 +2012,9 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Array_Length
                                 (Types.all, Of_Tree, Value),
                               Landin.Checking.Array_Element
-                                (Types.all, Of_Tree, Value));
+                                (Types.all, Of_Tree, Value),
+                              Static_Image =>
+                                not Is_Local_Binding (Of_Tree, Node));
                         else
                            declare
                               Got : constant Ty.Type_Kind :=
@@ -2069,7 +2073,9 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Array_Length
                                 (Types.all, Of_Tree, Written),
                               Landin.Checking.Array_Element
-                                (Types.all, Of_Tree, Written));
+                                (Types.all, Of_Tree, Written),
+                              Static_Image =>
+                                not Is_Local_Binding (Of_Tree, Node));
                         else
                            --  D21: the other initializer form is a
                            --  whole-array copy from a storage name, so the
@@ -2179,42 +2185,52 @@ package body Landin.Stages.Checking is
                      return;
                   end if;
 
-                  --  D20: an array copy also moves straight from one storage
-                  --  place to another.  D17 makes its length and element type
-                  --  its identity; no general array value is enabled by this
-                  --  one expression position.
+                  --  D20 copies an array straight from one storage place to
+                  --  another.  D29 also admits a literal here contextually:
+                  --  the destination's D17 shape supplies its count and scalar
+                  --  element type without making literals general values.
                   if Wants = Ty.Fixed_Array then
-                     declare
-                        Got : constant Ty.Type_Kind :=
-                          Selected_From (Of_Tree, Value);
-                     begin
-                        if Got = Ty.Ill_Typed then
-                           null;
-                        elsif Got /= Ty.Fixed_Array
-                          or else Landin.Checking.Array_Length
-                                    (Types.all, Of_Tree, Place)
-                                  /= Landin.Checking.Array_Length
-                                       (Types.all, Of_Tree, Value)
-                          or else Landin.Checking.Array_Element
-                                    (Types.all, Of_Tree, Place)
-                                  /= Landin.Checking.Array_Element
-                                       (Types.all, Of_Tree, Value)
-                        then
-                           Bad.Report
-                             (Item    => Bad.Type_Mismatch,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Value),
-                              Message => "this is not an array of the type"
-                                         & " written here",
-                              Note    => "D17: an array's length and element"
-                                         & " type are its identity",
-                              Related => Syn.Origin (Of_Tree, Place),
-                              Because => "the place written here",
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Value);
-                        end if;
-                     end;
+                     if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal then
+                        Check_Array_Literal
+                          (Of_Tree, Place, Value,
+                           Landin.Checking.Array_Length
+                             (Types.all, Of_Tree, Place),
+                           Landin.Checking.Array_Element
+                             (Types.all, Of_Tree, Place),
+                           Static_Image => False);
+                     else
+                        declare
+                           Got : constant Ty.Type_Kind :=
+                             Selected_From (Of_Tree, Value);
+                        begin
+                           if Got = Ty.Ill_Typed then
+                              null;
+                           elsif Got /= Ty.Fixed_Array
+                             or else Landin.Checking.Array_Length
+                                       (Types.all, Of_Tree, Place)
+                                     /= Landin.Checking.Array_Length
+                                          (Types.all, Of_Tree, Value)
+                             or else Landin.Checking.Array_Element
+                                       (Types.all, Of_Tree, Place)
+                                     /= Landin.Checking.Array_Element
+                                          (Types.all, Of_Tree, Value)
+                           then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Value),
+                                 Message => "this is not an array of the type"
+                                            & " written here",
+                                 Note    => "D17: an array's length and"
+                                            & " element type are its identity",
+                                 Related => Syn.Origin (Of_Tree, Place),
+                                 Because => "the place written here",
+                                 Into    => Found);
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Value);
+                           end if;
+                        end;
+                     end if;
 
                      return;
                   end if;

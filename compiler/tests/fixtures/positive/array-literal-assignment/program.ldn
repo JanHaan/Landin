@@ -1,0 +1,5 @@
+f: (at: usize) -> (value: u8) =
+    mut row: [2]u8
+    row = [1, 2]
+    value = row[at]
+end f

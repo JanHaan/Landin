@@ -1,4 +1,4 @@
 f: () -> none =
     mut row: [2]u8
-    row = [1, 2]
+    row = [1, false]
 end f

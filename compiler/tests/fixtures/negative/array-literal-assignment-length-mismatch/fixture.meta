@@ -1,0 +1,6 @@
+class: negative
+summary: array literal assignment requires the destination array length
+constructs: 0040, 0080, 0190, 0520, 1810, 1900
+program: program.ldn
+codes: L0301, L0301
+targets: linux-x86-64, macos-arm64

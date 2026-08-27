@@ -1,0 +1,10 @@
+public main: () -> (code: i32) =
+    mut row: [3]u32 = [10, 20, 30]
+    row = [row[1], row[0], row[0] + row[1]]
+
+    if row[0] == 20 and row[1] == 20 and row[2] == 40 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

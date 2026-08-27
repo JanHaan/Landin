@@ -548,8 +548,14 @@ and R3.30, not guessed as a prerequisite to the first front end.
 ### [0520] Array: a value
 
 Array: a value. Assignment copies. Size is part of the type.
+An array literal assigned to existing storage is formed there in written order:
+each element is evaluated and written before the next one begins. A later
+element can therefore observe an earlier write, and a failure can leave the
+written prefix changed; no hidden array-sized temporary is implied.
 ```landin
 grid: [4]f32 = [1.0, 2.0, 3.0, 4.0]
+mut next: [4]f32
+next = [grid[0], grid[1], grid[2], grid[3]]
 
 ```
 
