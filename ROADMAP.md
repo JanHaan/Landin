@@ -2747,22 +2747,47 @@ alone.
 
 D49 admits `s.f = zeroed` where `s` directly names D46 module state or a D47
 local and `f` is a fixed array of enabled scalars. The selection is typed as an
-array only for that complete contextual assignment; reads, copies, non-`zeroed`
-destinations, operands and nested expressions keep D48's L0304 boundary, while
-root immutability still owns L0303. A local clear records one whole-field fact
+array only for that complete contextual assignment; at this boundary reads,
+copies, non-`zeroed` destinations, operands and nested expressions keep D48's
+L0304 boundary, while root immutability still owns L0303. A local clear records
+one whole-field fact
 keyed by binding and field, so known and computed reads become valid without
 assigning a sibling or another array field, and branch merging retains the fact
 only from every arriving path. Lowering adds the declaration-order field identity
-to `Clear_Array`, leaving copy and fill field-zero-only. The verifier checks the
+to `Clear_Array`, leaving copy and fill field-zero-only at this boundary. The
+verifier checks the
 field exists and has an array shape before reading it. Backends derive the field
 extent and offset from target facts; x86-64 register-forms a wide module offset,
 uses the bounded frame displacement for a local, and treats an internal empty
 field as a zero-byte clear. Public checker, IR, verifier, lowering and backend
 cases pin the seams. The positive fixture, contextual and mutability refusals,
-the copy-destination refusal, field/branch definite-assignment negatives,
+the non-copy destination refusal, field/branch definite-assignment negatives,
 recorded IR and the two sibling runtimes provide corpus and executable evidence.
 Whole field copies, initialized aggregate storage, parameters, returns, fields
-of elements, struct-of-struct fields and nested arrays remain separate slices.
+of elements, struct-of-struct fields and nested arrays remain separate slices;
+D50 below supersedes the copy-endpoint boundary alone.
+
+D50 admits a fixed-array field as either endpoint of D20's contextual whole
+copy: field to field and field to or from a direct array name, across module and
+local storage, including exact self-copy. The two endpoints must have one D17
+shape; destination-root mutability remains [1900]'s first report. A local source
+uses D48's sparse facts and D49/D50's binding-and-field whole fact rather than
+D16's scalar-field bit, so it must be complete on every arriving path and an
+internal zero-length field is vacuously complete. Normal completion records the
+destination field whole without affecting a sibling, and merges keep it only
+from every path. Lowering carries one declaration-order identity per endpoint
+through compact `Copy_Array`, zero for direct array storage. The verifier checks
+each positive field exists and has an array shape before comparing shapes.
+Backends derive both offsets and the extent from target facts; x86-64
+register-forms a D18-wide module field on either side, uses L0504-bounded frame
+displacements, and emits one forward byte copy, including a zero-count internal
+empty field. Public checker, IR, verifier, lowering and backend cases pin the
+seams. The positive fixture, mutability/shape/context/definite-assignment
+negatives, recorded IR, and the module/local sibling runtime provide corpus and
+executable evidence. Initializers from a field, general field values, literals
+and repetitions into a field, whole copies of the containing struct,
+parameters, returns, fields of elements, struct-of-struct fields and nested
+arrays remain separate slices.
 
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
@@ -2770,8 +2795,8 @@ and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D3
 counted inferred local and module repetition, D34's explicitly typed local and
 module repetition and D36/D38's explicitly typed local and module mixed
 repetition; array assignments other than D20's direct storage name, D29's literal,
-D30's `zeroed`, D32's repetition, D37's mixed-prefix repetition and D49's
-contextual field clear; general
+D30's `zeroed`, D32's repetition, D37's mixed-prefix repetition, D49's
+contextual field clear and D50's contextual field copy endpoints; general
 whole-array value positions; inferred scalar initialization, named-return
 subobject and nested-subobject scalar `zeroed` assignment, nested/general scalar and every
 other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49; inferred initialization,
@@ -2783,7 +2808,7 @@ operands
 other than D14's direct name and D31's literal; and initialized local or module
 state, whole values, parameters or returns of a struct with an aggregate
 field, plus selection or whole-place use of its array field beyond D48's indexed
-elements and D49's contextual clear.
+elements, D49's contextual clear and D50's contextual copy endpoints.
 Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
 
@@ -2815,7 +2840,9 @@ array-field selection and the whole-value boundary pinned. D48 migrated an
 indexed element of that field for both storage classes while keeping the field
 itself and every whole-value boundary pinned. D49 migrated the one contextual
 whole-field clear while keeping reads, copies, other destinations and every
-general-value boundary pinned.
+general-value boundary pinned. D50 migrated contextual whole-field copy
+endpoints while keeping initializers, other destinations, containing-struct
+copies and every general-value boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

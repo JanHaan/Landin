@@ -1,0 +1,60 @@
+holder: type = struct
+    tag: u8
+    left: [2]usize
+    right: [2]usize
+    tail: u16
+end holder
+
+mut source: holder
+mut destination: holder
+mut words: [2]usize
+
+public main: () -> (code: i32) =
+    source.tag = 7
+    source.left[0] = 20
+    source.left[1] = 22
+    source.tail = 701
+
+    destination.tag = 8
+    destination.right[0] = 98
+    destination.right[1] = 99
+    destination.tail = 702
+    destination.left = source.left
+    words = destination.left
+    source.left = words
+    source.left = source.left
+
+    mut local_source: holder
+    mut local_destination: holder
+    mut local_words: [2]usize
+    local_source.tag = 9
+    local_source.tail = 703
+    local_source.left = source.left
+    local_destination.tag = 10
+    local_destination.right[0] = 96
+    local_destination.right[1] = 97
+    local_destination.tail = 704
+    local_destination.left = local_source.left
+    local_words = local_destination.left
+    local_destination.left = local_words
+    local_destination.left = local_destination.left
+
+    if source.tag == 7 and source.left[0] == 20
+      and source.left[1] == 22 and source.tail == 701
+      and destination.tag == 8 and destination.left[0] == 20
+      and destination.left[1] == 22 and destination.right[0] == 98
+      and destination.right[1] == 99 and destination.tail == 702
+      and local_source.tag == 9 and local_source.left[0] == 20
+      and local_source.left[1] == 22 and local_source.tail == 703
+      and local_destination.tag == 10
+      and local_destination.left[0] == 20
+      and local_destination.left[1] == 22
+      and local_destination.right[0] == 96
+      and local_destination.right[1] == 97
+      and local_destination.tail == 704
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

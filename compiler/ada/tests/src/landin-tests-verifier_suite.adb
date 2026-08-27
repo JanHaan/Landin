@@ -179,6 +179,11 @@ package body Landin.Tests.Verifier_Suite is
       Array_Copy_Endpoint_Is_Scalar,
       Array_Copy_Lengths_Disagree,
       Array_Copy_Elements_Disagree,
+      Array_Copy_Source_Field_Is_Out_Of_Range,
+      Array_Copy_Source_Field_Is_Not_An_Array,
+      Array_Copy_Destination_Field_Is_Out_Of_Range,
+      Array_Copy_Destination_Field_Is_Not_An_Array,
+      Array_Copy_Field_Shape_Disagrees,
       Array_Copy_Slot_Is_Not_Owned,
       Array_Copy_Inside_A_Datum,
       Array_Clear_Destination_Is_Scalar,
@@ -226,6 +231,7 @@ package body Landin.Tests.Verifier_Suite is
              Length  => 2));
       elsif Harm in Field_Operation_Names_An_Array
                     | Field_Store_Names_An_Array
+                    | Array_Copy_Field_Shape_Disagrees
       then
          IR.Add_Field
            (Unit, G,
@@ -588,6 +594,39 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Array_Copy_Source_Field_Is_Out_Of_Range
+            | Array_Copy_Source_Field_Is_Not_An_Array =>
+            IR.Emit_Array_Copy
+              (Unit, A, (Kind => IR.Module_Datum, Datum => G),
+               (Kind => IR.Frame_Slot, Slot => Q), Site,
+               Source_Field =>
+                 (if Harm = Array_Copy_Source_Field_Is_Out_Of_Range
+                  then 2 else 1));
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Copy_Destination_Field_Is_Out_Of_Range
+            | Array_Copy_Destination_Field_Is_Not_An_Array =>
+            IR.Emit_Array_Copy
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => Q),
+               (Kind => IR.Frame_Slot, Slot => T), Site,
+               Destination_Field =>
+                 (if Harm = Array_Copy_Destination_Field_Is_Out_Of_Range
+                  then 2 else 1));
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Copy_Field_Shape_Disagrees =>
+            IR.Emit_Array_Copy
+              (Unit, A, (Kind => IR.Module_Datum, Datum => G),
+               (Kind => IR.Frame_Slot, Slot => Q), Site,
+               Source_Field => 1);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Array_Copy_Slot_Is_Not_Owned =>
             IR.Emit_Array_Copy
               (Unit, A, (Kind => IR.Frame_Slot, Slot => 6),
@@ -818,6 +857,16 @@ package body Landin.Tests.Verifier_Suite is
           V.Array_Storage_Is_Not_An_Array),
          (Array_Copy_Lengths_Disagree, V.Array_Copy_Shapes_Disagree),
          (Array_Copy_Elements_Disagree, V.Array_Copy_Shapes_Disagree),
+         (Array_Copy_Source_Field_Is_Out_Of_Range,
+          V.Element_Field_Out_Of_Range),
+         (Array_Copy_Source_Field_Is_Not_An_Array,
+          V.Element_Field_Is_Not_An_Array),
+         (Array_Copy_Destination_Field_Is_Out_Of_Range,
+          V.Element_Field_Out_Of_Range),
+         (Array_Copy_Destination_Field_Is_Not_An_Array,
+          V.Element_Field_Is_Not_An_Array),
+         (Array_Copy_Field_Shape_Disagrees,
+          V.Array_Copy_Shapes_Disagree),
          (Array_Copy_Slot_Is_Not_Owned, V.Slot_Out_Of_Range),
          (Array_Copy_Inside_A_Datum, V.Array_Copy_Inside_A_Datum),
          (Array_Clear_Destination_Is_Scalar,

@@ -1,0 +1,34 @@
+word_pair: type = [2]usize
+
+holder: type = struct
+    tag: u8
+    left: word_pair
+    right: word_pair
+    tail: u16
+end holder
+
+holder_alias: type = holder
+
+mut source: holder
+mut destination: holder
+mut words: word_pair
+
+copy_module: () -> none =
+    destination.left = source.left
+    words = destination.left
+    source.left = words
+    source.left = source.left
+end copy_module
+
+copy_local: (at: usize) -> (result: usize) =
+    mut left: holder_alias
+    mut right: holder
+    mut local_words: word_pair
+    left.left[0] = 20
+    left.left[1] = 22
+    right.left = left.left
+    local_words = right.left
+    left.left = local_words
+    left.left = left.left
+    result = left.left[at]
+end copy_local

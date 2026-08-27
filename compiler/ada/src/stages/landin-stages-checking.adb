@@ -1287,15 +1287,16 @@ package body Landin.Stages.Checking is
       function Selected_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
-      --  D48 admits a fixed-array field only in the one context that names
+      --  D48 first admits a fixed-array field in the one context that names
       --  one of its elements.  Keeping this separate from Selected_From
-      --  leaves the field itself refused as a value, destination, copy, or
-      --  `zeroed` target.
+      --  leaves the field itself refused as a general value or place while
+      --  D49/D50 add two assignment contexts explicitly.
       function Indexed_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
-      --  D49 admits that same fixed-array field as a whole place only when
-      --  assignment supplies `zeroed` as its complete contextual value.
+      --  D49/D50 admit that same fixed-array field as a whole place only
+      --  when assignment supplies `zeroed` or another fixed-array storage
+      --  endpoint as its complete contextual value.
       --  This predicate notes the field shape when that exact place exists;
       --  it reports nothing and leaves every other selection for the
       --  ordinary place checker, so root mutability and field diagnostics
@@ -2709,12 +2710,18 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Assignment =>
-               --  D49 supplies the fixed-array shape only in this complete
-               --  `zeroed` assignment context.  Check_Place still owns root
-               --  mutability and every malformed or non-array selection.
-               if Syn.Kind
-                    (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+               --  D49 supplies the fixed-array shape for a complete `zeroed`
+               --  assignment.  D50 additionally recognizes a direct array
+               --  name or a selection as copy syntax; the source selection
+               --  is not typed until Check_Place accepts the destination, so
+               --  destination diagnostics remain first and alone.
+               if Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                     = Syn.Zeroed_Literal
+                 or else Is_Direct_Array_Name
+                   (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                 or else Syn.Kind
+                   (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                    = Syn.Member_Selection
                then
                   if Admit_Array_Field
                        (Of_Tree, Syn.Target_Of (Of_Tree, Node))
@@ -2734,6 +2741,13 @@ package body Landin.Stages.Checking is
                     (Types.all, Of_Tree, Syn.Target_Of (Of_Tree, Node))
                     = Ty.Ill_Typed
                then
+                  --  D50 may put a selection on the source side.  Since the
+                  --  destination owns this refusal, mark that unvisited
+                  --  source ill-typed as well: the later flow walk must not
+                  --  fall back from an undecided selection to a whole read
+                  --  of its local aggregate base and add L0302.
+                  Landin.Checking.Refuse
+                    (Types.all, Of_Tree, Syn.Value_Of (Of_Tree, Node));
                   return;
                end if;
 
@@ -2859,9 +2873,14 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Place));
                      else
                         declare
+                           Admitted : constant Boolean :=
+                             (Syn.Kind (Of_Tree, Value)
+                                = Syn.Member_Selection
+                              and then Admit_Array_Field (Of_Tree, Value));
                            Got : constant Ty.Type_Kind :=
                              Selected_From (Of_Tree, Value);
                         begin
+                           pragma Unreferenced (Admitted);
                            if Got = Ty.Ill_Typed then
                               null;
                            elsif Got /= Ty.Fixed_Array
@@ -5154,14 +5173,30 @@ package body Landin.Stages.Checking is
                  and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
                           = Res.Bound
                then
-                  Require_Assigned
-                    (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Node),
-                     Res.Bound_To (Meanings.all, Of_Tree, From), State,
-                     "`" & Spelled (Syn.Name (Of_Tree, From)) & "."
-                     & Spelled (Syn.Name (Of_Tree, Node))
-                     & "` is read here and no path that arrives assigned"
-                     & " it",
-                     Field => Which);
+                  declare
+                     Id : constant Res.Declaration_Id :=
+                       Res.Bound_To (Meanings.all, Of_Tree, From);
+                  begin
+                     if Landin.Checking.Type_Of
+                          (Types.all, Of_Tree, Node) = Ty.Fixed_Array
+                     then
+                        --  D50 reads a copy source as one whole fixed-array
+                        --  field.  Its D48 sparse facts and D49/D50 whole
+                        --  fact are separate from D16's scalar-field bit.
+                        Require_Array
+                          (Of_Tree, Node, Id, State,
+                           Field => Which, Whole_As => Whole_As);
+                     else
+                        Require_Assigned
+                          (Syn.Source_Of (Of_Tree),
+                           Syn.Where (Of_Tree, Node), Id, State,
+                           "`" & Spelled (Syn.Name (Of_Tree, From)) & "."
+                           & Spelled (Syn.Name (Of_Tree, Node))
+                           & "` is read here and no path that arrives"
+                           & " assigned it",
+                           Field => Which);
+                     end if;
+                  end;
                else
                   Read_Names (Of_Tree, From, State);
                end if;

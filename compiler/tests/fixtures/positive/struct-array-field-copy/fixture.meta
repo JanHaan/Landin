@@ -1,0 +1,5 @@
+class: positive
+summary: D50 copies fixed-array fields to and from module and local array storage
+constructs: 0520, 0670, 0710, 0750, 1740, 1810, 1820, 1910
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -198,10 +198,10 @@ package Landin.IR is
       --  Reaches_A_Slot's answer.
       Load_Element,
       Store_Element,
-      --  One whole [0520] array copied between two storage places, or
-      --  cleared in one place for [0540].  Storage carries identities,
-      --  never one entry per element, so either remains compact for D18's
-      --  target-sized extent.
+      --  One whole [0520] array copied between two storage places or D50
+      --  fields, or cleared in one place or D49 field for [0540].  Storage
+      --  and field identities never carry one entry per element, so either
+      --  remains compact for D18's target-sized extent.
       Copy_Array,
       Clear_Array,
       Fill_Array,
@@ -1036,6 +1036,14 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
 
+   --  D50's containing aggregate field for the source of an array copy.
+   --  Zero means the source storage is itself a fixed array; a positive
+   --  value is [0750]'s declaration-order field, never a target offset.
+   function Source_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
+
    function Destination_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
@@ -1059,15 +1067,17 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
 
-   --  D48's containing aggregate field for an element operation, and D49's
-   --  destination field for a clear.  Zero means the reached storage is
-   --  itself a fixed array; a positive value is [0750]'s declaration-order
-   --  field.  It is an identity, never a target byte offset.
+   --  D48's containing aggregate field for an element operation, D49's
+   --  destination field for a clear, and D50's destination field for a
+   --  copy.  Zero means the reached storage is itself a fixed array; a
+   --  positive value is [0750]'s declaration-order field.  It is an
+   --  identity, never a target byte offset.
    function Element_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Element | Store_Element | Clear_Array;
+                          in Load_Element | Store_Element
+                             | Copy_Array | Clear_Array;
 
    --  Which array a slot-reaching element operation names.  Only
    --  meaningful when Reaches_A_Slot is true; a computed module-array
@@ -1446,7 +1456,9 @@ package Landin.IR is
       Item       : Item_Id;
       Source     : Storage;
       Destination : Storage;
-      Site       : Landin.Provenance.Origin)
+      Site       : Landin.Provenance.Origin;
+      Source_Field : Natural := 0;
+      Destination_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
 
@@ -1600,6 +1612,7 @@ private
       Slot        : Slot_Id                   := No_Slot;
       Named       : Item_Id                   := No_Item;
       Source      : Storage                   := (others => <>);
+      Source_Field : Natural                  := 0;
       Destination : Storage                   := (others => <>);
       Target      : Block_Id                  := No_Block;
       Alternative : Block_Id                  := No_Block;
