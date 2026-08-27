@@ -199,12 +199,26 @@ package Landin.Checking is
    --  How an aggregate is laid out
    ------------------------------------------------------------------
 
-   --  Field order is declaration order [0750].  The types are scalar-only
-   --  while aggregate values remain refused; this array is the complete
-   --  input needed to place that first enabled family without teaching
-   --  Landin.Targets what a field or a syntax tree is.
-   type Field_Type_Array is
-     array (Positive range <>) of Landin.Types.Scalar_Name;
+   --  A length is a count of elements and not of bytes, so it is not a
+   --  Byte_Count: [0520] makes the length part of the type and [0370]'s
+   --  `lenof` asks for it, while how many bytes that comes to needs a
+   --  target.  Its range holds every enabled target's `usize`; D18 applies
+   --  the particular target's byte-extent limit before one is recorded.
+   type Element_Count is range 0 .. 2 ** 64 - 1;
+
+   --  Field order is declaration order [0750].  D45 adds one compact
+   --  aggregate leaf to the scalar one: a fixed array of enabled scalars.
+   --  The array remains one field no matter how large its source length is.
+   type Field_Kind is (Scalar_Field, Fixed_Array_Field);
+
+   type Field_Shape is record
+      Kind    : Field_Kind               := Scalar_Field;
+      Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
+      Length  : Element_Count            := 1;
+   end record;
+
+   type Field_Shape_Array is
+     array (Positive range <>) of Field_Shape;
 
    --  Every query accepts either the body declaration or any alias of it;
    --  Body_Of is the canonical key, just as it is for nominal equality.
@@ -219,17 +233,28 @@ package Landin.Checking is
                  and then Contains (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
+   --  Runtime aggregate storage still carries a scalar run.  A layout with
+   --  an aggregate field is valid for D45's measurement, but its values wait
+   --  for the separate nested-place and whole-copy slices.
+   function Has_Only_Scalar_Fields
+     (Of_Table : Table; Id : Declaration_Id) return Boolean
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id);
+
    procedure Lay_Out
      (Into  : in out Table;
       Id    : Declaration_Id;
-      Fields : Field_Type_Array;
-      Facts : Landin.Targets.Target_Facts)
+      Fields : Field_Shape_Array;
+      Facts : Landin.Targets.Target_Facts;
+      Fits  : out Boolean)
      with Pre  => Is_Prepared (Into)
                   and then Contains (Into, Id)
                   and then Body_Of (Into, Id) = Id
                   and then not Has_Layout (Into, Id),
-          Post => Has_Layout (Into, Id)
-                  and then Layout_Field_Count (Into, Id) = Fields'Length;
+          Post => Has_Layout (Into, Id) = Fits
+                  and then (if Fits then Layout_Field_Count (Into, Id)
+                                         = Fields'Length);
 
    function Field_Offset
      (Of_Table : Table;
@@ -240,9 +265,18 @@ package Landin.Checking is
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id);
 
-   --  What a field holds, kept beside where it sits so that a stage which
-   --  has neither the tree nor a target can still say what an aggregate is
-   --  made of.
+   function Field_Kind_Of
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Field_Kind
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id)
+                 and then Field <= Layout_Field_Count (Of_Table, Id);
+
+   --  What a scalar field holds, kept beside where it sits so that a stage
+   --  which has neither the tree nor a target can still lower the currently
+   --  enabled runtime aggregate family.
    function Field_Type
      (Of_Table : Table;
       Id       : Declaration_Id;
@@ -250,7 +284,31 @@ package Landin.Checking is
      with Pre => Is_Prepared (Of_Table)
                  and then Contains (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id)
-                 and then Field <= Layout_Field_Count (Of_Table, Id);
+                 and then Field <= Layout_Field_Count (Of_Table, Id)
+                 and then Field_Kind_Of (Of_Table, Id, Field)
+                            = Scalar_Field;
+
+   function Field_Array_Length
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Element_Count
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id)
+                 and then Field <= Layout_Field_Count (Of_Table, Id)
+                 and then Field_Kind_Of (Of_Table, Id, Field)
+                            = Fixed_Array_Field;
+
+   function Field_Array_Element
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Landin.Types.Scalar_Name
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id)
+                 and then Field <= Layout_Field_Count (Of_Table, Id)
+                 and then Field_Kind_Of (Of_Table, Id, Field)
+                            = Fixed_Array_Field;
 
    function Layout_Extent (Of_Table : Table; Id : Declaration_Id)
      return Landin.Targets.Byte_Count
@@ -302,13 +360,6 @@ package Landin.Checking is
    --  what type the node has, for the reason a struct's declaration
    --  identity is -- a Type_Kind says the category and never which one.
    --
-   --  A length is a count of elements and not of bytes, so it is not a
-   --  Byte_Count: [0520] makes the length part of the type and [0370]'s
-   --  `lenof` asks for it, while how many bytes that comes to needs a
-   --  target.  Its range holds every enabled target's `usize`; D18 applies
-   --  the particular target's byte-extent limit before one is recorded.
-   type Element_Count is range 0 .. 2 ** 64 - 1;
-
    function Array_Length
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -511,10 +562,9 @@ private
    package Shape_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Array_Shape);
 
-   package Field_Type_Vectors is new Ada.Containers.Vectors
+   package Field_Shape_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
-      Element_Type => Landin.Types.Scalar_Name,
-      "="          => Landin.Types."=");
+      Element_Type => Field_Shape);
 
    type Aggregate_Layout is record
       Ready  : Boolean := False;
@@ -545,7 +595,7 @@ private
       Bodies       : Body_Vectors.Vector;
       Layouts      : Layout_Vectors.Vector;
       Field_Offsets : Offset_Vectors.Vector;
-      Field_Types  : Field_Type_Vectors.Vector;
+      Field_Shapes : Field_Shape_Vectors.Vector;
       Scalars      : Scalar_Identities :=
         [others => Landin.Source.Names.No_Name];
    end record;

@@ -40,6 +40,9 @@ package body Landin.IR.Verifier is
                "two operands of one operator do not have one type",
             when Result_Disagrees     =>
                "an instruction's result is not the type its operands give",
+            when Measurement_Field_Malformed =>
+               "an aggregate measurement's scalar field has a length other"
+               & " than one",
             when Condition_Is_Not_A_Bool =>
                "a branch's condition is not a bool",
             when Slot_Out_Of_Range    =>
@@ -901,6 +904,30 @@ package body Landin.IR.Verifier is
                                  return (Kind => Result_Disagrees,
                                          Item => Id, Block => Block,
                                          Value => V);
+                              end if;
+
+                              if Is_Aggregate_Measurement
+                                   (Of_Unit, Id, V)
+                              then
+                                 for Field in
+                                   1 .. Measurement_Field_Count
+                                          (Of_Unit, Id, V)
+                                 loop
+                                    declare
+                                       Part : constant Measurement_Field :=
+                                         Nth_Measurement_Field
+                                           (Of_Unit, Id, V, Field);
+                                    begin
+                                       if Part.Kind
+                                            = Scalar_Measurement_Field
+                                         and then Part.Length /= 1
+                                       then
+                                          return
+                                            (Measurement_Field_Malformed,
+                                             Id, Block, V);
+                                       end if;
+                                    end;
+                                 end loop;
                               end if;
 
                            when Store =>

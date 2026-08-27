@@ -628,12 +628,12 @@ package body Landin.IR is
 
    function Nth_Measurement_Field
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id; Field : Positive)
-      return Landin.Types.Scalar_Name
+      return Measurement_Field
    is
       First : constant Natural :=
         Held (Of_Unit, Item, Value).First_Measurement_Field;
    begin
-      return Of_Unit.Fields (First + Field);
+      return Of_Unit.Measurement_Fields (First + Field);
    end Nth_Measurement_Field;
 
    function Number_Of
@@ -719,14 +719,15 @@ package body Landin.IR is
      (Into    : in out Unit;
       Item    : Item_Id;
       Of_Code : Opcode;
-      Fields  : Scalar_Field_Array;
+      Fields  : Measurement_Field_Array;
       Gives   : Landin.Types.Scalar_Name;
       Site    : Landin.Provenance.Origin) return Value_Id
    is
-      First : constant Natural := Natural (Into.Fields.Length);
+      First : constant Natural :=
+        Natural (Into.Measurement_Fields.Length);
    begin
       for Field of Fields loop
-         Into.Fields.Append (Field);
+         Into.Measurement_Fields.Append (Field);
       end loop;
 
       return Append

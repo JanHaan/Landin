@@ -23,6 +23,7 @@ package body Landin.Stages.Lowering is
    use type IR.Part_Position;
    use type IR.Value_Id;
    use type Landin.Checking.Element_Count;
+   use type Landin.Checking.Field_Kind;
    use type Landin.Source.Source_Id;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
@@ -552,10 +553,10 @@ package body Landin.Stages.Lowering is
 
             --  [0370]: the type asked about is carried into the IR and the
             --  target-dependent answer is not.  D17 decomposes a fixed array
-            --  into operations the IR already has; D44 carries an ordinary
-            --  struct as its declaration-order scalar field run.  A nonempty
-            --  array has its element's alignment; the internal empty shape
-            --  has size zero and alignment one.
+            --  into operations the IR already has; D44/D45 carry an ordinary
+            --  struct as its declaration-order scalar or compact fixed-array
+            --  field run.  A nonempty array has its element's alignment; the
+            --  internal empty shape has size zero and alignment one.
             when Syn.Size_Of | Syn.Align_Of =>
                declare
                   Asked : constant Syn.Node_Id :=
@@ -570,14 +571,30 @@ package body Landin.Stages.Lowering is
                         Declared : constant Res.Declaration_Id :=
                           Landin.Checking.Body_Of
                             (Types.all, Of_Tree, Asked);
-                        Fields : IR.Scalar_Field_Array
+                        Fields : IR.Measurement_Field_Array
                           (1 .. Landin.Checking.Layout_Field_Count
                                   (Types.all, Declared));
                      begin
                         for Field in Fields'Range loop
-                           Fields (Field) :=
-                             Landin.Checking.Field_Type
-                               (Types.all, Declared, Field);
+                           if Landin.Checking.Field_Kind_Of
+                                (Types.all, Declared, Field)
+                                = Landin.Checking.Scalar_Field
+                           then
+                              Fields (Field) :=
+                                (Kind    => IR.Scalar_Measurement_Field,
+                                 Element => Landin.Checking.Field_Type
+                                   (Types.all, Declared, Field),
+                                 Length  => 1);
+                           else
+                              Fields (Field) :=
+                                (Kind    => IR.Array_Measurement_Field,
+                                 Element =>
+                                   Landin.Checking.Field_Array_Element
+                                     (Types.all, Declared, Field),
+                                 Length  => IR.Element_Total
+                                   (Landin.Checking.Field_Array_Length
+                                      (Types.all, Declared, Field)));
+                           end if;
                         end loop;
 
                         return IR.Emit_Aggregate_Measurement

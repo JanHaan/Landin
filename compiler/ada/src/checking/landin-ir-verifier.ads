@@ -72,6 +72,7 @@ package Landin.IR.Verifier is
       Operand_Defines_Nothing,
       Operands_Disagree,
       Result_Disagrees,
+      Measurement_Field_Malformed,
       Condition_Is_Not_A_Bool,
       --  Places [1900] and module values [1940].
       Slot_Out_Of_Range,

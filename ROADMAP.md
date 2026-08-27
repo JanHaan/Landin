@@ -2655,6 +2655,28 @@ evidence. Scalar and fixed-array measurements are unchanged; aggregate values,
 aggregate fields, nested composition, inline anonymous measurement and `lenof`
 structs remain outside this slice.
 
+D45 admits a fixed array of an enabled scalar as one field of a named ordinary
+struct for layout and measurement. The field may name an array alias and is
+placed once as the compact element/count shape D17 already gives it; an internal
+zero-element shape keeps D17's size zero and alignment one without deciding
+whether source may spell `[0]T`. The complete padded struct must fit the selected
+target's `usize`. If it does not, L0300 owns one report at the struct body, no
+layout is recorded, and a later measurement adds no second report. Lowering
+carries only a declaration-order scalar or element/count leaf run; the backend
+derives every byte answer from its own target facts, while module folds and
+static images use the same checked layout as D44. The verifier rejects a
+noncanonical scalar measurement leaf and the dump exposes an array leaf as
+`[N]element`. Checker and target seam cases pin target-dependent fits, field and
+tail padding overflow, exact fits and invalid alignment; lowering and backend
+cases pin compactness and 64/32-bit answers.
+`positive/measurement-of-struct-array-fields`,
+`negative/struct-array-field-layout-overflow`, the reworked one-report
+`negative/struct-with-an-array-field`, the recorded IR and
+`runtime/measurements-answer-for-the-target` provide corpus and executable
+evidence. Runtime values of a struct with an aggregate field, struct fields of
+struct type, nested composition, inline anonymous measurement and `lenof`
+structs remain outside this slice.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D35's
@@ -2670,7 +2692,8 @@ repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`
 operands
-other than D14's direct name and D31's literal; and an array as a struct field.
+other than D14's direct name and D31's literal; and runtime values of a struct
+with an aggregate field.
 Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
 
@@ -2691,8 +2714,9 @@ let every other unlayable field through. At that boundary both were refused by
 name again and both had fixtures; the measurement fixture covered a declared
 name as well, which had the same hole before arrays existed. The later
 measurement slices above migrated first the array and then D44's named ordinary
-scalar-field struct refusals to positive evidence while keeping every broader
-aggregate boundary pinned.
+scalar-field struct refusals to positive evidence. D45 then migrated a fixed
+scalar array field to layout and measurement evidence while keeping its runtime
+value and every broader aggregate boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

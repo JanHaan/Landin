@@ -25,6 +25,7 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
    use type Landin.Checking.Element_Count;
+   use type Landin.Checking.Field_Kind;
    use type Landin.Types.Type_Kind;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
@@ -55,7 +56,12 @@ package body Landin.Tests.Checking_Suite is
      & "machine: type = struct" & LF
      & "    word: usize" & LF
      & "    tag: bool" & LF
-     & "end machine" & LF;
+     & "end machine" & LF
+     & "nested: type = struct" & LF
+     & "    tag: u8" & LF
+     & "    words: [2]usize" & LF
+     & "    tail: u16" & LF
+     & "end nested" & LF;
 
    procedure Declarations_Give_Structs_Their_Identity
      (Item : in out Landin.Testing.Context);
@@ -192,14 +198,24 @@ package body Landin.Tests.Checking_Suite is
          Machine_Tag       : Natural;
          Machine_Extent    : Natural;
          Machine_Alignment : Natural;
-         Machine_Size      : Natural);
+         Machine_Size      : Natural;
+         Array_Offset      : Natural;
+         Array_Tail        : Natural;
+         Array_Extent      : Natural;
+         Array_Alignment   : Natural;
+         Array_Size        : Natural);
 
       procedure Check_Target
         (Facts             : Landin.Targets.Target_Facts;
          Machine_Tag       : Natural;
          Machine_Extent    : Natural;
          Machine_Alignment : Natural;
-         Machine_Size      : Natural)
+         Machine_Size      : Natural;
+         Array_Offset      : Natural;
+         Array_Tail        : Natural;
+         Array_Extent      : Natural;
+         Array_Alignment   : Natural;
+         Array_Size        : Natural)
       is
          Work  : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
          Order : Landin.Stages.Pipeline;
@@ -259,6 +275,8 @@ package body Landin.Tests.Checking_Suite is
               Declaration_At (3);
             Machine : constant Landin.Provenance.Declaration_Id :=
               Declaration_At (4);
+            Nested  : constant Landin.Provenance.Declaration_Id :=
+              Declaration_At (5);
          begin
             Landin.Testing.Check
               (Item, Landin.Checking.Has_Layout (Types.all, Span),
@@ -344,11 +362,50 @@ package body Landin.Tests.Checking_Suite is
               (Item,
                Natural (Landin.Checking.Layout_Size (Types.all, Machine)),
                Machine_Size, "its size follows the target");
+
+            Landin.Testing.Check
+              (Item, Landin.Checking.Has_Layout (Types.all, Nested)
+                     and then not Landin.Checking.Has_Only_Scalar_Fields
+                       (Types.all, Nested),
+               "an array-field struct has a layout but no scalar value run");
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Field_Kind_Of (Types.all, Nested, 2)
+                 = Landin.Checking.Fixed_Array_Field
+               and then Landin.Checking.Field_Array_Length
+                          (Types.all, Nested, 2) = 2
+               and then Landin.Checking.Field_Array_Element
+                          (Types.all, Nested, 2) = Landin.Types.Usize,
+               "the array field keeps one compact structural shape");
+            Landin.Testing.Check_Equal
+              (Item,
+               Natural (Landin.Checking.Field_Offset (Types.all, Nested, 2)),
+               Array_Offset, "the array begins at its element alignment");
+            Landin.Testing.Check_Equal
+              (Item,
+               Natural (Landin.Checking.Field_Offset (Types.all, Nested, 3)),
+               Array_Tail, "the following field begins after the whole array");
+            Landin.Testing.Check_Equal
+              (Item,
+               Natural (Landin.Checking.Layout_Extent (Types.all, Nested)),
+               Array_Extent, "the array contributes its complete extent");
+            Landin.Testing.Check_Equal
+              (Item,
+               Natural (Landin.Checking.Layout_Alignment (Types.all, Nested)),
+               Array_Alignment, "its element alignment reaches the struct");
+            Landin.Testing.Check_Equal
+              (Item,
+               Natural (Landin.Checking.Layout_Size (Types.all, Nested)),
+               Array_Size, "the complete nested layout receives tail padding");
          end;
       end Check_Target;
    begin
-      Check_Target (Landin.Targets.Linux_X86_64, 8, 9, 8, 16);
-      Check_Target (Landin.Targets.Synthetic_32, 4, 5, 4, 8);
+      Check_Target
+        (Landin.Targets.Linux_X86_64, 8, 9, 8, 16,
+         8, 24, 26, 8, 32);
+      Check_Target
+        (Landin.Targets.Synthetic_32, 4, 5, 4, 8,
+         4, 12, 14, 4, 16);
    end Declared_Structs_Follow_Target_Layout;
 
    --  D17: an array's identity is its length and its element, so two
@@ -1544,6 +1601,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Array_Extent_Follows_Usize
      (Item : in out Landin.Testing.Context);
 
+   procedure Struct_Array_Field_Extent_Follows_Usize
+     (Item : in out Landin.Testing.Context);
+
    procedure Array_Extent_Follows_Usize
      (Item : in out Landin.Testing.Context)
    is
@@ -1586,6 +1646,48 @@ package body Landin.Tests.Checking_Suite is
       Check_Target
         (Landin.Targets.Linux_X86_64, "2147483648", "u16", True);
    end Array_Extent_Follows_Usize;
+
+   --  D45: a field that fits alone may leave no target `usize` room for
+   --  the field after it.  The same declaration therefore fits the 64-bit
+   --  description and is refused by the synthetic 32-bit one.
+   procedure Struct_Array_Field_Extent_Follows_Usize
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Target
+        (Facts    : Landin.Targets.Target_Facts;
+         Accepted : Boolean);
+
+      procedure Check_Target
+        (Facts    : Landin.Targets.Target_Facts;
+         Accepted : Boolean)
+      is
+         Work  : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Order : Landin.Stages.Pipeline;
+         Ran   : Natural;
+         Src   : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "struct-extent.ldn",
+            "bounded: type = struct" & LF
+            & "    bytes: [4294967295]u8" & LF
+            & "    tail: u8" & LF
+            & "end bounded" & LF
+            & "answer: usize = sizeof bounded" & LF);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+
+         Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) /= Accepted,
+            "the complete struct extent follows the target's usize");
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Synthetic_32, False);
+      Check_Target (Landin.Targets.Linux_X86_64, True);
+   end Struct_Array_Field_Extent_Follows_Usize;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
@@ -1643,6 +1745,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array extent follows usize",
          Array_Extent_Follows_Usize'Access);
+      Landin.Testing.Register
+        (Into, "checking", "struct array field extent follows usize",
+         Struct_Array_Field_Extent_Follows_Usize'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);
