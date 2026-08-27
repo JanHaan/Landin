@@ -2091,8 +2091,9 @@ begin an expression. Thus `[of, other, of]` remains an ordinary three-element
 literal and `[of + 1]` remains an ordinary one-element literal whose expression
 may name a binding called `of`.
 
-This slice admits no mixed module initializer, inferred binding, assignment,
-argument, return, discard, nested array or other general array value. Full-array
+This slice admits no mixed module initializer, inferred binding, argument,
+return, discard, nested array or other general array value. D37 separately
+admits assignment to an existing mutable fixed-array place. Full-array
 repetition remains governed by D32--D35, so a prefix length of zero is not a
 mixed form and does not narrow those existing contexts.
 
@@ -2113,7 +2114,62 @@ public-seam cases; `positive/local-array-mixed-repetition`;
 `negative/array-mixed-repetition-prefix-too-long`,
 `negative/module-array-mixed-repetition-not-enabled`,
 `negative/inferred-array-mixed-repetition-not-enabled`,
-`negative/array-mixed-repetition-assignment-not-enabled`,
 `negative/array-mixed-repetition-general-value-not-enabled`,
 `negative/nested-array-mixed-repetition-not-enabled`; and
 `runtime/mixed-array-repetition-is-source-ordered` on Linux x86-64.
+
+### D37 — A mixed prefix may assign a mutable fixed array
+
+**The tour said** that assignment reaches its destination before evaluating its
+right-hand side [0410], that a mutable binding may be assigned [1900], and that
+mixed repetition evaluates and stores its prefix before evaluating one repeated
+suffix [0560]. It did not say whether an existing array place could supply the
+mixed form's context, whether partial stores changed definite-assignment state,
+or whether both module and local storage used the compact suffix operation.
+
+**Chosen:** `[e1, ..., ek, of repeated]` may be the right-hand side of assignment
+to a mutable fixed-array place of type `[N]T` exactly when `1 <= k < N`. The
+destination supplies the complete length and scalar element type. Every prefix
+expression and `repeated` must have type `T`, including [0190]'s contextual
+commitment of an untyped integer. The existing place check retains [1900]'s
+mutability requirement, and a prefix that reaches or passes `N` is refused
+because no repeated suffix remains.
+
+The destination is reached and evaluated before any right-hand-side expression.
+Lowering then evaluates each prefix expression left to right and immediately
+stores it into destination parts `1` through `k`. It evaluates `repeated` exactly
+once and emits the existing compact `Fill_Array` with `First = k + 1`. The same
+IR operation names either a local frame slot or a module datum; no array-sized
+temporary, array-valued result, verifier rule or backend operation is added.
+
+Definite-assignment checks every prefix and repeated expression against the state
+incoming to the assignment. Stores made while evaluating the mixed form do not
+make an initially unassigned destination readable by a later expression in that
+same right-hand side. Only successful completion establishes the complete
+destination as assigned.
+
+Typed module initialization, inferred initialization, nested mixed forms and
+other general-value contexts remain refused. This rule creates no static mixed
+image and no independently carried mixed array value; it only forms the result
+directly in existing mutable storage.
+
+**Why assignment:** D29 and D32 already establish the destination-first,
+contextual assignment boundary for finite literals and full repetition. D36's
+ordered prefix stores and `Fill_Array.First`, plus their verifier and backend
+paths, express the mixed case without another representation. Extending only
+this boundary preserves the independently testable initializer and general-value
+refusals.
+
+**The alternative:** form a complete temporary and copy it after all expressions
+finish. That would reverse the observable immediate-store semantics, consume
+storage proportional to D18's target-sized extent, and make the compact suffix
+fill transient rather than the destination operation. It was declined.
+
+**Pinned by** the checker and lowering public-seam cases;
+`positive/array-mixed-repetition-assignment`;
+`negative/immutable-array-mixed-repetition-assignment`,
+`negative/array-mixed-repetition-assignment-element-mismatch`,
+`negative/array-mixed-repetition-assignment-prefix-too-long`,
+`negative/array-mixed-repetition-assignment-reads-incoming-state`, the retained
+initializer, inferred, nested and general-value refusal fixtures; and
+`runtime/mixed-array-repetition-assignment-is-source-ordered` on Linux x86-64.

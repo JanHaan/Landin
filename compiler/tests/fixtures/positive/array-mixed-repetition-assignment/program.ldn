@@ -1,0 +1,8 @@
+mut state: [4]u16
+
+f: (input: u16) -> (answer: u16) =
+    mut row: [4]u16
+    row = [input, state[0], of input + 1]
+    state = [row[0], of row[1]]
+    answer = row[3] + state[3]
+end f
