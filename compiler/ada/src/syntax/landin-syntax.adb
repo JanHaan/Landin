@@ -26,6 +26,7 @@ package body Landin.Syntax is
             --  What is indexed, and the index.
             when Element_Index            => 2,
             when Array_Literal            => 0,
+            when Array_Repetition         => 2,
             when Literal_Kind             => 0,
             --  The one slot is [1790]'s type, not an expression.
             when Size_Of | Align_Of       => 1,
@@ -200,6 +201,12 @@ package body Landin.Syntax is
    function Nth_Element
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
+
+   function Repetition_Count (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Repeated_Element (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 2));
 
    function Operand_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));

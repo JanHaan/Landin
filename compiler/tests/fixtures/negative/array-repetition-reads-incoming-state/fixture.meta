@@ -1,0 +1,6 @@
+class: negative
+summary: [0560] reads its one scalar expression before establishing the array
+constructs: 0160, 0520, 0560, 0570, 1800, 1950
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64

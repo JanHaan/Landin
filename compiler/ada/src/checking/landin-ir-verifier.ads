@@ -87,6 +87,8 @@ package Landin.IR.Verifier is
       Array_Copy_Shapes_Disagree,
       Array_Copy_Inside_A_Datum,
       Array_Clear_Inside_A_Datum,
+      Array_Fill_Inside_A_Datum,
+      Array_Fill_Value_Disagrees,
       Array_Image_Length_Disagrees,
       Array_Image_Value_Does_Not_Fit,
       --  Calls [1920].

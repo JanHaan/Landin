@@ -1,0 +1,5 @@
+class: positive
+summary: [0560] fills explicitly typed local arrays from one scalar expression
+constructs: 0160, 0520, 0560, 0570, 1800, 1950
+program: program.ldn
+targets: linux-x86-64, macos-arm64
