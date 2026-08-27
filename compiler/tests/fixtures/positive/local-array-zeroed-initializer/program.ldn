@@ -1,0 +1,4 @@
+f: (at: usize) -> (value: u32) =
+    row: [4]u32 = zeroed
+    value = row[at]
+end f

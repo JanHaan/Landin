@@ -63,12 +63,14 @@ package body Landin.IR.Verifier is
             when Element_Index_Is_Not_Usize =>
                "an element load or store indexes with a value other than"
                & " usize",
-            when Array_Copy_Endpoint_Is_Not_An_Array =>
-               "an array copy endpoint is not fixed-array storage",
+            when Array_Storage_Is_Not_An_Array =>
+               "an array operation names storage that is not a fixed array",
             when Array_Copy_Shapes_Disagree =>
                "an array copy's endpoints differ in length or element type",
             when Array_Copy_Inside_A_Datum =>
                "a datum contains an array copy, and [1940] admits none",
+            when Array_Clear_Inside_A_Datum =>
+               "a datum contains an array clear, and [1940] admits none",
             when Array_Image_Length_Disagrees =>
                "an array datum's image does not have one value per element",
             when Array_Image_Value_Does_Not_Fit =>
@@ -94,7 +96,7 @@ package body Landin.IR.Verifier is
             when Store_Field   => 1,
             when Load_Element  => 1,
             when Store_Element => 2,
-            when Copy_Array    => 0,
+            when Copy_Array | Clear_Array => 0,
             when Store         => 1,
             when Store_Datum   => 1,
             when Unary_Kind    => 1,
@@ -153,7 +155,7 @@ package body Landin.IR.Verifier is
                elsif Result_Of (Of_Unit, Place.Datum)
                      /= Landin.Types.Fixed_Array
                then
-                  return Array_Copy_Endpoint_Is_Not_An_Array;
+                  return Array_Storage_Is_Not_An_Array;
                end if;
 
                Element := Array_Element (Of_Unit, Place.Datum);
@@ -163,7 +165,7 @@ package body Landin.IR.Verifier is
                if not Holds (Of_Unit, Item, Place.Slot) then
                   return Slot_Out_Of_Range;
                elsif not Is_Array (Of_Unit, Item, Place.Slot) then
-                  return Array_Copy_Endpoint_Is_Not_An_Array;
+                  return Array_Storage_Is_Not_An_Array;
                end if;
 
                Element := Slot_Array_Element (Of_Unit, Item, Place.Slot);
@@ -604,6 +606,31 @@ package body Landin.IR.Verifier is
                                     return
                                       (Kind => Array_Copy_Shapes_Disagree,
                                        Item => Id, Block => Block, Value => V);
+                                 end if;
+                              end;
+
+                           when Clear_Array =>
+                              if Is_Datum then
+                                 return
+                                   (Kind  => Array_Clear_Inside_A_Datum,
+                                    Item  => Id,
+                                    Block => Block,
+                                    Value => V);
+                              end if;
+
+                              declare
+                                 Element : Landin.Types.Scalar_Name;
+                                 Length  : Element_Total;
+                                 Bad     : constant Fault_Kind :=
+                                   Shape_Of
+                                     (Id,
+                                      Destination_Of (Of_Unit, Id, V),
+                                      Element, Length);
+                                 pragma Unreferenced (Element, Length);
+                              begin
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
                                  end if;
                               end;
 

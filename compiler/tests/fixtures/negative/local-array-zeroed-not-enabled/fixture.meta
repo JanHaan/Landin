@@ -1,6 +1,0 @@
-class: negative
-summary: the first zeroed slice has no local frame initialization operation
-constructs: 0040, 0520, 0540, 1760, 1770, 1810
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

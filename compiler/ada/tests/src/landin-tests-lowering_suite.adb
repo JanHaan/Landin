@@ -936,6 +936,45 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Local_Array_Literal_Becomes_Ordered_Stores;
 
+   --  D28 clears a complete local array with one storage operation rather
+   --  than one instruction per element of its target-sized extent.
+   procedure A_Local_Zeroed_Array_Becomes_One_Clear
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Local_Zeroed_Array_Becomes_One_Clear
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: () -> none =" & LF
+         & "    row: [3]u32 = zeroed" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "zeroed is accepted locally");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 1), 2,
+            "one clear and the leave are the complete instruction run");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 1, 1) = IR.Clear_Array
+                  and then IR.Destination_Of (Unit, 1, 1).Kind
+                             = IR.Frame_Slot
+                  and then IR.Destination_Of (Unit, 1, 1).Slot = 1,
+            "the clear names the one compact array slot");
+      end;
+   end A_Local_Zeroed_Array_Becomes_One_Clear;
+
    ------------------------------------------------------------------
 
    --  D24: a module array literal folds each element to a Folded value
@@ -1570,6 +1609,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a local array literal becomes ordered stores",
          A_Local_Array_Literal_Becomes_Ordered_Stores'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a local zeroed array becomes one clear",
+         A_Local_Zeroed_Array_Becomes_One_Clear'Access);
       Landin.Testing.Register
         (Into, "lowering", "a module array literal records its image",
          A_Module_Array_Literal_Records_Its_Image'Access);

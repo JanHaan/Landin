@@ -1,0 +1,12 @@
+public main: () -> (code: i32) =
+    words: [4]u64 = zeroed
+    flags: [3]bool = zeroed
+
+    if words[0] == 0 and words[3] == 0
+        and not flags[0] and not flags[2]
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

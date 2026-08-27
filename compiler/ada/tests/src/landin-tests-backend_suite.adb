@@ -1262,6 +1262,59 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "12");
    end An_Array_Copy_Moves_A_Constant_Target_Extent;
 
+   --  D28 clears one complete compact array slot.  Its byte count follows
+   --  the target's usize width and the emitted operation never visits source
+   --  elements in the compiler.
+   procedure A_Local_Array_Clear_Follows_The_Target_Extent
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Local_Array_Clear_Follows_The_Target_Extent
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "f: () -> none =" & LF
+        & "    row: [3]usize = zeroed" & LF
+        & "end f" & LF;
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Bytes : String);
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Bytes : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran  : Natural;
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+         declare
+            Text : constant String := Emitted (Work);
+            Clear : constant String :=
+              HT & "leaq -" & Bytes & "(%rbp), %rdi" & LF
+              & HT & "xorl %eax, %eax" & LF
+              & HT & "movabsq $" & Bytes & ", %rcx" & LF
+              & HT & "cld" & LF
+              & HT & "rep stosb" & LF;
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, Clear),
+               "one target-sized byte clear reaches the compact frame slot");
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Text, HT & "rep stosb" & LF), 1,
+               "the complete array is cleared by one string operation");
+            Landin.Testing.Check
+              (Item, not Contains (Text, HT & "rep movsb" & LF),
+               "zeroed does not invent a source array to copy");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "24");
+      Check_Target (Landin.Targets.Synthetic_32, "12");
+   end A_Local_Array_Clear_Follows_The_Target_Extent;
+
    --  D10 zeroes a module binding with no value, and zero bytes do not
    --  have to be in the image to be zero: `.bss` reserves them and `.data`
    --  carries them.  A 32 KB part is in this compiler's range, so a
@@ -2524,6 +2577,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "an array copy moves a constant target extent",
          An_Array_Copy_Moves_A_Constant_Target_Extent'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a local array clear follows the target extent",
+         A_Local_Array_Clear_Follows_The_Target_Extent'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value folds every level",
          A_Module_Value_Folds_Every_Level'Access);

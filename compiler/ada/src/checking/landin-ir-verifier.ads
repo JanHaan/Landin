@@ -83,9 +83,10 @@ package Landin.IR.Verifier is
       Field_Out_Of_Range,
       Element_Datum_Is_Not_An_Array,
       Element_Index_Is_Not_Usize,
-      Array_Copy_Endpoint_Is_Not_An_Array,
+      Array_Storage_Is_Not_An_Array,
       Array_Copy_Shapes_Disagree,
       Array_Copy_Inside_A_Datum,
+      Array_Clear_Inside_A_Datum,
       Array_Image_Length_Disagrees,
       Array_Image_Value_Does_Not_Fit,
       --  Calls [1920].

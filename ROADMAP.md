@@ -2391,22 +2391,36 @@ the complete array does too without enumerating its D18 extent. Checker image
 validation treats it as a terminal zero image; lowering deliberately records no
 finite datum image, preserving D10's `.bss` representation and distinct storage
 through D21 chains. It is not synthesized as a general value and introduces no
-IR operation, so inferred bindings, locals, assignment and scalar contexts
-remain refused. `positive/module-array-zeroed-initializer`, the four focused
-negative boundaries, and `runtime/module-array-zeroed-reads-zero` pin the source
-and emitted-storage behavior.
+IR operation, so inferred bindings, assignment and scalar contexts remain
+refused. `positive/module-array-zeroed-initializer`, the three focused negative
+boundaries, and `runtime/module-array-zeroed-reads-zero` pin the source and
+emitted-storage behavior.
+
+D28 gives an explicitly typed local fixed array the same contextual image, but
+clears its complete compact frame slot at runtime. Lowering records one
+operandless and resultless `Clear_Array` carrying only that slot identity rather
+than enumerating D18's target-sized extent or inventing a zero source array. The
+verifier resolves the destination through the same storage-shape seam as an
+array copy, rejects scalar or unowned storage, and admits no clear in a static
+datum image. Linux x86-64 forms the frame address and emits one `rep stosb` over
+the target byte extent; focused backend evidence makes `[3]usize` 24 bytes there
+and 12 under the synthetic 32-bit description. Existing flow treatment of an
+initializer assigns the array as a whole, which a computed-index positive case
+pins. `positive/local-array-zeroed-initializer`, the three unchanged negative
+boundaries, and `runtime/local-array-zeroed-reads-zero` pin the source, lowering,
+target-width and runtime behavior.
 
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
-and module literal, and D27's module `zeroed`; general whole-array value
-positions; every other `zeroed` [0540] context; repetition [0560]; slices [0570];
-non-identifier `lenof` operands; and an array as a struct field. Each is its own
-slice, and the remaining value slices need the initialization work D21 did not
-settle.
+and module literal, and D27/D28's explicitly typed module and local `zeroed`;
+general whole-array value positions; inferred, assignment, scalar and every
+other `zeroed` [0540] context; repetition [0560]; slices [0570]; non-identifier
+`lenof` operands; and an array as a struct field. Each is its own slice, and the
+remaining value slices need the initialization work D21 did not settle.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
-which is what lets D27's surrounding array be zeroed at all. Every element this
-kernel admits is a scalar and every scalar has one, so the check is vacuous
+which is what lets D27/D28's surrounding array be zeroed at all. Every element
+this kernel admits is a scalar and every scalar has one, so the check is vacuous
 today; it stops being vacuous when a pointer can be an element, because [0540]
 gives a pointer no zero image and there is no null to stand for one.
 

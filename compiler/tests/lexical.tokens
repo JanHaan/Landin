@@ -986,6 +986,37 @@ file positive/local-array-literal-initializer/program.ldn tokens 67
   191 193 if
   194 197 end
   198 206 read_row
+file positive/local-array-zeroed-initializer/program.ldn tokens 30
+  0 1 f
+  1 2 :
+  3 4 (
+  4 6 at
+  6 7 :
+  8 13 usize
+  13 14 )
+  15 17 ->
+  18 19 (
+  19 24 value
+  24 25 :
+  26 29 u32
+  29 30 )
+  31 32 =
+  37 40 row
+  40 41 :
+  42 43 [
+  43 44 4
+  44 45 ]
+  45 48 u32
+  49 50 =
+  51 57 zeroed
+  62 67 value
+  68 69 =
+  70 73 row
+  73 74 [
+  74 76 at
+  76 77 ]
+  78 81 end
+  82 83 f
 file positive/local-shadows-a-parameter/program.ldn tokens 24
   0 1 f
   1 2 :
@@ -3969,24 +4000,6 @@ file negative/local-array-literal-length-mismatch/program.ldn tokens 35
   68 69 ]
   70 73 end
   74 75 f
-file negative/local-array-zeroed-not-enabled/program.ldn tokens 17
-  0 1 f
-  1 2 :
-  3 4 (
-  4 5 )
-  6 8 ->
-  9 13 none
-  14 15 =
-  20 23 row
-  23 24 :
-  25 26 [
-  26 27 4
-  27 28 ]
-  28 31 u32
-  32 33 =
-  34 40 zeroed
-  41 44 end
-  45 46 f
 file negative/local-used-above-its-declaration/program.ldn tokens 21
   0 1 f
   1 2 :
