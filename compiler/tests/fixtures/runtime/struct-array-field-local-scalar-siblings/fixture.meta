@@ -1,5 +1,5 @@
 class: runtime
-summary: D48 reads and writes a local array field while scalar siblings remain independently assignable
+summary: D49 clears a written local array field while scalar siblings remain independently assigned
 constructs: 0190, 0350, 0520, 0670, 0710, 0750, 1810, 1820
 program: main.ldn
 status: 42

@@ -1114,6 +1114,46 @@ package body Landin.Tests.Backend_Suite is
       end;
    end An_Array_Field_After_A_Wide_Field_Uses_Registers;
 
+   --  D49 clears the same far field from its register-formed module address;
+   --  the byte count is the field extent, not the containing datum extent.
+   procedure A_Wide_Array_Field_Clear_Uses_Registers
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Wide_Array_Field_Clear_Uses_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "wide: type = struct" & LF
+         & "    prefix: [2147483648]u8" & LF
+         & "    row: [2]u8" & LF
+         & "end wide" & LF
+         & "mut state: wide" & LF
+         & "clear: () -> none =" & LF
+         & "    state.row = zeroed" & LF
+         & "end clear" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "leaq state(%rip), %rdi")
+            and then Contains
+                       (Text, HT & "movabsq $2147483648, %rdx")
+            and then Contains (Text, HT & "addq %rdx, %rdi")
+            and then Contains (Text, HT & "movabsq $2, %rcx")
+            and then Contains (Text, HT & "rep stosb"),
+            "the full field offset is added before its two bytes clear");
+      end;
+   end A_Wide_Array_Field_Clear_Uses_Registers;
+
    --  A field is written where it is read [1810], and `inc` on one says
    --  what `x += 1` says [1900]: a load at the offset, a one, a trapping
    --  add and a store back to the same offset.
@@ -1227,6 +1267,7 @@ package body Landin.Tests.Backend_Suite is
         & "f: () -> none =" & LF
         & "    mut local: holder" & LF
         & "    local.tag = 1" & LF
+        & "    local.words = zeroed" & LF
         & "    local.words[0] = 1" & LF
         & "    local.words[1] = 2" & LF
         & "    at: usize = 1" & LF
@@ -1263,6 +1304,10 @@ package body Landin.Tests.Backend_Suite is
               (Item, Contains (Text, HT & "leaq " & Array_Field
                                       & "(%rbp), %rcx"),
                "the computed element starts at the target-laid-out field");
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & "leaq " & Array_Field
+                                      & "(%rbp), %rdi"),
+               "the clear starts at the same target-laid-out field");
             Landin.Testing.Check
               (Item, Contains (Text, HT & "movw %ax, " & Last_Field
                                       & "(%rbp)"),
@@ -1315,6 +1360,33 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Check
         (Item, Alignment = 1,
          "the empty field contributes identity alignment");
+
+      declare
+         Block : constant IR.Block_Id :=
+           IR.Add_Block
+             (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+      begin
+         IR.Enter (Unit, Routine, Block);
+         IR.Emit_Array_Clear
+           (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Slot), Site,
+            Field => 1);
+         IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+         IR.Leave_Block (Unit, Routine);
+
+         declare
+            Text : constant String :=
+              Landin.Backend.X86_64.Text
+                (Unit, Landin.Stages.Meanings (Work).all,
+                 Landin.Stages.Identities (Work).all,
+                 Landin.Targets.Linux_X86_64);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains (Text, HT & "movabsq $0, %rcx")
+               and then Contains (Text, HT & "rep stosb"),
+               "clearing the internal empty field is one zero-byte clear");
+         end;
+      end;
    end An_Empty_Array_Slot_Field_Has_Identity_Extent;
 
    procedure Constant_Array_Parts_Address_One_Frame_Cell
@@ -3078,6 +3150,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "an array field after a wide field uses registers",
          An_Array_Field_After_A_Wide_Field_Uses_Registers'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a wide array field clear uses registers",
+         A_Wide_Array_Field_Clear_Uses_Registers'Access);
       Landin.Testing.Register
         (Into, "backend", "a field is written at its own offset",
          A_Field_Is_Written_At_Its_Own_Offset'Access);

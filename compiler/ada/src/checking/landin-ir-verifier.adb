@@ -149,12 +149,14 @@ package body Landin.IR.Verifier is
       function Shape_Of
         (Item    : Item_Id;
          Place   : Storage;
+         Field   : Natural;
          Element : out Landin.Types.Scalar_Name;
          Length  : out Element_Total) return Fault_Kind;
 
       function Shape_Of
         (Item    : Item_Id;
          Place   : Storage;
+         Field   : Natural;
          Element : out Landin.Types.Scalar_Name;
          Length  : out Element_Total) return Fault_Kind
       is
@@ -168,24 +170,70 @@ package body Landin.IR.Verifier is
                  or else Kind_Of (Of_Unit, Place.Datum) /= Datum
                then
                   return Named_Item_Is_Not_A_Datum;
-               elsif Result_Of (Of_Unit, Place.Datum)
-                     /= Landin.Types.Fixed_Array
-               then
-                  return Array_Storage_Is_Not_An_Array;
                end if;
 
-               Element := Array_Element (Of_Unit, Place.Datum);
-               Length := Array_Length (Of_Unit, Place.Datum);
+               if Field = 0 then
+                  if Result_Of (Of_Unit, Place.Datum)
+                       /= Landin.Types.Fixed_Array
+                  then
+                     return Array_Storage_Is_Not_An_Array;
+                  end if;
+
+                  Element := Array_Element (Of_Unit, Place.Datum);
+                  Length := Array_Length (Of_Unit, Place.Datum);
+               else
+                  if Result_Of (Of_Unit, Place.Datum)
+                       /= Landin.Types.Aggregate
+                    or else Field > Field_Count (Of_Unit, Place.Datum)
+                  then
+                     return Element_Field_Out_Of_Range;
+                  end if;
+
+                  if Nth_Field_Shape
+                       (Of_Unit, Place.Datum, Positive (Field)).Kind
+                       /= Array_Field_Shape
+                  then
+                     return Element_Field_Is_Not_An_Array;
+                  end if;
+
+                  Element := Nth_Field_Shape
+                    (Of_Unit, Place.Datum, Positive (Field)).Element;
+                  Length := Nth_Field_Shape
+                    (Of_Unit, Place.Datum, Positive (Field)).Length;
+               end if;
 
             when Frame_Slot =>
                if not Holds (Of_Unit, Item, Place.Slot) then
                   return Slot_Out_Of_Range;
-               elsif not Is_Array (Of_Unit, Item, Place.Slot) then
-                  return Array_Storage_Is_Not_An_Array;
                end if;
 
-               Element := Slot_Array_Element (Of_Unit, Item, Place.Slot);
-               Length := Slot_Array_Length (Of_Unit, Item, Place.Slot);
+               if Field = 0 then
+                  if not Is_Array (Of_Unit, Item, Place.Slot) then
+                     return Array_Storage_Is_Not_An_Array;
+                  end if;
+
+                  Element := Slot_Array_Element (Of_Unit, Item, Place.Slot);
+                  Length := Slot_Array_Length (Of_Unit, Item, Place.Slot);
+               else
+                  if not Is_Aggregate (Of_Unit, Item, Place.Slot)
+                    or else Field >
+                      Slot_Field_Count (Of_Unit, Item, Place.Slot)
+                  then
+                     return Element_Field_Out_Of_Range;
+                  end if;
+
+                  if Nth_Slot_Field_Shape
+                       (Of_Unit, Item, Place.Slot, Positive (Field)).Kind
+                       /= Array_Field_Shape
+                  then
+                     return Element_Field_Is_Not_An_Array;
+                  end if;
+
+                  Element := Nth_Slot_Field_Shape
+                    (Of_Unit, Item, Place.Slot, Positive (Field)).Element;
+                  Length := Nth_Slot_Field_Shape
+                    (Of_Unit, Item, Place.Slot, Positive (Field)).Length;
+               end if;
          end case;
 
          return Nothing_Wrong;
@@ -750,7 +798,7 @@ package body Landin.IR.Verifier is
                                  Bad : Fault_Kind;
                               begin
                                  Bad := Shape_Of
-                                   (Id, Source_Of (Of_Unit, Id, V),
+                                   (Id, Source_Of (Of_Unit, Id, V), 0,
                                     Source_Element, Source_Length);
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -758,7 +806,7 @@ package body Landin.IR.Verifier is
                                  end if;
 
                                  Bad := Shape_Of
-                                   (Id, Destination_Of (Of_Unit, Id, V),
+                                   (Id, Destination_Of (Of_Unit, Id, V), 0,
                                     Destination_Element, Destination_Length);
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -790,6 +838,7 @@ package body Landin.IR.Verifier is
                                    Shape_Of
                                      (Id,
                                       Destination_Of (Of_Unit, Id, V),
+                                      Element_Field_Of (Of_Unit, Id, V),
                                       Element, Length);
                                  pragma Unreferenced (Element, Length);
                               begin
@@ -815,6 +864,7 @@ package body Landin.IR.Verifier is
                                    Shape_Of
                                      (Id,
                                       Destination_Of (Of_Unit, Id, V),
+                                      0,
                                       Element, Length);
                               begin
                                  if Bad /= Nothing_Wrong then

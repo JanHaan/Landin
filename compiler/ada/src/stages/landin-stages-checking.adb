@@ -1294,6 +1294,15 @@ package body Landin.Stages.Checking is
       function Indexed_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
+      --  D49 admits that same fixed-array field as a whole place only when
+      --  assignment supplies `zeroed` as its complete contextual value.
+      --  This predicate notes the field shape when that exact place exists;
+      --  it reports nothing and leaves every other selection for the
+      --  ordinary place checker, so root mutability and field diagnostics
+      --  keep their existing ownership.
+      function Admit_Array_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
       function Is_Direct_Array_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
@@ -1348,10 +1357,22 @@ package body Landin.Stages.Checking is
          return Synthesise (Of_Tree, Node);
       end Selected_From;
 
-      function Indexed_From
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      function Admit_Array_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
       is
       begin
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+              = Ty.Fixed_Array
+         then
+            return True;
+         end if;
+
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+              /= Ty.Undecided
+         then
+            return False;
+         end if;
+
          if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection then
             declare
                From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
@@ -1365,7 +1386,7 @@ package body Landin.Stages.Checking is
                        Selected_From (Of_Tree, From);
                   begin
                      if Held = Ty.Ill_Typed then
-                        return Held;
+                        return False;
                      end if;
 
                      if Held = Ty.Aggregate then
@@ -1395,13 +1416,24 @@ package body Landin.Stages.Checking is
                                    (Types.all, Wrote, Which),
                                  Landin.Checking.Field_Array_Element
                                    (Types.all, Wrote, Which));
-                              return Ty.Fixed_Array;
+                              return True;
                            end if;
                         end;
                      end if;
                   end;
                end if;
             end;
+         end if;
+
+         return False;
+      end Admit_Array_Field;
+
+      function Indexed_From
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is
+      begin
+         if Admit_Array_Field (Of_Tree, Node) then
+            return Ty.Fixed_Array;
          end if;
 
          return Selected_From (Of_Tree, Node);
@@ -2677,6 +2709,20 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Assignment =>
+               --  D49 supplies the fixed-array shape only in this complete
+               --  `zeroed` assignment context.  Check_Place still owns root
+               --  mutability and every malformed or non-array selection.
+               if Syn.Kind
+                    (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                    = Syn.Zeroed_Literal
+               then
+                  if Admit_Array_Field
+                       (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                  then
+                     null;
+                  end if;
+               end if;
+
                Check_Place
                  (Of_Tree, Syn.Target_Of (Of_Tree, Node),
                   Stepping => False);
@@ -5249,7 +5295,8 @@ package body Landin.Stages.Checking is
             then
                --  A refused whole array field is not assignable and must not
                --  acquire a D16 fact through this recovery walk.  D48's
-               --  element destination returned through the branch above.
+               --  element destination returned through the branch above;
+               --  D49's contextual whole-field clear reaches this one.
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                     = Ty.Ill_Typed
                then
@@ -5272,7 +5319,16 @@ package body Landin.Stages.Checking is
                           Res.Bound_To (Meanings.all, Of_Tree, From);
                      begin
                         if Is_Tracked (Id) then
-                           State.Fields (Positive (Id), Which) := True;
+                           if Landin.Checking.Type_Of
+                                (Types.all, Of_Tree, Node) = Ty.Fixed_Array
+                           then
+                              --  One compact fact covers a D18-sized field;
+                              --  do not also mark the scalar-field table.
+                              Array_Sets.Include
+                                (State.Whole_Arrays, (Id, Which));
+                           else
+                              State.Fields (Positive (Id), Which) := True;
+                           end if;
                         end if;
                      end;
                   end if;

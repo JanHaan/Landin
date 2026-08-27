@@ -1,5 +1,5 @@
 class: runtime
-summary: D48 reads and writes a module array field while preserving scalar sibling offsets
+summary: D49 clears a written module array field while preserving scalar siblings
 constructs: 0190, 0350, 0520, 0670, 0750, 1740, 1820
 program: main.ldn
 status: 42

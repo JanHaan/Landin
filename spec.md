@@ -1775,9 +1775,14 @@ context, and [1900] decides whether its direct local or module storage name may 
 written. Every scalar element the kernel currently admits has an all-bits-zero
 image, so the complete array has one [0540].
 
+D49 extends this contextual assignment to one fixed-array field selected
+immediately from enabled struct storage without making the field a general
+array place or value.
+
 The destination is reached first; `zeroed` evaluates no source expressions and
 names no source storage. Lowering emits one `Clear_Array` carrying that local
-frame slot or module datum. The verifier resolves its complete array shape, and
+frame slot or module datum; D49 additionally carries the declaration-order field
+identity, never a target byte offset. The verifier resolves its complete array shape, and
 the backend derives the byte extent from target facts before emitting one
 forward byte clear. There is no hidden zero datum, array temporary, source
 operand, or compiler enumeration of D18's target-sized length.
@@ -2390,7 +2395,8 @@ bounds behavior. A failed or refused assignment establishes nothing.
 D41's direct binding assignment remains unchanged. An immutable subobject, a
 selection from an invalid place, a nested subobject destination, and assignment to
 a named return remain outside this slice; D43 treats the last as its own contextual
-position. Inferred initialization and every nested, argument, return, operand,
+position. D49 separately treats one fixed-array field as a contextual `zeroed`
+destination without changing this scalar rule. Inferred initialization and every nested, argument, return, operand,
 discard or other general `zeroed` expression remain refused.
 
 **Why the selected type:** a scalar subobject already owns both the type and the
@@ -2700,8 +2706,9 @@ destination, or `inc`/`dec` target. The index is exactly `usize` under D18. A
 compiler-known index outside the field length is refused under [1950]; every
 other index is checked at runtime and traps before any address is formed under
 [0580]. Writability is the root binding's. The selection `s.f` is typed as an
-array only in this index-base context: as a whole value, copy endpoint,
-assignment destination, or `zeroed` target it remains refused with L0304.
+array only in this index-base context: as a whole value, copy endpoint, or
+non-`zeroed` assignment destination it remains refused with L0304. D49
+supersedes only the complete `s.f = zeroed` statement.
 
 D10 makes module state complete from declaration, so an indexed module-field
 read has no assignment requirement. A declaration-only local instead follows
@@ -2720,7 +2727,8 @@ itself an array; a positive field selects an array shape inside an aggregate.
 No checker-computed byte offset enters IR. Even a compiler-known index through
 a field uses the element operation: adding a two-level static-part encoding for
 that optimization was declined. Array copy, clear, and fill operations still
-name whole storage only and therefore require field zero.
+name whole storage only and therefore require field zero in this slice; D49
+later adds a field identity to `Clear_Array` alone.
 
 The verifier checks a positive element field against the aggregate field run
 before it reads the shape, and rejects an absent field or a scalar field. It
@@ -2733,7 +2741,7 @@ In both cases the bounds trap precedes field and element address arithmetic.
 
 **Why the scoped selection:** admitting `s.f` generally would also imply whole
 field copies and `zeroed`, which have separate initialization and lowering
-rules. Index-base typing enables the scalar subobject without pretending the
+rules. D49 later settles only the contextual clear. Index-base typing enables the scalar subobject without pretending the
 array field is an ordinary value. Field-qualified local facts preserve D19's
 independent-element rule when one struct contains more than one array field.
 
@@ -2760,3 +2768,68 @@ target-neutral IR that has none. All were declined.
 `runtime/struct-array-field-local-scalar-siblings`;
 `runtime/struct-array-field-computed-index-traps`; and
 `runtime/struct-array-field-local-computed-index-traps` on Linux x86-64.
+
+### D49 — `zeroed` clears one fixed-array field
+
+**The tour said** that assignment reaches its destination before its value
+[0410], that an array's complete value may be all-bits-zero [0520], that
+`zeroed` takes its type from context [0540], that a struct has its declared
+fields [0670], and that writability belongs to the root binding [1900]. D48
+admitted an element of a fixed-array field while deliberately leaving the
+field itself outside every whole-place context.
+
+**Chosen:** where `s` directly names D46 module state or a D47 local and `f` is
+a fixed array of enabled scalars, `s.f = zeroed` is admitted as a statement.
+The selection is typed as an array only as the destination of that complete
+assignment. As a value, copy source or destination, non-`zeroed` destination,
+`inc`/`dec` target, operand, or nested `zeroed` expression it remains refused
+with L0304. An immutable root reports L0303 first and alone under [1900]. The
+destination is reached first and `zeroed` evaluates nothing [0410]. Every
+enabled scalar has a zero image, so the complete field has one [0540].
+
+D10 already makes a module field complete, so clearing it changes no assignment
+fact. Normal completion for a local records the whole-field fact keyed by the
+binding and field. Every compiler-known or computed element of that field may
+then be read; a later computed write keeps the fact under D22, and no scalar
+sibling or other array field is affected. A merge keeps the fact only when every
+arriving path has it. An internal zero-length field is vacuously complete and
+clears zero bytes, preserving D17 without deciding whether source may spell
+`[0]T`.
+
+Lowering emits the existing compact `Clear_Array` with the root storage and the
+field's declaration-order identity. Field zero continues to mean that the
+storage is itself an array. `Copy_Array` and `Fill_Array` remain field-zero-only,
+so this does not admit a whole field copy or fill. No checker-computed offset,
+source operand, temporary, or per-element instruction enters IR. The dump
+exposes a positive clear field.
+
+The verifier checks a positive field against the aggregate run before it reads
+the shape, rejecting an absent field or a scalar field with the same faults D48
+uses. Each backend derives the field offset, element width, and byte extent from
+its selected target. Linux x86-64 forms a module field base in registers so a
+D18-wide preceding field remains addressable, uses the L0504-bounded displacement
+for a frame field, and emits one forward byte clear. A zero extent gives
+`rep stosb` a zero count.
+
+**Why only the contextual clear:** a field supplies exactly the shape and
+storage `zeroed` needs, while a general selection would also admit source reads,
+copies, literals, repetitions, arguments, returns, and hidden array-sized
+temporaries. Those operations have distinct source-order and definite-assignment
+rules. Keeping the selection scoped preserves their refusal.
+
+**The alternatives:** admit general whole field places and copies together,
+emit one scalar store per element, put a field into every array-storage endpoint,
+or admit aggregate `zeroed` initialization in the same slice. The first and last
+broaden the value boundary, the second makes compiler work proportional to a
+D18 extent, and the third representation widens copy and fill before either can
+use it. All were declined.
+
+**Pinned by** the checker, IR, verifier, lowering, and backend public-seam cases;
+`positive/struct-array-field-zeroed-assignment`;
+`negative/struct-array-field-zeroed-not-enabled`;
+`negative/struct-array-field-copy-not-enabled`;
+`negative/immutable-struct-array-field-zeroed`;
+`negative/struct-array-field-clear-keeps-fields-separate`;
+`negative/struct-array-field-clear-not-on-every-path`; the recorded IR dump;
+`runtime/struct-array-field-state-scalar-siblings`; and
+`runtime/struct-array-field-local-scalar-siblings` on Linux x86-64.

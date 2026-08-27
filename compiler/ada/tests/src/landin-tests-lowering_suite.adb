@@ -1568,6 +1568,62 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Zeroed_Assignment_Clears_Either_Storage_Kind;
 
+   --  D49 lowers a whole array-field clear through the same compact
+   --  operation, carrying the declaration-order field rather than a target
+   --  byte offset for both module and frame storage.
+   procedure Zeroed_Array_Field_Carries_Its_Containing_Field
+     (Item : in out Landin.Testing.Context);
+
+   procedure Zeroed_Array_Field_Carries_Its_Containing_Field
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "end holder" & LF
+         & "mut state: holder" & LF
+         & "f: () -> none =" & LF
+         & "    mut local: holder" & LF
+         & "    local.row = zeroed" & LF
+         & "    state.row = zeroed" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "module and local array-field clears are accepted and verified");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 2), 3,
+            "two field clears and the leave are the instruction run");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 2, 1) = IR.Clear_Array
+                  and then IR.Destination_Of (Unit, 2, 1).Kind
+                             = IR.Frame_Slot
+                  and then IR.Destination_Of (Unit, 2, 1).Slot = 1
+                  and then IR.Element_Field_Of (Unit, 2, 1) = 2,
+            "the local clear carries its aggregate slot and field");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 2, 2) = IR.Clear_Array
+                  and then IR.Destination_Of (Unit, 2, 2).Kind
+                             = IR.Module_Datum
+                  and then IR.Destination_Of (Unit, 2, 2).Datum = 1
+                  and then IR.Element_Field_Of (Unit, 2, 2) = 2,
+            "the module clear carries its aggregate datum and field");
+      end;
+   end Zeroed_Array_Field_Carries_Its_Containing_Field;
+
    ------------------------------------------------------------------
 
    --  D24: a module array literal folds each element to a Folded value
@@ -2564,6 +2620,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "zeroed assignment clears either storage kind",
          Zeroed_Assignment_Clears_Either_Storage_Kind'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "zeroed array field carries its field",
+         Zeroed_Array_Field_Carries_Its_Containing_Field'Access);
       Landin.Testing.Register
         (Into, "lowering", "a module array literal records its image",
          A_Module_Array_Literal_Records_Its_Image'Access);

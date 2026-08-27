@@ -170,7 +170,13 @@ package body Landin.IR.Dump is
 
             when Clear_Array =>
                return Lead & " destination "
-                 & Endpoint (Destination_Of (Of_Unit, Item, Value));
+                 & Endpoint (Destination_Of (Of_Unit, Item, Value))
+                 & (if Element_Field_Of (Of_Unit, Item, Value) = 0
+                    then ""
+                    else " field "
+                      & Trimmed
+                          (Natural'Image
+                             (Element_Field_Of (Of_Unit, Item, Value))));
 
             when Fill_Array =>
                return Lead & " destination "

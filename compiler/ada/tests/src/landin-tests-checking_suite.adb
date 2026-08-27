@@ -1594,6 +1594,74 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 1, "the element zeroed node was checked");
    end Array_Element_Assignment_Gives_Zeroed_Its_Type;
 
+   --  D49: the selected fixed-array field supplies both the contextual
+   --  shape of `zeroed` and the whole-field assignment fact used by the
+   --  computed read that follows it.
+   procedure Array_Field_Assignment_Gives_Zeroed_Its_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Assignment_Gives_Zeroed_Its_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "array-field-zeroed.ldn",
+         "word: type = u32" & LF
+         & "holder: type = struct" & LF
+         & "    row: [2]word" & LF
+         & "end holder" & LF
+         & "f: (at: usize) -> (result: word) =" & LF
+         & "    mut local: holder" & LF
+         & "    local.row = zeroed" & LF
+         & "    result = local.row[at]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a local array field gives zeroed its shape and becomes complete");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Zeroed_Literal
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Fixed_Array
+                  and then Landin.Checking.Array_Length
+                    (Types.all, Of_Tree.all, Node) = 2
+                  and then Landin.Checking.Array_Element
+                    (Types.all, Of_Tree.all, Node) = Landin.Types.U32,
+                  "field zeroed carries the resolved fixed-array shape");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 1, "the array-field zeroed node was checked");
+   end Array_Field_Assignment_Gives_Zeroed_Its_Shape;
+
    --  D18: an array may occupy every byte a target's `usize` can name, and
    --  not one beyond it.  The same 2**32-byte array therefore belongs to a
    --  64-bit target and is refused by a 32-bit one; neither answer comes from
@@ -1788,6 +1856,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "element assignment gives zeroed its type",
          Array_Element_Assignment_Gives_Zeroed_Its_Type'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array field assignment gives zeroed its shape",
+         Array_Field_Assignment_Gives_Zeroed_Its_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "array extent follows usize",
          Array_Extent_Follows_Usize'Access);

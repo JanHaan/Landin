@@ -1368,10 +1368,31 @@ package body Landin.Stages.Lowering is
                         declare
                            Value : constant Syn.Node_Id :=
                              Syn.Value_Of (Of_Tree, Stmt);
+                           Place : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree, Stmt);
+                           Nested : constant Boolean :=
+                             Syn.Kind (Of_Tree, Place)
+                               = Syn.Member_Selection;
+                           Named : constant Syn.Node_Id :=
+                             (if Nested
+                              then Syn.Target_Of (Of_Tree, Place)
+                              else Place);
+                           Field : constant Natural :=
+                             (if Nested
+                              then Landin.Checking.Field_Index
+                                (Types.all, Of_Tree, Place)
+                              else 0);
                            Destination : constant IR.Storage :=
-                             Storage_For
-                               (Of_Tree, Syn.Target_Of (Of_Tree, Stmt));
+                             Storage_For (Of_Tree, Named);
                         begin
+                           --  D49 is the only checker path that types a whole
+                           --  array-field selection.  Literal, repetition,
+                           --  fill and copy lowering remain field-zero-only.
+                           pragma Assert
+                             (Field = 0
+                              or else Syn.Kind (Of_Tree, Value)
+                                        = Syn.Zeroed_Literal);
+
                            if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
                            then
                               --  D29 forms the contextual value directly in
@@ -1465,9 +1486,11 @@ package body Landin.Stages.Lowering is
                                    = Syn.Zeroed_Literal
                            then
                               --  D30 reuses D28's one destination-only clear
-                              --  for either local or module runtime storage.
+                              --  for either local or module runtime storage;
+                              --  D49 adds the containing field identity.
                               IR.Emit_Array_Clear
-                                (Unit.all, Filling, Destination, Site);
+                                (Unit.all, Filling, Destination, Site,
+                                 Field => Field);
                            else
                               --  D20 is one compact storage operation: D18
                               --  permits a length the compiler host cannot
