@@ -1,0 +1,5 @@
+answer: () -> (r: u32) =
+    r = 42
+end answer
+
+mut row: [3]u32 = [answer(), of 7]

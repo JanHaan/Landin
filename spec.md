@@ -2093,7 +2093,8 @@ may name a binding called `of`.
 
 This slice admits no mixed module initializer, inferred binding, argument,
 return, discard, nested array or other general array value. D37 separately
-admits assignment to an existing mutable fixed-array place. Full-array
+admits assignment to an existing mutable fixed-array place, and D38 separately
+admits the explicitly typed module static-image form. Full-array
 repetition remains governed by D32--D35, so a prefix length of zero is not a
 mixed form and does not narrow those existing contexts.
 
@@ -2112,7 +2113,6 @@ and discard the compact fill representation. It was declined.
 **Pinned by** the parser, checker, IR, verifier, lowering and Linux x86-64
 public-seam cases; `positive/local-array-mixed-repetition`;
 `negative/array-mixed-repetition-prefix-too-long`,
-`negative/module-array-mixed-repetition-not-enabled`,
 `negative/inferred-array-mixed-repetition-not-enabled`,
 `negative/array-mixed-repetition-general-value-not-enabled`,
 `negative/nested-array-mixed-repetition-not-enabled`; and
@@ -2148,10 +2148,11 @@ make an initially unassigned destination readable by a later expression in that
 same right-hand side. Only successful completion establishes the complete
 destination as assigned.
 
-Typed module initialization, inferred initialization, nested mixed forms and
-other general-value contexts remain refused. This rule creates no static mixed
-image and no independently carried mixed array value; it only forms the result
-directly in existing mutable storage.
+Inferred initialization, nested mixed forms and other general-value contexts
+remain refused. D38 independently admits explicitly typed module initialization;
+this assignment rule creates no static mixed image and no independently carried
+mixed array value, and only forms the result directly in existing mutable
+storage.
 
 **Why assignment:** D29 and D32 already establish the destination-first,
 contextual assignment boundary for finite literals and full repetition. D36's
@@ -2173,3 +2174,55 @@ fill transient rather than the destination operation. It was declined.
 `negative/array-mixed-repetition-assignment-reads-incoming-state`, the retained
 initializer, inferred, nested and general-value refusal fixtures; and
 `runtime/mixed-array-repetition-assignment-is-source-ordered` on Linux x86-64.
+
+### D38 — A typed module mixed repetition has a compact hybrid image
+
+**The tour said** that repetition is for static patterns in flash [0560], that a
+module value must be known when the compiler reads it [1940], and that a mixed
+prefix leaves one expression to fill its suffix. It did not say whether an
+explicitly typed module array could use that mixed form, how its static image was
+represented, whether a zero suffix selected `.data` or `.bss`, or whether a
+through-name copy preserved the representation.
+
+**Chosen:** `[e1, ..., ek, of repeated]` may initialize an explicitly typed module
+fixed array `[N]T` exactly when `1 <= k < N`. The written type supplies `N` and
+`T`; every prefix expression and `repeated` must have type `T`, and each must be
+compile-time known under [1940]. Every fold uses the selected target facts and
+must fit `T`, including each prefix independently and the one suffix value.
+Inferred module initialization, nested mixed repetition and every general-value
+mixed form remain refused.
+
+Lowering folds the finite prefix in source order and the repeated expression once.
+IR records a **hybrid image** consisting of those `k` folded prefix values, one
+folded suffix value, the element type and the declared length. It never records
+`N - k` copies. Image verification checks the finite prefix and one suffix value;
+the dump renders the same finite run followed by `repeat`; direct-name image
+resolution copies that compact representation through chains. None of lowering,
+IR, verification, dumping or copying walks or allocates in proportion to `N`.
+
+A hybrid remains a present image when its suffix value is zero, because its
+nonempty written prefix makes it explicit `.data`; Linux x86-64 emits the prefix
+with width-matched scalar directives and then a constant-size `.rept N - k`
+around one zero directive. A full repetition of zero retains D34's absent image
+and loader-zeroed `.bss`. For every nonzero suffix the backend uses the same
+`.byte`, `.word`, `.long` or `.quad` directive, so a 64-bit pattern reaches the
+assembler with all eight bytes rather than GNU `.fill`'s truncated value field.
+
+**Why a hybrid image:** a finite prefix plus one suffix pattern is the source's
+own information and is sufficient to emit every byte. Expanding the suffix would
+make compile time, host memory, verifier work, dump size and assembly size depend
+on D18's target-sized extent; treating a zero suffix as absent would discard the
+nonzero prefix and misclassify initialized data as `.bss`.
+
+**The alternative:** lower the initializer to a complete per-position static
+image. That would reuse D24's literal run but erase the compactness guaranteed by
+repetition and make a legal target-sized declaration an impractical host-sized
+compiler computation. It was declined.
+
+**Pinned by** the checker, IR, verifier, lowering and Linux x86-64 backend
+public-seam cases; `positive/module-array-mixed-repetition`;
+`negative/module-array-mixed-repetition-prefix-not-static`,
+`negative/module-array-mixed-repetition-suffix-not-static`,
+`negative/module-array-mixed-repetition-fold-range`; the retained inferred,
+nested and general-value refusal fixtures; and
+`runtime/module-mixed-array-repetition-holds-hybrid` on Linux x86-64.

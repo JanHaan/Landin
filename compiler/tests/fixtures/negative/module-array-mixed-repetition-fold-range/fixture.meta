@@ -1,0 +1,6 @@
+class: negative
+summary: module mixed repetition prefix and suffix obey target fold range
+constructs: 0040, 0190, 0290, 0320, 0520, 0560, 1740, 1820, 1940
+program: program.ldn
+codes: L0300, L0300
+targets: linux-x86-64, macos-arm64

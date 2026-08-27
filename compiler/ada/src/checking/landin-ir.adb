@@ -260,6 +260,26 @@ package body Landin.IR is
       Into.Items (Positive (Item)) := Held;
    end Set_Repeated_Array_Image;
 
+   procedure Set_Hybrid_Array_Image
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Prefix : Landin.Types.Folded_Array;
+      Value  : Landin.Types.Folded)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Image, Natural (Into.Images.Length));
+      for Position in Prefix'Range loop
+         Into.Images.Append (Prefix (Position));
+         Held.Image.Count := Held.Image.Count + 1;
+      end loop;
+      Into.Images.Append (Value);
+      Held.Image.Count := Held.Image.Count + 1;
+      Held.Has_Image := True;
+      Held.Repeated_Image := True;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Hybrid_Array_Image;
+
    function Has_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
      is (Element (Of_Unit, Item).Has_Image);
 
@@ -267,9 +287,15 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id) return Boolean
      is (Element (Of_Unit, Item).Repeated_Image);
 
+   function Image_Prefix_Length
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     is (Element_Total (Element (Of_Unit, Item).Image.Count - 1));
+
    function Repeated_Image_Value
      (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Folded
-     is (Of_Unit.Images (Element (Of_Unit, Item).Image.First + 1));
+     is (Of_Unit.Images
+           (Element (Of_Unit, Item).Image.First
+            + Element (Of_Unit, Item).Image.Count));
 
    function Image_Length
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
@@ -281,6 +307,8 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Index : Part_Position)
      return Landin.Types.Folded
      is (if Is_Repeated_Image (Of_Unit, Item)
+              and then Element_Total (Index)
+                       > Image_Prefix_Length (Of_Unit, Item)
          then Repeated_Image_Value (Of_Unit, Item)
          else Of_Unit.Images
                 (Element (Of_Unit, Item).Image.First + Positive (Index)));

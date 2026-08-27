@@ -520,6 +520,30 @@ package Landin.IR is
                   and then Landin.Types."/=" (Value, 0),
           Post => Has_Image (Into, Item)
                   and then Is_Repeated_Image (Into, Item)
+                  and then Image_Prefix_Length (Into, Item) = 0
+                  and then Landin.Types."="
+                             (Repeated_Image_Value (Into, Item), Value);
+
+   --  D38's hybrid image is the finite source prefix followed by one scalar
+   --  repeated through the rest of the declared shape.  The repeated value is
+   --  present even when zero: unlike a full zero repetition, a nonempty prefix
+   --  makes this `.data`, and neither this run nor its readers expand N - k.
+   procedure Set_Hybrid_Array_Image
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Prefix : Landin.Types.Folded_Array;
+      Value  : Landin.Types.Folded)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item)
+                           = Landin.Types.Fixed_Array
+                  and then Prefix'Length > 0
+                  and then Element_Total (Prefix'Length)
+                           < Array_Length (Into, Item)
+                  and then not Has_Image (Into, Item),
+          Post => Has_Image (Into, Item)
+                  and then Is_Repeated_Image (Into, Item)
+                  and then Image_Prefix_Length (Into, Item)
+                           = Element_Total (Prefix'Length)
                   and then Landin.Types."="
                              (Repeated_Image_Value (Into, Item), Value);
 
@@ -533,6 +557,13 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
+
+   function Image_Prefix_Length
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array
+                 and then Is_Repeated_Image (Of_Unit, Item);
 
    function Repeated_Image_Value
      (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Folded

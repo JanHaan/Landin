@@ -235,11 +235,30 @@ package body Landin.IR.Dump is
                --  values.  An array datum with no image is D10's zero and
                --  says so by omitting this line.
                if Is_Repeated_Image (Of_Unit, Id) then
-                  Put
-                    ("  image repeat "
-                     & Trimmed
-                         (Landin.Types.Folded'Image
-                            (Repeated_Image_Value (Of_Unit, Id))));
+                  declare
+                     Rendered : Unbounded.Unbounded_String;
+                     Prefix : constant Element_Total :=
+                       Image_Prefix_Length (Of_Unit, Id);
+                  begin
+                     if Prefix > 0 then
+                        Unbounded.Append (Rendered, " prefix");
+                        for P in Part_Position'(1)
+                                 .. Part_Position (Prefix)
+                        loop
+                           Unbounded.Append
+                             (Rendered,
+                              " " & Trimmed
+                                (Landin.Types.Folded'Image
+                                   (Nth_Image (Of_Unit, Id, P))));
+                        end loop;
+                     end if;
+                     Unbounded.Append
+                       (Rendered,
+                        " repeat " & Trimmed
+                          (Landin.Types.Folded'Image
+                             (Repeated_Image_Value (Of_Unit, Id))));
+                     Put ("  image" & Unbounded.To_String (Rendered));
+                  end;
                elsif Has_Image (Of_Unit, Id) then
                   declare
                      Rendered : Unbounded.Unbounded_String;

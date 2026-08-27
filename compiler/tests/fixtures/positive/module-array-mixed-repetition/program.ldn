@@ -1,0 +1,5 @@
+base: u8 = 39
+mut through: [4294967295]u8 = huge
+mut huge: [4294967295]u8 = [base + 1, 41, of 42]
+mut wide: [4]u64 = [0x123456789ABCDEF0, 0xFEDCBA9876543210, of 0x8877665544332211]
+mut zero_suffix: [5]u32 = [1, 2 + 1, of 0]
