@@ -577,12 +577,15 @@ the word zeroed only when that image has one obvious
 reading. Numbers, bool, ranges containing zero and
 aggregates of those accept it. Named value sets do not:
 write the name. Pointers and 'any' have no zero image at
-all, because there is no null.
+all, because there is no null. Where the destination supplies
+that context, assignment writes the complete zero image as one
+value rather than spelling its parts.
 ```landin
-buffer: [256]u8 = zeroed
-irqs:   set(irq) = zeroed        -- fine: a set is bools, see [0730]
--- mode: clock_mode = zeroed     -- error, write 'internal'
--- p:    ptr u32     = zeroed    -- error, no zero image
+mut buffer: [256]u8 = zeroed
+buffer = zeroed                 -- clear the existing array as a whole
+irqs:   set(irq) = zeroed       -- fine: a set is bools, see [0730]
+-- mode: clock_mode = zeroed    -- error, write 'internal'
+-- p:    ptr u32     = zeroed   -- error, no zero image
 ```
 
 ### [0550] The first of those two properties is also a concept

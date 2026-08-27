@@ -1643,7 +1643,6 @@ Both were declined.
 
 **Pinned by** `positive/module-array-zeroed-initializer`,
 `negative/inferred-zeroed-not-enabled`,
-`negative/array-zeroed-assignment-not-enabled`,
 `negative/scalar-zeroed-not-enabled`, and
 `runtime/module-array-zeroed-reads-zero` on Linux x86-64.
 
@@ -1690,7 +1689,6 @@ assignment and evaluation decision. Both were declined.
 
 **Pinned by** `positive/local-array-zeroed-initializer`,
 `negative/inferred-zeroed-not-enabled`,
-`negative/array-zeroed-assignment-not-enabled`,
 `negative/scalar-zeroed-not-enabled`, and
 `runtime/local-array-zeroed-reads-zero` on Linux x86-64.
 
@@ -1750,3 +1748,52 @@ array in every frame and a second full traversal. It was declined.
 `negative/array-literal-assignment-element-mismatch`,
 `negative/array-literal-assignment-reads-incoming-state`, and
 `runtime/array-literal-assignment-is-source-ordered` on Linux x86-64.
+
+### D30 — Zeroed assignment clears one complete array place
+
+**The tour said** that `zeroed` is the all-bits-zero image supplied by a context
+[0540], that assignment evaluates its destination before its value [0410], and
+that array assignment copies a complete value [0520]. D27 and D28 admitted that
+image only while creating module and local storage. They deliberately left an
+existing destination to a later definite-assignment and runtime decision.
+
+**Chosen:** `zeroed` may be assigned contextually to a mutable fixed-array place:
+`place = zeroed`. The destination's D17 length and scalar element type supply the
+context, and [1900] decides whether its direct local or module storage name may be
+written. Every scalar element the kernel currently admits has an all-bits-zero
+image, so the complete array has one [0540].
+
+The destination is reached first; `zeroed` evaluates no source expressions and
+names no source storage. Lowering emits one `Clear_Array` carrying that local
+frame slot or module datum. The verifier resolves its complete array shape, and
+the backend derives the byte extent from target facts before emitting one
+forward byte clear. There is no hidden zero datum, array temporary, source
+operand, or compiler enumeration of D18's target-sized length.
+
+A normally completed assignment marks a local destination assigned as a whole,
+so every compiler-known and computed element may then be read. There is no
+source-order prefix like D29's literal has: the source contains no elements and
+specifies no per-element evaluation. This does not promise an atomic machine
+operation; concurrency and interruption remain outside the current kernel.
+
+This is one contextual array assignment. It does not infer a type for
+`name := zeroed`, initialize or assign a scalar, or admit `zeroed` as an
+argument, return, discard, nested value, or general expression. Module and local
+initializers keep D27/D28's distinct static and runtime paths. Repetition [0560],
+slices [0570], non-scalar array elements, and other zero-accepting types remain
+separate slices.
+
+**Why reuse the clear:** lowering one scalar zero store per element would make
+compiler work and IR size depend on an extent whose source writes no finite run.
+Copying a synthesized zero array would invent both storage and a read. D28's
+compact destination-only operation already says the complete runtime effect and
+already follows target width for either storage kind.
+
+**The alternative:** make `zeroed` a general array value and feed it through
+D20's copy. That would silently admit arguments, returns and other value
+positions while requiring source storage for an image that has none. It was
+declined.
+
+**Pinned by** `positive/array-zeroed-assignment` and
+`runtime/array-zeroed-assignment-clears-storage` on Linux x86-64, together with
+the focused lowering and target-width backend cases for both storage kinds.

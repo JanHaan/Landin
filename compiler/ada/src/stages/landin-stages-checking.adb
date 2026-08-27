@@ -1336,7 +1336,8 @@ package body Landin.Stages.Checking is
                  (Item    => Bad.Unsupported_Use,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
-                  Message => "`zeroed` needs an explicitly typed module array",
+                  Message => "`zeroed` needs an explicitly typed array"
+                             & " initializer or assignment",
                   Refused => Bad.Zeroed_Value,
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
@@ -2186,9 +2187,10 @@ package body Landin.Stages.Checking is
                   end if;
 
                   --  D20 copies an array straight from one storage place to
-                  --  another.  D29 also admits a literal here contextually:
-                  --  the destination's D17 shape supplies its count and scalar
-                  --  element type without making literals general values.
+                  --  another.  D29's literal and D30's `zeroed` are
+                  --  contextual: the destination's D17 shape supplies their
+                  --  count and scalar element type without making either a
+                  --  general value.
                   if Wants = Ty.Fixed_Array then
                      if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal then
                         Check_Array_Literal
@@ -2198,6 +2200,16 @@ package body Landin.Stages.Checking is
                            Landin.Checking.Array_Element
                              (Types.all, Of_Tree, Place),
                            Static_Image => False);
+                     elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
+                     then
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Value, Ty.Fixed_Array);
+                        Landin.Checking.Note_Array
+                          (Types.all, Of_Tree, Value,
+                           Landin.Checking.Array_Length
+                             (Types.all, Of_Tree, Place),
+                           Landin.Checking.Array_Element
+                             (Types.all, Of_Tree, Place));
                      else
                         declare
                            Got : constant Ty.Type_Kind :=

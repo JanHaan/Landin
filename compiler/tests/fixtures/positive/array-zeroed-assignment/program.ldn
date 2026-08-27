@@ -1,0 +1,5 @@
+f: (at: usize) -> (value: u32) =
+    mut row: [4]u32
+    row = zeroed
+    value = row[at]
+end f
