@@ -1264,6 +1264,61 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Module_Repetition_Images_Stay_Compact;
 
+   --  D35 reuses D34's compact module image after the count and scalar have
+   --  supplied an inferred shape, including through chains and zero patterns.
+   procedure Inferred_Module_Repetition_Images_Stay_Compact
+     (Item : in out Landin.Testing.Context);
+
+   procedure Inferred_Module_Repetition_Images_Stay_Compact
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "seed: u8 = 160" & LF
+         & "mut inferred := [4294967295 of seed + 5]" & LF
+         & "mut through: [4294967295]u8 = inferred" & LF
+         & "wide_pattern: u64 = 0x123456789ABCDEF0" & LF
+         & "mut wide := [2 of wide_pattern]" & LF
+         & "mut zero := [3 of 0]" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "inferred module repetitions and their through chain are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Datum in IR.Item_Id range 2 .. 3 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Is_Repeated_Image (Unit, Datum)
+               and then IR."="
+                 (IR.Image_Length (Unit, Datum),
+                  IR.Element_Total'(4_294_967_295))
+               and then Landin.Types."="
+                 (IR.Repeated_Image_Value (Unit, Datum), 165),
+               "the inferred source and chain keep one pattern"
+               & " and the extent");
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            IR.Is_Repeated_Image (Unit, 5)
+            and then Landin.Types."="
+              (IR.Repeated_Image_Value (Unit, 5),
+               Landin.Types.Folded'(16#1234_5678_9ABC_DEF0#)),
+            "an inferred wide pattern keeps all eight bytes");
+         Landin.Testing.Check
+           (Item, not IR.Has_Image (Unit, 6),
+            "an inferred zero pattern remains an absent image");
+      end;
+   end Inferred_Module_Repetition_Images_Stay_Compact;
+
    ------------------------------------------------------------------
 
    procedure A_Logical_Module_Value_Becomes_Blocks
@@ -1801,6 +1856,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "module repetition images stay compact",
          Module_Repetition_Images_Stay_Compact'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "inferred module repetitions stay compact",
+         Inferred_Module_Repetition_Images_Stay_Compact'Access);
       Landin.Testing.Register
         (Into, "lowering", "a computed destination precedes its value",
          A_Computed_Destination_Precedes_Its_Value'Access);

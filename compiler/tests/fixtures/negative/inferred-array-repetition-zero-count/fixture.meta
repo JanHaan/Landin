@@ -1,6 +1,6 @@
 class: negative
-summary: zero-count repetition inference waits for the empty-array decision
+summary: local and module zero-count inference waits for the empty-array decision
 constructs: 0040, 0050, 0530, 0560, 1740, 1810
 program: program.ldn
-codes: L0304
+codes: L0304, L0304
 targets: linux-x86-64, macos-arm64
