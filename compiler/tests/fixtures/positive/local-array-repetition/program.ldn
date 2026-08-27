@@ -1,0 +1,6 @@
+f: (at: usize, seed: u32) -> (value: u32) =
+    row: [4]u32 = [4 of seed]
+    mut other: [4]u32
+    other = [of seed + 1]
+    value = row[at] + other[at]
+end f

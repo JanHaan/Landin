@@ -158,6 +158,11 @@ package body Landin.IR.Dump is
                return Lead & " destination "
                  & Endpoint (Destination_Of (Of_Unit, Item, Value));
 
+            when Fill_Array =>
+               return Lead & " destination "
+                 & Endpoint (Destination_Of (Of_Unit, Item, Value))
+                 & Operands (Item, Value);
+
             when Call =>
                declare
                   C : constant Item_Id := Callee_Of (Of_Unit, Item, Value);

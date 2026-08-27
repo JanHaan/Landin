@@ -119,6 +119,9 @@ package Landin.Syntax is
       --  [0520]'s value form.  Its elements are its trailing run, in the
       --  order [0410] says they are evaluated.
       Array_Literal,
+      --  [0560]'s full-array scalar repetition.  Two fixed slots: an
+      --  optional written count and the one expression to evaluate.
+      Array_Repetition,
       Integer_Literal,
       True_Literal,
       False_Literal,
@@ -504,6 +507,17 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Array_Literal
                   and then Index <= Element_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Element'Result);
+
+   --  The explicit count in `[N of value]`, or No_Node for contextual
+   --  `[of value]`, and the scalar expression evaluated once [0560].
+   function Repetition_Count (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Array_Repetition;
+
+   function Repeated_Element (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Array_Repetition,
+          Post => Contains (Of_Tree, Repeated_Element'Result);
 
    function Operand_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)

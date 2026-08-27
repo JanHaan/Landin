@@ -291,9 +291,11 @@ and neither derives from a call, because nothing selects from one
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
-primary     ::= literal | array_literal | indexed | call | measurement
-              | "(" expression ")"
+primary     ::= literal | array_literal | array_repetition | indexed | call
+              | measurement | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
+array_repetition ::= "[" integer "of" expression "]"
+                   | "[" "of" expression "]"
 indexed     ::= selection ("[" expression "]")*
 selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
@@ -1849,3 +1851,62 @@ array value. It was declined.
 `negative/lenof-array-literal-needs-scalar-elements`, and
 `runtime/lenof-array-literal-is-compile-time` on Linux x86-64; the runtime case
 also keeps an ordinary array named `lenof` indexable.
+
+### D32 — Full-array repetition evaluates one scalar once
+
+**The tour said** that repetition writes `[N of value]`, or `[of value]` when a
+context supplies the length [0560], that expressions run left to right [0410],
+and that assigning an array copies its complete value [0520]. It did not say
+whether `value` runs once or once per element, nor how a contextual repetition
+is represented without materializing a target-sized temporary.
+
+**Chosen:** an explicitly typed local fixed-array binding may be initialized by
+`[N of expression]`, and a mutable fixed-array place may be assigned either
+`[N of expression]` or `[of expression]`. The written local type or destination
+supplies D17's exact length and scalar element type. When `N` is written, it must
+equal that length exactly. The scalar expression must have the element type,
+including [0190]'s contextual commitment of an untyped integer.
+
+The destination is reached first for assignment. The repeated scalar expression
+is then evaluated exactly once, and its target-width bit pattern is stored in
+every element. Normal completion initializes or assigns the destination as a
+whole for [1910], so a later computed index meets D22's whole-array requirement.
+The operation is not promised atomic with respect to interruption or concurrency.
+
+Lowering evaluates the scalar into one ordinary value and emits one
+`Fill_Array` carrying that operand and the destination's compact frame-slot or
+module-datum identity. The verifier requires one scalar operand matching the
+destination element type and rejects a fill in a static datum initializer. The
+Linux x86-64 backend derives the element count and width from the destination
+shape and target facts, then uses the width-matched forward repeated store.
+Neither IR nor compiler work enumerates D18's extent, and no hidden array
+storage or temporary is formed.
+
+This first repetition slice deliberately requires an explicitly typed local
+initializer or an existing mutable array place. It does not admit an inferred
+binding, module initializer or static image, mixed-prefix form such as
+`[0x7F, 0x45, of 0]`, argument, return, discard, nested repetition or general
+array value. Since `of` remains [1760]'s contextual spelling rather than a
+reserved word, `[of, other, of]` remains an ordinary literal whose elements may
+name a binding called `of`; repetition is recognized only where the token after
+`of` can begin its scalar expression. Thus `[of + 1]` also remains an ordinary
+one-element literal.
+
+**Why once:** the source writes one expression, and evaluating it once makes the
+runtime work visible without multiplying side effects by a type-level count.
+A scalar register or spill plus one compact fill is sufficient even when D18
+permits an extent the compiler host cannot enumerate.
+
+**The alternative:** lower repetition as if the source had written one copy of
+the expression per element. That would make side effects and compiler work
+proportional to a target-sized count and contradict the single expression the
+program contains. It was declined.
+
+**Pinned by** `positive/local-array-repetition`,
+`negative/array-repetition-count-mismatch`,
+`negative/array-repetition-element-mismatch`,
+`negative/array-repetition-local-initializer-needs-count`,
+`negative/array-repetition-needs-explicit-local-context`,
+`negative/array-repetition-reads-incoming-state`,
+`negative/array-repetition-not-enabled`, and
+`runtime/array-repetition-evaluates-once` on Linux x86-64.

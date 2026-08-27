@@ -505,8 +505,10 @@ package body Landin.Tests.IR_Suite is
          Routine : Landin.IR.Item_Id;
          Slot    : Landin.IR.Slot_Id;
          Block   : Landin.IR.Block_Id;
-         Copy    : Landin.IR.Value_Id;
-         Clear   : Landin.IR.Value_Id;
+         Copy       : Landin.IR.Value_Id;
+         Clear      : Landin.IR.Value_Id;
+         Fill_Value : Landin.IR.Value_Id;
+         Fill       : Landin.IR.Value_Id;
       begin
          Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
          Datum := Landin.IR.Add_Item
@@ -530,6 +532,12 @@ package body Landin.Tests.IR_Suite is
            (Unit, Routine,
             (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site);
          Clear := Landin.IR.Nth_Value (Unit, Routine, Block, 2);
+         Fill_Value := Landin.IR.Emit_Number
+           (Unit, Routine, Landin.Types.U16, 7, False, Site);
+         Landin.IR.Emit_Array_Fill
+           (Unit, Routine,
+            (Kind => Landin.IR.Frame_Slot, Slot => Slot), Fill_Value, Site);
+         Fill := Landin.IR.Nth_Value (Unit, Routine, Block, 4);
 
          Landin.Testing.Check
            (Item,
@@ -565,6 +573,23 @@ package body Landin.Tests.IR_Suite is
          Landin.Testing.Check_Equal
            (Item, Landin.IR.Operand_Count (Unit, Routine, Clear), 0,
             "clear metadata also stays constant at the target-width length");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Fill) = Landin.IR.Fill_Array
+            and then Landin.IR.Defines_Nothing (Landin.IR.Fill_Array)
+            and then Landin.IR.Result_Of (Unit, Routine, Fill)
+                       = Landin.Types.Not_Typed
+            and then Landin.IR.Destination_Of
+                       (Unit, Routine, Fill).Kind = Landin.IR.Frame_Slot
+            and then Landin.IR.Destination_Of
+                       (Unit, Routine, Fill).Slot = Slot,
+            "a whole-array fill carries one compact destination");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Operand_Count (Unit, Routine, Fill) = 1
+            and then Landin.IR.Nth_Operand (Unit, Routine, Fill, 1)
+                       = Fill_Value,
+            "fill carries one scalar rather than one value per element");
 
          declare
             Text : constant String := Landin.IR.Dump.Text
@@ -581,6 +606,11 @@ package body Landin.Tests.IR_Suite is
                Ada.Strings.Fixed.Index
                  (Text, "CLEAR_ARRAY destination slot 1") /= 0,
                "the dump names the clear destination");
+            Landin.Testing.Check
+              (Item,
+               Ada.Strings.Fixed.Index
+                 (Text, "FILL_ARRAY destination slot 1 <- 3") /= 0,
+               "the dump names the fill destination and scalar operand");
          end;
       end;
    end An_Array_Copy_Carries_Two_Compact_Places;

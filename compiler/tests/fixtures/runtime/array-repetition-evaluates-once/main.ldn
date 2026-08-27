@@ -1,0 +1,28 @@
+mut calls: u32 = 0
+mut state: [3]u32
+
+next: (base: u32) -> (value: u32) =
+    calls = calls + 1
+    value = base + calls
+end next
+
+public main: () -> (code: i32) =
+    bytes: [2]u8 = [2 of 0xA5]
+    halves: [2]u16 = [2 of 0xBEEF]
+    local: [4]u32 = [4 of next(10)]
+    quads: [2]u64 = [2 of 0x0123456789ABCDEF]
+    state = [of next(20)]
+
+    if calls == 2
+        and bytes[0] == 0xA5 and bytes[1] == 0xA5
+        and halves[0] == 0xBEEF and halves[1] == 0xBEEF
+        and local[0] == 11 and local[3] == 11
+        and quads[0] == 0x0123456789ABCDEF
+        and quads[1] == 0x0123456789ABCDEF
+        and state[0] == 22 and state[2] == 22
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

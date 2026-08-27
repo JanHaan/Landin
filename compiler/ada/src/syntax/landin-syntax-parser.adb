@@ -2281,6 +2281,9 @@ package body Landin.Syntax.Parser is
                      Items : Slot_Vectors.Vector;
 
                      procedure Skip_Remaining;
+                     function Finish_Repetition
+                       (Count : Node_Id; At_Of : Landin.Source.Span)
+                        return Node_Id;
 
                      procedure Skip_Remaining is
                         Level : Natural := 1;
@@ -2299,6 +2302,36 @@ package body Landin.Syntax.Parser is
                            <<Continue>>
                         end loop;
                      end Skip_Remaining;
+
+                     function Finish_Repetition
+                       (Count : Node_Id; At_Of : Landin.Source.Span)
+                        return Node_Id
+                     is
+                        Value : constant Node_Id := Parse_Expression;
+                     begin
+                        if not Expect
+                                 (Wanted  => Tok.Right_Bracket,
+                                  Message => "array repetition is closed with"
+                                             & " `]`",
+                                  Note    => "[0560]: repetition stays between"
+                                             & " its brackets",
+                                  Related => At_Item,
+                                  Because => "opened here")
+                        then
+                           Resync (List_Anchor);
+
+                           if Peek = Tok.Right_Bracket then
+                              Advance;
+                           end if;
+                        end if;
+
+                        Depth := Depth - 1;
+                        return Add
+                          (Of_Kind  => Array_Repetition,
+                           At_Token => At_Of,
+                           Extent   => Join (At_Item, After_Previous),
+                           Children => [Count, Value]);
+                     end Finish_Repetition;
                   begin
                      if Too_Deep (At_Item) then
                         Resync_Brackets;
@@ -2307,6 +2340,20 @@ package body Landin.Syntax.Parser is
 
                      Depth := Depth + 1;
                      Advance;
+
+                     --  [0560]'s contextual count takes the destination's
+                     --  fixed-array shape rather than spelling one here.
+                     if Peek = Tok.Identifier
+                       and then Named_Here = Of_Id
+                       and then Pre.Begins_Expression (Ahead (1))
+                     then
+                        declare
+                           At_Of : constant Landin.Source.Span := Here;
+                        begin
+                           Advance;
+                           return Finish_Repetition (No_Node, At_Of);
+                        end;
+                     end if;
 
                      if Peek = Tok.Right_Bracket then
                         Complain
@@ -2324,22 +2371,56 @@ package body Landin.Syntax.Parser is
                      end if;
 
                      loop
-                        Items.Append (Parse_Expression);
-
-                        if Peek = Tok.Identifier
+                        --  [0560]'s mixed prefix remains a later slice.  See
+                        --  the contextual `of` before parsing it as a name.
+                        if not Items.Is_Empty
+                          and then Peek = Tok.Identifier
                           and then Named_Here = Of_Id
+                          and then Pre.Begins_Expression (Ahead (1))
                         then
                            Refuse
                              (Item    => Syn.Array_Repetition,
                               Where   => Here,
-                              Message => "array repetition is not enabled"
-                                         & " yet");
+                              Message => "mixed-prefix array repetition is"
+                                         & " not enabled yet");
                            Skip_Remaining;
                            Depth := Depth - 1;
                            return Add
                              (Error_Expression, At_Item,
                               Join (At_Item, After_Previous),
                               To_List (Items));
+                        end if;
+
+                        Items.Append (Parse_Expression);
+
+                        if Peek = Tok.Identifier
+                          and then Named_Here = Of_Id
+                        then
+                           declare
+                              At_Of : constant Landin.Source.Span := Here;
+                           begin
+                              if Natural (Items.Length) = 1
+                                and then Kind
+                                  (Result, Items.First_Element)
+                                    = Integer_Literal
+                              then
+                                 Advance;
+                                 return Finish_Repetition
+                                          (Items.First_Element, At_Of);
+                              end if;
+
+                              Refuse
+                                (Item    => Syn.Array_Repetition,
+                                 Where   => At_Of,
+                                 Message => "only a literal count may stand"
+                                            & " before `of` in this kernel");
+                              Skip_Remaining;
+                              Depth := Depth - 1;
+                              return Add
+                                (Error_Expression, At_Item,
+                                 Join (At_Item, After_Previous),
+                                 To_List (Items));
+                           end;
                         end if;
 
                         exit when Peek /= Tok.Comma;

@@ -616,6 +616,15 @@ filled:  [256]u8 = [of 0xFF]         -- length from the type
 header:  [8]u8   = [0x7F, 0x45, of 0]
 
 ```
+The repeated expression runs once, not once for every element. A local with a
+written fixed-array type accepts the first form, and assignment to an existing
+fixed array accepts an explicit count or takes it from the destination:
+```landin
+mut row: [4]u32 = [4 of next()]
+row = [of next()]                 -- each call to next happens once
+
+```
+Mixed-prefix repetition remains a later compiler slice.
 
 ### [0570] Slice: a view
 
