@@ -537,7 +537,7 @@ package body Landin.Stages.Lowering is
                return IR.Emit_Truth (Unit.all, Filling, False, Site);
 
             when Syn.Zeroed_Literal =>
-               --  D40--D42: the checker admits this expression only where a
+               --  D40--D43: the checker admits this expression only where a
                --  scalar initializer or assignment destination supplies its
                --  type.  Reuse D10/D39's constants; the surrounding binding or
                --  assignment path emits its ordinary store.
