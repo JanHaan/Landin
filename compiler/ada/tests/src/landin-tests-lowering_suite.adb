@@ -936,6 +936,73 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Local_Array_Literal_Becomes_Ordered_Stores;
 
+   --  D29 forms a contextual assignment literal directly in its destination,
+   --  preserving one expression-store pair per source element for both local
+   --  and module storage rather than introducing a hidden array temporary.
+   procedure An_Array_Literal_Assignment_Becomes_Ordered_Stores
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_Literal_Assignment_Becomes_Ordered_Stores
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut state: [2]u32" & LF
+         & "f: () -> none =" & LF
+         & "    mut row: [2]u32" & LF
+         & "    row = [7, 8]" & LF
+         & "    state = [9, 10]" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "both assignment literals are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Slot_Count (Unit, 2), 1,
+            "the local destination remains the only frame cell");
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 2), 9,
+            "four number-store pairs precede the return");
+
+         for Position in 1 .. 4 loop
+            declare
+               Number : constant IR.Value_Id := IR.Value_Id (2 * Position - 1);
+               Store  : constant IR.Value_Id := IR.Value_Id (2 * Position);
+               Part   : constant IR.Part_Position :=
+                 IR.Part_Position (((Position - 1) mod 2) + 1);
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Op_Of (Unit, 2, Number) = IR.Number
+                        and then IR.Op_Of (Unit, 2, Store) = IR.Store_Field
+                        and then IR.Field_Of (Unit, 2, Store) = Part
+                        and then IR.Nth_Operand (Unit, 2, Store, 1) = Number,
+                  "each source value is immediately stored in its position");
+
+               if Position <= 2 then
+                  Landin.Testing.Check
+                    (Item, IR.Reaches_A_Slot (Unit, 2, Store)
+                           and then IR.Slot_Of (Unit, 2, Store) = 1,
+                     "the first literal writes the local array slot");
+               else
+                  Landin.Testing.Check
+                    (Item, not IR.Reaches_A_Slot (Unit, 2, Store)
+                           and then IR.Datum_Of (Unit, 2, Store) = 1,
+                     "the second literal writes the module array datum");
+               end if;
+            end;
+         end loop;
+      end;
+   end An_Array_Literal_Assignment_Becomes_Ordered_Stores;
+
    --  D28 clears a complete local array with one storage operation rather
    --  than one instruction per element of its target-sized extent.
    procedure A_Local_Zeroed_Array_Becomes_One_Clear
@@ -1609,6 +1676,10 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a local array literal becomes ordered stores",
          A_Local_Array_Literal_Becomes_Ordered_Stores'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "an array literal assignment becomes ordered stores",
+         An_Array_Literal_Assignment_Becomes_Ordered_Stores'Access);
       Landin.Testing.Register
         (Into, "lowering", "a local zeroed array becomes one clear",
          A_Local_Zeroed_Array_Becomes_One_Clear'Access);

@@ -1199,19 +1199,57 @@ package body Landin.Stages.Lowering is
                              (Types.all, Of_Tree,
                               Syn.Target_Of (Of_Tree, Stmt)) = Ty.Fixed_Array
                      then
-                        --  D20 is one compact storage operation: D18 permits
-                        --  a length the compiler host cannot enumerate.  The
-                        --  destination is still reached first as [0410] says.
                         declare
+                           Value : constant Syn.Node_Id :=
+                             Syn.Value_Of (Of_Tree, Stmt);
                            Destination : constant IR.Storage :=
                              Storage_For
                                (Of_Tree, Syn.Target_Of (Of_Tree, Stmt));
-                           Source : constant IR.Storage :=
-                             Storage_For
-                               (Of_Tree, Syn.Value_Of (Of_Tree, Stmt));
                         begin
-                           IR.Emit_Array_Copy
-                             (Unit.all, Filling, Source, Destination, Site);
+                           if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+                           then
+                              --  D29 forms the contextual value directly in
+                              --  its destination.  Each source expression is
+                              --  lowered and written before the next, exposing
+                              --  [0410]'s order without a hidden array-sized
+                              --  temporary.
+                              for Position in
+                                1 .. Syn.Element_Count (Of_Tree, Value)
+                              loop
+                                 declare
+                                    Element : constant IR.Value_Id :=
+                                      Lower_Expression
+                                        (Of_Tree,
+                                         Syn.Nth_Element
+                                           (Of_Tree, Value, Position),
+                                         Scope);
+                                    Part : constant IR.Part_Position :=
+                                      IR.Part_Position (Position);
+                                 begin
+                                    case Destination.Kind is
+                                       when IR.Module_Datum =>
+                                          IR.Emit_Store_Field
+                                            (Unit.all, Filling,
+                                             Destination.Datum, Part,
+                                             Element, Site);
+                                       when IR.Frame_Slot =>
+                                          IR.Emit_Store_Slot_Field
+                                            (Unit.all, Filling,
+                                             Destination.Slot, Part,
+                                             Element, Site);
+                                    end case;
+                                 end;
+                              end loop;
+                           else
+                              --  D20 is one compact storage operation: D18
+                              --  permits a length the compiler host cannot
+                              --  enumerate.  The destination is still reached
+                              --  first as [0410] says.
+                              IR.Emit_Array_Copy
+                                (Unit.all, Filling,
+                                 Storage_For (Of_Tree, Value),
+                                 Destination, Site);
+                           end if;
                         end;
                      else
                         declare
