@@ -1,0 +1,16 @@
+word: type = u64
+truth: type = bool
+mut number: word
+
+public main: () -> (code: i32) =
+    mut flag: truth
+    number = 9
+    flag = true
+    number = zeroed
+    flag = zeroed
+    if number == 0 and not flag then
+        code = 42
+    else
+        code = 1
+    end if
+end main

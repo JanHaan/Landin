@@ -1,0 +1,6 @@
+class: negative
+summary: scalar zeroed context does not make an immutable destination writable
+constructs: 0040, 0540, 1770, 1900
+program: program.ldn
+codes: L0303
+targets: linux-x86-64, macos-arm64

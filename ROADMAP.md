@@ -2570,8 +2570,8 @@ reuses D10's false `Truth` and typed zero `Number`, and the backend consequently
 keeps the absent zero image in loader-zeroed `.bss` rather than writing `.data`.
 Public checker, lowering and backend cases pin the resolved context, existing IR
 and storage selection. A positive fixture covers an alias and both scalar kinds;
-focused negatives retain inferred initialization, scalar assignment, and
-nested/general contexts; and the Linux x86-64 runtime fixture reads both values.
+focused negatives retain inferred initialization and nested/general contexts;
+and the Linux x86-64 runtime fixture reads both values.
 No general scalar `zeroed` value was admitted.
 
 D40 admits `zeroed` as the complete initializer of an explicitly typed local
@@ -2583,8 +2583,24 @@ initializer makes the binding definitely assigned before any later read. Public
 checker and lowering cases pin the resolved context, assignment state and
 constant/store path. A positive fixture covers an alias and both scalar kinds,
 and the Linux x86-64 runtime fixture reads both values. Inferred `:= zeroed`,
-scalar assignment, nested/general contexts and every non-initializer scalar use
-remain refused; no general scalar `zeroed` value was admitted.
+nested/general contexts and every non-initializer scalar use remain refused; no
+general scalar `zeroed` value was admitted.
+
+D41 admits `zeroed` as the complete right-hand side of assignment to a mutable
+scalar local slot or module datum. The destination's type may be an alias chain
+and must resolve to an enabled scalar; it supplies false for `bool` and zero for
+every integer. The ordinary place check and destination-first evaluation remain
+in force, so immutable, invalid-place and invalid-type destinations retain their
+refusals. Lowering reuses D10's typed `Truth` or `Number` followed by the ordinary
+slot `Store` or `Store_Datum`, with no new value, temporary, IR operation or
+backend path. Successful completion establishes definite assignment. Public
+checker and lowering cases pin both storage kinds, alias resolution, typed
+constants, ordinary stores and local assignment state. A positive fixture covers
+both destinations, focused negatives retain immutability and refuse scalar field
+and element subobjects, and the Linux x86-64 runtime fixture overwrites nonzero
+integer and true bool values and reads zero and false back. Inferred
+initialization, named returns, nested/general contexts and every other scalar
+`zeroed` use remain refused; no general scalar value was admitted.
 
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
@@ -2595,7 +2611,7 @@ repetition; array assignments other than D20's direct storage name, D29's litera
 D30's `zeroed`, D32's repetition and D37's mixed-prefix repetition; general
 whole-array value positions; inferred scalar initialization, scalar assignment,
 nested/general scalar and every other `zeroed` [0540] context beyond
-D27/D28/D30/D39/D40; inferred initialization, nested and general-value mixed-prefix
+D27/D28/D30/D39/D40/D41; inferred initialization, nested and general-value mixed-prefix
 repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`
@@ -2605,7 +2621,7 @@ Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
-which is what lets D27/D28/D30's surrounding array and D39/D40's scalar be zeroed
+which is what lets D27/D28/D30's surrounding array and D39--D41's scalar be zeroed
 at all. Every element this kernel admits is a scalar and every scalar has one, so the check is
 vacuous today; it stops being vacuous when a pointer can be an element, because
 [0540] gives a pointer no zero image and there is no null to stand for one.

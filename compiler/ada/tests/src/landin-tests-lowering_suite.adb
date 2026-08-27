@@ -693,6 +693,55 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Local_Scalar_Zeroed_Uses_The_Constant_Store_Path;
 
+   --  D41 lowers assignment-context `zeroed` as the existing typed zero or
+   --  false constant followed by the destination's ordinary scalar store.
+   procedure Scalar_Zeroed_Assignment_Uses_Ordinary_Stores
+     (Item : in out Landin.Testing.Context);
+
+   procedure Scalar_Zeroed_Assignment_Uses_Ordinary_Stores
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "word: type = u32" & LF
+         & "truth: type = bool" & LF
+         & "mut number: word" & LF
+         & "f: () -> none =" & LF
+         & "    mut flag: truth" & LF
+         & "    number = zeroed" & LF
+         & "    flag = zeroed" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "scalar zeroed assignments lower");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := 2;
+      begin
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, Routine, 1) = IR.Number
+                  and then IR.Number_Of (Unit, Routine, 1) = 0
+                  and then IR.Op_Of (Unit, Routine, 2) = IR.Store_Datum
+                  and then IR.Datum_Of (Unit, Routine, 2) = 1,
+            "typed integer zero feeds the ordinary module datum store");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, Routine, 3) = IR.Truth
+                  and then not IR.Truth_Of (Unit, Routine, 3)
+                  and then IR.Op_Of (Unit, Routine, 4) = IR.Store
+                  and then IR.Slot_Of (Unit, Routine, 4) = 1,
+            "typed false feeds the ordinary local slot store");
+         Check_Terminators (Item, Unit, "scalar zeroed assignments");
+      end;
+   end Scalar_Zeroed_Assignment_Uses_Ordinary_Stores;
+
    ------------------------------------------------------------------
 
    --  R2.20: a direct-name initial image does not alias its source.  Each
@@ -2063,6 +2112,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "local scalar zeroed uses constant stores",
          Local_Scalar_Zeroed_Uses_The_Constant_Store_Path'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "scalar zeroed assignment uses ordinary stores",
+         Scalar_Zeroed_Assignment_Uses_Ordinary_Stores'Access);
       Landin.Testing.Register
         (Into, "lowering", "module array images keep distinct datums",
          Module_Array_Images_Keep_Distinct_Datums'Access);

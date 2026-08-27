@@ -1238,6 +1238,125 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 2, "both local scalar zeroed nodes were checked");
    end Local_Scalar_Zeroed_Takes_Its_Written_Type;
 
+   --  D41: a mutable module scalar destination supplies `zeroed`'s scalar
+   --  context, including when an alias supplies that destination type.
+   procedure Module_Scalar_Assignment_Gives_Zeroed_Its_Type
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Scalar_Assignment_Gives_Zeroed_Its_Type
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "module-assignment.ldn",
+         "word: type = u32" & LF
+         & "mut number: word" & LF
+         & "f: () -> none =" & LF
+         & "    number = zeroed" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a module scalar destination gives zeroed its type");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Zeroed_Literal
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.U32,
+                  "assigned zeroed carries the resolved destination type");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 1, "the assigned zeroed node was checked");
+   end Module_Scalar_Assignment_Gives_Zeroed_Its_Type;
+
+   --  D41: assignment to a mutable local scalar also supplies `zeroed`'s
+   --  resolved scalar type and establishes definite assignment.
+   procedure Local_Scalar_Assignment_Gives_Zeroed_Its_Type
+     (Item : in out Landin.Testing.Context);
+
+   procedure Local_Scalar_Assignment_Gives_Zeroed_Its_Type
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "local-assignment.ldn",
+         "truth: type = bool" & LF
+         & "f: () -> (result: bool) =" & LF
+         & "    mut flag: truth" & LF
+         & "    flag = zeroed" & LF
+         & "    result = flag" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a local scalar destination types zeroed and becomes assigned");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Zeroed_Literal
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Bool,
+                  "assigned zeroed carries the resolved local type");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 1, "the local assigned zeroed node was checked");
+   end Local_Scalar_Assignment_Gives_Zeroed_Its_Type;
+
    --  D18: an array may occupy every byte a target's `usize` can name, and
    --  not one beyond it.  The same 2**32-byte array therefore belongs to a
    --  64-bit target and is refused by a 32-bit one; neither answer comes from
@@ -1326,6 +1445,12 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "typed local scalar gives zeroed its type",
          Local_Scalar_Zeroed_Takes_Its_Written_Type'Access);
+      Landin.Testing.Register
+        (Into, "checking", "module assignment gives zeroed its type",
+         Module_Scalar_Assignment_Gives_Zeroed_Its_Type'Access);
+      Landin.Testing.Register
+        (Into, "checking", "local assignment gives zeroed its type",
+         Local_Scalar_Assignment_Gives_Zeroed_Its_Type'Access);
       Landin.Testing.Register
         (Into, "checking", "array extent follows usize",
          Array_Extent_Follows_Usize'Access);

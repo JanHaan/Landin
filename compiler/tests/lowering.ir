@@ -1580,6 +1580,24 @@ item 1 ROUTINE f result i32 params 1 slots 3 blocks 3 values 14
     12 STORE slot 2 <- 11
     13 LOAD i32 slot 2
     14 LEAVE <- 13
+file positive/scalar-zeroed-assignment/program.ldn
+unit items 2
+item 1 DATUM module result u32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u32 0
+    2 LEAVE <- 1
+item 2 ROUTINE f result bool params 0 slots 2 blocks 1 values 8
+  slot 1 result bool return
+  slot 2 local bool
+  block 1 scope 3 BLOCK length 8
+    1 NUMBER u32 0
+    2 STORE_DATUM datum 1 module <- 1
+    3 TRUTH bool false
+    4 STORE slot 2 <- 3
+    5 LOAD bool slot 2
+    6 STORE slot 1 <- 5
+    7 LOAD bool slot 1
+    8 LEAVE <- 7
 file positive/shift-amount-is-not-known/program.ldn
 unit items 1
 item 1 ROUTINE g result i32 params 2 slots 5 blocks 1 values 14

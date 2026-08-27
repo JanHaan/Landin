@@ -1,0 +1,10 @@
+point: type = struct
+    x: u32
+end point
+mut state: point
+mut row: [1]u32
+
+f: () -> none =
+    state.x = zeroed
+    row[0] = zeroed
+end f
