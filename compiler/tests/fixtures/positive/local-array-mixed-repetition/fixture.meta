@@ -1,0 +1,5 @@
+class: positive
+summary: D36 initializes an explicitly typed local with a literal prefix and repeated suffix
+constructs: 0040, 0520, 0560, 1830
+program: program.ldn
+targets: linux-x86-64, macos-arm64

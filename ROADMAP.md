@@ -2512,14 +2512,32 @@ and inferred folds; and the runtime fixture reads inferred data, through and
 `.bss` images. Zero-count, count-less inferred, mixed-prefix and general-value
 forms remain refused.
 
+D36 admits `[e1, ..., ek, of repeated]` only as an explicitly typed local
+fixed-array initializer, with `1 <= k < N` for the written destination length
+`N`. The checker gives every prefix expression and the repeated expression the
+written scalar context while preserving incoming definite-assignment checks.
+Lowering evaluates and stores the prefix left to right, evaluates the repeated
+expression once, and emits one compact `Fill_Array` for the suffix without an
+array temporary. `Fill_Array` now carries a one-based `First` part; all prior
+full fills pass `First = 1`, the verifier holds it within the destination, the
+dump records it, and Linux x86-64 derives both the byte offset and remaining
+element count. The parser's public case pins that `of` remains contextual; public
+checker, IR, verifier, lowering and backend cases pin shape, bounds, compactness,
+order, offset and count. A positive fixture, six focused context/shape
+negatives, and `runtime/mixed-array-repetition-is-source-ordered` pin the source
+and executable boundary. Module, inferred, assignment, nested and general-value
+mixed forms remain refused.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D35's
-counted inferred local and module repetition and D34's explicitly typed local and
-module repetition; array assignments other than D20's direct storage name, D29's
+counted inferred local and module repetition, D34's explicitly typed local and
+module repetition and D36's explicitly typed local mixed repetition; array
+assignments other than D20's direct storage name, D29's
 literal, D30's `zeroed` and D32's repetition; general whole-array value
-positions; inferred, scalar and every other `zeroed` [0540] context;
-mixed-prefix, count-less inferred and general-value repetition [0560]; slices
+positions; inferred, scalar and every other `zeroed` [0540] context; module,
+inferred, assignment, nested and general-value mixed-prefix repetition, plus
+count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`
 operands
 other than D14's direct name and D31's literal; and an array as a struct field.

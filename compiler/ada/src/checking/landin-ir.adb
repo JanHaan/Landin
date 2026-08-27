@@ -556,6 +556,11 @@ package body Landin.IR is
      return Part_Position
      is (Held (Of_Unit, Item, Value).Part);
 
+   function First_Part_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Part_Position
+     is (Held (Of_Unit, Item, Value).Part);
+
    function Reaches_A_Slot
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      is (Held (Of_Unit, Item, Value).Slot /= No_Slot);
@@ -941,6 +946,7 @@ package body Landin.IR is
      (Into        : in out Unit;
       Item        : Item_Id;
       Destination : Storage;
+      First       : Part_Position;
       Value       : Value_Id;
       Site        : Landin.Provenance.Origin)
    is
@@ -948,6 +954,7 @@ package body Landin.IR is
         Instruction'(Op          => Fill_Array,
                      Site        => Site,
                      Destination => Destination,
+                     Part        => First,
                      others      => <>);
       Where : Value_Id;
    begin

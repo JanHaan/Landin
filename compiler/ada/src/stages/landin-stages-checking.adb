@@ -143,6 +143,12 @@ package body Landin.Stages.Checking is
          Expected     : Landin.Checking.Element_Count;
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean);
+      procedure Check_Mixed_Array_Repetition
+        (Of_Tree    : Syn.Tree;
+         Site_Node  : Syn.Node_Id;
+         Repetition : Syn.Node_Id;
+         Expected   : Landin.Checking.Element_Count;
+         Element    : Ty.Scalar_Name);
       procedure Check_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -553,6 +559,16 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Array_Repetition;
+            --  D36 admits a mixed prefix only for an explicitly typed local;
+            --  every other mixed form remains a contextual array refusal.
+            Is_Local_Mixed_Repetition_Init : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Written /= Syn.No_Node
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Mixed_Array_Repetition;
             Is_Module_Literal_Init : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
@@ -596,6 +612,7 @@ package body Landin.Stages.Checking is
               and then not Is_Direct_Name_Init
               and then not Is_Local_Literal_Init
               and then not Is_Typed_Repetition_Init
+              and then not Is_Local_Mixed_Repetition_Init
               and then not Is_Module_Literal_Init
               and then not Is_Module_Zeroed_Init
               and then not Is_Local_Zeroed_Init
@@ -1537,6 +1554,17 @@ package body Landin.Stages.Checking is
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
 
+            when Syn.Mixed_Array_Repetition =>
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "mixed-prefix array repetition needs an"
+                             & " explicitly typed local initializer",
+                  Refused => Bad.Array_Value,
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
+
             when Syn.Name_Reference =>
                if Res.Verdict_Of (Meanings.all, Of_Tree, Node)
                   /= Res.Bound
@@ -2075,6 +2103,48 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Array_Literal;
 
+      procedure Check_Mixed_Array_Repetition
+        (Of_Tree    : Syn.Tree;
+         Site_Node  : Syn.Node_Id;
+         Repetition : Syn.Node_Id;
+         Expected   : Landin.Checking.Element_Count;
+         Element    : Ty.Scalar_Name)
+      is
+         Prefix : constant Natural := Syn.Element_Count (Of_Tree, Repetition);
+      begin
+         Landin.Checking.Note
+           (Types.all, Of_Tree, Repetition, Ty.Fixed_Array);
+         Landin.Checking.Note_Array
+           (Types.all, Of_Tree, Repetition, Expected, Element);
+
+         --  The parser makes the prefix nonempty.  D36 also requires at least
+         --  one destination position to remain for the repeated suffix.
+         if Landin.Checking.Element_Count (Prefix) >= Expected then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Repetition),
+               Message => "this mixed repetition leaves no array suffix to"
+                          & " fill",
+               Note    => "D36: a prefix of k elements requires 1 <= k < N",
+               Related => Syn.Origin (Of_Tree, Site_Node),
+               Because => "the array context here",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Repetition);
+         end if;
+
+         for Position in 1 .. Prefix loop
+            Require
+              (Of_Tree, Syn.Nth_Element (Of_Tree, Repetition, Position),
+               Element, Syn.Origin (Of_Tree, Site_Node),
+               "the array element type");
+         end loop;
+
+         Require
+           (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition), Element,
+            Syn.Origin (Of_Tree, Site_Node), "the array element type");
+      end Check_Mixed_Array_Repetition;
+
       procedure Check_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -2288,6 +2358,17 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Value, Ty.Fixed_Array);
                            Landin.Checking.Note_Array
                              (Types.all, Of_Tree, Value,
+                              Landin.Checking.Array_Length
+                                (Types.all, Of_Tree, Written),
+                              Landin.Checking.Array_Element
+                                (Types.all, Of_Tree, Written));
+                        elsif Syn.Kind (Of_Tree, Value)
+                                = Syn.Mixed_Array_Repetition
+                        then
+                           --  D36: only this explicitly typed local
+                           --  initializer gives a mixed prefix its shape.
+                           Check_Mixed_Array_Repetition
+                             (Of_Tree, Node, Value,
                               Landin.Checking.Array_Length
                                 (Types.all, Of_Tree, Written),
                               Landin.Checking.Array_Element

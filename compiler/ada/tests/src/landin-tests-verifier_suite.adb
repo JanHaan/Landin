@@ -123,7 +123,7 @@ package body Landin.Tests.Verifier_Suite is
             (Kind => IR.Frame_Slot, Slot => R), Site);
          N := IR.Emit_Number (Unit, A, Landin.Types.U16, 7, False, Site);
          IR.Emit_Array_Fill
-           (Unit, A, (Kind => IR.Frame_Slot, Slot => Q), N, Site);
+           (Unit, A, (Kind => IR.Frame_Slot, Slot => Q), 1, N, Site);
          N := IR.Emit_Number (Unit, A, Landin.Types.U32, 1, False, Site);
          IR.Emit_Store (Unit, A, S, N, Site);
          N := IR.Emit_Load (Unit, A, S, Site);
@@ -175,6 +175,7 @@ package body Landin.Tests.Verifier_Suite is
       Array_Fill_Destination_Is_Scalar,
       Array_Fill_Slot_Is_Not_Owned,
       Array_Fill_Value_Has_The_Wrong_Type,
+      Array_Fill_First_Is_Outside_Array,
       Array_Fill_Inside_A_Datum,
       Condition_Is_A_Number,
       Call_Missing_An_Argument,
@@ -490,7 +491,7 @@ package body Landin.Tests.Verifier_Suite is
             N := IR.Emit_Number
               (Unit, A, Landin.Types.U32, 1, False, Site);
             IR.Emit_Array_Fill
-              (Unit, A, (Kind => IR.Frame_Slot, Slot => S), N, Site);
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => S), 1, N, Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -499,7 +500,7 @@ package body Landin.Tests.Verifier_Suite is
             N := IR.Emit_Number
               (Unit, A, Landin.Types.U32, 1, False, Site);
             IR.Emit_Array_Fill
-              (Unit, A, (Kind => IR.Frame_Slot, Slot => 5), N, Site);
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => 5), 1, N, Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -507,7 +508,18 @@ package body Landin.Tests.Verifier_Suite is
          when Array_Fill_Value_Has_The_Wrong_Type =>
             N := IR.Emit_Truth (Unit, A, True, Site);
             IR.Emit_Array_Fill
-              (Unit, A, (Kind => IR.Frame_Slot, Slot => Q), N, Site);
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => Q), 1, N, Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Fill_First_Is_Outside_Array =>
+            N := IR.Emit_Number
+              (Unit, A, Landin.Types.U16, 1, False, Site);
+            IR.Emit_Array_Fill
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => Q),
+               IR.Part_Position (4_294_967_296),
+               N, Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -522,7 +534,7 @@ package body Landin.Tests.Verifier_Suite is
             N := IR.Emit_Number
               (Unit, E, Landin.Types.U32, 1, False, Site);
             IR.Emit_Array_Fill
-              (Unit, E, (Kind => IR.Module_Datum, Datum => E), N, Site);
+              (Unit, E, (Kind => IR.Module_Datum, Datum => E), 1, N, Site);
             IR.Emit_Leave (Unit, E, IR.No_Value, Site);
             IR.Leave_Block (Unit, E);
 
@@ -626,6 +638,8 @@ package body Landin.Tests.Verifier_Suite is
          (Array_Fill_Slot_Is_Not_Owned, V.Slot_Out_Of_Range),
          (Array_Fill_Value_Has_The_Wrong_Type,
           V.Array_Fill_Value_Disagrees),
+         (Array_Fill_First_Is_Outside_Array,
+          V.Array_Fill_First_Out_Of_Range),
          (Array_Fill_Inside_A_Datum, V.Array_Fill_Inside_A_Datum),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
          (Call_Missing_An_Argument,   V.Wrong_Operand_Count),

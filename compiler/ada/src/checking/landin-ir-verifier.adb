@@ -75,6 +75,8 @@ package body Landin.IR.Verifier is
                "a datum contains an array fill, and [1940] admits none",
             when Array_Fill_Value_Disagrees =>
                "an array fill's scalar disagrees with its element type",
+            when Array_Fill_First_Out_Of_Range =>
+               "an array fill begins beyond its destination's last part",
             when Array_Image_Length_Disagrees =>
                "an array datum's image does not have one value per element",
             when Array_Image_Value_Does_Not_Fit =>
@@ -661,11 +663,19 @@ package body Landin.IR.Verifier is
                                      (Id,
                                       Destination_Of (Of_Unit, Id, V),
                                       Element, Length);
-                                 pragma Unreferenced (Length);
                               begin
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
+                                 end if;
+
+                                 if Element_Total
+                                      (First_Part_Of (Of_Unit, Id, V))
+                                      > Length
+                                 then
+                                    return
+                                      (Kind => Array_Fill_First_Out_Of_Range,
+                                       Item => Id, Block => Block, Value => V);
                                  end if;
 
                                  if Result_Of

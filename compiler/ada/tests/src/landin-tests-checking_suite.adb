@@ -834,6 +834,67 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 3, "all three typed repetitions carry a shape");
    end Typed_Repetition_Takes_Its_Written_Shape;
 
+   --  D36: only an explicitly typed local supplies the complete shape for a
+   --  nonempty literal prefix followed by one repeated suffix expression.
+   procedure Mixed_Repetition_Takes_Its_Local_Written_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Mixed_Repetition_Takes_Its_Local_Written_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "mixed-repetition.ldn",
+         "f: (first: u16, repeated: u16) -> none =" & LF
+         & "    row: [4]u16 = [first, first + 1, of repeated]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "an explicitly typed local mixed repetition is accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Mixed_Array_Repetition
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Fixed_Array
+                  and then Landin.Checking.Array_Length
+                    (Types.all, Of_Tree.all, Node) = 4
+                  and then Landin.Checking.Array_Element
+                    (Types.all, Of_Tree.all, Node) = Landin.Types.U16,
+                  "the mixed repetition carries the written array shape");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 1, "one mixed repetition carries a shape");
+   end Mixed_Repetition_Takes_Its_Local_Written_Shape;
+
    --  D33: the written repetition count and its one scalar expression supply
    --  an inferred local's compact D17 shape.  A typed expression retains its
    --  type and an untyped integer receives [0200]'s default.
@@ -1050,6 +1111,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "typed repetition takes its written shape",
          Typed_Repetition_Takes_Its_Written_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "mixed repetition takes local written shape",
+         Mixed_Repetition_Takes_Its_Local_Written_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "a local array literal takes its written shape",
          Local_Array_Literal_Takes_Its_Written_Shape'Access);

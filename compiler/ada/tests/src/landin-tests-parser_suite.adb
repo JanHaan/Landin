@@ -24,6 +24,7 @@ package body Landin.Tests.Parser_Suite is
    use type Landin.Platform.Read_Status;
    use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
+   use type Landin.Syntax.Node_Kind;
    use type Fixtures.Fixture_Class;
 
    --  Relative to compiler/ada, which is where the harness runs.
@@ -253,6 +254,79 @@ package body Landin.Tests.Parser_Suite is
         (Item, Pinned = Rejected,
          "every negative program names the codes its report carries");
    end Agrees_With_The_Corpus;
+
+   ------------------------------------------------------------------
+   --  Contextual array repetition
+   ------------------------------------------------------------------
+
+   procedure Mixed_Repetition_Preserves_Contextual_Of
+     (Item : in out Landin.Testing.Context);
+
+   procedure Mixed_Repetition_Preserves_Contextual_Of
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("mixed.ldn",
+           "f: (of: u32, other: u32) -> (value: u32) =" & ASCII.LF
+           & "  mixed: [4]u32 = [1, of, of other]" & ASCII.LF
+           & "  ordinary: [3]u32 = [of, other, of]" & ASCII.LF
+           & "  sum: [1]u32 = [of + 1]" & ASCII.LF
+           & "  value = mixed[0] + ordinary[0] + sum[0]" & ASCII.LF
+           & "end f" & ASCII.LF);
+      Mixed  : Natural := 0;
+      Three  : Natural := 0;
+      One    : Natural := 0;
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "the mixed form and ordinary names called `of` parse cleanly");
+
+         for Node in Landin.Syntax.Node_Id'(1)
+                     .. Landin.Syntax.Last_Node (Parsed)
+         loop
+            case Landin.Syntax.Kind (Parsed, Node) is
+               when Landin.Syntax.Mixed_Array_Repetition =>
+                  Mixed := Mixed + 1;
+                  Landin.Testing.Check_Equal
+                    (Item, Landin.Syntax.Element_Count (Parsed, Node), 2,
+                     "the source prefix has two elements");
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Syntax.Kind
+                       (Parsed, Landin.Syntax.Repeated_Element (Parsed, Node))
+                       = Landin.Syntax.Name_Reference,
+                     "the suffix keeps its one repeated expression");
+               when Landin.Syntax.Array_Literal =>
+                  if Landin.Syntax.Element_Count (Parsed, Node) = 3 then
+                     Three := Three + 1;
+                  elsif Landin.Syntax.Element_Count (Parsed, Node) = 1 then
+                     One := One + 1;
+                  end if;
+               when others =>
+                  null;
+            end case;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Mixed, 1, "one mixed-prefix repetition was recognized");
+      Landin.Testing.Check_Equal
+        (Item, Three, 1, "`[of, other, of]` stays an ordinary literal");
+      Landin.Testing.Check_Equal
+        (Item, One, 1, "`[of + 1]` stays an ordinary literal");
+   end Mixed_Repetition_Preserves_Contextual_Of;
 
    ------------------------------------------------------------------
    --  Recovery, on input nothing derives
@@ -505,6 +579,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "agrees with the corpus",
          Agrees_With_The_Corpus'Access);
+      Landin.Testing.Register
+        (Into, "parser", "preserves contextual of in mixed repetition",
+         Mixed_Repetition_Preserves_Contextual_Of'Access);
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
          Survives_Every_Truncation'Access);

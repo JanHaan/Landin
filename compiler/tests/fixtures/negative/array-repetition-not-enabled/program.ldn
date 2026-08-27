@@ -1,3 +1,0 @@
-f: () -> none =
-    row: [3]u8 = [1, of 2]
-end f

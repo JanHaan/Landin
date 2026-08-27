@@ -122,6 +122,9 @@ package Landin.Syntax is
       --  [0560]'s full-array scalar repetition.  Two fixed slots: an
       --  optional written count and the one expression to evaluate.
       Array_Repetition,
+      --  D36's mixed-prefix repetition.  Its one fixed slot is the repeated
+      --  expression; its trailing run is the nonempty literal prefix.
+      Mixed_Array_Repetition,
       Integer_Literal,
       True_Literal,
       False_Literal,
@@ -499,12 +502,14 @@ package Landin.Syntax is
 
    function Element_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
-                 and then Kind (Of_Tree, Id) = Array_Literal;
+                 and then Kind (Of_Tree, Id)
+                            in Array_Literal | Mixed_Array_Repetition;
 
    function Nth_Element
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
-                  and then Kind (Of_Tree, Id) = Array_Literal
+                  and then Kind (Of_Tree, Id)
+                             in Array_Literal | Mixed_Array_Repetition
                   and then Index <= Element_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Element'Result);
 
@@ -516,7 +521,8 @@ package Landin.Syntax is
 
    function Repeated_Element (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
-                  and then Kind (Of_Tree, Id) = Array_Repetition,
+                  and then Kind (Of_Tree, Id)
+                             in Array_Repetition | Mixed_Array_Repetition,
           Post => Contains (Of_Tree, Repeated_Element'Result);
 
    function Operand_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id

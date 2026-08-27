@@ -536,7 +536,7 @@ package body Landin.Tests.IR_Suite is
            (Unit, Routine, Landin.Types.U16, 7, False, Site);
          Landin.IR.Emit_Array_Fill
            (Unit, Routine,
-            (Kind => Landin.IR.Frame_Slot, Slot => Slot), Fill_Value, Site);
+            (Kind => Landin.IR.Frame_Slot, Slot => Slot), 3, Fill_Value, Site);
          Fill := Landin.IR.Nth_Value (Unit, Routine, Block, 4);
 
          Landin.Testing.Check
@@ -582,8 +582,9 @@ package body Landin.Tests.IR_Suite is
             and then Landin.IR.Destination_Of
                        (Unit, Routine, Fill).Kind = Landin.IR.Frame_Slot
             and then Landin.IR.Destination_Of
-                       (Unit, Routine, Fill).Slot = Slot,
-            "a whole-array fill carries one compact destination");
+                       (Unit, Routine, Fill).Slot = Slot
+            and then Landin.IR.First_Part_Of (Unit, Routine, Fill) = 3,
+            "an array suffix fill carries one compact destination and start");
          Landin.Testing.Check
            (Item,
             Landin.IR.Operand_Count (Unit, Routine, Fill) = 1
@@ -609,8 +610,8 @@ package body Landin.Tests.IR_Suite is
             Landin.Testing.Check
               (Item,
                Ada.Strings.Fixed.Index
-                 (Text, "FILL_ARRAY destination slot 1 <- 3") /= 0,
-               "the dump names the fill destination and scalar operand");
+                 (Text, "FILL_ARRAY destination slot 1 first 3 <- 3") /= 0,
+               "the dump names the fill destination, first part and operand");
          end;
       end;
    end An_Array_Copy_Carries_Two_Compact_Places;
