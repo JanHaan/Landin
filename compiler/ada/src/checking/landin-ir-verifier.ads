@@ -33,6 +33,19 @@
 --  vectors, and no public function can see a run.  Those two are also the
 --  ones that must run first -- a run whose base is wrong makes
 --  `Nth_Value` raise `Constraint_Error` before any later rule can speak.
+--
+--  D24's array datum image is one exception to the "width belongs to the
+--  target" rule above: a per-position folded value is a concrete number
+--  the backend will store into the object at a target-derived width, so
+--  the verifier holds each one to fitting its own element type against
+--  the compilation's target facts.  A malformed image whose 300 an u8 is
+--  asked to hold, or whose 2**32 a 32-bit `usize` cannot address, is IR
+--  the backend has no defined answer for and must be refused before it
+--  is asked one.  Facts arrive on the entry points that need them; the
+--  historical no-facts entries stay for callers whose IR carries no
+--  images at all.
+
+with Landin.Targets;
 
 package Landin.IR.Verifier is
 
@@ -73,6 +86,8 @@ package Landin.IR.Verifier is
       Array_Copy_Endpoint_Is_Not_An_Array,
       Array_Copy_Shapes_Disagree,
       Array_Copy_Inside_A_Datum,
+      Array_Image_Length_Disagrees,
+      Array_Image_Value_Does_Not_Fit,
       --  Calls [1920].
       Callee_Is_Not_A_Routine,
       Call_Inside_A_Datum,
@@ -94,12 +109,25 @@ package Landin.IR.Verifier is
    --  case can assert the whole record instead of matching a message.
    function Check (Of_Unit : Unit) return Fault;
 
+   --  The same walk with per-image value verification, which needs a
+   --  target width to decide whether a Folded value fits its element
+   --  type.  A caller with an image to check has target facts and passes
+   --  them; a caller with none may use the no-facts entry above and skip
+   --  the D24 rule.
+   function Check
+     (Of_Unit : Unit;
+      Facts   : Landin.Targets.Target_Facts) return Fault;
+
    --  The same walk, raising on the first fault.  In every build mode:
    --  the builder's preconditions are gone under release, and
    --  `Landin.Targets` already learnt what that costs when a release
    --  build accepted an alignment of twelve that only a precondition had
    --  refused.
    procedure Verify (Of_Unit : Unit);
+
+   procedure Verify
+     (Of_Unit : Unit;
+      Facts   : Landin.Targets.Target_Facts);
 
    --  For a message and for a test that wants to say which rule it meant.
    function Describe (Of_Kind : Fault_Kind) return String;

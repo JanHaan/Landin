@@ -1,0 +1,7 @@
+point: type = struct
+    x: u32
+    y: u32
+end point
+
+mut origin: point
+mut coords: [2]u32 = [origin.x, origin.y]

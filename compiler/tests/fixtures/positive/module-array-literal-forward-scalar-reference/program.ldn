@@ -1,0 +1,4 @@
+--  A module is a set, so `base` is a name the compiler knows when it
+--  reads the literal above.
+mut buffer: [3]u32 = [base, base + 1, base + 2]
+base: u32 = 100

@@ -2283,9 +2283,82 @@ separate negatives keep module and inferred literals, general assignment, and
 [0560]'s repetition outside it. Requiring at least one literal element does not
 settle whether `[0]T` is a source type programmers may write.
 
+D24 lifts the same nonempty literal into module scope on the same
+written-type terms: `[mut] name: [N]T = [first, ...]` is admitted when
+`T` is a scalar and every element folds to a value the type holds.
+[1940] already refuses a call and any non-known name reference at
+module scope, and the checker now runs its per-element fold against
+the element type so `[3]u8 = [200 + 100]` is refused for the same
+reason the whole-value fold of a scalar module binding is. A forward
+name reference to a scalar module binding is admitted like any other
+module scalar image: [1740] makes a module a set, so `a: u32 = 5`
+below the array literal is a name the compiler knows when it reads it.
+Every [1820] operator [1940] admits is folded target-aware during
+checking and again while lowering records the verified image — arithmetic,
+wrapping arithmetic at the operand type's own width so `255 +% 1` on u8 is
+zero and every unsigned or signed size wraps the same way, comparisons,
+logical words with short-circuiting, bitwise set, shifts, complement and the
+three measurements. Both syntax walks take widths from the compilation's
+target facts; the backend separately folds verified scalar IR. The positive
+operator corpus and negative fold-agreement fixtures hold checking to settling
+every image or invalid operand before lowering. A member selection, an
+element index and a nested array literal are refused by the checker
+as D24-excluded constructs so no `arr[0]` or `p.x` at this position
+becomes a stage crash during image resolution; each will arrive with
+its own slice. The refusal walks each element's whole subtree, so
+`source[0] + 1` and `state.x == 3` earn the same refusal a bare
+`source[0]` or a bare `state.x` does rather than passing the checker
+and defecting during the lowering's fold. The adjacent scalar [1940]
+path now refuses the same two storage selections before its backend fold;
+neither static aggregate nor array images exist for it to read yet. An arithmetic fold that
+walks past the compiler's widest kernel value is now distinguished
+from an unfoldable subtree and reported at the element (or, at scalar
+module scope, at the binding value) rather than deferred silently and
+crashing the backend's own Ty.Folded arithmetic. The IR verifier now
+holds every per-position image value to its element type at the
+compilation's target facts, so an u8 that holds 300, a bool that
+holds 2, or a `usize` that overflows a 32-bit description is a
+builder defect that never reaches an object. It also holds image
+runs to the same partition rule the other item runs already had —
+no run may cross another and no byte of the shared vector may
+belong to no item — so a corrupt base or count is caught before
+Nth_Image is asked one.
+Lowering resolves each element to a `Folded` value and records the
+image against the datum in one compact per-item run; the same pass
+follows a D21 direct-name chain to the terminal literal or the D10
+zero, and every destination on the chain owns distinct storage
+initialized with the same terminal image. The IR datum image never
+allocates a per-position run for an omitted or zero-target array —
+that datum's `Image_Length` is zero and the backend keeps it in
+`.bss` — while a nonzero or mixed image reaches `.data` with one
+directive per position at the element's own alignment.
+`positive/module-array-literal-initializer`,
+`positive/module-array-literal-forward-scalar-reference`,
+`positive/module-array-literal-1820-operators`,
+`negative/module-array-literal-length-mismatch`,
+`negative/module-array-literal-element-mismatch`,
+`negative/module-array-literal-element-not-known`,
+`negative/module-array-literal-element-out-of-range`,
+`negative/module-array-literal-index-element`,
+`negative/module-array-literal-selection-element`,
+`negative/module-array-literal-nested-index`,
+`negative/module-array-literal-nested-selection`,
+`negative/module-array-literal-fold-overflow`,
+`negative/module-scalar-fold-overflow`,
+`negative/module-array-fold-agreement`,
+`negative/module-scalar-fold-agreement`,
+`negative/module-scalar-storage-selection`,
+`positive/module-scalar-wrapping-arithmetic`,
+`positive/module-array-literal-wrapping-arithmetic`, and
+`runtime/module-array-literal-holds-its-image` pin the admitted form
+and its refusal boundary; `runtime/module-array-initializers-copy-images`
+already exercises the D21 chain that terminates at D10 zero and is
+unchanged, and the retired `negative/module-array-literal-not-enabled`
+is replaced by the D24 negatives above.
+
 What is still refused: array initializers other than D21's direct storage name
-and D23's explicitly typed local literal, general whole-array value positions,
-a module array literal, the inferred literal length [0530], `zeroed` [0540],
+and D23/D24's explicitly typed local and module literal, general whole-array
+value positions, the inferred literal length [0530], `zeroed` [0540],
 repetition [0560], slices [0570], non-identifier `lenof` operands, and an array
 as a struct field. Each is its own slice, and the remaining value
 slices need the initialization work D21 did not settle.

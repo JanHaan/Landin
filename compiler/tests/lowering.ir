@@ -686,6 +686,88 @@ item 3 DATUM source result array params 0 slots 0 blocks 1 values 1
   elements 2 of u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/module-array-literal-1820-operators/program.ldn
+unit items 6
+item 1 DATUM comparisons result array params 0 slots 0 blocks 1 values 1
+  elements 3 of bool
+  image 1 1 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM logic result array params 0 slots 0 blocks 1 values 1
+  elements 4 of bool
+  image 0 1 0 1
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM bitwise result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u8
+  image 15 15 5
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM shifts result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u32
+  image 16 4 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 DATUM complement result array params 0 slots 0 blocks 1 values 1
+  elements 2 of i8
+  image -1 -128
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 6 DATUM measurements result array params 0 slots 0 blocks 1 values 1
+  elements 3 of usize
+  image 4 4 3
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+file positive/module-array-literal-forward-scalar-reference/program.ldn
+unit items 2
+item 1 DATUM buffer result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u32
+  image 100 101 102
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM base result u32 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u32 100
+    2 LEAVE <- 1
+file positive/module-array-literal-initializer/program.ldn
+unit items 3
+item 1 DATUM numbers result array params 0 slots 0 blocks 1 values 1
+  elements 4 of u32
+  image 10 21 30 40
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM flags result array params 0 slots 0 blocks 1 values 1
+  elements 3 of bool
+  image 1 0 1
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM signed result array params 0 slots 0 blocks 1 values 1
+  elements 2 of i32
+  image -1 7
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+file positive/module-array-literal-wrapping-arithmetic/program.ldn
+unit items 4
+item 1 DATUM u8_wraps result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u8
+  image 0 255 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM u64_wraps result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u64
+  image 0 18446744073709551615 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM i8_wraps result array params 0 slots 0 blocks 1 values 1
+  elements 3 of i8
+  image -128 127 -128
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM i64_wraps result array params 0 slots 0 blocks 1 values 1
+  elements 2 of i64
+  image -9223372036854775808 9223372036854775807
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/module-binding-with-no-value-reads-zero/program.ldn
 unit items 4
 item 1 DATUM later result i32 params 0 slots 0 blocks 1 values 2
@@ -750,6 +832,107 @@ item 4 DATUM sum_base result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 9
     2 LEAVE <- 1
+file positive/module-scalar-wrapping-arithmetic/program.ldn
+unit items 11
+item 1 DATUM u8_wraps_add result u8 params 0 slots 1 blocks 1 values 6
+  slot 1 - u8
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER u8 255
+    2 STORE slot 1 <- 1
+    3 NUMBER u8 1
+    4 LOAD u8 slot 1
+    5 WRAPPING_ADD u8 <- 4 3
+    6 LEAVE <- 5
+item 2 DATUM u8_wraps_sub result u8 params 0 slots 1 blocks 1 values 6
+  slot 1 - u8
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER u8 0
+    2 STORE slot 1 <- 1
+    3 NUMBER u8 1
+    4 LOAD u8 slot 1
+    5 WRAPPING_SUBTRACT u8 <- 4 3
+    6 LEAVE <- 5
+item 3 DATUM u8_wraps_mul result u8 params 0 slots 1 blocks 1 values 6
+  slot 1 - u8
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER u8 128
+    2 STORE slot 1 <- 1
+    3 NUMBER u8 2
+    4 LOAD u8 slot 1
+    5 WRAPPING_MULTIPLY u8 <- 4 3
+    6 LEAVE <- 5
+item 4 DATUM u64_wraps_add result u64 params 0 slots 1 blocks 1 values 6
+  slot 1 - u64
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER u64 18446744073709551615
+    2 STORE slot 1 <- 1
+    3 NUMBER u64 1
+    4 LOAD u64 slot 1
+    5 WRAPPING_ADD u64 <- 4 3
+    6 LEAVE <- 5
+item 5 DATUM u64_wraps_sub result u64 params 0 slots 1 blocks 1 values 6
+  slot 1 - u64
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER u64 0
+    2 STORE slot 1 <- 1
+    3 NUMBER u64 1
+    4 LOAD u64 slot 1
+    5 WRAPPING_SUBTRACT u64 <- 4 3
+    6 LEAVE <- 5
+item 6 DATUM u64_wraps_mul result u64 params 0 slots 1 blocks 1 values 6
+  slot 1 - u64
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER u64 9223372036854775808
+    2 STORE slot 1 <- 1
+    3 NUMBER u64 2
+    4 LOAD u64 slot 1
+    5 WRAPPING_MULTIPLY u64 <- 4 3
+    6 LEAVE <- 5
+item 7 DATUM i8_wraps_add result i8 params 0 slots 1 blocks 1 values 6
+  slot 1 - i8
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER i8 127
+    2 STORE slot 1 <- 1
+    3 NUMBER i8 1
+    4 LOAD i8 slot 1
+    5 WRAPPING_ADD i8 <- 4 3
+    6 LEAVE <- 5
+item 8 DATUM i8_wraps_sub result i8 params 0 slots 1 blocks 1 values 6
+  slot 1 - i8
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER i8 128 negated
+    2 STORE slot 1 <- 1
+    3 NUMBER i8 1
+    4 LOAD i8 slot 1
+    5 WRAPPING_SUBTRACT i8 <- 4 3
+    6 LEAVE <- 5
+item 9 DATUM i8_wraps_mul result i8 params 0 slots 1 blocks 1 values 6
+  slot 1 - i8
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER i8 1 negated
+    2 STORE slot 1 <- 1
+    3 NUMBER i8 128 negated
+    4 LOAD i8 slot 1
+    5 WRAPPING_MULTIPLY i8 <- 4 3
+    6 LEAVE <- 5
+item 10 DATUM i64_wraps_add result i64 params 0 slots 1 blocks 1 values 6
+  slot 1 - i64
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER i64 9223372036854775807
+    2 STORE slot 1 <- 1
+    3 NUMBER i64 1
+    4 LOAD i64 slot 1
+    5 WRAPPING_ADD i64 <- 4 3
+    6 LEAVE <- 5
+item 11 DATUM i64_wraps_sub result i64 params 0 slots 1 blocks 1 values 6
+  slot 1 - i64
+  block 1 scope 1 PROGRAM length 6
+    1 NUMBER i64 9223372036854775808 negated
+    2 STORE slot 1 <- 1
+    3 NUMBER i64 1
+    4 LOAD i64 slot 1
+    5 WRAPPING_SUBTRACT i64 <- 4 3
+    6 LEAVE <- 5
 file positive/module-value-from-another/program.ldn
 unit items 2
 item 1 DATUM doubled result u32 params 0 slots 1 blocks 1 values 6

@@ -1,0 +1,14 @@
+--  Every wrapping form at its boundary as a D24 element.  Unsigned
+--  wraps in the type's width; signed wraps around the type's own sign
+--  boundary.
+mut u8_wraps: [3]u8 = [255 +% 1, 0 -% 1, 128 *% 2]
+mut u64_wraps: [3]u64 = [
+    18446744073709551615 +% 1,
+    0 -% 1,
+    9223372036854775808 *% 2
+]
+mut i8_wraps: [3]i8 = [127 +% 1, -128 -% 1, -1 *% -128]
+mut i64_wraps: [2]i64 = [
+    9223372036854775807 +% 1,
+    -9223372036854775808 -% 1
+]

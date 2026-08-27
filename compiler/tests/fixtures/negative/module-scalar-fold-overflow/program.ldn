@@ -1,0 +1,3 @@
+saturated: u64 = 18446744073709551615
+past_top: u64 = saturated + 1
+overflowing_product: u64 = 4294967296 * 4294967296

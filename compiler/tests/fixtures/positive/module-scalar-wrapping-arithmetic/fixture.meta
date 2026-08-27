@@ -1,0 +1,5 @@
+class: positive
+summary: [1940] admits [0300]'s wrapping arithmetic in a scalar module value; the checker's fold uses the operand type's own width so a boundary wrap fits the type
+constructs: 0290, 0300, 1740, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

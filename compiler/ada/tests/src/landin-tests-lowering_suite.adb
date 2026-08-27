@@ -938,6 +938,118 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
+   --  D24: a module array literal folds each element to a Folded value
+   --  and records the source-order image against the datum item, so a
+   --  target loader can consume it byte for byte.  A datum with no image
+   --  is D10 zero and stays reserved storage.
+   procedure A_Module_Array_Literal_Records_Its_Image
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Array_Literal_Records_Its_Image
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut numbers: [4]u32 = [10, 20 + 1, base, base + 100]" & LF
+         & "base: u32 = 100" & LF
+         & "mut zeroed: [2]u16" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the module literal is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check
+           (Item, IR.Has_Image (Unit, 1),
+            "the literal-initialized module array records an image");
+         Landin.Testing.Check_Equal
+           (Item, Natural (IR.Image_Length (Unit, 1)), 4,
+            "one folded value per source-order position");
+         Landin.Testing.Check_Equal
+           (Item, Integer (IR.Nth_Image (Unit, 1, 1)),
+            Integer'(10), "position one is the first literal");
+         Landin.Testing.Check_Equal
+           (Item, Integer (IR.Nth_Image (Unit, 1, 2)),
+            Integer'(21), "position two folds the sum");
+         Landin.Testing.Check_Equal
+           (Item, Integer (IR.Nth_Image (Unit, 1, 3)),
+            Integer'(100),
+            "position three reaches a forward module scalar reference");
+         Landin.Testing.Check_Equal
+           (Item, Integer (IR.Nth_Image (Unit, 1, 4)),
+            Integer'(200), "position four folds the same reference");
+
+         Landin.Testing.Check
+           (Item, not IR.Has_Image (Unit, 3),
+            "an omitted-initializer array datum has no image and stays"
+            & " zero storage");
+      end;
+   end A_Module_Array_Literal_Records_Its_Image;
+
+   --  D24 also settles D21's chain: a destination initialized from a
+   --  direct module storage name copies its terminal image, and the two
+   --  storage places remain distinct.  A chain that terminates at D10
+   --  zero keeps every destination without an image.
+   procedure A_Module_Array_Chain_Copies_The_Terminal_Image
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Array_Chain_Copies_The_Terminal_Image
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut typed: [3]u32 = literal" & LF
+         & "mut inferred := typed" & LF
+         & "mut literal: [3]u32 = [7, 8, 9]" & LF
+         & "mut zero_typed: [2]u16 = zero_source" & LF
+         & "mut zero_source: [2]u16" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the chain is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Datum in IR.Item_Id range 1 .. 3 loop
+            Landin.Testing.Check
+              (Item, IR.Has_Image (Unit, Datum),
+               "every destination on the chain has its own image");
+            Landin.Testing.Check_Equal
+              (Item, Natural (IR.Image_Length (Unit, Datum)), 3,
+               "and its length equals the source length");
+            Landin.Testing.Check_Equal
+              (Item, Integer (IR.Nth_Image (Unit, Datum, 1)),
+               Integer'(7), "first element carried");
+            Landin.Testing.Check_Equal
+              (Item, Integer (IR.Nth_Image (Unit, Datum, 2)),
+               Integer'(8), "second element carried");
+            Landin.Testing.Check_Equal
+              (Item, Integer (IR.Nth_Image (Unit, Datum, 3)),
+               Integer'(9), "third element carried");
+         end loop;
+
+         Landin.Testing.Check
+           (Item, not IR.Has_Image (Unit, 4)
+                    and then not IR.Has_Image (Unit, 5),
+            "a chain terminating at D10 zero leaves both without an image");
+      end;
+   end A_Module_Array_Chain_Copies_The_Terminal_Image;
+
+   ------------------------------------------------------------------
+
    procedure A_Logical_Module_Value_Becomes_Blocks
      (Item : in out Landin.Testing.Context);
 
@@ -1453,6 +1565,13 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a local array literal becomes ordered stores",
          A_Local_Array_Literal_Becomes_Ordered_Stores'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a module array literal records its image",
+         A_Module_Array_Literal_Records_Its_Image'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a module array chain copies the terminal image",
+         A_Module_Array_Chain_Copies_The_Terminal_Image'Access);
       Landin.Testing.Register
         (Into, "lowering", "a computed destination precedes its value",
          A_Computed_Destination_Precedes_Its_Value'Access);
