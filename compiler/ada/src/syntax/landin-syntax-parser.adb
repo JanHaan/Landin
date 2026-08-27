@@ -2387,14 +2387,24 @@ package body Landin.Syntax.Parser is
                end if;
 
                --  [0370]'s third measurement.  `lenof` stays contextual:
-               --  only this expression position meets its spelling.  This
-               --  first R2.20 slice takes one direct identifier, not a
-               --  selection or another general expression.
+               --  only this expression position meets its spelling.  D31's
+               --  literal is parenthesized so an ordinary binding named
+               --  `lenof` keeps [0570]'s `lenof[index]` spelling.
                if Peek = Tok.Identifier
                  and then Named_Here = Lenof_Id
-                 and then Ahead (1) = Tok.Identifier
+                 and then
+                   (Ahead (1) = Tok.Identifier
+                    or else
+                      (Ahead (1) = Tok.Left_Paren
+                       and then Ahead (2) = Tok.Left_Bracket))
                then
                   Advance;
+
+                  if Peek = Tok.Left_Paren then
+                     return Add
+                       (Len_Of, At_Item,
+                        Children => [1 => Parse_Primary]);
+                  end if;
 
                   declare
                      At_Name : constant Landin.Source.Span := Here;

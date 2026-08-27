@@ -1,0 +1,9 @@
+pair: type = struct
+    left: u8
+    right: u8
+end pair
+
+f: () -> (length: usize) =
+    mut value: pair
+    length = lenof ([value])
+end f

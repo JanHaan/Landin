@@ -1388,36 +1388,110 @@ package body Landin.Stages.Checking is
                   end;
                end;
 
-            --  [0370]: the length belongs to the fixed-array type, not to
-            --  its storage.  Selected_From carries a named array's shape
-            --  without treating the whole array as a value read.
+            --  [0370]: the length belongs to a named fixed-array type or to
+            --  the source shape of D31's nonempty literal.  Neither form reads
+            --  storage or evaluates a literal element.
             when Syn.Len_Of =>
                declare
                   Asked : constant Syn.Node_Id :=
                     Syn.Operand_Of (Of_Tree, Node);
-                  Held  : constant Ty.Type_Kind :=
-                    Selected_From (Of_Tree, Asked);
                begin
-                  if Held = Ty.Ill_Typed then
-                     --  In particular, an unresolved name was already
-                     --  reported by resolution and remains resolution-owned.
-                     return Kept (Ty.Ill_Typed);
+                  if Syn.Kind (Of_Tree, Asked) = Syn.Array_Literal then
+                     declare
+                        Count : constant Landin.Checking.Element_Count :=
+                          Landin.Checking.Element_Count
+                            (Syn.Element_Count (Of_Tree, Asked));
+                        First : constant Syn.Node_Id :=
+                          Syn.Nth_Element (Of_Tree, Asked, 1);
+                        Got : constant Ty.Type_Kind :=
+                          Synthesise (Of_Tree, First);
+                        Element : Ty.Scalar_Name;
+                     begin
+                        if Got = Ty.Untyped_Integer then
+                           Element := Ty.Default_Integer;
+                           Commit_To (Of_Tree, First, Element);
+                        elsif Got in Ty.Scalar_Name then
+                           Element := Ty.Scalar_Name (Got);
+                        else
+                           if Got = Ty.No_Value then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, First),
+                                 Message => "this hands back nothing, so it"
+                                            & " cannot supply an array"
+                                            & " element type",
+                                 Note    => "D31: `lenof` checks one scalar"
+                                            & " element type without"
+                                            & " evaluating the elements",
+                                 Related => Syn.Origin (Of_Tree, Asked),
+                                 Because => "this measured literal",
+                                 Into    => Found);
+                           elsif Got /= Ty.Ill_Typed then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, First),
+                                 Message => "this is " & Shown (Got)
+                                            & ", and an array literal needs"
+                                            & " a scalar element type",
+                                 Note    => "D31: `lenof` checks the literal's"
+                                            & " D25 scalar shape",
+                                 Related => Syn.Origin (Of_Tree, Asked),
+                                 Because => "this measured literal",
+                                 Into    => Found);
+                           end if;
+
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Asked);
+                           return Kept (Ty.Ill_Typed);
+                        end if;
+
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Asked, Ty.Fixed_Array);
+                        Landin.Checking.Note_Array
+                          (Types.all, Of_Tree, Asked, Count, Element);
+
+                        for Position in
+                          2 .. Syn.Element_Count (Of_Tree, Asked)
+                        loop
+                           Require
+                             (Of_Tree,
+                              Syn.Nth_Element
+                                (Of_Tree, Asked, Position),
+                              Element, Syn.Origin (Of_Tree, Asked),
+                              "the first literal element measured by `lenof`");
+                        end loop;
+
+                        return Kept (Ty.Usize);
+                     end;
                   end if;
 
-                  if Held /= Ty.Fixed_Array then
-                     Bad.Report
-                       (Item    => Bad.Type_Mismatch,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Asked),
-                        Message => "this is not a fixed array, so it has no"
-                                   & " array length",
-                        Note    => "[0370]: this kernel's `lenof` measures a"
-                                   & " named fixed array",
-                        Related => Syn.Origin (Of_Tree, Asked),
-                        Because => "what it names",
-                        Into    => Found);
-                     return Kept (Ty.Ill_Typed);
-                  end if;
+                  declare
+                     Held : constant Ty.Type_Kind :=
+                       Selected_From (Of_Tree, Asked);
+                  begin
+                     if Held = Ty.Ill_Typed then
+                        --  In particular, an unresolved name was already
+                        --  reported and remains resolution-owned.
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+
+                     if Held /= Ty.Fixed_Array then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Asked),
+                           Message => "this is not a fixed array, so it has no"
+                                      & " array length",
+                           Note    => "[0370]: this kernel's `lenof` measures"
+                                      & " a named array or array literal",
+                           Related => Syn.Origin (Of_Tree, Asked),
+                           Because => "what it names",
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+                  end;
 
                   return Kept (Ty.Usize);
                end;
@@ -2358,6 +2432,11 @@ package body Landin.Stages.Checking is
             when Syn.Call =>
                return False;
 
+            --  D31 measures the literal's syntax.  Its elements are checked
+            --  for one scalar shape but are not module values to be folded.
+            when Syn.Len_Of =>
+               return True;
+
             when Syn.Name_Reference =>
                if Res.Verdict_Of (Meanings.all, Of_Tree, Node)
                   /= Res.Bound
@@ -2409,6 +2488,12 @@ package body Landin.Stages.Checking is
                   when Syn.Element_Index    => "an array index",
                   when others               => "");
          begin
+            --  D31's operand is checked for one scalar shape, but its
+            --  expressions are not read to form the compile-time count.
+            if Syn.Kind (Of_Tree, Where) = Syn.Len_Of then
+               return;
+            end if;
+
             if What /= "" then
                Bad.Report
                  (Item    => Bad.Not_Known_At_Compile_Time,
@@ -3314,7 +3399,10 @@ package body Landin.Stages.Checking is
                   Asked : constant Syn.Node_Id :=
                     Syn.Operand_Of (Of_Tree, Node);
                begin
-                  if Syn.Kind (Of_Tree, Asked) = Syn.Name_Reference
+                  if Syn.Kind (Of_Tree, Asked) = Syn.Array_Literal then
+                     Value := Ty.Folded (Syn.Element_Count (Of_Tree, Asked));
+                     Known := True;
+                  elsif Syn.Kind (Of_Tree, Asked) = Syn.Name_Reference
                     and then Res.Verdict_Of (Meanings.all, Of_Tree, Asked)
                              = Res.Bound
                   then
