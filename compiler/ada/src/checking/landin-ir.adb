@@ -114,6 +114,11 @@ package body Landin.IR is
    function Nth_Field
      (Of_Unit : Unit; Item : Item_Id; Index : Positive)
      return Landin.Types.Scalar_Name
+     is (Nth_Field_Shape (Of_Unit, Item, Index).Element);
+
+   function Nth_Field_Shape
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive)
+      return Field_Shape
      is (Of_Unit.Fields
            (Element (Of_Unit, Item).Fields.First + Index));
 
@@ -149,10 +154,21 @@ package body Landin.IR is
       Item    : Item_Id;
       Of_Type : Landin.Types.Scalar_Name)
    is
+   begin
+      Add_Field
+        (Into, Item,
+         (Kind => Scalar_Field_Shape, Element => Of_Type, Length => 1));
+   end Add_Field;
+
+   procedure Add_Field
+     (Into : in out Unit;
+      Item : Item_Id;
+      Shape : Field_Shape)
+   is
       Held : Item_Record := Element (Into, Item);
    begin
       Open_Run (Held.Fields, Natural (Into.Fields.Length));
-      Into.Fields.Append (Of_Type);
+      Into.Fields.Append (Shape);
       Held.Fields.Count := Held.Fields.Count + 1;
       Into.Items (Positive (Item)) := Held;
    end Add_Field;
@@ -200,6 +216,12 @@ package body Landin.IR is
      is (if Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
          then Array_Length (Of_Unit, Item)
          else Element_Total (Field_Count (Of_Unit, Item)));
+
+   function Part_Is_Scalar
+     (Of_Unit : Unit; Item : Item_Id; Index : Part_Position) return Boolean
+     is (Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
+         or else Nth_Field_Shape
+           (Of_Unit, Item, Positive (Index)).Kind = Scalar_Field_Shape);
 
    function Nth_Part
      (Of_Unit : Unit; Item : Item_Id; Index : Part_Position)
@@ -628,7 +650,7 @@ package body Landin.IR is
 
    function Nth_Measurement_Field
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id; Field : Positive)
-      return Measurement_Field
+      return Field_Shape
    is
       First : constant Natural :=
         Held (Of_Unit, Item, Value).First_Measurement_Field;
@@ -719,7 +741,7 @@ package body Landin.IR is
      (Into    : in out Unit;
       Item    : Item_Id;
       Of_Code : Opcode;
-      Fields  : Measurement_Field_Array;
+      Fields  : Field_Shape_Array;
       Gives   : Landin.Types.Scalar_Name;
       Site    : Landin.Provenance.Origin) return Value_Id
    is

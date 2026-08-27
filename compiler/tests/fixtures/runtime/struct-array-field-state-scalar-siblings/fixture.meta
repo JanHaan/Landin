@@ -1,0 +1,6 @@
+class: runtime
+summary: D46 zeroes an array-field struct and preserves scalar sibling offsets around the array
+constructs: 0190, 0350, 0520, 0670, 0750, 1740, 1820
+program: main.ldn
+status: 42
+targets: linux-x86-64

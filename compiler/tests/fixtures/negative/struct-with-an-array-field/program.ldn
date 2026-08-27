@@ -1,14 +1,10 @@
---  D45 lays this type out compactly for measurement.  A runtime value still
---  waits for nested-place, initialization and whole-copy rules.
+--  D46 gives this type module storage, but its local frame representation
+--  still waits for nested-place, initialization and whole-copy rules.
 holder: type = struct
     row: [4]u8
     count: u32
 end holder
 
-mut here: holder
-
---  The refused binding owns the one report.  Reading another field does not
---  manufacture a second diagnosis from the ill-typed value.
-f: () -> (r: u32) =
-    r = here.count
+f: () -> none =
+    mut here: holder
 end f

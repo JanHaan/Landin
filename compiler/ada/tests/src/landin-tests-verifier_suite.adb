@@ -148,6 +148,7 @@ package body Landin.Tests.Verifier_Suite is
       Result_Of_The_Wrong_Type,
       Measurement_Result_Is_Not_Usize,
       Scalar_Measurement_Length_Is_Not_One,
+      Aggregate_Scalar_Length_Is_Not_One,
       Operands_Of_Two_Types,
       Store_Of_The_Wrong_Type,
       Store_To_A_Parameter,
@@ -155,6 +156,8 @@ package body Landin.Tests.Verifier_Suite is
       Datum_Load_Names_A_Routine,
       Datum_Load_Names_An_Aggregate,
       Field_Beyond_The_Aggregate,
+      Field_Operation_Names_An_Array,
+      Field_Store_Names_An_Array,
       Field_Store_Of_The_Wrong_Type,
       Local_Array_Part_Is_Out_Of_Range,
       Local_Array_Load_Has_The_Wrong_Type,
@@ -204,7 +207,23 @@ package body Landin.Tests.Verifier_Suite is
       IR.Set_Array (Unit, E, Landin.Types.U32, 4);
       D := IR.Add_Item (Unit, IR.Datum, 3, Landin.Types.U32, Site);
       G := IR.Add_Item (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
-      IR.Add_Field (Unit, G, Landin.Types.U32);
+      if Harm = Aggregate_Scalar_Length_Is_Not_One then
+         IR.Add_Field
+           (Unit, G,
+            (Kind    => IR.Scalar_Field_Shape,
+             Element => Landin.Types.U32,
+             Length  => 2));
+      elsif Harm in Field_Operation_Names_An_Array
+                    | Field_Store_Names_An_Array
+      then
+         IR.Add_Field
+           (Unit, G,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U32,
+             Length  => 2));
+      else
+         IR.Add_Field (Unit, G, Landin.Types.U32);
+      end if;
 
       if Harm = No_Block_At_All then
          return V.Check (Unit);
@@ -270,10 +289,10 @@ package body Landin.Tests.Verifier_Suite is
          when Measurement_Result_Is_Not_Usize =>
             N := IR.Emit_Aggregate_Measurement
               (Unit, A, IR.Measure_Size,
-               [(Kind    => IR.Scalar_Measurement_Field,
+               [(Kind    => IR.Scalar_Field_Shape,
                  Element => Landin.Types.U8,
                  Length  => 1),
-                (Kind    => IR.Scalar_Measurement_Field,
+                (Kind    => IR.Scalar_Field_Shape,
                  Element => Landin.Types.U32,
                  Length  => 1)],
                Landin.Types.U32, Site);
@@ -285,11 +304,16 @@ package body Landin.Tests.Verifier_Suite is
          when Scalar_Measurement_Length_Is_Not_One =>
             N := IR.Emit_Aggregate_Measurement
               (Unit, A, IR.Measure_Size,
-               [(Kind    => IR.Scalar_Measurement_Field,
+               [(Kind    => IR.Scalar_Field_Shape,
                  Element => Landin.Types.U8,
                  Length  => 2)],
                Landin.Types.Usize, Site);
             pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Aggregate_Scalar_Length_Is_Not_One =>
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -346,6 +370,22 @@ package body Landin.Tests.Verifier_Suite is
             N := IR.Emit_Load_Field
                    (Unit, A, G, 2, Landin.Types.U32, Site);
             pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Field_Operation_Names_An_Array =>
+            N := IR.Emit_Load_Field
+                   (Unit, A, G, 1, Landin.Types.U32, Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Field_Store_Names_An_Array =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.U32, 1, False, Site);
+            IR.Emit_Store_Field (Unit, A, G, 1, N, Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -631,7 +671,9 @@ package body Landin.Tests.Verifier_Suite is
          (Result_Of_The_Wrong_Type,   V.Result_Disagrees),
          (Measurement_Result_Is_Not_Usize, V.Result_Disagrees),
          (Scalar_Measurement_Length_Is_Not_One,
-          V.Measurement_Field_Malformed),
+          V.Field_Shape_Malformed),
+         (Aggregate_Scalar_Length_Is_Not_One,
+          V.Field_Shape_Malformed),
          (Operands_Of_Two_Types,      V.Operands_Disagree),
          (Store_Of_The_Wrong_Type,    V.Store_Disagrees_With_Slot),
          (Store_To_A_Parameter,       V.Store_To_A_Parameter),
@@ -640,6 +682,8 @@ package body Landin.Tests.Verifier_Suite is
          (Datum_Load_Names_An_Aggregate,
           V.Aggregate_Datum_Is_Not_A_Value),
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
+         (Field_Operation_Names_An_Array, V.Field_Is_Not_A_Scalar),
+         (Field_Store_Names_An_Array, V.Field_Is_Not_A_Scalar),
          (Field_Store_Of_The_Wrong_Type, V.Store_Datum_Disagrees),
          (Local_Array_Part_Is_Out_Of_Range, V.Field_Out_Of_Range),
          (Local_Array_Load_Has_The_Wrong_Type, V.Result_Disagrees),

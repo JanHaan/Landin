@@ -1,5 +1,5 @@
 class: negative
-summary: D45 lays out an array field for measurement but keeps a runtime value of that struct refused once
+summary: D46 admits array-field structs as module state but keeps local storage refused once
 constructs: 0520, 0670, 0750, 1740, 1830
 program: program.ldn
 codes: L0304

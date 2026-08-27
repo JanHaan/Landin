@@ -1604,6 +1604,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Struct_Array_Field_Extent_Follows_Usize
      (Item : in out Landin.Testing.Context);
 
+   procedure Struct_Array_Field_Storage_Is_Module_Only
+     (Item : in out Landin.Testing.Context);
+
    procedure Array_Extent_Follows_Usize
      (Item : in out Landin.Testing.Context)
    is
@@ -1689,6 +1692,49 @@ package body Landin.Tests.Checking_Suite is
       Check_Target (Landin.Targets.Linux_X86_64, True);
    end Struct_Array_Field_Extent_Follows_Usize;
 
+   --  D46 is deliberately a storage-class boundary: the same laid-out type
+   --  is zeroed module state, while a local still waits for a frame shape
+   --  that can describe its nested array field.
+   procedure Struct_Array_Field_Storage_Is_Module_Only
+     (Item : in out Landin.Testing.Context)
+   is
+      Prefix : constant String :=
+        "holder: type = struct" & LF
+        & "    row: [2]u32" & LF
+        & "    tail: u8" & LF
+        & "end holder" & LF;
+
+      procedure Check_Source (Source : String; Accepted : Boolean);
+
+      procedure Check_Source (Source : String; Accepted : Boolean) is
+         Work  : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran   : Natural;
+         Src   : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "storage.ldn", Source);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+
+         Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) /= Accepted,
+            "the storage class decides whether the shape is enabled");
+      end Check_Source;
+   begin
+      Check_Source (Prefix & "mut state: holder" & LF, True);
+      Check_Source
+        (Prefix
+         & "f: () -> none =" & LF
+         & "    mut state: holder" & LF
+         & "end f" & LF,
+         False);
+   end Struct_Array_Field_Storage_Is_Module_Only;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1748,6 +1794,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "struct array field extent follows usize",
          Struct_Array_Field_Extent_Follows_Usize'Access);
+      Landin.Testing.Register
+        (Into, "checking", "struct array field storage is module only",
+         Struct_Array_Field_Storage_Is_Module_Only'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);
