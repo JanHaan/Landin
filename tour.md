@@ -622,10 +622,13 @@ end read_header
 
 ```
 The repeated expression runs once, not once for every element. In the mixed form
-`[e1, ..., ek, of repeated]`, an explicitly typed local requires `1 <= k < N`,
-evaluates and stores the prefix left to right, then evaluates `repeated` once and
-compactly fills the suffix. Module, inferred, assignment, nested and general-value
-mixed forms remain refused. `of` stays contextual: `[of, other, of]` and
+`[e1, ..., ek, of repeated]`, an explicitly typed local or assignment to a
+mutable fixed array requires `1 <= k < N`, evaluates and stores the prefix left
+to right, then evaluates `repeated` once and compactly fills the suffix. An
+assignment reaches its destination first; all right-hand reads use the incoming
+definite-assignment state, and successful completion assigns the whole array.
+Module initialization, inference, nesting and general-value mixed forms remain
+refused. `of` stays contextual: `[of, other, of]` and
 `[of + 1]` remain ordinary literals when `of` names a binding. A nonzero written
 fixed-array type accepts either full-array form for module state or a local; at module scope
 the expression must be a compile-time known scalar [1940]. A counted repetition
@@ -637,6 +640,7 @@ flash: [4]u32 = [of 0xFFFF_FFFF]
 mut row: [4]u32 = [of next()]
 inferred := [4 of next()]
 row = [of next()]                 -- each call to next happens once
+row = [header(), of padding()]     -- prefix first, then one padding call
 
 ```
 A zero contextual length and a zero count in the inferred form are refused while

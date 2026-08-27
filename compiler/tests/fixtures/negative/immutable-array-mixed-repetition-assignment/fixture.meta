@@ -1,0 +1,6 @@
+class: negative
+summary: mixed-prefix repetition cannot assign an immutable array place
+constructs: 0040, 0080, 0410, 0520, 0560, 1760, 1810, 1900
+program: program.ldn
+codes: L0303
+targets: linux-x86-64, macos-arm64

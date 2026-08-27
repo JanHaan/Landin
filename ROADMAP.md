@@ -2525,18 +2525,36 @@ element count. The parser's public case pins that `of` remains contextual; publi
 checker, IR, verifier, lowering and backend cases pin shape, bounds, compactness,
 order, offset and count. A positive fixture, six focused context/shape
 negatives, and `runtime/mixed-array-repetition-is-source-ordered` pin the source
-and executable boundary. Module, inferred, assignment, nested and general-value
-mixed forms remain refused.
+and executable boundary. Module, inferred, nested and general-value mixed forms
+remain refused; assignment is admitted separately by D37.
+
+D37 admits `[e1, ..., ek, of repeated]` as the right-hand side of assignment to
+a mutable fixed-array place of type `[N]T`, with `1 <= k < N`. The destination
+supplies the shape and scalar context. Its place is reached before every
+right-hand expression; lowering then evaluates and immediately stores each
+prefix expression left to right before evaluating `repeated` once and reusing
+D36's compact `Fill_Array` from `k + 1`. The destination may be a local frame
+slot or module datum, and neither path creates a temporary or a new IR, verifier
+or backend operation. Definite-assignment checks all right-hand reads against the
+incoming state and establishes the whole destination only after successful
+completion. Public checker and lowering cases pin contextual shape, both storage
+kinds, immediate order, one suffix value, `First` and absence of a hidden slot.
+A positive fixture pins both destination kinds and whole-destination assignment;
+focused negatives pin mutability, prefix and suffix types, `k < N`, and incoming
+state; the Linux x86-64 runtime fixture pins prefix visibility and exactly-once
+suffix evaluation for both storage kinds. Typed module initialization, inferred
+initialization, nested and general-value mixed forms remain refused.
 
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D35's
 counted inferred local and module repetition, D34's explicitly typed local and
 module repetition and D36's explicitly typed local mixed repetition; array
-assignments other than D20's direct storage name, D29's
-literal, D30's `zeroed` and D32's repetition; general whole-array value
-positions; inferred, scalar and every other `zeroed` [0540] context; module,
-inferred, assignment, nested and general-value mixed-prefix repetition, plus
+assignments other than D20's direct storage name, D29's literal, D30's `zeroed`,
+D32's repetition and D37's mixed-prefix repetition; general whole-array value
+positions; inferred, scalar and every other `zeroed` [0540] context; module
+initialization, inferred initialization, nested and general-value mixed-prefix
+repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`
 operands

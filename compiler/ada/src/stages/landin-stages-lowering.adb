@@ -1294,6 +1294,51 @@ package body Landin.Stages.Lowering is
                                  end;
                               end loop;
                            elsif Syn.Kind (Of_Tree, Value)
+                                   = Syn.Mixed_Array_Repetition
+                           then
+                              --  D37: Storage_For above reaches the complete
+                              --  destination before any right-hand expression.
+                              --  Form each prefix position directly in that
+                              --  storage, then evaluate one suffix value for a
+                              --  compact fill beginning at k + 1.
+                              for Position in
+                                1 .. Syn.Element_Count (Of_Tree, Value)
+                              loop
+                                 declare
+                                    Element : constant IR.Value_Id :=
+                                      Lower_Expression
+                                        (Of_Tree,
+                                         Syn.Nth_Element
+                                           (Of_Tree, Value, Position),
+                                         Scope);
+                                    Part : constant IR.Part_Position :=
+                                      IR.Part_Position (Position);
+                                 begin
+                                    case Destination.Kind is
+                                       when IR.Module_Datum =>
+                                          IR.Emit_Store_Field
+                                            (Unit.all, Filling,
+                                             Destination.Datum, Part,
+                                             Element, Site);
+                                       when IR.Frame_Slot =>
+                                          IR.Emit_Store_Slot_Field
+                                            (Unit.all, Filling,
+                                             Destination.Slot, Part,
+                                             Element, Site);
+                                    end case;
+                                 end;
+                              end loop;
+
+                              IR.Emit_Array_Fill
+                                (Unit.all, Filling, Destination,
+                                 IR.Part_Position
+                                   (Syn.Element_Count (Of_Tree, Value) + 1),
+                                 Lower_Expression
+                                   (Of_Tree,
+                                    Syn.Repeated_Element (Of_Tree, Value),
+                                    Scope),
+                                 Site);
+                           elsif Syn.Kind (Of_Tree, Value)
                                    = Syn.Array_Repetition
                            then
                               IR.Emit_Array_Fill
