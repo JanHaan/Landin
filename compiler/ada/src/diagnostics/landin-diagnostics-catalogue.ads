@@ -240,7 +240,7 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Name       =>
                "[1860]: a name used and declared in no visible scope",
             when Literal_Out_Of_Range  =>
-               "[1880]: a literal whose value its context's type does not"
+               "a compile-time magnitude its context or target does not"
                & " hold",
             when Type_Mismatch         =>
                "[1890]: two types that must agree and do not",

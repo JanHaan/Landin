@@ -129,6 +129,60 @@ package body Landin.Targets is
    function Size_Of (Item : Placement) return Byte_Count
      is (Align_Up (Item.Reach, Item.Widest));
 
+   function Can_Place
+     (Into      : Placement;
+      Size      : Byte_Count;
+      Alignment : Byte_Alignment;
+      Maximum   : Byte_Count) return Boolean
+   is
+      Step      : constant Byte_Count := Byte_Count (Alignment);
+      Remainder : constant Byte_Count := Into.Reach mod Step;
+      Padding   : constant Byte_Count :=
+        (if Remainder = 0 then 0 else Step - Remainder);
+      Widest    : constant Byte_Alignment :=
+        Byte_Alignment'Max (Into.Widest, Alignment);
+      Finish_Step : constant Byte_Count := Byte_Count (Widest);
+      At_Offset : Byte_Count;
+      Reach     : Byte_Count;
+      Finish_Remainder : Byte_Count;
+      Finish_Padding   : Byte_Count;
+   begin
+      if not Is_Power_Of_Two (Alignment)
+        or else Into.Reach > Maximum
+        or else Padding > Maximum - Into.Reach
+      then
+         return False;
+      end if;
+
+      At_Offset := Into.Reach + Padding;
+      if Size > Maximum - At_Offset then
+         return False;
+      end if;
+
+      Reach := At_Offset + Size;
+      Finish_Remainder := Reach mod Finish_Step;
+      Finish_Padding :=
+        (if Finish_Remainder = 0
+         then 0 else Finish_Step - Finish_Remainder);
+      return Finish_Padding <= Maximum - Reach;
+   end Can_Place;
+
+   procedure Place
+     (Into      : in out Placement;
+      Size      : Byte_Count;
+      Alignment : Byte_Alignment;
+      At_Offset : out Byte_Count)
+   is
+   begin
+      if not Can_Place (Into, Size, Alignment, Byte_Count'Last) then
+         raise Compiler_Defect with "aggregate placement overflow";
+      end if;
+
+      At_Offset := Align_Up (Into.Reach, Alignment);
+      Into.Reach := At_Offset + Size;
+      Into.Widest := Byte_Alignment'Max (Into.Widest, Alignment);
+   end Place;
+
    procedure Place
      (Into  : in out Placement;
       Size  : Scalar_Size;
@@ -137,12 +191,8 @@ package body Landin.Targets is
    is
       Wants : constant Byte_Alignment := Alignment_Of (Facts, Size);
    begin
-      At_Offset := Align_Up (Into.Reach, Wants);
-      Into.Reach := At_Offset + Byte_Count (Bytes (Size));
-
-      if Wants > Into.Widest then
-         Into.Widest := Wants;
-      end if;
+      Place
+        (Into, Byte_Count (Bytes (Size)), Wants, At_Offset);
    end Place;
 
 end Landin.Targets;

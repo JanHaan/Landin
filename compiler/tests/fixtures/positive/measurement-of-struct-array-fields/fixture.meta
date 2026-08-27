@@ -1,0 +1,5 @@
+class: positive
+summary: D45 lays out and measures a named struct with one compact aliased fixed-scalar-array field
+constructs: 0370, 0520, 0670, 0710, 0750, 1740, 1790, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

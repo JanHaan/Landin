@@ -181,30 +181,93 @@ package body Landin.Checking is
    procedure Lay_Out
      (Into  : in out Table;
       Id    : Declaration_Id;
-      Fields : Field_Type_Array;
-      Facts : Landin.Targets.Target_Facts)
+      Fields : Field_Shape_Array;
+      Facts : Landin.Targets.Target_Facts;
+      Fits  : out Boolean)
    is
       Built : Aggregate_Layout;
+
+      procedure Extent_Of
+        (Field     : Field_Shape;
+         Size      : out Landin.Targets.Byte_Count;
+         Alignment : out Landin.Targets.Byte_Alignment);
+
+      procedure Extent_Of
+        (Field     : Field_Shape;
+         Size      : out Landin.Targets.Byte_Count;
+         Alignment : out Landin.Targets.Byte_Alignment)
+      is
+         Held : constant Landin.Targets.Scalar_Size :=
+           Landin.Types.Storage_Size (Field.Element, Facts);
+      begin
+         if Field.Kind = Scalar_Field then
+            Size := Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held));
+            Alignment := Landin.Targets.Alignment_Of (Facts, Held);
+         else
+            Array_Extent
+              (Field.Length, Field.Element, Facts, Size, Alignment);
+         end if;
+      end Extent_Of;
    begin
+      --  First prove the complete padded value fits this target.  D18 proves
+      --  each array leaf fits alone; the containing struct still may not.
+      for Field in Fields'Range loop
+         declare
+            Size      : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
+            Ignored   : Landin.Targets.Byte_Count;
+         begin
+            Extent_Of (Fields (Field), Size, Alignment);
+            if not Landin.Targets.Can_Place
+                     (Built.Placed, Size, Alignment,
+                      Landin.Targets.Maximum_Object_Size (Facts))
+            then
+               Fits := False;
+               return;
+            end if;
+            Landin.Targets.Place
+              (Built.Placed, Size, Alignment, Ignored);
+         end;
+      end loop;
+
       Built.First := Natural (Into.Field_Offsets.Length) + 1;
       Built.Count := Fields'Length;
+      Built.Placed := Landin.Targets.Empty_Placement;
 
       for Field in Fields'Range loop
          declare
+            Size      : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
             At_Offset : Landin.Targets.Byte_Count;
          begin
+            Extent_Of (Fields (Field), Size, Alignment);
             Landin.Targets.Place
-              (Built.Placed,
-               Landin.Types.Storage_Size (Fields (Field), Facts),
-               Facts, At_Offset);
+              (Built.Placed, Size, Alignment, At_Offset);
             Into.Field_Offsets.Append (At_Offset);
-            Into.Field_Types.Append (Fields (Field));
+            Into.Field_Shapes.Append (Fields (Field));
          end;
       end loop;
 
       Built.Ready := True;
       Into.Layouts (Natural (Id)) := Built;
+      Fits := True;
    end Lay_Out;
+
+   function Has_Only_Scalar_Fields
+     (Of_Table : Table; Id : Declaration_Id) return Boolean
+   is
+      Layout : Aggregate_Layout renames
+        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+   begin
+      for Field in 1 .. Layout.Count loop
+         if Of_Table.Field_Shapes (Layout.First + Field - 1).Kind
+              /= Scalar_Field
+         then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Has_Only_Scalar_Fields;
 
    function Field_Offset
      (Of_Table : Table;
@@ -225,8 +288,41 @@ package body Landin.Checking is
       Layout : Aggregate_Layout renames
         Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
    begin
-      return Of_Table.Field_Types (Layout.First + Field - 1);
+      return Of_Table.Field_Shapes (Layout.First + Field - 1).Element;
    end Field_Type;
+
+   function Field_Kind_Of
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Field_Kind
+   is
+      Layout : Aggregate_Layout renames
+        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+   begin
+      return Of_Table.Field_Shapes (Layout.First + Field - 1).Kind;
+   end Field_Kind_Of;
+
+   function Field_Array_Length
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Element_Count
+   is
+      Layout : Aggregate_Layout renames
+        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+   begin
+      return Of_Table.Field_Shapes (Layout.First + Field - 1).Length;
+   end Field_Array_Length;
+
+   function Field_Array_Element
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive) return Landin.Types.Scalar_Name
+   is
+      Layout : Aggregate_Layout renames
+        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+   begin
+      return Of_Table.Field_Shapes (Layout.First + Field - 1).Element;
+   end Field_Array_Element;
 
    function Layout_Extent (Of_Table : Table; Id : Declaration_Id)
      return Landin.Targets.Byte_Count

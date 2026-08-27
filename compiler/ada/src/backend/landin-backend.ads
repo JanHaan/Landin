@@ -101,8 +101,9 @@ package Landin.Backend is
                                      (Of_Unit, Item, Slot));
 
    --  Answer one target-neutral measurement instruction.  Aggregate
-   --  measurements carry only declaration-order scalar field types; this
-   --  target-owning seam derives their padded placement with Landin.Targets.
+   --  measurements carry declaration-order scalar or compact fixed-array
+   --  fields; this target-owning seam derives their padded placement with
+   --  Landin.Targets.
    procedure Measurement_Extent
      (Of_Unit   : Landin.IR.Unit;
       Item      : Landin.IR.Item_Id;

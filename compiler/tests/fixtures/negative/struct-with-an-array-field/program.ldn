@@ -1,5 +1,5 @@
---  [0750] lays a struct out from its fields, and an array field waits for
---  the slice that can lay one out inside another.
+--  D45 lays this type out compactly for measurement.  A runtime value still
+--  waits for nested-place, initialization and whole-copy rules.
 holder: type = struct
     row: [4]u8
     count: u32
@@ -7,9 +7,8 @@ end holder
 
 mut here: holder
 
---  A struct whose field was refused has no layout, so reading a field
---  that is fine asks it for one it does not have.  The refusal above is
---  the answer, and this reads back one report rather than a defect.
+--  The refused binding owns the one report.  Reading another field does not
+--  manufacture a second diagnosis from the ill-typed value.
 f: () -> (r: u32) =
     r = here.count
 end f

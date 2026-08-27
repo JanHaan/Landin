@@ -1,0 +1,6 @@
+too_large: type = struct
+    bytes: [18446744073709551614]u8
+    tail: u32
+end too_large
+
+answer: usize = sizeof too_large

@@ -455,6 +455,60 @@ package body Landin.Tests.Targets_Suite is
       Landin.Testing.Check_Equal
         (Item, Natural (Size_Of (Tight)), 8,
          "and the order that needs no padding is smaller");
+
+      --  D45's fixed array is already one extent/alignment pair.  Placing
+      --  that pair once preserves field order without enumerating elements.
+      declare
+         Nested : Placement := Empty_Placement;
+      begin
+         Place (Nested, Byte_1, Linux_X86_64, Where);
+         Landin.Testing.Check
+           (Item, Can_Place (Nested, 16, 8, Byte_Count'Last),
+            "a nested extent can be placed at its own alignment");
+         Place (Nested, 16, 8, Where);
+         Landin.Testing.Check_Equal
+           (Item, Natural (Where), 8, "the nested extent starts at eight");
+         Place (Nested, Byte_2, Linux_X86_64, Where);
+         Landin.Testing.Check_Equal
+           (Item, Natural (Where), 24, "the following field starts after it");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Size_Of (Nested)), 32,
+            "the complete nested placement receives tail padding");
+         Landin.Testing.Check
+           (Item, not Can_Place
+              (Empty_Placement, 8, 8, 7),
+            "the caller can diagnose a target extent before placement");
+
+         Landin.Testing.Check
+           (Item, Can_Place
+              (Empty_Placement, Byte_Count'Last, 1, Byte_Count'Last),
+            "an exactly full byte-aligned extent fits");
+         Landin.Testing.Check
+           (Item, not Can_Place
+              (Empty_Placement, 1, 3, Byte_Count'Last),
+            "a non-power-of-two alignment is refused");
+
+         declare
+            Near_End : Placement := Empty_Placement;
+         begin
+            Place (Near_End, Byte_Count'Last - 1, 1, Where);
+            Landin.Testing.Check
+              (Item, not Can_Place
+                 (Near_End, 0, 4, Byte_Count'Last),
+               "field padding may cross the maximum extent");
+         end;
+
+         declare
+            Needs_Tail : Placement := Empty_Placement;
+         begin
+            Place (Needs_Tail, 8, 8, Where);
+            Landin.Testing.Check
+              (Item, not Can_Place
+                 (Needs_Tail, Byte_Count'Last - 8, 1,
+                  Byte_Count'Last),
+               "tail padding may cross the maximum extent");
+         end;
+      end;
    end Fields_Keep_The_Order_They_Were_Written;
 
    --  The layout follows the description and not the machine running the

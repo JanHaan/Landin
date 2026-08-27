@@ -34,6 +34,8 @@ package body Landin.Tests.Lowering_Suite is
 
    package IR renames Landin.IR;
 
+   use type IR.Measurement_Field_Kind;
+
    use type IR.Block_Id;
    use type IR.Element_Total;
    use type IR.Item_Id;
@@ -2028,19 +2030,29 @@ package body Landin.Tests.Lowering_Suite is
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
       begin
          for Datum in IR.Item_Id'(1) .. 2 loop
-            Landin.Testing.Check
-              (Item,
-               IR.Op_Of (Unit, Datum, 1)
-                 in IR.Measure_Size | IR.Measure_Align
-                 and then IR.Is_Aggregate_Measurement (Unit, Datum, 1)
-                 and then IR.Measurement_Field_Count (Unit, Datum, 1) = 3
-                 and then IR.Nth_Measurement_Field (Unit, Datum, 1, 1)
-                            = Landin.Types.U8
-                 and then IR.Nth_Measurement_Field (Unit, Datum, 1, 2)
-                            = Landin.Types.Usize
-                 and then IR.Nth_Measurement_Field (Unit, Datum, 1, 3)
-                            = Landin.Types.U16,
-               "each measurement carries declaration-order scalar types");
+            declare
+               First : constant IR.Measurement_Field :=
+                 IR.Nth_Measurement_Field (Unit, Datum, 1, 1);
+               Second : constant IR.Measurement_Field :=
+                 IR.Nth_Measurement_Field (Unit, Datum, 1, 2);
+               Third : constant IR.Measurement_Field :=
+                 IR.Nth_Measurement_Field (Unit, Datum, 1, 3);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  IR.Op_Of (Unit, Datum, 1)
+                    in IR.Measure_Size | IR.Measure_Align
+                    and then IR.Is_Aggregate_Measurement (Unit, Datum, 1)
+                    and then IR.Measurement_Field_Count (Unit, Datum, 1) = 3
+                    and then First.Kind = IR.Scalar_Measurement_Field
+                    and then First.Element = Landin.Types.U8
+                    and then Second.Kind = IR.Scalar_Measurement_Field
+                    and then Second.Element = Landin.Types.Usize
+                    and then Third.Kind = IR.Scalar_Measurement_Field
+                    and then Third.Element = Landin.Types.U16,
+                  "each measurement carries declaration-order scalar"
+                  & " types");
+            end;
          end loop;
          Landin.Testing.Check
            (Item,
@@ -2049,6 +2061,71 @@ package body Landin.Tests.Lowering_Suite is
             "the verifier accepts target-neutral aggregate measurements");
       end;
    end A_Struct_Measurement_Carries_Its_Scalar_Fields;
+
+   --  D45: a fixed array remains one measurement field, regardless of its
+   --  length.  The backend receives the element and count and derives the
+   --  field extent and alignment from its own target facts.
+   procedure A_Struct_Measurement_Carries_A_Compact_Array_Field
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Measurement_Carries_A_Compact_Array_Field
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "header: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    words: [4294967295]usize" & LF
+         & "    tail: u16" & LF
+         & "end header" & LF
+         & "alias: type = header" & LF
+         & "size: usize = sizeof alias" & LF
+         & "align: usize = alignof header" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a target-sized fixed-array field is accepted compactly");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Datum in IR.Item_Id'(1) .. 2 loop
+            declare
+               First : constant IR.Measurement_Field :=
+                 IR.Nth_Measurement_Field (Unit, Datum, 1, 1);
+               Array_Field : constant IR.Measurement_Field :=
+                 IR.Nth_Measurement_Field (Unit, Datum, 1, 2);
+               Last : constant IR.Measurement_Field :=
+                 IR.Nth_Measurement_Field (Unit, Datum, 1, 3);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  IR.Is_Aggregate_Measurement (Unit, Datum, 1)
+                    and then IR.Measurement_Field_Count (Unit, Datum, 1) = 3
+                    and then First.Kind = IR.Scalar_Measurement_Field
+                    and then First.Element = Landin.Types.U8
+                    and then Array_Field.Kind = IR.Array_Measurement_Field
+                    and then Array_Field.Element = Landin.Types.Usize
+                    and then Array_Field.Length = 4_294_967_295
+                    and then Last.Kind = IR.Scalar_Measurement_Field
+                    and then Last.Element = Landin.Types.U16,
+                  "the declaration-order run contains one compact array"
+                  & " shape");
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Verifier.Check (Unit).Kind
+              = Landin.IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the compact aggregate measurement");
+      end;
+   end A_Struct_Measurement_Carries_A_Compact_Array_Field;
 
    ------------------------------------------------------------------
    --  An internal array shape the source does not pin
@@ -2375,6 +2452,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a struct measurement carries its scalar fields",
          A_Struct_Measurement_Carries_Its_Scalar_Fields'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a struct measurement keeps an array compact",
+         A_Struct_Measurement_Carries_A_Compact_Array_Field'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "an internal empty array has identity measurements",

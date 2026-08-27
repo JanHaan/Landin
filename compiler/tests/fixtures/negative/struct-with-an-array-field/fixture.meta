@@ -1,6 +1,6 @@
 class: negative
-summary: [0750] lays a struct out from its fields, so a struct with an array field is refused once and reading another field does not ask it for a layout it has not got
-constructs: 0520, 0670, 0750, 1830
+summary: D45 lays out an array field for measurement but keeps a runtime value of that struct refused once
+constructs: 0520, 0670, 0750, 1740, 1830
 program: program.ldn
 codes: L0304
 targets: linux-x86-64, macos-arm64

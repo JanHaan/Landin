@@ -130,6 +130,26 @@ package Landin.Targets is
                   and then Extent_Of (Into)
                            >= At_Offset + Byte_Count (Bytes (Size));
 
+   --  The same placement operation for a field whose representation is
+   --  already known as an extent and alignment.  D45 first needs this for
+   --  a fixed array nested in a struct: an array is one field and must not
+   --  be expanded into one placement per element.
+   function Can_Place
+     (Into      : Placement;
+      Size      : Byte_Count;
+      Alignment : Byte_Alignment;
+      Maximum   : Byte_Count) return Boolean;
+
+   procedure Place
+     (Into      : in out Placement;
+      Size      : Byte_Count;
+      Alignment : Byte_Alignment;
+      At_Offset : out Byte_Count)
+     with Pre  => Can_Place
+                    (Into, Size, Alignment, Byte_Count'Last),
+          Post => At_Offset mod Byte_Count (Alignment) = 0
+                  and then Extent_Of (Into) >= At_Offset + Size;
+
    --  How far the fields reach, before the whole is rounded up.
    function Extent_Of (Item : Placement) return Byte_Count;
 
