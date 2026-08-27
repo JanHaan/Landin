@@ -2439,6 +2439,11 @@ package body Landin.Syntax.Parser is
                   return Add (False_Literal, At_Item);
                end if;
 
+               if Peek = Tok.Kw_Zeroed then
+                  Advance;
+                  return Add (Zeroed_Literal, At_Item);
+               end if;
+
                if Peek = Tok.Left_Paren then
                   if Too_Deep (At_Item) then
                      Advance;

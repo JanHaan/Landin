@@ -1,0 +1,4 @@
+f: () -> none =
+    mut row: [4]u32
+    row = zeroed
+end f

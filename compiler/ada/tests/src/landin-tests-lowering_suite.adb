@@ -941,7 +941,8 @@ package body Landin.Tests.Lowering_Suite is
    --  D24: a module array literal folds each element to a Folded value
    --  and records the source-order image against the datum item, so a
    --  target loader can consume it byte for byte.  A datum with no image
-   --  is D10 zero and stays reserved storage.
+   --  is D10 zero and stays reserved storage; D27's explicit `zeroed`
+   --  initializer deliberately has that same absent image.
    procedure A_Module_Array_Literal_Records_Its_Image
      (Item : in out Landin.Testing.Context);
 
@@ -956,7 +957,8 @@ package body Landin.Tests.Lowering_Suite is
         (Work,
          "mut numbers: [4]u32 = [10, 20 + 1, base, base + 100]" & LF
          & "base: u32 = 100" & LF
-         & "mut zeroed: [2]u16" & LF,
+         & "mut reserved: [2]u16" & LF
+         & "mut cleared: [3]bool = zeroed" & LF,
          Ran);
 
       Landin.Testing.Check
@@ -990,6 +992,9 @@ package body Landin.Tests.Lowering_Suite is
            (Item, not IR.Has_Image (Unit, 3),
             "an omitted-initializer array datum has no image and stays"
             & " zero storage");
+         Landin.Testing.Check
+           (Item, not IR.Has_Image (Unit, 4),
+            "an explicitly zeroed array datum also keeps its image absent");
       end;
    end A_Module_Array_Literal_Records_Its_Image;
 

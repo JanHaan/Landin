@@ -104,6 +104,8 @@ package Landin.Diagnostics.Checking is
       --  and so does an element the kernel cannot lay out end to end.
       Array_Value,
       Array_Element,
+      --  [0540]'s contextual all-bits-zero image.
+      Zeroed_Value,
       --  [0370] measures a type, and this kernel measures the eleven:
       --  a declared name and an array each need the answer a later
       --  slice records for them.
@@ -121,6 +123,7 @@ package Landin.Diagnostics.Checking is
             when Struct_Value       => "[0670]",
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
+            when Zeroed_Value       => "[0540]",
             when Measured_Type      => "[0370]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
@@ -182,6 +185,7 @@ private
             when Struct_Value
                | Array_Value
                | Array_Element
+               | Zeroed_Value
                | Measured_Type     => "R2.20");
 
 end Landin.Diagnostics.Checking;

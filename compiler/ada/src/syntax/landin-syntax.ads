@@ -122,6 +122,8 @@ package Landin.Syntax is
       Integer_Literal,
       True_Literal,
       False_Literal,
+      --  [0540]'s contextual all-bits-zero image.
+      Zeroed_Literal,
       --  [0370]'s measurements.  They take a type where every other
       --  expression takes an expression, which is why they are their own
       --  node kind and not a call: the kernel has no way to pass a type
@@ -196,7 +198,7 @@ package Landin.Syntax is
 
    subtype Binary_Kind is Node_Kind range Multiply .. Logical_Or;
 
-   subtype Literal_Kind is Node_Kind range Integer_Literal .. False_Literal;
+   subtype Literal_Kind is Node_Kind range Integer_Literal .. Zeroed_Literal;
 
    --  A hole: the parser needed a construct of that band here and could not
    --  read one.  Not a band of its own, because one per band is the point.

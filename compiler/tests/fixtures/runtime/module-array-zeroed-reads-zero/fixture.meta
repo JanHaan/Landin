@@ -1,0 +1,6 @@
+class: runtime
+summary: a module zeroed initializer reserves an all-zero array image
+constructs: 0040, 0080, 0190, 0340, 0350, 0520, 0540, 1740, 1760, 1770
+program: main.ldn
+status: 42
+targets: linux-x86-64

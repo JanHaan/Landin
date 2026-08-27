@@ -724,7 +724,7 @@ def grammar_recognises(rules, trees, tokens, start="program"):
                     else:
                         ends = ((at + 1,)
                                 if token_kind == "integer"
-                                or text in ("true", "false") else ())
+                                or text in ("true", "false", "zeroed") else ())
             elif name in LEXICAL_RULES:
                 ends = (at + 1,) if at < len(tokens) else ()
             elif name in trees:

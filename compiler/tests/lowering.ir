@@ -811,6 +811,16 @@ item 4 DATUM i64_wraps result array params 0 slots 0 blocks 1 values 1
   image -9223372036854775808 9223372036854775807
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/module-array-zeroed-initializer/program.ldn
+unit items 2
+item 1 DATUM numbers result array params 0 slots 0 blocks 1 values 1
+  elements 4 of u32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM flags result array params 0 slots 0 blocks 1 values 1
+  elements 3 of bool
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/module-binding-with-no-value-reads-zero/program.ldn
 unit items 4
 item 1 DATUM later result i32 params 0 slots 0 blocks 1 values 2

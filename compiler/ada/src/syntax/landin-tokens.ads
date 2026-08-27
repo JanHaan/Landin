@@ -51,11 +51,11 @@ package Landin.Tokens is
      (End_Of_Input,
       Identifier,
       Integer_Literal,
-      --  The twenty-one words [1760] reserves.
+      --  The twenty-two words [1760] reserves.
       Kw_Alignof, Kw_And, Kw_Dec, Kw_Else, Kw_Elsif, Kw_End, Kw_False,
       Kw_If, Kw_Inc, Kw_Mut, Kw_None, Kw_Not, Kw_Or, Kw_Public,
       Kw_Return, Kw_Sizeof, Kw_Struct, Kw_Then, Kw_True, Kw_Type,
-      Kw_When,
+      Kw_When, Kw_Zeroed,
       --  The signs the kernel productions spell.
       Ampersand, Bar, Caret, Colon, Colon_Equal, Comma, Dot, Equal,
       Equal_Equal, Greater, Greater_Equal, Greater_Greater, Left_Bracket,
@@ -75,7 +75,7 @@ package Landin.Tokens is
    --  stream the parser may take at face value.
    subtype Kernel_Kind is Token_Kind range End_Of_Input .. Underscore;
 
-   subtype Reserved_Word is Token_Kind range Kw_Alignof .. Kw_When;
+   subtype Reserved_Word is Token_Kind range Kw_Alignof .. Kw_Zeroed;
 
    subtype Punctuation is Token_Kind range Ampersand .. Underscore;
 
@@ -90,11 +90,11 @@ package Landin.Tokens is
    --  literal has as many as there are programs.
    subtype Spelled_Kind is Token_Kind range Kw_Alignof .. Dot_Dot_Less;
 
-   --  `literal ::= integer | "true" | "false"` [1770]. true and false are
-   --  reserved words and literals at once, so this is a predicate rather
-   --  than a band of the enumeration.
+   --  `literal ::= integer | "true" | "false" | "zeroed"` [1770].  The
+   --  three words are reserved and literals at once, so this is a predicate
+   --  rather than a band of the enumeration.
    function Is_Literal (Of_Kind : Token_Kind) return Boolean
-     is (Of_Kind in Integer_Literal | Kw_True | Kw_False);
+     is (Of_Kind in Integer_Literal | Kw_True | Kw_False | Kw_Zeroed);
 
    --  The bytes of a kind that has only one spelling.  `alignof` is the
    --  longest, at seven.
