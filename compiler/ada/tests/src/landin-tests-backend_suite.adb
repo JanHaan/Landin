@@ -1508,6 +1508,47 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Zero_Data_Is_Reserved_And_Not_Written;
 
+   --  D39 reaches the same absent loader-zero image as D10, including through
+   --  a scalar alias: spelling `zeroed` must not move either datum to `.data`.
+   procedure A_Zeroed_Module_Scalar_Stays_In_Bss
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Zeroed_Module_Scalar_Stays_In_Bss
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "word: type = u64" & LF
+         & "number: word = zeroed" & LF
+         & "flag: bool = zeroed" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, "number:" & LF & HT & ".zero 8" & LF),
+            "the aliased integer zero is reserved");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, "flag:" & LF & HT & ".zero 1" & LF),
+            "false is reserved");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & ".bss" & LF), 1,
+            "both contextual zeros share the reserved section");
+         Landin.Testing.Check
+           (Item, not Contains (Text, HT & ".data" & LF),
+            "no written data image is emitted");
+      end;
+   end A_Zeroed_Module_Scalar_Stays_In_Bss;
+
    --  [1740]'s module state of [0520]'s array type.  D10 zeroes it, so it
    --  is reserved like any other zero, and its extent is the element
    --  repeated: `[4]u32` is sixteen bytes aligned to four, and `[3]usize`
@@ -2772,6 +2813,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "zero data is reserved and not written",
          Zero_Data_Is_Reserved_And_Not_Written'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a zeroed module scalar stays in bss",
+         A_Zeroed_Module_Scalar_Stays_In_Bss'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value becomes initialized data",
          A_Module_Value_Becomes_Initialized_Data'Access);

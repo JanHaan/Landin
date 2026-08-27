@@ -1627,8 +1627,12 @@ package body Landin.Stages.Lowering is
          --  none.  So the block carries the scope the resolver read it in.
          Open (Fresh (Of_Tree, Node, Res.Program_Scope));
 
-         if Value = Syn.No_Node then
+         if Value = Syn.No_Node
+           or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
+         then
             --  D10: a binding with no value holds zero, false for a bool.
+            --  D39's contextual scalar `zeroed` is exactly that existing
+            --  scalar IR, not a separately evaluated expression.
             if Held = Ty.Bool then
                Answer :=
                  IR.Emit_Truth (Unit.all, Filling, False, Site);

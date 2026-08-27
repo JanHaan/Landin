@@ -1,0 +1,3 @@
+word: type = u64
+number: word = zeroed
+mut flag: bool = zeroed

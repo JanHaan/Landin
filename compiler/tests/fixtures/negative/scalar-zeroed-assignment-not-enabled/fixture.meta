@@ -1,0 +1,6 @@
+class: negative
+summary: neither module nor local scalar assignment gives zeroed D39's initializer context
+constructs: 0040, 0190, 0540, 1740, 1760, 1770, 1800, 1810
+program: program.ldn
+codes: L0304, L0304
+targets: linux-x86-64, macos-arm64
