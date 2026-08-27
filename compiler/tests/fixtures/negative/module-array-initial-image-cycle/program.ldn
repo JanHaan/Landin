@@ -1,0 +1,2 @@
+mut first: [2]u32 = second
+mut second: [2]u32 = first

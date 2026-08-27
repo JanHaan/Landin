@@ -1,0 +1,7 @@
+row: type = [2]u32
+row_alias: type = row
+
+--  Module initial images follow declaration identity rather than source order.
+mut typed_buffer: row_alias = source
+mut inferred_buffer := typed_buffer
+mut source: [2]u32

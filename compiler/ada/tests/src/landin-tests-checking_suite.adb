@@ -551,13 +551,13 @@ package body Landin.Tests.Checking_Suite is
       Check_Target (Landin.Targets.Synthetic_32, 16, 4);
    end Array_Types_Are_Their_Length_And_Element;
 
-   --  D21: inference from a direct storage name carries D17's exact shape
-   --  onto every destination declaration, independent of destination
+   --  R2.20: inference from a direct storage name carries D17's exact shape
+   --  onto module and local declarations, independent of destination
    --  mutability and whether the source is module or prior-local storage.
-   procedure Inferred_Array_Locals_Carry_Their_Source_Shape
+   procedure Inferred_Array_Bindings_Carry_Their_Source_Shape
      (Item : in out Landin.Testing.Context);
 
-   procedure Inferred_Array_Locals_Carry_Their_Source_Shape
+   procedure Inferred_Array_Bindings_Carry_Their_Source_Shape
      (Item : in out Landin.Testing.Context)
    is
       Work  : Landin.Stages.Compilation :=
@@ -570,6 +570,7 @@ package body Landin.Tests.Checking_Suite is
       Src := Landin.Stages.Add_Source
         (Work, "inferred-arrays.ldn",
          "source: [3]u16" & LF
+         & "mut module_copy := source" & LF
          & "f: () -> none =" & LF
          & "    mut mutable_module := source" & LF
          & "    immutable_module := source" & LF
@@ -598,7 +599,10 @@ package body Landin.Tests.Checking_Suite is
                         (Landin.Resolution.Declaration_Count (Meanings.all))
          loop
             if Landin.Resolution.Sort_Of (Meanings.all, Id)
-                 = Landin.Resolution.Local_Binding
+                 in Landin.Resolution.Local_Binding
+                    | Landin.Resolution.Module_Binding
+              and then Landin.Checking.Type_Of (Types.all, Id)
+                       = Landin.Types.Fixed_Array
             then
                Count := Count + 1;
                Landin.Testing.Check
@@ -618,8 +622,8 @@ package body Landin.Tests.Checking_Suite is
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Count, 4, "every inferred destination was checked");
-   end Inferred_Array_Locals_Carry_Their_Source_Shape;
+        (Item, Count, 6, "module and local destinations were checked");
+   end Inferred_Array_Bindings_Carry_Their_Source_Shape;
 
    --  D18: an array may occupy every byte a target's `usize` can name, and
    --  not one beyond it.  The same 2**32-byte array therefore belongs to a
@@ -680,8 +684,8 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "array types are their length and element",
          Array_Types_Are_Their_Length_And_Element'Access);
       Landin.Testing.Register
-        (Into, "checking", "inferred array locals carry their source shape",
-         Inferred_Array_Locals_Carry_Their_Source_Shape'Access);
+        (Into, "checking", "inferred arrays carry their source shape",
+         Inferred_Array_Bindings_Carry_Their_Source_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "array extent follows usize",
          Array_Extent_Follows_Usize'Access);

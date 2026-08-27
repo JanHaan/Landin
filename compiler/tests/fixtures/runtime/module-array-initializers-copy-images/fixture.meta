@@ -1,0 +1,6 @@
+class: runtime
+summary: R2.20 gives typed and inferred module array initializers independent storage holding the source's initial image
+constructs: 0050, 0060, 0080, 0110, 0410, 0520, 1740, 1910, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

@@ -1,0 +1,9 @@
+length_source: [3]u32
+bool_source: [2]bool
+
+mut wrong_length: [2]u32 = length_source
+mut wrong_element: [2]u32 = bool_source
+
+--  Invalid shape edges do not become an initial-image cycle.
+mut cycle_short: [2]u32 = cycle_long
+mut cycle_long: [3]u32 = cycle_short

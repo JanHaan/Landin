@@ -1,0 +1,6 @@
+class: negative
+summary: R2.20 admits only a direct module storage name as an array initializer and preserves every general array-value refusal
+constructs: 0520, 1740
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

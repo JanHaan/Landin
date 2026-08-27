@@ -1,0 +1,17 @@
+mut typed: [2]u32 = source
+mut inferred := typed
+mut source: [2]u32
+
+public main: () -> (code: i32) =
+    typed[0] = 42
+    inferred[1] = 7
+
+    if source[0] == 0 and source[1] == 0
+        and typed[0] == 42 and typed[1] == 0
+        and inferred[0] == 0 and inferred[1] == 7
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
