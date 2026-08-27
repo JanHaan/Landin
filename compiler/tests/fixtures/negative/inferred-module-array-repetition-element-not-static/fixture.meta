@@ -1,0 +1,6 @@
+class: negative
+summary: an inferred module repetition element must fold without running code
+constructs: 0040, 0050, 0520, 0560, 1740, 1810, 1830, 1940
+program: program.ldn
+codes: L0305
+targets: linux-x86-64, macos-arm64

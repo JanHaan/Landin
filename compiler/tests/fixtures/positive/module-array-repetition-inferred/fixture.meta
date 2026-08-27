@@ -1,0 +1,5 @@
+class: positive
+summary: counted module repetition infers a compact static array image
+constructs: 0040, 0050, 0200, 0520, 0530, 0560, 1740, 1810, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

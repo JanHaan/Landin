@@ -619,8 +619,9 @@ header:  [8]u8   = [0x7F, 0x45, of 0]
 The repeated expression runs once, not once for every element. A nonzero written
 fixed-array type accepts either form for module state or a local; at module scope
 the expression must be a compile-time known scalar [1940]. A counted repetition
-may also supply an inferred local's length and scalar element type. Assignment to
-an existing fixed array accepts an explicit count or takes it from the destination:
+may also supply an inferred local or module binding's length and scalar element
+type; an untyped integer element defaults to `i32`. Assignment to an existing
+fixed array accepts an explicit count or takes it from the destination:
 ```landin
 flash: [4]u32 = [of 0xFFFF_FFFF]
 mut row: [4]u32 = [of next()]
@@ -629,10 +630,12 @@ row = [of next()]                 -- each call to next happens once
 
 ```
 A zero contextual length and a zero count in the inferred form are refused while
-[0580]'s empty-array decision remains open. An inferred module initializer, a
-count-less inferred initializer, mixed-prefix repetition and other general array
-value positions remain later compiler slices. A module repetition whose folded
-pattern is zero has the same loader-zeroed image as omitted or `zeroed` state.
+[0580]'s empty-array decision remains open. A count-less inferred initializer,
+mixed-prefix repetition and other general array value positions remain later
+compiler slices. Every inferred extent must fit the target's `usize`. A module
+repetition uses [1940]'s target-aware fold and range rules; its compact repeated
+image survives direct-name chains, while a folded zero pattern has the same
+loader-zeroed image as omitted or `zeroed` state.
 
 ### [0570] Slice: a view
 

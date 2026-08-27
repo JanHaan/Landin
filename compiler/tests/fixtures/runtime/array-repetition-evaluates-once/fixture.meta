@@ -1,6 +1,6 @@
 class: runtime
-summary: array repetition evaluates one scalar and fills local and module storage
-constructs: 0050, 0080, 0160, 0390, 0410, 0520, 0530, 0560, 0570, 1800, 1880, 1950, 1960, 1970
+summary: typed and inferred repetition evaluates one scalar and fills all storage
+constructs: 0050, 0080, 0160, 0200, 0390, 0410, 0520, 0530, 0560, 0570, 1740, 1800, 1810, 1880, 1940, 1950, 1960, 1970
 program: main.ldn
 status: 42
 targets: linux-x86-64

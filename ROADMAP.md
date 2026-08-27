@@ -2497,15 +2497,30 @@ reads 1/2/4/8-byte module patterns plus zero and through images. A zero contextu
 length is refused by repetition without admitting or rejecting `[0]T` source, so
 [0580] remains open.
 
+D35 admits counted nonzero repetition as an inferred module initializer. Its
+written count supplies D17's length, its scalar expression supplies the element
+type, and [0200] defaults an untyped integer to `i32`; the inferred byte extent
+is checked against the selected target's `usize`. Module repetition now shares
+one [1940] target-aware fold/range path for D34's typed and D35's inferred forms,
+so a non-static, out-of-range or overflowing pattern is refused by the checker
+rather than reaching lowering's defect guard. D34's compact repeated image,
+through-chain copying, full-width backend directives and absent zero image apply
+unchanged. Public checker and lowering cases pin inferred shape and compact
+images; a positive fixture pins typed/defaulted inference, through copying and
+zero patterns; focused negatives pin staticness, target extent and both typed
+and inferred folds; and the runtime fixture reads inferred data, through and
+`.bss` images. Zero-count, count-less inferred, mixed-prefix and general-value
+forms remain refused.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
-and module literal, D27/D28's explicitly typed module and local `zeroed`, D33's
-counted inferred local repetition and D34's explicitly typed local and module
-repetition; array assignments other than D20's direct storage name, D29's
+and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D35's
+counted inferred local and module repetition and D34's explicitly typed local and
+module repetition; array assignments other than D20's direct storage name, D29's
 literal, D30's `zeroed` and D32's repetition; general whole-array value
 positions; inferred, scalar and every other `zeroed` [0540] context;
-mixed-prefix, count-less inferred, inferred-module and general-value repetition
-[0560]; slices [0570]; `lenof`
+mixed-prefix, count-less inferred and general-value repetition [0560]; slices
+[0570]; `lenof`
 operands
 other than D14's direct name and D31's literal; and an array as a struct field.
 Each is its own slice, and the remaining

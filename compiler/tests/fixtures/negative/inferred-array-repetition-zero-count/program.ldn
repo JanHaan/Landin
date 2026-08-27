@@ -1,3 +1,5 @@
+module := [0 of 1]
+
 f: () -> none =
     row := [0 of 1]
 end f

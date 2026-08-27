@@ -544,8 +544,8 @@ package body Landin.Stages.Checking is
             --  once the checker settles the types.
             --  D34 admits full-array repetition where a written nonzero array
             --  type supplies its shape, for either module or local storage.
-            --  D33's inferred local form is admitted by Infer before this
-            --  written-declaration gate.
+            --  D33/D35's inferred local and module forms are admitted by Infer
+            --  before this written-declaration gate.
             Is_Typed_Repetition_Init : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
@@ -1531,9 +1531,8 @@ package body Landin.Stages.Checking is
                  (Item    => Bad.Unsupported_Use,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
-                  Message => "array repetition needs a typed local"
-                             & " initializer, a counted inferred local"
-                             & " initializer, or assignment",
+                  Message => "array repetition needs a typed binding, a"
+                             & " counted inferred binding, or assignment",
                   Refused => Bad.Array_Value,
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
@@ -2213,8 +2212,9 @@ package body Landin.Stages.Checking is
                      --  narrow array case reads the shape from a direct
                      --  storage name without making array names general
                      --  values.  D25/D26's literal was already given its
-                     --  finite shape and scalar context by Infer; D33 does the
-                     --  same for a counted local repetition.  Checking either
+                     --  finite shape and scalar context by Infer; D33/D35 do
+                     --  the same for a counted local or module repetition.
+                     --  Checking either
                      --  here applies its contextual element boundary.
                      --  Every other form still goes through Synthesise and
                      --  keeps its existing refusal.
@@ -2245,7 +2245,8 @@ package body Landin.Stages.Checking is
                                 (Types.all, Of_Tree, Value),
                               Landin.Checking.Array_Element
                                 (Types.all, Of_Tree, Value),
-                              Static_Image => False);
+                              Static_Image =>
+                                not Is_Local_Binding (Of_Tree, Node));
                         else
                            declare
                               Got : constant Ty.Type_Kind :=
@@ -2653,43 +2654,52 @@ package body Landin.Stages.Checking is
             and then Type_At (Of_Tree, Written) = Ty.Fixed_Array)
            or else
              (Value /= Syn.No_Node
-              and then Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+              and then Syn.Kind (Of_Tree, Value)
+                       in Syn.Array_Literal | Syn.Array_Repetition
               and then Landin.Checking.Type_Of
                          (Types.all, Of_Tree, Value) = Ty.Fixed_Array);
 
          procedure Refuse_Unreadable_Subtree (Where : Syn.Node_Id);
 
          procedure Refuse_Unreadable_Subtree (Where : Syn.Node_Id) is
-            What : constant String :=
-              (case Syn.Kind (Of_Tree, Where) is
-                  when Syn.Member_Selection => "a field selection",
-                  when Syn.Element_Index    => "an array index",
-                  when others               => "");
          begin
-            --  D31's operand is checked for one scalar shape, but its
-            --  expressions are not read to form the compile-time count.
-            if Syn.Kind (Of_Tree, Where) = Syn.Len_Of then
+            if Where = Syn.No_Node then
                return;
             end if;
 
-            if What /= "" then
-               Bad.Report
-                 (Item    => Bad.Not_Known_At_Compile_Time,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Where),
-                  Message => What & " has no static module value in this"
-                             & " compiler",
-                  Note    => "[1940]: a module initializer is read at compile"
-                             & " time, before any storage can be selected",
-                  Into    => Found);
-               Landin.Checking.Refuse (Types.all, Of_Tree, Where);
-               return;
-            end if;
+            declare
+               What : constant String :=
+                 (case Syn.Kind (Of_Tree, Where) is
+                     when Syn.Member_Selection => "a field selection",
+                     when Syn.Element_Index    => "an array index",
+                     when others               => "");
+            begin
+               --  D31's operand is checked for one scalar shape, but its
+               --  expressions are not read to form the compile-time count.
+               if Syn.Kind (Of_Tree, Where) = Syn.Len_Of then
+                  return;
+               end if;
 
-            for Position in 1 .. Syn.Slot_Count (Of_Tree, Where) loop
-               Refuse_Unreadable_Subtree
-                 (Syn.Slot (Of_Tree, Where, Position));
-            end loop;
+               if What /= "" then
+                  Bad.Report
+                    (Item    => Bad.Not_Known_At_Compile_Time,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Where),
+                     Message => What & " has no static module value in this"
+                                & " compiler",
+                     Note    => "[1940]: a module initializer is read at"
+                                & " compile time, before any storage can be"
+                                & " selected",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Where);
+                  return;
+               end if;
+
+               for Position in 1 .. Syn.Slot_Count (Of_Tree, Where) loop
+                  Refuse_Unreadable_Subtree
+                    (Syn.Slot (Of_Tree, Where, Position));
+               end loop;
+            end;
          end Refuse_Unreadable_Subtree;
       begin
          --  D24 gives array-literal elements their own more specific boundary.
@@ -2822,13 +2832,15 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         --  D33: a counted repetition directly initializing an inferred local
-         --  supplies D17's length and takes its scalar element type from its
+         --  D33/D35: a counted repetition directly initializing an inferred
+         --  local or module binding supplies D17's length and takes its scalar
+         --  element type from its
          --  one expression.  Like D25, an untyped integer takes [0200]'s
          --  default; unlike a literal, no source run needs a common context.
          --  A zero count remains deferred with [0580]'s source-level empty
          --  array decision even though the internal shape can represent one.
-         if Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
+         if Res.Sort_Of (Meanings.all, Id)
+              in Res.Local_Binding | Res.Module_Binding
            and then Syn.Kind (Of_Tree.all, Value) = Syn.Array_Repetition
            and then Syn.Repetition_Count (Of_Tree.all, Value) /= Syn.No_Node
          then
@@ -3745,6 +3757,64 @@ package body Landin.Stages.Checking is
          Held       : Ty.Folded;
          Known      : Boolean;
          Overflowed : Boolean;
+
+         procedure Check_Array_Element
+           (Each : Syn.Node_Id; Element : Ty.Scalar_Name);
+
+         procedure Check_Array_Element
+           (Each : Syn.Node_Id; Element : Ty.Scalar_Name)
+         is
+            Element_Held      : Ty.Folded;
+            Element_Known     : Boolean;
+            Element_Overflowed : Boolean;
+         begin
+            --  A literal on its own was already checked by Require's
+            --  Commit_To; skip it to keep the report from doubling.  A subtree
+            --  the checker already refused likewise carries its own report.
+            if not
+                 (Syn.Kind (Of_Tree, Each) = Syn.Integer_Literal
+                  or else
+                    (Syn.Kind (Of_Tree, Each) = Syn.Negation
+                     and then Syn.Kind
+                       (Of_Tree, Syn.Operand_Of (Of_Tree, Each))
+                         = Syn.Integer_Literal))
+              and then Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Each) /= Ty.Ill_Typed
+            then
+               Fold (Of_Tree, Each, 0, Element_Held,
+                     Element_Known, Element_Overflowed);
+
+               if Element_Overflowed then
+                  Bad.Report
+                    (Item    => Bad.Literal_Out_Of_Range,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Each),
+                     Message => "this element's fold overflows the widest"
+                                & " value the compiler holds",
+                     Note    => "[1940]: a module value has no moment in"
+                                & " which to trap, so a fold whose result"
+                                & " walks past the compiler's widest kernel"
+                                & " value is refused",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Each);
+               elsif Element_Known
+                 and then not Ty.Holds (Element_Held, Element, Facts)
+               then
+                  Bad.Report
+                    (Item    => Bad.Literal_Out_Of_Range,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Each),
+                     Message => "this element works out to "
+                                & Written (Element_Held) & ", and no "
+                                & Shown (Element) & " holds it",
+                     Note    => "D24/D34/D35: every module array element"
+                                & " pattern has to fit the array's element"
+                                & " type",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Each);
+               end if;
+            end if;
+         end Check_Array_Element;
       begin
          if Value = Syn.No_Node then
             return;
@@ -3759,11 +3829,12 @@ package body Landin.Stages.Checking is
                         (Types.all, Of_Tree, Value);
          end if;
 
-         --  D24/D26: a module array literal is one fold per element, and the
-         --  element type is what has to hold each one.  A shorter or longer
-         --  literal has already been reported by Check_Array_Literal.
+         --  D24/D26 fold every module array literal element.  D34/D35 fold
+         --  the repetition's one element pattern through the same target-aware
+         --  boundary.  The contextual shape checks have already run.
          if Wanted = Ty.Fixed_Array
-           and then Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+           and then Syn.Kind (Of_Tree, Value)
+                    in Syn.Array_Literal | Syn.Array_Repetition
          then
             declare
                Element : constant Ty.Scalar_Name :=
@@ -3771,76 +3842,18 @@ package body Landin.Stages.Checking is
                    (Types.all, Of_Tree, Value);
             begin
                if Element in Ty.Integer_Name then
-                  for Position in
-                    1 .. Syn.Element_Count (Of_Tree, Value)
-                  loop
-                     declare
-                        Each : constant Syn.Node_Id :=
-                          Syn.Nth_Element (Of_Tree, Value, Position);
-                        Element_Held : Ty.Folded;
-                        Element_Known : Boolean;
-                        Element_Overflowed : Boolean;
-                     begin
-                        --  A literal on its own was already checked by
-                        --  Require's Commit_To; skip it to keep the report
-                        --  from doubling.  A subtree the checker already
-                        --  refused likewise carries its own report already.
-                        if not
-                             (Syn.Kind (Of_Tree, Each) = Syn.Integer_Literal
-                              or else
-                                (Syn.Kind (Of_Tree, Each) = Syn.Negation
-                                 and then Syn.Kind
-                                   (Of_Tree,
-                                    Syn.Operand_Of (Of_Tree, Each))
-                                     = Syn.Integer_Literal))
-                          and then Landin.Checking.Type_Of
-                                     (Types.all, Of_Tree, Each)
-                                   /= Ty.Ill_Typed
-                        then
-                           Fold (Of_Tree, Each, 0, Element_Held,
-                                 Element_Known, Element_Overflowed);
-
-                           if Element_Overflowed then
-                              Bad.Report
-                                (Item    => Bad.Literal_Out_Of_Range,
-                                 Source  => Syn.Source_Of (Of_Tree),
-                                 Where   => Syn.Where (Of_Tree, Each),
-                                 Message => "this element's fold overflows"
-                                            & " the widest value the"
-                                            & " compiler holds",
-                                 Note    => "[1940]: a module value has no"
-                                            & " moment in which to trap,"
-                                            & " so a fold whose result"
-                                            & " walks past the compiler's"
-                                            & " widest kernel value is"
-                                            & " refused",
-                                 Into    => Found);
-                              Landin.Checking.Refuse
-                                (Types.all, Of_Tree, Each);
-                           elsif Element_Known
-                             and then not Ty.Holds
-                                            (Element_Held, Element, Facts)
-                           then
-                              Bad.Report
-                                (Item    => Bad.Literal_Out_Of_Range,
-                                 Source  => Syn.Source_Of (Of_Tree),
-                                 Where   => Syn.Where (Of_Tree, Each),
-                                 Message => "this element works out to "
-                                            & Written (Element_Held)
-                                            & ", and no "
-                                            & Shown (Element)
-                                            & " holds it",
-                                 Note    => "D24: every module array"
-                                            & " literal element has to"
-                                            & " fit the array's element"
-                                            & " type",
-                                 Into    => Found);
-                              Landin.Checking.Refuse
-                                (Types.all, Of_Tree, Each);
-                           end if;
-                        end if;
-                     end;
-                  end loop;
+                  if Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition then
+                     Check_Array_Element
+                       (Syn.Repeated_Element (Of_Tree, Value), Element);
+                  else
+                     for Position in
+                       1 .. Syn.Element_Count (Of_Tree, Value)
+                     loop
+                        Check_Array_Element
+                          (Syn.Nth_Element (Of_Tree, Value, Position),
+                           Element);
+                     end loop;
+                  end if;
                end if;
             end;
             return;

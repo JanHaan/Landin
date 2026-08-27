@@ -1,0 +1,5 @@
+next: () -> (value: u32) =
+    value = 1
+end next
+
+module := [3 of next()]

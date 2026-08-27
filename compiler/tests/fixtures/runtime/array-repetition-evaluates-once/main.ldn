@@ -6,6 +6,10 @@ module_longs: [2]u32 = [of 0x89ABCDEF]
 module_quads: [2]u64 = [of 0x123456789ABCDEF0]
 module_through: [2]u64 = module_quads
 module_zero: [2]u64 = [of 0]
+inferred_pattern: u32 = 0x76543210
+inferred_module := [2 of inferred_pattern]
+inferred_through: [2]u32 = inferred_module
+inferred_zero := [2 of 0]
 
 next: (base: u32) -> (value: u32) =
     calls = calls + 1
@@ -32,6 +36,9 @@ public main: () -> (code: i32) =
         and module_quads[0] == 0x123456789ABCDEF0
         and module_through[1] == 0x123456789ABCDEF0
         and module_zero[0] == 0 and module_zero[1] == 0
+        and inferred_module[0] == 0x76543210
+        and inferred_through[1] == 0x76543210
+        and inferred_zero[0] == 0 and inferred_zero[1] == 0
     then
         code = 42
     else

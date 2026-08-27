@@ -1789,6 +1789,47 @@ file positive/module-array-repetition/program.ldn tokens 53
   159 161 of
   162 163 0
   163 164 ]
+file positive/module-array-repetition-inferred/program.ldn tokens 40
+  0 4 seed
+  4 5 :
+  6 9 u16
+  10 11 =
+  12 14 40
+  15 18 mut
+  19 24 typed
+  25 27 :=
+  28 29 [
+  29 30 3
+  31 33 of
+  34 38 seed
+  39 40 +
+  41 42 2
+  42 43 ]
+  44 47 mut
+  48 57 defaulted
+  58 60 :=
+  61 62 [
+  62 63 2
+  64 66 of
+  67 68 1
+  68 69 ]
+  70 73 mut
+  74 78 zero
+  79 81 :=
+  82 83 [
+  83 84 4
+  85 87 of
+  88 89 0
+  89 90 ]
+  91 94 mut
+  95 102 through
+  102 103 :
+  104 105 [
+  105 106 3
+  106 107 ]
+  107 110 u16
+  111 112 =
+  113 118 typed
 file positive/module-array-zeroed-initializer/program.ldn tokens 17
   0 7 numbers
   7 8 :
@@ -3317,22 +3358,28 @@ file negative/array-repetition-count-mismatch/program.ldn tokens 35
   82 83 ]
   84 87 end
   88 89 f
-file negative/array-repetition-countless-inferred-initializer-not-enabled/program.ldn tokens 15
-  0 1 f
-  1 2 :
-  3 4 (
-  4 5 )
-  6 8 ->
-  9 13 none
-  14 15 =
-  20 25 other
-  26 28 :=
-  29 30 [
-  30 32 of
-  33 34 1
-  34 35 ]
-  36 39 end
-  40 41 f
+file negative/array-repetition-countless-inferred-initializer-not-enabled/program.ldn tokens 21
+  0 6 module
+  7 9 :=
+  10 11 [
+  11 13 of
+  14 15 1
+  15 16 ]
+  18 19 f
+  19 20 :
+  21 22 (
+  22 23 )
+  24 26 ->
+  27 31 none
+  32 33 =
+  38 43 other
+  44 46 :=
+  47 48 [
+  48 50 of
+  51 52 1
+  52 53 ]
+  54 57 end
+  58 59 f
 file negative/array-repetition-element-mismatch/program.ldn tokens 21
   0 1 f
   1 2 :
@@ -3372,14 +3419,6 @@ file negative/array-repetition-general-value-not-enabled/program.ldn tokens 16
   31 32 ]
   33 36 end
   37 38 f
-file negative/array-repetition-inferred-module-initializer-not-enabled/program.ldn tokens 7
-  0 8 inferred
-  9 11 :=
-  12 13 [
-  13 14 3
-  15 17 of
-  18 19 1
-  19 20 ]
 file negative/array-repetition-not-enabled/program.ldn tokens 22
   0 1 f
   1 2 :
@@ -4187,23 +4226,76 @@ file negative/inferred-array-repetition-reads-incoming-state/program.ldn tokens 
   58 59 ]
   60 63 end
   64 65 f
-file negative/inferred-array-repetition-zero-count/program.ldn tokens 16
-  0 1 f
-  1 2 :
-  3 4 (
-  4 5 )
-  6 8 ->
-  9 13 none
-  14 15 =
-  20 23 row
+file negative/inferred-array-repetition-zero-count/program.ldn tokens 23
+  0 6 module
+  7 9 :=
+  10 11 [
+  11 12 0
+  13 15 of
+  16 17 1
+  17 18 ]
+  20 21 f
+  21 22 :
+  23 24 (
+  24 25 )
+  26 28 ->
+  29 33 none
+  34 35 =
+  40 43 row
+  44 46 :=
+  47 48 [
+  48 49 0
+  50 52 of
+  53 54 1
+  54 55 ]
+  56 59 end
+  60 61 f
+file negative/inferred-module-array-repetition-element-not-static/program.ldn tokens 25
+  0 4 next
+  4 5 :
+  6 7 (
+  7 8 )
+  9 11 ->
+  12 13 (
+  13 18 value
+  18 19 :
+  20 23 u32
+  23 24 )
+  25 26 =
+  31 36 value
+  37 38 =
+  39 40 1
+  41 44 end
+  45 49 next
+  51 57 module
+  58 60 :=
+  61 62 [
+  62 63 3
+  64 66 of
+  67 71 next
+  71 72 (
+  72 73 )
+  73 74 ]
+file negative/inferred-module-array-repetition-extent-overflow/program.ldn tokens 19
+  0 4 seed
+  4 5 :
+  6 9 u16
+  10 11 =
+  12 13 1
+  14 23 too_large
   24 26 :=
   27 28 [
-  28 29 0
-  30 32 of
-  33 34 1
-  34 35 ]
-  36 39 end
-  40 41 f
+  28 48 18446744073709551615
+  49 51 of
+  52 56 seed
+  56 57 ]
+  58 66 too_many
+  67 69 :=
+  70 71 [
+  71 91 18446744073709551616
+  92 94 of
+  95 96 1
+  96 97 ]
 file negative/inferred-zeroed-not-enabled/program.ldn tokens 15
   0 6 module
   7 9 :=
@@ -5426,6 +5518,106 @@ file negative/module-array-repetition-element-not-static/program.ldn tokens 29
   76 77 (
   77 78 )
   78 79 ]
+file negative/module-array-repetition-fold-range/program.ldn tokens 60
+  0 5 small
+  5 6 :
+  7 9 u8
+  10 11 =
+  12 13 1
+  14 17 max
+  17 18 :
+  19 22 u64
+  23 24 =
+  25 45 18446744073709551615
+  46 49 mut
+  50 61 typed_range
+  61 62 :
+  63 64 [
+  64 65 2
+  65 66 ]
+  66 68 u8
+  69 70 =
+  71 72 [
+  72 74 of
+  75 76 (
+  76 77 1
+  78 80 <<
+  81 82 3
+  82 83 )
+  84 85 +
+  86 89 250
+  89 90 ]
+  91 105 inferred_range
+  106 108 :=
+  109 110 [
+  110 111 2
+  112 114 of
+  115 120 small
+  121 122 +
+  123 126 255
+  126 127 ]
+  128 131 mut
+  132 146 typed_overflow
+  146 147 :
+  148 149 [
+  149 150 2
+  150 151 ]
+  151 154 u64
+  155 156 =
+  157 158 [
+  158 160 of
+  161 164 max
+  165 166 +
+  167 168 1
+  168 169 ]
+  170 187 inferred_overflow
+  188 190 :=
+  191 192 [
+  192 193 2
+  194 196 of
+  197 200 max
+  201 202 +
+  203 204 1
+  204 205 ]
+file negative/module-array-repetition-index-element/program.ldn tokens 38
+  0 6 source
+  6 7 :
+  8 9 [
+  9 10 2
+  10 11 ]
+  11 14 u32
+  15 16 =
+  17 18 [
+  18 20 10
+  20 21 ,
+  22 24 20
+  24 25 ]
+  26 29 mut
+  30 35 typed
+  35 36 :
+  37 38 [
+  38 39 3
+  39 40 ]
+  40 43 u32
+  44 45 =
+  46 47 [
+  47 48 3
+  49 51 of
+  52 58 source
+  58 59 [
+  59 60 0
+  60 61 ]
+  61 62 ]
+  63 71 inferred
+  72 74 :=
+  75 76 [
+  76 77 3
+  78 80 of
+  81 87 source
+  87 88 [
+  88 89 1
+  89 90 ]
+  90 91 ]
 file negative/module-fold-no-type-holds/program.ldn tokens 7
   0 4 over
   4 5 :
