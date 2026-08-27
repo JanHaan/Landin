@@ -1344,6 +1344,8 @@ package body Landin.Tests.Backend_Suite is
       Source_Text : constant String :=
         "row: type = [4]u32" & LF
         & "public mut buffer: row" & LF
+        & "mut copy: row = buffer" & LF
+        & "mut inferred := copy" & LF
         & "mut wide: [3]usize" & LF;
 
       procedure Check_Target
@@ -1375,6 +1377,19 @@ package body Landin.Tests.Backend_Suite is
                          & HT & ".zero 16" & LF
                          & HT & ".size buffer, 16" & LF),
                "four u32 are sixteen bytes reserved whole");
+            Landin.Testing.Check
+              (Item,
+               Contains (Text,
+                         HT & ".align 4" & LF
+                         & "copy:" & LF
+                         & HT & ".zero 16" & LF
+                         & HT & ".size copy, 16" & LF)
+               and then Contains (Text,
+                                  HT & ".align 4" & LF
+                                  & "inferred:" & LF
+                                  & HT & ".zero 16" & LF
+                                  & HT & ".size inferred, 16" & LF),
+               "typed and inferred images keep distinct zero storage");
             Landin.Testing.Check
               (Item,
                Contains (Text,

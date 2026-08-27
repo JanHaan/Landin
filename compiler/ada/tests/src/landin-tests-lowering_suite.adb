@@ -605,6 +605,54 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
+   --  R2.20: a direct-name initial image does not alias its source.  Each
+   --  declaration remains a separate fixed-array datum; the currently
+   --  possible image is zero and therefore needs no run-before-main copy.
+   procedure Module_Array_Images_Keep_Distinct_Datums
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Array_Images_Keep_Distinct_Datums
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut typed: [2]u32 = source" & LF
+         & "mut inferred := typed" & LF
+         & "mut source: [2]u32" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Item_Count (Unit), 3,
+            "source and both destinations are separate items");
+
+         for Datum in IR.Item_Id range 1 .. 3 loop
+            Landin.Testing.Check
+              (Item, IR.Kind_Of (Unit, Datum) = IR.Datum
+                       and then IR.Result_Of (Unit, Datum)
+                                = Landin.Types.Fixed_Array,
+               "each declaration is its own array datum");
+            Landin.Testing.Check_Equal
+              (Item, Natural (IR.Array_Length (Unit, Datum)), 2,
+               "each datum keeps the exact length");
+            Landin.Testing.Check
+              (Item, IR.Array_Element (Unit, Datum) = Landin.Types.U32,
+               "each datum keeps the exact element type");
+         end loop;
+      end;
+   end Module_Array_Images_Keep_Distinct_Datums;
+
+   ------------------------------------------------------------------
+
    --  [0670]'s state carries its fields' types and no value at all: D10
    --  zeroes the whole of it, and where each field sits needs a target
    --  this stage deliberately does not have.
@@ -1331,6 +1379,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a module value becomes a datum",
          A_Module_Value_Becomes_A_Datum'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "module array images keep distinct datums",
+         Module_Array_Images_Keep_Distinct_Datums'Access);
       Landin.Testing.Register
         (Into, "lowering", "a logical module value becomes blocks",
          A_Logical_Module_Value_Becomes_Blocks'Access);

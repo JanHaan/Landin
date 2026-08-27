@@ -1,0 +1,6 @@
+class: negative
+summary: D17 requires a direct-name module array initializer to have the exact destination length and element type
+constructs: 0520, 1740
+program: program.ldn
+codes: L0301, L0301, L0301, L0301
+targets: linux-x86-64, macos-arm64

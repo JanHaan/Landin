@@ -2193,11 +2193,20 @@ been reserved, and the destination is wholly assigned by the copy alone
 rather than by subsequent element writes. The source is read before the
 local's binding scope begins [0110], so a local cannot initialize itself and
 an outer name may be shadowed. Mutable and immutable destinations both accept
-the value because a declaration is not an assignment [0080]. Module bindings
-with an initializer, array literals, `zeroed`, repetition, slices, calls,
-selections, index results, and every other value shape stay refused; no global
-array `Name_Reference` value is synthesized and each broader form remains its
-own later slice.
+the value because a declaration is not an assignment [0080].
+
+The module form admits those same typed and inferred spellings only when
+`source` is one direct module storage name of the exact D17 shape. Initial-image
+validation follows declaration IDs through forward references and chains,
+which must terminate at an omitted-initializer module array; returning to a
+visiting declaration reports [1940] once for the cycle. Every terminating
+image available now is D10's zero image, but lowering keeps one datum per
+declaration and the backend reserves one distinct `.bss` symbol per datum, so
+initialization copies bytes rather than aliases storage without introducing
+code before [1460]'s entry point. Array literals, `zeroed`, repetition, slices,
+calls, selections, index results, and every other value shape stay refused;
+no global array `Name_Reference` value is synthesized and each broader form
+remains its own later slice.
 
 D22 answers the question D19 left open and enables a computed index into a
 local fixed-array frame slot on the same [1950] terms module arrays met. A
@@ -2258,9 +2267,9 @@ observes nonzero array answers. The focused backend case emits an aliased size
 and inline alignment from one source against the 64-bit and synthetic 32-bit
 target descriptions.
 
-What is still refused: module array initializers, inferred array initializers
-from anything other than a direct storage name, general whole-array value
-positions, an array literal [0520], the inferred length [0530], `zeroed`
+What is still refused: array initializers from anything other than a direct
+storage name, general whole-array value positions, an array literal [0520],
+the inferred length [0530], `zeroed`
 [0540], repetition [0560], slices [0570], non-identifier `lenof` operands,
 and an array as a struct field. Each is its own slice, and the remaining value
 slices need the initialization work D21 did not settle.
