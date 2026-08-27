@@ -1,0 +1,6 @@
+small: u8 = 1
+max: u64 = 18446744073709551615
+mut typed_range: [2]u8 = [of (1 << 3) + 250]
+inferred_range := [2 of small + 255]
+mut typed_overflow: [2]u64 = [of max + 1]
+inferred_overflow := [2 of max + 1]

@@ -1,0 +1,5 @@
+seed: u16 = 40
+mut typed := [3 of seed + 2]
+mut defaulted := [2 of 1]
+mut zero := [4 of 0]
+mut through: [3]u16 = typed

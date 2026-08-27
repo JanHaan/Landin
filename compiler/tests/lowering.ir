@@ -983,6 +983,31 @@ item 5 DATUM zero result array params 0 slots 0 blocks 1 values 1
   elements 3 of u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/module-array-repetition-inferred/program.ldn
+unit items 5
+item 1 DATUM seed result u16 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u16 40
+    2 LEAVE <- 1
+item 2 DATUM typed result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u16
+  image repeat 42
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM defaulted result array params 0 slots 0 blocks 1 values 1
+  elements 2 of i32
+  image repeat 1
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM zero result array params 0 slots 0 blocks 1 values 1
+  elements 4 of i32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 DATUM through result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u16
+  image repeat 42
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/module-array-zeroed-initializer/program.ldn
 unit items 2
 item 1 DATUM numbers result array params 0 slots 0 blocks 1 values 1

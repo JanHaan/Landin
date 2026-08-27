@@ -1951,7 +1951,6 @@ declined.
 `negative/inferred-array-repetition-extent-overflow`,
 `negative/inferred-array-repetition-reads-incoming-state`,
 `negative/inferred-array-repetition-zero-count`,
-`negative/array-repetition-inferred-module-initializer-not-enabled`,
 `negative/array-repetition-general-value-not-enabled`, and
 `runtime/array-repetition-evaluates-once` on Linux x86-64.
 
@@ -1991,10 +1990,9 @@ image stays `.bss`.
 A repetition whose written contextual length is zero is refused at the
 repetition. This is a construct-specific nonzero requirement, not an admission or
 rejection of `[0]T` as source; [0580]'s empty-array legality remains undecided.
-D33's zero-count inferred refusal remains for the same reason. An inferred module
-initializer, a count-less inferred initializer, mixed-prefix form, argument,
-return, discard, nested repetition and every other general array value position
-remain refused.
+D33's zero-count inferred refusal remains for the same reason. An inferred module initializer remained outside this slice until D35. A
+count-less inferred initializer, mixed-prefix form, argument, return, discard,
+nested repetition and every other general array value position remain refused.
 
 **Why one image value:** repetition writes one expression and every destination
 position receives the same target-width pattern. Materializing one value per
@@ -2010,6 +2008,53 @@ scalar directive keeps both compact source and all pattern bits.
 `positive/module-array-repetition`,
 `negative/array-repetition-zero-context`,
 `negative/module-array-repetition-element-not-static`,
+`negative/module-array-repetition-index-element`,
+`negative/array-repetition-countless-inferred-initializer-not-enabled`, and
+`runtime/array-repetition-evaluates-once` on Linux x86-64.
+
+### D35 — A counted module repetition may infer its nonzero array shape
+
+**The tour said** that a counted repetition may supply an inferred local's
+length and scalar element type [0560]. D33 implemented that local form, while
+D34 supplied the compact static image only when module state wrote its array
+type.
+
+**Chosen:** `[N of expression]` may directly initialize an inferred module
+binding when `N` is written and nonzero. The count supplies D17's length and
+the one expression supplies its scalar element type; an untyped integer takes
+[0200]'s `i32` default. The resulting byte extent must fit the selected target's
+`usize` by D18, exactly as for D25/D26/D33 inferred arrays.
+
+The repeated expression obeys [1940]'s known/static boundary and the same
+D24 target-aware fold and range checks as D34's typed module repetition.
+Literal and [1820] operator trees may reach through module scalar names; a call,
+storage selection, index or nested array value is refused before lowering. The
+checker folds the one pattern against the inferred scalar type, so no accepted
+out-of-range or overflowing pattern can reach lowering as a compiler defect.
+
+D34's representation and emission apply unchanged: a nonzero pattern is one
+compact repeated image, direct module-array name chains preserve it, and a zero
+pattern is the absent loader-zeroed image emitted in `.bss`. Zero count,
+count-less inferred repetition, mixed-prefix repetition and every general array
+value position remain refused.
+
+**Why only counted:** without a written type or source run, `[of expression]`
+has no source for its length. The scalar can determine an element type but not
+an array extent, so accepting it would require a separate inference rule rather
+than completing the symmetry D33 began.
+
+**The alternative:** infer only locals and require every module repetition to
+write its array type. That makes storage duration alter whether an explicit
+count and scalar can determine the same D17 shape, while D34's static image
+already represents the result. It was declined.
+
+**Pinned by** `positive/module-array-repetition-inferred`,
+`negative/inferred-module-array-repetition-element-not-static`,
+`negative/module-array-repetition-index-element`,
+`negative/inferred-module-array-repetition-extent-overflow`,
+`negative/module-array-repetition-fold-range`,
+`negative/inferred-array-repetition-zero-count`,
 `negative/array-repetition-countless-inferred-initializer-not-enabled`,
-`negative/array-repetition-inferred-module-initializer-not-enabled`, and
+`negative/array-repetition-not-enabled`,
+`negative/array-repetition-general-value-not-enabled`, and
 `runtime/array-repetition-evaluates-once` on Linux x86-64.

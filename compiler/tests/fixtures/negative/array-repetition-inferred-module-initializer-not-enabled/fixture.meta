@@ -1,6 +1,0 @@
-class: negative
-summary: an inferred module repetition still has no admitted initializer form
-constructs: 0040, 0050, 0520, 0530, 0560, 1740, 1810
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64
