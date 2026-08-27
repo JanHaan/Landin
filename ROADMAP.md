@@ -2456,24 +2456,38 @@ D32 admits [0560]'s full-array repetition for an explicitly typed local
 initializer and for assignment to a mutable fixed-array place. A written count
 must equal the contextual D17 length; in assignment, `[of expression]` takes that
 length from the destination. The one scalar expression is checked against the
-element type, read from incoming definite-assignment state and evaluated exactly once. Lowering
-emits one compact `Fill_Array` with that scalar operand and the frame-slot or
+element type, read from incoming definite-assignment state and evaluated exactly
+once. Lowering emits one compact `Fill_Array` with that scalar operand and the frame-slot or
 module-datum destination; verification checks both its storage shape and operand
 type. Linux x86-64 derives the target element count and width and emits the
 matching `rep stosb`, `stosw`, `stosl` or `stosq`, with runtime evidence across
-all four enabled widths. The positive and five focused type/flow/context
+all four enabled widths. The positive and four focused type/flow/context
 negatives pin the source boundary, the old repetition refusal now pins only the
 mixed-prefix form, and `runtime/array-repetition-evaluates-once` pins one
 execution and complete local and module fills.
 
+D33 lets a counted full-array repetition supply an inferred local binding's D17
+shape. Its nonzero integer count is the length; its one scalar expression is the
+element-type source, with an untyped integer taking [0200]'s default just as
+D25's first literal element does. The inferred byte extent is checked against
+the target `usize`, then D32's existing checker, definite-assignment walk,
+compact `Fill_Array`, verifier and backend paths apply unchanged. A written zero
+count remains refused rather than deciding [0580]'s open source-level empty-array
+question. The positive fixture pins typed and defaulted scalar inference; three
+focused negatives pin target extent, incoming state and zero count; module and
+general-value negatives preserve those boundaries; and the existing runtime case
+now infers its side-effecting local while proving one evaluation and a complete
+fill.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, D27/D28's explicitly typed module and local `zeroed`, and
-D32's explicitly typed local repetition; array assignments other than D20's
-direct storage name, D29's literal, D30's `zeroed` and D32's repetition; general
-whole-array value positions; inferred, scalar and every other `zeroed` [0540]
-context; mixed-prefix, inferred, module-initializer and general-value repetition
-[0560]; slices [0570]; `lenof` operands
+D32's explicitly typed and D33's counted inferred local repetition; array
+assignments other than D20's direct storage name, D29's literal, D30's `zeroed`
+and D32's repetition; general whole-array value positions; inferred, scalar and
+every other `zeroed` [0540] context; mixed-prefix, count-less inferred,
+module-initializer and general-value repetition [0560]; slices [0570]; `lenof`
+operands
 other than D14's direct name and D31's literal; and an array as a struct field.
 Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.

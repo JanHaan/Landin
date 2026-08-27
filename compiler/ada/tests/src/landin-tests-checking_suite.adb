@@ -773,6 +773,84 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 1, "one module literal was checked");
    end Module_Array_Literal_Takes_Its_Written_Shape;
 
+   --  D33: the written repetition count and its one scalar expression supply
+   --  an inferred local's compact D17 shape.  A typed expression retains its
+   --  type and an untyped integer receives [0200]'s default.
+   procedure Inferred_Repetition_Carries_Its_Source_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Inferred_Repetition_Carries_Its_Source_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "repetition.ldn",
+         "f: (seed: u16) -> none =" & LF
+         & "    typed := [3 of seed]" & LF
+         & "    defaulted := [2 of 1]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "both inferred repetitions are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Array_Repetition
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Fixed_Array,
+                  "the repetition is recorded as a fixed array");
+
+               if Seen = 1 then
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Checking.Array_Length
+                       (Types.all, Of_Tree.all, Node) = 3
+                     and then Landin.Checking.Array_Element
+                       (Types.all, Of_Tree.all, Node) = Landin.Types.U16,
+                     "a typed scalar supplies the three-element shape");
+               else
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Checking.Array_Length
+                       (Types.all, Of_Tree.all, Node) = 2
+                     and then Landin.Checking.Array_Element
+                       (Types.all, Of_Tree.all, Node)
+                         = Landin.Types.Default_Integer,
+                     "an untyped scalar supplies the default integer shape");
+               end if;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 2, "both repetition nodes carry a shape");
+   end Inferred_Repetition_Carries_Its_Source_Shape;
+
    --  D18: an array may occupy every byte a target's `usize` can name, and
    --  not one beyond it.  The same 2**32-byte array therefore belongs to a
    --  64-bit target and is refused by a 32-bit one; neither answer comes from
@@ -834,6 +912,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "inferred arrays carry their source shape",
          Inferred_Array_Bindings_Carry_Their_Source_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "inferred repetition carries its source shape",
+         Inferred_Repetition_Carries_Its_Source_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "a local array literal takes its written shape",
          Local_Array_Literal_Takes_Its_Written_Shape'Access);

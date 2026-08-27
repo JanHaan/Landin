@@ -1,3 +1,4 @@
 f: () -> none =
     row: [3]u8 = [of 1]
+    other := [of 1]
 end f
