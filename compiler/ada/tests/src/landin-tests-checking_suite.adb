@@ -1112,6 +1112,65 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 2, "both module repetition nodes carry a shape");
    end Inferred_Module_Repetition_Carries_Its_Source_Shape;
 
+   --  D39: an explicitly typed module scalar supplies `zeroed`'s scalar
+   --  context, including when a type alias supplies the enabled scalar.
+   procedure Module_Scalar_Zeroed_Takes_Its_Written_Type
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Scalar_Zeroed_Takes_Its_Written_Type
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "module.ldn",
+         "word: type = u32" & LF
+         & "number: word = zeroed" & LF
+         & "flag: bool = zeroed" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "typed module scalar zeroed initializers are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Zeroed_Literal
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = (if Seen = 1
+                       then Landin.Types.U32
+                       else Landin.Types.Bool),
+                  "zeroed carries the resolved written scalar type");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 2, "both scalar zeroed nodes were checked");
+   end Module_Scalar_Zeroed_Takes_Its_Written_Type;
+
    --  D18: an array may occupy every byte a target's `usize` can name, and
    --  not one beyond it.  The same 2**32-byte array therefore belongs to a
    --  64-bit target and is refused by a 32-bit one; neither answer comes from
@@ -1194,6 +1253,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "a module array literal takes its written shape",
          Module_Array_Literal_Takes_Its_Written_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "typed module scalar gives zeroed its type",
+         Module_Scalar_Zeroed_Takes_Its_Written_Type'Access);
       Landin.Testing.Register
         (Into, "checking", "array extent follows usize",
          Array_Extent_Follows_Usize'Access);

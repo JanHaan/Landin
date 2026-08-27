@@ -1,0 +1,6 @@
+class: negative
+summary: a written local scalar type does not supply zeroed's D39 module context
+constructs: 0040, 0190, 0540, 1740, 1760, 1770, 1800, 1810
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

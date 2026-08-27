@@ -109,11 +109,12 @@ keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
 ### [1770] The kernel's literals are integers, booleans, and contextual zero
 
 The kernel's literals are integers, the two booleans, and `zeroed` in the
-contexts D27 and D28 admit. Integer literals are untyped and take the type of
-their context [0190], defaulting to i32 with none [0200]; the bases and the
-separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it the
-all-bits-zero image of its context, and D27/D28 currently supply that context
-only for an explicitly typed module or local fixed-array initializer. Floats
+contexts D27, D28, D30 and D39 admit. Integer literals are untyped and take the
+type of their context [0190], defaulting to i32 with none [0200]; the bases and
+the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it the
+all-bits-zero image of its context. D27/D28 supply an explicitly typed module or
+local fixed-array initializer, D30 supplies a fixed-array assignment destination,
+and D39 supplies an explicitly typed module scalar initializer. Floats
 [0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
 not enabled yet.
@@ -1626,9 +1627,11 @@ name chain may copy this terminal zero image while retaining one storage object
 per declaration.
 
 This is a contextual initializer, not an array-valued expression or a runtime
-operation. It does not infer a type for `name := zeroed`, initialize a local,
-assign an existing array, or initialize a scalar. It introduces no IR opcode,
-temporary, startup copy, or source-order element evaluation. Repetition [0560],
+operation. D27 itself does not infer a type for `name := zeroed`; D28 separately
+admits a typed local array initializer, D30 an array assignment, and D39 a typed
+module scalar initializer. Local scalar initialization and every inferred form
+remain refused. D27 introduces no IR opcode, temporary, startup copy, or
+source-order element evaluation. Repetition [0560],
 slices [0570], empty literals, non-scalar array elements, parameters, returns,
 arguments, and general whole-array value positions remain outside this slice.
 
@@ -1646,7 +1649,7 @@ Both were declined.
 
 **Pinned by** `positive/module-array-zeroed-initializer`,
 `negative/inferred-zeroed-not-enabled`,
-`negative/scalar-zeroed-not-enabled`, and
+`negative/local-scalar-zeroed-not-enabled`, and
 `runtime/module-array-zeroed-reads-zero` on Linux x86-64.
 
 ### D28 — A local zero image is one runtime storage operation
@@ -1671,10 +1674,11 @@ byte extent, and emits one forward `rep stosb` clear. Compiler work and IR size
 therefore remain independent of the target-sized length D18 admits, and no
 array-valued temporary or hidden zero datum exists.
 
-This remains one contextual initializer. It does not infer a shape for
-`name := zeroed`, assign an existing array, initialize a scalar, or admit
-`zeroed` as an argument, return, discard, or general expression. Module arrays
-continue to use D27's absent static image rather than this runtime instruction.
+This remains one contextual initializer. D28 does not infer a shape for
+`name := zeroed`; D30 separately admits array assignment and D39 a typed module
+scalar initializer. Local scalar initialization, scalar assignment, and
+`zeroed` as an argument, return, discard, nested or general expression remain
+refused. Module arrays continue to use D27's absent static image rather than this runtime instruction.
 Repetition [0560], slices [0570], empty literals, non-scalar array elements,
 parameters, and returns remain outside this slice.
 
@@ -1692,7 +1696,7 @@ assignment and evaluation decision. Both were declined.
 
 **Pinned by** `positive/local-array-zeroed-initializer`,
 `negative/inferred-zeroed-not-enabled`,
-`negative/scalar-zeroed-not-enabled`, and
+`negative/local-scalar-zeroed-not-enabled`, and
 `runtime/local-array-zeroed-reads-zero` on Linux x86-64.
 
 ### D29 — Array literal assignment forms the value in its destination
@@ -1780,9 +1784,11 @@ specifies no per-element evaluation. This does not promise an atomic machine
 operation; concurrency and interruption remain outside the current kernel.
 
 This is one contextual array assignment. It does not infer a type for
-`name := zeroed`, initialize or assign a scalar, or admit `zeroed` as an
-argument, return, discard, nested value, or general expression. Module and local
-initializers keep D27/D28's distinct static and runtime paths. Repetition [0560],
+`name := zeroed` or assign a scalar; D39 separately admits a typed module scalar
+initializer, while local scalar initialization remains refused. Nor does D30
+admit `zeroed` as an argument, return, discard, nested value, or general
+expression. Module and local array initializers keep D27/D28's distinct static
+and runtime paths. Repetition [0560],
 slices [0570], non-scalar array elements, and other zero-accepting types remain
 separate slices.
 
@@ -2226,3 +2232,44 @@ public-seam cases; `positive/module-array-mixed-repetition`;
 `negative/module-array-mixed-repetition-fold-range`; the retained inferred,
 nested and general-value refusal fixtures; and
 `runtime/module-mixed-array-repetition-holds-hybrid` on Linux x86-64.
+
+### D39 — A written module scalar gives `zeroed` its context
+
+**The tour said** that `zeroed` denotes the all-bits-zero image of the type its
+context supplies [0540], and [1940] requires a module initializer to be known
+when the compiler reads it. It did not say whether a scalar declaration could
+supply that context, whether an alias changed the answer, or whether spelling the
+zero image required initialized data.
+
+**Chosen:** `zeroed` may directly initialize an explicitly typed module scalar
+binding: `[mut] name: T = zeroed`. The written type must resolve, through any
+chain of type aliases, to one of [0120]'s enabled scalar types. That resolved
+scalar is the literal's context. Its compile-time-known value is `false` for
+`bool` and integer zero for every enabled integer type. The rule applies only to
+the complete initializer in that declaration. An inferred binding, an explicitly
+typed local scalar initializer, scalar assignment, a nested occurrence and every
+other expression position remain refused.
+
+Lowering uses exactly D10's existing scalar-zero IR: a false `Truth` for `bool`
+and a zero `Number` of the resolved integer type. No new IR operation, startup
+code or static fold is introduced. Linux x86-64 therefore uses the existing
+zero-data classification and reserves the datum in loader-zeroed `.bss`; it does
+not write a zero directive into `.data`.
+
+**Why this boundary:** the declaration already supplies every fact [0540] needs,
+and its static zero is the same module image D10 already represents. Restricting
+the rule to that direct contextual site admits no generally typed `zeroed` value
+and leaves local execution and assignment as independently testable slices.
+
+**The alternative:** make `zeroed` a general scalar expression wherever an
+expected type is available. That would also admit locals, assignments, operands,
+arguments and returns in one step, erasing the contextual boundaries retained by
+D27, D28 and D30. It was declined.
+
+**Pinned by** the checker, lowering and Linux x86-64 backend public-seam cases;
+`positive/module-scalar-zeroed-initializer`;
+`negative/inferred-zeroed-not-enabled`,
+`negative/local-scalar-zeroed-not-enabled`,
+`negative/scalar-zeroed-assignment-not-enabled`,
+`negative/nested-scalar-zeroed-not-enabled`; and
+`runtime/module-scalar-zeroed-reads-zero` on Linux x86-64.

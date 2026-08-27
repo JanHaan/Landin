@@ -1,0 +1,5 @@
+class: positive
+summary: an explicitly typed module scalar supplies zeroed's context through a scalar alias
+constructs: 0040, 0190, 0540, 1740, 1760, 1770, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

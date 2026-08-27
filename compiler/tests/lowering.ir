@@ -1273,6 +1273,16 @@ item 11 DATUM i64_wraps_sub result i64 params 0 slots 1 blocks 1 values 6
     4 LOAD i64 slot 1
     5 WRAPPING_SUBTRACT i64 <- 4 3
     6 LEAVE <- 5
+file positive/module-scalar-zeroed-initializer/program.ldn
+unit items 2
+item 1 DATUM number result u64 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u64 0
+    2 LEAVE <- 1
+item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 TRUTH bool false
+    2 LEAVE <- 1
 file positive/module-value-from-another/program.ldn
 unit items 2
 item 1 DATUM doubled result u32 params 0 slots 1 blocks 1 values 6
