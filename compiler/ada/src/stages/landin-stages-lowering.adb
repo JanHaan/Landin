@@ -1697,13 +1697,12 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
-      --  Pass three: D24's initial-image resolution.  An array datum whose
-      --  value is a literal has its per-position fold recorded here; one
-      --  initialized from a direct storage name follows the D21 chain the
-      --  checker validated and copies the terminal image, or leaves the
-      --  datum without one when the chain terminates at D10's zero.  A
-      --  datum with no image stays reserved in `.bss`; a datum with one
-      --  reaches `.data` with one directive per position.  The pass is
+      --  Pass three: D24/D34 initial-image resolution.  An array datum whose
+      --  value is a literal has its per-position fold recorded here; a
+      --  repetition has one folded pattern; and a direct storage name follows
+      --  the D21 chain while preserving either representation.  A chain ending
+      --  at D10 zero or a zero-pattern repetition has no image and stays
+      --  reserved in `.bss`.  A nonzero image reaches `.data`.  The pass is
       --  separate from Lower_Datum because a source may be written below
       --  its use [1740] and its item has to exist before this reads it.
       Resolve_Array_Images :
@@ -2332,6 +2331,38 @@ package body Landin.Stages.Lowering is
             end;
          end Set_Image_From_Literal;
 
+         procedure Set_Image_From_Repetition
+           (Id         : Res.Declaration_Id;
+            Of_Tree    : Syn.Tree;
+            Repetition : Syn.Node_Id);
+
+         procedure Set_Image_From_Repetition
+           (Id         : Res.Declaration_Id;
+            Of_Tree    : Syn.Tree;
+            Repetition : Syn.Node_Id)
+         is
+            Held  : Ty.Folded;
+            Known : Boolean;
+         begin
+            Fold_Constant
+              (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition),
+               Held, Known);
+            if not Known then
+               raise Landin.Compiler_Defect with
+                 "a module array repetition element the checker accepted"
+                 & " did not fold at lowering";
+            end if;
+
+            --  D34's zero pattern is loader-zeroed storage, represented by
+            --  the same absent image as D10 and `zeroed`.  Every nonzero
+            --  extent is one scalar plus the compact D17 shape.
+            if Held /= 0 then
+               IR.Set_Repeated_Array_Image
+                 (Unit.all, IR.Item_For (Unit.all, Id), Held);
+               Made (Id) := True;
+            end if;
+         end Set_Image_From_Repetition;
+
          procedure Copy_Image_From
            (Destination : Res.Declaration_Id;
             Source_Id   : Res.Declaration_Id);
@@ -2345,6 +2376,14 @@ package body Landin.Stages.Lowering is
             Length : constant IR.Element_Total :=
               IR.Image_Length (Unit.all, Source_Item);
          begin
+            if IR.Is_Repeated_Image (Unit.all, Source_Item) then
+               IR.Set_Repeated_Array_Image
+                 (Unit.all, IR.Item_For (Unit.all, Destination),
+                  IR.Repeated_Image_Value (Unit.all, Source_Item));
+               Made (Destination) := True;
+               return;
+            end if;
+
             if Length = 0 then
                return;
             end if;
@@ -2400,6 +2439,8 @@ package body Landin.Stages.Lowering is
                null;
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Array_Literal then
                Set_Image_From_Literal (Id, Their_Tree.all, Value);
+            elsif Syn.Kind (Their_Tree.all, Value) = Syn.Array_Repetition then
+               Set_Image_From_Repetition (Id, Their_Tree.all, Value);
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Name_Reference
               and then Res.Verdict_Of
                          (Meanings.all, Their_Tree.all, Value) = Res.Bound

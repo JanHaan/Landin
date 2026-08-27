@@ -686,15 +686,18 @@ item 1 ROUTINE read_row result u32 params 1 slots 7 blocks 5 values 32
     30 JUMP target 2
 file positive/local-array-repetition/program.ldn
 unit items 1
-item 1 ROUTINE f result u32 params 2 slots 7 blocks 1 values 18
+item 1 ROUTINE f result u32 params 2 slots 10 blocks 1 values 29
   slot 1 at usize param 1
   slot 2 seed u32 param 2
   slot 3 value u32 return
   slot 4 row elements 4 of u32
-  slot 5 other elements 4 of u32
+  slot 5 contextual elements 4 of u32
   slot 6 - u32
-  slot 7 - u32
-  block 1 scope 3 BLOCK length 18
+  slot 7 other elements 4 of u32
+  slot 8 - u32
+  slot 9 - u32
+  slot 10 - u32
+  block 1 scope 3 BLOCK length 29
     1 LOAD u32 slot 2
     2 FILL_ARRAY destination slot 4 <- 1
     3 LOAD u32 slot 2
@@ -703,16 +706,27 @@ item 1 ROUTINE f result u32 params 2 slots 7 blocks 1 values 18
     6 LOAD u32 slot 6
     7 ADD u32 <- 6 5
     8 FILL_ARRAY destination slot 5 <- 7
-    9 LOAD usize slot 1
-    10 LOAD_ELEMENT u32 slot 4 <- 9
-    11 STORE slot 7 <- 10
-    12 LOAD usize slot 1
-    13 LOAD_ELEMENT u32 slot 5 <- 12
-    14 LOAD u32 slot 7
-    15 ADD u32 <- 14 13
-    16 STORE slot 3 <- 15
-    17 LOAD u32 slot 3
-    18 LEAVE <- 17
+    9 LOAD u32 slot 2
+    10 STORE slot 8 <- 9
+    11 NUMBER u32 2
+    12 LOAD u32 slot 8
+    13 ADD u32 <- 12 11
+    14 FILL_ARRAY destination slot 7 <- 13
+    15 LOAD usize slot 1
+    16 LOAD_ELEMENT u32 slot 4 <- 15
+    17 STORE slot 10 <- 16
+    18 LOAD usize slot 1
+    19 LOAD_ELEMENT u32 slot 5 <- 18
+    20 LOAD u32 slot 10
+    21 ADD u32 <- 20 19
+    22 STORE slot 9 <- 21
+    23 LOAD usize slot 1
+    24 LOAD_ELEMENT u32 slot 7 <- 23
+    25 LOAD u32 slot 9
+    26 ADD u32 <- 25 24
+    27 STORE slot 3 <- 26
+    28 LOAD u32 slot 3
+    29 LEAVE <- 28
 file positive/local-array-repetition-inferred/program.ldn
 unit items 2
 item 1 ROUTINE typed result u32 params 2 slots 4 blocks 1 values 7
@@ -942,6 +956,31 @@ item 3 DATUM i8_wraps result array params 0 slots 0 blocks 1 values 1
 item 4 DATUM i64_wraps result array params 0 slots 0 blocks 1 values 1
   elements 2 of i64
   image -9223372036854775808 9223372036854775807
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+file positive/module-array-repetition/program.ldn
+unit items 5
+item 1 DATUM through result array params 0 slots 0 blocks 1 values 1
+  elements 4294967295 of u8
+  image repeat 165
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM huge result array params 0 slots 0 blocks 1 values 1
+  elements 4294967295 of u8
+  image repeat 165
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM base result u8 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u8 160
+    2 LEAVE <- 1
+item 4 DATUM counted result array params 0 slots 0 blocks 1 values 1
+  elements 2 of u64
+  image repeat 1311768467463790320
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 DATUM zero result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-zeroed-initializer/program.ldn

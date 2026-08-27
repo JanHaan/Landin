@@ -360,9 +360,14 @@ package body Landin.IR.Verifier is
                declare
                   Element : constant Landin.Types.Scalar_Name :=
                     Array_Element (Of_Unit, Id);
+                  Last : constant Part_Position :=
+                    (if Is_Repeated_Image (Of_Unit, Id) then 1
+                     else Part_Position (Image_Length (Of_Unit, Id)));
                begin
-                  for Position in Part_Position'(1)
-                                  .. Part_Position (Image_Length (Of_Unit, Id))
+                  --  D34 verifies one repeated scalar once; walking the
+                  --  declared extent would turn a compact image back into a
+                  --  target-sized host computation.
+                  for Position in Part_Position'(1) .. Last
                   loop
                      declare
                         Held : constant Landin.Types.Folded :=

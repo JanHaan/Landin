@@ -1,6 +1,7 @@
 f: (at: usize, seed: u32) -> (value: u32) =
     row: [4]u32 = [4 of seed]
+    contextual: [4]u32 = [of seed + 1]
     mut other: [4]u32
-    other = [of seed + 1]
-    value = row[at] + other[at]
+    other = [of seed + 2]
+    value = row[at] + contextual[at] + other[at]
 end f
