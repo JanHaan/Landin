@@ -1,0 +1,6 @@
+class: negative
+summary: D51 intersects a local field initializer source across arriving paths
+constructs: 0080, 0110, 0520, 0670, 0750, 1740, 1810, 1910
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64

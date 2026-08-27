@@ -1314,18 +1314,35 @@ package body Landin.Stages.Lowering is
                                  Site        => Site);
                            else
                               --  D21: the initializer copies a whole array
-                              --  from a storage name into this fresh local
-                              --  slot, the same one compact operation D20's
-                              --  assignment emits.  No opcode of its own is
-                              --  needed and no operand run proportional to
-                              --  D18's length.
-                              IR.Emit_Array_Copy
-                                (Unit.all, Filling,
-                                 Source      => Storage_For (Of_Tree, Value),
-                                 Destination =>
-                                   IR.Storage'
-                                     (Kind => IR.Frame_Slot, Slot => Where),
-                                 Site        => Site);
+                              --  from storage into this fresh local slot.
+                              --  D51 reuses D50's source-field identity when
+                              --  that storage is a containing struct; no
+                              --  opcode or target offset is introduced.
+                              declare
+                                 Source_Nested : constant Boolean :=
+                                   Syn.Kind (Of_Tree, Value)
+                                     = Syn.Member_Selection;
+                                 Source_Named : constant Syn.Node_Id :=
+                                   (if Source_Nested
+                                    then Syn.Target_Of (Of_Tree, Value)
+                                    else Value);
+                                 Source_Field : constant Natural :=
+                                   (if Source_Nested
+                                    then Landin.Checking.Field_Index
+                                      (Types.all, Of_Tree, Value)
+                                    else 0);
+                              begin
+                                 IR.Emit_Array_Copy
+                                   (Unit.all, Filling,
+                                    Source =>
+                                      Storage_For (Of_Tree, Source_Named),
+                                    Destination =>
+                                      IR.Storage'
+                                        (Kind => IR.Frame_Slot,
+                                         Slot => Where),
+                                    Site => Site,
+                                    Source_Field => Source_Field);
+                              end;
                            end if;
                         else
                            IR.Emit_Store

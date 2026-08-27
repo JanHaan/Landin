@@ -1,0 +1,26 @@
+word: type = usize
+word_pair: type = [2]word
+
+holder: type = struct
+    tag: u8
+    row: word_pair
+    tail: u16
+end holder
+
+holder_alias: type = holder
+
+mut state: holder_alias
+
+from_fields: (at: usize) -> (result: usize) =
+    typed: word_pair = state.row
+    inferred := state.row
+
+    mut local: holder_alias
+    local.row = zeroed
+    local_typed: word_pair = local.row
+    local_inferred := local.row
+
+    mut state := state.row
+    result = typed[at] + inferred[at] + local_typed[at]
+      + local_inferred[at] + state[at]
+end from_fields
