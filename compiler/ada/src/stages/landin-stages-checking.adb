@@ -527,9 +527,9 @@ package body Landin.Stages.Checking is
             --  D46 admits [1740]'s declaration-only module state once D45
             --  laid out all of its scalar and fixed-array fields: D10 makes
             --  the entire datum zero without forming an aggregate value.
-            --  D16's declaration-only local remains limited to scalar fields
-            --  because its frame slot has only a scalar field run.  A
-            --  parameter, return or written value still needs a whole-value
+            --  D47 admits the same declaration-only shape as one frame cell;
+            --  D16 still tracks and requires its scalar fields independently.
+            --  A parameter, return or written value still needs a whole-value
             --  rule this slice does not have.
             Is_Zeroed_State : constant Boolean :=
               Syn.Kind (Of_Tree, Node) = Syn.Binding
@@ -544,18 +544,8 @@ package body Landin.Stages.Checking is
               and then
                 (Held /= Ty.Aggregate
                  or else
-                   (Landin.Checking.Body_Of
-                      (Types.all, Of_Tree, Written) /= Res.No_Declaration
-                    and then
-                      (not Landin.Checking.Has_Layout
-                         (Types.all,
-                          Landin.Checking.Body_Of
-                            (Types.all, Of_Tree, Written))
-                       or else not Is_Local_Binding (Of_Tree, Node)
-                       or else Landin.Checking.Has_Only_Scalar_Fields
-                         (Types.all,
-                          Landin.Checking.Body_Of
-                            (Types.all, Of_Tree, Written)))));
+                   Landin.Checking.Body_Of
+                     (Types.all, Of_Tree, Written) /= Res.No_Declaration);
             --  D21: an array binding may be initialized directly from a
             --  whole-array storage name.  Resolution makes that module
             --  storage at module scope and an in-scope storage declaration
@@ -1882,9 +1872,9 @@ package body Landin.Stages.Checking is
                         return Kept (Ty.Ill_Typed);
                      end if;
 
-                     --  D46 admits the containing module storage, not an
-                     --  array field as a value or nested place.  Refuse the
-                     --  selection before Field_Type's scalar precondition;
+                     --  D46/D47 admit the containing module or local storage,
+                     --  not an array field as a value or nested place.  Refuse
+                     --  the selection before Field_Type's scalar precondition;
                      --  an index over it then inherits this one report.
                      if Landin.Checking.Field_Kind_Of
                           (Types.all, Wrote, Which)
@@ -4930,6 +4920,15 @@ package body Landin.Stages.Checking is
          --  Reaching the field is not a read of the whole struct, which
          --  is why this does not walk into the base.
          if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection then
+            --  D47: a refused array-field selection has no D16 fact.  Its
+            --  type was made ill-typed by synthesis, so do not fall back to
+            --  reading the whole local and add a second diagnostic.
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                 = Ty.Ill_Typed
+            then
+               return;
+            end if;
+
             declare
                From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
                Which : constant Natural :=
@@ -5081,6 +5080,14 @@ package body Landin.Stages.Checking is
             if Node /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
             then
+               --  A refused D47 array field is not an assignable field and
+               --  must not acquire a D16 fact through this recovery walk.
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                    = Ty.Ill_Typed
+               then
+                  return;
+               end if;
+
                declare
                   From : constant Syn.Node_Id :=
                     Syn.Target_Of (Of_Tree, Node);

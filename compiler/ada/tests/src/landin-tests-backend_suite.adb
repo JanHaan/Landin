@@ -63,6 +63,7 @@ package body Landin.Tests.Backend_Suite is
    end Occurrences;
 
    use type Landin.Source.Source_Id;
+   use type Landin.Targets.Byte_Alignment;
    use type Landin.Targets.Byte_Count;
    use type Landin.Targets.Scalar_Size;
 
@@ -1169,6 +1170,104 @@ package body Landin.Tests.Backend_Suite is
             "and the bool is one byte at eight");
       end;
    end A_Struct_Local_Is_A_Cell_In_The_Frame;
+
+   --  D47 replays a compact array-field shape inside [1810]'s one frame
+   --  cell.  Both the cell extent and the trailing scalar's address follow
+   --  the selected target's usize width rather than the host.
+   procedure A_Struct_Array_Field_Local_Follows_Its_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Array_Field_Local_Follows_Its_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "holder: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    words: [2]usize" & LF
+        & "    tail: u16" & LF
+        & "end holder" & LF
+        & "f: () -> none =" & LF
+        & "    mut local: holder" & LF
+        & "    local.tag = 1" & LF
+        & "    local.tail = 2" & LF
+        & "end f" & LF;
+
+      procedure Check_Target
+        (Facts       : Landin.Targets.Target_Facts;
+         First_Cell  : String;
+         Last_Field  : String);
+
+      procedure Check_Target
+        (Facts       : Landin.Targets.Target_Facts;
+         First_Cell  : String;
+         Last_Field  : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran  : Natural;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & "movb %al, " & First_Cell
+                                      & "(%rbp)"),
+               "the first scalar begins the target-sized cell");
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & "movw %ax, " & Last_Field
+                                      & "(%rbp)"),
+               "the trailing scalar follows the compact array field");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "-32", "-8");
+      Check_Target (Landin.Targets.Synthetic_32, "-16", "-4");
+   end A_Struct_Array_Field_Local_Follows_Its_Target;
+
+   --  D17's empty fixed-array shape is internal evidence, not a source
+   --  decision about `[0]T`: when one reaches D47's slot field run it takes
+   --  no bytes and imposes alignment one, exactly as in D45 and D46.
+   procedure An_Empty_Array_Slot_Field_Has_Identity_Extent
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Empty_Array_Slot_Field_Has_Identity_Extent
+     (Item : in out Landin.Testing.Context)
+   is
+      Work      : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran       : Natural;
+      Unit      : IR.Unit;
+      Routine   : IR.Item_Id;
+      Slot      : IR.Slot_Id;
+      Size      : Landin.Targets.Byte_Count;
+      Alignment : Landin.Targets.Byte_Alignment;
+      Site      : constant Landin.Provenance.Origin :=
+        (Source => 1, Where => Landin.Source.Empty_Span);
+   begin
+      Lower (Work, "f: () -> none = end f" & LF, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+      Routine := IR.Add_Item
+        (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+      Slot := IR.Add_Aggregate_Slot
+        (Unit, Routine, IR.No_Declaration, Site);
+      IR.Add_Slot_Field
+        (Unit, Routine, Slot,
+         (Kind    => IR.Array_Field_Shape,
+          Element => Landin.Types.U64,
+          Length  => 0));
+      Landin.Backend.Aggregate_Extent
+        (Unit, Routine, Slot, Landin.Targets.Linux_X86_64,
+         Size, Alignment);
+
+      Landin.Testing.Check
+        (Item, Size = 0, "the empty field contributes no bytes");
+      Landin.Testing.Check
+        (Item, Alignment = 1,
+         "the empty field contributes identity alignment");
+   end An_Empty_Array_Slot_Field_Has_Identity_Extent;
 
    procedure Constant_Array_Parts_Address_One_Frame_Cell
      (Item : in out Landin.Testing.Context);
@@ -2934,6 +3033,12 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a struct local is a cell in the frame",
          A_Struct_Local_Is_A_Cell_In_The_Frame'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a struct array field local follows its target",
+         A_Struct_Array_Field_Local_Follows_Its_Target'Access);
+      Landin.Testing.Register
+        (Into, "backend", "an empty array slot field has identity extent",
+         An_Empty_Array_Slot_Field_Has_Identity_Extent'Access);
       Landin.Testing.Register
         (Into, "backend", "constant array parts share one frame cell",
          Constant_Array_Parts_Address_One_Frame_Cell'Access);

@@ -1,0 +1,10 @@
+holder: type = struct
+    row: [4]u8
+    count: u32
+end holder
+
+f: () -> none =
+    mut local: holder
+    _ = local.row
+    first: u8 = local.row[0]
+end f

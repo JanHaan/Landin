@@ -1,5 +1,4 @@
---  D46 gives this type module storage, but its local frame representation
---  still waits for nested-place, initialization and whole-copy rules.
+--  D47 gives this type one local frame cell, but no whole aggregate value.
 holder: type = struct
     row: [4]u8
     count: u32
@@ -7,4 +6,5 @@ end holder
 
 f: () -> none =
     mut here: holder
+    _ = here
 end f

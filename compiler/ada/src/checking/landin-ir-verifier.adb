@@ -345,6 +345,27 @@ package body Landin.IR.Verifier is
                   end;
                end loop;
             end if;
+
+            for Slot in 1 .. Slot_Count (Of_Unit, Id) loop
+               if Is_Aggregate (Of_Unit, Id, Slot_Id (Slot)) then
+                  for Field in
+                    1 .. Slot_Field_Count (Of_Unit, Id, Slot_Id (Slot))
+                  loop
+                     declare
+                        Shape : constant Field_Shape :=
+                          Nth_Slot_Field_Shape
+                            (Of_Unit, Id, Slot_Id (Slot), Field);
+                     begin
+                        if Shape.Kind = Scalar_Field_Shape
+                          and then Shape.Length /= 1
+                        then
+                           return (Kind => Field_Shape_Malformed,
+                                   Item => Id, others => <>);
+                        end if;
+                     end;
+                  end loop;
+               end if;
+            end loop;
          end;
       end loop;
 
@@ -504,6 +525,16 @@ package body Landin.IR.Verifier is
                                        return (Kind => Field_Out_Of_Range,
                                                Item => Id, Block => Block,
                                                Value => V);
+                                    end if;
+
+                                    if not Slot_Part_Is_Scalar
+                                      (Of_Unit, Id, Cell,
+                                       Field_Of (Of_Unit, Id, V))
+                                    then
+                                       return
+                                         (Kind => Field_Is_Not_A_Scalar,
+                                          Item => Id, Block => Block,
+                                          Value => V);
                                     end if;
 
                                     if Op = Load_Field

@@ -233,9 +233,9 @@ package Landin.Checking is
                  and then Contains (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
-   --  Runtime aggregate storage still carries a scalar run.  A layout with
-   --  an aggregate field is valid for D45's measurement, but its values wait
-   --  for the separate nested-place and whole-copy slices.
+   --  A whole aggregate value is still lowered as a scalar field copy.  A
+   --  layout with an array field is valid for D45--D47's measurement and
+   --  storage, but its whole value waits for the separate copy slice.
    function Has_Only_Scalar_Fields
      (Of_Table : Table; Id : Declaration_Id) return Boolean
      with Pre => Is_Prepared (Of_Table)

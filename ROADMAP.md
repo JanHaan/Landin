@@ -2687,15 +2687,39 @@ for measurement, in a separate item run. The verifier holds scalar shapes to
 canonical length one and refuses scalar field operations aimed at an array
 shape. Backend cases pin 64/32-bit placement and the x86-64 register-formed
 address required for a scalar sibling beyond a signed displacement.
-`positive/struct-array-field-module-state`, the local-storage
-`negative/struct-with-an-array-field`,
+`positive/struct-array-field-module-state`,
 `negative/struct-array-field-selection-not-enabled`,
 `negative/struct-array-field-whole-copy-not-enabled`, the recorded IR and
 `runtime/struct-array-field-state-scalar-siblings` provide corpus and executable
-evidence. Local storage, initialized module state, whole reads and copies,
+evidence. At D46, local storage, initialized module state, whole reads and copies,
 parameters, returns, selection of the array field and indexing through it remain
-refused; struct fields of struct type and broader nested composition are still
-outside the laid-out kernel.
+refused; D47 below supersedes that local-storage boundary. Struct fields of
+struct type and broader nested composition are still outside the laid-out
+kernel.
+
+D47 admits a declaration-only local binding whose direct or aliased named
+ordinary struct has scalar and fixed-scalar-array fields. It is one compact
+frame cell and is not implicitly zeroed: D16 still requires every scalar
+sibling read to have been assigned on every arriving path. The array field is
+inaccessible and carries no D16 fact, so a refused selection produces L0304
+without a second whole-struct assignment report. Lowering gives an aggregate
+slot the same neutral scalar or element/count field shape D45 and D46 use, in
+its own slot run. The verifier holds scalar slot shapes to canonical length one
+and rejects scalar field operations aimed at an array slot field before any
+scalar accessor is used. The backend replays the shared shape through target
+placement; cases pin 64/32-bit frame extents and post-array scalar offsets, the
+internal empty-array identity extent, and L0504 ownership when a nested array
+field makes an x86-64 frame unaddressable.
+`positive/struct-array-field-local-storage`, the one-report
+`negative/struct-with-an-array-field`,
+`negative/struct-array-field-local-selection-not-enabled`,
+`negative/struct-array-field-local-whole-copy-not-enabled`,
+`negative/struct-array-field-local-unassigned-scalar`, the recorded IR and
+`runtime/struct-array-field-local-scalar-siblings` provide corpus and executable
+evidence. Local initialization, whole reads and copies, parameters, returns,
+selection of the array field and indexing through it remain refused; struct
+fields of struct type and broader nested composition are still outside the
+laid-out kernel.
 
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
@@ -2712,8 +2736,8 @@ repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`
 operands
-other than D14's direct name and D31's literal; and local storage, initialized
-module state, whole values, parameters or returns of a struct with an aggregate
+other than D14's direct name and D31's literal; and initialized local or module
+state, whole values, parameters or returns of a struct with an aggregate
 field, plus selection of its array field or indexing through that selection.
 Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
@@ -2740,7 +2764,9 @@ scalar array field to layout and measurement evidence while keeping its runtime
 value and every broader aggregate boundary pinned. D46 migrated the containing
 declaration-only module storage and its scalar-field operations to executable
 evidence while keeping local storage, array-field selection and the whole-value
-boundary pinned.
+boundary pinned. D47 migrated the containing declaration-only local storage
+and its scalar field operations to executable evidence while keeping initialization,
+array-field selection and the whole-value boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the
