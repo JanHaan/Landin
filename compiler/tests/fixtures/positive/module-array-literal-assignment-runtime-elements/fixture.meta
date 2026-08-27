@@ -1,0 +1,5 @@
+class: positive
+summary: a module array assignment literal accepts runtime element expressions
+constructs: 0040, 0080, 0190, 0410, 0520, 1740, 1810, 1900
+program: program.ldn
+targets: linux-x86-64, macos-arm64

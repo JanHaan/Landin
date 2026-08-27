@@ -1,0 +1,9 @@
+known: () -> none =
+    mut row: [2]u8
+    row = [1, row[0]]
+end known
+
+computed: (at: usize) -> none =
+    mut row: [2]u8
+    row = [1, row[at]]
+end computed

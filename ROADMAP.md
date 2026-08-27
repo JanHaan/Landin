@@ -2410,9 +2410,25 @@ pins. `positive/local-array-zeroed-initializer`, the three unchanged negative
 boundaries, and `runtime/local-array-zeroed-reads-zero` pin the source, lowering,
 target-width and runtime behavior.
 
+D29 admits a nonempty array literal as the contextual value of an assignment to
+a mutable fixed-array place. The destination's D17 shape fixes the exact count
+and scalar context. After reaching that destination, lowering evaluates and
+writes each element in source order, so a later expression observes any earlier
+write and a failure can leave the completed prefix changed. This creates no
+hidden array-sized temporary and no new IR operation: the finite source run
+becomes the existing scalar-expression and field-store pairs against either a
+local slot or module datum. Flow checks every source read against the incoming
+state and marks the array wholly assigned after normal completion. The focused
+lowering case pins both storage kinds; the two positive fixtures distinguish a
+runtime module assignment from its static initializer, three negative fixtures
+pin shape, type and incoming definite-assignment state, and
+`runtime/array-literal-assignment-is-source-ordered` pins computed-index
+assignment and observable order.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, and D27/D28's explicitly typed module and local `zeroed`;
+array assignments other than D20's direct storage name and D29's literal;
 general whole-array value positions; inferred, assignment, scalar and every
 other `zeroed` [0540] context; repetition [0560]; slices [0570]; non-identifier
 `lenof` operands; and an array as a struct field. Each is its own slice, and the

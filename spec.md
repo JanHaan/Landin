@@ -1693,3 +1693,60 @@ assignment and evaluation decision. Both were declined.
 `negative/array-zeroed-assignment-not-enabled`,
 `negative/scalar-zeroed-not-enabled`, and
 `runtime/local-array-zeroed-reads-zero` on Linux x86-64.
+
+### D29 — Array literal assignment forms the value in its destination
+
+**The tour said** that assignment copies an array [0520], that an assignment
+evaluates its destination place before its value [0410], and that aggregate
+parts initialize in written order. D20 admitted only a direct storage name as
+the value, while D23 admitted a literal only for a fresh local binding. Neither
+said whether assignment of a literal needs a hidden complete value or exposes
+its element order in existing storage.
+
+**Chosen:** a nonempty array literal may be assigned contextually to a mutable
+fixed-array place: `place = [first, ..., last]`. The destination's D17 length and
+scalar element type are the context; the literal must contain exactly that many
+elements and each expression must have that element type. The kernel's present
+fixed-array places are direct local or module storage names. [1900] still decides
+whether one may be written.
+
+The destination place is reached first. Then each literal element is evaluated
+left to right and written immediately to its one-based destination position
+before the next expression begins. A later expression can observe an earlier
+write to the same array, and a runtime failure can leave the completed prefix
+changed. Lowering emits the existing scalar expression and field-store sequence
+for each source element; it creates no hidden array-sized temporary and no new
+array IR operation. The compiler work and instruction run are proportional to
+the literal text the program wrote, not to an implicit target-sized extent.
+
+Definite assignment checks every right-hand-side read against the state arriving
+at the statement, then marks the destination array assigned as a whole only when
+the assignment completes normally. Thus assigning a complete literal makes a
+previously uninitialized array readable through a compiler-known or computed
+index, but an element written earlier in the same statement does not justify a
+source read that was unassigned on entry.
+
+This is one assignment context, not a general array value. Array literals remain
+refused as arguments, returns, discards, scalar operands, nested elements, and
+other expression positions. Empty literals, repetition [0560], slices [0570],
+non-scalar element arrays, and `zeroed` assignment remain separate slices. A
+direct storage-name assignment continues to use D20's one compact `Copy_Array`.
+
+**Why expose the writes:** evaluating every element before changing the
+destination would require a hidden second array as large as the value, obscuring
+a cost the language promises to keep visible. Writing each completed scalar
+uses only storage the program named and gives [0410]'s aggregate order an
+observable, deterministic meaning. Source text already contains one expression
+per store, so this does not introduce D18's host-enumeration problem.
+
+**The alternative:** synthesize a temporary array and copy it only after every
+element succeeds. That gives transactional-looking assignment and prevents
+later elements from observing earlier writes, at the price of an implicit full
+array in every frame and a second full traversal. It was declined.
+
+**Pinned by** `positive/array-literal-assignment`,
+`positive/module-array-literal-assignment-runtime-elements`,
+`negative/array-literal-assignment-length-mismatch`,
+`negative/array-literal-assignment-element-mismatch`,
+`negative/array-literal-assignment-reads-incoming-state`, and
+`runtime/array-literal-assignment-is-source-ordered` on Linux x86-64.
