@@ -1338,7 +1338,7 @@ declaration, so their computed reads meet no assignment requirement and
 their computed writes still assign nothing tracked. Every other refused
 value form — an inferred initializer not sourced by a direct storage name, a
 slice, `zeroed`, repetition, an array literal outside D23's one context,
-`lenof`, a local or whole value of D46's array-field struct, or its array field
+`lenof`, a whole value of D46/D47's array-field struct, or its array field
 as a value or nested place — stays refused.
 
 **Why:** treating one computed write as a whole assignment would admit
@@ -2575,8 +2575,9 @@ array field.
 This admits the containing storage, not the array field as a value or nested
 place. Selecting that field, including as the base of an index, reports L0304
 once at the selection; the enclosing index inherits the ill-typed result. A
-local declaration of the same struct also reports L0304, because the frame's
-aggregate-slot representation remains scalar-field-only. An initializer, whole
+local declaration of the same struct also reported L0304 in this slice because
+the frame's aggregate-slot representation remained scalar-field-only; D47
+supersedes that storage boundary. An initializer, whole
 read or copy, parameter, return and every other whole-value context remain
 refused. Struct fields of struct type and other nested aggregate composition
 remain outside D45 and therefore outside this decision. D17's internal
@@ -2614,7 +2615,70 @@ were declined.
 
 **Pinned by** the checker, lowering, verifier and backend public-seam cases;
 `positive/struct-array-field-module-state`;
-`negative/struct-with-an-array-field`;
 `negative/struct-array-field-selection-not-enabled`;
 `negative/struct-array-field-whole-copy-not-enabled`; the recorded IR dump; and
 `runtime/struct-array-field-state-scalar-siblings` on Linux x86-64.
+
+### D47 — An array-field struct may be declaration-only local storage
+
+**The tour said** that a declaration-only binding must be assigned before it
+is used [0080], that an array is a value whose length is part of its type
+[0520], that a struct has its declared fields [0670], and that those fields
+keep declaration order and target padding [0750]. D16 made each field of a
+struct local its own definite-assignment fact. D45 supplied the complete
+layout for scalar and fixed-scalar-array fields, while D46 deliberately stopped
+after module storage because the frame IR could describe only scalar fields.
+
+**Chosen:** a declaration-only local binding may have a type that resolves,
+directly or through aliases, to a named ordinary laid-out struct whose fields
+are enabled scalars or fixed arrays of enabled scalars. The complete object is
+one frame cell with the padded extent and alignment derived from the selected
+target. Unlike D46's module state, this local is not implicitly zeroed and no
+stores are invented at its declaration.
+
+D16 continues to track each accessible scalar field independently. A scalar
+sibling before or after the array must be assigned on every arriving path
+before it is read, and assigning one sibling assigns no other. The array field
+has no D16 fact because this decision does not enable selecting it as a value or
+nested place: selection, including as the base of an index, reports L0304 once
+and the definite-assignment recovery walk adds no whole-struct report. A local
+initializer, whole read or copy, parameter, return and every other whole-value
+context remain refused. Struct fields of struct type and broader nested
+aggregate composition also remain outside the laid-out kernel.
+
+Lowering records the cell as one aggregate slot whose declaration-order field
+run uses D45's neutral shape: a scalar leaf has canonical length one and a
+fixed-array leaf carries one scalar element and one count. Slot, item and
+measurement runs remain distinct. The dump exposes the slot run, the verifier
+rejects a noncanonical scalar slot leaf, and `Load_Field` or `Store_Field` may
+name only a scalar part. Thus the inaccessible array field cannot cross the
+verified scalar operation boundary even if lowering is damaged.
+
+The backend replays every slot shape through the same target placement as D45
+measurement and D46 module storage. D17's internal zero-element shape therefore
+contributes size zero and alignment one here too without deciding whether
+source may spell `[0]T`. Scalar field operations use the resulting offset.
+On x86-64 the existing signed frame-displacement limit applies to the complete
+cell: a routine whose padded frame is not addressable reports L0504 before
+assembly is emitted, including when an array field is what makes it too wide.
+
+**Why storage without a value:** the frame needs only a compact description and
+D16 already supplies the scalar-field initialization rule. Enabling the array
+field as a place requires an aggregate-aware nested-place representation and
+computed element addressing; enabling a whole value additionally settles
+initializers, copies, parameters and returns. None is required to allocate the
+cell and use its scalar siblings.
+
+**The alternatives:** keep local storage refused until nested indexing, or
+enable array-field selection and whole values in the same slice. The first
+would preserve a storage-class distinction after item and slot IR can express
+the same neutral shape; the second combines independent representation,
+definite-assignment and calling-convention questions. Both were declined.
+
+**Pinned by** the checker, lowering, verifier, driver and backend public-seam
+cases; `positive/struct-array-field-local-storage`;
+`negative/struct-with-an-array-field`;
+`negative/struct-array-field-local-selection-not-enabled`;
+`negative/struct-array-field-local-whole-copy-not-enabled`;
+`negative/struct-array-field-local-unassigned-scalar`; the recorded IR dump;
+and `runtime/struct-array-field-local-scalar-siblings` on Linux x86-64.

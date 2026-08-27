@@ -682,7 +682,13 @@ package body Landin.Tests.Driver_Suite is
          & "end edge" & LF
          & "overflow: () -> none =" & LF
          & "    mut bytes: [18446744073709551615]u8" & LF
-         & "end overflow" & LF);
+         & "end overflow" & LF
+         & "wide: type = struct" & LF
+         & "    bytes: [2147483648]u8" & LF
+         & "end wide" & LF
+         & "nested: () -> none =" & LF
+         & "    mut item: wide" & LF
+         & "end nested" & LF);
 
       declare
          Result : constant Landin.Driver.Outcome :=
@@ -697,8 +703,10 @@ package body Landin.Tests.Driver_Suite is
            (Item, Contains (Report, "L0504"), "and says which limit");
          Landin.Testing.Check
            (Item,
-            Contains (Report, "edge") and then Contains (Report, "overflow"),
-            "naming both the encoding edge and target-width overflow");
+            Contains (Report, "edge")
+              and then Contains (Report, "overflow")
+              and then Contains (Report, "nested"),
+            "naming the array, target-width and nested-field frames");
          Landin.Testing.Check
            (Item, not Host.Exists ("wide.s"), "and writes nothing");
       end;

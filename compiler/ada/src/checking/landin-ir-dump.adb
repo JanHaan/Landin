@@ -335,6 +335,7 @@ package body Landin.IR.Dump is
                declare
                   Slot : constant Slot_Id := Slot_Id (S);
                   Marks : Unbounded.Unbounded_String;
+                  Fields : Unbounded.Unbounded_String;
                begin
                   --  The marks come from Nth_Parameter and Result_Slot,
                   --  so a unit whose counts and marks disagree says so.
@@ -350,6 +351,29 @@ package body Landin.IR.Dump is
                      Unbounded.Append (Marks, " return");
                   end if;
 
+                  if Is_Aggregate (Of_Unit, Id, Slot) then
+                     for Field in
+                       1 .. Slot_Field_Count (Of_Unit, Id, Slot)
+                     loop
+                        declare
+                           Shape : constant Field_Shape :=
+                             Nth_Slot_Field_Shape
+                               (Of_Unit, Id, Slot, Field);
+                        begin
+                           Unbounded.Append (Fields, " ");
+                           if Shape.Kind = Array_Field_Shape then
+                              Unbounded.Append
+                                (Fields,
+                                 "[" & Trimmed
+                                   (Element_Total'Image (Shape.Length))
+                                 & "]");
+                           end if;
+                           Unbounded.Append
+                             (Fields, Landin.Types.Spelling (Shape.Element));
+                        end;
+                     end loop;
+                  end if;
+
                   Put
                     ("  slot " & Trimmed (Slot_Id'Image (Slot))
                      & " " & Named (Declares (Of_Unit, Id, Slot)) & " "
@@ -362,7 +386,8 @@ package body Landin.IR.Dump is
                              & Landin.Types.Spelling
                                  (Slot_Array_Element (Of_Unit, Id, Slot))
                         elsif Is_Aggregate (Of_Unit, Id, Slot)
-                        then "aggregate"
+                        then "aggregate fields"
+                             & Unbounded.To_String (Fields)
                         else Landin.Types.Spelling
                                (Type_Of (Of_Unit, Id, Slot)))
                      & Unbounded.To_String (Marks));

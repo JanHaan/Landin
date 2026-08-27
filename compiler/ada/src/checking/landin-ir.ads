@@ -732,12 +732,21 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total
      with Pre => Holds (Of_Unit, Item, Slot);
 
+   function Slot_Part_Is_Scalar
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id;
+      Index : Part_Position) return Boolean
+     with Pre => Holds (Of_Unit, Item, Slot)
+                 and then Element_Total (Index)
+                            <= Slot_Part_Count (Of_Unit, Item, Slot);
+
    function Nth_Slot_Part
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id;
       Index : Part_Position) return Landin.Types.Scalar_Name
      with Pre => Holds (Of_Unit, Item, Slot)
                  and then Element_Total (Index)
-                            <= Slot_Part_Count (Of_Unit, Item, Slot);
+                            <= Slot_Part_Count (Of_Unit, Item, Slot)
+                 and then Slot_Part_Is_Scalar
+                            (Of_Unit, Item, Slot, Index);
 
    function Slot_Field_Count
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Natural
@@ -754,6 +763,29 @@ package Landin.IR is
           Post => Slot_Field_Count (Into, Item, Slot)
                     = Slot_Field_Count (Into, Item, Slot)'Old + 1;
 
+   procedure Add_Slot_Field
+     (Into : in out Unit;
+      Item : Item_Id;
+      Slot : Slot_Id;
+      Shape : Field_Shape)
+     with Pre  => Holds (Into, Item)
+                  and then Holds (Into, Item, Slot)
+                  and then Is_Aggregate (Into, Item, Slot),
+          Post => Slot_Field_Count (Into, Item, Slot)
+                    = Slot_Field_Count (Into, Item, Slot)'Old + 1
+                  and then Nth_Slot_Field_Shape
+                    (Into, Item, Slot,
+                     Slot_Field_Count (Into, Item, Slot)) = Shape;
+
+   function Nth_Slot_Field_Shape
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Slot    : Slot_Id;
+      Index   : Positive) return Field_Shape
+     with Pre => Holds (Of_Unit, Item)
+                 and then Holds (Of_Unit, Item, Slot)
+                 and then Index <= Slot_Field_Count (Of_Unit, Item, Slot);
+
    function Nth_Slot_Field
      (Of_Unit : Unit;
       Item    : Item_Id;
@@ -761,7 +793,9 @@ package Landin.IR is
       Index   : Positive) return Landin.Types.Scalar_Name
      with Pre => Holds (Of_Unit, Item)
                  and then Holds (Of_Unit, Item, Slot)
-                 and then Index <= Slot_Field_Count (Of_Unit, Item, Slot);
+                 and then Index <= Slot_Field_Count (Of_Unit, Item, Slot)
+                 and then Nth_Slot_Field_Shape
+                   (Of_Unit, Item, Slot, Index).Kind = Scalar_Field_Shape;
 
    --  Adds a slot and makes it the next parameter [1800].  A parameter
    --  is a slot the caller filled, so the ABI has somewhere to put an
@@ -1609,11 +1643,6 @@ private
    package Item_Ref_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Item_Id);
 
-   package Scalar_Field_Vectors is new Ada.Containers.Vectors
-     (Index_Type   => Positive,
-      Element_Type => Landin.Types.Scalar_Name,
-      "="          => Landin.Types."=");
-
    package Field_Shape_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Field_Shape);
@@ -1632,7 +1661,7 @@ private
       Code       : Code_Vectors.Vector;
       Operands   : Value_Ref_Vectors.Vector;
       Fields     : Field_Shape_Vectors.Vector;
-      Slot_Fields : Scalar_Field_Vectors.Vector;
+      Slot_Fields : Field_Shape_Vectors.Vector;
       Measurement_Fields : Field_Shape_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
       --  D24: one folded scalar per array-datum position, laid end to end

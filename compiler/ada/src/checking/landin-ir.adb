@@ -383,12 +383,21 @@ package body Landin.IR is
          then Element_Total (Slot_Field_Count (Of_Unit, Item, Slot))
          else 0);
 
+   function Slot_Part_Is_Scalar
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id;
+      Index : Part_Position) return Boolean
+     is (Is_Array (Of_Unit, Item, Slot)
+         or else Nth_Slot_Field_Shape
+           (Of_Unit, Item, Slot, Positive (Index)).Kind
+                   = Scalar_Field_Shape);
+
    function Nth_Slot_Part
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id;
       Index : Part_Position) return Landin.Types.Scalar_Name
      is (if Is_Array (Of_Unit, Item, Slot)
          then Slot_Array_Element (Of_Unit, Item, Slot)
-         else Nth_Slot_Field (Of_Unit, Item, Slot, Positive (Index)));
+         else Nth_Slot_Field_Shape
+           (Of_Unit, Item, Slot, Positive (Index)).Element);
 
    function Slot_Field_Count
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Natural
@@ -400,23 +409,42 @@ package body Landin.IR is
       Slot    : Slot_Id;
       Of_Type : Landin.Types.Scalar_Name)
    is
+   begin
+      Add_Slot_Field
+        (Into, Item, Slot,
+         (Kind => Scalar_Field_Shape, Element => Of_Type, Length => 1));
+   end Add_Slot_Field;
+
+   procedure Add_Slot_Field
+     (Into : in out Unit;
+      Item : Item_Id;
+      Slot : Slot_Id;
+      Shape : Field_Shape)
+   is
       Where : constant Positive := Slot_At (Into, Item, Slot);
       Held  : Slot_Record := Into.Slots (Where);
    begin
       Open_Run (Held.Fields, Natural (Into.Slot_Fields.Length));
-      Into.Slot_Fields.Append (Of_Type);
+      Into.Slot_Fields.Append (Shape);
       Held.Fields.Count := Held.Fields.Count + 1;
       Into.Slots (Where) := Held;
    end Add_Slot_Field;
+
+   function Nth_Slot_Field_Shape
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Slot    : Slot_Id;
+      Index   : Positive) return Field_Shape
+     is (Of_Unit.Slot_Fields
+           (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Fields.First
+            + Index));
 
    function Nth_Slot_Field
      (Of_Unit : Unit;
       Item    : Item_Id;
       Slot    : Slot_Id;
       Index   : Positive) return Landin.Types.Scalar_Name
-     is (Of_Unit.Slot_Fields
-           (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Fields.First
-            + Index));
+     is (Nth_Slot_Field_Shape (Of_Unit, Item, Slot, Index).Element);
 
    function Add_Parameter
      (Into     : in out Unit;

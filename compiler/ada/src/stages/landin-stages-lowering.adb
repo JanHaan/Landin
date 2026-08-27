@@ -351,9 +351,22 @@ package body Landin.Stages.Lowering is
             for Field in
               1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
             loop
-               IR.Add_Slot_Field
-                 (Unit.all, Filling, Slots (Positive (Id)),
-                  Landin.Checking.Field_Type (Types.all, Id, Field));
+               if Landin.Checking.Field_Kind_Of
+                    (Types.all, Id, Field) = Landin.Checking.Scalar_Field
+               then
+                  IR.Add_Slot_Field
+                    (Unit.all, Filling, Slots (Positive (Id)),
+                     Landin.Checking.Field_Type (Types.all, Id, Field));
+               else
+                  IR.Add_Slot_Field
+                    (Unit.all, Filling, Slots (Positive (Id)),
+                     (Kind    => IR.Array_Field_Shape,
+                      Element => Landin.Checking.Field_Array_Element
+                        (Types.all, Id, Field),
+                      Length  => IR.Element_Total
+                        (Landin.Checking.Field_Array_Length
+                           (Types.all, Id, Field))));
+               end if;
             end loop;
 
             return Slots (Positive (Id));

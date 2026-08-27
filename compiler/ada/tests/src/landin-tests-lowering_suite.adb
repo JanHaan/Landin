@@ -999,6 +999,66 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
+   --  D47 gives [1810]'s declaration-only local the same compact field
+   --  shapes as D46's datum, but in one aggregate slot rather than one
+   --  module item.  This stage still carries no target offsets.
+   procedure A_Struct_Local_Carries_Its_Field_Shapes
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Local_Carries_Its_Field_Shapes
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    words: [2]usize" & LF
+         & "    tail: u16" & LF
+         & "end holder" & LF
+         & "f: () -> none =" & LF
+         & "    mut local: holder" & LF
+         & "    local.tag = 1" & LF
+         & "    local.tail = 2" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Slot : constant IR.Slot_Id := 1;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Item_Count (Unit), 1, "the function is the one item");
+         Landin.Testing.Check
+           (Item, IR.Is_Aggregate (Unit, 1, Slot),
+            "the local is one aggregate slot");
+         Landin.Testing.Check_Equal
+           (Item, IR.Slot_Field_Count (Unit, 1, Slot), 3,
+            "all source fields are carried");
+         Landin.Testing.Check
+           (Item, IR.Nth_Slot_Field (Unit, 1, Slot, 1) = Landin.Types.U8,
+            "the first scalar keeps its type");
+         Landin.Testing.Check
+           (Item,
+            IR.Nth_Slot_Field_Shape (Unit, 1, Slot, 2)
+              = (Kind    => IR.Array_Field_Shape,
+                 Element => Landin.Types.Usize,
+                 Length  => 2),
+            "the array field remains one target-neutral shape");
+         Landin.Testing.Check
+           (Item, IR.Nth_Slot_Field (Unit, 1, Slot, 3) = Landin.Types.U16,
+            "the trailing scalar keeps its type and order");
+      end;
+   end A_Struct_Local_Carries_Its_Field_Shapes;
+
+   ------------------------------------------------------------------
+
    --  [0710]'s copy is a field read and a field write each, in [0750]'s
    --  order, and no opcode of its own: two fields make four instructions
    --  and the last of them is the store of the second field.
@@ -2409,6 +2469,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a struct state carries its fields",
          A_Struct_State_Carries_Its_Fields'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a struct local carries its field shapes",
+         A_Struct_Local_Carries_Its_Field_Shapes'Access);
       Landin.Testing.Register
         (Into, "lowering", "a struct copy becomes its fields",
          A_Struct_Copy_Becomes_Its_Fields'Access);

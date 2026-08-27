@@ -101,7 +101,8 @@ package Landin.Backend is
                                      (Of_Unit, Item, Slot));
 
    --  The target extent of one compact scalar or fixed-array field.  Both
-   --  D45 measurement and D46 module storage replay this same leaf.
+   --  D45 measurement, D46 module storage and D47 frame storage replay this
+   --  same leaf.
    procedure Field_Extent
      (Shape     : Landin.IR.Field_Shape;
       Facts     : Landin.Targets.Target_Facts;

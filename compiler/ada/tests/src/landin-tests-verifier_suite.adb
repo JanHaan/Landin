@@ -149,6 +149,7 @@ package body Landin.Tests.Verifier_Suite is
       Measurement_Result_Is_Not_Usize,
       Scalar_Measurement_Length_Is_Not_One,
       Aggregate_Scalar_Length_Is_Not_One,
+      Slot_Scalar_Length_Is_Not_One,
       Operands_Of_Two_Types,
       Store_Of_The_Wrong_Type,
       Store_To_A_Parameter,
@@ -158,6 +159,8 @@ package body Landin.Tests.Verifier_Suite is
       Field_Beyond_The_Aggregate,
       Field_Operation_Names_An_Array,
       Field_Store_Names_An_Array,
+      Slot_Field_Operation_Names_An_Array,
+      Slot_Field_Store_Names_An_Array,
       Field_Store_Of_The_Wrong_Type,
       Local_Array_Part_Is_Out_Of_Range,
       Local_Array_Load_Has_The_Wrong_Type,
@@ -196,7 +199,7 @@ package body Landin.Tests.Verifier_Suite is
                    Harm : Damage) return V.Fault
    is
       A, D, G, E : IR.Item_Id;
-      S, P, Q, R : IR.Slot_Id;
+      S, P, Q, R, T : IR.Slot_Id;
       B, C : IR.Block_Id;
       N, M : IR.Value_Id;
    begin
@@ -239,6 +242,25 @@ package body Landin.Tests.Verifier_Suite is
           then Landin.Types.U16 else Landin.Types.U32),
          (if Harm = Array_Copy_Lengths_Disagree then 5 else 4),
          IR.No_Declaration, Site);
+      T := IR.Add_Aggregate_Slot
+        (Unit, A, IR.No_Declaration, Site);
+      if Harm = Slot_Scalar_Length_Is_Not_One then
+         IR.Add_Slot_Field
+           (Unit, A, T,
+            (Kind    => IR.Scalar_Field_Shape,
+             Element => Landin.Types.U32,
+             Length  => 2));
+      elsif Harm in Slot_Field_Operation_Names_An_Array
+                    | Slot_Field_Store_Names_An_Array
+      then
+         IR.Add_Slot_Field
+           (Unit, A, T,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U32,
+             Length  => 2));
+      else
+         IR.Add_Slot_Field (Unit, A, T, Landin.Types.U32);
+      end if;
       IR.Set_Result_Slot (Unit, A, S);
       B := IR.Add_Block (Unit, A, Landin.Resolution.Program_Scope, Site);
       IR.Enter (Unit, A, B);
@@ -318,6 +340,11 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Slot_Scalar_Length_Is_Not_One =>
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Operands_Of_Two_Types =>
             N := IR.Emit_Number
                    (Unit, A, Landin.Types.U32, 1, False, Site);
@@ -386,6 +413,22 @@ package body Landin.Tests.Verifier_Suite is
             N := IR.Emit_Number
                    (Unit, A, Landin.Types.U32, 1, False, Site);
             IR.Emit_Store_Field (Unit, A, G, 1, N, Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Slot_Field_Operation_Names_An_Array =>
+            N := IR.Emit_Load_Slot_Field
+                   (Unit, A, T, 1, Landin.Types.U32, Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Slot_Field_Store_Names_An_Array =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.U32, 1, False, Site);
+            IR.Emit_Store_Slot_Field (Unit, A, T, 1, N, Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -511,7 +554,7 @@ package body Landin.Tests.Verifier_Suite is
 
          when Array_Copy_Slot_Is_Not_Owned =>
             IR.Emit_Array_Copy
-              (Unit, A, (Kind => IR.Frame_Slot, Slot => 5),
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => 6),
                (Kind => IR.Frame_Slot, Slot => Q), Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -539,7 +582,7 @@ package body Landin.Tests.Verifier_Suite is
 
          when Array_Clear_Slot_Is_Not_Owned =>
             IR.Emit_Array_Clear
-              (Unit, A, (Kind => IR.Frame_Slot, Slot => 5), Site);
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => 6), Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -569,7 +612,7 @@ package body Landin.Tests.Verifier_Suite is
             N := IR.Emit_Number
               (Unit, A, Landin.Types.U32, 1, False, Site);
             IR.Emit_Array_Fill
-              (Unit, A, (Kind => IR.Frame_Slot, Slot => 5), 1, N, Site);
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => 6), 1, N, Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -674,6 +717,8 @@ package body Landin.Tests.Verifier_Suite is
           V.Field_Shape_Malformed),
          (Aggregate_Scalar_Length_Is_Not_One,
           V.Field_Shape_Malformed),
+         (Slot_Scalar_Length_Is_Not_One,
+          V.Field_Shape_Malformed),
          (Operands_Of_Two_Types,      V.Operands_Disagree),
          (Store_Of_The_Wrong_Type,    V.Store_Disagrees_With_Slot),
          (Store_To_A_Parameter,       V.Store_To_A_Parameter),
@@ -684,6 +729,10 @@ package body Landin.Tests.Verifier_Suite is
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
          (Field_Operation_Names_An_Array, V.Field_Is_Not_A_Scalar),
          (Field_Store_Names_An_Array, V.Field_Is_Not_A_Scalar),
+         (Slot_Field_Operation_Names_An_Array,
+          V.Field_Is_Not_A_Scalar),
+         (Slot_Field_Store_Names_An_Array,
+          V.Field_Is_Not_A_Scalar),
          (Field_Store_Of_The_Wrong_Type, V.Store_Datum_Disagrees),
          (Local_Array_Part_Is_Out_Of_Range, V.Field_Out_Of_Range),
          (Local_Array_Load_Has_The_Wrong_Type, V.Result_Disagrees),
