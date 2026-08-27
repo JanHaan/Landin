@@ -11,14 +11,14 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 93 with evidence, 105 with neither.
+#  198 constructs, 95 with evidence, 103 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
 0020   tour        accepted emitted                   Block comment. Nests properly
 0030   tour        accepted emitted                   Doc comment. Attaches to the declaration that follows
-0040   tour        refused                            Full form: name, type, value
-0050   tour        accepted emitted executed          Type inferred from the value
+0040   tour        accepted emitted executed refused  Full form: name, type, value
+0050   tour        accepted emitted executed refused  Type inferred from the value
 0060   tour        accepted emitted executed          Mutable binding
 0070   tour        -                                  Two questions about a reference
 0080   tour        accepted emitted executed refused  Declaration only
@@ -32,7 +32,7 @@
 0160   tour        accepted emitted executed refused  Pointer-width integers: usize, isize
 0170   tour        refused refused-by-name            Floating point: f16, f32, f64
 0180   tour        accepted emitted                   bool, with true and false
-0190   tour        accepted emitted                   Integer literals are untyped
+0190   tour        accepted emitted executed refused  Integer literals are untyped
 0200   tour        accepted emitted refused           With no context, an integer literal defaults to i32
 0210   tour        refused                            Float literals are always recognisable as such
 0220   tour        accepted emitted                   Bases, separators, exponents
@@ -66,10 +66,10 @@
 0500   tour        -                                  Three operations sit between pointers and slices
 0510   tour        -                                  slice_from is where uninitialised storage is smuggled in
 0520   tour        accepted emitted executed refused refused-by-name Array: a value
-0530   tour        -                                  The length may be inferred from the literal
+0530   tour        refused                            The length may be inferred from the literal
 0540   tour        -                                  zeroed is the all-bits-zero image of a type
 0550   tour        -                                  The first of those two properties is also a concept
-0560   tour        -                                  Repetition, for static patterns that live in flash
+0560   tour        refused refused-by-name            Repetition, for static patterns that live in flash
 0570   tour        accepted emitted executed refused refused-by-name Slice: a view
 0580   tour        accepted emitted executed          An empty slice still has a base
 0590   tour        -                                  Fixed arrays are the vector type

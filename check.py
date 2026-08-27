@@ -1733,7 +1733,7 @@ def check_precedence_table(full_run):
         return set(re.findall(r"(?:Landin\.Tokens\.)?\b((?:Kw_[A-Za-z_]+)"
                               r"|Identifier|Integer_Literal|Ampersand|Bar"
                               r"|Caret|Equal_Equal|Greater_Greater|Greater_Equal"
-                              r"|Greater|Left_Paren|Less_Greater|Less_Equal"
+                              r"|Greater|Left_Bracket|Left_Paren|Less_Greater|Less_Equal"
                               r"|Less_Less|Less|Minus_Percent|Minus|Percent"
                               r"|Plus_Percent|Plus|Right_Paren|Slash"
                               r"|Star_Percent|Star|Tilde|Underscore"

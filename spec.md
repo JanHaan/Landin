@@ -288,8 +288,9 @@ and neither derives from a call, because nothing selects from one
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
-primary     ::= literal | indexed | call | measurement
+primary     ::= literal | array_literal | indexed | call | measurement
               | "(" expression ")"
+array_literal ::= "[" expression ("," expression)* "]"
 indexed     ::= selection ("[" expression "]")*
 selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
@@ -1214,7 +1215,7 @@ This kernel admits an array name as a whole value only in this direct copy;
 D21 reuses the same storage read for its direct-name local initializers.
 Parameters, returns, discards, and other general value positions remain refused
 until their own R2.20 or R2.30 slices. No array literal is enabled by this
-decision.
+decision; D23 later admits one contextual initializer.
 
 **Why:** expanding a copy into one operation per element would make compiler
 work and IR size proportional to a target object that the host may not be able
@@ -1261,7 +1262,8 @@ each destination nevertheless owns distinct storage initialized with that
 image rather than aliasing its source. Nothing runs before the entry point
 [1460], so no module-level copy instruction exists.
 
-Every other array initializer value remains refused: an array literal [0520],
+Every other array initializer value remains refused: D23 later admits one
+contextual local array literal [0520], while a module or inferred literal,
 `zeroed` [0540], repetition [0560], a slice [0570], a call, and an indexed or
 selected subexpression are each their own later slice. This decision does not
 enable a general array value or an array as a parameter, return, discard, or
@@ -1279,9 +1281,9 @@ defers every value form whose own semantic rule is a later slice.
 
 **The alternative:** widen the initializer to any array-typed expression, or
 make the inferred spelling synthesize a general array value. Either admits
-constructs the checker cannot recognise yet — an array literal, `zeroed`, a
-slice, a call result, a selection or an index result — and each is its own
-decision. Reading D17's shape directly from named storage instead keeps the
+constructs this decision does not recognise — D23's local array literal,
+`zeroed`, a slice, a call result, a selection or an index result — and each is
+its own decision. Reading D17's shape directly from named storage instead keeps the
 same narrow source rule as the explicit form without synthesizing an array
 `Name_Reference` anywhere else.
 
@@ -1322,8 +1324,8 @@ Module arrays are unchanged: D10 gives their state every element from
 declaration, so their computed reads meet no assignment requirement and
 their computed writes still assign nothing tracked. Every other refused
 value form — an inferred initializer not sourced by a direct storage name, a
-slice, `zeroed`, repetition, an array literal, `lenof`, an array as a struct
-field — stays refused.
+slice, `zeroed`, repetition, an array literal outside D23's one context,
+`lenof`, an array as a struct field — stays refused.
 
 **Why:** treating one computed write as a whole assignment would admit
 uninitialized reads from every other position, exactly the failure D19
@@ -1349,3 +1351,50 @@ way to observe.
 `runtime/local-array-computed-index-reads-and-writes`,
 `runtime/local-array-computed-index-traps`, and
 `runtime/local-array-computed-store-traps` on Linux x86-64.
+
+### D23 — A written local array type gives a literal its shape
+
+**The tour said** that an array is a value whose size is part of its type
+[0520], that a binding may write its type and value together [0040], that an
+integer literal takes the type of its context [0190], and that expressions are
+evaluated left to right [0410]. It did not say which of those supplies the
+shape and element context while array values are being introduced a slice at a
+time.
+
+**Chosen:** a nonempty array literal initializes an explicitly typed local
+fixed-array binding: `[mut] name: [N]T = [first, ...]`. The literal contains
+exactly `N` elements, and the scalar `T` is the context for every element
+expression. Each element is evaluated and stored in source order. The fresh
+local is thereby initialized as a whole, so a later computed index meets D22's
+whole-array requirement without a preceding copy.
+
+This is one contextual initializer and not a general array value. An inferred
+binding [0530], a module binding, assignment to an existing array, a parameter,
+return, argument or discard still refuses the literal. An empty literal,
+repetition [0560], `zeroed` [0540], slices [0570], nested array values and
+non-scalar elements remain outside this slice. In particular, requiring one
+expression in the literal grammar does not decide whether a programmer may
+write the zero-length type `[0]T`.
+
+**Why the written type:** it gives both facts the checker needs without an
+array-value inference rule: D17's exact length and the scalar context [0190]
+applies to each expression. The literal's finite source run is also the one
+array extent it is sound for the compiler to enumerate. Lowering allocates the
+same compact frame slot as any local array and stores each source element into
+its position; it does not introduce an array-valued IR result or work
+proportional to a target extent that was not written in the literal.
+
+**The alternative:** first infer the literal's length and element type, then
+allow that value in every compatible position. That is [0530] plus general
+array values rather than [0520]'s smallest executable case. It was deferred so
+module initial images, copying temporaries, parameters and returns do not become
+unstated consequences of accepting one local initializer.
+
+**Pinned by** `positive/local-array-literal-initializer`,
+`negative/array-literal-inferred-length-not-enabled`,
+`negative/local-array-literal-length-mismatch`,
+`negative/local-array-literal-element-mismatch`,
+`negative/module-array-literal-not-enabled`,
+`negative/array-literal-assignment-not-enabled`,
+`negative/array-repetition-not-enabled`, and
+`runtime/local-array-literal-initializes-elements` on Linux x86-64.

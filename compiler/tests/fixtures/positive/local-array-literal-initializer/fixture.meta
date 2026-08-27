@@ -1,0 +1,5 @@
+class: positive
+summary: D23 gives each element of an explicitly typed local array literal its scalar context
+constructs: 0040, 0080, 0190, 0410, 0520, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64

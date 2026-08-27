@@ -25,6 +25,7 @@ package body Landin.Syntax is
             when Member_Selection         => 1,
             --  What is indexed, and the index.
             when Element_Index            => 2,
+            when Array_Literal            => 0,
             when Literal_Kind             => 0,
             --  The one slot is [1790]'s type, not an expression.
             when Size_Of | Align_Of       => 1,
@@ -190,6 +191,13 @@ package body Landin.Syntax is
      is (Nth_Item (Of_Tree, Id, Index));
 
    function Nth_Argument
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
+
+   function Element_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Element
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
 
