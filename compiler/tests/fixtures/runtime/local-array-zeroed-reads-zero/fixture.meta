@@ -1,0 +1,6 @@
+class: runtime
+summary: a local zeroed initializer clears its complete frame slot
+constructs: 0040, 0190, 0340, 0350, 0520, 0540, 0570, 1760, 1770, 1810
+program: main.ldn
+status: 42
+targets: linux-x86-64

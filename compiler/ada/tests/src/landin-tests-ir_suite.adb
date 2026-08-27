@@ -506,6 +506,7 @@ package body Landin.Tests.IR_Suite is
          Slot    : Landin.IR.Slot_Id;
          Block   : Landin.IR.Block_Id;
          Copy    : Landin.IR.Value_Id;
+         Clear   : Landin.IR.Value_Id;
       begin
          Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
          Datum := Landin.IR.Add_Item
@@ -525,6 +526,10 @@ package body Landin.Tests.IR_Suite is
             (Kind => Landin.IR.Module_Datum, Datum => Datum),
             (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site);
          Copy := Landin.IR.Nth_Value (Unit, Routine, Block, 1);
+         Landin.IR.Emit_Array_Clear
+           (Unit, Routine,
+            (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site);
+         Clear := Landin.IR.Nth_Value (Unit, Routine, Block, 2);
 
          Landin.Testing.Check
            (Item,
@@ -546,6 +551,20 @@ package body Landin.Tests.IR_Suite is
          Landin.Testing.Check_Equal
            (Item, Landin.IR.Operand_Count (Unit, Routine, Copy), 0,
             "its metadata does not grow with the array length");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Clear) = Landin.IR.Clear_Array
+            and then Landin.IR.Defines_Nothing (Landin.IR.Clear_Array)
+            and then Landin.IR.Result_Of (Unit, Routine, Clear)
+                       = Landin.Types.Not_Typed
+            and then Landin.IR.Destination_Of
+                       (Unit, Routine, Clear).Kind = Landin.IR.Frame_Slot
+            and then Landin.IR.Destination_Of
+                       (Unit, Routine, Clear).Slot = Slot,
+            "a whole-array clear carries only its compact destination");
+         Landin.Testing.Check_Equal
+           (Item, Landin.IR.Operand_Count (Unit, Routine, Clear), 0,
+            "clear metadata also stays constant at the target-width length");
 
          declare
             Text : constant String := Landin.IR.Dump.Text
@@ -557,6 +576,11 @@ package body Landin.Tests.IR_Suite is
                Ada.Strings.Fixed.Index
                  (Text, "COPY_ARRAY from datum 1 f to slot 1") /= 0,
                "the dump names both kinds of storage endpoint");
+            Landin.Testing.Check
+              (Item,
+               Ada.Strings.Fixed.Index
+                 (Text, "CLEAR_ARRAY destination slot 1") /= 0,
+               "the dump names the clear destination");
          end;
       end;
    end An_Array_Copy_Carries_Two_Compact_Places;

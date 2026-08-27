@@ -1,0 +1,5 @@
+class: positive
+summary: an explicitly typed local array is initialized by zeroed
+constructs: 0040, 0520, 0540, 0570, 1760, 1770, 1810
+targets: linux-x86-64, macos-arm64
+program: program.ldn

@@ -639,6 +639,53 @@ package body Landin.Backend.X86_64 is
                      Emit ("rep movsb");
                   end;
 
+               when Landin.IR.Clear_Array =>
+                  --  D28 clears the complete local slot at runtime without
+                  --  making IR or compiler work proportional to D18's extent.
+                  declare
+                     Destination : constant Landin.IR.Storage :=
+                       Landin.IR.Destination_Of (Of_Unit, Item, Value);
+                     Length : constant Landin.IR.Element_Total :=
+                       (case Destination.Kind is
+                           when Landin.IR.Module_Datum =>
+                             Landin.IR.Array_Length
+                               (Of_Unit, Destination.Datum),
+                           when Landin.IR.Frame_Slot =>
+                             Landin.IR.Slot_Array_Length
+                               (Of_Unit, Item, Destination.Slot));
+                     Element : constant Landin.Types.Scalar_Name :=
+                       (case Destination.Kind is
+                           when Landin.IR.Module_Datum =>
+                             Landin.IR.Array_Element
+                               (Of_Unit, Destination.Datum),
+                           when Landin.IR.Frame_Slot =>
+                             Landin.IR.Slot_Array_Element
+                               (Of_Unit, Item, Destination.Slot));
+                     Bytes : constant Landin.Targets.Byte_Count :=
+                       Landin.Targets.Byte_Count (Length)
+                       * Landin.Targets.Byte_Count
+                           (Landin.Targets.Bytes (Size_Of (Element, Facts)));
+                  begin
+                     case Destination.Kind is
+                        when Landin.IR.Module_Datum =>
+                           Emit
+                             ("leaq " & Symbol (Destination.Datum)
+                              & "(%rip), %rdi");
+                        when Landin.IR.Frame_Slot =>
+                           Emit
+                             ("leaq " & Slot_Cell (Destination.Slot)
+                              & ", %rdi");
+                     end case;
+                     Emit ("xorl %eax, %eax");
+                     Emit
+                       ("movabsq $"
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image (Bytes))
+                        & ", %rcx");
+                     Emit ("cld");
+                     Emit ("rep stosb");
+                  end;
+
                when Landin.IR.Load_Datum | Landin.IR.Store_Datum =>
                   --  A module value is named rather than offset from a
                   --  frame, and RIP-relative is how x86-64 names one
@@ -1457,7 +1504,7 @@ package body Landin.Backend.X86_64 is
                      when Landin.IR.Call | Landin.IR.Store_Datum
                         | Landin.IR.Load_Field | Landin.IR.Store_Field
                         | Landin.IR.Load_Element | Landin.IR.Store_Element
-                        | Landin.IR.Copy_Array
+                        | Landin.IR.Copy_Array | Landin.IR.Clear_Array
                         | Landin.IR.Jump | Landin.IR.Branch =>
                         --  [1940] admits none of these in a module value,
                         --  and [1830] refuses a call there by name.
