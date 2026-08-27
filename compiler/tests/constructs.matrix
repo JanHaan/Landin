@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 95 with evidence, 103 with neither.
+#  198 constructs, 96 with evidence, 102 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -19,7 +19,7 @@
 0030   tour        accepted emitted                   Doc comment. Attaches to the declaration that follows
 0040   tour        accepted emitted executed refused  Full form: name, type, value
 0050   tour        accepted emitted executed refused  Type inferred from the value
-0060   tour        accepted emitted executed          Mutable binding
+0060   tour        accepted emitted executed refused  Mutable binding
 0070   tour        -                                  Two questions about a reference
 0080   tour        accepted emitted executed refused  Declaration only
 0090   tour        accepted emitted                   Exported from the module
@@ -67,7 +67,7 @@
 0510   tour        -                                  slice_from is where uninitialised storage is smuggled in
 0520   tour        accepted emitted executed refused refused-by-name Array: a value
 0530   tour        accepted emitted executed refused  The length may be inferred from the literal
-0540   tour        -                                  zeroed is the all-bits-zero image of a type
+0540   tour        accepted emitted executed refused  zeroed is the all-bits-zero image of a type
 0550   tour        -                                  The first of those two properties is also a concept
 0560   tour        refused refused-by-name            Repetition, for static patterns that live in flash
 0570   tour        accepted emitted executed refused refused-by-name Slice: a view
@@ -189,8 +189,8 @@
 1730   tour        -                                  Check once, then carry the proof
 1740   spec        accepted emitted executed refused  A program is declarations, in any order
 1750   spec        accepted emitted refused           A source file is bytes
-1760   spec        accepted emitted refused           Identifiers are lower case, and no identifier is a keyword
-1770   spec        accepted emitted executed          The kernel's literals are integers and the two booleans
+1760   spec        accepted emitted executed refused  Identifiers are lower case, and no identifier is a keyword
+1770   spec        accepted emitted executed refused  The kernel's literals are integers, booleans, and contextual zero
 1780   spec        accepted emitted refused           A comment ends a token, and its opener says which kind it is
 1790   spec        accepted emitted executed refused  A binding names one thing, and says how much it may change
 1795   spec        accepted emitted executed refused  A type declaration names a type, and names nothing new

@@ -1,0 +1,12 @@
+numbers: [4]u32 = zeroed
+flags: [3]bool = zeroed
+
+public main: () -> (code: i32) =
+    if numbers[0] == 0 and numbers[3] == 0
+        and not flags[0] and not flags[2]
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

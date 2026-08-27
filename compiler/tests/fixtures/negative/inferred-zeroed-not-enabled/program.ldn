@@ -1,0 +1,5 @@
+module := zeroed
+
+f: () -> none =
+    local := zeroed
+end f

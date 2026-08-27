@@ -1,0 +1,5 @@
+class: positive
+summary: an explicitly typed module scalar array accepts the zero image
+constructs: 0040, 0520, 0540, 1740, 1760, 1770
+program: program.ldn
+targets: linux-x86-64, macos-arm64

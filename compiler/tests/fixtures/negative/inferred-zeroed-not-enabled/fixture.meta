@@ -1,0 +1,6 @@
+class: negative
+summary: zeroed needs a written type and does not infer an array shape
+constructs: 0050, 0540, 1760, 1770
+program: program.ldn
+codes: L0304, L0304
+targets: linux-x86-64, macos-arm64

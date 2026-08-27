@@ -2384,19 +2384,31 @@ checker-owned refusals, and no general array value or IR operation is added.
 `runtime/module-array-literal-infers-static-image` pin the shape, image and
 refusal boundary.
 
-What is still refused: array initializers other than D21's direct storage name,
-D23/D24's explicitly typed local and module literal, and D25/D26's inferred
-local and module literal; general whole-array value positions; `zeroed` [0540];
-repetition [0560]; slices [0570]; non-identifier `lenof` operands; and an array
-as a struct field. Each is its own slice, and the remaining value slices need
-the initialization work D21 did not settle.
+D27 enables [0540]'s `zeroed` in one contextual position: an explicitly typed
+module fixed-array initializer. The written D17 shape supplies its context and
+every scalar element the kernel currently admits has an all-bits-zero image, so
+the complete array does too without enumerating its D18 extent. Checker image
+validation treats it as a terminal zero image; lowering deliberately records no
+finite datum image, preserving D10's `.bss` representation and distinct storage
+through D21 chains. It is not synthesized as a general value and introduces no
+IR operation, so inferred bindings, locals, assignment and scalar contexts
+remain refused. `positive/module-array-zeroed-initializer`, the four focused
+negative boundaries, and `runtime/module-array-zeroed-reads-zero` pin the source
+and emitted-storage behavior.
 
-[0540] is worth naming now rather than when it bites: it says a type *has* a
-zero image when all-zero is a valid value for it, which is what lets a
-surrounding array be zeroed at all. Every element this kernel admits is a
-scalar and every scalar has one, so the check is vacuous today; it stops being
-vacuous when a pointer can be an element, because [0540] gives a pointer no
-zero image and there is no null to stand for one.
+What is still refused: array initializers other than D21's direct storage name,
+D23/D24's explicitly typed local and module literal, D25/D26's inferred local
+and module literal, and D27's module `zeroed`; general whole-array value
+positions; every other `zeroed` [0540] context; repetition [0560]; slices [0570];
+non-identifier `lenof` operands; and an array as a struct field. Each is its own
+slice, and the remaining value slices need the initialization work D21 did not
+settle.
+
+[0540] says a type *has* a zero image when all-zero is a valid value for it,
+which is what lets D27's surrounding array be zeroed at all. Every element this
+kernel admits is a scalar and every scalar has one, so the check is vacuous
+today; it stops being vacuous when a pointer can be an element, because [0540]
+gives a pointer no zero image and there is no null to stand for one.
 
 Promoting `[` took away more refusals than the three that are obvious, and a
 third review round measured what each one used to do. `sizeof [4]u8` — the very

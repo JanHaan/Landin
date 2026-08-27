@@ -2305,6 +2305,10 @@ package body Landin.Stages.Lowering is
 
             if Value = Syn.No_Node then
                null;
+            elsif Syn.Kind (Their_Tree.all, Value) = Syn.Zeroed_Literal then
+               --  D27's explicit zero image remains absent, just like D10's
+               --  omitted initializer; the backend therefore selects .bss.
+               null;
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Array_Literal then
                Set_Image_From_Literal (Id, Their_Tree.all, Value);
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Name_Reference
