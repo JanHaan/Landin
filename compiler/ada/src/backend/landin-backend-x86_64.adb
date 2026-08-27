@@ -12,6 +12,7 @@ package body Landin.Backend.X86_64 is
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Opcode;
    use type Landin.IR.Element_Total;
+   use type Landin.IR.Field_Shape_Kind;
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
@@ -228,6 +229,9 @@ package body Landin.Backend.X86_64 is
          Wanted : Landin.IR.Element_Total;
          Offset : out Landin.Targets.Byte_Count);
 
+      function Has_Array_Field
+        (Item : Landin.IR.Item_Id) return Boolean;
+
       procedure Place_Fields
         (Item   : Landin.IR.Item_Id;
          Placed : out Landin.Targets.Placement;
@@ -259,11 +263,16 @@ package body Landin.Backend.X86_64 is
 
          for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
             declare
-               Held : constant Held_Size :=
-                 Size_Of (Landin.IR.Nth_Field (Of_Unit, Item, Field), Facts);
+               Shape : constant Landin.IR.Field_Shape :=
+                 Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field);
+               Size : Landin.Targets.Byte_Count;
+               Alignment : Landin.Targets.Byte_Alignment;
                At_Offset : Landin.Targets.Byte_Count;
             begin
-               Landin.Targets.Place (Placed, Held, Facts, At_Offset);
+               Landin.Backend.Field_Extent
+                 (Shape, Facts, Size, Alignment);
+               Landin.Targets.Place
+                 (Placed, Size, Alignment, At_Offset);
 
                if Landin.IR.Element_Total (Field) = Wanted then
                   Offset := At_Offset;
@@ -271,6 +280,23 @@ package body Landin.Backend.X86_64 is
             end;
          end loop;
       end Place_Fields;
+
+      function Has_Array_Field (Item : Landin.IR.Item_Id) return Boolean is
+      begin
+         if Landin.IR.Result_Of (Of_Unit, Item) /= Landin.Types.Aggregate
+         then
+            return False;
+         end if;
+
+         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
+            if Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field).Kind
+                 = Landin.IR.Array_Field_Shape
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Has_Array_Field;
 
       function Field_Offset
         (Item : Landin.IR.Item_Id; Field : Landin.IR.Part_Position)
@@ -905,8 +931,9 @@ package body Landin.Backend.X86_64 is
                      --  target range, so form every nonzero element address
                      --  in registers rather than leave that placement
                      --  question to an unencodable relocation.
-                     if Landin.IR.Result_Of (Of_Unit, Datum)
-                          = Landin.Types.Fixed_Array
+                     if (Landin.IR.Result_Of (Of_Unit, Datum)
+                           = Landin.Types.Fixed_Array
+                         or else Has_Array_Field (Datum))
                        and then At_Offset > 0
                      then
                         Emit ("leaq " & Symbol (Datum) & "(%rip), %rcx");

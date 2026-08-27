@@ -34,7 +34,8 @@ package body Landin.Tests.Lowering_Suite is
 
    package IR renames Landin.IR;
 
-   use type IR.Measurement_Field_Kind;
+   use type IR.Field_Shape;
+   use type IR.Field_Shape_Kind;
 
    use type IR.Block_Id;
    use type IR.Element_Total;
@@ -930,9 +931,9 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
-   --  [0670]'s state carries its fields' types and no value at all: D10
-   --  zeroes the whole of it, and where each field sits needs a target
-   --  this stage deliberately does not have.
+   --  [0670]'s state carries each field's compact target-neutral shape and
+   --  no value at all: D10 zeroes the whole of it, and where each field sits
+   --  needs a target this stage deliberately does not have.
    procedure A_Struct_State_Carries_Its_Fields
      (Item : in out Landin.Testing.Context);
 
@@ -947,6 +948,7 @@ package body Landin.Tests.Lowering_Suite is
         (Work,
          "counters: type = struct" & LF
          & "    hits: u32" & LF
+         & "    words: [2]usize" & LF
          & "    ready: bool" & LF
          & "end counters" & LF
          & "mut state: counters" & LF,
@@ -968,13 +970,20 @@ package body Landin.Tests.Lowering_Suite is
             "and its type is the aggregate it was declared with");
 
          Landin.Testing.Check_Equal
-           (Item, IR.Field_Count (Unit, 1), 2, "both fields are carried");
+           (Item, IR.Field_Count (Unit, 1), 3, "all fields are carried");
          Landin.Testing.Check
            (Item, IR.Nth_Field (Unit, 1, 1) = Landin.Types.U32,
             "the first field keeps its type");
          Landin.Testing.Check
-           (Item, IR.Nth_Field (Unit, 1, 2) = Landin.Types.Bool,
-            "and so does the second, in the order they were written");
+           (Item,
+            IR.Nth_Field_Shape (Unit, 1, 2)
+              = (Kind    => IR.Array_Field_Shape,
+                 Element => Landin.Types.Usize,
+                 Length  => 2),
+            "the array field keeps its element and length without a target");
+         Landin.Testing.Check
+           (Item, IR.Nth_Field (Unit, 1, 3) = Landin.Types.Bool,
+            "and the last scalar keeps its type and order");
 
          Landin.Testing.Check_Equal
            (Item, IR.Value_Count (Unit, 1), 1, "a leave and nothing else");
@@ -2031,11 +2040,11 @@ package body Landin.Tests.Lowering_Suite is
       begin
          for Datum in IR.Item_Id'(1) .. 2 loop
             declare
-               First : constant IR.Measurement_Field :=
+               First : constant IR.Field_Shape :=
                  IR.Nth_Measurement_Field (Unit, Datum, 1, 1);
-               Second : constant IR.Measurement_Field :=
+               Second : constant IR.Field_Shape :=
                  IR.Nth_Measurement_Field (Unit, Datum, 1, 2);
-               Third : constant IR.Measurement_Field :=
+               Third : constant IR.Field_Shape :=
                  IR.Nth_Measurement_Field (Unit, Datum, 1, 3);
             begin
                Landin.Testing.Check
@@ -2044,11 +2053,11 @@ package body Landin.Tests.Lowering_Suite is
                     in IR.Measure_Size | IR.Measure_Align
                     and then IR.Is_Aggregate_Measurement (Unit, Datum, 1)
                     and then IR.Measurement_Field_Count (Unit, Datum, 1) = 3
-                    and then First.Kind = IR.Scalar_Measurement_Field
+                    and then First.Kind = IR.Scalar_Field_Shape
                     and then First.Element = Landin.Types.U8
-                    and then Second.Kind = IR.Scalar_Measurement_Field
+                    and then Second.Kind = IR.Scalar_Field_Shape
                     and then Second.Element = Landin.Types.Usize
-                    and then Third.Kind = IR.Scalar_Measurement_Field
+                    and then Third.Kind = IR.Scalar_Field_Shape
                     and then Third.Element = Landin.Types.U16,
                   "each measurement carries declaration-order scalar"
                   & " types");
@@ -2097,23 +2106,23 @@ package body Landin.Tests.Lowering_Suite is
       begin
          for Datum in IR.Item_Id'(1) .. 2 loop
             declare
-               First : constant IR.Measurement_Field :=
+               First : constant IR.Field_Shape :=
                  IR.Nth_Measurement_Field (Unit, Datum, 1, 1);
-               Array_Field : constant IR.Measurement_Field :=
+               Array_Field : constant IR.Field_Shape :=
                  IR.Nth_Measurement_Field (Unit, Datum, 1, 2);
-               Last : constant IR.Measurement_Field :=
+               Last : constant IR.Field_Shape :=
                  IR.Nth_Measurement_Field (Unit, Datum, 1, 3);
             begin
                Landin.Testing.Check
                  (Item,
                   IR.Is_Aggregate_Measurement (Unit, Datum, 1)
                     and then IR.Measurement_Field_Count (Unit, Datum, 1) = 3
-                    and then First.Kind = IR.Scalar_Measurement_Field
+                    and then First.Kind = IR.Scalar_Field_Shape
                     and then First.Element = Landin.Types.U8
-                    and then Array_Field.Kind = IR.Array_Measurement_Field
+                    and then Array_Field.Kind = IR.Array_Field_Shape
                     and then Array_Field.Element = Landin.Types.Usize
                     and then Array_Field.Length = 4_294_967_295
-                    and then Last.Kind = IR.Scalar_Measurement_Field
+                    and then Last.Kind = IR.Scalar_Field_Shape
                     and then Last.Element = Landin.Types.U16,
                   "the declaration-order run contains one compact array"
                   & " shape");

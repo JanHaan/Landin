@@ -29,6 +29,7 @@ package body Landin.Stages.Checking is
    use type Landin.Types.Magnitude;
    use type Landin.Checking.Progress;
    use type Landin.Checking.Element_Count;
+   use type Landin.Checking.Field_Kind;
    use type Res.Verdict;
    use type Res.Declaration_Sort;
    use type Landin.Source.Source_Id;
@@ -523,17 +524,13 @@ package body Landin.Stages.Checking is
          declare
             Held : constant Ty.Type_Kind :=
               Type_At (Of_Tree, Written, For_Declaration);
-            --  [1740]'s module binding with no value is the one aggregate
-            --  place that needs nothing this kernel cannot emit: D10 makes
-            --  it zero, and zeroed storage is what a datum already is.  A
-            --  parameter, a return, a local or a written value each need a
-            --  rule this slice does not have, so each is still refused.
-            --  [1740]'s module state and [1810]'s local binding, each
-            --  without a value: D10 zeroes the first and D16 makes every
-            --  field of the second assigned before it is read, so neither
-            --  needs a value of a struct type to exist.  A parameter, a
-            --  return and a written value each need a rule this slice
-            --  does not have, so each is still refused.
+            --  D46 admits [1740]'s declaration-only module state once D45
+            --  laid out all of its scalar and fixed-array fields: D10 makes
+            --  the entire datum zero without forming an aggregate value.
+            --  D16's declaration-only local remains limited to scalar fields
+            --  because its frame slot has only a scalar field run.  A
+            --  parameter, return or written value still needs a whole-value
+            --  rule this slice does not have.
             Is_Zeroed_State : constant Boolean :=
               Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) = Syn.No_Node
@@ -554,6 +551,7 @@ package body Landin.Stages.Checking is
                          (Types.all,
                           Landin.Checking.Body_Of
                             (Types.all, Of_Tree, Written))
+                       or else not Is_Local_Binding (Of_Tree, Node)
                        or else Landin.Checking.Has_Only_Scalar_Fields
                          (Types.all,
                           Landin.Checking.Body_Of
@@ -1884,6 +1882,25 @@ package body Landin.Stages.Checking is
                         return Kept (Ty.Ill_Typed);
                      end if;
 
+                     --  D46 admits the containing module storage, not an
+                     --  array field as a value or nested place.  Refuse the
+                     --  selection before Field_Type's scalar precondition;
+                     --  an index over it then inherits this one report.
+                     if Landin.Checking.Field_Kind_Of
+                          (Types.all, Wrote, Which)
+                          = Landin.Checking.Fixed_Array_Field
+                     then
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "a fixed-array field is not an enabled"
+                                      & " value or nested place yet",
+                           Refused => Bad.Array_Value,
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+
                      Landin.Checking.Note_Field
                        (Types.all, Of_Tree, Node, Which);
                      return Kept
@@ -2633,6 +2650,33 @@ package body Landin.Stages.Checking is
                   --  straight from one place to another and nothing has to
                   --  carry them anywhere.
                   if Wants = Ty.Aggregate then
+                     declare
+                        Wrote : constant Res.Declaration_Id :=
+                          Landin.Checking.Body_Of
+                            (Types.all, Of_Tree, Place);
+                     begin
+                        if Wrote /= Res.No_Declaration
+                          and then Landin.Checking.Has_Layout
+                            (Types.all, Wrote)
+                          and then not
+                            Landin.Checking.Has_Only_Scalar_Fields
+                              (Types.all, Wrote)
+                        then
+                           Bad.Report
+                             (Item    => Bad.Unsupported_Use,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "a whole value of a struct with an"
+                                         & " aggregate field is not enabled"
+                                         & " yet",
+                              Refused => Bad.Struct_Value,
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                           return;
+                        end if;
+                     end;
+
                      declare
                         Got : constant Ty.Type_Kind :=
                           Selected_From (Of_Tree, Value);

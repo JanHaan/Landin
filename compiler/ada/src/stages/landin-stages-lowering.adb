@@ -15,6 +15,7 @@ package body Landin.Stages.Lowering is
    package Res renames Landin.Resolution;
    package Ty  renames Landin.Types;
    package IR  renames Landin.IR;
+   package Check renames Landin.Checking;
 
    use type IR.Block_Id;
    use type IR.Element_Total;
@@ -571,7 +572,7 @@ package body Landin.Stages.Lowering is
                         Declared : constant Res.Declaration_Id :=
                           Landin.Checking.Body_Of
                             (Types.all, Of_Tree, Asked);
-                        Fields : IR.Measurement_Field_Array
+                        Fields : IR.Field_Shape_Array
                           (1 .. Landin.Checking.Layout_Field_Count
                                   (Types.all, Declared));
                      begin
@@ -581,13 +582,13 @@ package body Landin.Stages.Lowering is
                                 = Landin.Checking.Scalar_Field
                            then
                               Fields (Field) :=
-                                (Kind    => IR.Scalar_Measurement_Field,
+                                (Kind    => IR.Scalar_Field_Shape,
                                  Element => Landin.Checking.Field_Type
                                    (Types.all, Declared, Field),
                                  Length  => 1);
                            else
                               Fields (Field) :=
-                                (Kind    => IR.Array_Measurement_Field,
+                                (Kind    => IR.Array_Field_Shape,
                                  Element =>
                                    Landin.Checking.Field_Array_Element
                                      (Types.all, Declared, Field),
@@ -1777,18 +1778,33 @@ package body Landin.Stages.Lowering is
                            end if;
 
                            --  [0750]'s fields, in the order they were
-                           --  written.  The types and not the offsets: a
-                           --  backend has a description and works out the
-                           --  same placement the checker did.
+                           --  written.  The compact scalar or fixed-array
+                           --  shapes and not the offsets: a backend has a
+                           --  description and works out the same placement
+                           --  the checker did.
                            if Held = Ty.Aggregate then
                               for Field in
                                 1 .. Landin.Checking.Layout_Field_Count
                                        (Types.all, Id)
                               loop
-                                 IR.Add_Field
-                                   (Unit.all, Made,
-                                    Landin.Checking.Field_Type
-                                      (Types.all, Id, Field));
+                                 if Landin.Checking.Field_Kind_Of
+                                      (Types.all, Id, Field)
+                                      = Landin.Checking.Scalar_Field
+                                 then
+                                    IR.Add_Field
+                                      (Unit.all, Made,
+                                       Landin.Checking.Field_Type
+                                         (Types.all, Id, Field));
+                                 else
+                                    IR.Add_Field
+                                      (Unit.all, Made,
+                                       (Kind    => IR.Array_Field_Shape,
+                                        Element => Check.Field_Array_Element
+                                          (Types.all, Id, Field),
+                                        Length => IR.Element_Total
+                                          (Check.Field_Array_Length
+                                             (Types.all, Id, Field))));
+                                 end if;
                               end loop;
                            end if;
                         end;

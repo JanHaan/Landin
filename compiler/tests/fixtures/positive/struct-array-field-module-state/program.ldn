@@ -1,0 +1,15 @@
+holder: type = struct
+    tag: u8
+    row: [2]usize
+    count: u32
+end holder
+
+holder_alias: type = holder
+
+direct: holder
+public mut through_alias: holder_alias
+
+touch: () -> none =
+    seen: u8 = direct.tag
+    through_alias.count = 2
+end touch

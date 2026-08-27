@@ -931,9 +931,10 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_State_Becomes_Zeroed_Data;
 
-   --  The same declaration against a 32-bit description, so the size
-   --  follows the target rather than the host: `usize bool` is sixteen
-   --  bytes on Linux x86-64 and eight here.
+   --  The same declaration against two descriptions, so an array field's
+   --  element width and the aggregate's tail padding follow the target
+   --  rather than the host: this is 32 bytes on Linux x86-64 and 16 on
+   --  the synthetic 32-bit description.
    procedure A_Struct_State_Follows_Its_Target
      (Item : in out Landin.Testing.Context);
 
@@ -943,6 +944,7 @@ package body Landin.Tests.Backend_Suite is
       Source : constant String :=
         "machine: type = struct" & LF
         & "    word: usize" & LF
+        & "    row: [2]usize" & LF
         & "    ready: bool" & LF
         & "end machine" & LF
         & "mut state: machine" & LF;
@@ -954,6 +956,16 @@ package body Landin.Tests.Backend_Suite is
       begin
          Lower (Work, Source, Ran);
          Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains (Text, HT & ".align 4" & LF & "state:" & LF
+                               & HT & ".zero 16" & LF),
+               "the array field uses the synthetic pointer width");
+         end;
       end;
 
       declare
@@ -969,8 +981,8 @@ package body Landin.Tests.Backend_Suite is
             Landin.Testing.Check
               (Item,
                Contains (Text, HT & ".align 8" & LF & "state:" & LF
-                               & HT & ".zero 16" & LF),
-               "a pointer-width field widens the state it is in");
+                               & HT & ".zero 32" & LF),
+               "the array field uses the Linux pointer width");
          end;
       end;
    end A_Struct_State_Follows_Its_Target;
@@ -1020,6 +1032,48 @@ package body Landin.Tests.Backend_Suite is
             "and the bool is one byte at eight");
       end;
    end A_Field_Is_Read_At_Its_Own_Offset;
+
+   --  D46 can put a scalar sibling beyond the signed displacement of an
+   --  x86-64 memory operand.  Like D18's far array element, the backend
+   --  must form that address in registers rather than ask the assembler
+   --  and loader to encode an impossible symbol-plus-offset relocation.
+   procedure A_Field_After_A_Wide_Array_Uses_A_Register_Address
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Field_After_A_Wide_Array_Uses_A_Register_Address
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "wide: type = struct" & LF
+         & "    prefix: [2147483648]u8" & LF
+         & "    tail: u8" & LF
+         & "end wide" & LF
+         & "mut state: wide" & LF
+         & "read: () -> none =" & LF
+         & "    value: u8 = state.tail" & LF
+         & "end read" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "leaq state(%rip), %rcx"),
+            "the wide sibling offset starts from the symbol address");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "movabsq $2147483648, %rdx")
+                  and then Contains (Text, HT & "addq %rdx, %rcx")
+                  and then Contains (Text, HT & "movb (%rcx), %al"),
+            "the full target offset is added and then loaded");
+      end;
+   end A_Field_After_A_Wide_Array_Uses_A_Register_Address;
 
    --  A field is written where it is read [1810], and `inc` on one says
    --  what `x += 1` says [1900]: a load at the offset, a one, a trapping
@@ -2871,6 +2925,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a field is read at its own offset",
          A_Field_Is_Read_At_Its_Own_Offset'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a field after a wide array uses registers",
+         A_Field_After_A_Wide_Array_Uses_A_Register_Address'Access);
       Landin.Testing.Register
         (Into, "backend", "a field is written at its own offset",
          A_Field_Is_Written_At_Its_Own_Offset'Access);

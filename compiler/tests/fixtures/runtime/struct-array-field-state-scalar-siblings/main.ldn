@@ -1,0 +1,22 @@
+holder: type = struct
+    tag: u8
+    words: [2]usize
+    tail: u16
+end holder
+
+mut state: holder
+
+public main: () -> (code: i32) =
+    if state.tag == 0 and state.tail == 0 then
+        state.tag = 7
+        state.tail = 701
+
+        if state.tag == 7 and state.tail == 701 then
+            code = 42
+        else
+            code = 2
+        end if
+    else
+        code = 1
+    end if
+end main

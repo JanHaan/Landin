@@ -179,12 +179,12 @@ package body Landin.IR.Dump is
                     1 .. Measurement_Field_Count (Of_Unit, Item, Value)
                   loop
                      declare
-                        Part : constant Measurement_Field :=
+                        Part : constant Field_Shape :=
                           Nth_Measurement_Field
                             (Of_Unit, Item, Value, Field);
                      begin
                         Unbounded.Append (Fields, " ");
-                        if Part.Kind = Scalar_Measurement_Field then
+                        if Part.Kind = Scalar_Field_Shape then
                            Unbounded.Append
                              (Fields, Landin.Types.Spelling (Part.Element));
                         else
@@ -317,9 +317,18 @@ package body Landin.IR.Dump is
             --  item says about itself: where each field sits needs a
             --  target and a dump has none.
             for F in 1 .. Field_Count (Of_Unit, Id) loop
-               Put ("  field " & Trimmed (Natural'Image (F)) & " "
-                    & Landin.Types.Spelling
-                        (Nth_Field (Of_Unit, Id, F)));
+               declare
+                  Shape : constant Field_Shape :=
+                    Nth_Field_Shape (Of_Unit, Id, F);
+               begin
+                  Put
+                    ("  field " & Trimmed (Natural'Image (F)) & " "
+                     & (if Shape.Kind = Scalar_Field_Shape
+                        then Landin.Types.Spelling (Shape.Element)
+                        else "[" & Trimmed
+                          (Element_Total'Image (Shape.Length)) & "]"
+                          & Landin.Types.Spelling (Shape.Element)));
+               end;
             end loop;
 
             for S in 1 .. Slot_Count (Of_Unit, Id) loop

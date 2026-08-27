@@ -100,6 +100,14 @@ package Landin.Backend is
                            or else Landin.IR.Is_Array
                                      (Of_Unit, Item, Slot));
 
+   --  The target extent of one compact scalar or fixed-array field.  Both
+   --  D45 measurement and D46 module storage replay this same leaf.
+   procedure Field_Extent
+     (Shape     : Landin.IR.Field_Shape;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment);
+
    --  Answer one target-neutral measurement instruction.  Aggregate
    --  measurements carry declaration-order scalar or compact fixed-array
    --  fields; this target-owning seam derives their padded placement with

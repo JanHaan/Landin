@@ -1,0 +1,11 @@
+holder: type = struct
+    row: [4]u8
+    count: u32
+end holder
+
+mut state: holder
+
+f: () -> none =
+    _ = state.row
+    first: u8 = state.row[0]
+end f

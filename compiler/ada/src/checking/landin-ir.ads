@@ -284,20 +284,19 @@ package Landin.IR is
    type Block_Id is range 0 .. Integer'Last;
    type Value_Id is range 0 .. Integer'Last;
 
-   --  A target-neutral aggregate measurement leaf.  D44 needs the scalar
-   --  form and D45 adds a compact fixed-scalar-array form; neither carries
-   --  a checker-computed offset, size or alignment.
-   type Measurement_Field_Kind is
-     (Scalar_Measurement_Field, Array_Measurement_Field);
+   --  One target-neutral aggregate field shape.  D44 needs the scalar form,
+   --  D45 adds the compact fixed-scalar-array form for measurement, and D46
+   --  uses that same representation-independent input for module storage.
+   --  Item and measurement runs remain separate APIs and vectors.
+   type Field_Shape_Kind is (Scalar_Field_Shape, Array_Field_Shape);
 
-   type Measurement_Field is record
-      Kind    : Measurement_Field_Kind      := Scalar_Measurement_Field;
+   type Field_Shape is record
+      Kind    : Field_Shape_Kind          := Scalar_Field_Shape;
       Element : Landin.Types.Scalar_Name    := Landin.Types.Bool;
       Length  : Element_Total               := 1;
    end record;
 
-   type Measurement_Field_Array is
-     array (Positive range <>) of Measurement_Field;
+   type Field_Shape_Array is array (Positive range <>) of Field_Shape;
 
    No_Item  : constant Item_Id  := 0;
    No_Slot  : constant Slot_Id  := 0;
@@ -422,8 +421,9 @@ package Landin.IR is
    --  An aggregate item's fields
    ------------------------------------------------------------------
 
-   --  [0750]: the scalar fields of an aggregate datum, in the order they
-   --  were written.  The types and not the offsets, for the reason
+   --  [0750]: an aggregate datum's fields, in the order they were written.
+   --  D46 permits a scalar or a compact fixed-scalar-array shape.  Shapes
+   --  and not offsets are carried, for the reason
    --  Measure_Size carries a type rather than an answer: an offset needs
    --  a target and this package has none.  Whoever holds a description
    --  lays them out with Landin.Targets.Placement and gets what the
@@ -443,11 +443,30 @@ package Landin.IR is
                              (Into, Item, Field_Count (Into, Item))
                            = Of_Type;
 
+   procedure Add_Field
+     (Into : in out Unit;
+      Item : Item_Id;
+      Shape : Field_Shape)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item) = Landin.Types.Aggregate,
+          Post => Field_Count (Into, Item)
+                    = Field_Count (Into, Item)'Old + 1
+                  and then Nth_Field_Shape
+                    (Into, Item, Field_Count (Into, Item)) = Shape;
+
+   function Nth_Field_Shape
+     (Of_Unit : Unit; Item : Item_Id; Index : Positive)
+      return Field_Shape
+     with Pre => Holds (Of_Unit, Item)
+                 and then Index <= Field_Count (Of_Unit, Item);
+
    function Nth_Field
      (Of_Unit : Unit; Item : Item_Id; Index : Positive)
      return Landin.Types.Scalar_Name
      with Pre => Holds (Of_Unit, Item)
-                 and then Index <= Field_Count (Of_Unit, Item);
+                 and then Index <= Field_Count (Of_Unit, Item)
+                 and then Nth_Field_Shape (Of_Unit, Item, Index).Kind
+                            = Scalar_Field_Shape;
 
    --  How many parts an aggregate item has, and what one holds, whether
    --  it is [0670]'s struct or [0520]'s array.  A field and an element
@@ -457,11 +476,17 @@ package Landin.IR is
    function Part_Count (Of_Unit : Unit; Item : Item_Id) return Element_Total
      with Pre => Holds (Of_Unit, Item);
 
+   function Part_Is_Scalar
+     (Of_Unit : Unit; Item : Item_Id; Index : Part_Position) return Boolean
+     with Pre => Holds (Of_Unit, Item)
+                 and then Element_Total (Index) <= Part_Count (Of_Unit, Item);
+
    function Nth_Part
      (Of_Unit : Unit; Item : Item_Id; Index : Part_Position)
      return Landin.Types.Scalar_Name
      with Pre => Holds (Of_Unit, Item)
-                 and then Element_Total (Index) <= Part_Count (Of_Unit, Item);
+                 and then Element_Total (Index) <= Part_Count (Of_Unit, Item)
+                 and then Part_Is_Scalar (Of_Unit, Item, Index);
 
    ------------------------------------------------------------------
    --  An array item's shape
@@ -1077,7 +1102,7 @@ package Landin.IR is
 
    function Nth_Measurement_Field
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id; Field : Positive)
-      return Measurement_Field
+      return Field_Shape
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                           in Measure_Size | Measure_Align
@@ -1103,7 +1128,7 @@ package Landin.IR is
      (Into    : in out Unit;
       Item    : Item_Id;
       Of_Code : Opcode;
-      Fields  : Measurement_Field_Array;
+      Fields  : Field_Shape_Array;
       Gives   : Landin.Types.Scalar_Name;
       Site    : Landin.Provenance.Origin) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
@@ -1584,14 +1609,14 @@ private
    package Item_Ref_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Item_Id);
 
-   package Field_Vectors is new Ada.Containers.Vectors
+   package Scalar_Field_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Landin.Types.Scalar_Name,
       "="          => Landin.Types."=");
 
-   package Measurement_Field_Vectors is new Ada.Containers.Vectors
+   package Field_Shape_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
-      Element_Type => Measurement_Field);
+      Element_Type => Field_Shape);
 
    package Image_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
@@ -1606,9 +1631,9 @@ private
       Blocks     : Block_Vectors.Vector;
       Code       : Code_Vectors.Vector;
       Operands   : Value_Ref_Vectors.Vector;
-      Fields     : Field_Vectors.Vector;
-      Slot_Fields : Field_Vectors.Vector;
-      Measurement_Fields : Measurement_Field_Vectors.Vector;
+      Fields     : Field_Shape_Vectors.Vector;
+      Slot_Fields : Scalar_Field_Vectors.Vector;
+      Measurement_Fields : Field_Shape_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
       --  D24: one folded scalar per array-datum position, laid end to end
       --  across items so a datum with no image contributes no bytes here.

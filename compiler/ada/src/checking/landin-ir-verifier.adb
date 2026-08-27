@@ -40,9 +40,8 @@ package body Landin.IR.Verifier is
                "two operands of one operator do not have one type",
             when Result_Disagrees     =>
                "an instruction's result is not the type its operands give",
-            when Measurement_Field_Malformed =>
-               "an aggregate measurement's scalar field has a length other"
-               & " than one",
+            when Field_Shape_Malformed =>
+               "an aggregate's scalar field has a length other than one",
             when Condition_Is_Not_A_Bool =>
                "a branch's condition is not a bool",
             when Slot_Out_Of_Range    =>
@@ -61,6 +60,8 @@ package body Landin.IR.Verifier is
                & " storage and not a value yet",
             when Field_Out_Of_Range =>
                "a field load names a field the aggregate does not have",
+            when Field_Is_Not_A_Scalar =>
+               "a scalar field operation names a fixed-array field",
             when Element_Datum_Is_Not_An_Array =>
                "an element load or store names a datum that is not an array",
             when Element_Index_Is_Not_Usize =>
@@ -320,6 +321,33 @@ package body Landin.IR.Verifier is
          end loop;
       end;
 
+      --  D46 shares one target-neutral field shape between aggregate
+      --  storage and D45's measurement.  Hold the aggregate run to its
+      --  canonical scalar representation before inspecting any item's
+      --  blocks, just as the vector partition checks above precede uses of
+      --  the vectors they protect.
+      for Which in 1 .. Item_Count (Of_Unit) loop
+         declare
+            Id : constant Item_Id := Item_Id (Which);
+         begin
+            if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate then
+               for Field in 1 .. Field_Count (Of_Unit, Id) loop
+                  declare
+                     Shape : constant Field_Shape :=
+                       Nth_Field_Shape (Of_Unit, Id, Field);
+                  begin
+                     if Shape.Kind = Scalar_Field_Shape
+                       and then Shape.Length /= 1
+                     then
+                        return (Kind => Field_Shape_Malformed,
+                                Item => Id, others => <>);
+                     end if;
+                  end;
+               end loop;
+            end if;
+         end;
+      end loop;
+
       for Which in 1 .. Item_Count (Of_Unit) loop
          declare
             Id : constant Item_Id := Item_Id (Which);
@@ -518,6 +546,16 @@ package body Landin.IR.Verifier is
                                     then
                                        return
                                          (Kind => Field_Out_Of_Range,
+                                          Item => Id, Block => Block,
+                                         Value => V);
+                                    end if;
+
+                                    if not Part_Is_Scalar
+                                      (Of_Unit, D,
+                                       Field_Of (Of_Unit, Id, V))
+                                    then
+                                       return
+                                         (Kind => Field_Is_Not_A_Scalar,
                                           Item => Id, Block => Block,
                                           Value => V);
                                     end if;
@@ -914,16 +952,16 @@ package body Landin.IR.Verifier is
                                           (Of_Unit, Id, V)
                                  loop
                                     declare
-                                       Part : constant Measurement_Field :=
+                                       Part : constant Field_Shape :=
                                          Nth_Measurement_Field
                                            (Of_Unit, Id, V, Field);
                                     begin
                                        if Part.Kind
-                                            = Scalar_Measurement_Field
+                                            = Scalar_Field_Shape
                                          and then Part.Length /= 1
                                        then
                                           return
-                                            (Measurement_Field_Malformed,
+                                            (Field_Shape_Malformed,
                                              Id, Block, V);
                                        end if;
                                     end;
