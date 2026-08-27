@@ -1,0 +1,6 @@
+class: runtime
+summary: D52 writes module and local field literals in source order without changing siblings
+constructs: 0080, 0190, 0340, 0350, 0410, 0520, 0670, 0750, 1740, 1760, 1770, 1810, 1900
+program: main.ldn
+status: 42
+targets: linux-x86-64

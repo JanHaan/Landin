@@ -1114,6 +1114,84 @@ package body Landin.Tests.Backend_Suite is
       end;
    end An_Array_Field_After_A_Wide_Field_Uses_Registers;
 
+   --  D52 reuses D48's field-qualified element-store path for every literal
+   --  position.  A far module field is register-formed for each store;
+   --  a frame field and its element scale follow the selected target.
+   procedure Array_Field_Literal_Stores_Follow_Their_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Literal_Stores_Follow_Their_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Wide : constant String :=
+        "wide: type = struct" & LF
+        & "    prefix: [2147483648]u8" & LF
+        & "    row: [2]u8" & LF
+        & "end wide" & LF
+        & "mut state: wide" & LF
+        & "write: () -> none =" & LF
+        & "    state.row = [20, 22]" & LF
+        & "end write" & LF;
+      Local : constant String :=
+        "holder: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    row: [2]usize" & LF
+        & "    tail: u16" & LF
+        & "end holder" & LF
+        & "write: () -> none =" & LF
+        & "    mut local: holder" & LF
+        & "    local.row = [20, 22]" & LF
+        & "end write" & LF;
+
+      procedure Check_Local
+        (Facts : Landin.Targets.Target_Facts;
+         Field : String;
+         Scale : String);
+
+      procedure Check_Local
+        (Facts : Landin.Targets.Target_Facts;
+         Field : String;
+         Scale : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Local, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Occurrences (Text, HT & "leaq " & Field & "(%rbp), %rcx") = 2
+               and then Occurrences
+                 (Text, HT & "imulq $" & Scale & ", %rax, %rax") = 2,
+               "both local stores use the target field and element width");
+         end;
+      end Check_Local;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower (Work, Wide, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Text, HT & "leaq state(%rip), %rcx") = 2
+            and then Occurrences
+              (Text, HT & "movabsq $2147483648, %rdx") = 2
+            and then Occurrences (Text, HT & "addq %rdx, %rcx") = 2,
+            "each far module-field store forms the full-width address");
+      end;
+
+      Check_Local (Landin.Targets.Linux_X86_64, "-24", "8");
+      Check_Local (Landin.Targets.Synthetic_32, "-12", "4");
+   end Array_Field_Literal_Stores_Follow_Their_Target;
+
    --  D49 clears the same far field from its register-formed module address;
    --  the byte count is the field extent, not the containing datum extent.
    procedure A_Wide_Array_Field_Clear_Uses_Registers
@@ -3302,6 +3380,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "an array field after a wide field uses registers",
          An_Array_Field_After_A_Wide_Field_Uses_Registers'Access);
+      Landin.Testing.Register
+        (Into, "backend", "array field literal stores follow their target",
+         Array_Field_Literal_Stores_Follow_Their_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "a wide array field clear uses registers",
          A_Wide_Array_Field_Clear_Uses_Registers'Access);

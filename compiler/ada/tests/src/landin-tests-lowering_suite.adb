@@ -2337,6 +2337,87 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end An_Array_Field_Element_Carries_Its_Containing_Field;
 
+   --  D52 keeps D29's direct-array Store_Field run unchanged, but an
+   --  element inside a selected field needs D48's two-level identity:
+   --  containing field plus zero-based element index.
+   procedure Array_Field_Literals_Become_Field_Qualified_Element_Stores
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Literals_Become_Field_Qualified_Element_Stores
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "end holder" & LF
+         & "mut state: holder" & LF
+         & "f: () -> none =" & LF
+         & "    state.row = [20, 22]" & LF
+         & "    mut local: holder" & LF
+         & "    local.row = [30, 12]" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "module and local field literals lower");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := 2;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, Routine), 13,
+            "four value-index-store triples precede the return");
+
+         for Position in 1 .. 4 loop
+            declare
+               Element : constant IR.Value_Id :=
+                 IR.Value_Id (3 * Position - 2);
+               Index : constant IR.Value_Id := IR.Value_Id (3 * Position - 1);
+               Store : constant IR.Value_Id := IR.Value_Id (3 * Position);
+               Expected_Index : constant Landin.Types.Magnitude :=
+                 Landin.Types.Magnitude ((Position - 1) mod 2);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  IR.Op_Of (Unit, Routine, Element) = IR.Number
+                  and then IR.Op_Of (Unit, Routine, Index) = IR.Number
+                  and then IR.Number_Of (Unit, Routine, Index)
+                             = Expected_Index
+                  and then IR.Op_Of (Unit, Routine, Store) = IR.Store_Element
+                  and then IR.Element_Field_Of (Unit, Routine, Store) = 2
+                  and then IR.Nth_Operand (Unit, Routine, Store, 1) = Index
+                  and then IR.Nth_Operand (Unit, Routine, Store, 2) = Element,
+                  "each expression precedes its index and element store");
+
+               if Position <= 2 then
+                  Landin.Testing.Check
+                    (Item, not IR.Reaches_A_Slot (Unit, Routine, Store)
+                           and then IR.Datum_Of (Unit, Routine, Store) = 1,
+                     "the first literal reaches the module field");
+               else
+                  Landin.Testing.Check
+                    (Item, IR.Reaches_A_Slot (Unit, Routine, Store)
+                           and then IR.Slot_Of (Unit, Routine, Store) = 1,
+                     "the second literal reaches the local field");
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the field-qualified literal stores verify");
+      end;
+   end Array_Field_Literals_Become_Field_Qualified_Element_Stores;
+
    ------------------------------------------------------------------
    --  A named aggregate measurement
    ------------------------------------------------------------------
@@ -2806,6 +2887,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "an array field element carries its containing field",
          An_Array_Field_Element_Carries_Its_Containing_Field'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "array field literals become field-qualified element stores",
+         Array_Field_Literals_Become_Field_Qualified_Element_Stores'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "a struct measurement carries its scalar fields",
