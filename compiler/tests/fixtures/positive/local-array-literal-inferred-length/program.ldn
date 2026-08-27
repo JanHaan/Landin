@@ -1,0 +1,9 @@
+f: () -> none =
+    row := [1, 2, 3]
+    last: i32 = row[2]
+end f
+
+g: (seed: u8) -> none =
+    bytes := [seed, 255]
+    last: u8 = bytes[1]
+end g

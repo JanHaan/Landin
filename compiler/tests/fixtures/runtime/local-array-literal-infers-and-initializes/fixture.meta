@@ -1,0 +1,6 @@
+class: runtime
+summary: an inferred local array has the literal length and initializes every element
+constructs: 0040, 0050, 0080, 0190, 0200, 0410, 0520, 0530, 1810
+program: main.ldn
+status: 42
+targets: linux-x86-64

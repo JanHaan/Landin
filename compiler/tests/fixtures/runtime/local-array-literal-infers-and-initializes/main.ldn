@@ -1,0 +1,12 @@
+at: (i: usize) -> (r: i32) =
+    row := [10, 20 + 1, 30, 40]
+    r = row[i]
+end at
+
+public main: () -> (code: i32) =
+    if at(0) == 10 and at(1) == 21 and at(2) == 30 and at(3) == 40 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
