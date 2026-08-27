@@ -9,7 +9,7 @@ end next
 public main: () -> (code: i32) =
     bytes: [2]u8 = [2 of 0xA5]
     halves: [2]u16 = [2 of 0xBEEF]
-    local: [4]u32 = [4 of next(10)]
+    local := [4 of next(10)]
     quads: [2]u64 = [2 of 0x0123456789ABCDEF]
     state = [of next(20)]
 

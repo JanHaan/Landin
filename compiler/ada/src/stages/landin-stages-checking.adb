@@ -541,8 +541,9 @@ package body Landin.Stages.Checking is
             --  exact length and the scalar context.  Every element must
             --  also be [1940]'s "known", which Check_Module_Value asks
             --  once the checker settles the types.
-            --  D32 admits full-array repetition only where a written local
-            --  array type supplies its extent and scalar element context.
+            --  D32 admits full-array repetition where a written local array
+            --  type supplies its shape.  D33's inferred form is admitted by
+            --  Infer before this written-declaration gate.
             Is_Local_Repetition_Init : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
@@ -1529,8 +1530,9 @@ package body Landin.Stages.Checking is
                  (Item    => Bad.Unsupported_Use,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
-                  Message => "array repetition needs an explicitly typed"
-                             & " local array initializer or assignment",
+                  Message => "array repetition needs a typed local"
+                             & " initializer, a counted inferred local"
+                             & " initializer, or assignment",
                   Refused => Bad.Array_Value,
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
@@ -2086,10 +2088,14 @@ package body Landin.Stages.Checking is
          --  D32's repetition is contextual like `zeroed`: the destination
          --  supplies the complete array shape, while one scalar expression
          --  supplies the value stored into every element.
-         Landin.Checking.Note
-           (Types.all, Of_Tree, Repetition, Ty.Fixed_Array);
-         Landin.Checking.Note_Array
-           (Types.all, Of_Tree, Repetition, Expected, Element);
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Repetition)
+              = Ty.Undecided
+         then
+            Landin.Checking.Note
+              (Types.all, Of_Tree, Repetition, Ty.Fixed_Array);
+            Landin.Checking.Note_Array
+              (Types.all, Of_Tree, Repetition, Expected, Element);
+         end if;
 
          if Count /= Syn.No_Node then
             declare
@@ -2154,18 +2160,23 @@ package body Landin.Stages.Checking is
                      --  narrow array case reads the shape from a direct
                      --  storage name without making array names general
                      --  values.  D25/D26's literal was already given its
-                     --  finite shape and scalar context by Infer; checking it
-                     --  here applies the local or module element boundary.
+                     --  finite shape and scalar context by Infer; D33 does the
+                     --  same for a counted local repetition.  Checking either
+                     --  here applies its contextual element boundary.
                      --  Every other form still goes through Synthesise and
                      --  keeps its existing refusal.
                      declare
-                        Inferred_Literal : constant Boolean :=
-                          Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+                        Inferred_Array : constant Boolean :=
+                          Syn.Kind (Of_Tree, Value)
+                            in Syn.Array_Literal | Syn.Array_Repetition
                           and then Landin.Checking.Type_Of
                                      (Types.all, Of_Tree, Value)
                                    = Ty.Fixed_Array;
                      begin
-                        if Inferred_Literal then
+                        if Inferred_Array
+                          and then Syn.Kind (Of_Tree, Value)
+                                   = Syn.Array_Literal
+                        then
                            Check_Array_Literal
                              (Of_Tree, Node, Value,
                               Landin.Checking.Array_Length
@@ -2174,6 +2185,13 @@ package body Landin.Stages.Checking is
                                 (Types.all, Of_Tree, Value),
                               Static_Image =>
                                 not Is_Local_Binding (Of_Tree, Node));
+                        elsif Inferred_Array then
+                           Check_Array_Repetition
+                             (Of_Tree, Node, Value,
+                              Landin.Checking.Array_Length
+                                (Types.all, Of_Tree, Value),
+                              Landin.Checking.Array_Element
+                                (Types.all, Of_Tree, Value));
                         else
                            declare
                               Got : constant Ty.Type_Kind :=
@@ -2754,6 +2772,133 @@ package body Landin.Stages.Checking is
                      Syn.Origin (Of_Tree.all, Node),
                      "the first inferred array element");
                end loop;
+            end;
+
+            return;
+         end if;
+
+         --  D33: a counted repetition directly initializing an inferred local
+         --  supplies D17's length and takes its scalar element type from its
+         --  one expression.  Like D25, an untyped integer takes [0200]'s
+         --  default; unlike a literal, no source run needs a common context.
+         --  A zero count remains deferred with [0580]'s source-level empty
+         --  array decision even though the internal shape can represent one.
+         if Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
+           and then Syn.Kind (Of_Tree.all, Value) = Syn.Array_Repetition
+           and then Syn.Repetition_Count (Of_Tree.all, Value) /= Syn.No_Node
+         then
+            declare
+               Count_Node : constant Syn.Node_Id :=
+                 Syn.Repetition_Count (Of_Tree.all, Value);
+               Repeated : constant Syn.Node_Id :=
+                 Syn.Repeated_Element (Of_Tree.all, Value);
+               Snap : constant Landin.Source.Snapshot :=
+                 Source (Context, Syn.Source_Of (Of_Tree.all));
+               Text : constant String :=
+                 Landin.Source.Slice
+                   (Snap, Syn.Digit_Span (Of_Tree.all, Count_Node));
+               Count_Value : Ty.Magnitude;
+               Overflowed  : Boolean;
+            begin
+               Ty.Evaluate
+                 (Text, Syn.Base (Of_Tree.all, Count_Node),
+                  Count_Value, Overflowed);
+
+               if Overflowed then
+                  Bad.Report
+                    (Item    => Bad.Literal_Out_Of_Range,
+                     Source  => Syn.Source_Of (Of_Tree.all),
+                     Where   => Syn.Where (Of_Tree.all, Count_Node),
+                     Message => "this is more elements than an array may have",
+                     Note    => "D18: an array's byte extent must fit the"
+                                & " target's usize",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree.all, Value);
+                  Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+                  return;
+               elsif Count_Value = 0 then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree.all),
+                     Where   => Syn.Where (Of_Tree.all, Count_Node),
+                     Message => "inferring a zero-element array is not"
+                                & " enabled yet",
+                     Refused => Bad.Array_Value,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree.all, Value);
+                  Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+                  return;
+               end if;
+
+               declare
+                  Count : constant Landin.Checking.Element_Count :=
+                    Landin.Checking.Element_Count (Count_Value);
+                  Got : constant Ty.Type_Kind :=
+                    Synthesise (Of_Tree.all, Repeated);
+                  Element : Ty.Scalar_Name;
+               begin
+                  if Got = Ty.Untyped_Integer then
+                     Element := Ty.Default_Integer;
+                     Commit_To (Of_Tree.all, Repeated, Element);
+                  elsif Got in Ty.Scalar_Name then
+                     Element := Ty.Scalar_Name (Got);
+                  else
+                     if Got = Ty.No_Value then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree.all),
+                           Where   => Syn.Where (Of_Tree.all, Repeated),
+                           Message => "this hands back nothing, so it cannot"
+                                      & " supply an array element type",
+                           Note    => "D33: repetition supplies one scalar"
+                                      & " element type for the inferred array",
+                           Related => Syn.Origin (Of_Tree.all, Node),
+                           Because => "this inferred binding",
+                           Into    => Found);
+                     end if;
+
+                     Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+                     return;
+                  end if;
+
+                  declare
+                     Element_Bytes : constant Ty.Magnitude :=
+                       Ty.Magnitude
+                         (Landin.Targets.Bytes
+                            (Ty.Storage_Size (Element, Facts)));
+                     Maximum_Bytes : constant Ty.Magnitude :=
+                       Ty.Magnitude
+                         (Landin.Targets.Maximum_Object_Size (Facts));
+                  begin
+                     if Element_Bytes /= 0
+                       and then Count_Value > Maximum_Bytes / Element_Bytes
+                     then
+                        Bad.Report
+                          (Item    => Bad.Literal_Out_Of_Range,
+                           Source  => Syn.Source_Of (Of_Tree.all),
+                           Where   => Syn.Where (Of_Tree.all, Value),
+                           Message => "this inferred array is larger than the"
+                                      & " target can address",
+                           Note    => "D18: an array's byte extent must fit"
+                                      & " the target's usize",
+                           Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree.all, Value);
+                        Landin.Checking.Settle
+                          (Types.all, Id, Ty.Ill_Typed);
+                        return;
+                     end if;
+                  end;
+
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree.all, Value, Ty.Fixed_Array);
+                  Landin.Checking.Note_Array
+                    (Types.all, Of_Tree.all, Value, Count, Element);
+                  Landin.Checking.Note_Array
+                    (Types.all, Id, Count, Element);
+                  Landin.Checking.Settle
+                    (Types.all, Id, Ty.Fixed_Array);
+               end;
             end;
 
             return;

@@ -617,14 +617,17 @@ header:  [8]u8   = [0x7F, 0x45, of 0]
 
 ```
 The repeated expression runs once, not once for every element. A local with a
-written fixed-array type accepts the first form, and assignment to an existing
-fixed array accepts an explicit count or takes it from the destination:
+written fixed-array type accepts the first form. A counted repetition may also
+supply an inferred local's length and scalar element type. Assignment to an
+existing fixed array accepts an explicit count or takes it from the destination:
 ```landin
 mut row: [4]u32 = [4 of next()]
+inferred := [4 of next()]
 row = [of next()]                 -- each call to next happens once
 
 ```
-Mixed-prefix repetition remains a later compiler slice.
+A zero count in the inferred form waits for [0580]'s empty-array decision.
+Mixed-prefix and module repetition remain later compiler slices.
 
 ### [0570] Slice: a view
 

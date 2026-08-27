@@ -1,5 +1,5 @@
 class: negative
-summary: initial repetition needs an explicitly typed local array context
+summary: array repetition is not a general array value
 constructs: 0040, 0050, 0520, 0560, 1740, 1810
 program: program.ldn
 codes: L0304

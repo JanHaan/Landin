@@ -1,0 +1,9 @@
+typed: (at: usize, seed: u32) -> (value: u32) =
+    row := [3 of seed]
+    value = row[at]
+end typed
+
+defaulted: (at: usize) -> (value: i32) =
+    row := [2 of 1]
+    value = row[at]
+end defaulted
