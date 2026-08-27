@@ -1,0 +1,6 @@
+class: runtime
+summary: D50 copies module and local array fields while preserving every sibling
+constructs: 0190, 0350, 0520, 0670, 0750, 1740, 1810, 1820, 1910
+program: main.ldn
+status: 42
+targets: linux-x86-64

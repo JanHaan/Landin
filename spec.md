@@ -1222,8 +1222,9 @@ sparse facts on the other keeps those sparse facts; sparse on both keeps their
 intersection. Completeness is decided by counting the sparse facts already
 present, never by walking an array extent that D18 permits to fill the target.
 
-This kernel admits an array name as a whole value only in this direct copy;
-D21 reuses the same storage read for its direct-name local initializers.
+This kernel admits an array name as a whole value only in this copy context;
+D50 later lets either endpoint be a directly selected fixed-array field. D21
+reuses only the direct-name storage read for local initializers.
 Parameters, returns, discards, and other general value positions remain refused
 until their own R2.20 or R2.30 slices. No array literal is enabled by this
 decision; D23 later admits one contextual initializer.
@@ -2707,8 +2708,9 @@ compiler-known index outside the field length is refused under [1950]; every
 other index is checked at runtime and traps before any address is formed under
 [0580]. Writability is the root binding's. The selection `s.f` is typed as an
 array only in this index-base context: as a whole value, copy endpoint, or
-non-`zeroed` assignment destination it remains refused with L0304. D49
-supersedes only the complete `s.f = zeroed` statement.
+non-`zeroed` assignment destination it remains refused with L0304. D49 later
+supersedes the complete `s.f = zeroed` statement, and D50 later supersedes the
+copy-endpoint boundary alone.
 
 D10 makes module state complete from declaration, so an indexed module-field
 read has no assignment requirement. A declaration-only local instead follows
@@ -2728,7 +2730,8 @@ No checker-computed byte offset enters IR. Even a compiler-known index through
 a field uses the element operation: adding a two-level static-part encoding for
 that optimization was declined. Array copy, clear, and fill operations still
 name whole storage only and therefore require field zero in this slice; D49
-later adds a field identity to `Clear_Array` alone.
+later adds a destination field identity to `Clear_Array`, and D50 adds source
+and destination identities to `Copy_Array`.
 
 The verifier checks a positive element field against the aggregate field run
 before it reads the shape, and rejects an absent field or a scalar field. It
@@ -2781,10 +2784,11 @@ field itself outside every whole-place context.
 **Chosen:** where `s` directly names D46 module state or a D47 local and `f` is
 a fixed array of enabled scalars, `s.f = zeroed` is admitted as a statement.
 The selection is typed as an array only as the destination of that complete
-assignment. As a value, copy source or destination, non-`zeroed` destination,
-`inc`/`dec` target, operand, or nested `zeroed` expression it remains refused
-with L0304. An immutable root reports L0303 first and alone under [1900]. The
-destination is reached first and `zeroed` evaluates nothing [0410]. Every
+assignment. At this boundary, as a value, copy source or destination,
+non-`zeroed` destination, `inc`/`dec` target, operand, or nested `zeroed`
+expression it remains refused with L0304; D50 later supersedes the copy
+endpoints alone. An immutable root reports L0303 first and alone under [1900].
+The destination is reached first and `zeroed` evaluates nothing [0410]. Every
 enabled scalar has a zero image, so the complete field has one [0540].
 
 D10 already makes a module field complete, so clearing it changes no assignment
@@ -2798,10 +2802,11 @@ clears zero bytes, preserving D17 without deciding whether source may spell
 
 Lowering emits the existing compact `Clear_Array` with the root storage and the
 field's declaration-order identity. Field zero continues to mean that the
-storage is itself an array. `Copy_Array` and `Fill_Array` remain field-zero-only,
-so this does not admit a whole field copy or fill. No checker-computed offset,
-source operand, temporary, or per-element instruction enters IR. The dump
-exposes a positive clear field.
+storage is itself an array. At this boundary `Copy_Array` and `Fill_Array`
+remain field-zero-only, so this does not admit a whole field copy or fill; D50
+later adds both copy endpoint identities. No checker-computed offset, source
+operand, temporary, or per-element instruction enters IR. The dump exposes a
+positive clear field.
 
 The verifier checks a positive field against the aggregate run before it reads
 the shape, rejecting an absent field or a scalar field with the same faults D48
@@ -2833,3 +2838,79 @@ use it. All were declined.
 `negative/struct-array-field-clear-not-on-every-path`; the recorded IR dump;
 `runtime/struct-array-field-state-scalar-siblings`; and
 `runtime/struct-array-field-local-scalar-siblings` on Linux x86-64.
+
+### D50 — A fixed-array field is a whole-copy endpoint
+
+**The tour said** that assignment reaches its destination before its value
+[0410], that assigning an array copies its complete value [0520], that a struct
+has its declared fields [0670], and that writability belongs to the root binding
+[1900]. D20 admitted one compact copy between direct array storage names. D48
+made an indexed element of a fixed-array field reachable, and D49 made the
+complete field a contextual `zeroed` destination, while both kept a field out
+of copy syntax.
+
+**Chosen:** where `s` directly names D46 module state or a D47 local and `f` is
+a fixed array of enabled scalars, `s.f` may be either endpoint of D20's copy:
+`s.f = t.g`, `s.f = name`, `name = s.f`, and `s.f = s.f`. A direct name has
+field identity zero; a selection has its declaration-order field identity.
+Both endpoints must have the same D17 length and scalar element type. A
+disagreement is refused with D20's L0301 at the source, related to the
+destination. The destination root must be mutable under [1900]; L0303 owns an
+immutable destination first and alone. The destination is reached before the
+source under [0410], and neither endpoint evaluates an element.
+
+The source is read as a whole. D10 makes a module field complete. A local
+source field must be complete on every arriving path: D49's clear or an earlier
+D50 copy supplies its binding-and-field whole fact, while D19/D48's sparse
+facts also suffice when they cover the declared length. An internal zero-length
+field is vacuously complete. Self-copy follows the same rule and therefore
+cannot make an unassigned field assigned. Normal completion records only the
+destination's whole fact; a scalar sibling and every other array field remain
+independent, and a branch merge keeps that fact only when every arriving path
+has it.
+
+This is a copy context, not a general array value. A fixed-array field remains
+refused as an initializer source, argument, return, discard, operand, or bare
+read, and as a literal, repetition, or other non-`zeroed`, non-copy assignment
+destination. Whole copies of the containing struct keep D46's refusal, so D50
+does not make the scalar-only `Copy_Field` path consume an array shape.
+
+Lowering emits one compact `Copy_Array` carrying both root storage identities
+and both field identities, never target offsets, temporaries, or one operation
+per element. The verifier first checks that each positive field exists in an
+aggregate and has an array shape, then compares the two shapes; those explicit
+checks precede every shaped accessor in assertion-free builds. `Fill_Array`
+remains field-zero-only.
+
+Each backend derives both field offsets, the source element width, and the byte
+extent from its selected target. Linux x86-64 register-forms a module field on
+either side when a D18-wide preceding field puts its offset outside a signed
+displacement, uses L0504-bounded frame displacements for local fields, and emits
+one forward `rep movsb`. Distinct fields and distinct storage do not overlap;
+an exact self-copy names the same range, which the forward copy preserves. A
+zero extent gives the operation a zero count.
+
+**Why the contextual endpoints:** the compact D20 operation already expresses
+the complete source read and destination write without enumerating D18's
+extent. Typing the selections only in this syntax reuses that rule without
+creating an array value that another expression, call, return, or initializer
+would have to carry.
+
+**The alternatives:** admit a fixed-array field as a general value, enable
+field-wise copies of the containing struct, initialize storage from a selected
+field, emit one scalar copy per element, put a field component into every
+`Storage`, or introduce a second copy opcode. The first three broaden distinct
+value and static-image rules, the fourth cannot represent every D18 extent, the
+fifth widens unrelated fill endpoints, and the sixth duplicates D20 for two
+identities. All were declined.
+
+**Pinned by** the checker, IR, verifier, lowering, and backend public-seam cases;
+`positive/struct-array-field-copy`;
+`negative/struct-array-field-copy-source-unassigned`;
+`negative/struct-array-field-copy-not-on-every-path`;
+`negative/struct-array-field-copy-shape-mismatch`;
+`negative/immutable-struct-array-field-copy`;
+`negative/struct-array-field-copy-initializer-not-enabled`;
+`negative/struct-array-field-copy-keeps-fields-separate`;
+`negative/struct-array-field-copy-not-enabled`; the recorded IR dump; and
+`runtime/struct-array-field-copy-endpoints` on Linux x86-64.

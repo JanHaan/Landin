@@ -534,7 +534,8 @@ package body Landin.Tests.IR_Suite is
          Landin.IR.Emit_Array_Copy
            (Unit, Routine,
             (Kind => Landin.IR.Module_Datum, Datum => Datum),
-            (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site);
+            (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site,
+            Source_Field => 5, Destination_Field => 6);
          Copy := Landin.IR.Nth_Value (Unit, Routine, Block, 1);
          --  This seam pins transport only; the verifier owns whether field 7
          --  exists and has an array shape in a particular destination.
@@ -562,11 +563,15 @@ package body Landin.Tests.IR_Suite is
             Landin.IR.Source_Of (Unit, Routine, Copy).Kind
               = Landin.IR.Module_Datum
             and then Landin.IR.Source_Of (Unit, Routine, Copy).Datum = Datum
+            and then Landin.IR.Source_Field_Of
+                       (Unit, Routine, Copy) = 5
             and then Landin.IR.Destination_Of (Unit, Routine, Copy).Kind
               = Landin.IR.Frame_Slot
             and then Landin.IR.Destination_Of
-                       (Unit, Routine, Copy).Slot = Slot,
-            "its discriminated endpoints retain datum and slot identities");
+                       (Unit, Routine, Copy).Slot = Slot
+            and then Landin.IR.Element_Field_Of
+                       (Unit, Routine, Copy) = 6,
+            "its endpoints retain storage and field identities");
          Landin.Testing.Check_Equal
            (Item, Landin.IR.Operand_Count (Unit, Routine, Copy), 0,
             "its metadata does not grow with the array length");
@@ -613,8 +618,9 @@ package body Landin.Tests.IR_Suite is
             Landin.Testing.Check
               (Item,
                Ada.Strings.Fixed.Index
-                 (Text, "COPY_ARRAY from datum 1 f to slot 1") /= 0,
-               "the dump names both kinds of storage endpoint");
+                 (Text, "COPY_ARRAY from datum 1 f field 5 to slot 1"
+                        & " field 6") /= 0,
+               "the dump names both storage and field endpoints");
             Landin.Testing.Check
               (Item,
                Ada.Strings.Fixed.Index

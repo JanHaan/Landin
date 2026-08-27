@@ -1624,6 +1624,90 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Zeroed_Array_Field_Carries_Its_Containing_Field;
 
+   --  D50 carries an independent declaration-order field for each compact
+   --  Copy_Array endpoint.  Zero keeps the direct-array spelling, so all
+   --  field/name and module/frame combinations use the same operation.
+   procedure Array_Field_Copy_Carries_Both_Endpoint_Fields
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Copy_Carries_Both_Endpoint_Fields
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "end holder" & LF
+         & "mut source: holder" & LF
+         & "mut destination: holder" & LF
+         & "mut words: [2]u32" & LF
+         & "f: () -> none =" & LF
+         & "    destination.row = source.row" & LF
+         & "    words = destination.row" & LF
+         & "    destination.row = words" & LF
+         & "    mut left: holder" & LF
+         & "    mut right: holder" & LF
+         & "    mut local_words: [2]u32" & LF
+         & "    left.row = zeroed" & LF
+         & "    right.row = left.row" & LF
+         & "    local_words = right.row" & LF
+         & "    right.row = local_words" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "field and direct-array copies are accepted and verified");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := 4;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, Routine), 8,
+            "six copies, one clear and the leave are the instruction run");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, Routine, 1) = IR.Copy_Array
+            and then IR.Source_Of (Unit, Routine, 1).Kind = IR.Module_Datum
+            and then IR.Destination_Of (Unit, Routine, 1).Kind
+                       = IR.Module_Datum
+            and then IR.Source_Field_Of (Unit, Routine, 1) = 2
+            and then IR.Element_Field_Of (Unit, Routine, 1) = 2,
+            "a module field copies directly to a module field");
+         Landin.Testing.Check
+           (Item,
+            IR.Source_Field_Of (Unit, Routine, 2) = 2
+            and then IR.Element_Field_Of (Unit, Routine, 2) = 0
+            and then IR.Source_Field_Of (Unit, Routine, 3) = 0
+            and then IR.Element_Field_Of (Unit, Routine, 3) = 2,
+            "module field and direct-array endpoints keep zero distinct");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, Routine, 5) = IR.Copy_Array
+            and then IR.Source_Of (Unit, Routine, 5).Kind = IR.Frame_Slot
+            and then IR.Destination_Of (Unit, Routine, 5).Kind
+                       = IR.Frame_Slot
+            and then IR.Source_Field_Of (Unit, Routine, 5) = 2
+            and then IR.Element_Field_Of (Unit, Routine, 5) = 2,
+            "a frame field copies directly to a frame field");
+         Landin.Testing.Check
+           (Item,
+            IR.Source_Field_Of (Unit, Routine, 6) = 2
+            and then IR.Element_Field_Of (Unit, Routine, 6) = 0
+            and then IR.Source_Field_Of (Unit, Routine, 7) = 0
+            and then IR.Element_Field_Of (Unit, Routine, 7) = 2,
+            "frame field and direct-array endpoints keep zero distinct");
+      end;
+   end Array_Field_Copy_Carries_Both_Endpoint_Fields;
+
    ------------------------------------------------------------------
 
    --  D24: a module array literal folds each element to a Folded value
@@ -2623,6 +2707,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "zeroed array field carries its field",
          Zeroed_Array_Field_Carries_Its_Containing_Field'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "array field copy carries both fields",
+         Array_Field_Copy_Carries_Both_Endpoint_Fields'Access);
       Landin.Testing.Register
         (Into, "lowering", "a module array literal records its image",
          A_Module_Array_Literal_Records_Its_Image'Access);

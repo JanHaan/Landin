@@ -651,6 +651,10 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      is (Held (Of_Unit, Item, Value).Source);
 
+   function Source_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     is (Held (Of_Unit, Item, Value).Source_Field);
+
    function Destination_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      is (Held (Of_Unit, Item, Value).Destination);
@@ -1053,7 +1057,9 @@ package body Landin.IR is
       Item        : Item_Id;
       Source      : Storage;
       Destination : Storage;
-      Site        : Landin.Provenance.Origin)
+      Site        : Landin.Provenance.Origin;
+      Source_Field : Natural := 0;
+      Destination_Field : Natural := 0)
    is
       Where : constant Value_Id :=
         Append
@@ -1061,7 +1067,9 @@ package body Landin.IR is
            Instruction'(Op          => Copy_Array,
                         Site        => Site,
                         Source      => Source,
+                        Source_Field => Source_Field,
                         Destination => Destination,
+                        Element_Field => Destination_Field,
                         others      => <>));
    begin
       pragma Assert (Where /= No_Value);
