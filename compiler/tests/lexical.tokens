@@ -1275,6 +1275,28 @@ file positive/module-array-literal-forward-scalar-reference/program.ldn tokens 2
   153 156 u32
   157 158 =
   159 162 100
+file positive/module-array-literal-inferred-length/program.ldn tokens 21
+  0 3 row
+  4 6 :=
+  7 8 [
+  8 9 1
+  9 10 ,
+  11 12 2
+  12 13 ,
+  14 15 3
+  15 16 ]
+  17 21 base
+  21 22 :
+  23 25 u8
+  26 27 =
+  28 29 4
+  30 35 bytes
+  36 38 :=
+  39 40 [
+  40 44 base
+  44 45 ,
+  46 47 5
+  47 48 ]
 file positive/module-array-literal-initializer/program.ldn tokens 48
   198 201 mut
   202 209 numbers
@@ -4382,16 +4404,67 @@ file negative/module-array-literal-index-element/program.ldn tokens 31
   64 65 1
   65 66 ]
   66 67 ]
-file negative/module-array-literal-inferred-length-not-enabled/program.ldn tokens 9
-  0 3 row
-  4 6 :=
-  7 8 [
-  8 9 1
-  9 10 ,
-  11 12 2
-  12 13 ,
-  14 15 3
-  15 16 ]
+file negative/module-array-literal-inferred-boundaries/program.ldn tokens 41
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 10 (
+  10 11 r
+  11 12 :
+  13 16 u32
+  16 17 )
+  18 19 =
+  24 25 r
+  26 27 =
+  28 29 1
+  30 33 end
+  34 35 f
+  37 43 source
+  43 44 :
+  45 46 [
+  46 47 1
+  47 48 ]
+  48 51 u32
+  52 58 called
+  59 61 :=
+  62 63 [
+  63 64 f
+  64 65 (
+  65 66 )
+  66 67 ,
+  68 69 1
+  69 70 ]
+  71 78 indexed
+  79 81 :=
+  82 83 [
+  83 89 source
+  89 90 [
+  90 91 0
+  91 92 ]
+  92 93 ,
+  94 95 1
+  95 96 ]
+file negative/module-array-literal-inferred-fold/program.ldn tokens 18
+  0 4 base
+  4 5 :
+  6 8 u8
+  9 10 =
+  11 12 1
+  13 16 bad
+  17 19 :=
+  20 21 [
+  21 25 base
+  25 26 ,
+  27 28 (
+  28 29 1
+  30 32 <<
+  33 34 3
+  34 35 )
+  36 37 +
+  38 41 250
+  41 42 ]
 file negative/module-array-literal-length-mismatch/program.ldn tokens 28
   0 3 mut
   4 9 short

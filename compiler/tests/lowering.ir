@@ -756,6 +756,22 @@ item 2 DATUM base result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 100
     2 LEAVE <- 1
+file positive/module-array-literal-inferred-length/program.ldn
+unit items 3
+item 1 DATUM row result array params 0 slots 0 blocks 1 values 1
+  elements 3 of i32
+  image 1 2 3
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM base result u8 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u8 4
+    2 LEAVE <- 1
+item 3 DATUM bytes result array params 0 slots 0 blocks 1 values 1
+  elements 2 of u8
+  image 4 5
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/module-array-literal-initializer/program.ldn
 unit items 3
 item 1 DATUM numbers result array params 0 slots 0 blocks 1 values 1
