@@ -1,0 +1,50 @@
+holder: type = struct
+    tag: u8
+    row: [2]usize
+    sibling: [2]usize
+    tail: u16
+end holder
+
+mut state: holder
+
+public main: () -> (code: i32) =
+    state.tag = 7
+    state.row[0] = 20
+    state.row[1] = 22
+    state.sibling[0] = 90
+    state.sibling[1] = 91
+    state.tail = 701
+
+    typed: [2]usize = state.row
+    mut inferred := state.row
+    inferred[0] = 10
+    inferred[1] = 32
+
+    mut local: holder
+    local.tag = 8
+    local.row[0] = 19
+    local.row[1] = 23
+    local.sibling[0] = 92
+    local.sibling[1] = 93
+    local.tail = 702
+    local_typed: [2]usize = local.row
+    mut local_inferred := local.row
+    local_inferred[0] = 18
+    local_inferred[1] = 24
+
+    if typed[0] == 20 and typed[1] == 22
+      and inferred[0] == 10 and inferred[1] == 32
+      and state.tag == 7 and state.row[0] == 20 and state.row[1] == 22
+      and state.sibling[0] == 90 and state.sibling[1] == 91
+      and state.tail == 701
+      and local_typed[0] == 19 and local_typed[1] == 23
+      and local_inferred[0] == 18 and local_inferred[1] == 24
+      and local.tag == 8 and local.row[0] == 19 and local.row[1] == 23
+      and local.sibling[0] == 92 and local.sibling[1] == 93
+      and local.tail == 702
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -123,6 +123,8 @@ package body Landin.Stages.Checking is
          Wanted  : Ty.Scalar_Name);
       function Synthesise
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+      function Admit_Array_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Synthesise_Binary
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Check_Call
@@ -549,7 +551,9 @@ package body Landin.Stages.Checking is
             --  D21: an array binding may be initialized directly from a
             --  whole-array storage name.  Resolution makes that module
             --  storage at module scope and an in-scope storage declaration
-            --  inside a body.  Every other
+            --  inside a body.  D51 also admits a fixed-array field when the
+            --  destination binding is local; the field remains outside the
+            --  module static-image and general-value rules.  Every other
             --  value form (an array literal, a call, `zeroed`, or a slice) is
             --  deferred: none of them is a Name_Reference.  An inferred
             --  direct-name binding has no Written node and is admitted
@@ -558,8 +562,16 @@ package body Landin.Stages.Checking is
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
-              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                       = Syn.Name_Reference;
+              and then
+                (Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                   = Syn.Name_Reference
+                 or else
+                   (Is_Local_Binding (Of_Tree, Node)
+                    and then Syn.Kind
+                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                        = Syn.Member_Selection
+                    and then Admit_Array_Field
+                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))));
             --  D23 admits a literal only where its written local array type
             --  supplies both the element context and the exact length.
             Is_Local_Literal_Init : constant Boolean :=
@@ -1296,14 +1308,13 @@ package body Landin.Stages.Checking is
 
       --  D49/D50 admit that same fixed-array field as a whole place only
       --  when assignment supplies `zeroed` or another fixed-array storage
-      --  endpoint as its complete contextual value.
+      --  endpoint as its complete contextual value.  D51 reuses the note for
+      --  a local initializer source; the local/module gates remain at those
+      --  contextual callers.
       --  This predicate notes the field shape when that exact place exists;
       --  it reports nothing and leaves every other selection for the
       --  ordinary place checker, so root mutability and field diagnostics
       --  keep their existing ownership.
-      function Admit_Array_Field
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-
       function Is_Direct_Array_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
@@ -3129,6 +3140,17 @@ package body Landin.Stages.Checking is
             end;
          end Refuse_Unreadable_Subtree;
       begin
+         --  A contextual initializer boundary already owns a refused value.
+         --  In particular, D51 keeps a selected field out of a module
+         --  initializer with L0304; [1940] must not add a second report for
+         --  the same node after that refusal has made it Ill_Typed.
+         if Value /= Syn.No_Node
+           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+                    = Ty.Ill_Typed
+         then
+            return;
+         end if;
+
          --  D24 gives array-literal elements their own more specific boundary.
          --  Scalar module values still follow [1940]: selecting storage is not
          --  a compile-time scalar image, even beneath an otherwise foldable
@@ -3389,22 +3411,28 @@ package body Landin.Stages.Checking is
          end if;
 
          declare
-            --  D21 infers D17's shape only from a direct storage name, for a
-            --  local or module binding.  Literals, calls, selections, indexes
-            --  and every other expression form still follow Synthesise's
-            --  refusal.
+            --  D21 infers D17's shape from a direct storage name for a local
+            --  or module binding.  D51 adds a directly selected fixed-array
+            --  field only for a local binding; module images and every other
+            --  expression form still follow Synthesise's refusal.
             Direct_Name : constant Boolean :=
               Res.Sort_Of (Meanings.all, Id)
                 in Res.Local_Binding | Res.Module_Binding
               and then Syn.Kind (Of_Tree.all, Value) = Syn.Name_Reference
               and then Res.Verdict_Of (Meanings.all, Of_Tree.all, Value)
                        = Res.Bound;
+            Direct_Field : constant Boolean :=
+              Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
+              and then Syn.Kind (Of_Tree.all, Value) = Syn.Member_Selection
+              and then Admit_Array_Field (Of_Tree.all, Value);
+            Direct_Source : constant Boolean :=
+              Direct_Name or else Direct_Field;
             Got : constant Ty.Type_Kind :=
-              (if Direct_Name
+              (if Direct_Source
                then Selected_From (Of_Tree.all, Value)
                else Synthesise (Of_Tree.all, Value));
             Direct_Array : constant Boolean :=
-              Direct_Name and then Got = Ty.Fixed_Array;
+              Direct_Source and then Got = Ty.Fixed_Array;
          begin
             if Got = Ty.Untyped_Integer then
                Commit_To (Of_Tree.all, Value, Ty.Default_Integer);

@@ -2784,12 +2784,30 @@ displacements, and emits one forward byte copy, including a zero-count internal
 empty field. Public checker, IR, verifier, lowering and backend cases pin the
 seams. The positive fixture, mutability/shape/context/definite-assignment
 negatives, recorded IR, and the module/local sibling runtime provide corpus and
-executable evidence. Initializers from a field, general field values, literals
-and repetitions into a field, whole copies of the containing struct,
+executable evidence. Module initializers from a field, general field values,
+literals and repetitions into a field, whole copies of the containing struct,
 parameters, returns, fields of elements, struct-of-struct fields and nested
-arrays remain separate slices.
+arrays remain separate slices; D51 below supersedes the local-initializer
+boundary alone.
 
-What is still refused: array initializers other than D21's direct storage name,
+D51 admits a directly selected fixed-array field as the source of either D21
+local initializer spelling. The explicitly typed form requires the written D17
+shape to match; the inferred form takes the field's shape. The source is read
+before the new name exists and as a whole, so a local field must be complete on
+every arriving path through D48's sparse facts or D49/D50's whole fact, while a
+module field is complete under D10 and an internal empty field is vacuous.
+Lowering reuses compact `Copy_Array`, carrying D50's source-field identity into
+the fresh frame slot at field zero; the verifier and backend reuse the existing
+checked shape and target-derived address paths. Public checker, lowering and
+backend cases pin the seams. Typed/inferred module and local roots, aliases,
+source-order shadowing, shape and definite-assignment negatives, the recorded
+IR, and an executable independence fixture provide corpus evidence. Module
+initializers from a field, general field values, literals and repetitions into
+a field, containing-struct copies, parameters, returns, fields of elements,
+struct-of-struct fields and nested arrays remain separate slices.
+
+What is still refused: array initializers other than D21's direct storage name
+and D51's selected field for a local binding,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D35's
 counted inferred local and module repetition, D34's explicitly typed local and
@@ -2808,7 +2826,8 @@ operands
 other than D14's direct name and D31's literal; and initialized local or module
 state, whole values, parameters or returns of a struct with an aggregate
 field, plus selection or whole-place use of its array field beyond D48's indexed
-elements, D49's contextual clear and D50's contextual copy endpoints.
+elements, D49's contextual clear, D50's contextual copy endpoints and D51's
+local initializer source.
 Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
 
@@ -2842,7 +2861,9 @@ itself and every whole-value boundary pinned. D49 migrated the one contextual
 whole-field clear while keeping reads, copies, other destinations and every
 general-value boundary pinned. D50 migrated contextual whole-field copy
 endpoints while keeping initializers, other destinations, containing-struct
-copies and every general-value boundary pinned.
+copies and every general-value boundary pinned. D51 migrated the local
+initializer source in both D21 spellings while keeping module initializers and
+every general-value boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

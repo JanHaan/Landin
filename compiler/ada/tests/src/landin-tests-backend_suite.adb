@@ -1245,6 +1245,55 @@ package body Landin.Tests.Backend_Suite is
       Check_Local (Landin.Targets.Synthetic_32, "-28", "-12", "8");
    end Array_Field_Copy_Derives_Both_Target_Addresses;
 
+   --  D51's fresh destination is direct array storage in the frame while its
+   --  source may be a D18-wide module field.  The field identity therefore
+   --  takes D50's register-formed source path on either target description.
+   procedure Array_Field_Initializer_Derives_Its_Source_Address
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Initializer_Derives_Its_Source_Address
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "wide: type = struct" & LF
+        & "    prefix: [2147483648]u8" & LF
+        & "    row: [2]u8" & LF
+        & "end wide" & LF
+        & "source: wide" & LF
+        & "copy: () -> none =" & LF
+        & "    local: [2]u8 = source.row" & LF
+        & "end copy" & LF;
+
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts);
+
+      procedure Check_Target (Facts : Landin.Targets.Target_Facts) is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  HT & "leaq -2(%rbp), %rdi" & LF
+                  & HT & "leaq source(%rip), %rsi" & LF
+                  & HT & "movabsq $2147483648, %rdx" & LF
+                  & HT & "addq %rdx, %rsi" & LF
+                  & HT & "movabsq $2, %rcx" & LF
+                  & HT & "cld" & LF
+                  & HT & "rep movsb" & LF),
+               "the fresh slot and wide field source follow the target");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64);
+      Check_Target (Landin.Targets.Synthetic_32);
+   end Array_Field_Initializer_Derives_Its_Source_Address;
+
    --  A field is written where it is read [1810], and `inc` on one says
    --  what `x += 1` says [1900]: a load at the offset, a one, a trapping
    --  add and a store back to the same offset.
@@ -3259,6 +3308,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "array field copy derives both addresses",
          Array_Field_Copy_Derives_Both_Target_Addresses'Access);
+      Landin.Testing.Register
+        (Into, "backend", "array field initializer derives source address",
+         Array_Field_Initializer_Derives_Its_Source_Address'Access);
       Landin.Testing.Register
         (Into, "backend", "a field is written at its own offset",
          A_Field_Is_Written_At_Its_Own_Offset'Access);
