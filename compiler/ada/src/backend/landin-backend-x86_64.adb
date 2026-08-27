@@ -710,6 +710,15 @@ package body Landin.Backend.X86_64 is
                              Landin.IR.Slot_Array_Element
                                (Of_Unit, Item, Destination.Slot));
                      Held : constant Held_Size := Size_Of (Element, Facts);
+                     First : constant Landin.IR.Part_Position :=
+                       Landin.IR.First_Part_Of (Of_Unit, Item, Value);
+                     Count : constant Landin.IR.Element_Total :=
+                       Length - (Landin.IR.Element_Total (First) - 1);
+                     Offset : constant Landin.Targets.Byte_Count :=
+                       Landin.Targets.Byte_Count
+                         (Landin.IR.Element_Total (First) - 1)
+                       * Landin.Targets.Byte_Count
+                           (Landin.Targets.Bytes (Held));
                   begin
                      case Destination.Kind is
                         when Landin.IR.Module_Datum =>
@@ -721,13 +730,20 @@ package body Landin.Backend.X86_64 is
                              ("leaq " & Slot_Cell (Destination.Slot)
                               & ", %rdi");
                      end case;
+                     if Offset /= 0 then
+                        Emit
+                          ("addq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Offset))
+                           & ", %rdi");
+                     end if;
                      Emit
                        ("mov" & Suffix (Held) & " "
                         & Value_Cell (Operand (1)) & ", "
                         & Accumulator (Held));
                      Emit
                        ("movabsq $"
-                        & Trimmed (Landin.IR.Element_Total'Image (Length))
+                        & Trimmed (Landin.IR.Element_Total'Image (Count))
                         & ", %rcx");
                      Emit ("cld");
                      Emit ("rep stos" & Suffix (Held));

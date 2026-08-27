@@ -1,0 +1,19 @@
+mut calls: u32 = 0
+
+next: (base: u32) -> (value: u32) =
+    calls = calls + 1
+    value = base + calls
+end next
+
+public main: () -> (code: i32) =
+    row: [5]u32 = [next(10), next(20), of next(30)]
+
+    if calls == 3
+        and row[0] == 11 and row[1] == 22
+        and row[2] == 33 and row[3] == 33 and row[4] == 33
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

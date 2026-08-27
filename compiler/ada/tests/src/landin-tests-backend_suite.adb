@@ -1382,17 +1382,20 @@ package body Landin.Tests.Backend_Suite is
         "mut state: [3]usize" & LF
         & "f: () -> none =" & LF
         & "    local: [3]usize = [3 of 7]" & LF
+        & "    mixed: [4]usize = [1, 2, of 9]" & LF
         & "    state = [of 8]" & LF
         & "end f" & LF;
 
       procedure Check_Target
         (Facts  : Landin.Targets.Target_Facts;
          Bytes  : String;
+         Offset : String;
          Suffix : String);
 
       procedure Check_Target
         (Facts  : Landin.Targets.Target_Facts;
          Bytes  : String;
+         Offset : String;
          Suffix : String)
       is
          Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
@@ -1409,6 +1412,12 @@ package body Landin.Tests.Backend_Suite is
               HT & "movabsq $3, %rcx" & LF
               & HT & "cld" & LF
               & HT & "rep stos" & Suffix & LF;
+            Suffix_Offset : constant String :=
+              HT & "addq $" & Offset & ", %rdi" & LF;
+            Suffix_Count : constant String :=
+              HT & "movabsq $2, %rcx" & LF
+              & HT & "cld" & LF
+              & HT & "rep stos" & Suffix & LF;
          begin
             Landin.Testing.Check
               (Item, Contains (Text, HT & "leaq -" & Bytes & "(%rbp), %rdi"),
@@ -1418,12 +1427,16 @@ package body Landin.Tests.Backend_Suite is
                "the assignment fill reaches module storage");
             Landin.Testing.Check_Equal
               (Item, Occurrences (Text, Fill), 2,
-               "both fills repeat three elements at the target width");
+               "both full fills repeat three elements at the target width");
+            Landin.Testing.Check
+              (Item, Contains (Text, Suffix_Offset)
+                     and then Contains (Text, Suffix_Count),
+               "the suffix fill offsets past its prefix and repeats two");
          end;
       end Check_Target;
    begin
-      Check_Target (Landin.Targets.Linux_X86_64, "24", "q");
-      Check_Target (Landin.Targets.Synthetic_32, "12", "l");
+      Check_Target (Landin.Targets.Linux_X86_64, "24", "16", "q");
+      Check_Target (Landin.Targets.Synthetic_32, "12", "8", "l");
    end An_Array_Fill_Follows_The_Target_Element_Width;
 
    --  D10 zeroes a module binding with no value, and zero bytes do not

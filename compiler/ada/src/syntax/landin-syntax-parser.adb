@@ -2371,24 +2371,44 @@ package body Landin.Syntax.Parser is
                      end if;
 
                      loop
-                        --  [0560]'s mixed prefix remains a later slice.  See
-                        --  the contextual `of` before parsing it as a name.
+                        --  D36 keeps `of` contextual: only the spelling after
+                        --  a comma and before something that can begin an
+                        --  expression ends the nonempty literal prefix.
                         if not Items.Is_Empty
                           and then Peek = Tok.Identifier
                           and then Named_Here = Of_Id
                           and then Pre.Begins_Expression (Ahead (1))
                         then
-                           Refuse
-                             (Item    => Syn.Array_Repetition,
-                              Where   => Here,
-                              Message => "mixed-prefix array repetition is"
-                                         & " not enabled yet");
-                           Skip_Remaining;
-                           Depth := Depth - 1;
-                           return Add
-                             (Error_Expression, At_Item,
-                              Join (At_Item, After_Previous),
-                              To_List (Items));
+                           declare
+                              At_Of : constant Landin.Source.Span := Here;
+                              Value : Node_Id;
+                           begin
+                              Advance;
+                              Value := Parse_Expression;
+
+                              if not Expect
+                                (Wanted  => Tok.Right_Bracket,
+                                 Message => "mixed array repetition is closed"
+                                            & " with `]`",
+                                 Note    => "D36: the repeated suffix stays"
+                                            & " between its brackets",
+                                 Related => At_Item,
+                                 Because => "opened here")
+                              then
+                                 Resync (List_Anchor);
+
+                                 if Peek = Tok.Right_Bracket then
+                                    Advance;
+                                 end if;
+                              end if;
+
+                              Depth := Depth - 1;
+                              return Add
+                                (Of_Kind  => Mixed_Array_Repetition,
+                                 At_Token => At_Of,
+                                 Extent   => Join (At_Item, After_Previous),
+                                 Children => [Value] & To_List (Items));
+                           end;
                         end if;
 
                         Items.Append (Parse_Expression);

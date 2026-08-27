@@ -161,6 +161,10 @@ package body Landin.IR.Dump is
             when Fill_Array =>
                return Lead & " destination "
                  & Endpoint (Destination_Of (Of_Unit, Item, Value))
+                 & " first "
+                 & Trimmed
+                     (Part_Position'Image
+                        (First_Part_Of (Of_Unit, Item, Value)))
                  & Operands (Item, Value);
 
             when Call =>
