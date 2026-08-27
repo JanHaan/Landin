@@ -1,0 +1,9 @@
+point: type = struct
+    x: u32
+    y: u32
+end point
+
+state: point
+
+mut is_origin: [1]bool = [state.x == 0]
+mut sum: [1]u32 = [state.x + state.y]

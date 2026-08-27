@@ -1,0 +1,5 @@
+class: positive
+summary: D24 admits an explicitly typed module array literal, folding each element into the datum's source-order image
+constructs: 0040, 0080, 0110, 0190, 0410, 0520, 1740, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

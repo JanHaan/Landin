@@ -1,0 +1,25 @@
+--  D24 gives the datum a source-order image, and D21's chain gives
+--  each destination its own storage carrying the same image.  Writing
+--  through one must not touch the others.
+mut literal: [4]u32 = [10, 20 + 1, base, base + 100]
+mut typed: [4]u32 = literal
+mut inferred := typed
+
+base: u32 = 100
+
+public main: () -> (code: i32) =
+    typed[0] = 99
+    inferred[1] = 77
+
+    if literal[0] == 10 and literal[1] == 21
+        and literal[2] == 100 and literal[3] == 200
+        and typed[0] == 99 and typed[1] == 21
+        and typed[2] == 100 and typed[3] == 200
+        and inferred[0] == 10 and inferred[1] == 77
+        and inferred[2] == 100 and inferred[3] == 200
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

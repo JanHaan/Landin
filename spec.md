@@ -1255,17 +1255,19 @@ assignment [0080].
 
 At module scope `source` is exactly one resolved module storage name. Its
 initial-image chain follows declaration identities, across forward references
-and type-alias chains, and must terminate at a module array whose initializer
-is omitted. A chain that returns to a declaration is [1940]'s value worked out
-from itself. Every terminating source image enabled now is D10's zero image;
-each destination nevertheless owns distinct storage initialized with that
-image rather than aliasing its source. Nothing runs before the entry point
-[1460], so no module-level copy instruction exists.
+and type-alias chains, and must terminate either at a module array whose
+initializer is omitted or at a module array whose initializer is D24's
+explicit literal. A chain that returns to a declaration is [1940]'s value
+worked out from itself. Each destination on the chain nevertheless owns
+distinct storage initialized with the terminal image rather than aliasing
+its source. Nothing runs before the entry point [1460], so no module-level
+copy instruction exists.
 
-Every other array initializer value remains refused: D23 later admits one
-contextual local array literal [0520], while a module or inferred literal,
-`zeroed` [0540], repetition [0560], a slice [0570], a call, and an indexed or
-selected subexpression are each their own later slice. This decision does not
+Every other array initializer value remains refused: D23 admits one
+contextual local array literal [0520], D24 admits its module counterpart,
+while an inferred literal, `zeroed` [0540], repetition [0560], a slice
+[0570], a call, and an indexed or selected subexpression are each their
+own later slice. This decision does not
 enable a general array value or an array as a parameter, return, discard, or
 struct field. A local source is read before the binding's scope begins [0110],
 so a local cannot initialize itself and an outer storage name may be shadowed.
@@ -1394,7 +1396,118 @@ unstated consequences of accepting one local initializer.
 `negative/array-literal-inferred-length-not-enabled`,
 `negative/local-array-literal-length-mismatch`,
 `negative/local-array-literal-element-mismatch`,
-`negative/module-array-literal-not-enabled`,
 `negative/array-literal-assignment-not-enabled`,
 `negative/array-repetition-not-enabled`, and
 `runtime/local-array-literal-initializes-elements` on Linux x86-64.
+
+### D24 — A written module array type gives a literal its static image
+
+**The tour said** that an array is a value whose size is part of its type
+[0520], that a binding may name its type and give it a value in one form
+[0040], that an integer literal takes the type of its context [0190], that
+expressions are evaluated left to right [0410], that a module value is
+known when the compiler reads it [1940], and that nothing runs before the
+entry point [1460]. It did not say what shape the compiler admits as a
+module array's static initial image.
+
+**Chosen:** a nonempty array literal initializes an explicitly typed
+module fixed-array binding: `[mut] name: [N]T = [first, ...]`. The
+literal contains exactly `N` elements, and the scalar `T` is the
+context for every element expression. Each element is evaluated in
+source order and its folded value becomes that array position's byte
+image at compile time. Every element must be `[1940]`-known and its
+fold must fit `T` — a literal or a bool spelling, an operator of [1820]
+[1940] enumerates over those, or a name bound to another module scalar
+binding whose own value is known. A forward reference is admitted for
+the same reason [1740] admits one for a scalar module value: a module
+is a set and the order between declarations is decided by identity
+rather than by their placement in the source.
+
+D21's direct-name form remains admitted at module scope as well.
+Following declaration identity through a chain of `[mut] name := source`
+or `[mut] name: [N]T = source` bindings now terminates either at D10's
+omitted-initializer array (whose image is zero) or at a D24 literal
+(whose image is that literal's fold). Every destination on the chain
+still owns distinct storage, and each is initialized with the terminal
+image byte for byte — a chain does not alias its source.
+
+This is the sole new module array initializer form. The inferred
+`[mut] name := [first, ...]` still refuses [0530]'s inferred length; an
+empty literal, `zeroed` [0540], repetition [0560], slices [0570],
+nested array values, non-scalar elements, calls, selections and index
+results all remain outside this slice. Requiring one expression in the
+literal grammar does not settle whether a programmer may write the
+zero-length type `[0]T`.
+
+The [1820] operators [1940] admits over literals are folded during
+checking and again when lowering records the verified image: [0290]'s
+arithmetic, [0300]'s wrapping forms at the operand type's own width so
+`u8 = 255 +% 1` is zero and every unsigned or signed size wraps the same
+way, [0320]'s shifts, [0330]'s bitwise set, [0340]'s logical words with
+short-circuiting, [0350]'s comparisons and [0370]'s measurements. Both
+walks take their widths from Landin.Types.Width against the compilation's
+target facts; the backend separately folds verified scalar IR, whose
+representation is no longer syntax. Thus a shift past the width gives zero
+at exactly the width [0320] promises and a bitwise `not` occupies the same
+bytes the backend emits. The positive operator corpus and the negative fold
+agreement fixtures pin that checking settles every value or invalid operand
+before lowering is allowed to record an image. A member selection [0420], an array element
+index [0570] and a nested array literal are refused as D24-excluded
+constructs; [1940] admits an operator of [1820] applied to leaves, and
+these three would need the source aggregate or array to have its own
+image resolved before this one — a stage each has to arrive with its own
+slice. The refusal walks each element's whole subtree, so
+`source[0] + 1` and `state.x == 3` are refused for the same reason a
+bare `source[0]` or a bare `state.x` is: the operator at the root is
+admitted but the leaf it stands on is not. The same [1940] boundary applies
+to a scalar module initializer: selecting `state.x` or `source[0]` needs a
+static aggregate or array image that the corresponding later slice has not
+yet supplied, so checking refuses it rather than leaving the backend to meet
+an unreadable value.
+
+A fold whose result walks past the compiler's widest kernel value is
+also refused with the same [1940] rule: an `18446744073709551615 + 1`
+and a `4294967296 * 4294967296` have no moment in which to trap and no
+folded value the compiler can hold, so each is refused at the element
+that produced the overflow rather than left to defect during image
+resolution. The same refusal applies to a scalar module binding whose
+value's fold overflows: `k: u64 = a + 1` where `a` is already
+`u64`'s maximum reports the overflow rather than silently deferring
+it to the backend and Constraint_Error at emit time.
+
+**Why the written type:** it gives the checker D17's exact length and
+one scalar context [0190] for every element, without introducing an
+array-value inference rule at module scope. The written literal is the
+one array extent it is sound to enumerate at compile time; every other
+D18 length reaches four billion positions and no reader will type them
+out. Requiring each element to be `[1940]`-known keeps [1460]'s
+"nothing runs before the entry point" as the rule that decides what a
+module value is, and the finite element run makes the module fold a
+per-position walk that a target loader can consume by writing one
+directive per element into the object.
+
+**The alternative:** admit a call, a general expression, or infer the
+length from the literal at module scope. The first two turn `[1460]`
+into a promise this compiler cannot keep; the third settles [0530]'s
+own decision on the strength of one initializer form, which local
+arrays' inferred forms would then have to follow. Both were declined.
+
+**Pinned by** `positive/module-array-literal-initializer`,
+`positive/module-array-literal-forward-scalar-reference`,
+`positive/module-array-literal-1820-operators`,
+`negative/module-array-literal-length-mismatch`,
+`negative/module-array-literal-element-mismatch`,
+`negative/module-array-literal-element-not-known`,
+`negative/module-array-literal-element-out-of-range`,
+`negative/module-array-literal-index-element`,
+`negative/module-array-literal-selection-element`,
+`negative/module-array-literal-nested-index`,
+`negative/module-array-literal-nested-selection`,
+`negative/module-array-literal-fold-overflow`,
+`negative/module-scalar-fold-overflow`,
+`negative/module-array-fold-agreement`,
+`negative/module-scalar-fold-agreement`,
+`negative/module-scalar-storage-selection`,
+`positive/module-scalar-wrapping-arithmetic`,
+`positive/module-array-literal-wrapping-arithmetic`, and
+`runtime/module-array-literal-holds-its-image` on Linux x86-64.

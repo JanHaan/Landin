@@ -16,6 +16,7 @@ with Ada.Strings.Fixed;
 
 with Landin.IR;
 with Landin.IR.Dump;
+with Landin.IR.Verifier;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -34,6 +35,8 @@ package body Landin.Tests.IR_Suite is
    use type Landin.IR.Slot_Id;
    use type Landin.IR.Storage_Kind;
    use type Landin.IR.Value_Id;
+   use type Landin.IR.Verifier.Fault_Kind;
+   use type Landin.Types.Folded;
    use type Landin.Types.Type_Kind;
 
    --  Library-level, because Landin.Stages.Stage_Reference is a
@@ -558,6 +561,78 @@ package body Landin.Tests.IR_Suite is
       end;
    end An_Array_Copy_Carries_Two_Compact_Places;
 
+   --  D24: an array datum records its source-order image as one Folded
+   --  value per position without allocating a run for an omitted-image
+   --  datum, and the verifier holds the length to the array's length.
+   procedure An_Array_Datum_Image_Is_Compact
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_Datum_Image_Is_Compact
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Unit : Landin.IR.Unit;
+         Loaded : Landin.IR.Item_Id;
+         Blank  : Landin.IR.Item_Id;
+         Block  : Landin.IR.Block_Id;
+      begin
+         Landin.IR.Prepare (Unit, Meanings.all);
+
+         Loaded := Landin.IR.Add_Item
+           (Unit, Landin.IR.Datum, 1, Landin.Types.Fixed_Array, Site);
+         Landin.IR.Set_Array (Unit, Loaded, Landin.Types.U32, 3);
+         Landin.IR.Set_Array_Image
+           (Unit, Loaded, Landin.Types.Folded_Array'(10, -1, 30));
+         Block := Landin.IR.Add_Block
+           (Unit, Loaded, Landin.Resolution.Program_Scope, Site);
+         Landin.IR.Enter (Unit, Loaded, Block);
+         Landin.IR.Emit_Leave (Unit, Loaded, Landin.IR.No_Value, Site);
+         Landin.IR.Leave_Block (Unit, Loaded);
+
+         Blank := Landin.IR.Add_Item
+           (Unit, Landin.IR.Datum, 2, Landin.Types.Fixed_Array, Site);
+         Landin.IR.Set_Array (Unit, Blank, Landin.Types.U32, 3);
+         Block := Landin.IR.Add_Block
+           (Unit, Blank, Landin.Resolution.Program_Scope, Site);
+         Landin.IR.Enter (Unit, Blank, Block);
+         Landin.IR.Emit_Leave (Unit, Blank, Landin.IR.No_Value, Site);
+         Landin.IR.Leave_Block (Unit, Blank);
+
+         Landin.Testing.Check
+           (Item, Landin.IR.Has_Image (Unit, Loaded),
+            "a datum given an image reports it");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Landin.IR.Image_Length (Unit, Loaded)), 3,
+            "and its image is one value per declared element");
+         Landin.Testing.Check_Equal
+           (Item,
+            Integer (Landin.IR.Nth_Image (Unit, Loaded, 1)),
+            Integer'(10),
+            "the first image value is source-order position one");
+         Landin.Testing.Check_Equal
+           (Item,
+            Integer (Landin.IR.Nth_Image (Unit, Loaded, 2)),
+            Integer'(-1),
+            "a negative folded value survives the image");
+         Landin.Testing.Check
+           (Item, not Landin.IR.Has_Image (Unit, Blank),
+            "a datum whose image was never set stays without one");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Verifier.Check (Unit).Kind
+              = Landin.IR.Verifier.Nothing_Wrong,
+            "the verifier accepts a well-formed image");
+      end;
+   end An_Array_Datum_Image_Is_Compact;
+
    ------------------------------------------------------------------
    --  D22: a slot-reaching element operation
    ------------------------------------------------------------------
@@ -667,6 +742,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "an array copy carries two compact places",
          An_Array_Copy_Carries_Two_Compact_Places'Access);
+      Landin.Testing.Register
+        (Into, "ir", "an array datum image is compact",
+         An_Array_Datum_Image_Is_Compact'Access);
       Landin.Testing.Register
         (Into, "ir", "a slot element reaches the frame",
          A_Slot_Element_Reaches_The_Frame'Access);

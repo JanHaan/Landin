@@ -42,13 +42,13 @@
 0260   tour        refused                            Text literals are untyped too
 0270   tour        -                                  The escape set is closed and small
 0280   tour        -                                  Raw literals: N quotes on each side, N at least three
-0290   tour        accepted emitted executed          Arithmetic
-0300   tour        accepted emitted executed          Overflow traps
+0290   tour        accepted emitted executed refused  Arithmetic
+0300   tour        accepted emitted executed refused  Overflow traps
 0310   tour        refused                            No implicit conversion
 0320   tour        accepted emitted executed refused  Shifts fill with zeros beyond the width, for any amount
-0330   tour        accepted emitted executed          Bitwise
+0330   tour        accepted emitted executed refused  Bitwise
 0340   tour        accepted emitted executed refused  Logical: and, or, not
-0350   tour        accepted emitted executed          Comparison
+0350   tour        accepted emitted executed refused  Comparison
 0360   tour        -                                  Ranges
 0370   tour        accepted emitted executed refused  sizeof, alignof and lenof
 0380   tour        -                                  addr takes an address

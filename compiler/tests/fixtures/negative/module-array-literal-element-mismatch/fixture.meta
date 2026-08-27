@@ -1,0 +1,6 @@
+class: negative
+summary: D24 gives every module array literal element the scalar type written for the array
+constructs: 0040, 0190, 0520, 1740
+program: program.ldn
+codes: L0301, L0301
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,8 @@
+point: type = struct
+    x: u32
+end point
+
+state: point
+source: [1]u32
+field: u32 = state.x
+part: u32 = source[0]

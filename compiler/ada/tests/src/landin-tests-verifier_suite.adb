@@ -10,6 +10,7 @@
 --  The frontend runs only to get a resolution table for Prepare and
 --  Declaration_Ids for Add_Item; the sources are strings in memory.
 
+with Landin.IR.Testing_Support;
 with Landin.IR.Verifier;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -27,6 +28,7 @@ package body Landin.Tests.Verifier_Suite is
 
    use type IR.Element_Total;
    use type IR.Value_Id;
+   use type Landin.Types.Folded;
    use type V.Fault_Kind;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
@@ -560,6 +562,229 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Malformed_Shapes_Are_Rejected;
 
+   --  D24: an array datum's per-position image has to fit its element type
+   --  at the compilation's target facts.  An u8 that holds 300 or a bool
+   --  that holds 2 is IR whose bytes the backend has no defined answer
+   --  for, and a 32-bit `usize` cannot hold a value that overflows the
+   --  target address space even when the Folded run has room for it.
+   procedure Malformed_Image_Values_Are_Rejected
+     (Item : in out Landin.Testing.Context);
+
+   procedure Malformed_Image_Values_Are_Rejected
+     (Item : in out Landin.Testing.Context)
+   is
+      type Row is record
+         Element  : Landin.Types.Scalar_Name;
+         Value    : Landin.Types.Folded;
+         Facts    : Landin.Targets.Target_Facts;
+         Rejected : Boolean;
+         Label    : String (1 .. 40);
+      end record;
+
+      function Padded (Text : String) return String;
+
+      function Padded (Text : String) return String is
+         Result : String (1 .. 40) := [others => ' '];
+      begin
+         Result (1 .. Text'Length) := Text;
+         return Result;
+      end Padded;
+
+      Cases : constant array (Positive range <>) of Row :=
+        [(Landin.Types.U8, 300, Landin.Targets.Linux_X86_64, True,
+          Padded ("u8 = 300")),
+         (Landin.Types.U8, 255, Landin.Targets.Linux_X86_64, False,
+          Padded ("u8 = 255")),
+         (Landin.Types.Bool, 2, Landin.Targets.Linux_X86_64, True,
+          Padded ("bool = 2")),
+         (Landin.Types.Bool, 1, Landin.Targets.Linux_X86_64, False,
+          Padded ("bool = 1")),
+         (Landin.Types.Usize, 2 ** 32,
+          Landin.Targets.Synthetic_32, True,
+          Padded ("usize = 2**32 on 32-bit")),
+         (Landin.Types.Usize, 2 ** 32,
+          Landin.Targets.Linux_X86_64, False,
+          Padded ("usize = 2**32 on 64-bit"))];
+   begin
+      for Each of Cases loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Each.Facts);
+            Site : Landin.Provenance.Origin;
+            Unit : IR.Unit;
+            Datum : IR.Item_Id;
+            Block : IR.Block_Id;
+            Result : V.Fault;
+         begin
+            Ready (Work, Site);
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Datum := IR.Add_Item
+              (Unit, IR.Datum, 1, Landin.Types.Fixed_Array, Site);
+            IR.Set_Array (Unit, Datum, Each.Element, 1);
+            IR.Set_Array_Image
+              (Unit, Datum, Landin.Types.Folded_Array'(1 => Each.Value));
+            Block := IR.Add_Block
+              (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Datum, Block);
+            IR.Emit_Leave (Unit, Datum, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Datum);
+
+            Result := V.Check (Unit, Each.Facts);
+
+            if Each.Rejected then
+               Landin.Testing.Check
+                 (Item,
+                  Result.Kind = V.Array_Image_Value_Does_Not_Fit,
+                  Each.Label & ": refused as out-of-range image");
+            else
+               Landin.Testing.Check
+                 (Item,
+                  Result.Kind = V.Nothing_Wrong,
+                  Each.Label & ": accepted as an in-range image");
+            end if;
+         end;
+      end loop;
+   end Malformed_Image_Values_Are_Rejected;
+
+   --  D24: an image run has to partition the shared vector alongside
+   --  Slots, Blocks, Values and Fields.  Unlike those, images are filled
+   --  in chain-resolution order rather than item order, so the partition
+   --  check cannot rely on Held.Image.First = previous item's endpoint.
+   --  This case pins the three malformed shapes the partition still has
+   --  to refuse: a base past the vector's end, two items whose runs
+   --  overlap, and a vector byte no item claims.
+   procedure Malformed_Image_Runs_Are_Rejected
+     (Item : in out Landin.Testing.Context);
+
+   procedure Malformed_Image_Runs_Are_Rejected
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Ready_With_Datum
+        (Work  : in out Landin.Stages.Compilation;
+         Unit  : in out IR.Unit;
+         Site  : out Landin.Provenance.Origin;
+         Datum : out IR.Item_Id;
+         Length : IR.Element_Total);
+
+      procedure Ready_With_Datum
+        (Work  : in out Landin.Stages.Compilation;
+         Unit  : in out IR.Unit;
+         Site  : out Landin.Provenance.Origin;
+         Datum : out IR.Item_Id;
+         Length : IR.Element_Total)
+      is
+         Block : IR.Block_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Fixed_Array, Site);
+         IR.Set_Array (Unit, Datum, Landin.Types.U8, Length);
+         Block := IR.Add_Block
+           (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Datum, Block);
+         IR.Emit_Leave (Unit, Datum, IR.No_Value, Site);
+         IR.Leave_Block (Unit, Datum);
+      end Ready_With_Datum;
+   begin
+      --  Case one: a base + count that walks past the vector's end,
+      --  which a Nth_Image call would otherwise turn into a
+      --  Constraint_Error at read time.
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready_With_Datum (Work, Unit, Site, Datum, Length => 3);
+         --  Two bytes in the vector, three claimed.
+         Landin.IR.Testing_Support.Append_Image_Bytes (Unit, 2);
+         Landin.IR.Testing_Support.Overwrite_Image_Run
+           (Unit, Datum, First => 0, Count => 3);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Item_Runs_Overlap,
+            "an image run that walks past the vector is refused");
+      end;
+
+      --  Case two: two datums whose runs overlap.  Bytes 1..3 belong
+      --  to the first and 2..4 would belong to the second, so byte 2
+      --  is claimed twice and the vector cannot describe a partition.
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum, Second : IR.Item_Id;
+         Block : IR.Block_Id;
+      begin
+         Ready_With_Datum (Work, Unit, Site, Datum, Length => 3);
+         Second := IR.Add_Item
+           (Unit, IR.Datum, 3, Landin.Types.Fixed_Array, Site);
+         IR.Set_Array (Unit, Second, Landin.Types.U8, 3);
+         Block := IR.Add_Block
+           (Unit, Second, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Second, Block);
+         IR.Emit_Leave (Unit, Second, IR.No_Value, Site);
+         IR.Leave_Block (Unit, Second);
+
+         --  Datum owns 0..2, Second overlaps at 1..3.
+         Landin.IR.Testing_Support.Append_Image_Bytes (Unit, 4);
+         Landin.IR.Testing_Support.Overwrite_Image_Run
+           (Unit, Datum, First => 0, Count => 3);
+         Landin.IR.Testing_Support.Overwrite_Image_Run
+           (Unit, Second, First => 1, Count => 3);
+
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Item_Runs_Overlap,
+            "two image runs sharing a byte are refused");
+      end;
+
+      --  Case three: a byte in the vector no item claims.  Datum owns
+      --  0..1 and byte 2 is orphaned, so the partition has a gap.
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready_With_Datum (Work, Unit, Site, Datum, Length => 3);
+         Landin.IR.Testing_Support.Append_Image_Bytes (Unit, 3);
+         Landin.IR.Testing_Support.Overwrite_Image_Run
+           (Unit, Datum, First => 0, Count => 2);
+
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Item_Runs_Overlap,
+            "a vector byte no item claims is refused");
+      end;
+
+      --  Case four: a corrupt base at Natural'Last.  The naive
+      --  `First + Count > Total` overflows Natural before the walk
+      --  speaks and raises Constraint_Error instead of returning a
+      --  Fault.  The subtraction-safe form has to refuse this instead.
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready_With_Datum (Work, Unit, Site, Datum, Length => 3);
+         Landin.IR.Testing_Support.Append_Image_Bytes (Unit, 3);
+         Landin.IR.Testing_Support.Overwrite_Image_Run
+           (Unit, Datum, First => Natural'Last, Count => 1);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Item_Runs_Overlap,
+            "an image run at Natural'Last is refused without arithmetic"
+            & " overflow");
+      end;
+   end Malformed_Image_Runs_Are_Rejected;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -568,6 +793,12 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "malformed shapes are rejected",
          Malformed_Shapes_Are_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "malformed image values are rejected",
+         Malformed_Image_Values_Are_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "malformed image runs are rejected",
+         Malformed_Image_Runs_Are_Rejected'Access);
    end Register;
 
 end Landin.Tests.Verifier_Suite;
