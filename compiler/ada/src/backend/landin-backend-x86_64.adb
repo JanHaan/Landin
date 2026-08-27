@@ -1513,15 +1513,23 @@ package body Landin.Backend.X86_64 is
       --  rather than bytes to carry.  An aggregate always is: D10 zeroes a
       --  binding with no value and [1940] admits no other way to write one
       --  at module level, which is why this asks the type before it asks
-      --  the fold -- an aggregate datum has no scalar answer to fold.
+      --  the fold -- an aggregate datum has no scalar answer to fold.  An
+      --  array datum is zero when it has no D24 image at all; a datum whose
+      --  image happens to be every-position-zero is written as `.data`
+      --  anyway, so a reader can tell it was an initializer rather than
+      --  storage the loader inherited from the section.
       function Is_All_Zero (Item : Landin.IR.Item_Id) return Boolean;
 
       function Is_All_Zero (Item : Landin.IR.Item_Id) return Boolean is
       begin
-         if Landin.IR.Result_Of (Of_Unit, Item)
-            in Landin.Types.Aggregate | Landin.Types.Fixed_Array
-         then
+         if Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.Aggregate then
             return True;
+         end if;
+
+         if Landin.IR.Result_Of (Of_Unit, Item)
+            = Landin.Types.Fixed_Array
+         then
+            return not Landin.IR.Has_Image (Of_Unit, Item);
          end if;
 
          return Folded (Item) = 0;
@@ -1569,6 +1577,53 @@ package body Landin.Backend.X86_64 is
             (if Length = 0 then 1
              else Landin.Targets.Alignment_Of (Facts, Held)));
       end Emit_Array_Datum;
+
+      --  D24: an array datum with an image.  Each source-order element
+      --  becomes one directive of the element's own size, so a nonzero or
+      --  mixed image reaches `.data` while the all-zero and omitted images
+      --  stay in `.bss` above.  A negative fold is written as the number
+      --  the assembler encodes at this width -- the same spelling
+      --  Emit_Datum already uses.
+      procedure Emit_Array_Image_Datum (Item : Landin.IR.Item_Id);
+
+      procedure Emit_Array_Image_Datum (Item : Landin.IR.Item_Id) is
+         Length : constant Landin.IR.Element_Total :=
+           Landin.IR.Array_Length (Of_Unit, Item);
+         Element : constant Landin.Types.Scalar_Name :=
+           Landin.IR.Array_Element (Of_Unit, Item);
+         Held : constant Held_Size := Size_Of (Element, Facts);
+         Bytes : constant String :=
+           Trimmed
+             (Landin.Targets.Byte_Count'Image
+                (Landin.Targets.Byte_Count (Length)
+                 * Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held))));
+      begin
+         if Landin.Resolution.Is_Public
+              (Meanings, Landin.IR.Declares (Of_Unit, Item))
+         then
+            Put (Character'Val (9) & ".globl " & Symbol (Item));
+         end if;
+
+         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put (Character'Val (9) & ".align "
+              & Trimmed
+                  (Landin.Targets.Byte_Alignment'Image
+                     (Landin.Targets.Alignment_Of (Facts, Held))));
+         Put (Symbol (Item) & ":");
+
+         for Position in Landin.IR.Part_Position'(1)
+                         .. Landin.IR.Part_Position (Length)
+         loop
+            Emit
+              (Directive (Held) & " "
+               & Trimmed
+                   (Landin.Types.Folded'Image
+                      (Landin.IR.Nth_Image
+                         (Of_Unit, Item, Position))));
+         end loop;
+
+         Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
+      end Emit_Array_Image_Datum;
 
       procedure Emit_Datum (Item : Landin.IR.Item_Id) is
          Kind : constant Landin.Types.Scalar_Name :=
@@ -1634,7 +1689,13 @@ package body Landin.Backend.X86_64 is
                if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Datum
                  and then not Is_All_Zero (Item)
                then
-                  Emit_Datum (Item);
+                  if Landin.IR.Result_Of (Of_Unit, Item)
+                     = Landin.Types.Fixed_Array
+                  then
+                     Emit_Array_Image_Datum (Item);
+                  else
+                     Emit_Datum (Item);
+                  end if;
                end if;
             end;
          end loop;

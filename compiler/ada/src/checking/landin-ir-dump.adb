@@ -217,6 +217,30 @@ package body Landin.IR.Dump is
                                  (Array_Length (Of_Unit, Id)))
                     & " of "
                     & Landin.Types.Spelling (Array_Element (Of_Unit, Id)));
+
+               --  D24: an initial image is the source-order run of folded
+               --  values.  An array datum with no image is D10's zero and
+               --  says so by omitting this line.
+               if Has_Image (Of_Unit, Id) then
+                  declare
+                     Rendered : Unbounded.Unbounded_String;
+                  begin
+                     for P in Part_Position'(1)
+                              .. Part_Position (Image_Length (Of_Unit, Id))
+                     loop
+                        if P /= 1 then
+                           Unbounded.Append (Rendered, " ");
+                        end if;
+                        Unbounded.Append
+                          (Rendered,
+                           Trimmed
+                             (Landin.Types.Folded'Image
+                                (Nth_Image (Of_Unit, Id, P))));
+                     end loop;
+                     Put ("  image "
+                          & Unbounded.To_String (Rendered));
+                  end;
+               end if;
             end if;
 
             --  [0750]'s order, which is the whole of what an aggregate

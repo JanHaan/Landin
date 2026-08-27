@@ -704,6 +704,75 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Check_Equal (Item, Seen, 1, "one literal was checked");
    end Local_Array_Literal_Takes_Its_Written_Shape;
 
+   --  D24: the written module array type gives the literal its exact shape,
+   --  its element type is the scalar context for every element expression,
+   --  and forward references to other module scalar bindings are admitted
+   --  because [1740] makes a module a set.
+   procedure Module_Array_Literal_Takes_Its_Written_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Array_Literal_Takes_Its_Written_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "module.ldn",
+         "mut buffer: [3]u32 = [base, base + 1, 12]" & LF
+         & "base: u32 = 100" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the module literal is accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Array_Literal
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Fixed_Array,
+                  "the module literal is a fixed array");
+               Landin.Testing.Check_Equal
+                 (Item,
+                  Natural
+                    (Landin.Checking.Array_Length
+                       (Types.all, Of_Tree.all, Node)),
+                  3, "it carries the written length");
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Array_Element
+                    (Types.all, Of_Tree.all, Node) = Landin.Types.U32,
+                  "it carries the written element type");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 1, "one module literal was checked");
+   end Module_Array_Literal_Takes_Its_Written_Shape;
+
    --  D18: an array may occupy every byte a target's `usize` can name, and
    --  not one beyond it.  The same 2**32-byte array therefore belongs to a
    --  64-bit target and is refused by a 32-bit one; neither answer comes from
@@ -768,6 +837,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "a local array literal takes its written shape",
          Local_Array_Literal_Takes_Its_Written_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "a module array literal takes its written shape",
+         Module_Array_Literal_Takes_Its_Written_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "array extent follows usize",
          Array_Extent_Follows_Usize'Access);

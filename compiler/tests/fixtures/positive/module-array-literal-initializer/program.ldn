@@ -1,0 +1,6 @@
+--  Every element folds to a known scalar value.  Order among positions
+--  is the source order; order among declarations is the module's set,
+--  which is why the u32 alias below is visible above.
+mut numbers: [4]u32 = [10, 20 + 1, 30, 40]
+mut flags: [3]bool = [true, false, true]
+mut signed: [2]i32 = [-1, 7]

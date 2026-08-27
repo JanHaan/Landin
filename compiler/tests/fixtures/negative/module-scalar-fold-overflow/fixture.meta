@@ -1,0 +1,6 @@
+class: negative
+summary: [1940] refuses a scalar module binding whose fold walks past the compiler's widest kernel value; the pre-existing whole-value fold now distinguishes overflow from an unfoldable subtree
+constructs: 0290, 1740, 1940
+program: program.ldn
+codes: L0300, L0300
+targets: linux-x86-64, macos-arm64

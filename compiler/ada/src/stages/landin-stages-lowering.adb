@@ -6,6 +6,7 @@ with Landin.Resolution;
 with Landin.Source;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
+with Landin.Targets;
 with Landin.Types;
 
 package body Landin.Stages.Lowering is
@@ -16,14 +17,19 @@ package body Landin.Stages.Lowering is
    package IR  renames Landin.IR;
 
    use type IR.Block_Id;
+   use type IR.Element_Total;
    use type IR.Item_Id;
    use type IR.Slot_Id;
    use type IR.Part_Position;
    use type IR.Value_Id;
    use type Landin.Checking.Element_Count;
    use type Landin.Source.Source_Id;
+   use type Landin.Targets.Bit_Width;
+   use type Landin.Targets.Byte_Count;
    use type Res.Declaration_Id;
    use type Res.Declaration_Sort;
+   use type Res.Verdict;
+   use type Ty.Folded;
    use type Ty.Magnitude;
    use type Syn.Node_Id;
    use type Syn.Node_Kind;
@@ -48,6 +54,8 @@ package body Landin.Stages.Lowering is
         Landin.Stages.Types (Context);
       Unit : constant not null access IR.Unit :=
         Landin.Stages.Code (Context);
+      Facts : constant Landin.Targets.Target_Facts :=
+        Landin.Stages.Target (Context);
 
       function Tree_For (Id : Landin.Source.Source_Id)
         return not null access constant Syn.Tree
@@ -1604,12 +1612,748 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
+      --  Pass three: D24's initial-image resolution.  An array datum whose
+      --  value is a literal has its per-position fold recorded here; one
+      --  initialized from a direct storage name follows the D21 chain the
+      --  checker validated and copies the terminal image, or leaves the
+      --  datum without one when the chain terminates at D10's zero.  A
+      --  datum with no image stays reserved in `.bss`; a datum with one
+      --  reaches `.data` with one directive per position.  The pass is
+      --  separate from Lower_Datum because a source may be written below
+      --  its use [1740] and its item has to exist before this reads it.
+      Resolve_Array_Images :
+      declare
+         Declarations : constant Natural :=
+           Res.Declaration_Count (Meanings.all);
+         subtype Numbered is
+           Res.Declaration_Id range 1 .. Res.Declaration_Id
+                                          (Positive'Max (1, Declarations));
+
+         type Image_State is (Unseen, Visiting, Resolved);
+
+         Where : array (Numbered) of Image_State := [others => Unseen];
+         Made  : array (Numbered) of Boolean := [others => False];
+
+         --  Every [1820] operator [1940] admits over literals, so a
+         --  bool comparison, a bitwise expression, a shift or a wrapping
+         --  arithmetic operator produces the same image bytes here that
+         --  the backend's own module-value fold would have produced for
+         --  a scalar module binding: one target-aware folder for both.
+         --  Constructs the checker excludes from D24 (a call, a member
+         --  selection, an element index and a nested array literal) are
+         --  refused before this pass reads them and reach here as a
+         --  compiler defect, not as [1940] silently narrowed.
+         type Pattern is mod 2 ** 64;
+         function Mask
+           (Value : Pattern;
+            Bits  : Landin.Targets.Bit_Width) return Pattern
+           is (if Bits >= 64 then Value
+               else Value and (2 ** Natural (Bits) - 1));
+         function Is_Negative
+           (Value : Pattern;
+            Bits  : Landin.Targets.Bit_Width) return Boolean
+           is ((Value and 2 ** (Natural (Bits) - 1)) /= 0);
+         function To_Pattern
+           (Value : Ty.Folded;
+            Bits  : Landin.Targets.Bit_Width) return Pattern
+           is (if Value < 0
+               then Mask (0 - Pattern (-Value), Bits)
+               else Mask (Pattern (Value), Bits));
+         function As_Number
+           (Value  : Pattern;
+            Bits   : Landin.Targets.Bit_Width;
+            Signed : Boolean) return Ty.Folded
+           is (if Signed and then Is_Negative (Value, Bits)
+               then -Ty.Folded (Mask (0 - Value, Bits))
+               else Ty.Folded (Value));
+
+         --  How wide this expression folds.  Bool has no arithmetic width
+         --  and folds at the byte the backend gives it -- the same rule
+         --  the backend's own folder keeps.
+         function Fold_Width
+           (Kind : Ty.Scalar_Name) return Landin.Targets.Bit_Width
+           is (if Kind in Ty.Integer_Name
+               then Ty.Width (Ty.Integer_Name (Kind), Facts)
+               else 8);
+
+         function Is_Signed_Type (Kind : Ty.Scalar_Name) return Boolean
+           is (Kind in Ty.Integer_Name
+               and then Ty.Is_Signed (Ty.Integer_Name (Kind)));
+
+         procedure Fold_Constant
+           (Of_Tree : Syn.Tree;
+            Node    : Syn.Node_Id;
+            Value   : out Ty.Folded;
+            Known   : out Boolean);
+
+         procedure Fold_Scalar_Datum
+           (Id    : Res.Declaration_Id;
+            Value : out Ty.Folded;
+            Known : out Boolean);
+
+         --  A per-datum guard against the fold following a [1940] cycle
+         --  the checker's own fold guard did not report.  Deliberately a
+         --  distinct set from Where above, because Fold_Scalar_Datum can
+         --  reach a module binding that also owns an array image and the
+         --  two questions travel through the same table.
+         Folding : array (Numbered) of Boolean := [others => False];
+
+         procedure Fold_Scalar_Datum
+           (Id    : Res.Declaration_Id;
+            Value : out Ty.Folded;
+            Known : out Boolean)
+         is
+            Their_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Id));
+            Theirs : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Id);
+            Their_Value : constant Syn.Node_Id :=
+              Syn.Value_Of (Their_Tree.all, Theirs);
+         begin
+            Value := 0;
+            Known := False;
+
+            if Folding (Id) then
+               return;
+            end if;
+
+            if Their_Value = Syn.No_Node then
+               --  D10 gives an omitted-initializer binding zero and False
+               --  for a bool.  Either way, the folded value is zero.
+               Value := 0;
+               Known := True;
+               return;
+            end if;
+
+            Folding (Id) := True;
+            Fold_Constant (Their_Tree.all, Their_Value, Value, Known);
+            Folding (Id) := False;
+         end Fold_Scalar_Datum;
+
+         procedure Fold_Constant
+           (Of_Tree : Syn.Tree;
+            Node    : Syn.Node_Id;
+            Value   : out Ty.Folded;
+            Known   : out Boolean)
+         is
+            procedure Combine
+              (Left, Right : Ty.Folded;
+               Of_Kind     : Syn.Node_Kind;
+               Answer      : out Ty.Folded;
+               Fits        : out Boolean);
+
+            procedure Combine
+              (Left, Right : Ty.Folded;
+               Of_Kind     : Syn.Node_Kind;
+               Answer      : out Ty.Folded;
+               Fits        : out Boolean) is
+            begin
+               Answer := 0;
+               Fits   := True;
+
+               case Of_Kind is
+                  when Syn.Add | Syn.Wrapping_Add =>
+                     Fits := (if Right > 0
+                              then Left <= Ty.Folded'Last - Right
+                              else Left >= Ty.Folded'First - Right);
+
+                  when Syn.Subtract | Syn.Wrapping_Subtract =>
+                     Fits := (if Right > 0
+                              then Left >= Ty.Folded'First + Right
+                              else Left <= Ty.Folded'Last + Right);
+
+                  when Syn.Multiply | Syn.Wrapping_Multiply =>
+                     Fits := Left = 0
+                             or else abs Right
+                                     <= Ty.Folded'Last / abs Left;
+
+                  when Syn.Divide | Syn.Remainder =>
+                     Fits := Right /= 0;
+
+                  when others =>
+                     Fits := False;
+               end case;
+
+               if not Fits then
+                  return;
+               end if;
+
+               case Of_Kind is
+                  when Syn.Add | Syn.Wrapping_Add =>
+                     Answer := Left + Right;
+                  when Syn.Subtract | Syn.Wrapping_Subtract =>
+                     Answer := Left - Right;
+                  when Syn.Multiply | Syn.Wrapping_Multiply =>
+                     Answer := Left * Right;
+                  when Syn.Divide =>
+                     Answer := Left / Right;
+                  when Syn.Remainder =>
+                     Answer := Left rem Right;
+                  when others =>
+                     Fits := False;
+               end case;
+            end Combine;
+         begin
+            Value := 0;
+            Known := False;
+
+            if Node = Syn.No_Node
+              or else not Syn.Is_Sound (Of_Tree, Node)
+            then
+               return;
+            end if;
+
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.Integer_Literal =>
+                  declare
+                     Snap : constant Landin.Source.Snapshot :=
+                       Landin.Stages.Source
+                         (Context, Syn.Source_Of (Of_Tree));
+                     Text : constant String :=
+                       Landin.Source.Slice
+                         (Snap, Syn.Digit_Span (Of_Tree, Node));
+                     Held       : Ty.Magnitude;
+                     Overflowed : Boolean;
+                  begin
+                     Ty.Evaluate
+                       (Text, Syn.Base (Of_Tree, Node), Held, Overflowed);
+
+                     if not Overflowed then
+                        Value := Ty.Folded (Held);
+                        Known := True;
+                     end if;
+                  end;
+
+               when Syn.True_Literal =>
+                  Value := 1;
+                  Known := True;
+
+               when Syn.False_Literal =>
+                  Value := 0;
+                  Known := True;
+
+               when Syn.Negation =>
+                  declare
+                     Under : Ty.Folded;
+                  begin
+                     Fold_Constant
+                       (Of_Tree, Syn.Operand_Of (Of_Tree, Node),
+                        Under, Known);
+                     if Known then
+                        Value := -Under;
+                     end if;
+                  end;
+
+               when Syn.Name_Reference =>
+                  if Res.Verdict_Of (Meanings.all, Of_Tree, Node)
+                     = Res.Bound
+                  then
+                     declare
+                        Means : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Of_Tree, Node);
+                     begin
+                        if Res.Sort_Of (Meanings.all, Means)
+                           = Res.Module_Binding
+                          and then Landin.Checking.Type_Of
+                                     (Types.all, Means)
+                                   in Ty.Scalar_Name
+                        then
+                           Fold_Scalar_Datum (Means, Value, Known);
+                        end if;
+                     end;
+                  end if;
+
+               when Syn.Add | Syn.Subtract | Syn.Multiply | Syn.Divide
+                  | Syn.Remainder =>
+                  declare
+                     Left, Right : Ty.Folded;
+                     Left_Known, Right_Known, Fits : Boolean;
+                  begin
+                     Fold_Constant
+                       (Of_Tree, Syn.Left_Of (Of_Tree, Node),
+                        Left, Left_Known);
+                     Fold_Constant
+                       (Of_Tree, Syn.Right_Of (Of_Tree, Node),
+                        Right, Right_Known);
+                     if Left_Known and then Right_Known then
+                        Combine
+                          (Left, Right, Syn.Kind (Of_Tree, Node),
+                           Value, Fits);
+                        Known := Fits;
+                     end if;
+                  end;
+
+               --  [0300]'s wrapping arithmetic, [0330]'s bitwise set and
+               --  [0320]'s shifts all depend on the operand type's width.
+               --  Checking has already settled the same target-aware fold;
+               --  this second walk records its verified answer in the image.
+               when Syn.Wrapping_Add | Syn.Wrapping_Subtract
+                  | Syn.Wrapping_Multiply
+                  | Syn.Bitwise_And | Syn.Bitwise_Xor | Syn.Bitwise_Or
+                  | Syn.Shift_Left | Syn.Shift_Right =>
+                  declare
+                     Op         : constant Syn.Node_Kind :=
+                       Syn.Kind (Of_Tree, Node);
+                     Left_Node  : constant Syn.Node_Id :=
+                       Syn.Left_Of (Of_Tree, Node);
+                     Right_Node : constant Syn.Node_Id :=
+                       Syn.Right_Of (Of_Tree, Node);
+                     Left       : Ty.Folded := 0;
+                     Right      : Ty.Folded := 0;
+                     Left_Known, Right_Known : Boolean := False;
+                     Kind       : constant Ty.Type_Kind :=
+                       Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Node);
+                  begin
+                     Fold_Constant (Of_Tree, Left_Node, Left, Left_Known);
+                     Fold_Constant
+                       (Of_Tree, Right_Node, Right, Right_Known);
+
+                     if Left_Known and then Right_Known
+                       and then Kind in Ty.Scalar_Name
+                     then
+                        declare
+                           Bits : constant Landin.Targets.Bit_Width :=
+                             Fold_Width (Ty.Scalar_Name (Kind));
+                           Signed : constant Boolean :=
+                             Is_Signed_Type (Ty.Scalar_Name (Kind));
+                           LP : constant Pattern := To_Pattern (Left, Bits);
+                           RP : constant Pattern := To_Pattern (Right, Bits);
+                           Answer : Pattern := 0;
+                           Exhausted : constant Boolean :=
+                             Op in Syn.Shift_Left | Syn.Shift_Right
+                               and then Right >= Ty.Folded (Bits);
+                        begin
+                           case Op is
+                              when Syn.Wrapping_Add =>
+                                 Answer := Mask (LP + RP, Bits);
+                              when Syn.Wrapping_Subtract =>
+                                 Answer := Mask (LP - RP, Bits);
+                              when Syn.Wrapping_Multiply =>
+                                 Answer := Mask (LP * RP, Bits);
+                              when Syn.Bitwise_And =>
+                                 Answer := Mask (LP and RP, Bits);
+                              when Syn.Bitwise_Xor =>
+                                 Answer := Mask (LP xor RP, Bits);
+                              when Syn.Bitwise_Or =>
+                                 Answer := Mask (LP or RP, Bits);
+                              when Syn.Shift_Left =>
+                                 Answer :=
+                                   (if Exhausted then 0
+                                    else Mask
+                                           (LP * 2 ** Natural (Right),
+                                            Bits));
+                              when Syn.Shift_Right =>
+                                 --  [0320]: signed `>>` preserves the sign
+                                 --  and unsigned fills with zeros.  Mirror
+                                 --  the backend's rule so the image is what
+                                 --  a datum's loaded bytes would compute.
+                                 Answer :=
+                                   (if Exhausted then 0
+                                    elsif Signed and then Left < 0
+                                    then Mask
+                                           (not
+                                             (Mask (not LP, Bits)
+                                              / 2 ** Natural (Right)),
+                                            Bits)
+                                    else Mask
+                                           (LP / 2 ** Natural (Right),
+                                            Bits));
+                              when others =>
+                                 raise Landin.Compiler_Defect with
+                                   "unreachable width-op case";
+                           end case;
+                           Value := As_Number (Answer, Bits, Signed);
+                           Known := True;
+                        end;
+                     end if;
+                  end;
+
+               when Syn.Complement =>
+                  declare
+                     Under : Ty.Folded := 0;
+                     Under_Known : Boolean := False;
+                     Kind : constant Ty.Type_Kind :=
+                       Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Node);
+                  begin
+                     Fold_Constant
+                       (Of_Tree, Syn.Operand_Of (Of_Tree, Node),
+                        Under, Under_Known);
+                     if Under_Known and then Kind in Ty.Scalar_Name then
+                        declare
+                           Bits : constant Landin.Targets.Bit_Width :=
+                             Fold_Width (Ty.Scalar_Name (Kind));
+                           Signed : constant Boolean :=
+                             Is_Signed_Type (Ty.Scalar_Name (Kind));
+                        begin
+                           Value :=
+                             As_Number
+                               (Mask
+                                  (not To_Pattern (Under, Bits), Bits),
+                                Bits, Signed);
+                           Known := True;
+                        end;
+                     end if;
+                  end;
+
+               when Syn.Logical_Not =>
+                  declare
+                     Under : Ty.Folded := 0;
+                     Under_Known : Boolean := False;
+                  begin
+                     Fold_Constant
+                       (Of_Tree, Syn.Operand_Of (Of_Tree, Node),
+                        Under, Under_Known);
+                     if Under_Known then
+                        Value := 1 - Under;
+                        Known := True;
+                     end if;
+                  end;
+
+               when Syn.Logical_And =>
+                  --  [0410]: `and` short-circuits.  A false left settles
+                  --  the answer without evaluating the right, which is
+                  --  the same rule the checker's own module value fold
+                  --  keeps for the same reason -- the right may not fold.
+                  declare
+                     Left : Ty.Folded := 0;
+                     Left_Known : Boolean := False;
+                  begin
+                     Fold_Constant
+                       (Of_Tree, Syn.Left_Of (Of_Tree, Node),
+                        Left, Left_Known);
+                     if Left_Known and then Left = 0 then
+                        Value := 0;
+                        Known := True;
+                     elsif Left_Known then
+                        declare
+                           Right : Ty.Folded := 0;
+                           Right_Known : Boolean := False;
+                        begin
+                           Fold_Constant
+                             (Of_Tree, Syn.Right_Of (Of_Tree, Node),
+                              Right, Right_Known);
+                           if Right_Known then
+                              Value := Right;
+                              Known := True;
+                           end if;
+                        end;
+                     end if;
+                  end;
+
+               when Syn.Logical_Or =>
+                  declare
+                     Left : Ty.Folded := 0;
+                     Left_Known : Boolean := False;
+                  begin
+                     Fold_Constant
+                       (Of_Tree, Syn.Left_Of (Of_Tree, Node),
+                        Left, Left_Known);
+                     if Left_Known and then Left = 1 then
+                        Value := 1;
+                        Known := True;
+                     elsif Left_Known then
+                        declare
+                           Right : Ty.Folded := 0;
+                           Right_Known : Boolean := False;
+                        begin
+                           Fold_Constant
+                             (Of_Tree, Syn.Right_Of (Of_Tree, Node),
+                              Right, Right_Known);
+                           if Right_Known then
+                              Value := Right;
+                              Known := True;
+                           end if;
+                        end;
+                     end if;
+                  end;
+
+               when Syn.Equal_To | Syn.Not_Equal_To
+                  | Syn.Less_Than | Syn.Less_Or_Equal
+                  | Syn.Greater_Than | Syn.Greater_Or_Equal =>
+                  declare
+                     Op : constant Syn.Node_Kind :=
+                       Syn.Kind (Of_Tree, Node);
+                     Left, Right : Ty.Folded := 0;
+                     Left_Known, Right_Known : Boolean := False;
+                  begin
+                     Fold_Constant
+                       (Of_Tree, Syn.Left_Of (Of_Tree, Node),
+                        Left, Left_Known);
+                     Fold_Constant
+                       (Of_Tree, Syn.Right_Of (Of_Tree, Node),
+                        Right, Right_Known);
+                     if Left_Known and then Right_Known then
+                        Value :=
+                          (case Op is
+                              when Syn.Equal_To =>
+                                (if Left = Right then 1 else 0),
+                              when Syn.Not_Equal_To =>
+                                (if Left /= Right then 1 else 0),
+                              when Syn.Less_Than =>
+                                (if Left < Right then 1 else 0),
+                              when Syn.Less_Or_Equal =>
+                                (if Left <= Right then 1 else 0),
+                              when Syn.Greater_Than =>
+                                (if Left > Right then 1 else 0),
+                              when others =>
+                                (if Left >= Right then 1 else 0));
+                        Known := True;
+                     end if;
+                  end;
+
+               when Syn.Size_Of | Syn.Align_Of =>
+                  --  [0370]: a measurement of a scalar type folds to the
+                  --  target's own byte count; the whole point of it being
+                  --  a `usize` is that a target answers.
+                  declare
+                     Asked : constant Syn.Node_Id :=
+                       Syn.Measured_Type (Of_Tree, Node);
+                     Held : constant Ty.Type_Kind :=
+                       Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Asked);
+                  begin
+                     if Held in Ty.Scalar_Name then
+                        declare
+                           Size : constant Landin.Targets.Scalar_Size :=
+                             Ty.Storage_Size
+                               (Ty.Scalar_Name (Held), Facts);
+                        begin
+                           if Syn.Kind (Of_Tree, Node) = Syn.Size_Of then
+                              Value :=
+                                Ty.Folded
+                                  (Landin.Targets.Bytes (Size));
+                           else
+                              Value :=
+                                Ty.Folded
+                                  (Landin.Targets.Alignment_Of
+                                     (Facts, Size));
+                           end if;
+                           Known := True;
+                        end;
+                     elsif Held = Ty.Fixed_Array then
+                        declare
+                           Length : constant Landin.Checking.Element_Count
+                             :=
+                               Landin.Checking.Array_Length
+                                 (Types.all, Of_Tree, Asked);
+                           Element : constant Ty.Scalar_Name :=
+                             Landin.Checking.Array_Element
+                               (Types.all, Of_Tree, Asked);
+                           Size : constant Landin.Targets.Scalar_Size :=
+                             Ty.Storage_Size (Element, Facts);
+                        begin
+                           if Syn.Kind (Of_Tree, Node) = Syn.Align_Of then
+                              Value :=
+                                (if Length = 0 then 1
+                                 else Ty.Folded
+                                        (Landin.Targets.Alignment_Of
+                                           (Facts, Size)));
+                           else
+                              Value :=
+                                Ty.Folded
+                                  (Landin.Targets.Byte_Count (Length)
+                                   * Landin.Targets.Byte_Count
+                                       (Landin.Targets.Bytes (Size)));
+                           end if;
+                           Known := True;
+                        end;
+                     end if;
+                  end;
+
+               when Syn.Len_Of =>
+                  --  [0370]'s length lives on the type, not on storage.
+                  declare
+                     Asked : constant Syn.Node_Id :=
+                       Syn.Operand_Of (Of_Tree, Node);
+                  begin
+                     if Syn.Kind (Of_Tree, Asked) = Syn.Name_Reference
+                       and then Res.Verdict_Of
+                                  (Meanings.all, Of_Tree, Asked)
+                                = Res.Bound
+                     then
+                        declare
+                           Named : constant Res.Declaration_Id :=
+                             Res.Bound_To
+                               (Meanings.all, Of_Tree, Asked);
+                        begin
+                           if Landin.Checking.Type_Of
+                                (Types.all, Named) = Ty.Fixed_Array
+                           then
+                              Value :=
+                                Ty.Folded
+                                  (Landin.Checking.Array_Length
+                                     (Types.all, Named));
+                              Known := True;
+                           end if;
+                        end;
+                     end if;
+                  end;
+
+               when others =>
+                  --  A construct outside D24's boundary.  The checker
+                  --  refused everything else that could reach here, so
+                  --  meeting one is a compiler defect rather than a
+                  --  diagnosis.
+                  raise Landin.Compiler_Defect with
+                    "a module array literal element the lowering cannot"
+                    & " fold reached image resolution";
+            end case;
+         end Fold_Constant;
+
+         procedure Set_Image_From_Literal
+           (Id      : Res.Declaration_Id;
+            Of_Tree : Syn.Tree;
+            Literal : Syn.Node_Id);
+
+         procedure Set_Image_From_Literal
+           (Id      : Res.Declaration_Id;
+            Of_Tree : Syn.Tree;
+            Literal : Syn.Node_Id)
+         is
+            Count : constant Natural :=
+              Syn.Element_Count (Of_Tree, Literal);
+         begin
+            if Count = 0 then
+               return;
+            end if;
+
+            declare
+               Values : Ty.Folded_Array (1 .. Count) := [others => 0];
+               Held   : Ty.Folded;
+               Known  : Boolean;
+            begin
+               for Position in 1 .. Count loop
+                  Fold_Constant
+                    (Of_Tree,
+                     Syn.Nth_Element (Of_Tree, Literal, Position),
+                     Held, Known);
+                  if not Known then
+                     raise Landin.Compiler_Defect with
+                       "a module array literal element the checker"
+                       & " accepted did not fold at lowering";
+                  end if;
+                  Values (Position) := Held;
+               end loop;
+
+               IR.Set_Array_Image
+                 (Unit.all, IR.Item_For (Unit.all, Id), Values);
+               Made (Id) := True;
+            end;
+         end Set_Image_From_Literal;
+
+         procedure Copy_Image_From
+           (Destination : Res.Declaration_Id;
+            Source_Id   : Res.Declaration_Id);
+
+         procedure Copy_Image_From
+           (Destination : Res.Declaration_Id;
+            Source_Id   : Res.Declaration_Id)
+         is
+            Source_Item : constant IR.Item_Id :=
+              IR.Item_For (Unit.all, Source_Id);
+            Length : constant IR.Element_Total :=
+              IR.Image_Length (Unit.all, Source_Item);
+         begin
+            if Length = 0 then
+               return;
+            end if;
+
+            declare
+               Values : Ty.Folded_Array
+                 (1 .. Positive (Length)) := [others => 0];
+            begin
+               for Position in Values'Range loop
+                  Values (Position) :=
+                    IR.Nth_Image
+                      (Unit.all, Source_Item,
+                       IR.Part_Position (Position));
+               end loop;
+
+               IR.Set_Array_Image
+                 (Unit.all,
+                  IR.Item_For (Unit.all, Destination), Values);
+               Made (Destination) := True;
+            end;
+         end Copy_Image_From;
+
+         procedure Resolve_Image (Id : Res.Declaration_Id);
+
+         procedure Resolve_Image (Id : Res.Declaration_Id)
+         is
+            Their_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Id));
+            Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Id);
+            Value : constant Syn.Node_Id :=
+              Syn.Value_Of (Their_Tree.all, Node);
+         begin
+            case Where (Id) is
+               when Resolved =>
+                  return;
+               when Visiting =>
+                  --  A cycle the checker already reported: leave the
+                  --  destination without an image.  Following it would
+                  --  loop; the diagnostic is the reader's answer here.
+                  return;
+               when Unseen =>
+                  null;
+            end case;
+
+            Where (Id) := Visiting;
+
+            if Value = Syn.No_Node then
+               null;
+            elsif Syn.Kind (Their_Tree.all, Value) = Syn.Array_Literal then
+               Set_Image_From_Literal (Id, Their_Tree.all, Value);
+            elsif Syn.Kind (Their_Tree.all, Value) = Syn.Name_Reference
+              and then Res.Verdict_Of
+                         (Meanings.all, Their_Tree.all, Value) = Res.Bound
+            then
+               declare
+                  Source_Id : constant Res.Declaration_Id :=
+                    Res.Bound_To
+                      (Meanings.all, Their_Tree.all, Value);
+               begin
+                  if Res.Sort_Of (Meanings.all, Source_Id)
+                       = Res.Module_Binding
+                    and then Landin.Checking.Type_Of
+                               (Types.all, Source_Id) = Ty.Fixed_Array
+                  then
+                     Resolve_Image (Source_Id);
+                     if Made (Source_Id) then
+                        Copy_Image_From (Id, Source_Id);
+                     end if;
+                  end if;
+               end;
+            end if;
+
+            Where (Id) := Resolved;
+         end Resolve_Image;
+      begin
+         if Declarations > 0 then
+            for Id in Res.Declaration_Id'(1) ..
+                      Res.Declaration_Id (Declarations)
+            loop
+               if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
+                 and then Landin.Checking.Type_Of (Types.all, Id)
+                          = Ty.Fixed_Array
+               then
+                  Resolve_Image (Id);
+               end if;
+            end loop;
+         end if;
+      end Resolve_Array_Images;
+
       --  Every Unit this stage builds, in every build mode.  A failure
       --  is a Landin.Compiler_Defect and never a diagnostic: the
       --  frontend refused every ill-formed program and this stage
       --  refused to run on a refused one, so nothing a program can say
-      --  reaches here.
-      Landin.IR.Verifier.Verify (Unit.all);
+      --  reaches here.  Facts flow in so D24's per-position image values
+      --  are held to fitting their element type at this compilation's
+      --  target rather than at the host running the compiler.
+      Landin.IR.Verifier.Verify (Unit.all, Facts);
 
       Outcome := Continue;
    end Run;

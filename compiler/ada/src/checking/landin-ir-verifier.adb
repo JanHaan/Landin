@@ -69,6 +69,11 @@ package body Landin.IR.Verifier is
                "an array copy's endpoints differ in length or element type",
             when Array_Copy_Inside_A_Datum =>
                "a datum contains an array copy, and [1940] admits none",
+            when Array_Image_Length_Disagrees =>
+               "an array datum's image does not have one value per element",
+            when Array_Image_Value_Does_Not_Fit =>
+               "an array datum's image carries a value the element type"
+               & " cannot hold on this target",
             when Callee_Is_Not_A_Routine =>
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
@@ -99,7 +104,29 @@ package body Landin.IR.Verifier is
             when Branch        => 1,
             when Leave         => 0);
 
-   function Check (Of_Unit : Unit) return Fault is
+   function Check
+     (Of_Unit    : Unit;
+      Facts      : Landin.Targets.Target_Facts;
+      Check_Image : Boolean) return Fault;
+
+   function Check (Of_Unit : Unit) return Fault
+     is (Check (Of_Unit,
+                --  Synthetic_32 is a legitimate description but this walk
+                --  cannot look at any image and so does not read it.  The
+                --  value stands in for the missing argument the same way
+                --  a checker-neutral default does in Landin.Types.
+                Landin.Targets.Synthetic_32,
+                Check_Image => False));
+
+   function Check
+     (Of_Unit : Unit;
+      Facts   : Landin.Targets.Target_Facts) return Fault
+     is (Check (Of_Unit, Facts, Check_Image => True));
+
+   function Check
+     (Of_Unit    : Unit;
+      Facts      : Landin.Targets.Target_Facts;
+      Check_Image : Boolean) return Fault is
 
       function Shape_Of
         (Item    : Item_Id;
@@ -210,6 +237,59 @@ package body Landin.IR.Verifier is
          end loop;
       end;
 
+      --  Images do not partition in item-order the way the four runs
+      --  above do: D21 chain resolution fills the source's image
+      --  before its destination's, so item 1's Image.First can land
+      --  beyond item 3's.  The partition still has to hold -- no run
+      --  may cross another and no byte of the vector may belong to no
+      --  item -- so this walk marks every position and reports the
+      --  first item that would overlap, land out of range or leave a
+      --  gap.
+      declare
+         Total : constant Natural := Natural (Of_Unit.Images.Length);
+         Seen  : array (1 .. Positive'Max (1, Total))
+                   of Item_Id := [others => No_Item];
+      begin
+         for Which in 1 .. Item_Count (Of_Unit) loop
+            declare
+               Held : constant Item_Record :=
+                 Of_Unit.Items (Which);
+            begin
+               if Held.Image.Count /= 0 then
+                  --  Subtraction-safe against Natural overflow, so a
+                  --  corrupt Held.Image.First at Natural'Last does not
+                  --  raise Constraint_Error before the walk speaks.  The
+                  --  two conditions read left-to-right: the base has to
+                  --  be inside the vector, and the run past the base has
+                  --  to fit the bytes that follow.
+                  if Held.Image.First > Total
+                    or else Held.Image.Count > Total - Held.Image.First
+                  then
+                     return (Kind => Item_Runs_Overlap,
+                             Item => Item_Id (Which), others => <>);
+                  end if;
+
+                  for Position in
+                    Held.Image.First + 1
+                    .. Held.Image.First + Held.Image.Count
+                  loop
+                     if Seen (Position) /= No_Item then
+                        return (Kind => Item_Runs_Overlap,
+                                Item => Item_Id (Which), others => <>);
+                     end if;
+                     Seen (Position) := Item_Id (Which);
+                  end loop;
+               end if;
+            end;
+         end loop;
+
+         for Position in 1 .. Total loop
+            if Seen (Position) = No_Item then
+               return (Kind => Item_Runs_Overlap, others => <>);
+            end if;
+         end loop;
+      end;
+
       --  The operand vector, which is the fifth run and the one a call
       --  extends after the fact.
       declare
@@ -244,6 +324,63 @@ package body Landin.IR.Verifier is
             if Open_Block (Of_Unit, Id) /= No_Block then
                return (Kind => Item_Still_Building, Item => Id,
                        others => <>);
+            end if;
+
+            --  D24: an array item's image, when it has one, has one value
+            --  per declared position.  A datum with no image is D10's zero
+            --  storage and this check has nothing to say about it.
+            if Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array
+              and then Has_Image (Of_Unit, Id)
+              and then Image_Length (Of_Unit, Id)
+                       /= Array_Length (Of_Unit, Id)
+            then
+               return (Kind => Array_Image_Length_Disagrees,
+                       Item => Id, others => <>);
+            end if;
+
+            --  D24: each per-position folded value has to fit its element
+            --  type at the compilation's target facts.  An u8 that holds
+            --  300, a bool that holds 2, or a `usize` that overflows a
+            --  32-bit description are IR whose bytes the backend has no
+            --  defined answer for, and a defect here is caught before an
+            --  `.data` directive lies about the bytes.
+            if Check_Image
+              and then Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array
+              and then Has_Image (Of_Unit, Id)
+              and then Image_Length (Of_Unit, Id)
+                       = Array_Length (Of_Unit, Id)
+            then
+               declare
+                  Element : constant Landin.Types.Scalar_Name :=
+                    Array_Element (Of_Unit, Id);
+               begin
+                  for Position in Part_Position'(1)
+                                  .. Part_Position (Image_Length (Of_Unit, Id))
+                  loop
+                     declare
+                        Held : constant Landin.Types.Folded :=
+                          Nth_Image (Of_Unit, Id, Position);
+                        Fits : Boolean;
+                     begin
+                        if Element = Landin.Types.Bool then
+                           Fits := Held in 0 .. 1;
+                        else
+                           Fits :=
+                             Landin.Types.Holds
+                               (Held,
+                                Landin.Types.Integer_Name (Element),
+                                Facts);
+                        end if;
+
+                        if not Fits then
+                           return
+                             (Kind  => Array_Image_Value_Does_Not_Fit,
+                              Item  => Id,
+                              others => <>);
+                        end if;
+                     end;
+                  end loop;
+               end;
             end if;
 
             --  [1550]: block 1 is where an item starts, and every other
@@ -870,8 +1007,9 @@ package body Landin.IR.Verifier is
       return Sound;
    end Check;
 
-   procedure Verify (Of_Unit : Unit) is
-      Found : constant Fault := Check (Of_Unit);
+   procedure Raise_On (Found : Fault);
+
+   procedure Raise_On (Found : Fault) is
    begin
       if Found.Kind /= Nothing_Wrong then
          raise Landin.Compiler_Defect with
@@ -880,6 +1018,18 @@ package body Landin.IR.Verifier is
            & ", block" & Found.Block'Image
            & ", value" & Found.Value'Image & ")";
       end if;
+   end Raise_On;
+
+   procedure Verify (Of_Unit : Unit) is
+   begin
+      Raise_On (Check (Of_Unit));
+   end Verify;
+
+   procedure Verify
+     (Of_Unit : Unit;
+      Facts   : Landin.Targets.Target_Facts) is
+   begin
+      Raise_On (Check (Of_Unit, Facts));
    end Verify;
 
 end Landin.IR.Verifier;

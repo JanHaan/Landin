@@ -199,6 +199,11 @@ package Landin.Types is
    --  truncating.  A host width leaking in would be Long_Long_Integer.
    type Folded is range -(2 ** 64 - 1) .. 2 ** 64 - 1;
 
+   --  A run of Folded values, in source order.  Used to carry an array
+   --  datum's initial image, D24's per-position fold, between the checker
+   --  and the backend without either learning what a target width is.
+   type Folded_Array is array (Positive range <>) of Folded;
+
    --  Whether a folded value is one of that type's, which is [1940]'s
    --  refusal made answerable.  Separate from Fits because a fold has a
    --  sign of its own rather than a unary minus standing over it.

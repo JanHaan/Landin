@@ -475,6 +475,53 @@ package Landin.IR is
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
 
+   --  D24: the source-order static image of an array datum, one folded
+   --  value per position.  An array item with no image is D10's all-zero
+   --  storage: the backend reserves it in `.bss` and this package does
+   --  not allocate a per-element run for it.  An array with an image is
+   --  written to `.data`, one directive per position.  A run and not one
+   --  operand per element, because [1940] admits a literal, an operator
+   --  of [1820] over literals, and a name bound to another module
+   --  binding -- and each of those already folds to a single Folded value
+   --  the backend can materialise.  Requires the count to match the array's
+   --  declared length, so the reader is spared having to guess.
+   procedure Set_Array_Image
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Elements : Landin.Types.Folded_Array)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item)
+                           = Landin.Types.Fixed_Array
+                  and then not Has_Image (Into, Item)
+                  and then Element_Total (Elements'Length)
+                           = Array_Length (Into, Item)
+                  and then Elements'Length > 0,
+          Post => Has_Image (Into, Item)
+                  and then Image_Length (Into, Item)
+                           = Element_Total (Elements'Length);
+
+   function Has_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array;
+
+   function Image_Length
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array
+                 and then Has_Image (Of_Unit, Item);
+
+   function Nth_Image
+     (Of_Unit : Unit; Item : Item_Id; Index : Part_Position)
+     return Landin.Types.Folded
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array
+                 and then Has_Image (Of_Unit, Item)
+                 and then Element_Total (Index)
+                          <= Image_Length (Of_Unit, Item);
+
    ------------------------------------------------------------------
    --  Slots
    ------------------------------------------------------------------
@@ -1346,6 +1393,10 @@ private
       --  [0520]'s shape, when Result says the item is an array.
       Element     : Landin.Types.Scalar_Name  := Landin.Types.Bool;
       Length      : Element_Total             := 0;
+      --  D24: the source-order static image, one Folded value per
+      --  position, or a run of count zero when the datum stays D10 zero.
+      Image       : Run;
+      Has_Image   : Boolean                   := False;
       Open        : Block_Id                  := No_Block;
    end record;
 
@@ -1375,6 +1426,11 @@ private
       Element_Type => Landin.Types.Scalar_Name,
       "="          => Landin.Types."=");
 
+   package Image_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Landin.Types.Folded,
+      "="          => Landin.Types."=");
+
    type Unit is tagged limited record
       Ready      : Boolean := False;
       Items      : Item_Vectors.Vector;
@@ -1386,6 +1442,9 @@ private
       Fields     : Field_Vectors.Vector;
       Slot_Fields : Field_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
+      --  D24: one folded scalar per array-datum position, laid end to end
+      --  across items so a datum with no image contributes no bytes here.
+      Images      : Image_Vectors.Vector;
    end record;
 
 end Landin.IR;

@@ -1407,6 +1407,68 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "12", "4");
    end An_Array_State_Is_Reserved_Whole;
 
+   --  D24: an array datum whose value is a literal reaches `.data` with
+   --  one directive per element at the element's own alignment, while a
+   --  chain terminating at D10 zero stays in `.bss` beside the other
+   --  reserved storage.  The four u32 image is sixteen bytes at four-byte
+   --  alignment, and each position is spelled with its folded value.
+   procedure A_Module_Array_Literal_Becomes_Data_Image
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Array_Literal_Becomes_Data_Image
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut numbers: [4]u32 = [10, 20 + 1, base, base + 100]" & LF
+         & "base: u32 = 100" & LF
+         & "mut zeroed: [2]u16" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text,
+               HT & ".data" & LF),
+            "one .data section holds the images");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text,
+               HT & ".type numbers, @object" & LF
+               & HT & ".align 4" & LF
+               & "numbers:" & LF
+               & HT & ".long 10" & LF
+               & HT & ".long 21" & LF
+               & HT & ".long 100" & LF
+               & HT & ".long 200" & LF
+               & HT & ".size numbers, 16" & LF),
+            "the array image is one directive per source-order element");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & ".bss" & LF)
+              and then Contains
+                         (Text,
+                          "zeroed:" & LF
+                          & HT & ".zero 4" & LF),
+            "an omitted-initializer array stays reserved storage");
+         Landin.Testing.Check
+           (Item,
+            Index (Text, HT & ".data" & LF)
+              < Index (Text, HT & ".bss" & LF),
+            "written data comes before reserved");
+      end;
+   end A_Module_Array_Literal_Becomes_Data_Image;
+
    --  [0520]'s element, reached by an index the compiler knows.  It sits
    --  where the element size puts it, so `[4]u32` reads its third at four
    --  bytes times two, and a `[8]bool` reads its fifth one byte along at
@@ -2420,6 +2482,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "an array state is reserved whole",
          An_Array_State_Is_Reserved_Whole'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a module array literal becomes data image",
+         A_Module_Array_Literal_Becomes_Data_Image'Access);
       Landin.Testing.Register
         (Into, "backend", "zero data is reserved and not written",
          Zero_Data_Is_Reserved_And_Not_Written'Access);

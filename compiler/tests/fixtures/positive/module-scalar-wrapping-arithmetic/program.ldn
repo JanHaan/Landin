@@ -1,0 +1,18 @@
+--  Every wrapping form at every boundary, one type each, across the
+--  three wrapping operators the tour spells.  Unsigned wraps modulo the
+--  type's width, signed wraps around the type's own sign boundary.
+
+u8_wraps_add: u8 = 255 +% 1
+u8_wraps_sub: u8 = 0 -% 1
+u8_wraps_mul: u8 = 128 *% 2
+
+u64_wraps_add: u64 = 18446744073709551615 +% 1
+u64_wraps_sub: u64 = 0 -% 1
+u64_wraps_mul: u64 = 9223372036854775808 *% 2
+
+i8_wraps_add: i8 = 127 +% 1
+i8_wraps_sub: i8 = -128 -% 1
+i8_wraps_mul: i8 = -1 *% -128
+
+i64_wraps_add: i64 = 9223372036854775807 +% 1
+i64_wraps_sub: i64 = -9223372036854775808 -% 1

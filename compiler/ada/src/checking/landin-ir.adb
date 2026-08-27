@@ -229,6 +229,35 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
      is (Element (Of_Unit, Item).Length);
 
+   procedure Set_Array_Image
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Elements : Landin.Types.Folded_Array)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Image, Natural (Into.Images.Length));
+      for Position in Elements'Range loop
+         Into.Images.Append (Elements (Position));
+         Held.Image.Count := Held.Image.Count + 1;
+      end loop;
+      Held.Has_Image := True;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Array_Image;
+
+   function Has_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Element (Of_Unit, Item).Has_Image);
+
+   function Image_Length
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     is (Element_Total (Element (Of_Unit, Item).Image.Count));
+
+   function Nth_Image
+     (Of_Unit : Unit; Item : Item_Id; Index : Part_Position)
+     return Landin.Types.Folded
+     is (Of_Unit.Images
+           (Element (Of_Unit, Item).Image.First + Positive (Index)));
+
    function Is_Aggregate
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Aggregate);

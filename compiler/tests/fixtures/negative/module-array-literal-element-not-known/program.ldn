@@ -1,0 +1,5 @@
+answer: () -> (r: u32) =
+    r = 42
+end answer
+
+mut buffer: [2]u32 = [answer(), 7]
