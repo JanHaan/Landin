@@ -1,0 +1,5 @@
+class: positive
+summary: a nonempty local array literal supplies its length and scalar element type
+constructs: 0050, 0200, 0520, 0530
+program: program.ldn
+targets: linux-x86-64, macos-arm64

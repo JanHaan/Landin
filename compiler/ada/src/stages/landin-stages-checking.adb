@@ -1947,30 +1947,38 @@ package body Landin.Stages.Checking is
                      --  and [0200] settles a literal that has none.  D21's
                      --  narrow array case reads the shape from a direct
                      --  storage name without making array names general
-                     --  values; every other form still goes through
-                     --  Synthesise and keeps its existing refusal.
-                     declare
-                        Got : constant Ty.Type_Kind :=
-                          (if Is_Direct_Array_Name (Of_Tree, Value)
-                           then Selected_From (Of_Tree, Value)
-                           else Synthesise (Of_Tree, Value));
-                     begin
-                        if Got = Ty.Untyped_Integer then
-                           Commit_To (Of_Tree, Value, Ty.Default_Integer);
-                        elsif Got = Ty.No_Value then
-                           Bad.Report
-                             (Item    => Bad.Type_Mismatch,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Value),
-                              Message => "this hands back nothing, so"
-                                         & " there is no type to infer",
-                              Note    => "[1920]: a call of a function"
-                                         & " returning none has no type",
-                              Related => Syn.Origin (Of_Tree, Node),
-                              Because => "this binding",
-                              Into    => Found);
-                        end if;
-                     end;
+                     --  values.  [0530]'s local literal was already given its
+                     --  finite shape and scalar context by Infer; every other
+                     --  form still goes through Synthesise and keeps its
+                     --  existing refusal.
+                     if Is_Local_Binding (Of_Tree, Node)
+                       and then Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+                     then
+                        null;
+                     else
+                        declare
+                           Got : constant Ty.Type_Kind :=
+                             (if Is_Direct_Array_Name (Of_Tree, Value)
+                              then Selected_From (Of_Tree, Value)
+                              else Synthesise (Of_Tree, Value));
+                        begin
+                           if Got = Ty.Untyped_Integer then
+                              Commit_To (Of_Tree, Value, Ty.Default_Integer);
+                           elsif Got = Ty.No_Value then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Value),
+                                 Message => "this hands back nothing, so"
+                                            & " there is no type to infer",
+                                 Note    => "[1920]: a call of a function"
+                                            & " returning none has no type",
+                                 Related => Syn.Origin (Of_Tree, Node),
+                                 Because => "this binding",
+                                 Into    => Found);
+                           end if;
+                        end;
+                     end if;
                   elsif Wants = Ty.Fixed_Array then
                      declare
                         Written : constant Syn.Node_Id :=
@@ -2346,6 +2354,98 @@ package body Landin.Stages.Checking is
 
          if Value = Syn.No_Node then
             Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+            return;
+         end if;
+
+         --  [0530]: a nonempty literal in a local inferred binding supplies
+         --  D17's length and takes its scalar element type from the first
+         --  element.  [0200] gives an otherwise untyped integer expression
+         --  its default context; that settled scalar then checks every later
+         --  element.  Module inference remains outside this slice because a
+         --  static image has a separate [1940] boundary.
+         if Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
+           and then Syn.Kind (Of_Tree.all, Value) = Syn.Array_Literal
+         then
+            declare
+               Count : constant Landin.Checking.Element_Count :=
+                 Landin.Checking.Element_Count
+                   (Syn.Element_Count (Of_Tree.all, Value));
+               First : constant Syn.Node_Id :=
+                 Syn.Nth_Element (Of_Tree.all, Value, 1);
+               Got : constant Ty.Type_Kind :=
+                 Synthesise (Of_Tree.all, First);
+               Element : Ty.Scalar_Name;
+            begin
+               if Got = Ty.Untyped_Integer then
+                  Element := Ty.Default_Integer;
+                  Commit_To (Of_Tree.all, First, Element);
+               elsif Got in Ty.Scalar_Name then
+                  Element := Ty.Scalar_Name (Got);
+               else
+                  if Got = Ty.No_Value then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree.all),
+                        Where   => Syn.Where (Of_Tree.all, First),
+                        Message => "this hands back nothing, so it cannot"
+                                   & " supply an array element type",
+                        Note    => "[0530]: the literal supplies one scalar"
+                                   & " element type for the inferred array",
+                        Related => Syn.Origin (Of_Tree.all, Node),
+                        Because => "this inferred binding",
+                        Into    => Found);
+                  end if;
+
+                  Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+                  return;
+               end if;
+
+               declare
+                  Element_Bytes : constant Ty.Magnitude :=
+                    Ty.Magnitude
+                      (Landin.Targets.Bytes
+                         (Ty.Storage_Size (Element, Facts)));
+                  Maximum_Bytes : constant Ty.Magnitude :=
+                    Ty.Magnitude
+                      (Landin.Targets.Maximum_Object_Size (Facts));
+               begin
+                  if Element_Bytes /= 0
+                    and then Ty.Magnitude (Count)
+                               > Maximum_Bytes / Element_Bytes
+                  then
+                     Bad.Report
+                       (Item    => Bad.Literal_Out_Of_Range,
+                        Source  => Syn.Source_Of (Of_Tree.all),
+                        Where   => Syn.Where (Of_Tree.all, Value),
+                        Message => "this inferred array is larger than the"
+                                   & " target can address",
+                        Note    => "D18: an array's byte extent must fit the"
+                                   & " target's usize",
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree.all, Value);
+                     Landin.Checking.Settle
+                       (Types.all, Id, Ty.Ill_Typed);
+                     return;
+                  end if;
+               end;
+
+               Landin.Checking.Note
+                 (Types.all, Of_Tree.all, Value, Ty.Fixed_Array);
+               Landin.Checking.Note_Array
+                 (Types.all, Of_Tree.all, Value, Count, Element);
+               Landin.Checking.Note_Array
+                 (Types.all, Id, Count, Element);
+               Landin.Checking.Settle (Types.all, Id, Ty.Fixed_Array);
+
+               for Position in 2 .. Syn.Element_Count (Of_Tree.all, Value) loop
+                  Require
+                    (Of_Tree.all,
+                     Syn.Nth_Element (Of_Tree.all, Value, Position), Element,
+                     Syn.Origin (Of_Tree.all, Node),
+                     "the first inferred array element");
+               end loop;
+            end;
+
             return;
          end if;
 

@@ -2356,12 +2356,29 @@ already exercises the D21 chain that terminates at D10 zero and is
 unchanged, and the retired `negative/module-array-literal-not-enabled`
 is replaced by the D24 negatives above.
 
-What is still refused: array initializers other than D21's direct storage name
-and D23/D24's explicitly typed local and module literal, general whole-array
-value positions, the inferred literal length [0530], `zeroed` [0540],
-repetition [0560], slices [0570], non-identifier `lenof` operands, and an array
-as a struct field. Each is its own slice, and the remaining value
-slices need the initialization work D21 did not settle.
+D25 admits [0530] in its first local position: a nonempty literal directly
+initializing an inferred local binding supplies D17's finite element count and
+takes its scalar element type from the first source expression. An untyped
+integer first element receives [0200]'s default `i32`; every later expression
+is checked in that one scalar context, so there is no common-type search or
+conversion rule. The complete inferred extent is held to D18's target `usize`
+before its shape is recorded. The declaration and literal carry the same
+compact shape metadata, after which D23's existing lowering evaluates and
+stores the source run left to right and marks the local whole. This does not
+introduce a general array value or temporary. Module inference remains refused:
+D24's static image still starts from a written shape and then applies [1940].
+`positive/local-array-literal-inferred-length`,
+`negative/local-array-literal-inferred-element-mismatch`,
+`negative/module-array-literal-inferred-length-not-enabled`, and
+`runtime/local-array-literal-infers-and-initializes` pin the admitted form and
+that boundary.
+
+What is still refused: array initializers other than D21's direct storage name,
+D23/D24's explicitly typed local and module literal, and D25's inferred local
+literal; general whole-array value positions; inferred module literal images;
+`zeroed` [0540]; repetition [0560]; slices [0570]; non-identifier `lenof`
+operands; and an array as a struct field. Each is its own slice, and the
+remaining value slices need the initialization work D21 did not settle.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a
 zero image when all-zero is a valid value for it, which is what lets a

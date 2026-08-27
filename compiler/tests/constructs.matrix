@@ -33,7 +33,7 @@
 0170   tour        refused refused-by-name            Floating point: f16, f32, f64
 0180   tour        accepted emitted                   bool, with true and false
 0190   tour        accepted emitted executed refused  Integer literals are untyped
-0200   tour        accepted emitted refused           With no context, an integer literal defaults to i32
+0200   tour        accepted emitted executed refused  With no context, an integer literal defaults to i32
 0210   tour        refused                            Float literals are always recognisable as such
 0220   tour        accepted emitted                   Bases, separators, exponents
 0230   tour        -                                  Hex float literals express every representable value exactly
@@ -66,7 +66,7 @@
 0500   tour        -                                  Three operations sit between pointers and slices
 0510   tour        -                                  slice_from is where uninitialised storage is smuggled in
 0520   tour        accepted emitted executed refused refused-by-name Array: a value
-0530   tour        refused                            The length may be inferred from the literal
+0530   tour        accepted emitted executed refused  The length may be inferred from the literal
 0540   tour        -                                  zeroed is the all-bits-zero image of a type
 0550   tour        -                                  The first of those two properties is also a concept
 0560   tour        refused refused-by-name            Repetition, for static patterns that live in flash

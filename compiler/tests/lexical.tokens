@@ -864,6 +864,60 @@ file positive/local-array-initialized-from-source-name/program.ldn tokens 42
   804 810 source
   811 814 end
   815 816 g
+file positive/local-array-literal-inferred-length/program.ldn tokens 53
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 row
+  24 26 :=
+  27 28 [
+  28 29 1
+  29 30 ,
+  31 32 2
+  32 33 ,
+  34 35 3
+  35 36 ]
+  41 45 last
+  45 46 :
+  47 50 i32
+  51 52 =
+  53 56 row
+  56 57 [
+  57 58 2
+  58 59 ]
+  60 63 end
+  64 65 f
+  67 68 g
+  68 69 :
+  70 71 (
+  71 75 seed
+  75 76 :
+  77 79 u8
+  79 80 )
+  81 83 ->
+  84 88 none
+  89 90 =
+  95 100 bytes
+  101 103 :=
+  104 105 [
+  105 109 seed
+  109 110 ,
+  111 114 255
+  114 115 ]
+  120 124 last
+  124 125 :
+  126 128 u8
+  129 130 =
+  131 136 bytes
+  136 137 [
+  137 138 1
+  138 139 ]
+  140 143 end
+  144 145 g
 file positive/local-array-literal-initializer/program.ldn tokens 67
   0 8 read_row
   8 9 :
@@ -2721,25 +2775,6 @@ file negative/array-literal-assignment-not-enabled/program.ldn tokens 23
   50 51 ]
   52 55 end
   56 57 f
-file negative/array-literal-inferred-length-not-enabled/program.ldn tokens 18
-  0 1 f
-  1 2 :
-  3 4 (
-  4 5 )
-  6 8 ->
-  9 13 none
-  14 15 =
-  141 144 row
-  145 147 :=
-  148 149 [
-  149 150 1
-  150 151 ,
-  152 153 2
-  153 154 ,
-  155 156 3
-  156 157 ]
-  158 161 end
-  162 163 f
 file negative/array-of-an-array-not-enabled/program.ldn tokens 11
   146 150 grid
   150 151 :
@@ -3803,6 +3838,25 @@ file negative/local-array-literal-element-mismatch/program.ldn tokens 33
   77 78 ]
   79 82 end
   83 84 f
+file negative/local-array-literal-inferred-element-mismatch/program.ldn tokens 18
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 row
+  24 26 :=
+  27 28 [
+  28 29 1
+  29 30 ,
+  31 35 true
+  35 36 ,
+  37 38 3
+  38 39 ]
+  40 43 end
+  44 45 f
 file negative/local-array-literal-length-mismatch/program.ldn tokens 35
   0 1 f
   1 2 :
@@ -4328,6 +4382,16 @@ file negative/module-array-literal-index-element/program.ldn tokens 31
   64 65 1
   65 66 ]
   66 67 ]
+file negative/module-array-literal-inferred-length-not-enabled/program.ldn tokens 9
+  0 3 row
+  4 6 :=
+  7 8 [
+  8 9 1
+  9 10 ,
+  11 12 2
+  12 13 ,
+  14 15 3
+  15 16 ]
 file negative/module-array-literal-length-mismatch/program.ldn tokens 28
   0 3 mut
   4 9 short

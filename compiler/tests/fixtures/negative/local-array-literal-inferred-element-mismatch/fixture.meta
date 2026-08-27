@@ -1,0 +1,6 @@
+class: negative
+summary: every later inferred literal element has the first element's scalar type
+constructs: 0050, 0200, 0520, 0530
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

@@ -1388,12 +1388,11 @@ proportional to a target extent that was not written in the literal.
 
 **The alternative:** first infer the literal's length and element type, then
 allow that value in every compatible position. That is [0530] plus general
-array values rather than [0520]'s smallest executable case. It was deferred so
-module initial images, copying temporaries, parameters and returns do not become
-unstated consequences of accepting one local initializer.
+array values rather than [0520]'s smallest executable case. It was deferred to
+D25 so module initial images, copying temporaries, parameters and returns did
+not become unstated consequences of accepting one local initializer.
 
 **Pinned by** `positive/local-array-literal-initializer`,
-`negative/array-literal-inferred-length-not-enabled`,
 `negative/local-array-literal-length-mismatch`,
 `negative/local-array-literal-element-mismatch`,
 `negative/array-literal-assignment-not-enabled`,
@@ -1488,9 +1487,9 @@ directive per element into the object.
 
 **The alternative:** admit a call, a general expression, or infer the
 length from the literal at module scope. The first two turn `[1460]`
-into a promise this compiler cannot keep; the third settles [0530]'s
-own decision on the strength of one initializer form, which local
-arrays' inferred forms would then have to follow. Both were declined.
+into a promise this compiler cannot keep; the third couples [0530] to
+static-image folding rather than to D25's later local source-order case.
+All three remain declined.
 
 **Pinned by** `positive/module-array-literal-initializer`,
 `positive/module-array-literal-forward-scalar-reference`,
@@ -1511,3 +1510,47 @@ arrays' inferred forms would then have to follow. Both were declined.
 `positive/module-scalar-wrapping-arithmetic`,
 `positive/module-array-literal-wrapping-arithmetic`, and
 `runtime/module-array-literal-holds-its-image` on Linux x86-64.
+
+### D25 — A nonempty local literal infers one fixed-array shape
+
+**The tour said** that a binding written with `:=` takes the type of its value
+[0050], that an integer literal takes the type of its context [0190] and uses
+the default integer when there is none [0200], that an array's size is part of
+its type [0520], and that the length may be inferred from a literal [0530]. It
+did not say which element supplies the scalar type or which value positions
+that inference enables.
+
+**Chosen:** a nonempty array literal directly initializing an inferred local
+binding has fixed-array type `[N]T`, where `N` is the number of source elements
+and `T` is the scalar type synthesized by the first element. When that first
+expression is an untyped integer, [0200]'s `i32` is its context and therefore
+`T`; every later element is checked in that same `T` context. D18's complete
+`N * sizeof T` extent must fit the target's `usize` before the shape is
+recorded. D23's existing lowering evaluates and stores the finite source run
+left to right, and the resulting local is wholly assigned.
+
+This admits only the initializer in a local inferred binding. A module
+`name := [first, ...]` remains refused: D24's static image still requires a
+written shape and its separate [1940] fold. A literal in general assignment,
+a parameter or return, an empty literal, a nested literal, repetition [0560]
+and every non-scalar element also remain outside this slice. In particular,
+inference does not create a general array-valued temporary.
+
+**Why the first element:** [0530]'s literal has no surrounding element type,
+while [0050] requires the value to answer with one type. Letting the first
+source expression answer and checking the rest against it gives [0410]'s source
+order a single deterministic context, applies [0200] without an invented
+numeric join, and needs no conversions [0310].
+
+**The alternative:** search all elements for a common type, defer every integer
+until a later element supplies one, or infer module static images at the same
+time. A common-type search would introduce conversion or least-upper-bound
+rules the language has neither stated nor wanted; deferral would make element
+order affect when errors appear without changing their source order; module
+inference would merge [0530] with [1940]'s independently constrained image
+fold. All three were declined.
+
+**Pinned by** `positive/local-array-literal-inferred-length`,
+`negative/local-array-literal-inferred-element-mismatch`,
+`negative/module-array-literal-inferred-length-not-enabled`, and
+`runtime/local-array-literal-infers-and-initializes` on Linux x86-64.

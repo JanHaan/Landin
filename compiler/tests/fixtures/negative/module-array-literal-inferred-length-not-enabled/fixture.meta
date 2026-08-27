@@ -1,0 +1,6 @@
+class: negative
+summary: inferred array literals remain local while module images require a written shape
+constructs: 0050, 0520, 0530, 1740, 1940
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

@@ -570,6 +570,33 @@ item 3 ROUTINE g result none params 0 slots 1 blocks 1 values 2
   block 1 scope 5 BLOCK length 2
     1 COPY_ARRAY from datum 1 source to slot 1
     2 LEAVE
+file positive/local-array-literal-inferred-length/program.ldn
+unit items 2
+item 1 ROUTINE f result none params 0 slots 2 blocks 1 values 9
+  slot 1 row elements 3 of i32
+  slot 2 last i32
+  block 1 scope 3 BLOCK length 9
+    1 NUMBER i32 1
+    2 STORE_FIELD <- 1
+    3 NUMBER i32 2
+    4 STORE_FIELD <- 3
+    5 NUMBER i32 3
+    6 STORE_FIELD <- 5
+    7 LOAD_FIELD i32
+    8 STORE slot 2 <- 7
+    9 LEAVE
+item 2 ROUTINE g result none params 1 slots 3 blocks 1 values 7
+  slot 1 seed u8 param 1
+  slot 2 bytes elements 2 of u8
+  slot 3 last u8
+  block 1 scope 5 BLOCK length 7
+    1 LOAD u8 slot 1
+    2 STORE_FIELD <- 1
+    3 NUMBER u8 255
+    4 STORE_FIELD <- 3
+    5 LOAD_FIELD u8
+    6 STORE slot 3 <- 5
+    7 LEAVE
 file positive/local-array-literal-initializer/program.ldn
 unit items 1
 item 1 ROUTINE read_row result u32 params 1 slots 6 blocks 5 values 28
