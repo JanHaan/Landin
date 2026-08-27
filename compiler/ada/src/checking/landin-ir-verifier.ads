@@ -84,6 +84,8 @@ package Landin.IR.Verifier is
       Field_Out_Of_Range,
       Field_Is_Not_A_Scalar,
       Element_Datum_Is_Not_An_Array,
+      Element_Field_Out_Of_Range,
+      Element_Field_Is_Not_An_Array,
       Element_Index_Is_Not_Usize,
       Array_Storage_Is_Not_An_Array,
       Array_Copy_Shapes_Disagree,

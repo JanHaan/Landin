@@ -1,0 +1,9 @@
+holder: type = struct
+    row: [2]u8
+end holder
+
+state: holder
+
+f: () -> none =
+    state.row[0] = 1
+end f

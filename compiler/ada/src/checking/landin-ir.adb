@@ -634,6 +634,10 @@ package body Landin.IR is
      return Part_Position
      is (Held (Of_Unit, Item, Value).Part);
 
+   function Element_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     is (Held (Of_Unit, Item, Value).Element_Field);
+
    function First_Part_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
       return Part_Position
@@ -935,13 +939,15 @@ package body Landin.IR is
       Datum  : Item_Id;
       Index  : Value_Id;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Field  : Natural := 0) return Value_Id
    is
       Made : Instruction :=
         Instruction'(Op     => Load_Element,
                      Result => Result,
                      Site   => Site,
                      Named  => Datum,
+                     Element_Field => Field,
                      others => <>);
    begin
       Made.First_Arg := Natural (Into.Operands.Length);
@@ -956,12 +962,14 @@ package body Landin.IR is
       Datum : Item_Id;
       Index : Value_Id;
       Value : Value_Id;
-      Site  : Landin.Provenance.Origin)
+      Site  : Landin.Provenance.Origin;
+      Field : Natural := 0)
    is
       Made : Instruction :=
         Instruction'(Op     => Store_Element,
                      Site   => Site,
                      Named  => Datum,
+                     Element_Field => Field,
                      others => <>);
       Where : Value_Id;
    begin
@@ -979,13 +987,15 @@ package body Landin.IR is
       Slot   : Slot_Id;
       Index  : Value_Id;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Field  : Natural := 0) return Value_Id
    is
       Made : Instruction :=
         Instruction'(Op     => Load_Element,
                      Result => Result,
                      Site   => Site,
                      Slot   => Slot,
+                     Element_Field => Field,
                      others => <>);
    begin
       Made.First_Arg := Natural (Into.Operands.Length);
@@ -1000,12 +1010,14 @@ package body Landin.IR is
       Slot  : Slot_Id;
       Index : Value_Id;
       Value : Value_Id;
-      Site  : Landin.Provenance.Origin)
+      Site  : Landin.Provenance.Origin;
+      Field : Natural := 0)
    is
       Made : Instruction :=
         Instruction'(Op     => Store_Element,
                      Site   => Site,
                      Slot   => Slot,
+                     Element_Field => Field,
                      others => <>);
       Where : Value_Id;
    begin
@@ -1019,14 +1031,22 @@ package body Landin.IR is
 
    function Slot_Element_Length
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Element_Total
-     is (Slot_Array_Length
-           (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot));
+     is (if Element_Field_Of (Of_Unit, Item, Value) = 0
+         then Slot_Array_Length
+                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
+         else Nth_Slot_Field_Shape
+                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
+                 Positive (Element_Field_Of (Of_Unit, Item, Value))).Length);
 
    function Slot_Element_Type
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Scalar_Name
-     is (Slot_Array_Element
-           (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot));
+     is (if Element_Field_Of (Of_Unit, Item, Value) = 0
+         then Slot_Array_Element
+                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
+         else Nth_Slot_Field_Shape
+                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
+                 Positive (Element_Field_Of (Of_Unit, Item, Value))).Element);
 
    procedure Emit_Array_Copy
      (Into        : in out Unit;

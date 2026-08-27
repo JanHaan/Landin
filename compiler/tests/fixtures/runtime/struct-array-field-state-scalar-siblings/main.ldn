@@ -7,11 +7,17 @@ end holder
 mut state: holder
 
 public main: () -> (code: i32) =
-    if state.tag == 0 and state.tail == 0 then
+    at: usize = 1
+    if state.tag == 0 and state.words[at] == 0 and state.tail == 0 then
         state.tag = 7
+        state.words[0] = 700
+        state.words[at] = 1
+        inc state.words[at]
         state.tail = 701
 
-        if state.tag == 7 and state.tail == 701 then
+        if state.tag == 7 and state.words[0] == 700
+          and state.words[at] == 2 and state.tail == 701
+        then
             code = 42
         else
             code = 2

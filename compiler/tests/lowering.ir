@@ -1792,21 +1792,52 @@ item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 11
     11 LEAVE
 file positive/struct-array-field-local-storage/program.ldn
 unit items 1
-item 1 ROUTINE use result none params 0 slots 4 blocks 1 values 9
+item 1 ROUTINE use result none params 0 slots 10 blocks 1 values 34
   slot 1 direct aggregate fields u8 [2]usize u16
   slot 2 through_alias aggregate fields u8 [2]usize u16
-  slot 3 seen_tail u16
-  slot 4 seen_tag u8
-  block 1 scope 3 BLOCK length 9
-    1 NUMBER u16 7
-    2 STORE_FIELD <- 1
-    3 NUMBER u8 1
-    4 STORE_FIELD <- 3
-    5 LOAD_FIELD u16
-    6 STORE slot 3 <- 5
-    7 LOAD_FIELD u8
-    8 STORE slot 4 <- 7
-    9 LEAVE
+  slot 3 - usize
+  slot 4 - usize
+  slot 5 - usize
+  slot 6 - usize
+  slot 7 at usize
+  slot 8 seen_element usize
+  slot 9 seen_tail u16
+  slot 10 seen_tag u8
+  block 1 scope 3 BLOCK length 34
+    1 NUMBER usize 0
+    2 STORE slot 3 <- 1
+    3 NUMBER usize 70
+    4 LOAD usize slot 3
+    5 STORE_ELEMENT slot 1 field 2 <- 4 3
+    6 NUMBER usize 1
+    7 STORE slot 4 <- 6
+    8 NUMBER usize 1
+    9 LOAD usize slot 4
+    10 STORE_ELEMENT slot 1 field 2 <- 9 8
+    11 NUMBER usize 0
+    12 STORE slot 5 <- 11
+    13 NUMBER usize 7
+    14 LOAD usize slot 5
+    15 STORE_ELEMENT slot 2 field 2 <- 14 13
+    16 NUMBER usize 1
+    17 STORE slot 6 <- 16
+    18 NUMBER usize 2
+    19 LOAD usize slot 6
+    20 STORE_ELEMENT slot 2 field 2 <- 19 18
+    21 NUMBER u16 7
+    22 STORE_FIELD <- 21
+    23 NUMBER u8 1
+    24 STORE_FIELD <- 23
+    25 NUMBER usize 1
+    26 STORE slot 7 <- 25
+    27 LOAD usize slot 7
+    28 LOAD_ELEMENT usize slot 2 field 2 <- 27
+    29 STORE slot 8 <- 28
+    30 LOAD_FIELD u16
+    31 STORE slot 9 <- 30
+    32 LOAD_FIELD u8
+    33 STORE slot 10 <- 32
+    34 LEAVE
 file positive/struct-array-field-module-state/program.ldn
 unit items 3
 item 1 DATUM direct result struct params 0 slots 0 blocks 1 values 1
@@ -1821,14 +1852,27 @@ item 2 DATUM through_alias result struct params 0 slots 0 blocks 1 values 1
   field 3 u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 3 ROUTINE touch result none params 0 slots 1 blocks 1 values 5
+item 3 ROUTINE touch result none params 0 slots 4 blocks 1 values 15
   slot 1 seen u8
-  block 1 scope 3 BLOCK length 5
+  slot 2 first usize
+  slot 3 at usize
+  slot 4 - usize
+  block 1 scope 3 BLOCK length 15
     1 LOAD_FIELD u8
     2 STORE slot 1 <- 1
-    3 NUMBER u32 2
-    4 STORE_FIELD <- 3
-    5 LEAVE
+    3 NUMBER usize 0
+    4 LOAD_ELEMENT usize datum 1 direct field 2 <- 3
+    5 STORE slot 2 <- 4
+    6 NUMBER usize 1
+    7 STORE slot 3 <- 6
+    8 LOAD usize slot 3
+    9 STORE slot 4 <- 8
+    10 LOAD usize slot 2
+    11 LOAD usize slot 4
+    12 STORE_ELEMENT datum 2 through_alias field 2 <- 11 10
+    13 NUMBER u32 2
+    14 STORE_FIELD <- 13
+    15 LEAVE
 file positive/struct-module-state/program.ldn
 unit items 1
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1

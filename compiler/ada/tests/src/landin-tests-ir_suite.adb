@@ -409,8 +409,13 @@ package body Landin.Tests.IR_Suite is
          Landin.IR.Prepare (Unit, Meanings.all);
          Datum := Landin.IR.Add_Item
                     (Unit, Landin.IR.Datum, 1,
-                     Landin.Types.Fixed_Array, Site);
-         Landin.IR.Set_Array (Unit, Datum, Landin.Types.U32, 4);
+                     Landin.Types.Aggregate, Site);
+         Landin.IR.Add_Field (Unit, Datum, Landin.Types.U8);
+         Landin.IR.Add_Field
+           (Unit, Datum,
+            (Kind    => Landin.IR.Array_Field_Shape,
+             Element => Landin.Types.U32,
+             Length  => 4));
          Routine := Landin.IR.Add_Item
                       (Unit, Landin.IR.Routine, 2, Landin.Types.U32, Site);
          Block := Landin.IR.Add_Block
@@ -421,9 +426,10 @@ package body Landin.Tests.IR_Suite is
          Stored := Landin.IR.Emit_Number
                      (Unit, Routine, Landin.Types.U32, 9, False, Site);
          Loaded := Landin.IR.Emit_Load_Element
-                     (Unit, Routine, Datum, Index, Landin.Types.U32, Site);
+                     (Unit, Routine, Datum, Index, Landin.Types.U32, Site,
+                      Field => 2);
          Landin.IR.Emit_Store_Element
-           (Unit, Routine, Datum, Index, Stored, Site);
+           (Unit, Routine, Datum, Index, Stored, Site, Field => 2);
          Store := Landin.IR.Nth_Value (Unit, Routine, Block, 4);
 
          Landin.Testing.Check
@@ -431,6 +437,7 @@ package body Landin.Tests.IR_Suite is
             Landin.IR.Op_Of (Unit, Routine, Loaded)
               = Landin.IR.Load_Element
             and then Landin.IR.Datum_Of (Unit, Routine, Loaded) = Datum
+            and then Landin.IR.Element_Field_Of (Unit, Routine, Loaded) = 2
             and then Landin.IR.Operand_Count (Unit, Routine, Loaded) = 1
             and then Landin.IR.Nth_Operand (Unit, Routine, Loaded, 1) = Index,
             "a load carries its array and runtime index");
@@ -439,6 +446,7 @@ package body Landin.Tests.IR_Suite is
             Landin.IR.Op_Of (Unit, Routine, Store)
               = Landin.IR.Store_Element
             and then Landin.IR.Datum_Of (Unit, Routine, Store) = Datum
+            and then Landin.IR.Element_Field_Of (Unit, Routine, Store) = 2
             and then Landin.IR.Operand_Count (Unit, Routine, Store) = 2
             and then Landin.IR.Nth_Operand (Unit, Routine, Store, 1) = Index
             and then Landin.IR.Nth_Operand (Unit, Routine, Store, 2) = Stored,

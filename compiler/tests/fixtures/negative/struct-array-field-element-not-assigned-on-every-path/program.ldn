@@ -1,0 +1,11 @@
+holder: type = struct
+    row: [1]u32
+end holder
+
+f: (choose: bool) -> none =
+    mut local: holder
+    if choose then
+        local.row[0] = 1
+    end if
+    _ = local.row[0]
+end f

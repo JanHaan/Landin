@@ -1076,6 +1076,44 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Field_After_A_Wide_Array_Uses_A_Register_Address;
 
+   procedure An_Array_Field_After_A_Wide_Field_Uses_Registers
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_Field_After_A_Wide_Field_Uses_Registers
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "wide: type = struct" & LF
+         & "    prefix: [2147483648]u8" & LF
+         & "    row: [2]u8" & LF
+         & "end wide" & LF
+         & "state: wide" & LF
+         & "read: (i: usize) -> (r: u8) =" & LF
+         & "    r = state.row[i]" & LF
+         & "end read" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "cmpq %rdx, %rax")
+            and then Contains (Text, HT & "leaq state(%rip), %rcx")
+            and then Contains
+                       (Text, HT & "movabsq $2147483648, %rdx")
+            and then Contains (Text, HT & "addq %rdx, %rcx")
+            and then Contains (Text, HT & "addq %rax, %rcx"),
+            "the trap precedes a full-width field offset and scaled index");
+      end;
+   end An_Array_Field_After_A_Wide_Field_Uses_Registers;
+
    --  A field is written where it is read [1810], and `inc` on one says
    --  what `x += 1` says [1900]: a load at the offset, a one, a trapping
    --  add and a store back to the same offset.
@@ -1189,17 +1227,23 @@ package body Landin.Tests.Backend_Suite is
         & "f: () -> none =" & LF
         & "    mut local: holder" & LF
         & "    local.tag = 1" & LF
+        & "    local.words[0] = 1" & LF
+        & "    local.words[1] = 2" & LF
+        & "    at: usize = 1" & LF
+        & "    local.words[at] = 3" & LF
         & "    local.tail = 2" & LF
         & "end f" & LF;
 
       procedure Check_Target
         (Facts       : Landin.Targets.Target_Facts;
          First_Cell  : String;
+         Array_Field : String;
          Last_Field  : String);
 
       procedure Check_Target
         (Facts       : Landin.Targets.Target_Facts;
          First_Cell  : String;
+         Array_Field : String;
          Last_Field  : String)
       is
          Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
@@ -1216,14 +1260,18 @@ package body Landin.Tests.Backend_Suite is
                                       & "(%rbp)"),
                "the first scalar begins the target-sized cell");
             Landin.Testing.Check
+              (Item, Contains (Text, HT & "leaq " & Array_Field
+                                      & "(%rbp), %rcx"),
+               "the computed element starts at the target-laid-out field");
+            Landin.Testing.Check
               (Item, Contains (Text, HT & "movw %ax, " & Last_Field
                                       & "(%rbp)"),
                "the trailing scalar follows the compact array field");
          end;
       end Check_Target;
    begin
-      Check_Target (Landin.Targets.Linux_X86_64, "-32", "-8");
-      Check_Target (Landin.Targets.Synthetic_32, "-16", "-4");
+      Check_Target (Landin.Targets.Linux_X86_64, "-32", "-24", "-8");
+      Check_Target (Landin.Targets.Synthetic_32, "-16", "-12", "-4");
    end A_Struct_Array_Field_Local_Follows_Its_Target;
 
    --  D17's empty fixed-array shape is internal evidence, not a source
@@ -3027,6 +3075,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a field after a wide array uses registers",
          A_Field_After_A_Wide_Array_Uses_A_Register_Address'Access);
+      Landin.Testing.Register
+        (Into, "backend", "an array field after a wide field uses registers",
+         An_Array_Field_After_A_Wide_Field_Uses_Registers'Access);
       Landin.Testing.Register
         (Into, "backend", "a field is written at its own offset",
          A_Field_Is_Written_At_Its_Own_Offset'Access);
