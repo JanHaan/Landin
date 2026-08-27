@@ -1,0 +1,13 @@
+holder: type = struct
+    row: [2]u8
+end holder
+
+known: () -> none =
+    mut local: holder
+    local.row = [1, local.row[0]]
+end known
+
+computed: (at: usize) -> none =
+    mut local: holder
+    local.row = [1, local.row[at]]
+end computed

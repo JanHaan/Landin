@@ -1,6 +1,0 @@
-class: negative
-summary: D50 keeps an array literal outside the contextual whole-field copy
-constructs: 0520, 0670, 0750, 1740, 1820
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

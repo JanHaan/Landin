@@ -3,6 +3,11 @@ holder: type = struct
 end holder
 
 mut state: holder
+
 f: () -> none =
-    state.row = [1, 2]
+    state.row = [2 of 1]
 end f
+
+mixed: () -> none =
+    state.row = [1, of 2]
+end mixed

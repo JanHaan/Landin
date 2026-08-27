@@ -1719,9 +1719,10 @@ its element order in existing storage.
 **Chosen:** a nonempty array literal may be assigned contextually to a mutable
 fixed-array place: `place = [first, ..., last]`. The destination's D17 length and
 scalar element type are the context; the literal must contain exactly that many
-elements and each expression must have that element type. The kernel's present
-fixed-array places are direct local or module storage names. [1900] still decides
-whether one may be written.
+elements and each expression must have that element type. At this boundary the
+fixed-array places are direct local or module storage names. D52 later admits a
+directly selected fixed-array field under the same literal rule. [1900] still
+decides whether either may be written.
 
 The destination place is reached first. Then each literal element is evaluated
 left to right and written immediately to its one-based destination position
@@ -2711,8 +2712,8 @@ other index is checked at runtime and traps before any address is formed under
 [0580]. Writability is the root binding's. The selection `s.f` is typed as an
 array only in this index-base context: as a whole value, copy endpoint, or
 non-`zeroed` assignment destination it remains refused with L0304. D49 later
-supersedes the complete `s.f = zeroed` statement, and D50 later supersedes the
-copy-endpoint boundary alone.
+supersedes the complete `s.f = zeroed` statement, D50 later supersedes the
+copy-endpoint boundary, and D52 later supersedes a literal destination alone.
 
 D10 makes module state complete from declaration, so an indexed module-field
 read has no assignment requirement. A declaration-only local instead follows
@@ -2834,7 +2835,6 @@ use it. All were declined.
 **Pinned by** the checker, IR, verifier, lowering, and backend public-seam cases;
 `positive/struct-array-field-zeroed-assignment`;
 `negative/struct-array-field-zeroed-not-enabled`;
-`negative/struct-array-field-copy-not-enabled`;
 `negative/immutable-struct-array-field-zeroed`;
 `negative/struct-array-field-clear-keeps-fields-separate`;
 `negative/struct-array-field-clear-not-on-every-path`; the recorded IR dump;
@@ -2875,9 +2875,9 @@ This is a copy context, not a general array value. A fixed-array field remains
 refused as a module initializer source, argument, return, discard, operand, or
 bare read, and as a literal, repetition, or other non-`zeroed`, non-copy
 assignment destination. D51 later admits it as a local initializer source
-without changing those positions. Whole copies of the containing struct keep
-D46's refusal, so D50 does not make the scalar-only `Copy_Field` path consume
-an array shape.
+without changing those positions, and D52 later admits a literal destination
+alone. Whole copies of the containing struct keep D46's refusal, so D50 does
+not make the scalar-only `Copy_Field` path consume an array shape.
 
 Lowering emits one compact `Copy_Array` carrying both root storage identities
 and both field identities, never target offsets, temporaries, or one operation
@@ -2916,8 +2916,7 @@ rule independently.
 `negative/struct-array-field-copy-not-on-every-path`;
 `negative/struct-array-field-copy-shape-mismatch`;
 `negative/immutable-struct-array-field-copy`;
-`negative/struct-array-field-copy-keeps-fields-separate`;
-`negative/struct-array-field-copy-not-enabled`; the recorded IR dump; and
+`negative/struct-array-field-copy-keeps-fields-separate`; the recorded IR dump; and
 `runtime/struct-array-field-copy-endpoints` on Linux x86-64.
 
 ### D51 — A fixed-array field initializes a local array
@@ -2951,9 +2950,10 @@ later definite-assignment tracking. A refused contextual value owns its report;
 This remains an initializer context rather than a general array value. A
 selected field is still refused as either a typed or inferred module
 initializer, argument, return, discard, operand or bare read. It is not a
-literal or repetition destination; whole copies of the containing struct keep
-D46's refusal; fields of elements, struct-of-struct fields and nested arrays
-remain outside the laid-out kernel.
+literal or repetition destination at this boundary; D52 later admits the
+literal destination alone. Whole copies of the containing struct keep D46's
+refusal; fields of elements, struct-of-struct fields and nested arrays remain
+outside the laid-out kernel.
 
 Lowering emits D21's one compact `Copy_Array` from the containing root storage,
 carrying the field's declaration-order identity as D50's source field, into the
@@ -2982,3 +2982,77 @@ duplicate or cannot represent the compact D18 operation. All were declined.
 `negative/struct-array-field-initializer-shape-mismatch`;
 `negative/module-array-initializer-from-field-not-enabled`; the recorded IR
 dump; and `runtime/local-array-initializers-from-fields` on Linux x86-64.
+
+### D52 — An array literal may be assigned to a fixed-array field
+
+**The tour said** that assignment reaches its destination before its value
+[0410], that an array has its complete value [0520], that aggregate parts are
+initialized in written order, that a struct has its declared fields [0670], and
+that writability belongs to the root binding [1900]. D29 admitted a nonempty
+literal only when the complete destination was a direct array storage name.
+D48 made each element of a fixed-array field reachable without making the
+field a general place.
+
+**Chosen:** where `s` directly names D46 module state or a D47 local and `f` is
+a fixed array of enabled scalars, D29's contextual assignment also admits
+`s.f = [first, ..., last]`. Direct and aliased root, field and scalar element
+types have the same meaning. The selected field's D17 length and element type
+are the context: the nonempty literal must contain exactly that many elements,
+and every expression must have the element type. A length or element mismatch
+uses D29's L0301 and relates the source to its destination. The root must be
+mutable under [1900]; L0303 owns an immutable root first and alone.
+
+The destination is reached first. Each expression is then evaluated from left
+to right and written immediately to its corresponding element before the next
+expression begins, exactly as D29 specifies for direct storage. Thus a
+later expression can observe an earlier write to the same field, and a runtime
+failure can leave a completed prefix changed. Reads in every source expression
+are nevertheless checked against the definite-assignment state arriving at the
+statement; only normal completion records the binding-and-field whole fact.
+That fact makes known and computed reads complete without affecting any scalar
+sibling or other array field, and a merge retains it only on every arriving
+path. Module state remains complete under D10.
+
+Lowering evaluates each element, emits a constant `usize` index, and uses
+D48's existing `Store_Element` operation with the root storage and the field's
+declaration-order identity. It creates no hidden array temporary and carries no
+target byte offset. D29's direct-array literal keeps its existing
+`Store_Field` run byte-for-byte. A constant field index deliberately retains
+the ordinary bounds check: introducing the two-level static-part encoding D48
+declined is not part of this rule.
+
+The verifier and backend reuse D48 without a new operation or invariant: the
+verifier checks the positive field exists and has an array shape before reading
+it, then checks the `usize` index and stored element type. Each backend derives
+the field offset, length and element width from its target. Linux x86-64 forms
+a D18-wide module field in registers and uses the L0504-bounded target
+displacement for a local; every bounds trap precedes address arithmetic.
+
+This is D29's literal context, not a general field value or place. Full and
+mixed repetition, `zeroed` other than D49, copies other than D50, module
+initializers, arguments, returns, discards, operands, bare reads, fields of
+elements, struct-of-struct fields and nested arrays keep their existing
+boundaries. In particular, D52 does not widen `Fill_Array`; repetition into a
+field remains a separate decision.
+
+**Why reuse element stores:** a literal already names one expression per
+position, and D48 already represents the containing field plus an element
+index. Reusing that operation preserves D29's observable order and avoids both
+a hidden complete temporary and a second two-level part representation.
+
+**The alternatives:** keep literals restricted to direct arrays, form a hidden
+array value and copy it, extend `Store_Field` with a nested part, or admit full
+and mixed repetition in the same slice. The first leaves otherwise usable
+field storage needlessly asymmetric; the second changes D29's order and frame
+cost; the third duplicates D48's identity; and the fourth requires a compact
+field-qualified fill rule that a literal does not need. All were declined.
+
+**Pinned by** the checker, lowering and backend public-seam cases;
+`positive/struct-array-field-literal-assignment`;
+`negative/struct-array-field-literal-length-mismatch`;
+`negative/struct-array-field-literal-element-mismatch`;
+`negative/immutable-struct-array-field-literal`;
+`negative/struct-array-field-literal-reads-incoming-state`;
+`negative/struct-array-field-literal-not-on-every-path`;
+`negative/struct-array-field-repetition-not-enabled`; the recorded IR dump;
+and `runtime/struct-array-field-literal-assignment-order` on Linux x86-64.

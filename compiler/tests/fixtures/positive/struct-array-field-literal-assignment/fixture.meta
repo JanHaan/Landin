@@ -1,0 +1,5 @@
+class: positive
+summary: D52 assigns contextual literals to module and local fixed-array fields
+constructs: 0190, 0410, 0520, 0670, 0750, 1740, 1810, 1820, 1900, 1910
+program: program.ldn
+targets: linux-x86-64, macos-arm64

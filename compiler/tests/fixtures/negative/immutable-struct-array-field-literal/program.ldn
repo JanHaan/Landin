@@ -1,0 +1,14 @@
+holder: type = struct
+    row: [2]u8
+end holder
+
+state: holder
+
+f: () -> none =
+    state.row = [1, 2]
+end f
+
+local_read: () -> none =
+    local: holder
+    local.row = [local.row[0], 2]
+end local_read

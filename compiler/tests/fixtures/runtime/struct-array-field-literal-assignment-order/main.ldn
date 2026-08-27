@@ -1,0 +1,39 @@
+holder: type = struct
+    tag: u8
+    row: [3]usize
+    sibling: [2]usize
+    tail: u16
+end holder
+
+mut state: holder
+
+public main: () -> (code: i32) =
+    state.tag = 7
+    state.row = [10, 20, 30]
+    state.sibling[0] = 90
+    state.sibling[1] = 91
+    state.tail = 701
+    state.row = [state.row[1], state.row[0], state.row[0] + state.row[1]]
+
+    mut local: holder
+    local.tag = 8
+    local.row = [11, 21, 31]
+    local.sibling[0] = 92
+    local.sibling[1] = 93
+    local.tail = 702
+    local.row = [local.row[1], local.row[0], local.row[0] + local.row[1]]
+
+    if state.tag == 7 and state.row[0] == 20 and state.row[1] == 20
+      and state.row[2] == 40
+      and state.sibling[0] == 90 and state.sibling[1] == 91
+      and state.tail == 701
+      and local.tag == 8 and local.row[0] == 21 and local.row[1] == 21
+      and local.row[2] == 42
+      and local.sibling[0] == 92 and local.sibling[1] == 93
+      and local.tail == 702
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
