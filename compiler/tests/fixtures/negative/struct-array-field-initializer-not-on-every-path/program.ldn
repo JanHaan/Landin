@@ -1,0 +1,11 @@
+holder: type = struct
+    row: [2]u8
+end holder
+
+f: (condition: bool) -> none =
+    mut source: holder
+    if condition then
+        source.row = zeroed
+    end if
+    destination: [2]u8 = source.row
+end f

@@ -1708,6 +1708,72 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Array_Field_Copy_Carries_Both_Endpoint_Fields;
 
+   --  D51 lowers both typed and inferred local initializers from a selected
+   --  array field through D21's Copy_Array.  The source keeps D50's field
+   --  identity and the fresh destination slot remains field zero.
+   procedure Array_Field_Initializer_Carries_Its_Source_Field
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Initializer_Carries_Its_Source_Field
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "end holder" & LF
+         & "state: holder" & LF
+         & "f: () -> none =" & LF
+         & "    module_typed: [2]u32 = state.row" & LF
+         & "    module_inferred := state.row" & LF
+         & "    mut local: holder" & LF
+         & "    local.row = zeroed" & LF
+         & "    local_typed: [2]u32 = local.row" & LF
+         & "    local_inferred := local.row" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "field initializers are accepted, lowered and verified");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := 2;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, Routine), 6,
+            "four copies, one clear and the leave are the instruction run");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, Routine, 1) = IR.Copy_Array
+            and then IR.Source_Of (Unit, Routine, 1).Kind = IR.Module_Datum
+            and then IR.Source_Field_Of (Unit, Routine, 1) = 2
+            and then IR.Element_Field_Of (Unit, Routine, 1) = 0
+            and then IR.Op_Of (Unit, Routine, 2) = IR.Copy_Array
+            and then IR.Source_Field_Of (Unit, Routine, 2) = 2
+            and then IR.Element_Field_Of (Unit, Routine, 2) = 0,
+            "typed and inferred module fields copy into direct slots");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, Routine, 4) = IR.Copy_Array
+            and then IR.Source_Of (Unit, Routine, 4).Kind = IR.Frame_Slot
+            and then IR.Source_Field_Of (Unit, Routine, 4) = 2
+            and then IR.Element_Field_Of (Unit, Routine, 4) = 0
+            and then IR.Op_Of (Unit, Routine, 5) = IR.Copy_Array
+            and then IR.Source_Field_Of (Unit, Routine, 5) = 2
+            and then IR.Element_Field_Of (Unit, Routine, 5) = 0,
+            "typed and inferred frame fields copy into direct slots");
+      end;
+   end Array_Field_Initializer_Carries_Its_Source_Field;
+
    ------------------------------------------------------------------
 
    --  D24: a module array literal folds each element to a Folded value
@@ -2710,6 +2776,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "array field copy carries both fields",
          Array_Field_Copy_Carries_Both_Endpoint_Fields'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "array field initializer carries source field",
+         Array_Field_Initializer_Carries_Its_Source_Field'Access);
       Landin.Testing.Register
         (Into, "lowering", "a module array literal records its image",
          A_Module_Array_Literal_Records_Its_Image'Access);

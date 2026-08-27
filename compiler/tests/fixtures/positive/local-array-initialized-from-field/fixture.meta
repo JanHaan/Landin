@@ -1,0 +1,5 @@
+class: positive
+summary: D51 initializes typed and inferred local arrays from module and local fields
+constructs: 0080, 0110, 0520, 0670, 0750, 1740, 1810, 1820, 1910
+program: program.ldn
+targets: linux-x86-64, macos-arm64

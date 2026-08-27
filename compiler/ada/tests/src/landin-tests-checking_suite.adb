@@ -1735,6 +1735,96 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 6, "six contextual array-field selections were checked");
    end Array_Field_Copy_Uses_Whole_Field_Facts;
 
+   --  D51 gives a selected fixed-array field D21's initializer context for
+   --  a local binding only.  Both written and inferred destinations carry
+   --  the field shape without making the selection a general value.
+   procedure Array_Field_Initializers_Carry_Their_Source_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Initializers_Carry_Their_Source_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "array-field-initializers.ldn",
+         "word: type = u32" & LF
+         & "holder: type = struct" & LF
+         & "    row: [2]word" & LF
+         & "end holder" & LF
+         & "state: holder" & LF
+         & "f: () -> none =" & LF
+         & "    module_typed: [2]word = state.row" & LF
+         & "    module_inferred := state.row" & LF
+         & "    mut local: holder" & LF
+         & "    local.row = zeroed" & LF
+         & "    local_typed: [2]word = local.row" & LF
+         & "    local_inferred := local.row" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "typed and inferred local bindings accept either field source");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Id in Landin.Provenance.Declaration_Id'(1)
+                   .. Landin.Provenance.Declaration_Id
+                        (Landin.Resolution.Declaration_Count (Meanings.all))
+         loop
+            if Landin.Resolution.Sort_Of (Meanings.all, Id)
+                 = Landin.Resolution.Local_Binding
+            then
+               declare
+                  Node : constant Landin.Syntax.Node_Id :=
+                    Landin.Resolution.Node_Of (Meanings.all, Id);
+                  Value : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Value_Of (Of_Tree.all, Node);
+               begin
+                  if Value /= Landin.Syntax.No_Node
+                    and then Landin.Syntax.Kind (Of_Tree.all, Value)
+                               = Landin.Syntax.Member_Selection
+                  then
+                     Seen := Seen + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Type_Of (Types.all, Id)
+                          = Landin.Types.Fixed_Array
+                        and then Landin.Checking.Array_Length
+                          (Types.all, Id) = 2
+                        and then Landin.Checking.Array_Element
+                          (Types.all, Id) = Landin.Types.U32
+                        and then Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Value)
+                            = Landin.Types.Fixed_Array,
+                        "the binding and contextual selection share a shape");
+                  end if;
+               end;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 4, "four local field initializers were checked");
+   end Array_Field_Initializers_Carry_Their_Source_Shape;
+
    --  D18: an array may occupy every byte a target's `usize` can name, and
    --  not one beyond it.  The same 2**32-byte array therefore belongs to a
    --  64-bit target and is refused by a 32-bit one; neither answer comes from
@@ -1935,6 +2025,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array field copy uses whole field facts",
          Array_Field_Copy_Uses_Whole_Field_Facts'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array field initializers carry source shape",
+         Array_Field_Initializers_Carry_Their_Source_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "array extent follows usize",
          Array_Extent_Follows_Usize'Access);

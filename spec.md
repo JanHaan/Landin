@@ -1224,7 +1224,8 @@ present, never by walking an array extent that D18 permits to fill the target.
 
 This kernel admits an array name as a whole value only in this copy context;
 D50 later lets either endpoint be a directly selected fixed-array field. D21
-reuses only the direct-name storage read for local initializers.
+reuses only the direct-name storage read for initializers; D51 later admits a
+directly selected fixed-array field as the source of a local initializer only.
 Parameters, returns, discards, and other general value positions remain refused
 until their own R2.20 or R2.30 slices. No array literal is enabled by this
 decision; D23 later admits one contextual initializer.
@@ -1275,11 +1276,12 @@ distinct storage initialized with the terminal image rather than aliasing
 its source. Nothing runs before the entry point [1460], so no module-level
 copy instruction exists.
 
-Every other array initializer value remains refused: D23 admits one
+Every other array initializer value remains refused: D51 later admits a
+directly selected fixed-array field for a local binding, D23 admits one
 contextual local array literal [0520], D24 admits its module counterpart,
 while an inferred literal, `zeroed` [0540], repetition [0560], a slice
-[0570], a call, and an indexed or selected subexpression are each their
-own later slice. This decision does not
+[0570], a call, and every other indexed or selected subexpression are each
+their own later slice. This decision does not
 enable a general array value or an array as a parameter, return, discard, or
 struct field. A local source is read before the binding's scope begins [0110],
 so a local cannot initialize itself and an outer storage name may be shadowed.
@@ -2870,10 +2872,12 @@ independent, and a branch merge keeps that fact only when every arriving path
 has it.
 
 This is a copy context, not a general array value. A fixed-array field remains
-refused as an initializer source, argument, return, discard, operand, or bare
-read, and as a literal, repetition, or other non-`zeroed`, non-copy assignment
-destination. Whole copies of the containing struct keep D46's refusal, so D50
-does not make the scalar-only `Copy_Field` path consume an array shape.
+refused as a module initializer source, argument, return, discard, operand, or
+bare read, and as a literal, repetition, or other non-`zeroed`, non-copy
+assignment destination. D51 later admits it as a local initializer source
+without changing those positions. Whole copies of the containing struct keep
+D46's refusal, so D50 does not make the scalar-only `Copy_Field` path consume
+an array shape.
 
 Lowering emits one compact `Copy_Array` carrying both root storage identities
 and both field identities, never target offsets, temporaries, or one operation
@@ -2898,11 +2902,13 @@ would have to carry.
 
 **The alternatives:** admit a fixed-array field as a general value, enable
 field-wise copies of the containing struct, initialize storage from a selected
-field, emit one scalar copy per element, put a field component into every
+field in this assignment slice, emit one scalar copy per element, put a field
+component into every
 `Storage`, or introduce a second copy opcode. The first three broaden distinct
 value and static-image rules, the fourth cannot represent every D18 extent, the
 fifth widens unrelated fill endpoints, and the sixth duplicates D20 for two
-identities. All were declined.
+identities. All were declined here; D51 later settles the local-initializer
+rule independently.
 
 **Pinned by** the checker, IR, verifier, lowering, and backend public-seam cases;
 `positive/struct-array-field-copy`;
@@ -2910,7 +2916,69 @@ identities. All were declined.
 `negative/struct-array-field-copy-not-on-every-path`;
 `negative/struct-array-field-copy-shape-mismatch`;
 `negative/immutable-struct-array-field-copy`;
-`negative/struct-array-field-copy-initializer-not-enabled`;
 `negative/struct-array-field-copy-keeps-fields-separate`;
 `negative/struct-array-field-copy-not-enabled`; the recorded IR dump; and
 `runtime/struct-array-field-copy-endpoints` on Linux x86-64.
+
+### D51 — A fixed-array field initializes a local array
+
+**The tour said** that a binding may carry a value [0040], an inferred binding
+takes that value's type [0050], the value is read before the new name exists
+[0110], and assigning an array copies its complete value [0520]. D21 admitted
+both typed and inferred local initializers from a direct array storage name.
+D50 made a directly selected fixed-array field a complete copy source, but kept
+it outside initializer syntax.
+
+**Chosen:** where `s` directly names D46 module state or a D47 local visible at
+the binding and `f` is a fixed array of enabled scalars, a local array binding
+may be initialized from `s.f` in either D21 form. In
+`[mut] name: [N]T = s.f`, the written type must have the field's D17 identity;
+a disagreement is D20's L0301 at the source, related to the binding. In
+`[mut] name := s.f`, the destination takes that length and scalar element type
+exactly. A declaration is not an assignment [0080], so either mutable or
+immutable binding accepts the initializer and the source root need not be
+mutable.
+
+The source is read before the new name enters scope [0110] and as a whole. D10
+makes a module field complete. A local field must be complete on every arriving
+path: D49's clear or a D50 copy supplies its binding-and-field whole fact, while
+D19/D48's sparse facts also suffice when they cover the declared length. An
+internal zero-length field is vacuously complete. The fresh local is completely
+initialized by the copy and, like every local declared with a value, needs no
+later definite-assignment tracking. A refused contextual value owns its report;
+[1940] does not add a static-module-value report after that node is ill typed.
+
+This remains an initializer context rather than a general array value. A
+selected field is still refused as either a typed or inferred module
+initializer, argument, return, discard, operand or bare read. It is not a
+literal or repetition destination; whole copies of the containing struct keep
+D46's refusal; fields of elements, struct-of-struct fields and nested arrays
+remain outside the laid-out kernel.
+
+Lowering emits D21's one compact `Copy_Array` from the containing root storage,
+carrying the field's declaration-order identity as D50's source field, into the
+fresh frame slot at field zero. It emits no target offset, temporary or
+per-element operation. The verifier and backend therefore reuse D50's rules:
+the verifier checks the source field before reading its shape, and x86-64
+register-forms a D18-wide module offset while ordinary frame addresses remain
+bounded by L0504. A zero extent gives the copy a zero byte count.
+
+**Why:** D21's initializer already is D20's copy into fresh local storage, and
+D50 already represents and checks a selected field as that copy's complete
+source. Reusing both preserves D21's typed/inferred symmetry without adding a
+general value position or a new IR operation.
+
+**The alternatives:** admit only the explicitly typed form, admit a module
+initializer from a field, make the field a general value, add a separate
+initializer opcode, or emit one store per element. The first makes D21's two
+spellings needlessly asymmetric; the second needs a new static-image rule for
+subobjects; the third broadens unrelated expression positions; the last two
+duplicate or cannot represent the compact D18 operation. All were declined.
+
+**Pinned by** the checker, lowering and backend public-seam cases;
+`positive/local-array-initialized-from-field`;
+`negative/struct-array-field-initializer-source-unassigned`;
+`negative/struct-array-field-initializer-not-on-every-path`;
+`negative/struct-array-field-initializer-shape-mismatch`;
+`negative/module-array-initializer-from-field-not-enabled`; the recorded IR
+dump; and `runtime/local-array-initializers-from-fields` on Linux x86-64.
