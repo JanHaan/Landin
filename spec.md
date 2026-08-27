@@ -109,13 +109,14 @@ keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
 ### [1770] The kernel's literals are integers, booleans, and contextual zero
 
 The kernel's literals are integers, the two booleans, and `zeroed` in the
-contexts D27, D28, D30 and D39--D41 admit. Integer literals are untyped and take
+contexts D27, D28, D30 and D39--D42 admit. Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
 and the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it
 the all-bits-zero image of its context. D27/D28 supply an explicitly typed module
 or local fixed-array initializer, D30 supplies a fixed-array assignment
 destination, D39/D40 supply an explicitly typed module or local scalar
-initializer respectively, and D41 supplies a mutable scalar assignment
+initializer respectively, D41 supplies a mutable scalar binding assignment, and
+D42 supplies an ordinary scalar field or fixed-array element assignment
 destination. Floats
 [0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
@@ -2334,11 +2335,11 @@ for a module datum. No new IR value, operation, temporary or backend path is
 introduced.
 
 Inferred initialization remains governed by D39/D40 and is refused without a
-written type. Assignment to a scalar struct field, array element or named return
-is not this direct-storage slice. A nested occurrence, argument, return, operand,
-discard and every other general `zeroed` expression remain refused; this rule
-admits only the complete contextual right-hand side of a direct binding
-assignment.
+written type. Assignment to a scalar struct field or fixed-array element is governed separately
+by D42, and assignment to a named return is not this direct-storage slice. A
+nested occurrence, argument, return, operand, discard and every other general
+`zeroed` expression remain refused; this rule admits only the complete contextual
+right-hand side of a direct binding assignment.
 
 **Why assignment:** the mutable destination already owns the scalar type and
 storage the literal needs. Reusing ordinary assignment preserves destination
@@ -2352,7 +2353,58 @@ a contextual form appear to be a general expression. It was declined.
 **Pinned by** the checker and lowering public-seam cases;
 `positive/scalar-zeroed-assignment`;
 `negative/immutable-scalar-zeroed-assignment`,
-`negative/scalar-subobject-zeroed-assignment-not-enabled`,
 `negative/inferred-zeroed-not-enabled`,
 `negative/nested-scalar-zeroed-not-enabled`; and
 `runtime/scalar-zeroed-assignment-clears-values` on Linux x86-64.
+
+### D42 — A scalar subobject assignment destination gives `zeroed` its context
+
+**The tour said** that assignment reaches its destination before evaluating its
+right-hand side [0410], that selection reaches a struct field or fixed-array
+element [0520], that only writable places may be assigned [1900], and that
+`zeroed` takes the all-bits-zero image of its context [0540]. D41 supplied that
+context only for a direct mutable scalar binding.
+
+**Chosen:** `zeroed` may be the complete right-hand side of assignment to an
+ordinary scalar struct field or fixed-array element selected immediately from a
+mutable local slot or module datum. The selected field or element type must
+resolve, through every representable alias, to an enabled scalar type and supplies
+the literal's context. The value is `false` for `bool` and integer zero for every
+enabled integer type.
+
+The ordinary place check runs first, retaining mutability and every invalid-place,
+invalid-selection and invalid-type refusal. The destination and a computed index
+are evaluated exactly once and before the right-hand side. A compiler-known index
+continues to use the existing `Store_Field`; a computed index continues to carry
+its ordinary bounds check into the existing `Store_Element`. The same slot-reaching
+forms serve local storage. No new IR value, operation, temporary or backend path
+is introduced.
+
+Successful completion has the ordinary definite-assignment effect of writing that
+one field or compiler-known element. It neither assigns any sibling field nor the
+array as a whole; a computed element retains the existing per-element facts and
+bounds behavior. A failed or refused assignment establishes nothing.
+
+D41's direct binding assignment remains unchanged. An immutable subobject, a
+selection from an invalid place, a nested subobject destination, and assignment to
+a named return remain outside this slice. Inferred initialization and every
+nested, argument, return, operand, discard or other general `zeroed` expression
+remain refused.
+
+**Why the selected type:** a scalar subobject already owns both the type and the
+storage that the contextual literal needs. Reusing the ordinary place and store
+paths preserves source order, definite assignment and bounds checks without
+turning `zeroed` into a general value.
+
+**The alternative:** infer an independent scalar zero before selecting the field
+or evaluating the index. That would reverse [0410]'s order and bypass the place
+semantics this assignment must preserve. It was declined.
+
+**Pinned by** the checker and lowering public-seam cases;
+`positive/scalar-subobject-zeroed-assignment`;
+`negative/immutable-scalar-zeroed-assignment`,
+`negative/named-return-zeroed-assignment-not-enabled`,
+`negative/inferred-zeroed-not-enabled`, and
+`negative/nested-scalar-zeroed-not-enabled`;
+`runtime/scalar-subobject-zeroed-assignment-clears-values`; and
+`runtime/scalar-subobject-zeroed-computed-index-traps` on Linux x86-64.

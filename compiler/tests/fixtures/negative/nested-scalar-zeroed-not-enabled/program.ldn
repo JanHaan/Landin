@@ -1,1 +1,10 @@
 value: u32 = zeroed + 1
+
+point: type = struct
+    x: u32
+end point
+mut state: point
+
+f: () -> none =
+    state.x = zeroed + 1
+end f

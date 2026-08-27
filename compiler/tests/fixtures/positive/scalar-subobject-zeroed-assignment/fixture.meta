@@ -1,0 +1,5 @@
+class: positive
+summary: D42 gives an ordinary scalar field and fixed-array element zeroed context
+constructs: 0420, 0540, 0570, 0670, 1770, 1900
+program: program.ldn
+targets: linux-x86-64, macos-arm64

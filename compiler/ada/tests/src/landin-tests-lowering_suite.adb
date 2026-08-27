@@ -742,6 +742,98 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Scalar_Zeroed_Assignment_Uses_Ordinary_Stores;
 
+   --  D42 reuses the ordinary subobject store paths.  The selected scalar
+   --  type chooses false or zero; a computed destination index is evaluated
+   --  once and carried to Store_Element before the contextual RHS is formed.
+   procedure Scalar_Subobject_Zeroed_Uses_Ordinary_Stores
+     (Item : in out Landin.Testing.Context);
+
+   procedure Scalar_Subobject_Zeroed_Uses_Ordinary_Stores
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "truth: type = bool" & LF
+         & "flags: type = struct" & LF
+         & "    ready: truth" & LF
+         & "end flags" & LF
+         & "mut state: flags" & LF
+         & "mut row: [2]u32" & LF
+         & "set: (at: usize) -> none =" & LF
+         & "    state.ready = zeroed" & LF
+         & "    row[at] = zeroed" & LF
+         & "end set" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "scalar subobject zeroed assignments lower");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Set_Routine : constant IR.Item_Id := 3;
+         Field_Store, Element_Store : IR.Value_Id := IR.No_Value;
+         First_Index_Load : IR.Value_Id := IR.No_Value;
+         Index_Loads : Natural := 0;
+      begin
+         for V in 1 .. IR.Value_Count (Unit, Set_Routine) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+               Op : constant IR.Opcode :=
+                 IR.Op_Of (Unit, Set_Routine, Value);
+            begin
+               if Op = IR.Store_Field then
+                  Field_Store := Value;
+               elsif Op = IR.Store_Element then
+                  Element_Store := Value;
+               elsif Op = IR.Load then
+                  Index_Loads := Index_Loads + 1;
+                  if First_Index_Load = IR.No_Value then
+                     First_Index_Load := Value;
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            Field_Store /= IR.No_Value
+            and then IR.Op_Of (Unit, Set_Routine, Field_Store - 1) = IR.Truth
+            and then not IR.Truth_Of
+                           (Unit, Set_Routine, Field_Store - 1)
+            and then IR.Nth_Operand
+                       (Unit, Set_Routine, Field_Store, 1) = Field_Store - 1,
+            "typed false feeds the existing Store_Field path");
+         Landin.Testing.Check
+           (Item,
+            Element_Store /= IR.No_Value
+            and then IR.Op_Of
+                       (Unit, Set_Routine,
+                        IR.Nth_Operand (Unit, Set_Routine, Element_Store, 2))
+                     = IR.Number
+            and then IR.Number_Of
+                       (Unit, Set_Routine,
+                        IR.Nth_Operand
+                          (Unit, Set_Routine, Element_Store, 2)) = 0,
+            "typed integer zero feeds the existing Store_Element path");
+         Landin.Testing.Check
+           (Item, Index_Loads = 2,
+            "the destination index is evaluated once and carried once");
+         Landin.Testing.Check
+           (Item,
+            First_Index_Load /= IR.No_Value
+            and then First_Index_Load
+              < IR.Nth_Operand (Unit, Set_Routine, Element_Store, 2),
+            "the destination index evaluation precedes the zero RHS");
+         Check_Terminators (Item, Unit, "scalar subobject zeroed assignments");
+      end;
+   end Scalar_Subobject_Zeroed_Uses_Ordinary_Stores;
+
    ------------------------------------------------------------------
 
    --  R2.20: a direct-name initial image does not alias its source.  Each
@@ -2115,6 +2207,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "scalar zeroed assignment uses ordinary stores",
          Scalar_Zeroed_Assignment_Uses_Ordinary_Stores'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "subobject zeroed uses ordinary stores",
+         Scalar_Subobject_Zeroed_Uses_Ordinary_Stores'Access);
       Landin.Testing.Register
         (Into, "lowering", "module array images keep distinct datums",
          Module_Array_Images_Keep_Distinct_Datums'Access);

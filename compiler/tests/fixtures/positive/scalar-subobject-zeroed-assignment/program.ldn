@@ -1,0 +1,22 @@
+point: type = struct
+    x: u32
+end point
+mut state: point
+mut row: [1]u32
+
+f: () -> none =
+    state.x = zeroed
+    row[0] = zeroed
+end f
+
+local_field: () -> (result: u32) =
+    mut local: point
+    local.x = zeroed
+    result = local.x
+end local_field
+
+local_element: () -> (result: u32) =
+    mut local: [1]u32
+    local[0] = zeroed
+    result = local[0]
+end local_element
