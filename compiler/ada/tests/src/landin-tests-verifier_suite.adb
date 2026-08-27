@@ -166,6 +166,9 @@ package body Landin.Tests.Verifier_Suite is
       Array_Copy_Elements_Disagree,
       Array_Copy_Slot_Is_Not_Owned,
       Array_Copy_Inside_A_Datum,
+      Array_Clear_Destination_Is_Scalar,
+      Array_Clear_Slot_Is_Not_Owned,
+      Array_Clear_Inside_A_Datum,
       Condition_Is_A_Number,
       Call_Missing_An_Argument,
       Unreachable_Block,
@@ -450,6 +453,32 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, E, IR.No_Value, Site);
             IR.Leave_Block (Unit, E);
 
+         when Array_Clear_Destination_Is_Scalar =>
+            IR.Emit_Array_Clear
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => S), Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Clear_Slot_Is_Not_Owned =>
+            IR.Emit_Array_Clear
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => 5), Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Clear_Inside_A_Datum =>
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+            B := IR.Add_Block
+              (Unit, E, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, E, B);
+            IR.Emit_Array_Clear
+              (Unit, E, (Kind => IR.Module_Datum, Datum => E), Site);
+            IR.Emit_Leave (Unit, E, IR.No_Value, Site);
+            IR.Leave_Block (Unit, E);
+
          when Condition_Is_A_Number =>
             C := IR.Add_Block
                    (Unit, A, Landin.Resolution.Program_Scope, Site);
@@ -536,11 +565,15 @@ package body Landin.Tests.Verifier_Suite is
          (Slot_Element_Store_Of_The_Wrong_Type,
           V.Store_Datum_Disagrees),
          (Array_Copy_Endpoint_Is_Scalar,
-          V.Array_Copy_Endpoint_Is_Not_An_Array),
+          V.Array_Storage_Is_Not_An_Array),
          (Array_Copy_Lengths_Disagree, V.Array_Copy_Shapes_Disagree),
          (Array_Copy_Elements_Disagree, V.Array_Copy_Shapes_Disagree),
          (Array_Copy_Slot_Is_Not_Owned, V.Slot_Out_Of_Range),
          (Array_Copy_Inside_A_Datum, V.Array_Copy_Inside_A_Datum),
+         (Array_Clear_Destination_Is_Scalar,
+          V.Array_Storage_Is_Not_An_Array),
+         (Array_Clear_Slot_Is_Not_Owned, V.Slot_Out_Of_Range),
+         (Array_Clear_Inside_A_Datum, V.Array_Clear_Inside_A_Datum),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
          (Call_Missing_An_Argument,   V.Wrong_Operand_Count),
          (Unreachable_Block,          V.Block_Unreachable),

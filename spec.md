@@ -108,12 +108,13 @@ keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
 
 ### [1770] The kernel's literals are integers, booleans, and contextual zero
 
-The kernel's literals are integers, the two booleans, and `zeroed` in the one
-context D27 admits. Integer literals are untyped and take the type of their
-context [0190], defaulting to i32 with none [0200]; the bases and the separator
-are [0220]'s. `zeroed` has no type of its own: [0540] gives it the all-bits-zero
-image of its context, and D27 currently supplies that context only for an
-explicitly typed module fixed-array initializer. Floats [0210], characters
+The kernel's literals are integers, the two booleans, and `zeroed` in the
+contexts D27 and D28 admit. Integer literals are untyped and take the type of
+their context [0190], defaulting to i32 with none [0200]; the bases and the
+separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it the
+all-bits-zero image of its context, and D27/D28 currently supply that context
+only for an explicitly typed module or local fixed-array initializer. Floats
+[0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
 not enabled yet.
 ```landin-grammar
@@ -1641,8 +1642,54 @@ rules; the second has no source fact from which to derive either `N` or `T`.
 Both were declined.
 
 **Pinned by** `positive/module-array-zeroed-initializer`,
-`negative/local-array-zeroed-not-enabled`,
 `negative/inferred-zeroed-not-enabled`,
 `negative/array-zeroed-assignment-not-enabled`,
 `negative/scalar-zeroed-not-enabled`, and
 `runtime/module-array-zeroed-reads-zero` on Linux x86-64.
+
+### D28 — A local zero image is one runtime storage operation
+
+**The tour said** that `zeroed` denotes all-bits-zero when that image is valid
+for its context [0540], that a fixed array is zeroable exactly when its element
+is [0520], and that a local binding may carry an initializer [1810]. D27 supplied
+one static module context but deliberately introduced no runtime operation, so
+it did not say how a local array obtains the same image.
+
+**Chosen:** `zeroed` directly initializes an explicitly typed local fixed-array
+binding: `[mut] name: [N]T = zeroed`. The written D17 shape is its context. Every
+scalar element the kernel currently admits has an all-bits-zero image, so one
+runtime storage operation clears the complete compact frame slot. The operation
+carries the destination identity, never one entry per element; its byte extent
+is derived from the target's width for `T`. The initialized local is assigned as
+a whole, so D22 permits a later compiler-known or computed index read.
+
+Lowering records one target-neutral `Clear_Array` instruction with no operands
+and no result. The Linux x86-64 backend forms the slot address, takes the target
+byte extent, and emits one forward `rep stosb` clear. Compiler work and IR size
+therefore remain independent of the target-sized length D18 admits, and no
+array-valued temporary or hidden zero datum exists.
+
+This remains one contextual initializer. It does not infer a shape for
+`name := zeroed`, assign an existing array, initialize a scalar, or admit
+`zeroed` as an argument, return, discard, or general expression. Module arrays
+continue to use D27's absent static image rather than this runtime instruction.
+Repetition [0560], slices [0570], empty literals, non-scalar array elements,
+parameters, and returns remain outside this slice.
+
+**Why one storage operation:** lowering one store per element would make compiler
+work and IR size proportional to an extent deliberately permitted to approach
+the target address space. Copying a synthesized zero array would instead invent
+storage and a source the program never declared. A destination-only clear says
+exactly what [0540] requires and leaves representation to the target backend.
+
+**The alternative:** treat `zeroed` as a scalar expression repeated `N` times,
+or enable it in assignment at the same time. The first imposes host enumeration
+and invents source-order evaluation where there is none; the second broadens the
+place/value boundary beyond fresh initialization and needs its own definite-
+assignment and evaluation decision. Both were declined.
+
+**Pinned by** `positive/local-array-zeroed-initializer`,
+`negative/inferred-zeroed-not-enabled`,
+`negative/array-zeroed-assignment-not-enabled`,
+`negative/scalar-zeroed-not-enabled`, and
+`runtime/local-array-zeroed-reads-zero` on Linux x86-64.

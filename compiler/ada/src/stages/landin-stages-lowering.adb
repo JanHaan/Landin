@@ -1134,6 +1134,18 @@ package body Landin.Stages.Lowering is
                                        Scope),
                                     Site);
                               end loop;
+                           elsif Syn.Kind (Of_Tree, Value)
+                                   = Syn.Zeroed_Literal
+                           then
+                              --  D28: clear the complete compact slot at
+                              --  runtime with one extent-independent
+                              --  operation.
+                              IR.Emit_Array_Clear
+                                (Unit.all, Filling,
+                                 Destination =>
+                                   IR.Storage'
+                                     (Kind => IR.Frame_Slot, Slot => Where),
+                                 Site        => Site);
                            else
                               --  D21: the initializer copies a whole array
                               --  from a storage name into this fresh local

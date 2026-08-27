@@ -1,3 +1,0 @@
-f: () -> none =
-    row: [4]u32 = zeroed
-end f

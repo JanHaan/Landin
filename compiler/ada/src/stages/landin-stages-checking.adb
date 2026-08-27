@@ -552,6 +552,17 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Zeroed_Literal;
+            --  D28 uses the same contextual image for an explicitly typed
+            --  local, whose complete compact frame slot lowering clears at
+            --  runtime rather than enumerating D18's target-sized extent.
+            Is_Local_Zeroed_Init : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Written /= Syn.No_Node
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Zeroed_Literal;
          begin
             --  [1795] declares the type; most *values* of one wait for the
             --  rest of R2.20.  A declaration-only module array is zeroed by
@@ -567,6 +578,7 @@ package body Landin.Stages.Checking is
               and then not Is_Local_Literal_Init
               and then not Is_Module_Literal_Init
               and then not Is_Module_Zeroed_Init
+              and then not Is_Local_Zeroed_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided

@@ -197,9 +197,12 @@ package Landin.IR is
       --  does: which is which is Reaches_A_Slot's answer.
       Load_Element,
       Store_Element,
-      --  One whole [0520] array copied between two storage places.  The
-      --  endpoints carry identities, never one entry per element.
+      --  One whole [0520] array copied between two storage places, or
+      --  cleared in one place for [0540].  Storage carries identities,
+      --  never one entry per element, so either remains compact for D18's
+      --  target-sized extent.
       Copy_Array,
+      Clear_Array,
       --  [0370]'s measurements.  The type they ask about is carried, not
       --  the answer: a size needs a width and a width needs a target, so
       --  the answer belongs to whoever has one.  This is the same seam
@@ -260,7 +263,7 @@ package Landin.IR is
    --  instruction's own Result answers that and an opcode cannot.
    function Defines_Nothing (Of_Code : Opcode) return Boolean
      is (Of_Code in Store | Store_Datum | Store_Field | Store_Element
-                    | Copy_Array | Terminator_Kind);
+                    | Copy_Array | Clear_Array | Terminator_Kind);
 
    ------------------------------------------------------------------
    --  Identities
@@ -897,7 +900,8 @@ package Landin.IR is
    function Destination_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Copy_Array | Clear_Array;
 
    --  Which part of that base, by [0750]'s order for a struct and by
    --  [0520]'s for an array.
@@ -1201,6 +1205,14 @@ package Landin.IR is
      (Into       : in out Unit;
       Item       : Item_Id;
       Source     : Storage;
+      Destination : Storage;
+      Site       : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   procedure Emit_Array_Clear
+     (Into       : in out Unit;
+      Item       : Item_Id;
       Destination : Storage;
       Site       : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
