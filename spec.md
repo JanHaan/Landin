@@ -1338,7 +1338,8 @@ declaration, so their computed reads meet no assignment requirement and
 their computed writes still assign nothing tracked. Every other refused
 value form — an inferred initializer not sourced by a direct storage name, a
 slice, `zeroed`, repetition, an array literal outside D23's one context,
-`lenof`, or a runtime value of D45's array-field struct — stays refused.
+`lenof`, a local or whole value of D46's array-field struct, or its array field
+as a value or nested place — stays refused.
 
 **Why:** treating one computed write as a whole assignment would admit
 uninitialized reads from every other position, exactly the failure D19
@@ -2551,3 +2552,69 @@ cases; `positive/measurement-of-struct-array-fields`;
 `negative/struct-array-field-layout-overflow`; the reworked one-report
 `negative/struct-with-an-array-field`; the recorded IR dump; and
 `runtime/measurements-answer-for-the-target` on Linux x86-64.
+
+### D46 — An array-field struct may be zeroed module state
+
+**The tour said** that an array is a value whose size is part of its type
+[0520], that all-zero is a valid image for an aggregate of zero-image parts
+[0540], that a struct has its declared fields [0670], that those fields keep
+their order and target padding [0750], and that a module is a set of
+declarations [1740]. D45 gave the checker a complete layout for a named ordinary
+struct with fixed-scalar-array fields, but deliberately left every runtime
+storage and value context refused.
+
+**Chosen:** a declaration-only module binding may have a type that resolves,
+directly or through aliases, to a named ordinary laid-out struct whose fields
+are enabled scalars or fixed arrays of enabled scalars. D10 supplies the whole
+object's all-zero image, so neither the array length nor the number of fields is
+expanded into initializer work. Module state has no local definite-assignment
+fact to establish: its scalar fields read as zero from declaration and ordinary
+mutable scalar fields may be assigned, including a scalar sibling after an
+array field.
+
+This admits the containing storage, not the array field as a value or nested
+place. Selecting that field, including as the base of an index, reports L0304
+once at the selection; the enclosing index inherits the ill-typed result. A
+local declaration of the same struct also reports L0304, because the frame's
+aggregate-slot representation remains scalar-field-only. An initializer, whole
+read or copy, parameter, return and every other whole-value context remain
+refused. Struct fields of struct type and other nested aggregate composition
+remain outside D45 and therefore outside this decision. D17's internal
+zero-length field rule is unchanged, and source `[0]T` legality remains
+undecided.
+
+Lowering records the module datum as one declaration-order run of neutral field
+shapes. A scalar shape has canonical length one; a fixed-array shape carries one
+scalar element and one count. This is the same representation-independent
+shape D45 measurement IR uses, but item and measurement runs remain distinct so
+one cannot be mistaken for the other. The verifier rejects a noncanonical
+scalar shape and rejects a scalar `Load_Field` or `Store_Field` aimed at an
+array shape. No target offset, byte size, alignment or expanded element run is
+put into IR.
+
+The backend replays those shapes through the same target placement used for
+measurement and reserves the complete padded object in zeroed storage. Scalar
+field operations use the resulting target offset. On x86-64, a nonzero offset
+in any aggregate containing an array field is formed from the symbol address
+and a full-width register constant, so D18-sized fields cannot create an
+unencodable symbol-plus-displacement relocation.
+
+**Why module state first:** it already has D10's complete image and needs only
+one compact datum description. Enabling the same type in a frame would require
+the slot representation and nested-place operations to describe the array;
+enabling a whole value would additionally settle copies, initialization,
+parameters and returns. Keeping those separate makes this slice executable
+without implying any of them.
+
+**The alternatives:** flatten the array into one scalar item field per element,
+or admit array shapes in every aggregate slot and field operation at once. The
+first cannot represent D18's enabled lengths, and the second couples storage,
+nested-place and whole-value decisions that have different invariants, so both
+were declined.
+
+**Pinned by** the checker, lowering, verifier and backend public-seam cases;
+`positive/struct-array-field-module-state`;
+`negative/struct-with-an-array-field`;
+`negative/struct-array-field-selection-not-enabled`;
+`negative/struct-array-field-whole-copy-not-enabled`; the recorded IR dump; and
+`runtime/struct-array-field-state-scalar-siblings` on Linux x86-64.
