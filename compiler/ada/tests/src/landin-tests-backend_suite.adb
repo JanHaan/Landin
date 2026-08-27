@@ -1410,8 +1410,9 @@ package body Landin.Tests.Backend_Suite is
    --  D24: an array datum whose value is a literal reaches `.data` with
    --  one directive per element at the element's own alignment, while a
    --  chain terminating at D10 zero stays in `.bss` beside the other
-   --  reserved storage.  The four u32 image is sixteen bytes at four-byte
-   --  alignment, and each position is spelled with its folded value.
+   --  reserved storage, as does D27's explicitly `zeroed` array.  The four
+   --  u32 image is sixteen bytes at four-byte alignment, and each position
+   --  is spelled with its folded value.
    procedure A_Module_Array_Literal_Becomes_Data_Image
      (Item : in out Landin.Testing.Context);
 
@@ -1426,7 +1427,8 @@ package body Landin.Tests.Backend_Suite is
         (Work,
          "mut numbers: [4]u32 = [10, 20 + 1, base, base + 100]" & LF
          & "base: u32 = 100" & LF
-         & "mut zeroed: [2]u16" & LF,
+         & "mut reserved: [2]u16" & LF
+         & "mut cleared: [3]bool = zeroed" & LF,
          Ran);
 
       Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
@@ -1458,9 +1460,16 @@ package body Landin.Tests.Backend_Suite is
             Contains (Text, HT & ".bss" & LF)
               and then Contains
                          (Text,
-                          "zeroed:" & LF
+                          "reserved:" & LF
                           & HT & ".zero 4" & LF),
             "an omitted-initializer array stays reserved storage");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text,
+               "cleared:" & LF
+               & HT & ".zero 3" & LF),
+            "an explicitly zeroed array stays reserved storage");
          Landin.Testing.Check
            (Item,
             Index (Text, HT & ".data" & LF)

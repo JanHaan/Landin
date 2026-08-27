@@ -89,7 +89,7 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves twenty-one words; the reserved set of the whole language is
+reserves twenty-two words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
@@ -102,20 +102,22 @@ digit       ::= "0" ... "9"
 keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
               | "end" | "return" | "when" | "inc" | "dec" | "none"
               | "true" | "false" | "and" | "or" | "not"
-              | "sizeof" | "alignof" | "type" | "struct"
+              | "sizeof" | "alignof" | "type" | "struct" | "zeroed"
 
 ```
 
-### [1770] The kernel's literals are integers and the two booleans
+### [1770] The kernel's literals are integers, booleans, and contextual zero
 
-The kernel's literals are integers and the two booleans.
-Integer literals are untyped and take the type of their context
-[0190], defaulting to i32 with none [0200]; the bases and the
-separator are [0220]'s. Floats [0210], characters [0250], text
-[0260] and raw literals [0280] are described in this tour and are
+The kernel's literals are integers, the two booleans, and `zeroed` in the one
+context D27 admits. Integer literals are untyped and take the type of their
+context [0190], defaulting to i32 with none [0200]; the bases and the separator
+are [0220]'s. `zeroed` has no type of its own: [0540] gives it the all-bits-zero
+image of its context, and D27 currently supplies that context only for an
+explicitly typed module fixed-array initializer. Floats [0210], characters
+[0250], text [0260] and raw literals [0280] are described in this tour and are
 not enabled yet.
 ```landin-grammar
-literal     ::= integer | "true" | "false"
+literal     ::= integer | "true" | "false" | "zeroed"
 integer     ::= decimal | hex | octal | binary
 decimal     ::= digit (digit | "_")*
 hex         ::= "0x" hex_digit (hex_digit | "_")*
@@ -1600,3 +1602,47 @@ declined.
 `negative/module-array-literal-inferred-boundaries`,
 `negative/module-array-literal-inferred-fold`, and
 `runtime/module-array-literal-infers-static-image` on Linux x86-64.
+
+### D27 — An explicitly typed module array may spell its zero image
+
+**The tour said** that `zeroed` denotes all-bits-zero when that image is valid
+for its context [0540], that a fixed array is zeroable exactly when its element
+is [0520], and that every module value is known when the compiler reads it
+[1940]. D10 already gives an omitted module initializer that image, but did not
+say where a program may request it explicitly while array values are enabled a
+slice at a time.
+
+**Chosen:** `zeroed` directly initializes an explicitly typed module fixed-array
+binding: `[mut] name: [N]T = zeroed`. The written D17 shape is its context. Every
+scalar element type the kernel currently admits has an all-bits-zero image, so
+the complete array has one without enumerating its `N` positions. Lowering
+records no finite datum image, exactly as for D10's omitted initializer; the
+backend therefore reserves the distinct module storage in `.bss`. A D21 direct
+name chain may copy this terminal zero image while retaining one storage object
+per declaration.
+
+This is a contextual initializer, not an array-valued expression or a runtime
+operation. It does not infer a type for `name := zeroed`, initialize a local,
+assign an existing array, or initialize a scalar. It introduces no IR opcode,
+temporary, startup copy, or source-order element evaluation. Repetition [0560],
+slices [0570], empty literals, non-scalar array elements, parameters, returns,
+arguments, and general whole-array value positions remain outside this slice.
+
+**Why preserve the absent image:** materializing `N` zero values would make host
+work and IR size depend on D18's target-sized extent and would emit bytes for a
+value the object format can reserve without storing. The absence already means
+exactly this image for D10, keeps zero storage in `.bss`, and remains distinct
+from D24/D26's finite literal image.
+
+**The alternative:** treat `zeroed` as a generally typed value, or infer an
+array shape from it. The first would silently admit local initialization,
+assignment, parameters, and other value positions that need their own runtime
+rules; the second has no source fact from which to derive either `N` or `T`.
+Both were declined.
+
+**Pinned by** `positive/module-array-zeroed-initializer`,
+`negative/local-array-zeroed-not-enabled`,
+`negative/inferred-zeroed-not-enabled`,
+`negative/array-zeroed-assignment-not-enabled`,
+`negative/scalar-zeroed-not-enabled`, and
+`runtime/module-array-zeroed-reads-zero` on Linux x86-64.

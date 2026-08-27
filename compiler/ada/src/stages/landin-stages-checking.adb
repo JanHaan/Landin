@@ -541,6 +541,17 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Array_Literal;
+            --  D27: every scalar element this kernel admits has one all-zero
+            --  image, so an explicitly typed module array can use [0540]
+            --  without recording a per-position static image.
+            Is_Module_Zeroed_Init : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then not Is_Local_Binding (Of_Tree, Node)
+              and then Written /= Syn.No_Node
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Zeroed_Literal;
          begin
             --  [1795] declares the type; most *values* of one wait for the
             --  rest of R2.20.  A declaration-only module array is zeroed by
@@ -555,6 +566,7 @@ package body Landin.Stages.Checking is
               and then not Is_Direct_Name_Init
               and then not Is_Local_Literal_Init
               and then not Is_Module_Literal_Init
+              and then not Is_Module_Zeroed_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -565,9 +577,22 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
-                     Message => "a value of an array type is not enabled"
-                                & " yet",
-                     Refused => Bad.Array_Value,
+                     Message =>
+                       (if Syn.Kind (Of_Tree, Node) = Syn.Binding
+                           and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+                           and then Syn.Kind
+                                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                                    = Syn.Zeroed_Literal
+                        then "`zeroed` is not enabled for a local array"
+                        else "a value of an array type is not enabled yet"),
+                     Refused =>
+                       (if Syn.Kind (Of_Tree, Node) = Syn.Binding
+                           and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+                           and then Syn.Kind
+                                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                                    = Syn.Zeroed_Literal
+                        then Bad.Zeroed_Value
+                        else Bad.Array_Value),
                      Into    => Found);
                end if;
 
@@ -1293,6 +1318,16 @@ package body Landin.Stages.Checking is
             when Syn.True_Literal | Syn.False_Literal =>
                return Kept (Ty.Bool);
 
+            when Syn.Zeroed_Literal =>
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "`zeroed` needs an explicitly typed module array",
+                  Refused => Bad.Zeroed_Value,
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
+
             --  D14: a measurement is a `usize`.  The type it asks about
             --  is recorded on its own node, because the lowering reads it
             --  from there and a type name is not an expression that would
@@ -1995,7 +2030,21 @@ package body Landin.Stages.Checking is
                         Written : constant Syn.Node_Id :=
                           Syn.Declared_Type (Of_Tree, Node);
                      begin
-                        if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+                        if Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
+                        then
+                           --  D27: this contextual literal denotes the absent
+                           --  static image.  Its written array type supplies
+                           --  the shape without making `zeroed` a value that
+                           --  can appear in any other expression position.
+                           Landin.Checking.Note
+                             (Types.all, Of_Tree, Value, Ty.Fixed_Array);
+                           Landin.Checking.Note_Array
+                             (Types.all, Of_Tree, Value,
+                              Landin.Checking.Array_Length
+                                (Types.all, Of_Tree, Written),
+                              Landin.Checking.Array_Element
+                                (Types.all, Of_Tree, Written));
+                        elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
                         then
                            --  D23 for a local, D24 for a module binding:
                            --  the written array type supplies the exact
@@ -2560,15 +2609,17 @@ package body Landin.Stages.Checking is
          Image_States (Id) := Visiting;
 
          --  An omitted initializer is D10's zero image; D24 admits a
-         --  literal terminal image on the same terms.  Refused or
-         --  mismatched initializer forms are left to their existing
+         --  literal terminal image and D27 spells the zero image explicitly.
+         --  Refused or mismatched initializer forms are left to their existing
          --  diagnostics rather than producing graph fallout.
          if Value = Syn.No_Node then
             Image_States (Id) := Valid;
             return True;
          end if;
 
-         if Syn.Kind (Of_Tree.all, Value) = Syn.Array_Literal then
+         if Syn.Kind (Of_Tree.all, Value)
+              in Syn.Array_Literal | Syn.Zeroed_Literal
+         then
             Image_States (Id) := Valid;
             return True;
          end if;

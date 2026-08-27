@@ -1,0 +1,2 @@
+numbers: [4]u32 = zeroed
+mut flags: [3]bool = zeroed

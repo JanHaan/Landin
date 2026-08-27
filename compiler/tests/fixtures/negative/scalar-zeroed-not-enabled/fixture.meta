@@ -1,0 +1,6 @@
+class: negative
+summary: this zeroed slice accepts only an explicitly typed module fixed array
+constructs: 0040, 0190, 0540, 1740, 1760, 1770
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64
