@@ -2542,18 +2542,35 @@ kinds, immediate order, one suffix value, `First` and absence of a hidden slot.
 A positive fixture pins both destination kinds and whole-destination assignment;
 focused negatives pin mutability, prefix and suffix types, `k < N`, and incoming
 state; the Linux x86-64 runtime fixture pins prefix visibility and exactly-once
-suffix evaluation for both storage kinds. Typed module initialization, inferred
-initialization, nested and general-value mixed forms remain refused.
+suffix evaluation for both storage kinds. Typed module initialization remained separate for D38; inferred initialization,
+nested and general-value mixed forms remain refused.
+
+D38 admits `[e1, ..., ek, of repeated]` for an explicitly typed module fixed
+array `[N]T`, with `1 <= k < N`. Every prefix and suffix expression takes the
+written scalar context and must be [1940] static-known under the selected target;
+each target-aware fold must fit `T`. Lowering records one compact hybrid image:
+the finite prefix followed by one repeated suffix value and the declared shape.
+IR, verification, dumping, direct-name image copying and Linux x86-64 emission
+never expand `N - k`. A zero suffix remains a present `.data` hybrid and emits a
+compact zero directive after its prefix, while D34's full zero repetition remains
+an absent image in `.bss`. The backend emits width-matched prefix directives and
+then `.rept N - k` around one suffix directive, preserving complete 64-bit
+patterns. Public checker, IR, verifier, lowering and backend cases pin the
+boundary; a target-sized positive fixture pins compact through-name copying;
+focused negatives pin prefix and suffix staticness and target fold range; and the
+Linux x86-64 runtime fixture reads every enabled width, a zero suffix, a full
+zero image and a through-name hybrid. Inferred initialization, nested and
+general-value mixed forms remain refused.
 
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D35's
 counted inferred local and module repetition, D34's explicitly typed local and
-module repetition and D36's explicitly typed local mixed repetition; array
-assignments other than D20's direct storage name, D29's literal, D30's `zeroed`,
-D32's repetition and D37's mixed-prefix repetition; general whole-array value
-positions; inferred, scalar and every other `zeroed` [0540] context; module
-initialization, inferred initialization, nested and general-value mixed-prefix
+module repetition and D36/D38's explicitly typed local and module mixed
+repetition; array assignments other than D20's direct storage name, D29's literal,
+D30's `zeroed`, D32's repetition and D37's mixed-prefix repetition; general
+whole-array value positions; inferred, scalar and every other `zeroed` [0540]
+context; inferred initialization, nested and general-value mixed-prefix
 repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`

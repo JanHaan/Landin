@@ -622,21 +622,25 @@ end read_header
 
 ```
 The repeated expression runs once, not once for every element. In the mixed form
-`[e1, ..., ek, of repeated]`, an explicitly typed local or assignment to a
-mutable fixed array requires `1 <= k < N`, evaluates and stores the prefix left
-to right, then evaluates `repeated` once and compactly fills the suffix. An
-assignment reaches its destination first; all right-hand reads use the incoming
-definite-assignment state, and successful completion assigns the whole array.
-Module initialization, inference, nesting and general-value mixed forms remain
-refused. `of` stays contextual: `[of, other, of]` and
-`[of + 1]` remain ordinary literals when `of` names a binding. A nonzero written
-fixed-array type accepts either full-array form for module state or a local; at module scope
-the expression must be a compile-time known scalar [1940]. A counted repetition
+`[e1, ..., ek, of repeated]`, an explicitly typed local, explicitly typed module
+binding or assignment to a mutable fixed array requires `1 <= k < N`. A local or
+assignment evaluates and stores the prefix left to right, then evaluates
+`repeated` once and compactly fills the suffix. An assignment reaches its
+destination first; all right-hand reads use the incoming definite-assignment
+state, and successful completion assigns the whole array. A module initializer
+requires every prefix and suffix expression to be compile-time known [1940] and
+keeps a compact static image: the finite prefix plus one repeated suffix pattern.
+Inference, nesting and general-value mixed forms remain refused. `of` stays
+contextual: `[of, other, of]` and `[of + 1]` remain ordinary literals when `of`
+names a binding. A nonzero written fixed-array type accepts either full-array
+form for module state or a local; at module scope the expression must be a
+compile-time known scalar [1940]. A counted repetition
 may also supply an inferred local or module binding's length and scalar element
 type; an untyped integer element defaults to `i32`. Assignment to an existing
 fixed array accepts an explicit count or takes it from the destination:
 ```landin
 flash: [4]u32 = [of 0xFFFF_FFFF]
+header_image: [8]u8 = [0x7F, 0x45, of 0]
 mut row: [4]u32 = [of next()]
 inferred := [4 of next()]
 row = [of next()]                 -- each call to next happens once

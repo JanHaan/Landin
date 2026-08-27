@@ -1,0 +1,5 @@
+class: positive
+summary: typed module mixed repetitions keep compact prefix and suffix images
+constructs: 0040, 0050, 0300, 0520, 0560, 1740, 1810, 1940
+targets: linux-x86-64, macos-arm64
+program: program.ldn

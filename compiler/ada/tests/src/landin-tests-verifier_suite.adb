@@ -744,6 +744,43 @@ package body Landin.Tests.Verifier_Suite is
             end if;
          end;
       end loop;
+
+      --  D38 checks the finite prefix and one suffix pattern, not every
+      --  position in a target-sized declared extent.
+      for Bad_Prefix in Boolean loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Site : Landin.Provenance.Origin;
+            Unit : IR.Unit;
+            Datum : IR.Item_Id;
+            Block : IR.Block_Id;
+            Result : V.Fault;
+         begin
+            Ready (Work, Site);
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Datum := IR.Add_Item
+              (Unit, IR.Datum, 1, Landin.Types.Fixed_Array, Site);
+            IR.Set_Array
+              (Unit, Datum, Landin.Types.U8, IR.Element_Total'Last);
+            IR.Set_Hybrid_Array_Image
+              (Unit, Datum,
+               Landin.Types.Folded_Array'
+                 (1 => (if Bad_Prefix then 300 else 1)),
+               (if Bad_Prefix then 2 else 300));
+            Block := IR.Add_Block
+              (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Datum, Block);
+            IR.Emit_Leave (Unit, Datum, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Datum);
+
+            Result := V.Check (Unit, Landin.Targets.Linux_X86_64);
+            Landin.Testing.Check
+              (Item, Result.Kind = V.Array_Image_Value_Does_Not_Fit,
+               (if Bad_Prefix then "bad hybrid prefix is rejected"
+                else "bad hybrid suffix is rejected"));
+         end;
+      end loop;
    end Malformed_Image_Values_Are_Rejected;
 
    --  D24: an image run has to partition the shared vector alongside

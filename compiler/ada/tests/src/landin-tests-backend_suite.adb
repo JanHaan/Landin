@@ -1675,7 +1675,12 @@ package body Landin.Tests.Backend_Suite is
          & "mut longs: [5]u32 = [of 305419896]" & LF
          & "mut quads: [6]u64 = [of 0x123456789ABCDEF0]" & LF
          & "mut huge: [4294967295]u8 = [of 1]" & LF
-         & "mut zero: [7]u64 = [of 0]" & LF,
+         & "mut zero: [7]u64 = [of 0]" & LF
+         & "mut hybrid: [4294967295]u8 = [1, 2, of 3]" & LF
+         & "mut hybrid_zero: [4]u32 = [7, of 0]" & LF
+         & "mut hybrid_quad: [4]u64 = [0x123456789ABCDEF0,"
+         & " of 0xFEDCBA9876543210]" & LF
+         & "mut hybrid_through: [4]u64 = hybrid_quad" & LF,
          Ran);
 
       Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
@@ -1707,6 +1712,36 @@ package body Landin.Tests.Backend_Suite is
               (Text, "huge:" & LF & HT & ".rept 4294967295" & LF
                      & HT & ".byte 1" & LF & HT & ".endr" & LF),
             "a target-sized extent does not enlarge the assembly text");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, "hybrid:" & LF & HT & ".byte 1" & LF
+                     & HT & ".byte 2" & LF
+                     & HT & ".rept 4294967293" & LF
+                     & HT & ".byte 3" & LF & HT & ".endr" & LF),
+            "a target-sized hybrid emits its prefix and one compact suffix");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, "hybrid_zero:" & LF & HT & ".long 7" & LF
+                     & HT & ".rept 3" & LF & HT & ".long 0" & LF
+                     & HT & ".endr" & LF),
+            "a zero suffix remains a present data image");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, "hybrid_quad:" & LF
+                     & HT & ".quad 1311768467463790320" & LF
+                     & HT & ".rept 3" & LF
+                     & HT & ".quad 18364758544493064720" & LF
+                     & HT & ".endr" & LF)
+            and then Contains
+              (Text, "hybrid_through:" & LF
+                     & HT & ".quad 1311768467463790320" & LF
+                     & HT & ".rept 3" & LF
+                     & HT & ".quad 18364758544493064720" & LF
+                     & HT & ".endr" & LF),
+            "hybrid chains preserve every byte of 64-bit prefix and suffix");
          Landin.Testing.Check
            (Item,
             Contains (Text, "zero:" & LF & HT & ".zero 56" & LF),

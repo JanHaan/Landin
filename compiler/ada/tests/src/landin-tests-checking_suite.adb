@@ -836,10 +836,10 @@ package body Landin.Tests.Checking_Suite is
 
    --  D36: only an explicitly typed local supplies the complete shape for a
    --  nonempty literal prefix followed by one repeated suffix expression.
-   procedure Mixed_Repetition_Takes_Its_Local_Written_Shape
+   procedure Mixed_Repetition_Takes_Its_Typed_Written_Shape
      (Item : in out Landin.Testing.Context);
 
-   procedure Mixed_Repetition_Takes_Its_Local_Written_Shape
+   procedure Mixed_Repetition_Takes_Its_Typed_Written_Shape
      (Item : in out Landin.Testing.Context)
    is
       Work  : Landin.Stages.Compilation :=
@@ -851,7 +851,8 @@ package body Landin.Tests.Checking_Suite is
    begin
       Src := Landin.Stages.Add_Source
         (Work, "mixed-repetition.ldn",
-         "f: (first: u16, repeated: u16) -> none =" & LF
+         "module_row: [4]u16 = [1, 2 + 1, of 4]" & LF
+         & "f: (first: u16, repeated: u16) -> none =" & LF
          & "    row: [4]u16 = [first, first + 1, of repeated]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
@@ -862,7 +863,7 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
-         "an explicitly typed local mixed repetition is accepted");
+         "explicitly typed local and module mixed repetitions are accepted");
 
       declare
          Of_Tree : constant not null access constant Landin.Syntax.Tree :=
@@ -892,8 +893,8 @@ package body Landin.Tests.Checking_Suite is
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Seen, 1, "one mixed repetition carries a shape");
-   end Mixed_Repetition_Takes_Its_Local_Written_Shape;
+        (Item, Seen, 2, "both typed mixed repetitions carry a shape");
+   end Mixed_Repetition_Takes_Its_Typed_Written_Shape;
 
    --  D37: a mutable fixed-array assignment place supplies the complete shape
    --  for a nonempty prefix followed by one repeated suffix expression.  Both
@@ -1182,8 +1183,8 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "typed repetition takes its written shape",
          Typed_Repetition_Takes_Its_Written_Shape'Access);
       Landin.Testing.Register
-        (Into, "checking", "mixed repetition takes local written shape",
-         Mixed_Repetition_Takes_Its_Local_Written_Shape'Access);
+        (Into, "checking", "mixed repetition takes typed written shape",
+         Mixed_Repetition_Takes_Its_Typed_Written_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "mixed assignment takes destination shape",
          Mixed_Repetition_Assignment_Takes_Its_Destination_Shape'Access);
