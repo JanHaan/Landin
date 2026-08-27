@@ -1059,15 +1059,15 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
 
-   --  D48's containing aggregate field for an element operation.  Zero
-   --  means the reached storage is itself a fixed array; a positive value
-   --  is [0750]'s declaration-order field.  It is an identity, never a
-   --  target byte offset.
+   --  D48's containing aggregate field for an element operation, and D49's
+   --  destination field for a clear.  Zero means the reached storage is
+   --  itself a fixed array; a positive value is [0750]'s declaration-order
+   --  field.  It is an identity, never a target byte offset.
    function Element_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Element | Store_Element;
+                          in Load_Element | Store_Element | Clear_Array;
 
    --  Which array a slot-reaching element operation names.  Only
    --  meaningful when Reaches_A_Slot is true; a computed module-array
@@ -1454,7 +1454,8 @@ package Landin.IR is
      (Into       : in out Unit;
       Item       : Item_Id;
       Destination : Storage;
-      Site       : Landin.Provenance.Origin)
+      Site       : Landin.Provenance.Origin;
+      Field      : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
 

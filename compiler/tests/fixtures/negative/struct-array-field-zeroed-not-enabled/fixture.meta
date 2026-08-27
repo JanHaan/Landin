@@ -1,5 +1,5 @@
 class: negative
-summary: D48 does not make an array field itself a zeroed destination
+summary: D49 leaves the array-field selection refused when zeroed is nested in an expression
 constructs: 0520, 0540, 0670, 0750, 1740, 1820
 program: program.ldn
 codes: L0304

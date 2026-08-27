@@ -183,6 +183,10 @@ package body Landin.Tests.Verifier_Suite is
       Array_Copy_Inside_A_Datum,
       Array_Clear_Destination_Is_Scalar,
       Array_Clear_Slot_Is_Not_Owned,
+      Array_Clear_Datum_Field_Is_Out_Of_Range,
+      Array_Clear_Datum_Field_Is_Not_An_Array,
+      Array_Clear_Slot_Field_Is_Out_Of_Range,
+      Array_Clear_Slot_Field_Is_Not_An_Array,
       Array_Clear_Inside_A_Datum,
       Array_Fill_Destination_Is_Scalar,
       Array_Fill_Slot_Is_Not_Owned,
@@ -619,6 +623,28 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Array_Clear_Datum_Field_Is_Out_Of_Range
+            | Array_Clear_Datum_Field_Is_Not_An_Array =>
+            IR.Emit_Array_Clear
+              (Unit, A, (Kind => IR.Module_Datum, Datum => G), Site,
+               Field =>
+                 (if Harm = Array_Clear_Datum_Field_Is_Out_Of_Range
+                  then 2 else 1));
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Clear_Slot_Field_Is_Out_Of_Range
+            | Array_Clear_Slot_Field_Is_Not_An_Array =>
+            IR.Emit_Array_Clear
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => T), Site,
+               Field =>
+                 (if Harm = Array_Clear_Slot_Field_Is_Out_Of_Range
+                  then 2 else 1));
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Array_Clear_Inside_A_Datum =>
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -797,6 +823,14 @@ package body Landin.Tests.Verifier_Suite is
          (Array_Clear_Destination_Is_Scalar,
           V.Array_Storage_Is_Not_An_Array),
          (Array_Clear_Slot_Is_Not_Owned, V.Slot_Out_Of_Range),
+         (Array_Clear_Datum_Field_Is_Out_Of_Range,
+          V.Element_Field_Out_Of_Range),
+         (Array_Clear_Datum_Field_Is_Not_An_Array,
+          V.Element_Field_Is_Not_An_Array),
+         (Array_Clear_Slot_Field_Is_Out_Of_Range,
+          V.Element_Field_Out_Of_Range),
+         (Array_Clear_Slot_Field_Is_Not_An_Array,
+          V.Element_Field_Is_Not_An_Array),
          (Array_Clear_Inside_A_Datum, V.Array_Clear_Inside_A_Datum),
          (Array_Fill_Destination_Is_Scalar,
           V.Array_Storage_Is_Not_An_Array),

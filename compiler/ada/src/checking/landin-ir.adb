@@ -1071,7 +1071,8 @@ package body Landin.IR is
      (Into        : in out Unit;
       Item        : Item_Id;
       Destination : Storage;
-      Site        : Landin.Provenance.Origin)
+      Site        : Landin.Provenance.Origin;
+      Field       : Natural := 0)
    is
       Where : constant Value_Id :=
         Append
@@ -1079,6 +1080,7 @@ package body Landin.IR is
            Instruction'(Op          => Clear_Array,
                         Site        => Site,
                         Destination => Destination,
+                        Element_Field => Field,
                         others      => <>));
    begin
       pragma Assert (Where /= No_Value);

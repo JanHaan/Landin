@@ -1,0 +1,6 @@
+class: negative
+summary: D49 intersects a whole array-field clear across branch paths
+constructs: 0080, 0430, 0520, 0540, 0670, 0750, 1810, 1910
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64
