@@ -146,6 +146,7 @@ package body Landin.Tests.Verifier_Suite is
       Left_Open,
       Operand_From_Another_Block,
       Result_Of_The_Wrong_Type,
+      Measurement_Result_Is_Not_Usize,
       Operands_Of_Two_Types,
       Store_Of_The_Wrong_Type,
       Store_To_A_Parameter,
@@ -261,6 +262,16 @@ package body Landin.Tests.Verifier_Suite is
             M := IR.Emit_Binary
                    (Unit, A, IR.Add, N, N, Landin.Types.U16, Site);
             pragma Assert (M /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Measurement_Result_Is_Not_Usize =>
+            N := IR.Emit_Aggregate_Measurement
+              (Unit, A, IR.Measure_Size,
+               [Landin.Types.U8, Landin.Types.U32],
+               Landin.Types.U32, Site);
+            pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -600,6 +611,7 @@ package body Landin.Tests.Verifier_Suite is
          (Left_Open,                  V.Item_Still_Building),
          (Operand_From_Another_Block, V.Operand_In_Another_Block),
          (Result_Of_The_Wrong_Type,   V.Result_Disagrees),
+         (Measurement_Result_Is_Not_Usize, V.Result_Disagrees),
          (Operands_Of_Two_Types,      V.Operands_Disagree),
          (Store_Of_The_Wrong_Type,    V.Store_Disagrees_With_Slot),
          (Store_To_A_Parameter,       V.Store_To_A_Parameter),

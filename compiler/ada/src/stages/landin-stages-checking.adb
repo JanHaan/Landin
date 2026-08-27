@@ -1429,10 +1429,10 @@ package body Landin.Stages.Checking is
                   Asked : constant Syn.Node_Id :=
                     Syn.Measured_Type (Of_Tree, Node);
                begin
-                  --  D14 and D17: legality follows the resolved checked
+                  --  D14, D17 and D44: legality follows the resolved checked
                   --  type, not the syntax that happened to spell it.  Type_At
-                  --  also carries an array's structural shape onto this node,
-                  --  including through a chain of aliases.
+                  --  also carries an array's structural shape or a struct's
+                  --  nominal body onto this node, including through aliases.
                   declare
                      Held : constant Ty.Type_Kind := Type_At (Of_Tree, Asked);
                   begin
@@ -1443,7 +1443,8 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Asked, Held);
                      end if;
 
-                     if Held in Ty.Scalar_Name or else Held = Ty.Fixed_Array
+                     if Held in Ty.Scalar_Name
+                       or else Held in Ty.Fixed_Array | Ty.Aggregate
                      then
                         return Kept (Ty.Usize);
                      end if;
@@ -1455,14 +1456,11 @@ package body Landin.Stages.Checking is
                         return Kept (Ty.Ill_Typed);
                      end if;
 
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Asked),
-                        Message => "measuring this is not enabled yet",
-                        Refused => Bad.Measured_Type,
-                        Into    => Found);
-                     return Kept (Ty.Ill_Typed);
+                     --  Type_At answers one of the admitted shapes above or
+                     --  Ill_Typed after its owning diagnostic.  Anything
+                     --  else is compiler state, not a source refusal.
+                     raise Landin.Compiler_Defect with
+                       "a measured type has no settled checked shape";
                   end;
                end;
 
@@ -3918,6 +3916,21 @@ package body Landin.Stages.Checking is
                                   (Landin.Targets.Byte_Count (Length)
                                    * Landin.Targets.Byte_Count
                                        (Landin.Targets.Bytes (Size))));
+                        Known := True;
+                     end;
+                  elsif Held = Ty.Aggregate then
+                     declare
+                        Declared : constant Res.Declaration_Id :=
+                          Landin.Checking.Body_Of
+                            (Types.all, Of_Tree, Asked);
+                     begin
+                        Value :=
+                          Ty.Folded
+                            (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
+                             then Landin.Checking.Layout_Size
+                                    (Types.all, Declared)
+                             else Landin.Checking.Layout_Alignment
+                                    (Types.all, Declared));
                         Known := True;
                      end;
                   end if;

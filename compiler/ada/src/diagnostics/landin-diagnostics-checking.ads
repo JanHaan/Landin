@@ -105,11 +105,7 @@ package Landin.Diagnostics.Checking is
       Array_Value,
       Array_Element,
       --  [0540]'s contextual all-bits-zero image.
-      Zeroed_Value,
-      --  [0370] measures a type, and this kernel measures the eleven:
-      --  a declared name and an array each need the answer a later
-      --  slice records for them.
-      Measured_Type);
+      Zeroed_Value);
 
    function Construct (Item : Refused_Use)
      return Landin.Tokens.Construct_Reference
@@ -123,8 +119,7 @@ package Landin.Diagnostics.Checking is
             when Struct_Value       => "[0670]",
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
-            when Zeroed_Value       => "[0540]",
-            when Measured_Type      => "[0370]")
+            when Zeroed_Value       => "[0540]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  The type names above, spelled once.  A name that is not here is a
@@ -185,7 +180,6 @@ private
             when Struct_Value
                | Array_Value
                | Array_Element
-               | Zeroed_Value
-               | Measured_Type     => "R2.20");
+               | Zeroed_Value      => "R2.20");
 
 end Landin.Diagnostics.Checking;

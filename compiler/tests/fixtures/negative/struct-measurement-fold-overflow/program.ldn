@@ -1,0 +1,9 @@
+header: type = struct
+    tag: u8
+    address: usize
+    tail: u16
+end header
+
+maximum: usize = 18446744073709551615
+scalar_overflow: usize = sizeof header + maximum
+array_overflow: [1]usize = [alignof header + maximum]

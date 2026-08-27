@@ -1532,6 +1532,88 @@ file positive/measurement-of-fixed-arrays/program.ldn tokens 48
   186 187 =
   188 195 alignof
   196 202 packet
+file positive/measurement-of-structs/program.ldn tokens 81
+  0 6 packet
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 tag
+  29 30 :
+  31 33 u8
+  38 45 payload
+  45 46 :
+  47 50 u64
+  55 59 tail
+  59 60 :
+  61 64 u16
+  65 68 end
+  69 75 packet
+  77 82 alias
+  82 83 :
+  84 88 type
+  89 90 =
+  91 97 packet
+  98 105 forward
+  105 106 :
+  107 111 type
+  112 113 =
+  114 119 later
+  120 125 later
+  125 126 :
+  127 131 type
+  132 133 =
+  134 139 alias
+  141 152 direct_size
+  152 153 :
+  154 159 usize
+  160 161 =
+  162 168 sizeof
+  169 175 packet
+  176 188 direct_align
+  188 189 :
+  190 195 usize
+  196 197 =
+  198 205 alignof
+  206 212 packet
+  213 223 alias_size
+  223 224 :
+  225 230 usize
+  231 232 =
+  233 239 sizeof
+  240 245 alias
+  246 257 alias_align
+  257 258 :
+  259 264 usize
+  265 266 =
+  267 274 alignof
+  275 280 alias
+  281 293 forward_size
+  293 294 :
+  295 300 usize
+  301 302 =
+  303 309 sizeof
+  310 317 forward
+  318 331 forward_align
+  331 332 :
+  333 338 usize
+  339 340 =
+  341 348 alignof
+  349 356 forward
+  357 369 static_image
+  369 370 :
+  371 372 [
+  372 373 2
+  373 374 ]
+  374 379 usize
+  380 381 =
+  382 383 [
+  383 389 sizeof
+  390 396 packet
+  396 397 ,
+  398 405 alignof
+  406 413 forward
+  413 414 ]
 file positive/module-array-initialized-from-source-name/program.ldn tokens 30
   0 3 row
   3 4 :
@@ -5547,29 +5629,13 @@ file negative/match-not-enabled/program.ldn tokens 26
   65 70 match
   71 74 end
   75 76 f
-file negative/measuring-refused-types/program.ldn tokens 22
-  0 6 record
-  6 7 :
-  8 12 type
-  13 14 =
-  15 21 struct
-  26 31 field
-  31 32 :
-  33 35 u8
-  36 39 end
-  40 46 record
-  48 59 struct_size
-  59 60 :
-  61 66 usize
-  67 68 =
-  69 75 sizeof
-  76 82 record
-  83 96 unknown_align
-  96 97 :
-  98 103 usize
-  104 105 =
-  106 113 alignof
-  114 121 nowhere
+file negative/measuring-refused-types/program.ldn tokens 6
+  0 13 unknown_align
+  13 14 :
+  15 20 usize
+  21 22 =
+  23 30 alignof
+  31 38 nowhere
 file negative/missing-end/program.ldn tokens 14
   0 1 f
   1 2 :
@@ -7209,6 +7275,49 @@ file negative/struct-field-not-declared/program.ldn tokens 30
   108 114 misses
   115 118 end
   119 120 f
+file negative/struct-measurement-fold-overflow/program.ldn tokens 42
+  0 6 header
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 tag
+  29 30 :
+  31 33 u8
+  38 45 address
+  45 46 :
+  47 52 usize
+  57 61 tail
+  61 62 :
+  63 66 u16
+  67 70 end
+  71 77 header
+  79 86 maximum
+  86 87 :
+  88 93 usize
+  94 95 =
+  96 116 18446744073709551615
+  117 132 scalar_overflow
+  132 133 :
+  134 139 usize
+  140 141 =
+  142 148 sizeof
+  149 155 header
+  156 157 +
+  158 165 maximum
+  166 180 array_overflow
+  180 181 :
+  182 183 [
+  183 184 1
+  184 185 ]
+  185 190 usize
+  191 192 =
+  193 194 [
+  194 201 alignof
+  202 208 header
+  209 210 +
+  211 218 maximum
+  218 219 ]
 file negative/struct-needs-a-field/program.ldn tokens 7
   0 5 empty
   5 6 :

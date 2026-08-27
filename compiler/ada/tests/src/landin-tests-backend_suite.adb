@@ -2143,7 +2143,15 @@ package body Landin.Tests.Backend_Suite is
         & "here: usize = sizeof usize" & LF
         & "wide: usize = sizeof u32" & LF
         & "array_size: usize = sizeof packet" & LF
-        & "array_align: usize = alignof [3]usize" & LF;
+        & "array_align: usize = alignof [3]usize" & LF
+        & "header: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    address: usize" & LF
+        & "    tail: u16" & LF
+        & "end header" & LF
+        & "header_alias: type = header" & LF
+        & "struct_size: usize = sizeof header_alias" & LF
+        & "struct_align: usize = alignof header" & LF;
 
       Native : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -2190,6 +2198,18 @@ package body Landin.Tests.Backend_Suite is
               and then Contains
                 (Thin, "array_align:" & LF & HT & ".long 4" & LF),
             "an inline array keeps its target element alignment");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, "struct_size:" & LF & HT & ".quad 24" & LF)
+              and then Contains
+                (Thin, "struct_size:" & LF & HT & ".long 12" & LF),
+            "an aliased struct derives padded size from target placement");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, "struct_align:" & LF & HT & ".quad 8" & LF)
+              and then Contains
+                (Thin, "struct_align:" & LF & HT & ".long 4" & LF),
+            "a struct derives alignment from its target field run");
       end;
    end A_Measurement_Follows_The_Target;
 

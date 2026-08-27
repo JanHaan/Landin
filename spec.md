@@ -2448,3 +2448,50 @@ declined.
 **Pinned by** the checker and lowering public-seam cases;
 `positive/named-return-zeroed-assignment`; and
 `runtime/named-return-zeroed-reads-zero` on Linux x86-64.
+
+### D44 — A named ordinary scalar-field struct has byte measurements
+
+**The tour said** that `sizeof T` and `alignof T` ask the target for byte
+measurements and produce `usize` [0370], that a struct's fields are laid out in
+declaration order with target padding [0750], and that aliases denote the same
+type [0710]. D14 enabled scalar measurement and D17 enabled fixed arrays, but the
+implemented checker still refused every aggregate measurement.
+
+**Chosen:** `sizeof T` and `alignof T` are admitted when `T` resolves directly or
+through any representable alias chain to a named ordinary struct whose fields are
+all enabled scalars. `sizeof` is the target's padded size of that field run and
+`alignof` is its required alignment. Both results remain `usize`. A malformed or
+unresolved measured type retains its one owning diagnostic rather than acquiring
+a second measurement refusal.
+
+Lowering carries the struct compactly in target-neutral IR as its declaration-
+order run of scalar field types. It carries neither checker-computed offsets nor
+size or alignment constants. A backend with target facts replays that run through
+`Landin.Targets.Place` and reads `Landin.Targets.Size_Of` or
+`Landin.Targets.Alignment_Of`; module-scalar folds use the same backend seam. The
+checker also evaluates the leaf during [1940]'s target-aware validation, and
+lowering reads that same checked layout when a static module array image must
+contain the concrete answer. This preserves D24's fold agreement without putting
+a target answer into ordinary measurement IR. The verifier requires a measurement
+result to be `usize`, and the dump exposes the field run.
+
+This decision does not enable array or struct fields, nested aggregate
+composition, inline anonymous struct measurement, `lenof` on a struct, aggregate
+values, aggregate parameters or returns, or a struct in any other expression or
+storage context. Scalar and fixed-array measurements are unchanged.
+
+**Why the field run:** field types and declaration order are the complete
+representation-independent input to [0750]'s placement arithmetic. Carrying that
+small input lets every target derive one authoritative answer without putting a
+target choice or a checker cache into IR.
+
+**The alternative:** lower the checker-prepared size and alignment as integer
+constants. That would make target-dependent checker results part of otherwise
+target-neutral IR and give downstream consumers no way to establish that the
+answer came from their own target description. It was declined.
+
+**Pinned by** the lowering and backend public-seam cases;
+`positive/measurement-of-structs`; the one-report
+`negative/measuring-refused-types`;
+`negative/struct-measurement-fold-overflow`; the recorded IR dump; and
+`runtime/measurements-answer-for-the-target` on Linux x86-64.

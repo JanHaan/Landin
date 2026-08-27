@@ -1,6 +1,1 @@
-record: type = struct
-    field: u8
-end record
-
-struct_size: usize = sizeof record
 unknown_align: usize = alignof nowhere

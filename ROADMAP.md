@@ -2262,11 +2262,13 @@ emits the scalar element's `Measure_Size`, the array length as an existing
 `Measure_Align`. The internally represented zero-element shape keeps zero size
 and alignment one without deciding whether `[0]T` is source programmers may
 write. `positive/measurement-of-fixed-arrays` pins the inline and alias-chain
-forms, `negative/measuring-refused-types` pins both refusal boundaries without
-duplicate diagnostics, and `runtime/measurements-answer-for-the-target`
-observes nonzero array answers. The focused backend case emits an aliased size
-and inline alignment from one source against the 64-bit and synthetic 32-bit
-target descriptions.
+forms, and `runtime/measurements-answer-for-the-target` observes nonzero array
+answers. D44 later migrates the ordinary scalar-field struct boundary to
+positive evidence; the remaining one-report
+`negative/measuring-refused-types` pins an unresolved measured type without a
+duplicate diagnostic. The focused backend case emits an aliased size and inline
+alignment from one source against the 64-bit and synthetic 32-bit target
+descriptions.
 
 The next slice is D23's nonempty array literal [0520] in one contextual
 position: an explicitly typed local fixed-array initializer. The written D17
@@ -2634,6 +2636,25 @@ values on Linux x86-64. D39--D42's contexts are unchanged; invalid destinations,
 named-return subobjects, inferred initialization and nested/general uses remain
 refused, and no general scalar `zeroed` value was admitted.
 
+D44 admits `sizeof T` and `alignof T` when `T` resolves directly or through
+aliases to a named ordinary struct whose fields are all enabled scalars. Lowering
+records only those declaration-order scalar field types on the measurement IR;
+there are no checker-computed offsets or byte answers. The backend replays the
+run through `Landin.Targets` and therefore derives padded size and alignment from
+the selected target, including module-scalar folds. The checker evaluates the
+same leaf for [1940]'s target-aware validation, and lowering reads the checked
+layout when a static module array image needs the concrete answer; ordinary
+measurement IR remains target-neutral. The verifier pins `usize` as the result
+and the dump exposes the compact run. The lowering and backend public-seam cases
+compare direct and aliased shapes and the Linux x86-64 and synthetic 32-bit
+answers. `positive/measurement-of-structs`, the one-report
+`negative/measuring-refused-types`,
+`negative/struct-measurement-fold-overflow`, the recorded IR, and
+`runtime/measurements-answer-for-the-target` provide corpus and executable
+evidence. Scalar and fixed-array measurements are unchanged; aggregate values,
+aggregate fields, nested composition, inline anonymous measurement and `lenof`
+structs remain outside this slice.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D35's
@@ -2669,8 +2690,9 @@ first value of that struct, because the field loop named an aggregate field and
 let every other unlayable field through. At that boundary both were refused by
 name again and both had fixtures; the measurement fixture covered a declared
 name as well, which had the same hole before arrays existed. The later
-measurement slice above migrated that array refusal to positive evidence while
-keeping the struct boundary pinned.
+measurement slices above migrated first the array and then D44's named ordinary
+scalar-field struct refusals to positive evidence while keeping every broader
+aggregate boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

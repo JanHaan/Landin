@@ -2,6 +2,13 @@
 --  These answers are checked against what the System V ABI says for x86-64.
 row: type = [3]u16
 packet: type = row
+header: type = struct
+    tag: u8
+    payload: u64
+    tail: u16
+end header
+header_alias: type = header
+header_image: [2]usize = [sizeof header, alignof header_alias]
 
 public main: () -> (code: i32) =
     if sizeof u8 == 1 and alignof u8 == 1
@@ -13,6 +20,9 @@ public main: () -> (code: i32) =
         and sizeof usize == 8 and sizeof isize == 8
         and sizeof [3]u16 == 6 and alignof [3]u16 == 2
         and sizeof packet == 6 and alignof packet == 2
+        and sizeof header == 24 and alignof header == 8
+        and sizeof header_alias == 24 and alignof header_alias == 8
+        and header_image[0] == 24 and header_image[1] == 8
     then
         code = 42
     else
