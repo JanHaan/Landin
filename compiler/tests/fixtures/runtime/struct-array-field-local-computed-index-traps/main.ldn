@@ -1,0 +1,14 @@
+holder: type = struct
+    tag: u8
+    row: [2]u32
+end holder
+
+put: (i: usize) -> none =
+    mut local: holder
+    local.row[i] = 7
+end put
+
+public main: () -> (code: i32) =
+    put(2)
+    code = 1
+end main

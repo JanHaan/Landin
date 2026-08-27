@@ -193,8 +193,9 @@ package Landin.IR is
       --  An element selected by a runtime `usize`.  Unlike Load_Field, the
       --  position is an operand because [1950] checks its value at runtime.
       --  D22 lets this reach either [1740]'s module array or [1810]'s
-      --  local array in this item's own frame, the same way Load_Field
-      --  does: which is which is Reaches_A_Slot's answer.
+      --  local array in this item's own frame; D48 additionally carries
+      --  a containing aggregate field.  Which storage class is reached is
+      --  Reaches_A_Slot's answer.
       Load_Element,
       Store_Element,
       --  One whole [0520] array copied between two storage places, or
@@ -1058,6 +1059,16 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
 
+   --  D48's containing aggregate field for an element operation.  Zero
+   --  means the reached storage is itself a fixed array; a positive value
+   --  is [0750]'s declaration-order field.  It is an identity, never a
+   --  target byte offset.
+   function Element_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Load_Element | Store_Element;
+
    --  Which array a slot-reaching element operation names.  Only
    --  meaningful when Reaches_A_Slot is true; a computed module-array
    --  element carries no slot and asks Datum_Of instead.  The reached
@@ -1073,9 +1084,25 @@ package Landin.IR is
                  and then Reaches_A_Slot (Of_Unit, Item, Value)
                  and then Holds (Of_Unit, Item,
                                  Slot_Of (Of_Unit, Item, Value))
-                 and then Is_Array
-                            (Of_Unit, Item,
-                             Slot_Of (Of_Unit, Item, Value));
+                 and then
+                   (if Element_Field_Of (Of_Unit, Item, Value) = 0
+                    then Is_Array
+                           (Of_Unit, Item,
+                            Slot_Of (Of_Unit, Item, Value))
+                    else Is_Aggregate
+                           (Of_Unit, Item,
+                            Slot_Of (Of_Unit, Item, Value))
+                      and then Element_Field_Of (Of_Unit, Item, Value)
+                                 <= Slot_Field_Count
+                                      (Of_Unit, Item,
+                                       Slot_Of (Of_Unit, Item, Value))
+                      and then Nth_Slot_Field_Shape
+                                 (Of_Unit, Item,
+                                  Slot_Of (Of_Unit, Item, Value),
+                                  Positive
+                                    (Element_Field_Of
+                                       (Of_Unit, Item, Value))).Kind
+                                 = Array_Field_Shape);
 
    function Slot_Element_Type
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
@@ -1086,9 +1113,25 @@ package Landin.IR is
                  and then Reaches_A_Slot (Of_Unit, Item, Value)
                  and then Holds (Of_Unit, Item,
                                  Slot_Of (Of_Unit, Item, Value))
-                 and then Is_Array
-                            (Of_Unit, Item,
-                             Slot_Of (Of_Unit, Item, Value));
+                 and then
+                   (if Element_Field_Of (Of_Unit, Item, Value) = 0
+                    then Is_Array
+                           (Of_Unit, Item,
+                            Slot_Of (Of_Unit, Item, Value))
+                    else Is_Aggregate
+                           (Of_Unit, Item,
+                            Slot_Of (Of_Unit, Item, Value))
+                      and then Element_Field_Of (Of_Unit, Item, Value)
+                                 <= Slot_Field_Count
+                                      (Of_Unit, Item,
+                                       Slot_Of (Of_Unit, Item, Value))
+                      and then Nth_Slot_Field_Shape
+                                 (Of_Unit, Item,
+                                  Slot_Of (Of_Unit, Item, Value),
+                                  Positive
+                                    (Element_Field_Of
+                                       (Of_Unit, Item, Value))).Kind
+                                 = Array_Field_Shape);
 
    function Callee_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
@@ -1335,14 +1378,15 @@ package Landin.IR is
    --  [1950]'s runtime-selected array element.  Index is operand one; a
    --  store's value is operand two.  The verifier holds the former to
    --  `usize`, the latter and the result to the array's element type, and
-   --  Datum to an array item.
+   --  Datum either to an array item or to D48's named aggregate field.
    function Emit_Load_Element
      (Into   : in out Unit;
       Item   : Item_Id;
       Datum  : Item_Id;
       Index  : Value_Id;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Field  : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Datum)
                   and then Holds (Into, Item, Index)
@@ -1356,24 +1400,25 @@ package Landin.IR is
       Datum : Item_Id;
       Index : Value_Id;
       Value : Value_Id;
-      Site  : Landin.Provenance.Origin)
+      Site  : Landin.Provenance.Origin;
+      Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Datum)
                  and then Holds (Into, Item, Index)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
 
-   --  The same element operations reaching a fixed-array slot in this
-   --  item's own frame [1810].  D22 admits the computed-index path for a
-   --  local array as well; the slot is the frame cell whose Add_Array_Slot
-   --  declared its element type and length.
+   --  The same element operations reaching a slot in this item's own frame
+   --  [1810].  Field zero names an Add_Array_Slot shape; D48's positive
+   --  field names a compact fixed-array leaf of an aggregate slot.
    function Emit_Load_Slot_Element
      (Into   : in out Unit;
       Item   : Item_Id;
       Slot   : Slot_Id;
       Index  : Value_Id;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Field  : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Slot)
                   and then Holds (Into, Item, Index)
@@ -1388,7 +1433,8 @@ package Landin.IR is
       Slot  : Slot_Id;
       Index : Value_Id;
       Value : Value_Id;
-      Site  : Landin.Provenance.Origin)
+      Site  : Landin.Provenance.Origin;
+      Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Slot)
                  and then Holds (Into, Item, Index)
@@ -1558,6 +1604,7 @@ private
       Alternative : Block_Id                  := No_Block;
       Number      : Landin.Types.Magnitude    := 0;
       Part        : Part_Position              := 1;
+      Element_Field : Natural                  := 0;
       Measured    : Landin.Types.Scalar_Name  := Landin.Types.Bool;
       First_Measurement_Field : Natural        := 0;
       Measurement_Field_Total : Natural        := 0;

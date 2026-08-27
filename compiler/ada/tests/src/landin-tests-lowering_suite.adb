@@ -2064,6 +2064,73 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Computed_Local_Element_Reaches_Its_Slot;
 
+   procedure An_Array_Field_Element_Carries_Its_Containing_Field
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_Field_Element_Carries_Its_Containing_Field
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "end holder" & LF
+         & "state: holder" & LF
+         & "f: (at: usize) -> none =" & LF
+         & "    mut local: holder" & LF
+         & "    local.row[at] = state.row[at]" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Module_Loads, Local_Stores : Natural := 0;
+      begin
+         for I in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Owner : constant IR.Item_Id := IR.Item_Id (I);
+            begin
+               for V in 1 .. IR.Value_Count (Unit, Owner) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (V);
+                     Op : constant IR.Opcode :=
+                       IR.Op_Of (Unit, Owner, Value);
+                  begin
+                     if Op = IR.Load_Element
+                       and then not IR.Reaches_A_Slot (Unit, Owner, Value)
+                       and then IR.Element_Field_Of (Unit, Owner, Value) = 2
+                     then
+                        Module_Loads := Module_Loads + 1;
+                     elsif Op = IR.Store_Element
+                       and then IR.Reaches_A_Slot (Unit, Owner, Value)
+                       and then IR.Element_Field_Of (Unit, Owner, Value) = 2
+                     then
+                        Local_Stores := Local_Stores + 1;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+
+         Landin.Testing.Check_Equal
+           (Item, Module_Loads, 1,
+            "the module read carries its containing field");
+         Landin.Testing.Check_Equal
+           (Item, Local_Stores, 1,
+            "the local write carries the same containing field");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind
+                    = IR.Verifier.Nothing_Wrong,
+            "the field-qualified element operations verify");
+      end;
+   end An_Array_Field_Element_Carries_Its_Containing_Field;
+
    ------------------------------------------------------------------
    --  A named aggregate measurement
    ------------------------------------------------------------------
@@ -2520,6 +2587,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a computed local element reaches its slot",
          A_Computed_Local_Element_Reaches_Its_Slot'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "an array field element carries its containing field",
+         An_Array_Field_Element_Carries_Its_Containing_Field'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "a struct measurement carries its scalar fields",

@@ -1,0 +1,8 @@
+holder: type = struct
+    tag: u8
+end holder
+
+f: () -> (r: u8) =
+    mut local: holder
+    r = local.tag[0]
+end f

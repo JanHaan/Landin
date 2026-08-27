@@ -1339,7 +1339,8 @@ their computed writes still assign nothing tracked. Every other refused
 value form — an inferred initializer not sourced by a direct storage name, a
 slice, `zeroed`, repetition, an array literal outside D23's one context,
 `lenof`, a whole value of D46/D47's array-field struct, or its array field
-as a value or nested place — stays refused.
+as a whole value or place — stays refused. D48 separately admits one element
+selected through that field.
 
 **Why:** treating one computed write as a whole assignment would admit
 uninitialized reads from every other position, exactly the failure D19
@@ -2572,9 +2573,10 @@ fact to establish: its scalar fields read as zero from declaration and ordinary
 mutable scalar fields may be assigned, including a scalar sibling after an
 array field.
 
-This admits the containing storage, not the array field as a value or nested
-place. Selecting that field, including as the base of an index, reports L0304
-once at the selection; the enclosing index inherits the ill-typed result. A
+This admits the containing storage, not the array field as a value or whole
+place. Selecting that field reported L0304 once at the selection in this
+slice; D48 supersedes that result only where the selection is immediately the
+base of an index. A
 local declaration of the same struct also reported L0304 in this slice because
 the frame's aggregate-slot representation remained scalar-field-only; D47
 supersedes that storage boundary. An initializer, whole
@@ -2639,9 +2641,10 @@ stores are invented at its declaration.
 D16 continues to track each accessible scalar field independently. A scalar
 sibling before or after the array must be assigned on every arriving path
 before it is read, and assigning one sibling assigns no other. The array field
-has no D16 fact because this decision does not enable selecting it as a value or
-nested place: selection, including as the base of an index, reports L0304 once
-and the definite-assignment recovery walk adds no whole-struct report. A local
+had no D16 fact in this slice because it was not selectable as a value or
+nested place: selection reported L0304 once and the definite-assignment
+recovery walk added no whole-struct report. D48 supersedes that boundary for an
+indexed element and gives it a field-qualified fact. A local
 initializer, whole read or copy, parameter, return and every other whole-value
 context remain refused. Struct fields of struct type and broader nested
 aggregate composition also remain outside the laid-out kernel.
@@ -2682,3 +2685,78 @@ cases; `positive/struct-array-field-local-storage`;
 `negative/struct-array-field-local-whole-copy-not-enabled`;
 `negative/struct-array-field-local-unassigned-scalar`; the recorded IR dump;
 and `runtime/struct-array-field-local-scalar-siblings` on Linux x86-64.
+
+### D48 — An element of a fixed-array field is a place
+
+**The tour said** that an array element is a place [0520], that a computed
+index traps before an address is formed [0580], that a struct has its declared
+fields [0670], and that assignment uses the root binding's mutability [1900].
+D46 and D47 admitted the containing module datum and local frame cell, but
+stopped before an array field could be reached.
+
+**Chosen:** where `s` directly names D46 module state or a D47 local and `f` is
+a fixed array of enabled scalars, `s.f[i]` is admitted as a read, assignment
+destination, or `inc`/`dec` target. The index is exactly `usize` under D18. A
+compiler-known index outside the field length is refused under [1950]; every
+other index is checked at runtime and traps before any address is formed under
+[0580]. Writability is the root binding's. The selection `s.f` is typed as an
+array only in this index-base context: as a whole value, copy endpoint,
+assignment destination, or `zeroed` target it remains refused with L0304.
+
+D10 makes module state complete from declaration, so an indexed module-field
+read has no assignment requirement. A declaration-only local instead follows
+D19 and D22 per field. Its compiler-known element facts are keyed by binding,
+field, and position; assigning one position establishes only that fact. A
+computed read requires the whole-field fact, which holds once every declared
+position in that field has a fact on every arriving path. A computed write
+establishes no fact and clears none, and `inc`/`dec` first requires the read.
+An internal zero-length field is vacuously complete, preserving D17 without
+deciding whether source may spell `[0]T`.
+
+Lowering carries the root storage identity, the declaration-order field
+position, and the index through the existing `Load_Element` and
+`Store_Element` operations. Field zero continues to mean that the storage is
+itself an array; a positive field selects an array shape inside an aggregate.
+No checker-computed byte offset enters IR. Even a compiler-known index through
+a field uses the element operation: adding a two-level static-part encoding for
+that optimization was declined. Array copy, clear, and fill operations still
+name whole storage only and therefore require field zero.
+
+The verifier checks a positive element field against the aggregate field run
+before it reads the shape, and rejects an absent field or a scalar field. It
+then applies the existing `usize`, result, and stored-value rules to the array
+shape's element. The dump exposes the field identity. Each backend derives the
+field offset, length, and element width from its selected target. On x86-64 a
+module field base is formed in registers so a D18-wide preceding field remains
+addressable; a local uses the field displacement inside the L0504-bounded frame.
+In both cases the bounds trap precedes field and element address arithmetic.
+
+**Why the scoped selection:** admitting `s.f` generally would also imply whole
+field copies and `zeroed`, which have separate initialization and lowering
+rules. Index-base typing enables the scalar subobject without pretending the
+array field is an ordinary value. Field-qualified local facts preserve D19's
+independent-element rule when one struct contains more than one array field.
+
+**The alternatives:** enable module indexing first and defer locals, introduce
+new field-element opcodes, or lower an address-of-field value. The first leaves
+D47 storage unusable despite the same compact shape; the second duplicates the
+existing element trap and operand rules; the third introduces addresses into a
+target-neutral IR that has none. All were declined.
+
+**Pinned by** the IR, verifier, lowering, and backend public-seam cases;
+`positive/struct-array-field-module-state` and
+`positive/struct-array-field-local-storage`;
+`negative/struct-array-field-selection-not-enabled`;
+`negative/struct-array-field-local-selection-not-enabled`;
+`negative/struct-array-field-immutable-element`;
+`negative/struct-array-field-index-not-usize`;
+`negative/struct-array-field-index-outside`;
+`negative/struct-array-field-local-computed-unassigned`;
+`negative/struct-array-fields-keep-assignment-separate`;
+`negative/struct-array-field-element-not-assigned-on-every-path`;
+`negative/scalar-struct-field-is-not-indexable`;
+`negative/struct-array-field-zeroed-not-enabled`; the recorded IR dump;
+`runtime/struct-array-field-state-scalar-siblings`;
+`runtime/struct-array-field-local-scalar-siblings`;
+`runtime/struct-array-field-computed-index-traps`; and
+`runtime/struct-array-field-local-computed-index-traps` on Linux x86-64.

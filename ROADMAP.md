@@ -2692,8 +2692,8 @@ address required for a scalar sibling beyond a signed displacement.
 `negative/struct-array-field-whole-copy-not-enabled`, the recorded IR and
 `runtime/struct-array-field-state-scalar-siblings` provide corpus and executable
 evidence. At D46, local storage, initialized module state, whole reads and copies,
-parameters, returns, selection of the array field and indexing through it remain
-refused; D47 below supersedes that local-storage boundary. Struct fields of
+parameters, returns and selection of the array field remain refused; D47 below
+supersedes the local-storage boundary and D48 supersedes indexed access. Struct fields of
 struct type and broader nested composition are still outside the laid-out
 kernel.
 
@@ -2717,9 +2717,31 @@ field makes an x86-64 frame unaddressable.
 `negative/struct-array-field-local-unassigned-scalar`, the recorded IR and
 `runtime/struct-array-field-local-scalar-siblings` provide corpus and executable
 evidence. Local initialization, whole reads and copies, parameters, returns,
-selection of the array field and indexing through it remain refused; struct
-fields of struct type and broader nested composition are still outside the
-laid-out kernel.
+selection of the array field remains refused; D48 below supersedes indexed
+access. Struct fields of struct type and broader nested composition are still
+outside the laid-out kernel.
+
+D48 admits `s.f[i]` when `s` directly names D46 module state or a D47 local and
+`f` is a fixed array of enabled scalars. The selection is typed as an array only
+as that index base: the field as a whole value, place, copy endpoint or `zeroed`
+target remains refused. D18's exact `usize` index, [1950]'s compiler-known bound
+refusal, [0580]'s runtime trap and [1900]'s root mutability apply unchanged.
+Module state keeps D10's complete image. Local definite-assignment facts are
+keyed by binding, field and compiler-known position; a computed local read
+requires every position of that field on every arriving path, while a computed
+write establishes no fact. Lowering extends the existing element operations
+with a declaration-order containing field, zero for direct array storage, and
+never carries a target offset. The verifier checks the field exists and is an
+array before its shape access. Backends derive the field offset and length from
+the selected target; x86-64 traps before address arithmetic, uses a full-width
+register offset for module fields and an L0504-bounded displacement for frame
+fields. Public IR, verifier, lowering and backend cases pin transport, malformed
+fields, target-dependent placement and wide offsets. The promoted module/local
+positive fixtures, focused negative fixtures, recorded IR, sibling runtimes and
+module/local computed-trap runtimes provide corpus and executable evidence.
+Whole array-field values and copies, `zeroed` field assignment, initialized
+aggregate storage, parameters, returns, fields of elements, struct-of-struct
+fields and nested arrays remain separate slices.
 
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
@@ -2729,7 +2751,7 @@ module repetition and D36/D38's explicitly typed local and module mixed
 repetition; array assignments other than D20's direct storage name, D29's literal,
 D30's `zeroed`, D32's repetition and D37's mixed-prefix repetition; general
 whole-array value positions; inferred scalar initialization, named-return
-subobject and nested-subobject scalar assignment, nested/general scalar and every
+subobject and nested-subobject scalar `zeroed` assignment, nested/general scalar and every
 other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43; inferred initialization,
 nested and general-value mixed-prefix
 repetition, plus
@@ -2738,7 +2760,7 @@ count-less inferred and general-value full repetition [0560]; slices
 operands
 other than D14's direct name and D31's literal; and initialized local or module
 state, whole values, parameters or returns of a struct with an aggregate
-field, plus selection of its array field or indexing through that selection.
+field, plus selection or whole-place use of its array field.
 Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
 
@@ -2766,7 +2788,9 @@ declaration-only module storage and its scalar-field operations to executable
 evidence while keeping local storage, array-field selection and the whole-value
 boundary pinned. D47 migrated the containing declaration-only local storage
 and its scalar field operations to executable evidence while keeping initialization,
-array-field selection and the whole-value boundary pinned.
+array-field selection and the whole-value boundary pinned. D48 migrated an
+indexed element of that field for both storage classes while keeping the field
+itself and every whole-value boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

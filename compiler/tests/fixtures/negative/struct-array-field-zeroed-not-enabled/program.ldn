@@ -1,0 +1,9 @@
+holder: type = struct
+    row: [2]u8
+end holder
+
+mut state: holder
+
+f: () -> none =
+    state.row = zeroed
+end f

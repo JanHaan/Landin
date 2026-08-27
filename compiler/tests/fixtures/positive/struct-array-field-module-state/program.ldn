@@ -11,5 +11,8 @@ public mut through_alias: holder_alias
 
 touch: () -> none =
     seen: u8 = direct.tag
+    first: usize = direct.row[0]
+    at: usize = 1
+    through_alias.row[at] = first
     through_alias.count = 2
 end touch

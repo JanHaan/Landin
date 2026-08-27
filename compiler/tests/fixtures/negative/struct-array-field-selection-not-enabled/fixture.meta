@@ -1,6 +1,6 @@
 class: negative
-summary: D46 admits the containing module storage but refuses an array field as a value or nested place
+summary: D48 admits an element place but keeps the module array field itself refused as a value
 constructs: 0520, 0670, 0750, 1740, 1820, 1830
 program: program.ldn
-codes: L0304, L0304
+codes: L0304
 targets: linux-x86-64, macos-arm64

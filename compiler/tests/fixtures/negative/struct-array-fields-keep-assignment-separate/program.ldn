@@ -1,0 +1,11 @@
+holder: type = struct
+    left: [2]u8
+    right: [2]u8
+end holder
+
+at: (i: usize) -> (r: u8) =
+    mut local: holder
+    local.left[0] = 7
+    local.left[1] = 1
+    r = local.right[i]
+end at

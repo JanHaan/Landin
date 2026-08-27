@@ -64,6 +64,11 @@ package body Landin.IR.Verifier is
                "a scalar field operation names a fixed-array field",
             when Element_Datum_Is_Not_An_Array =>
                "an element load or store names a datum that is not an array",
+            when Element_Field_Out_Of_Range =>
+               "an element load or store names a field the aggregate does"
+               & " not have",
+            when Element_Field_Is_Not_An_Array =>
+               "an element load or store names a scalar aggregate field",
             when Element_Index_Is_Not_Usize =>
                "an element load or store indexes with a value other than"
                & " usize",
@@ -621,12 +626,50 @@ package body Landin.IR.Verifier is
                                                Value => V);
                                     end if;
 
-                                    if not Is_Array (Of_Unit, Id, Cell) then
+                                    if Element_Field_Of (Of_Unit, Id, V) = 0
+                                      and then not Is_Array
+                                                     (Of_Unit, Id, Cell)
+                                    then
                                        return
                                          (Kind =>
                                             Element_Datum_Is_Not_An_Array,
                                           Item => Id, Block => Block,
                                           Value => V);
+                                    end if;
+
+                                    if Element_Field_Of (Of_Unit, Id, V) > 0
+                                    then
+                                       declare
+                                          Field : constant Natural :=
+                                            Element_Field_Of
+                                              (Of_Unit, Id, V);
+                                          Not_Array : constant Fault_Kind :=
+                                            Element_Field_Is_Not_An_Array;
+                                       begin
+                                          if not Is_Aggregate
+                                                   (Of_Unit, Id, Cell)
+                                            or else Field > Slot_Field_Count
+                                                              (Of_Unit, Id,
+                                                               Cell)
+                                          then
+                                             return
+                                               (Kind =>
+                                                  Element_Field_Out_Of_Range,
+                                                Item => Id, Block => Block,
+                                                Value => V);
+                                          end if;
+
+                                          if Nth_Slot_Field_Shape
+                                               (Of_Unit, Id, Cell,
+                                                Positive (Field)).Kind
+                                               /= Array_Field_Shape
+                                          then
+                                             return
+                                               (Kind => Not_Array,
+                                                Item => Id, Block => Block,
+                                                Value => V);
+                                          end if;
+                                       end;
                                     end if;
                                  end;
                               else
@@ -643,14 +686,49 @@ package body Landin.IR.Verifier is
                                           Value => V);
                                     end if;
 
-                                    if Result_Of (Of_Unit, D)
-                                         /= Landin.Types.Fixed_Array
+                                    if Element_Field_Of (Of_Unit, Id, V) = 0
+                                      and then Result_Of (Of_Unit, D)
+                                                   /= Landin.Types.Fixed_Array
                                     then
                                        return
                                          (Kind =>
                                             Element_Datum_Is_Not_An_Array,
                                           Item => Id, Block => Block,
                                           Value => V);
+                                    end if;
+
+                                    if Element_Field_Of (Of_Unit, Id, V) > 0
+                                    then
+                                       declare
+                                          Field : constant Natural :=
+                                            Element_Field_Of
+                                              (Of_Unit, Id, V);
+                                          Not_Array : constant Fault_Kind :=
+                                            Element_Field_Is_Not_An_Array;
+                                       begin
+                                          if Result_Of (Of_Unit, D)
+                                               /= Landin.Types.Aggregate
+                                            or else Field > Field_Count
+                                                              (Of_Unit, D)
+                                          then
+                                             return
+                                               (Kind =>
+                                                  Element_Field_Out_Of_Range,
+                                                Item => Id, Block => Block,
+                                                Value => V);
+                                          end if;
+
+                                          if Nth_Field_Shape
+                                               (Of_Unit, D,
+                                                Positive (Field)).Kind
+                                               /= Array_Field_Shape
+                                          then
+                                             return
+                                               (Kind => Not_Array,
+                                                Item => Id, Block => Block,
+                                                Value => V);
+                                          end if;
+                                       end;
                                     end if;
                                  end;
                               end if;
@@ -1050,12 +1128,19 @@ package body Landin.IR.Verifier is
                                  Element : constant Landin.Types.Scalar_Name
                                    :=
                                      (if Reaches_A_Slot (Of_Unit, Id, V)
-                                      then Slot_Array_Element
-                                             (Of_Unit, Id,
-                                              Slot_Of (Of_Unit, Id, V))
-                                      else Array_Element
+                                      then Slot_Element_Type
+                                             (Of_Unit, Id, V)
+                                      elsif Element_Field_Of
+                                              (Of_Unit, Id, V) = 0
+                                      then Array_Element
                                              (Of_Unit,
-                                              Datum_Of (Of_Unit, Id, V)));
+                                              Datum_Of (Of_Unit, Id, V))
+                                      else Nth_Field_Shape
+                                             (Of_Unit,
+                                              Datum_Of (Of_Unit, Id, V),
+                                              Positive
+                                                (Element_Field_Of
+                                                   (Of_Unit, Id, V))).Element);
                               begin
                                  if Result_Of (Of_Unit, Id, Index)
                                       /= Landin.Types.Usize

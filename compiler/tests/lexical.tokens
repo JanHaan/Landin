@@ -3009,7 +3009,7 @@ file positive/statement-inc-dec/program.ldn tokens 19
   53 54 n
   55 58 end
   59 60 f
-file positive/struct-array-field-local-storage/program.ldn tokens 65
+file positive/struct-array-field-local-storage/program.ldn tokens 112
   0 6 holder
   6 7 :
   8 12 type
@@ -3051,31 +3051,78 @@ file positive/struct-array-field-local-storage/program.ldn tokens 65
   171 183 holder_alias
   188 194 direct
   194 195 .
-  195 199 tail
-  200 201 =
-  202 203 7
-  208 221 through_alias
-  221 222 .
-  222 225 tag
-  226 227 =
-  228 229 1
-  234 243 seen_tail
-  243 244 :
-  245 248 u16
-  249 250 =
-  251 257 direct
-  257 258 .
-  258 262 tail
-  267 275 seen_tag
-  275 276 :
-  277 279 u8
-  280 281 =
-  282 295 through_alias
-  295 296 .
-  296 299 tag
-  300 303 end
-  304 307 use
-file positive/struct-array-field-module-state/program.ldn tokens 53
+  195 198 row
+  198 199 [
+  199 200 0
+  200 201 ]
+  202 203 =
+  204 206 70
+  211 217 direct
+  217 218 .
+  218 221 row
+  221 222 [
+  222 223 1
+  223 224 ]
+  225 226 =
+  227 228 1
+  233 246 through_alias
+  246 247 .
+  247 250 row
+  250 251 [
+  251 252 0
+  252 253 ]
+  254 255 =
+  256 257 7
+  262 275 through_alias
+  275 276 .
+  276 279 row
+  279 280 [
+  280 281 1
+  281 282 ]
+  283 284 =
+  285 286 2
+  291 297 direct
+  297 298 .
+  298 302 tail
+  303 304 =
+  305 306 7
+  311 324 through_alias
+  324 325 .
+  325 328 tag
+  329 330 =
+  331 332 1
+  337 339 at
+  339 340 :
+  341 346 usize
+  347 348 =
+  349 350 1
+  355 367 seen_element
+  367 368 :
+  369 374 usize
+  375 376 =
+  377 390 through_alias
+  390 391 .
+  391 394 row
+  394 395 [
+  395 397 at
+  397 398 ]
+  403 412 seen_tail
+  412 413 :
+  414 417 u16
+  418 419 =
+  420 426 direct
+  426 427 .
+  427 431 tail
+  436 444 seen_tag
+  444 445 :
+  446 448 u8
+  449 450 =
+  451 464 through_alias
+  464 465 .
+  465 468 tag
+  469 472 end
+  473 476 use
+file positive/struct-array-field-module-state/program.ldn tokens 76
   0 6 holder
   6 7 :
   8 12 type
@@ -3122,13 +3169,36 @@ file positive/struct-array-field-module-state/program.ldn tokens 53
   198 204 direct
   204 205 .
   205 208 tag
-  213 226 through_alias
-  226 227 .
-  227 232 count
-  233 234 =
-  235 236 2
-  237 240 end
-  241 246 touch
+  213 218 first
+  218 219 :
+  220 225 usize
+  226 227 =
+  228 234 direct
+  234 235 .
+  235 238 row
+  238 239 [
+  239 240 0
+  240 241 ]
+  246 248 at
+  248 249 :
+  250 255 usize
+  256 257 =
+  258 259 1
+  264 277 through_alias
+  277 278 .
+  278 281 row
+  281 282 [
+  282 284 at
+  284 285 ]
+  286 287 =
+  288 293 first
+  298 311 through_alias
+  311 312 .
+  312 317 count
+  318 319 =
+  320 321 2
+  322 325 end
+  326 331 touch
 file positive/struct-module-state/program.ldn tokens 20
   0 8 counters
   8 9 :
@@ -7289,6 +7359,119 @@ file negative/slice-not-enabled/program.ldn tokens 7
   122 123 [
   123 124 ]
   124 126 u8
+file negative/struct-array-field-immutable-element/program.ldn tokens 33
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 row
+  29 30 :
+  31 32 [
+  32 33 2
+  33 34 ]
+  34 36 u8
+  37 40 end
+  41 47 holder
+  49 54 state
+  54 55 :
+  56 62 holder
+  64 65 f
+  65 66 :
+  67 68 (
+  68 69 )
+  70 72 ->
+  73 77 none
+  78 79 =
+  84 89 state
+  89 90 .
+  90 93 row
+  93 94 [
+  94 95 0
+  95 96 ]
+  97 98 =
+  99 100 1
+  101 104 end
+  105 106 f
+file negative/struct-array-field-index-not-usize/program.ldn tokens 40
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 row
+  29 30 :
+  31 32 [
+  32 33 2
+  33 34 ]
+  34 36 u8
+  37 40 end
+  41 47 holder
+  49 54 state
+  54 55 :
+  56 62 holder
+  64 66 at
+  66 67 :
+  68 69 (
+  69 70 i
+  70 71 :
+  72 75 u32
+  75 76 )
+  77 79 ->
+  80 81 (
+  81 82 r
+  82 83 :
+  84 86 u8
+  86 87 )
+  88 89 =
+  94 95 r
+  96 97 =
+  98 103 state
+  103 104 .
+  104 107 row
+  107 108 [
+  108 109 i
+  109 110 ]
+  111 114 end
+  115 117 at
+file negative/struct-array-field-index-outside/program.ldn tokens 37
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 row
+  29 30 :
+  31 32 [
+  32 33 2
+  33 34 ]
+  34 36 u8
+  37 40 end
+  41 47 holder
+  49 54 state
+  54 55 :
+  56 62 holder
+  64 65 f
+  65 66 :
+  67 68 (
+  68 69 )
+  70 72 ->
+  73 74 (
+  74 75 r
+  75 76 :
+  77 79 u8
+  79 80 )
+  81 82 =
+  87 88 r
+  89 90 =
+  91 96 state
+  96 97 .
+  97 100 row
+  100 101 [
+  101 102 2
+  102 103 ]
+  104 107 end
+  108 109 f
 file negative/struct-array-field-layout-overflow/program.ldn tokens 22
   0 9 too_large
   9 10 :
@@ -7312,6 +7495,56 @@ file negative/struct-array-field-layout-overflow/program.ldn tokens 22
   104 105 =
   106 112 sizeof
   113 122 too_large
+file negative/struct-array-field-local-computed-unassigned/program.ldn tokens 49
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 row
+  29 30 :
+  31 32 [
+  32 33 2
+  33 34 ]
+  34 36 u8
+  37 40 end
+  41 47 holder
+  49 51 at
+  51 52 :
+  53 54 (
+  54 55 i
+  55 56 :
+  57 62 usize
+  62 63 )
+  64 66 ->
+  67 68 (
+  68 69 r
+  69 70 :
+  71 73 u8
+  73 74 )
+  75 76 =
+  81 84 mut
+  85 90 local
+  90 91 :
+  92 98 holder
+  103 108 local
+  108 109 .
+  109 112 row
+  112 113 [
+  113 114 0
+  114 115 ]
+  116 117 =
+  118 119 7
+  124 125 r
+  126 127 =
+  128 133 local
+  133 134 .
+  134 137 row
+  137 138 [
+  138 139 i
+  139 140 ]
+  141 144 end
+  145 147 at
 file negative/struct-array-field-local-selection-not-enabled/program.ldn tokens 44
   0 6 holder
   6 7 :
@@ -7511,6 +7744,38 @@ file negative/struct-array-field-whole-copy-not-enabled/program.ldn tokens 36
   130 134 left
   135 138 end
   139 143 copy
+file negative/struct-array-field-zeroed-not-enabled/program.ldn tokens 31
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 row
+  29 30 :
+  31 32 [
+  32 33 2
+  33 34 ]
+  34 36 u8
+  37 40 end
+  41 47 holder
+  49 52 mut
+  53 58 state
+  58 59 :
+  60 66 holder
+  68 69 f
+  69 70 :
+  71 72 (
+  72 73 )
+  74 76 ->
+  77 81 none
+  82 83 =
+  88 93 state
+  93 94 .
+  94 97 row
+  98 99 =
+  100 106 zeroed
+  107 110 end
+  111 112 f
 file negative/struct-copy-across-types/program.ldn tokens 45
   0 4 here
   4 5 :

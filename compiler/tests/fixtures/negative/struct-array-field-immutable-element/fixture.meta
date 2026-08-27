@@ -1,0 +1,6 @@
+class: negative
+summary: D48 gives an array-field element the writability of its immutable module root
+constructs: 0520, 0670, 0750, 1740, 1820, 1900
+program: program.ldn
+codes: L0303
+targets: linux-x86-64, macos-arm64
