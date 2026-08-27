@@ -1,0 +1,5 @@
+f: () -> (length: usize) =
+    mut first: u8
+    mut second: u8
+    length = lenof ([first, second])
+end f

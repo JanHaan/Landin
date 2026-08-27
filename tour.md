@@ -369,10 +369,13 @@ are gone; step(0, 10, 2) and friends are library calls.
 sizeof, alignof and lenof.
 On an array the length is a compile-time value; on a slice
 it is a run-time value; on a literal it is compile-time.
+The expressions in a literal measured by lenof are checked for one
+scalar element type but are not evaluated or read.
 ```landin
 w1 := sizeof u32
 a1 := alignof u64
 n1 := lenof grid
+n2 := lenof ([next(), next(), next()]) -- 3; next is not called
 
 ```
 

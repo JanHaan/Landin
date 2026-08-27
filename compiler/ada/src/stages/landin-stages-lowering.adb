@@ -597,21 +597,25 @@ package body Landin.Stages.Lowering is
                end;
 
             --  [0370]: unlike byte measurements, an array's element count is
-            --  target-neutral and was fixed by its declared type.  Materialise
-            --  it as the existing usize Number; no storage is read.
+            --  target-neutral.  D14 takes it from a named array's type; D31
+            --  takes it from a literal's source run without lowering an
+            --  element.  Both use the existing usize Number.
             when Syn.Len_Of =>
                declare
                   Asked : constant Syn.Node_Id :=
                     Syn.Operand_Of (Of_Tree, Node);
-                  Means : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, Asked);
+                  Length : constant Ty.Magnitude :=
+                    (if Syn.Kind (Of_Tree, Asked) = Syn.Array_Literal
+                     then Ty.Magnitude (Syn.Element_Count (Of_Tree, Asked))
+                     else Ty.Magnitude
+                            (Landin.Checking.Array_Length
+                               (Types.all,
+                                Res.Bound_To
+                                  (Meanings.all, Of_Tree, Asked))));
                begin
                   return IR.Emit_Number
                            (Unit.all, Filling, Scalar_At (Of_Tree, Node),
-                            Ty.Magnitude
-                              (Landin.Checking.Array_Length
-                                 (Types.all, Means)),
-                            False, Site);
+                            Length, False, Site);
                end;
 
             when Syn.Negation =>
@@ -2225,7 +2229,11 @@ package body Landin.Stages.Lowering is
                      Asked : constant Syn.Node_Id :=
                        Syn.Operand_Of (Of_Tree, Node);
                   begin
-                     if Syn.Kind (Of_Tree, Asked) = Syn.Name_Reference
+                     if Syn.Kind (Of_Tree, Asked) = Syn.Array_Literal then
+                        Value :=
+                          Ty.Folded (Syn.Element_Count (Of_Tree, Asked));
+                        Known := True;
+                     elsif Syn.Kind (Of_Tree, Asked) = Syn.Name_Reference
                        and then Res.Verdict_Of
                                   (Meanings.all, Of_Tree, Asked)
                                 = Res.Bound

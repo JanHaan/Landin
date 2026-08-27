@@ -1,0 +1,19 @@
+mut calls: u8 = 0
+mut lenof: [1]usize = [7]
+
+value: () -> (result: u8) =
+    calls = calls + 1
+    result = calls
+end value
+
+literal_length: usize = lenof ([value(), value(), value()])
+
+public main: () -> (code: i32) =
+    if literal_length == 3 and lenof ([value()]) == 1
+        and lenof[0] == 7 and calls == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -1,0 +1,6 @@
+class: runtime
+summary: lenof answers with an array literal's compile-time element count
+constructs: 0080, 0160, 0200, 0370, 0520, 0570, 1800, 1880, 1950, 1960, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

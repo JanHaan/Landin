@@ -1,0 +1,3 @@
+f: () -> (length: usize) =
+    length = lenof ([1, true])
+end f
