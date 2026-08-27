@@ -1,5 +1,5 @@
 class: negative
-summary: neither module nor local scalar assignment gives zeroed D39's initializer context
+summary: scalar assignment gives zeroed neither D39's module nor D40's local initializer context
 constructs: 0040, 0190, 0540, 1740, 1760, 1770, 1800, 1810
 program: program.ldn
 codes: L0304, L0304
