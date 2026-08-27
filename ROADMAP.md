@@ -2437,13 +2437,29 @@ module `[3]usize` clear 24 bytes under Linux x86-64 and 12 under the synthetic
 assignment, while `runtime/array-zeroed-assignment-clears-storage` proves the
 complete local and module effect.
 
+D31 admits [0370]'s parenthesized nonempty array literal as the second `lenof`
+operand. Its parentheses preserve `lenof[index]` as indexing when `lenof` is an
+ordinary binding, rather than silently making the contextual spelling reserve
+that position. D25's first-element rule supplies one scalar shape and checks
+every later expression,
+but none of those expressions is evaluated, read, folded, lowered or stored: the
+source run alone supplies one target-neutral `usize` Number. The same count is a
+static module image even when an element is a call, and no object exists to be
+limited by D18's maximum extent. The positive fixture pins unassigned local
+operands; two negative fixtures pin scalar agreement and reject an aggregate
+first element with one type report; and
+`runtime/lenof-array-literal-is-compile-time` pins a module count whose calls
+must not run while an ordinary array named `lenof` remains indexable. Slices and
+every other expression operand remain separate.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, and D27/D28's explicitly typed module and local `zeroed`;
 array assignments other than D20's direct storage name, D29's literal and D30's
 `zeroed`; general whole-array value positions; inferred, scalar and every other
-`zeroed` [0540] context; repetition [0560]; slices [0570]; non-identifier `lenof`
-operands; and an array as a struct field. Each is its own slice, and the remaining
+`zeroed` [0540] context; repetition [0560]; slices [0570]; `lenof` operands
+other than D14's direct name and D31's literal; and an array as a struct field.
+Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,

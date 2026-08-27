@@ -298,6 +298,7 @@ indexed     ::= selection ("[" expression "]")*
 selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
 measurement ::= ("sizeof" | "alignof") type | "lenof" identifier
+              | "lenof" "(" array_literal ")"
 arguments   ::= expression ("," expression)*
 unary       ::= ("-" | "~" | "not")* primary
 product     ::= unary (("*" | "/" | "%" | "*%") unary)*
@@ -961,10 +962,10 @@ than about this.
 **Chosen:** `usize`. A size and an alignment are counts of bytes on the
 machine being compiled for, which is what [0160] says `usize` is for, and a
 measurement that defaulted to `i32` would need a conversion at every use
-where a width is wanted. `lenof` has the same result type. In this R2.20
-slice it takes only a direct identifier naming a fixed array; slices,
-literals and general expression operands remain deferred. The spelling stays
-contextual rather than joining [1760]'s reserved words.
+where a width is wanted. `lenof` has the same result type. It takes a direct
+identifier naming a fixed array; D31 also admits a nonempty array literal.
+Slices and every other general expression operand remain deferred. The
+spelling stays contextual rather than joining [1760]'s reserved words.
 
 **Where the answer comes from** is the other half of this decision and the
 half with teeth. A scalar `sizeof` or `alignof` is not folded by the checker or
@@ -1797,3 +1798,54 @@ declined.
 **Pinned by** `positive/array-zeroed-assignment` and
 `runtime/array-zeroed-assignment-clears-storage` on Linux x86-64, together with
 the focused lowering and target-width backend cases for both storage kinds.
+
+### D31 — `lenof` counts a literal without forming it
+
+**The tour said** that a literal's `lenof` is compile-time [0370]. D14 first
+implemented only a direct name, because a general expression operand would have
+made array values, calls, selections and slices one undivided decision. D25 later
+settled how a nonempty literal supplies a scalar element shape.
+
+**Chosen:** `lenof ([first, ...])` is a `usize` whose value is the number of
+expressions in the literal's source run. The literal must remain nonempty under
+[0520]. Its first element supplies D25's scalar type, including [0200]'s default
+for an otherwise untyped integer, and every later element must have that same
+type. This checks that the syntax denotes one array shape; it does not create an
+array value.
+
+None of the element expressions is evaluated, read, folded, lowered or stored.
+The count therefore remains valid when an element is an unassigned local, a call,
+a selection or any other well-typed scalar expression. At module scope those
+expressions do not become module initializer inputs: the complete measurement is
+known from syntax alone. Definite assignment likewise reads no names beneath the
+measurement.
+
+Lowering emits one existing `usize` Number holding the source element count. A
+static module binding records the same number directly. No array storage,
+temporary, element instruction, target query or backend operation is introduced.
+D18's maximum object extent does not apply because no object of the literal's
+shape exists.
+
+This admits only a parenthesized nonempty array literal beside D14's direct
+identifier. The parentheses are part of the measurement syntax, not a general
+expression operand: without them, `lenof[index]` continues to index an ordinary
+binding named `lenof`, as [1760]'s contextual spelling requires. A slice,
+selection, index, call and every other general `lenof` expression remain
+deferred. Empty literal syntax and `[0]T` source legality remain undecided with
+[0520].
+
+**Why type-check expressions that do not run:** the brackets still claim one
+array literal, and D25 already gives that claim a deterministic scalar shape.
+Counting arbitrary comma-separated expressions regardless of their types would
+make malformed aggregate syntax valid only when placed beneath `lenof`.
+
+**The alternative:** evaluate the literal and then ask the resulting array value
+for its length. That would make calls and reads observable despite the count being
+fixed by syntax, require hidden array storage, and prematurely admit a general
+array value. It was declined.
+
+**Pinned by** `positive/lenof-array-literal-does-not-read-elements`,
+`negative/lenof-array-literal-element-mismatch`,
+`negative/lenof-array-literal-needs-scalar-elements`, and
+`runtime/lenof-array-literal-is-compile-time` on Linux x86-64; the runtime case
+also keeps an ordinary array named `lenof` indexable.

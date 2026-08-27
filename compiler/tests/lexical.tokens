@@ -641,6 +641,38 @@ file positive/if-plain/program.ldn tokens 29
   76 78 if
   79 82 end
   83 84 f
+file positive/lenof-array-literal-does-not-read-elements/program.ldn tokens 31
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 10 (
+  10 16 length
+  16 17 :
+  18 23 usize
+  23 24 )
+  25 26 =
+  31 34 mut
+  35 40 first
+  40 41 :
+  42 44 u8
+  49 52 mut
+  53 59 second
+  59 60 :
+  61 63 u8
+  68 74 length
+  75 76 =
+  77 82 lenof
+  83 84 (
+  84 85 [
+  85 90 first
+  90 91 ,
+  92 98 second
+  98 99 ]
+  99 100 )
+  101 104 end
+  105 106 f
 file positive/lenof-remains-a-name/program.ldn tokens 30
   0 5 lenof
   5 6 :
@@ -3777,6 +3809,69 @@ file negative/keyword-as-name/program.ldn tokens 5
   8 9 =
   10 11 1
 file negative/latin1-byte-in-name/program.ldn refused no rule spells 'é'
+file negative/lenof-array-literal-element-mismatch/program.ldn tokens 23
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 10 (
+  10 16 length
+  16 17 :
+  18 23 usize
+  23 24 )
+  25 26 =
+  31 37 length
+  38 39 =
+  40 45 lenof
+  46 47 (
+  47 48 [
+  48 49 1
+  49 50 ,
+  51 55 true
+  55 56 ]
+  56 57 )
+  58 61 end
+  62 63 f
+file negative/lenof-array-literal-needs-scalar-elements/program.ldn tokens 38
+  0 4 pair
+  4 5 :
+  6 10 type
+  11 12 =
+  13 19 struct
+  24 28 left
+  28 29 :
+  30 32 u8
+  37 42 right
+  42 43 :
+  44 46 u8
+  47 50 end
+  51 55 pair
+  57 58 f
+  58 59 :
+  60 61 (
+  61 62 )
+  63 65 ->
+  66 67 (
+  67 73 length
+  73 74 :
+  75 80 usize
+  80 81 )
+  82 83 =
+  88 91 mut
+  92 97 value
+  97 98 :
+  99 103 pair
+  108 114 length
+  115 116 =
+  117 122 lenof
+  123 124 (
+  124 125 [
+  125 130 value
+  130 131 ]
+  131 132 )
+  133 136 end
+  137 138 f
 file negative/lenof-scalar/program.ldn tokens 20
   0 1 f
   1 2 :
