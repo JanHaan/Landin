@@ -140,7 +140,8 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Binding : Syn.Node_Id;
          Literal : Syn.Node_Id;
-         Written : Syn.Node_Id);
+         Expected : Landin.Checking.Element_Count;
+         Element : Ty.Scalar_Name);
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Block
@@ -1818,12 +1819,9 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Binding : Syn.Node_Id;
          Literal : Syn.Node_Id;
-         Written : Syn.Node_Id)
+         Expected : Landin.Checking.Element_Count;
+         Element : Ty.Scalar_Name)
       is
-         Expected : constant Landin.Checking.Element_Count :=
-           Landin.Checking.Array_Length (Types.all, Of_Tree, Written);
-         Element : constant Ty.Scalar_Name :=
-           Landin.Checking.Array_Element (Types.all, Of_Tree, Written);
       begin
          --  Check_Module_Value refuses a call element by [1940] and marks
          --  the whole literal Ill_Typed on the way out; walking each
@@ -1850,8 +1848,8 @@ package body Landin.Stages.Checking is
                           & Counted
                               (Syn.Element_Count (Of_Tree, Literal), "element")
                           & ", and the declared array has a different length",
-               Note    => "D23/D24: an array literal supplies exactly the"
-                          & " number of elements its written type names",
+               Note    => "D23/D24/D26: an array literal supplies exactly"
+                          & " the number of elements its written type names",
                Related => Syn.Origin (Of_Tree, Binding),
                Because => "the type declared here",
                Into    => Found);
@@ -1947,38 +1945,51 @@ package body Landin.Stages.Checking is
                      --  and [0200] settles a literal that has none.  D21's
                      --  narrow array case reads the shape from a direct
                      --  storage name without making array names general
-                     --  values.  [0530]'s local literal was already given its
-                     --  finite shape and scalar context by Infer; every other
-                     --  form still goes through Synthesise and keeps its
-                     --  existing refusal.
-                     if Is_Local_Binding (Of_Tree, Node)
-                       and then Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
-                     then
-                        null;
-                     else
-                        declare
-                           Got : constant Ty.Type_Kind :=
-                             (if Is_Direct_Array_Name (Of_Tree, Value)
-                              then Selected_From (Of_Tree, Value)
-                              else Synthesise (Of_Tree, Value));
-                        begin
-                           if Got = Ty.Untyped_Integer then
-                              Commit_To (Of_Tree, Value, Ty.Default_Integer);
-                           elsif Got = Ty.No_Value then
-                              Bad.Report
-                                (Item    => Bad.Type_Mismatch,
-                                 Source  => Syn.Source_Of (Of_Tree),
-                                 Where   => Syn.Where (Of_Tree, Value),
-                                 Message => "this hands back nothing, so"
-                                            & " there is no type to infer",
-                                 Note    => "[1920]: a call of a function"
-                                            & " returning none has no type",
-                                 Related => Syn.Origin (Of_Tree, Node),
-                                 Because => "this binding",
-                                 Into    => Found);
-                           end if;
-                        end;
-                     end if;
+                     --  values.  D25/D26's literal was already given its
+                     --  finite shape and scalar context by Infer; checking it
+                     --  here applies the local or module element boundary.
+                     --  Every other form still goes through Synthesise and
+                     --  keeps its existing refusal.
+                     declare
+                        Inferred_Literal : constant Boolean :=
+                          Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+                          and then Landin.Checking.Type_Of
+                                     (Types.all, Of_Tree, Value)
+                                   = Ty.Fixed_Array;
+                     begin
+                        if Inferred_Literal then
+                           Check_Array_Literal
+                             (Of_Tree, Node, Value,
+                              Landin.Checking.Array_Length
+                                (Types.all, Of_Tree, Value),
+                              Landin.Checking.Array_Element
+                                (Types.all, Of_Tree, Value));
+                        else
+                           declare
+                              Got : constant Ty.Type_Kind :=
+                                (if Is_Direct_Array_Name (Of_Tree, Value)
+                                 then Selected_From (Of_Tree, Value)
+                                 else Synthesise (Of_Tree, Value));
+                           begin
+                              if Got = Ty.Untyped_Integer then
+                                 Commit_To
+                                   (Of_Tree, Value, Ty.Default_Integer);
+                              elsif Got = Ty.No_Value then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "this hands back nothing, so"
+                                               & " there is no type to infer",
+                                    Note    => "[1920]: a call of a function"
+                                               & " returning none has no type",
+                                    Related => Syn.Origin (Of_Tree, Node),
+                                    Because => "this binding",
+                                    Into    => Found);
+                              end if;
+                           end;
+                        end if;
+                     end;
                   elsif Wants = Ty.Fixed_Array then
                      declare
                         Written : constant Syn.Node_Id :=
@@ -1993,7 +2004,11 @@ package body Landin.Stages.Checking is
                            --  literal as it does for any other module
                            --  value, so a runtime element is refused there.
                            Check_Array_Literal
-                             (Of_Tree, Node, Value, Written);
+                             (Of_Tree, Node, Value,
+                              Landin.Checking.Array_Length
+                                (Types.all, Of_Tree, Written),
+                              Landin.Checking.Array_Element
+                                (Types.all, Of_Tree, Written));
                         else
                            --  D21: the other initializer form is a
                            --  whole-array copy from a storage name, so the
@@ -2287,9 +2302,14 @@ package body Landin.Stages.Checking is
          Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree, Node);
          Written : constant Syn.Node_Id :=
            Syn.Declared_Type (Of_Tree, Node);
-         Written_Array : constant Boolean :=
-           Written /= Syn.No_Node
-           and then Type_At (Of_Tree, Written) = Ty.Fixed_Array;
+         Binding_Array : constant Boolean :=
+           (Written /= Syn.No_Node
+            and then Type_At (Of_Tree, Written) = Ty.Fixed_Array)
+           or else
+             (Value /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+              and then Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Value) = Ty.Fixed_Array);
 
          procedure Refuse_Unreadable_Subtree (Where : Syn.Node_Id);
 
@@ -2324,7 +2344,7 @@ package body Landin.Stages.Checking is
          --  Scalar module values still follow [1940]: selecting storage is not
          --  a compile-time scalar image, even beneath an otherwise foldable
          --  operator.
-         if Value /= Syn.No_Node and then not Written_Array then
+         if Value /= Syn.No_Node and then not Binding_Array then
             Refuse_Unreadable_Subtree (Value);
          end if;
 
@@ -2357,13 +2377,14 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         --  [0530]: a nonempty literal in a local inferred binding supplies
-         --  D17's length and takes its scalar element type from the first
-         --  element.  [0200] gives an otherwise untyped integer expression
-         --  its default context; that settled scalar then checks every later
-         --  element.  Module inference remains outside this slice because a
-         --  static image has a separate [1940] boundary.
-         if Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
+         --  [0530]: a nonempty literal in an inferred binding supplies D17's
+         --  length and takes its scalar element type from the first element.
+         --  [0200] gives an otherwise untyped integer expression its default
+         --  context; that settled scalar then checks every later element.
+         --  D25 uses the shape for a local source-order initializer; D26 uses
+         --  the same shape for D24's separate [1940] module image boundary.
+         if Res.Sort_Of (Meanings.all, Id)
+              in Res.Local_Binding | Res.Module_Binding
            and then Syn.Kind (Of_Tree.all, Value) = Syn.Array_Literal
          then
             declare
@@ -3254,7 +3275,7 @@ package body Landin.Stages.Checking is
                         (Types.all, Of_Tree, Value);
          end if;
 
-         --  D24: a module array literal is one fold per element, and the
+         --  D24/D26: a module array literal is one fold per element, and the
          --  element type is what has to hold each one.  A shorter or longer
          --  literal has already been reported by Check_Array_Literal.
          if Wanted = Ty.Fixed_Array

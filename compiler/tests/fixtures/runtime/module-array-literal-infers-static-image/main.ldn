@@ -1,0 +1,22 @@
+mut literal := [10, 20 + 1, base, base + 100]
+mut typed: [4]i32 = literal
+mut copied := literal
+
+base: i32 = 100
+
+public main: () -> (code: i32) =
+    typed[0] = 99
+    copied[1] = 77
+
+    if literal[0] == 10 and literal[1] == 21
+        and literal[2] == 100 and literal[3] == 200
+        and typed[0] == 99 and typed[1] == 21
+        and typed[2] == 100 and typed[3] == 200
+        and copied[0] == 10 and copied[1] == 77
+        and copied[2] == 100 and copied[3] == 200
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

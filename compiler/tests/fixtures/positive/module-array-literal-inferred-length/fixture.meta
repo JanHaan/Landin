@@ -1,0 +1,5 @@
+class: positive
+summary: a known module literal supplies its static array shape and image
+constructs: 0050, 0200, 0520, 0530, 1740, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

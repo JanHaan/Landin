@@ -1,0 +1,6 @@
+class: negative
+summary: inferred module literals keep the known-value and storage-selection boundaries
+constructs: 0050, 0520, 0530, 0570, 1740, 1940
+program: program.ldn
+codes: L0305, L0304
+targets: linux-x86-64, macos-arm64

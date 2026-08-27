@@ -1430,13 +1430,12 @@ omitted-initializer array (whose image is zero) or at a D24 literal
 still owns distinct storage, and each is initialized with the terminal
 image byte for byte — a chain does not alias its source.
 
-This is the sole new module array initializer form. The inferred
-`[mut] name := [first, ...]` still refuses [0530]'s inferred length; an
-empty literal, `zeroed` [0540], repetition [0560], slices [0570],
-nested array values, non-scalar elements, calls, selections and index
-results all remain outside this slice. Requiring one expression in the
-literal grammar does not settle whether a programmer may write the
-zero-length type `[0]T`.
+This is D24's sole new module array initializer form. D26 later admits
+`[mut] name := [first, ...]` after D25 settles [0530]'s inferred shape. An
+empty literal, `zeroed` [0540], repetition [0560], slices [0570], nested
+array values, non-scalar elements, calls, selections and index results all
+remain outside these slices. Requiring one expression in the literal grammar
+does not settle whether a programmer may write the zero-length type `[0]T`.
 
 The [1820] operators [1940] admits over literals are folded during
 checking and again when lowering records the verified image: [0290]'s
@@ -1485,11 +1484,12 @@ module value is, and the finite element run makes the module fold a
 per-position walk that a target loader can consume by writing one
 directive per element into the object.
 
-**The alternative:** admit a call, a general expression, or infer the
-length from the literal at module scope. The first two turn `[1460]`
-into a promise this compiler cannot keep; the third couples [0530] to
-static-image folding rather than to D25's later local source-order case.
-All three remain declined.
+**The alternative:** admit a call or a general expression, or infer the
+length from the literal before settling the local rule. The first two turn
+`[1460]` into a promise this compiler cannot keep; the third would have coupled
+[0530] to static-image folding rather than first giving local and module
+bindings D25's one shape. D26 admits inference only after that shared rule;
+the first two alternatives remain declined.
 
 **Pinned by** `positive/module-array-literal-initializer`,
 `positive/module-array-literal-forward-scalar-reference`,
@@ -1529,9 +1529,9 @@ expression is an untyped integer, [0200]'s `i32` is its context and therefore
 recorded. D23's existing lowering evaluates and stores the finite source run
 left to right, and the resulting local is wholly assigned.
 
-This admits only the initializer in a local inferred binding. A module
-`name := [first, ...]` remains refused: D24's static image still requires a
-written shape and its separate [1940] fold. A literal in general assignment,
+D25 admits only the initializer in a local inferred binding. Its module
+counterpart remained refused until D26 connected the inferred shape to D24's
+separate [1940] static-image fold. A literal in general assignment,
 a parameter or return, an empty literal, a nested literal, repetition [0560]
 and every non-scalar element also remain outside this slice. In particular,
 inference does not create a general array-valued temporary.
@@ -1551,6 +1551,52 @@ inference would merge [0530] with [1940]'s independently constrained image
 fold. All three were declined.
 
 **Pinned by** `positive/local-array-literal-inferred-length`,
-`negative/local-array-literal-inferred-element-mismatch`,
-`negative/module-array-literal-inferred-length-not-enabled`, and
+`negative/local-array-literal-inferred-element-mismatch`, and
 `runtime/local-array-literal-infers-and-initializes` on Linux x86-64.
+
+### D26 — An inferred module literal has the same static image boundary
+
+**The tour said** that `:=` takes the type of its value [0050], that the length
+may be inferred from an array literal [0530], and that every module value is
+known when the compiler reads it [1940]. D24 supplied static images only after
+a written array type, and D25 first settled how a nonempty literal infers one
+shape.
+
+**Chosen:** a nonempty array literal directly initializing an inferred module
+binding has D25's `[N]T` shape: its source count is `N`, its first element
+supplies scalar `T`, an otherwise untyped integer first element defaults to
+`i32` [0200], and every later element is checked in that same context. Once the
+shape is settled, every element must meet D24's module-image boundary: it is
+[1940]-known, target-aware folding produces a value held by `T`, and the values
+form one source-order static image. D21's direct-name chain may copy that image
+into typed or inferred module array storage, with a distinct datum for every
+binding.
+
+All D24 exclusions remain exclusions: no call, member selection, element index
+or nested array can supply an image element, and checked overflow or an
+out-of-range folded value is refused before lowering. D18 limits the inferred
+complete byte extent before the shape is recorded. A local inferred literal
+continues to use D25's runtime evaluation instead; only module scope folds an
+image.
+
+This does not admit a literal in general assignment, as a parameter or return,
+or as a general array-valued expression. It also does not admit an empty
+literal, repetition [0560], `zeroed` [0540], slices [0570], or a non-scalar
+element. No general array temporary is introduced.
+
+**Why reuse D25's shape before D24's fold:** inference answers only which fixed
+array the binding holds; [1940] independently answers whether module storage
+can have that value before anything runs [1460]. Keeping those checks
+sequential makes local and module `:=` mean the same type while preserving the
+module-only static-image restriction.
+
+**The alternative:** infer a different element type from the complete folded
+image, or make module inference choose a written-width type from each value.
+Either would make the same literal have a different type at local and module
+scope and would invent a numeric join or narrowing conversion [0310]. Both were
+declined.
+
+**Pinned by** `positive/module-array-literal-inferred-length`,
+`negative/module-array-literal-inferred-boundaries`,
+`negative/module-array-literal-inferred-fold`, and
+`runtime/module-array-literal-infers-static-image` on Linux x86-64.
