@@ -1139,6 +1139,40 @@ package body Landin.Stages.Lowering is
                                     Site);
                               end loop;
                            elsif Syn.Kind (Of_Tree, Value)
+                                   = Syn.Mixed_Array_Repetition
+                           then
+                              --  D36 stores the prefix as it is evaluated,
+                              --  then evaluates one suffix pattern and fills
+                              --  from the first part after that prefix.
+                              for Position in
+                                1 .. Syn.Element_Count (Of_Tree, Value)
+                              loop
+                                 IR.Emit_Store_Slot_Field
+                                   (Unit.all, Filling, Where,
+                                    IR.Part_Position (Position),
+                                    Lower_Expression
+                                      (Of_Tree,
+                                       Syn.Nth_Element
+                                         (Of_Tree, Value, Position),
+                                       Scope),
+                                    Site);
+                              end loop;
+
+                              IR.Emit_Array_Fill
+                                (Unit.all, Filling,
+                                 Destination =>
+                                   IR.Storage'
+                                     (Kind => IR.Frame_Slot, Slot => Where),
+                                 First       =>
+                                   IR.Part_Position
+                                     (Syn.Element_Count (Of_Tree, Value) + 1),
+                                 Value       =>
+                                   Lower_Expression
+                                     (Of_Tree,
+                                      Syn.Repeated_Element (Of_Tree, Value),
+                                      Scope),
+                                 Site        => Site);
+                           elsif Syn.Kind (Of_Tree, Value)
                                    = Syn.Array_Repetition
                            then
                               IR.Emit_Array_Fill
@@ -1146,6 +1180,7 @@ package body Landin.Stages.Lowering is
                                  Destination =>
                                    IR.Storage'
                                      (Kind => IR.Frame_Slot, Slot => Where),
+                                 First       => 1,
                                  Value       =>
                                    Lower_Expression
                                      (Of_Tree,
@@ -1262,7 +1297,7 @@ package body Landin.Stages.Lowering is
                                    = Syn.Array_Repetition
                            then
                               IR.Emit_Array_Fill
-                                (Unit.all, Filling, Destination,
+                                (Unit.all, Filling, Destination, 1,
                                  Lower_Expression
                                    (Of_Tree,
                                     Syn.Repeated_Element (Of_Tree, Value),

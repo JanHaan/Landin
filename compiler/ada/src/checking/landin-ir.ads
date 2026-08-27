@@ -936,6 +936,14 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Copy_Array | Clear_Array | Fill_Array;
 
+   --  The one-based first destination part of a compact array fill.  Full
+   --  fills carry 1; D36 suffix fills carry the first part after the prefix.
+   function First_Part_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Part_Position
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Fill_Array;
+
    --  Which part of that base, by [0750]'s order for a struct and by
    --  [0520]'s for an array.
    function Field_Of
@@ -1255,8 +1263,9 @@ package Landin.IR is
      (Into       : in out Unit;
       Item       : Item_Id;
       Destination : Storage;
-      Value      : Value_Id;
-      Site       : Landin.Provenance.Origin)
+      First       : Part_Position;
+      Value       : Value_Id;
+      Site        : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);

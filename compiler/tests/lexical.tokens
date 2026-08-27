@@ -1090,6 +1090,52 @@ file positive/local-array-literal-initializer/program.ldn tokens 69
   195 197 if
   198 201 end
   202 210 read_row
+file positive/local-array-mixed-repetition/program.ldn tokens 45
+  0 1 f
+  1 2 :
+  3 4 (
+  4 6 at
+  6 7 :
+  8 13 usize
+  13 14 ,
+  15 19 seed
+  19 20 :
+  21 24 u16
+  24 25 )
+  26 28 ->
+  29 30 (
+  30 35 value
+  35 36 :
+  37 40 u16
+  40 41 )
+  42 43 =
+  48 51 row
+  51 52 :
+  53 54 [
+  54 55 5
+  55 56 ]
+  56 59 u16
+  60 61 =
+  62 63 [
+  63 67 seed
+  67 68 ,
+  69 73 seed
+  74 75 +
+  76 77 1
+  77 78 ,
+  79 81 of
+  82 86 seed
+  87 88 +
+  89 90 2
+  90 91 ]
+  96 101 value
+  102 103 =
+  104 107 row
+  107 108 [
+  108 110 at
+  110 111 ]
+  112 115 end
+  116 117 f
 file positive/local-array-repetition/program.ldn tokens 76
   0 1 f
   1 2 :
@@ -3310,6 +3356,74 @@ file negative/array-literal-assignment-reads-incoming-state/program.ldn tokens 5
   144 145 ]
   146 149 end
   150 158 computed
+file negative/array-mixed-repetition-assignment-not-enabled/program.ldn tokens 24
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 mut
+  24 27 row
+  27 28 :
+  29 30 [
+  30 31 3
+  31 32 ]
+  32 34 u8
+  39 42 row
+  43 44 =
+  45 46 [
+  46 47 1
+  47 48 ,
+  49 51 of
+  52 53 2
+  53 54 ]
+  55 58 end
+  59 60 f
+file negative/array-mixed-repetition-general-value-not-enabled/program.ldn tokens 17
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 21 _
+  22 23 =
+  24 25 [
+  25 26 1
+  26 27 ,
+  28 30 of
+  31 32 2
+  32 33 ]
+  34 37 end
+  38 39 f
+file negative/array-mixed-repetition-prefix-too-long/program.ldn tokens 24
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 row
+  23 24 :
+  25 26 [
+  26 27 2
+  27 28 ]
+  28 30 u8
+  31 32 =
+  33 34 [
+  34 35 1
+  35 36 ,
+  37 38 2
+  38 39 ,
+  40 42 of
+  43 44 3
+  44 45 ]
+  46 49 end
+  50 51 f
 file negative/array-of-an-array-not-enabled/program.ldn tokens 11
   146 150 grid
   150 151 :
@@ -3419,29 +3533,6 @@ file negative/array-repetition-general-value-not-enabled/program.ldn tokens 16
   31 32 ]
   33 36 end
   37 38 f
-file negative/array-repetition-not-enabled/program.ldn tokens 22
-  0 1 f
-  1 2 :
-  3 4 (
-  4 5 )
-  6 8 ->
-  9 13 none
-  14 15 =
-  20 23 row
-  23 24 :
-  25 26 [
-  26 27 3
-  27 28 ]
-  28 30 u8
-  31 32 =
-  33 34 [
-  34 35 1
-  35 36 ,
-  37 39 of
-  40 41 2
-  41 42 ]
-  43 46 end
-  47 48 f
 file negative/array-repetition-reads-incoming-state/program.ldn tokens 26
   0 1 f
   1 2 :
@@ -4181,6 +4272,24 @@ file negative/indexing-not-enabled/program.ldn tokens 45
   242 243 ]
   244 247 end
   248 249 f
+file negative/inferred-array-mixed-repetition-not-enabled/program.ldn tokens 17
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 row
+  24 26 :=
+  27 28 [
+  28 29 1
+  29 30 ,
+  31 33 of
+  34 35 2
+  35 36 ]
+  37 40 end
+  41 42 f
 file negative/inferred-array-repetition-extent-overflow/program.ldn tokens 23
   0 1 f
   1 2 :
@@ -5488,6 +5597,20 @@ file negative/module-array-literal-selection-element/program.ldn tokens 34
   110 111 .
   111 112 y
   112 113 ]
+file negative/module-array-mixed-repetition-not-enabled/program.ldn tokens 13
+  0 3 row
+  3 4 :
+  5 6 [
+  6 7 3
+  7 8 ]
+  8 10 u8
+  11 12 =
+  13 14 [
+  14 15 1
+  15 16 ,
+  17 19 of
+  20 21 2
+  21 22 ]
 file negative/module-array-repetition-element-not-static/program.ldn tokens 29
   0 4 next
   4 5 :
@@ -5915,6 +6038,33 @@ file negative/name-from-another-arm/program.ldn tokens 33
   101 103 if
   104 107 end
   108 109 f
+file negative/nested-array-mixed-repetition-not-enabled/program.ldn tokens 26
+  0 1 f
+  1 2 :
+  3 4 (
+  4 5 )
+  6 8 ->
+  9 13 none
+  14 15 =
+  20 23 row
+  23 24 :
+  25 26 [
+  26 27 2
+  27 28 ]
+  28 30 u8
+  31 32 =
+  33 34 [
+  34 35 [
+  35 36 1
+  36 37 ,
+  38 40 of
+  41 42 2
+  42 43 ]
+  43 44 ,
+  45 46 3
+  46 47 ]
+  48 51 end
+  52 53 f
 file negative/non-ascii-outside-comment/program.ldn refused no rule spells 'Ã'
 file negative/operands-of-two-types/program.ldn tokens 23
   0 1 f

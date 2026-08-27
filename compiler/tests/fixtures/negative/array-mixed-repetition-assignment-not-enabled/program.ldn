@@ -1,0 +1,4 @@
+f: () -> none =
+    mut row: [3]u8
+    row = [1, of 2]
+end f

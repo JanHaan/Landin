@@ -936,6 +936,57 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Local_Array_Literal_Becomes_Ordered_Stores;
 
+   --  D36 lowers the finite prefix as ordered scalar stores, then evaluates
+   --  the repeated expression once and fills only the remaining suffix.
+   procedure A_Mixed_Repetition_Becomes_Prefix_Stores_And_One_Fill
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Mixed_Repetition_Becomes_Prefix_Stores_And_One_Fill
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "f: () -> none =" & LF
+         & "    row: [5]u32 = [7, 8, of 9]" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the explicitly typed local mixed repetition is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Slot_Count (Unit, 1), 1,
+            "the mixed form owns no hidden array temporary");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, 1, 1) = IR.Number
+            and then IR.Op_Of (Unit, 1, 2) = IR.Store_Field
+            and then IR.Field_Of (Unit, 1, 2) = 1
+            and then IR.Op_Of (Unit, 1, 3) = IR.Number
+            and then IR.Op_Of (Unit, 1, 4) = IR.Store_Field
+            and then IR.Field_Of (Unit, 1, 4) = 2,
+            "the two prefix expressions are stored in source order");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, 1, 5) = IR.Number
+            and then IR.Op_Of (Unit, 1, 6) = IR.Fill_Array
+            and then IR.First_Part_Of (Unit, 1, 6) = 3
+            and then IR.Nth_Operand (Unit, 1, 6, 1) = 5,
+            "one scalar evaluation feeds one compact suffix fill");
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 1), 7,
+            "only prefix pairs, one value, one fill and return are emitted");
+      end;
+   end A_Mixed_Repetition_Becomes_Prefix_Stores_And_One_Fill;
+
    --  D29 forms a contextual assignment literal directly in its destination,
    --  preserving one expression-store pair per source element for both local
    --  and module storage rather than introducing a hidden array temporary.
@@ -1836,6 +1887,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a local array literal becomes ordered stores",
          A_Local_Array_Literal_Becomes_Ordered_Stores'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a mixed repetition becomes stores and one fill",
+         A_Mixed_Repetition_Becomes_Prefix_Stores_And_One_Fill'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "an array literal assignment becomes ordered stores",

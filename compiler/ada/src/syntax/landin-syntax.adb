@@ -27,6 +27,7 @@ package body Landin.Syntax is
             when Element_Index            => 2,
             when Array_Literal            => 0,
             when Array_Repetition         => 2,
+            when Mixed_Array_Repetition   => 1,
             when Literal_Kind             => 0,
             --  The one slot is [1790]'s type, not an expression.
             when Size_Of | Align_Of       => 1,
@@ -206,7 +207,8 @@ package body Landin.Syntax is
      is (Slot (Of_Tree, Id, 1));
 
    function Repeated_Element (Of_Tree : Tree; Id : Node_Id) return Node_Id
-     is (Slot (Of_Tree, Id, 2));
+     is (Slot (Of_Tree, Id,
+          (if Kind (Of_Tree, Id) = Array_Repetition then 2 else 1)));
 
    function Operand_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));

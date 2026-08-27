@@ -296,6 +296,7 @@ primary     ::= literal | array_literal | array_repetition | indexed | call
 array_literal ::= "[" expression ("," expression)* "]"
 array_repetition ::= "[" integer "of" expression "]"
                    | "[" "of" expression "]"
+                   | "[" expression ("," expression)* "," "of" expression "]"
 indexed     ::= selection ("[" expression "]")*
 selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
@@ -1401,8 +1402,7 @@ not become unstated consequences of accepting one local initializer.
 **Pinned by** `positive/local-array-literal-initializer`,
 `negative/local-array-literal-length-mismatch`,
 `negative/local-array-literal-element-mismatch`,
-`negative/array-literal-assignment-not-enabled`,
-`negative/array-repetition-not-enabled`, and
+`negative/array-literal-assignment-not-enabled`, and
 `runtime/local-array-literal-initializes-elements` on Linux x86-64.
 
 ### D24 — A written module array type gives a literal its static image
@@ -1907,7 +1907,7 @@ program contains. It was declined.
 `negative/array-repetition-element-mismatch`,
 `negative/array-repetition-countless-inferred-initializer-not-enabled`,
 `negative/array-repetition-reads-incoming-state`,
-`negative/array-repetition-not-enabled`, and
+`negative/array-mixed-repetition-assignment-not-enabled`, and
 `runtime/array-repetition-evaluates-once` on Linux x86-64.
 
 ### D33 — A counted local repetition supplies its inferred shape
@@ -1991,8 +1991,9 @@ A repetition whose written contextual length is zero is refused at the
 repetition. This is a construct-specific nonzero requirement, not an admission or
 rejection of `[0]T` as source; [0580]'s empty-array legality remains undecided.
 D33's zero-count inferred refusal remains for the same reason. An inferred module initializer remained outside this slice until D35. A
-count-less inferred initializer, mixed-prefix form, argument, return, discard,
-nested repetition and every other general array value position remain refused.
+count-less inferred initializer, every mixed-prefix context other than D36's
+typed local, argument, return, discard, nested repetition and every other
+general array value position remain refused.
 
 **Why one image value:** repetition writes one expression and every destination
 position receives the same target-width pattern. Materializing one value per
@@ -2035,8 +2036,8 @@ out-of-range or overflowing pattern can reach lowering as a compiler defect.
 D34's representation and emission apply unchanged: a nonzero pattern is one
 compact repeated image, direct module-array name chains preserve it, and a zero
 pattern is the absent loader-zeroed image emitted in `.bss`. Zero count,
-count-less inferred repetition, mixed-prefix repetition and every general array
-value position remain refused.
+count-less inferred repetition, every mixed-prefix context later than D36's
+explicitly typed local, and every general array value position remain refused.
 
 **Why only counted:** without a written type or source run, `[of expression]`
 has no source for its length. The scalar can determine an element type but not
@@ -2055,6 +2056,64 @@ already represents the result. It was declined.
 `negative/module-array-repetition-fold-range`,
 `negative/inferred-array-repetition-zero-count`,
 `negative/array-repetition-countless-inferred-initializer-not-enabled`,
-`negative/array-repetition-not-enabled`,
+`negative/module-array-mixed-repetition-not-enabled`,
 `negative/array-repetition-general-value-not-enabled`, and
 `runtime/array-repetition-evaluates-once` on Linux x86-64.
+
+### D36 — A typed local may mix a literal prefix with one repeated suffix
+
+**The tour said** that repetition may follow values already written between the
+brackets [0560], that expressions run left to right [0410], and that a local
+binding may write its fixed-array type [0040]. It did not state which contexts
+first admit that mixed form, whether the repeated expression runs once, or how
+the compact fill identifies only the suffix.
+
+**Chosen:** `[e1, ..., ek, of repeated]` may initialize an explicitly typed
+local fixed array of length `N` exactly when `1 <= k < N`. The written type
+supplies D17's length and scalar element type. Each prefix expression and the
+repeated expression must have that scalar type, including [0190]'s contextual
+commitment of an untyped integer. A prefix that reaches or passes `N` is refused
+because no nonempty repeated suffix remains.
+
+Lowering evaluates each prefix expression and immediately stores it into parts
+`1` through `k`, in source order. It then evaluates `repeated` exactly once and
+emits one compact `Fill_Array` beginning at one-based part `k + 1`. No hidden
+array temporary or array-valued IR result is formed. `Fill_Array` carries its
+one-based `First` part; every pre-D36 full fill passes `First = 1`. The verifier
+requires `First` to lie within the destination length as well as retaining the
+existing destination-shape and scalar-operand checks. Linux x86-64 offsets the
+destination by `(First - 1) * element_size` bytes and repeats exactly
+`N - First + 1` width-matched stores.
+
+The parser still does not reserve `of`. It recognizes the suffix marker only
+after a nonempty comma-terminated prefix and only when the token after `of` can
+begin an expression. Thus `[of, other, of]` remains an ordinary three-element
+literal and `[of + 1]` remains an ordinary one-element literal whose expression
+may name a binding called `of`.
+
+This slice admits no mixed module initializer, inferred binding, assignment,
+argument, return, discard, nested array or other general array value. Full-array
+repetition remains governed by D32--D35, so a prefix length of zero is not a
+mixed form and does not narrow those existing contexts.
+
+**Why local and explicit:** it is the smallest context that already owns a
+runtime destination and supplies both `N` and the scalar type. Admitting module
+state would require a mixed static-image representation; inference would need a
+new length rule; assignment would expand D29/D32's contextual value boundary.
+Each remains independently testable rather than becoming an unstated result of
+this slice.
+
+**The alternative:** materialize the prefix and repeated suffix as a complete
+array temporary, then copy it to the local. That would hide the observable
+prefix-store order, allocate storage proportional to D18's target-sized extent,
+and discard the compact fill representation. It was declined.
+
+**Pinned by** the parser, checker, IR, verifier, lowering and Linux x86-64
+public-seam cases; `positive/local-array-mixed-repetition`;
+`negative/array-mixed-repetition-prefix-too-long`,
+`negative/module-array-mixed-repetition-not-enabled`,
+`negative/inferred-array-mixed-repetition-not-enabled`,
+`negative/array-mixed-repetition-assignment-not-enabled`,
+`negative/array-mixed-repetition-general-value-not-enabled`,
+`negative/nested-array-mixed-repetition-not-enabled`; and
+`runtime/mixed-array-repetition-is-source-ordered` on Linux x86-64.

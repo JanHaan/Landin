@@ -554,7 +554,9 @@ Array: a value. Assignment copies. Size is part of the type.
 An array literal assigned to existing storage is formed there in written order:
 each element is evaluated and written before the next one begins. A later
 element can therefore observe an earlier write, and a failure can leave the
-written prefix changed; no hidden array-sized temporary is implied.
+written prefix changed; no hidden array-sized temporary is implied. An explicitly
+typed local may finish a nonempty written prefix with [0560]'s repeated suffix;
+the same direct formation and ordering apply.
 ```landin
 grid: [4]f32 = [1.0, 2.0, 3.0, 4.0]
 mut next: [4]f32
@@ -613,11 +615,19 @@ Repetition, for static patterns that live in flash.
 ```landin
 pattern: [256]u8 = [256 of 0xFF]
 filled:  [256]u8 = [of 0xFF]         -- length from the type
-header:  [8]u8   = [0x7F, 0x45, of 0]
+
+read_header: () -> none =
+    header: [8]u8 = [0x7F, 0x45, of 0]
+end read_header
 
 ```
-The repeated expression runs once, not once for every element. A nonzero written
-fixed-array type accepts either form for module state or a local; at module scope
+The repeated expression runs once, not once for every element. In the mixed form
+`[e1, ..., ek, of repeated]`, an explicitly typed local requires `1 <= k < N`,
+evaluates and stores the prefix left to right, then evaluates `repeated` once and
+compactly fills the suffix. Module, inferred, assignment, nested and general-value
+mixed forms remain refused. `of` stays contextual: `[of, other, of]` and
+`[of + 1]` remain ordinary literals when `of` names a binding. A nonzero written
+fixed-array type accepts either full-array form for module state or a local; at module scope
 the expression must be a compile-time known scalar [1940]. A counted repetition
 may also supply an inferred local or module binding's length and scalar element
 type; an untyped integer element defaults to `i32`. Assignment to an existing
@@ -630,9 +640,9 @@ row = [of next()]                 -- each call to next happens once
 
 ```
 A zero contextual length and a zero count in the inferred form are refused while
-[0580]'s empty-array decision remains open. A count-less inferred initializer,
-mixed-prefix repetition and other general array value positions remain later
-compiler slices. Every inferred extent must fit the target's `usize`. A module
+[0580]'s empty-array decision remains open. A count-less inferred initializer
+and other general array value positions remain later compiler slices. Every
+inferred extent must fit the target's `usize`. A module
 repetition uses [1940]'s target-aware fold and range rules; its compact repeated
 image survives direct-name chains, while a folded zero pattern has the same
 loader-zeroed image as omitted or `zeroed` state.
