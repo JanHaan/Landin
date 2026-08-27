@@ -132,13 +132,14 @@ package Landin.Syntax.Precedence is
    --  would be blamed on the parser.
    ------------------------------------------------------------------
 
-   --  `primary ::= literal | identifier | call | "(" expression ")"`,
-   --  plus `unary`'s prefix operators.
+   --  `primary ::= literal | array_literal | indexed | call | measurement
+   --               | "(" expression ")"`, plus `unary`'s prefix operators.
    function Begins_Expression (Of_Kind : Landin.Tokens.Token_Kind)
      return Boolean
      is (Landin.Tokens.Is_Literal (Of_Kind)
          or else Of_Kind in Landin.Tokens.Identifier
                             | Landin.Tokens.Left_Paren
+                            | Landin.Tokens.Left_Bracket
                             | Landin.Tokens.Kw_Sizeof
                             | Landin.Tokens.Kw_Alignof
          or else Is_Prefix (Of_Kind));

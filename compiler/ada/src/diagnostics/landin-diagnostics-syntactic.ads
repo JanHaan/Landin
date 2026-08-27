@@ -109,11 +109,10 @@ package Landin.Diagnostics.Syntactic is
       Break_Statement,
       Match_Statement,
       Type_Parameter,
-      --  The three the brackets used to refuse by being a lexeme
-      --  the kernel omitted.  [1790] spells one array now, so
-      --  only the parser can tell these from it.
+      --  Bracketed constructs whose spelling the parser alone can tell
+      --  from [1790]'s array type and [0520]'s array literal.
       Slice_Type,
-      Array_Literal,
+      Array_Repetition,
       Indexing,
       --  [1820] indexes what a selection named, so the brackets come
       --  last: a field of an element is [0670]'s struct inside [0520]'s
@@ -146,7 +145,7 @@ package Landin.Diagnostics.Syntactic is
             when Match_Statement      => "[1210]",
             when Type_Parameter       => "[1290]",
             when Slice_Type           => "[0570]",
-            when Array_Literal        => "[0520]",
+            when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
             when Selection_From_An_Index => "[0520]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
@@ -197,7 +196,7 @@ private
             when Struct_Type
                | Distinct_Type
                | Slice_Type
-               | Array_Literal
+               | Array_Repetition
                | Indexing
                | Selection_From_An_Index => "R2.20",
             --  R2.40 implements type and fixed parameters.

@@ -2203,8 +2203,9 @@ visiting declaration reports [1940] once for the cycle. Every terminating
 image available now is D10's zero image, but lowering keeps one datum per
 declaration and the backend reserves one distinct `.bss` symbol per datum, so
 initialization copies bytes rather than aliases storage without introducing
-code before [1460]'s entry point. Array literals, `zeroed`, repetition, slices,
-calls, selections, index results, and every other value shape stay refused;
+code before [1460]'s entry point. D23 later admits one contextual local array
+literal; module and inferred literals, `zeroed`, repetition, slices, calls,
+selections, index results, and every other value shape stay refused;
 no global array `Name_Reference` value is synthesized and each broader form
 remains its own later slice.
 
@@ -2267,11 +2268,26 @@ observes nonzero array answers. The focused backend case emits an aliased size
 and inline alignment from one source against the 64-bit and synthetic 32-bit
 target descriptions.
 
-What is still refused: array initializers from anything other than a direct
-storage name, general whole-array value positions, an array literal [0520],
-the inferred length [0530], `zeroed`
-[0540], repetition [0560], slices [0570], non-identifier `lenof` operands,
-and an array as a struct field. Each is its own slice, and the remaining value
+The next slice is D23's nonempty array literal [0520] in one contextual
+position: an explicitly typed local fixed-array initializer. The written D17
+shape supplies the exact element count and scalar context; the checker rejects
+a shorter or longer source run and checks every element against that scalar.
+Lowering evaluates each element left to right and immediately writes its
+one-based position into the existing compact array frame slot, so no array
+value, temporary, new IR instruction or backend operation is introduced. The
+initialized local is whole for D22, which the runtime fixture observes through
+a computed index. `positive/local-array-literal-initializer`, the count and
+element mismatch fixtures, and
+`runtime/local-array-literal-initializes-elements` pin the admitted form;
+separate negatives keep module and inferred literals, general assignment, and
+[0560]'s repetition outside it. Requiring at least one literal element does not
+settle whether `[0]T` is a source type programmers may write.
+
+What is still refused: array initializers other than D21's direct storage name
+and D23's explicitly typed local literal, general whole-array value positions,
+a module array literal, the inferred literal length [0530], `zeroed` [0540],
+repetition [0560], slices [0570], non-identifier `lenof` operands, and an array
+as a struct field. Each is its own slice, and the remaining value
 slices need the initialization work D21 did not settle.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a

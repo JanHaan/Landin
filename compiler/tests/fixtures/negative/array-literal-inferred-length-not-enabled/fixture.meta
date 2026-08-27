@@ -1,0 +1,6 @@
+class: negative
+summary: [0530] inferred array length remains separate from D23's explicitly typed local literal
+constructs: 0050, 0520, 0530
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

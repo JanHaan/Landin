@@ -1,0 +1,5 @@
+f: () -> none =
+    --  D23 accepts [0520] only with a written local array type; [0530]'s
+    --  inferred length remains its own slice.
+    row := [1, 2, 3]
+end f
