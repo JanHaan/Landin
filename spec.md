@@ -1906,7 +1906,51 @@ program contains. It was declined.
 `negative/array-repetition-count-mismatch`,
 `negative/array-repetition-element-mismatch`,
 `negative/array-repetition-local-initializer-needs-count`,
-`negative/array-repetition-needs-explicit-local-context`,
 `negative/array-repetition-reads-incoming-state`,
 `negative/array-repetition-not-enabled`, and
+`runtime/array-repetition-evaluates-once` on Linux x86-64.
+
+### D33 — A counted local repetition supplies its inferred shape
+
+**The tour said** that a literal may supply an omitted array length [0530] and
+that repetition writes a count before `of` when no surrounding type supplies one
+[0560]. It did not say whether the same count can supply the complete type of an
+inferred binding, or which expression supplies the element type.
+
+**Chosen:** a counted full-array repetition directly initializing an inferred
+local binding supplies `[N]T`. `N` is the written nonzero integer count. The one
+repeated expression supplies `T` by D25's deterministic first-element rule: an
+untyped integer receives [0200]'s default `i32`, an already typed scalar retains
+that type, and no common-type search or conversion is introduced. The resulting
+byte extent must fit D18's target `usize` before the compact shape is recorded on
+the repetition and binding.
+
+The repeated expression is read from incoming definite-assignment state and
+uses D32's lowering unchanged: it evaluates exactly once into one scalar IR
+value, followed by one compact `Fill_Array` for the inferred local frame slot.
+Successful initialization establishes the whole array. Neither checker nor IR
+enumerates the inferred extent.
+
+A written zero count remains refused in this inference position. The compiler's
+internal layout can represent an empty array, but whether source may write one is
+still [0580]'s open empty-array decision; this refusal deliberately does not
+settle it. A count-less inferred initializer, module initializer, mixed-prefix
+repetition, argument, return, discard, nested repetition and other general array
+value remain outside this slice.
+
+**Why the scalar expression:** unlike a literal source run, repetition has only
+one value-producing expression. Taking its settled scalar type gives every
+stored element the same type without inventing a second inference rule.
+
+**The alternative:** require a written array type for every repetition. That
+would leave the explicit count unable to do the same shape work as [0530]'s
+literal count, despite already being checked against that shape by D32. It was
+declined.
+
+**Pinned by** `positive/local-array-repetition-inferred`,
+`negative/inferred-array-repetition-extent-overflow`,
+`negative/inferred-array-repetition-reads-incoming-state`,
+`negative/inferred-array-repetition-zero-count`,
+`negative/array-repetition-module-initializer-not-enabled`,
+`negative/array-repetition-general-value-not-enabled`, and
 `runtime/array-repetition-evaluates-once` on Linux x86-64.

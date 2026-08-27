@@ -1,0 +1,5 @@
+class: positive
+summary: a counted local repetition infers its array shape
+constructs: 0040, 0050, 0200, 0520, 0530, 0560, 1740, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64
