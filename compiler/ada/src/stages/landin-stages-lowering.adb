@@ -1116,7 +1116,7 @@ package body Landin.Stages.Lowering is
                            if Syn.Kind (Of_Tree, Value)
                                 = Syn.Array_Literal
                            then
-                              --  D23: a literal has exactly the finite
+                              --  D23/D25: a literal has exactly the finite
                               --  element run the source wrote.  Lower and
                               --  store each one immediately, preserving
                               --  [0410]'s left-to-right evaluation in the
