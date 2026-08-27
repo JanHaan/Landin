@@ -143,6 +143,12 @@ package body Landin.Stages.Checking is
          Expected     : Landin.Checking.Element_Count;
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean);
+      procedure Check_Array_Repetition
+        (Of_Tree    : Syn.Tree;
+         Site_Node  : Syn.Node_Id;
+         Repetition : Syn.Node_Id;
+         Expected   : Landin.Checking.Element_Count;
+         Element    : Ty.Scalar_Name);
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Block
@@ -535,6 +541,16 @@ package body Landin.Stages.Checking is
             --  exact length and the scalar context.  Every element must
             --  also be [1940]'s "known", which Check_Module_Value asks
             --  once the checker settles the types.
+            --  D32 admits full-array repetition only where a written local
+            --  array type supplies its extent and scalar element context.
+            Is_Local_Repetition_Init : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Written /= Syn.No_Node
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Array_Repetition;
             Is_Module_Literal_Init : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
@@ -577,6 +593,7 @@ package body Landin.Stages.Checking is
               and then not Is_Zeroed_State
               and then not Is_Direct_Name_Init
               and then not Is_Local_Literal_Init
+              and then not Is_Local_Repetition_Init
               and then not Is_Module_Literal_Init
               and then not Is_Module_Zeroed_Init
               and then not Is_Local_Zeroed_Init
@@ -1507,6 +1524,17 @@ package body Landin.Stages.Checking is
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
 
+            when Syn.Array_Repetition =>
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "array repetition needs an explicitly typed"
+                             & " local array initializer or assignment",
+                  Refused => Bad.Array_Value,
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
+
             when Syn.Name_Reference =>
                if Res.Verdict_Of (Meanings.all, Of_Tree, Node)
                   /= Res.Bound
@@ -2045,6 +2073,62 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Array_Literal;
 
+      procedure Check_Array_Repetition
+        (Of_Tree    : Syn.Tree;
+         Site_Node  : Syn.Node_Id;
+         Repetition : Syn.Node_Id;
+         Expected   : Landin.Checking.Element_Count;
+         Element    : Ty.Scalar_Name)
+      is
+         Count : constant Syn.Node_Id :=
+           Syn.Repetition_Count (Of_Tree, Repetition);
+      begin
+         --  D32's repetition is contextual like `zeroed`: the destination
+         --  supplies the complete array shape, while one scalar expression
+         --  supplies the value stored into every element.
+         Landin.Checking.Note
+           (Types.all, Of_Tree, Repetition, Ty.Fixed_Array);
+         Landin.Checking.Note_Array
+           (Types.all, Of_Tree, Repetition, Expected, Element);
+
+         if Count /= Syn.No_Node then
+            declare
+               Snap : constant Landin.Source.Snapshot :=
+                 Source (Context, Syn.Source_Of (Of_Tree));
+               Text : constant String :=
+                 Landin.Source.Slice
+                   (Snap, Syn.Digit_Span (Of_Tree, Count));
+               Value      : Ty.Magnitude;
+               Overflowed : Boolean;
+            begin
+               Ty.Evaluate
+                 (Text, Syn.Base (Of_Tree, Count), Value, Overflowed);
+
+               if Overflowed
+                 or else Value /= Ty.Magnitude (Expected)
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Count),
+                     Message => "this repetition count does not match the"
+                                & " array context",
+                     Note    => "D32: a written repetition count is exactly"
+                                & " the destination array's length",
+                     Related => Syn.Origin (Of_Tree, Site_Node),
+                     Because => "the array context here",
+                     Into    => Found);
+                  Landin.Checking.Refuse
+                    (Types.all, Of_Tree, Repetition);
+               end if;
+            end;
+         end if;
+
+         Require
+           (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition), Element,
+            Syn.Origin (Of_Tree, Site_Node), "the array element type");
+      end Check_Array_Repetition;
+
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind) is
       begin
@@ -2135,6 +2219,30 @@ package body Landin.Stages.Checking is
                                 (Types.all, Of_Tree, Written),
                               Landin.Checking.Array_Element
                                 (Types.all, Of_Tree, Written));
+                        elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition
+                          and then Is_Local_Binding (Of_Tree, Node)
+                        then
+                           if Syn.Repetition_Count (Of_Tree, Value)
+                             = Syn.No_Node
+                           then
+                              Bad.Report
+                                (Item    => Bad.Unsupported_Use,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Value),
+                                 Message => "a local array initializer must"
+                                            & " write its repetition count",
+                                 Refused => Bad.Array_Value,
+                                 Into    => Found);
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Value);
+                           else
+                              Check_Array_Repetition
+                                (Of_Tree, Node, Value,
+                                 Landin.Checking.Array_Length
+                                   (Types.all, Of_Tree, Written),
+                                 Landin.Checking.Array_Element
+                                   (Types.all, Of_Tree, Written));
+                           end if;
                         elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
                         then
                            --  D23 for a local, D24 for a module binding:
@@ -2266,7 +2374,14 @@ package body Landin.Stages.Checking is
                   --  count and scalar element type without making either a
                   --  general value.
                   if Wants = Ty.Fixed_Array then
-                     if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal then
+                     if Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition then
+                        Check_Array_Repetition
+                          (Of_Tree, Place, Value,
+                           Landin.Checking.Array_Length
+                             (Types.all, Of_Tree, Place),
+                           Landin.Checking.Array_Element
+                             (Types.all, Of_Tree, Place));
+                     elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal then
                         Check_Array_Literal
                           (Of_Tree, Place, Value,
                            Landin.Checking.Array_Length

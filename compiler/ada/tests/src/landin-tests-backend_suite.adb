@@ -1368,6 +1368,64 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "12");
    end A_Module_Array_Clear_Follows_The_Target_Extent;
 
+   --  D32 repeats an element count rather than a byte count, and selects the
+   --  repeated-store width from the target's scalar facts.  `usize` therefore
+   --  uses qwords on Linux x86-64 and longwords under Synthetic_32 while the
+   --  same compact source fills both a frame slot and a module datum.
+   procedure An_Array_Fill_Follows_The_Target_Element_Width
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Array_Fill_Follows_The_Target_Element_Width
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "mut state: [3]usize" & LF
+        & "f: () -> none =" & LF
+        & "    local: [3]usize = [3 of 7]" & LF
+        & "    state = [of 8]" & LF
+        & "end f" & LF;
+
+      procedure Check_Target
+        (Facts  : Landin.Targets.Target_Facts;
+         Bytes  : String;
+         Suffix : String);
+
+      procedure Check_Target
+        (Facts  : Landin.Targets.Target_Facts;
+         Bytes  : String;
+         Suffix : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran  : Natural;
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         Landin.Testing.Check
+           (Item, not Landin.Stages.Failed (Work), "both fills are accepted");
+
+         declare
+            Text : constant String := Emitted (Work);
+            Fill : constant String :=
+              HT & "movabsq $3, %rcx" & LF
+              & HT & "cld" & LF
+              & HT & "rep stos" & Suffix & LF;
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & "leaq -" & Bytes & "(%rbp), %rdi"),
+               "the local fill reaches one target-sized array slot");
+            Landin.Testing.Check
+              (Item, Contains (Text, HT & "leaq state(%rip), %rdi"),
+               "the assignment fill reaches module storage");
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Text, Fill), 2,
+               "both fills repeat three elements at the target width");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "24", "q");
+      Check_Target (Landin.Targets.Synthetic_32, "12", "l");
+   end An_Array_Fill_Follows_The_Target_Element_Width;
+
    --  D10 zeroes a module binding with no value, and zero bytes do not
    --  have to be in the image to be zero: `.bss` reserves them and `.data`
    --  carries them.  A 32 KB part is in this compiler's range, so a
@@ -2636,6 +2694,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a module array clear follows the target extent",
          A_Module_Array_Clear_Follows_The_Target_Extent'Access);
+      Landin.Testing.Register
+        (Into, "backend", "an array fill follows the target element width",
+         An_Array_Fill_Follows_The_Target_Element_Width'Access);
       Landin.Testing.Register
         (Into, "backend", "a module value folds every level",
          A_Module_Value_Folds_Every_Level'Access);

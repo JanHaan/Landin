@@ -71,6 +71,10 @@ package body Landin.IR.Verifier is
                "a datum contains an array copy, and [1940] admits none",
             when Array_Clear_Inside_A_Datum =>
                "a datum contains an array clear, and [1940] admits none",
+            when Array_Fill_Inside_A_Datum =>
+               "a datum contains an array fill, and [1940] admits none",
+            when Array_Fill_Value_Disagrees =>
+               "an array fill's scalar disagrees with its element type",
             when Array_Image_Length_Disagrees =>
                "an array datum's image does not have one value per element",
             when Array_Image_Value_Does_Not_Fit =>
@@ -97,6 +101,7 @@ package body Landin.IR.Verifier is
             when Load_Element  => 1,
             when Store_Element => 2,
             when Copy_Array | Clear_Array => 0,
+            when Fill_Array    => 1,
             when Store         => 1,
             when Store_Datum   => 1,
             when Unary_Kind    => 1,
@@ -631,6 +636,41 @@ package body Landin.IR.Verifier is
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
+                                 end if;
+                              end;
+
+                           when Fill_Array =>
+                              if Is_Datum then
+                                 return
+                                   (Kind  => Array_Fill_Inside_A_Datum,
+                                    Item  => Id,
+                                    Block => Block,
+                                    Value => V);
+                              end if;
+
+                              declare
+                                 Element : Landin.Types.Scalar_Name;
+                                 Length  : Element_Total;
+                                 Bad     : constant Fault_Kind :=
+                                   Shape_Of
+                                     (Id,
+                                      Destination_Of (Of_Unit, Id, V),
+                                      Element, Length);
+                                 pragma Unreferenced (Length);
+                              begin
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
+
+                                 if Result_Of
+                                      (Of_Unit, Id,
+                                       Nth_Operand (Of_Unit, Id, V, 1))
+                                      /= Element
+                                 then
+                                    return
+                                      (Kind => Array_Fill_Value_Disagrees,
+                                       Item => Id, Block => Block, Value => V);
                                  end if;
                               end;
 

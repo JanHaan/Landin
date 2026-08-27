@@ -1,0 +1,5 @@
+f: () -> none =
+    short: [4]u8 = [3 of 1]
+    mut long: [4]u8
+    long = [5 of 2]
+end f

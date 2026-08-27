@@ -1,0 +1,5 @@
+f: () -> none =
+    mut source: u8
+    mut row: [3]u8
+    row = [of source]
+end f

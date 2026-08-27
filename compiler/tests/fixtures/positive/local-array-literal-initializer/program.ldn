@@ -1,6 +1,6 @@
 read_row: (i: usize) -> (r: u32) =
     of: u32 = 1
-    row: [3]u32 = [of, 2 + 3, of]
+    row: [3]u32 = [of + 1, 2 + 3, of]
     flags: [2]bool = [true, false]
     if flags[0] then
         r = row[i]

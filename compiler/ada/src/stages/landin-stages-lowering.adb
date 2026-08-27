@@ -1139,6 +1139,20 @@ package body Landin.Stages.Lowering is
                                     Site);
                               end loop;
                            elsif Syn.Kind (Of_Tree, Value)
+                                   = Syn.Array_Repetition
+                           then
+                              IR.Emit_Array_Fill
+                                (Unit.all, Filling,
+                                 Destination =>
+                                   IR.Storage'
+                                     (Kind => IR.Frame_Slot, Slot => Where),
+                                 Value       =>
+                                   Lower_Expression
+                                     (Of_Tree,
+                                      Syn.Repeated_Element (Of_Tree, Value),
+                                      Scope),
+                                 Site        => Site);
+                           elsif Syn.Kind (Of_Tree, Value)
                                    = Syn.Zeroed_Literal
                            then
                               --  D28: clear the complete compact slot at
@@ -1244,6 +1258,16 @@ package body Landin.Stages.Lowering is
                                     end case;
                                  end;
                               end loop;
+                           elsif Syn.Kind (Of_Tree, Value)
+                                   = Syn.Array_Repetition
+                           then
+                              IR.Emit_Array_Fill
+                                (Unit.all, Filling, Destination,
+                                 Lower_Expression
+                                   (Of_Tree,
+                                    Syn.Repeated_Element (Of_Tree, Value),
+                                    Scope),
+                                 Site);
                            elsif Syn.Kind (Of_Tree, Value)
                                    = Syn.Zeroed_Literal
                            then

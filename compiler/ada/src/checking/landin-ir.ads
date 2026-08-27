@@ -203,6 +203,7 @@ package Landin.IR is
       --  target-sized extent.
       Copy_Array,
       Clear_Array,
+      Fill_Array,
       --  [0370]'s measurements.  The type they ask about is carried, not
       --  the answer: a size needs a width and a width needs a target, so
       --  the answer belongs to whoever has one.  This is the same seam
@@ -263,7 +264,8 @@ package Landin.IR is
    --  instruction's own Result answers that and an opcode cannot.
    function Defines_Nothing (Of_Code : Opcode) return Boolean
      is (Of_Code in Store | Store_Datum | Store_Field | Store_Element
-                    | Copy_Array | Clear_Array | Terminator_Kind);
+                    | Copy_Array | Clear_Array | Fill_Array
+                    | Terminator_Kind);
 
    ------------------------------------------------------------------
    --  Identities
@@ -901,7 +903,7 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Copy_Array | Clear_Array;
+                          in Copy_Array | Clear_Array | Fill_Array;
 
    --  Which part of that base, by [0750]'s order for a struct and by
    --  [0520]'s for an array.
@@ -1216,6 +1218,16 @@ package Landin.IR is
       Destination : Storage;
       Site       : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   procedure Emit_Array_Fill
+     (Into       : in out Unit;
+      Item       : Item_Id;
+      Destination : Storage;
+      Value      : Value_Id;
+      Site       : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
 
    --  Result is stated by the caller and not derived from the operand,

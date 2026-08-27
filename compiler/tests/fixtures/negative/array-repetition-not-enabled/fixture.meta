@@ -1,5 +1,5 @@
 class: negative
-summary: [0560] array repetition remains a separately named R2.20 slice
+summary: [0560] mixed-prefix array repetition remains a later R2.20 slice
 constructs: 0040, 0520, 0560, 1830
 program: program.ldn
 codes: L0010

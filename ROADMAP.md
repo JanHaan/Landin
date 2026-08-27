@@ -2452,12 +2452,28 @@ first element with one type report; and
 must not run while an ordinary array named `lenof` remains indexable. Slices and
 every other expression operand remain separate.
 
+D32 admits [0560]'s full-array repetition for an explicitly typed local
+initializer and for assignment to a mutable fixed-array place. A written count
+must equal the contextual D17 length; in assignment, `[of expression]` takes that
+length from the destination. The one scalar expression is checked against the
+element type, read from incoming definite-assignment state and evaluated exactly once. Lowering
+emits one compact `Fill_Array` with that scalar operand and the frame-slot or
+module-datum destination; verification checks both its storage shape and operand
+type. Linux x86-64 derives the target element count and width and emits the
+matching `rep stosb`, `stosw`, `stosl` or `stosq`, with runtime evidence across
+all four enabled widths. The positive and five focused type/flow/context
+negatives pin the source boundary, the old repetition refusal now pins only the
+mixed-prefix form, and `runtime/array-repetition-evaluates-once` pins one
+execution and complete local and module fills.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
-and module literal, and D27/D28's explicitly typed module and local `zeroed`;
-array assignments other than D20's direct storage name, D29's literal and D30's
-`zeroed`; general whole-array value positions; inferred, scalar and every other
-`zeroed` [0540] context; repetition [0560]; slices [0570]; `lenof` operands
+and module literal, D27/D28's explicitly typed module and local `zeroed`, and
+D32's explicitly typed local repetition; array assignments other than D20's
+direct storage name, D29's literal, D30's `zeroed` and D32's repetition; general
+whole-array value positions; inferred, scalar and every other `zeroed` [0540]
+context; mixed-prefix, inferred, module-initializer and general-value repetition
+[0560]; slices [0570]; `lenof` operands
 other than D14's direct name and D31's literal; and an array as a struct field.
 Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.

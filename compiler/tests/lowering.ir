@@ -639,46 +639,80 @@ item 2 ROUTINE g result none params 1 slots 3 blocks 1 values 7
     7 LEAVE
 file positive/local-array-literal-initializer/program.ldn
 unit items 1
-item 1 ROUTINE read_row result u32 params 1 slots 6 blocks 5 values 28
+item 1 ROUTINE read_row result u32 params 1 slots 7 blocks 5 values 32
   slot 1 i usize param 1
   slot 2 r u32 return
   slot 3 of u32
   slot 4 row elements 3 of u32
   slot 5 - u32
-  slot 6 flags elements 2 of bool
-  block 1 scope 3 BLOCK length 18
+  slot 6 - u32
+  slot 7 flags elements 2 of bool
+  block 1 scope 3 BLOCK length 22
     1 NUMBER u32 1
     2 STORE slot 3 <- 1
     3 LOAD u32 slot 3
-    4 STORE_FIELD <- 3
-    5 NUMBER u32 2
-    6 STORE slot 5 <- 5
-    7 NUMBER u32 3
-    8 LOAD u32 slot 5
-    9 ADD u32 <- 8 7
-    10 STORE_FIELD <- 9
-    11 LOAD u32 slot 3
-    12 STORE_FIELD <- 11
-    13 TRUTH bool true
+    4 STORE slot 5 <- 3
+    5 NUMBER u32 1
+    6 LOAD u32 slot 5
+    7 ADD u32 <- 6 5
+    8 STORE_FIELD <- 7
+    9 NUMBER u32 2
+    10 STORE slot 6 <- 9
+    11 NUMBER u32 3
+    12 LOAD u32 slot 6
+    13 ADD u32 <- 12 11
     14 STORE_FIELD <- 13
-    15 TRUTH bool false
+    15 LOAD u32 slot 3
     16 STORE_FIELD <- 15
-    17 LOAD_FIELD bool
-    18 BRANCH target 3 alternative 4 <- 17
+    17 TRUTH bool true
+    18 STORE_FIELD <- 17
+    19 TRUTH bool false
+    20 STORE_FIELD <- 19
+    21 LOAD_FIELD bool
+    22 BRANCH target 3 alternative 4 <- 21
   block 2 scope 3 BLOCK length 2
-    27 LOAD u32 slot 2
-    28 LEAVE <- 27
+    31 LOAD u32 slot 2
+    32 LEAVE <- 31
   block 3 scope 4 BLOCK length 4
-    19 LOAD usize slot 1
-    20 LOAD_ELEMENT u32 slot 4 <- 19
-    21 STORE slot 2 <- 20
-    22 JUMP target 2
-  block 4 scope 3 BLOCK length 1
-    23 JUMP target 5
-  block 5 scope 5 BLOCK length 3
-    24 NUMBER u32 0
+    23 LOAD usize slot 1
+    24 LOAD_ELEMENT u32 slot 4 <- 23
     25 STORE slot 2 <- 24
     26 JUMP target 2
+  block 4 scope 3 BLOCK length 1
+    27 JUMP target 5
+  block 5 scope 5 BLOCK length 3
+    28 NUMBER u32 0
+    29 STORE slot 2 <- 28
+    30 JUMP target 2
+file positive/local-array-repetition/program.ldn
+unit items 1
+item 1 ROUTINE f result u32 params 2 slots 7 blocks 1 values 18
+  slot 1 at usize param 1
+  slot 2 seed u32 param 2
+  slot 3 value u32 return
+  slot 4 row elements 4 of u32
+  slot 5 other elements 4 of u32
+  slot 6 - u32
+  slot 7 - u32
+  block 1 scope 3 BLOCK length 18
+    1 LOAD u32 slot 2
+    2 FILL_ARRAY destination slot 4 <- 1
+    3 LOAD u32 slot 2
+    4 STORE slot 6 <- 3
+    5 NUMBER u32 1
+    6 LOAD u32 slot 6
+    7 ADD u32 <- 6 5
+    8 FILL_ARRAY destination slot 5 <- 7
+    9 LOAD usize slot 1
+    10 LOAD_ELEMENT u32 slot 4 <- 9
+    11 STORE slot 7 <- 10
+    12 LOAD usize slot 1
+    13 LOAD_ELEMENT u32 slot 5 <- 12
+    14 LOAD u32 slot 7
+    15 ADD u32 <- 14 13
+    16 STORE slot 3 <- 15
+    17 LOAD u32 slot 3
+    18 LEAVE <- 17
 file positive/local-array-zeroed-initializer/program.ldn
 unit items 1
 item 1 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6

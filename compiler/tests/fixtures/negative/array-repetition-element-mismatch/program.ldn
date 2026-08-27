@@ -1,0 +1,3 @@
+f: () -> none =
+    row: [3]u8 = [3 of true]
+end f

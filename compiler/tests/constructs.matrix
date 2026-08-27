@@ -52,7 +52,7 @@
 0360   tour        -                                  Ranges
 0370   tour        accepted emitted executed refused  sizeof, alignof and lenof
 0380   tour        -                                  addr takes an address
-0390   tour        refused                            Assignment is a statement
+0390   tour        accepted emitted executed refused  Assignment is a statement
 0400   tour        accepted emitted refused           No `++` and no `--`
 0410   tour        accepted emitted executed refused  Evaluation order is fixed
 0420   tour        accepted emitted executed refused  The dot is not only field access
@@ -69,7 +69,7 @@
 0530   tour        accepted emitted executed refused  The length may be inferred from the literal
 0540   tour        accepted emitted executed refused  zeroed is the all-bits-zero image of a type
 0550   tour        -                                  The first of those two properties is also a concept
-0560   tour        refused refused-by-name            Repetition, for static patterns that live in flash
+0560   tour        accepted emitted executed refused refused-by-name Repetition, for static patterns that live in flash
 0570   tour        accepted emitted executed refused refused-by-name Slice: a view
 0580   tour        accepted emitted executed          An empty slice still has a base
 0590   tour        -                                  Fixed arrays are the vector type

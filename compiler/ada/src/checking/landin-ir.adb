@@ -910,6 +910,27 @@ package body Landin.IR is
       pragma Assert (Where /= No_Value);
    end Emit_Array_Clear;
 
+   procedure Emit_Array_Fill
+     (Into        : in out Unit;
+      Item        : Item_Id;
+      Destination : Storage;
+      Value       : Value_Id;
+      Site        : Landin.Provenance.Origin)
+   is
+      Made : Instruction :=
+        Instruction'(Op          => Fill_Array,
+                     Site        => Site,
+                     Destination => Destination,
+                     others      => <>);
+      Where : Value_Id;
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Value);
+      Where := Append (Into, Item, Made);
+      pragma Assert (Where /= No_Value);
+   end Emit_Array_Fill;
+
    procedure Emit_Store_Datum
      (Into  : in out Unit;
       Item  : Item_Id;
