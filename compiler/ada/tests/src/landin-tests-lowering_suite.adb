@@ -880,6 +880,62 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Local_Array_Initializer_Becomes_A_Copy;
 
+   --  D23 lowers a finite source run directly into the one compact local
+   --  array slot, keeping each expression immediately before its store.
+   procedure A_Local_Array_Literal_Becomes_Ordered_Stores
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Local_Array_Literal_Becomes_Ordered_Stores
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "f: () -> none =" & LF
+         & "    row: [3]u32 = [7, 8, 9]" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the literal is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Slot_Count (Unit, 1), 1,
+            "the literal owns one compact array slot");
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 1), 7,
+            "three number-store pairs precede the return");
+
+         for Position in 1 .. 3 loop
+            declare
+               Number : constant IR.Value_Id := IR.Value_Id (2 * Position - 1);
+               Store  : constant IR.Value_Id := IR.Value_Id (2 * Position);
+            begin
+               Landin.Testing.Check
+                 (Item, IR.Op_Of (Unit, 1, Number) = IR.Number,
+                  "the element is lowered before its store");
+               Landin.Testing.Check_Equal
+                 (Item, Natural (IR.Number_Of (Unit, 1, Number)),
+                  Position + 6, "the source element keeps its value");
+               Landin.Testing.Check
+                 (Item, IR.Op_Of (Unit, 1, Store) = IR.Store_Field
+                        and then IR.Reaches_A_Slot (Unit, 1, Store)
+                        and then IR.Slot_Of (Unit, 1, Store) = 1
+                        and then IR.Field_Of (Unit, 1, Store)
+                                   = IR.Part_Position (Position)
+                        and then IR.Nth_Operand (Unit, 1, Store, 1) = Number,
+                  "the value is stored at its own one-based position");
+            end;
+         end loop;
+      end;
+   end A_Local_Array_Literal_Becomes_Ordered_Stores;
+
    ------------------------------------------------------------------
 
    procedure A_Logical_Module_Value_Becomes_Blocks
@@ -1394,6 +1450,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a local array initializer becomes a copy",
          A_Local_Array_Initializer_Becomes_A_Copy'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a local array literal becomes ordered stores",
+         A_Local_Array_Literal_Becomes_Ordered_Stores'Access);
       Landin.Testing.Register
         (Into, "lowering", "a computed destination precedes its value",
          A_Computed_Destination_Precedes_Its_Value'Access);

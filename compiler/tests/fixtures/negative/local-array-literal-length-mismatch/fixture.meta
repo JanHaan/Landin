@@ -1,0 +1,6 @@
+class: negative
+summary: D23 requires a local array literal to have exactly its written type's length
+constructs: 0040, 0190, 0520, 1810
+program: program.ldn
+codes: L0301, L0301
+targets: linux-x86-64, macos-arm64

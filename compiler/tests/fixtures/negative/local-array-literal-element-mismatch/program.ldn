@@ -1,0 +1,4 @@
+f: () -> none =
+    numbers: [2]u8 = [1, false]
+    flags: [2]bool = [true, 0]
+end f

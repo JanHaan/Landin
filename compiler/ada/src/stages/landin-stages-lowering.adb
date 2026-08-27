@@ -1105,18 +1105,42 @@ package body Landin.Stages.Lowering is
                         elsif Landin.Checking.Type_Of (Types.all, Id)
                                 = Ty.Fixed_Array
                         then
-                           --  D21: the initializer copies a whole array from
-                           --  a storage name into this fresh local slot, the
-                           --  same one compact operation D20's assignment
-                           --  emits.  No opcode of its own is needed and no
-                           --  operand run proportional to D18's length.
-                           IR.Emit_Array_Copy
-                             (Unit.all, Filling,
-                              Source      => Storage_For (Of_Tree, Value),
-                              Destination =>
-                                IR.Storage'
-                                  (Kind => IR.Frame_Slot, Slot => Where),
-                              Site        => Site);
+                           if Syn.Kind (Of_Tree, Value)
+                                = Syn.Array_Literal
+                           then
+                              --  D23: a literal has exactly the finite
+                              --  element run the source wrote.  Lower and
+                              --  store each one immediately, preserving
+                              --  [0410]'s left-to-right evaluation in the
+                              --  existing compact array slot.
+                              for Position in
+                                1 .. Syn.Element_Count (Of_Tree, Value)
+                              loop
+                                 IR.Emit_Store_Slot_Field
+                                   (Unit.all, Filling, Where,
+                                    IR.Part_Position (Position),
+                                    Lower_Expression
+                                      (Of_Tree,
+                                       Syn.Nth_Element
+                                         (Of_Tree, Value, Position),
+                                       Scope),
+                                    Site);
+                              end loop;
+                           else
+                              --  D21: the initializer copies a whole array
+                              --  from a storage name into this fresh local
+                              --  slot, the same one compact operation D20's
+                              --  assignment emits.  No opcode of its own is
+                              --  needed and no operand run proportional to
+                              --  D18's length.
+                              IR.Emit_Array_Copy
+                                (Unit.all, Filling,
+                                 Source      => Storage_For (Of_Tree, Value),
+                                 Destination =>
+                                   IR.Storage'
+                                     (Kind => IR.Frame_Slot, Slot => Where),
+                                 Site        => Site);
+                           end if;
                         else
                            IR.Emit_Store
                              (Unit.all, Filling, Where,

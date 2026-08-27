@@ -1,5 +1,0 @@
-f: () -> none =
-    --  [0520] writes an array as a literal; the kernel declares the type
-    --  and does not yet make a value of one.
-    row := [1, 2, 3]
-end f

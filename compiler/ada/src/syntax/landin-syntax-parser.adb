@@ -185,6 +185,9 @@ package body Landin.Syntax.Parser is
             Lenof_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "lenof");
 
+            Of_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "of");
+
             Scalar_Id : constant array (Scalar_Name)
               of Landin.Source.Names.Name_Id :=
                 [for S in Scalar_Name =>
@@ -2270,18 +2273,103 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Expression, At_Item);
                end if;
 
-               --  [0570] indexes whatever named a value, and a closing
-               --  `)` is one of the places that does.
-               --  [0520]'s literal, and [0560]'s repetition inside one.
-               --  A `[` where a value belongs is one of those and never
-               --  an array type, which only a type position holds.
+               --  [0520]'s literal is one or more expressions in source
+               --  order.  Empty arrays remain outside this slice, as does
+               --  [0560]'s contextual `of` repetition.
                if Peek = Tok.Left_Bracket then
-                  Refuse
-                    (Item    => Syn.Array_Literal,
-                     Where   => At_Item,
-                     Message => "an array literal is not enabled yet");
-                  Resync_Brackets;
-                  return Add (Error_Expression, At_Item);
+                  declare
+                     Items : Slot_Vectors.Vector;
+
+                     procedure Skip_Remaining;
+
+                     procedure Skip_Remaining is
+                        Level : Natural := 1;
+                     begin
+                        while Peek /= Tok.End_Of_Input loop
+                           if Peek = Tok.Left_Bracket then
+                              Level := Level + 1;
+                           elsif Peek = Tok.Right_Bracket then
+                              Level := Level - 1;
+                              Advance;
+                              exit when Level = 0;
+                              goto Continue;
+                           end if;
+
+                           Advance;
+                           <<Continue>>
+                        end loop;
+                     end Skip_Remaining;
+                  begin
+                     if Too_Deep (At_Item) then
+                        Resync_Brackets;
+                        return Add (Error_Expression, At_Item);
+                     end if;
+
+                     Depth := Depth + 1;
+                     Advance;
+
+                     if Peek = Tok.Right_Bracket then
+                        Complain
+                          (Item    => Syn.Expression_Expected,
+                           Where   => Here,
+                           Message => "an array literal has at least one"
+                                      & " element",
+                           Note    => "[0520]: an array literal writes its"
+                                      & " elements between the brackets");
+                        Advance;
+                        Depth := Depth - 1;
+                        return Add
+                          (Error_Expression, At_Item,
+                           Join (At_Item, After_Previous));
+                     end if;
+
+                     loop
+                        Items.Append (Parse_Expression);
+
+                        if Peek = Tok.Identifier
+                          and then Named_Here = Of_Id
+                        then
+                           Refuse
+                             (Item    => Syn.Array_Repetition,
+                              Where   => Here,
+                              Message => "array repetition is not enabled"
+                                         & " yet");
+                           Skip_Remaining;
+                           Depth := Depth - 1;
+                           return Add
+                             (Error_Expression, At_Item,
+                              Join (At_Item, After_Previous),
+                              To_List (Items));
+                        end if;
+
+                        exit when Peek /= Tok.Comma;
+                        Advance;
+                     end loop;
+
+                     Depth := Depth - 1;
+                     if not Expect
+                              (Wanted  => Tok.Right_Bracket,
+                               Message => "an array literal is closed with"
+                                          & " `]`",
+                               Note    => "[0520]: array literal ::= `[`"
+                                          & " expression (`,' expression)*"
+                                          & " `]`",
+                               Related => At_Item,
+                               Because => "opened here")
+                     then
+                        Resync (List_Anchor);
+
+                        if Peek = Tok.Right_Bracket then
+                           Advance;
+                        end if;
+                     end if;
+
+                     return Add
+                       (Of_Kind  => Array_Literal,
+                        At_Token => At_Item,
+                        Extent   => Join (At_Item, After_Previous),
+                        Children => To_List (Items));
+                  end;
                end if;
 
                if Peek = Tok.Integer_Literal then

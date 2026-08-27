@@ -102,6 +102,8 @@ package body Landin.Stages.Checking is
 
       function Settled_Type (Id : Res.Declaration_Id) return Ty.Type_Kind;
       function Declared_As (Id : Res.Declaration_Id) return Ty.Type_Kind;
+      function Is_Local_Binding
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Declared_As_Node
         (Of_Tree         : Syn.Tree;
          Node            : Syn.Node_Id;
@@ -132,6 +134,11 @@ package body Landin.Stages.Checking is
          Because : String);
       procedure Check_Place
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Stepping : Boolean);
+      procedure Check_Array_Literal
+        (Of_Tree : Syn.Tree;
+         Binding : Syn.Node_Id;
+         Literal : Syn.Node_Id;
+         Written : Syn.Node_Id);
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Block
@@ -443,6 +450,23 @@ package body Landin.Stages.Checking is
          end;
       end Type_At;
 
+      function Is_Local_Binding
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
+      begin
+         for Id in Res.Declaration_Id'(1)
+                   .. Res.Declaration_Id
+                        (Res.Declaration_Count (Meanings.all))
+         loop
+            if Res.Source_Of (Meanings.all, Id) = Syn.Source_Of (Of_Tree)
+              and then Res.Node_Of (Meanings.all, Id) = Node
+            then
+               return Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding;
+            end if;
+         end loop;
+
+         return False;
+      end Is_Local_Binding;
+
       function Declared_As_Node
         (Of_Tree         : Syn.Tree;
          Node            : Syn.Node_Id;
@@ -493,6 +517,15 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Name_Reference;
+            --  D23 admits a literal only where its written local array type
+            --  supplies both the element context and the exact length.
+            Is_Local_Literal_Init : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Array_Literal;
          begin
             --  [1795] declares the type; most *values* of one wait for the
             --  rest of R2.20.  A declaration-only module array is zeroed by
@@ -505,6 +538,7 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
               and then not Is_Direct_Name_Init
+              and then not Is_Local_Literal_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1323,6 +1357,17 @@ package body Landin.Stages.Checking is
                   return Kept (Ty.Usize);
                end;
 
+            when Syn.Array_Literal =>
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "an array literal needs an explicitly typed"
+                             & " local array initializer",
+                  Refused => Bad.Array_Value,
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
+
             when Syn.Name_Reference =>
                if Res.Verdict_Of (Meanings.all, Of_Tree, Node)
                   /= Res.Bound
@@ -1754,6 +1799,48 @@ package body Landin.Stages.Checking is
          end;
       end Check_Place;
 
+      procedure Check_Array_Literal
+        (Of_Tree : Syn.Tree;
+         Binding : Syn.Node_Id;
+         Literal : Syn.Node_Id;
+         Written : Syn.Node_Id)
+      is
+         Expected : constant Landin.Checking.Element_Count :=
+           Landin.Checking.Array_Length (Types.all, Of_Tree, Written);
+         Element : constant Ty.Scalar_Name :=
+           Landin.Checking.Array_Element (Types.all, Of_Tree, Written);
+      begin
+         Landin.Checking.Note
+           (Types.all, Of_Tree, Literal, Ty.Fixed_Array);
+         Landin.Checking.Note_Array
+           (Types.all, Of_Tree, Literal, Expected, Element);
+
+         if Landin.Checking.Element_Count
+              (Syn.Element_Count (Of_Tree, Literal)) /= Expected
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Literal),
+               Message => "this literal has "
+                          & Counted
+                              (Syn.Element_Count (Of_Tree, Literal), "element")
+                          & ", and the declared array has a different length",
+               Note    => "D23: a local array literal supplies exactly the"
+                          & " number of elements its written type names",
+               Related => Syn.Origin (Of_Tree, Binding),
+               Because => "the type declared here",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
+         end if;
+
+         for Position in 1 .. Syn.Element_Count (Of_Tree, Literal) loop
+            Require
+              (Of_Tree, Syn.Nth_Element (Of_Tree, Literal, Position), Element,
+               Syn.Origin (Of_Tree, Binding), "the array element type");
+         end loop;
+      end Check_Array_Literal;
+
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind) is
       begin
@@ -1803,43 +1890,56 @@ package body Landin.Stages.Checking is
                         end if;
                      end;
                   elsif Wants = Ty.Fixed_Array then
-                     --  D21: the one initializer form is a whole-array copy
-                     --  from a storage name, so the identity check is D17's
-                     --  as an assignment's is.  The Selected_From short-cut
-                     --  keeps a Name_Reference to an array from tripping the
-                     --  "not enabled yet" refusal Synthesise raises for the
-                     --  general expression forms this slice defers.
                      declare
                         Written : constant Syn.Node_Id :=
                           Syn.Declared_Type (Of_Tree, Node);
-                        Got : constant Ty.Type_Kind :=
-                          Selected_From (Of_Tree, Value);
                      begin
-                        if Got = Ty.Ill_Typed then
-                           null;
-                        elsif Got /= Ty.Fixed_Array
-                          or else Landin.Checking.Array_Length
-                                    (Types.all, Of_Tree, Value)
-                                  /= Landin.Checking.Array_Length
-                                       (Types.all, Of_Tree, Written)
-                          or else Landin.Checking.Array_Element
-                                    (Types.all, Of_Tree, Value)
-                                  /= Landin.Checking.Array_Element
-                                       (Types.all, Of_Tree, Written)
+                        if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+                          and then Is_Local_Binding (Of_Tree, Node)
                         then
-                           Bad.Report
-                             (Item    => Bad.Type_Mismatch,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Value),
-                              Message => "this is not an array of the type"
-                                         & " written here",
-                              Note    => "D17: an array's length and element"
-                                         & " type are its identity",
-                              Related => Syn.Origin (Of_Tree, Node),
-                              Because => "the type declared here",
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Value);
+                           --  D23: the written local array type supplies
+                           --  the exact count and scalar context for every
+                           --  element.
+                           Check_Array_Literal
+                             (Of_Tree, Node, Value, Written);
+                        else
+                           --  D21: the other initializer form is a
+                           --  whole-array copy from a storage name, so the
+                           --  identity check is D17's as an assignment's is.
+                           --  Selected_From keeps that one direct name out
+                           --  of the general-value refusal.
+                           declare
+                              Got : constant Ty.Type_Kind :=
+                                Selected_From (Of_Tree, Value);
+                           begin
+                              if Got = Ty.Ill_Typed then
+                                 null;
+                              elsif Got /= Ty.Fixed_Array
+                                or else Landin.Checking.Array_Length
+                                          (Types.all, Of_Tree, Value)
+                                        /= Landin.Checking.Array_Length
+                                             (Types.all, Of_Tree, Written)
+                                or else Landin.Checking.Array_Element
+                                          (Types.all, Of_Tree, Value)
+                                        /= Landin.Checking.Array_Element
+                                             (Types.all, Of_Tree, Written)
+                              then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "this is not an array of the"
+                                               & " type written here",
+                                    Note    => "D17: an array's length and"
+                                               & " element type are its"
+                                               & " identity",
+                                    Related => Syn.Origin (Of_Tree, Node),
+                                    Because => "the type declared here",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Value);
+                              end if;
+                           end;
                         end if;
                      end;
                   else

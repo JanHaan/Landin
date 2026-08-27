@@ -1,0 +1,6 @@
+class: negative
+summary: [0560] array repetition remains a separately named R2.20 slice
+constructs: 0040, 0520, 0560, 1830
+program: program.ldn
+codes: L0010
+targets: linux-x86-64, macos-arm64

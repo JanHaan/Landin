@@ -116,6 +116,9 @@ package Landin.Syntax is
       --  the index, which D18 gives `usize` context -- [1950] says what
       --  happens when the compiler knows it and when it does not.
       Element_Index,
+      --  [0520]'s value form.  Its elements are its trailing run, in the
+      --  order [0410] says they are evaluated.
+      Array_Literal,
       Integer_Literal,
       True_Literal,
       False_Literal,
@@ -488,6 +491,17 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Call
                   and then Index <= Argument_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Argument'Result);
+
+   function Element_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Array_Literal;
+
+   function Nth_Element
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Array_Literal
+                  and then Index <= Element_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Element'Result);
 
    function Operand_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)

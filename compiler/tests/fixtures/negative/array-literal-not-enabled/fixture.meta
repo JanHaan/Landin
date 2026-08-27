@@ -1,6 +1,0 @@
-class: negative
-summary: [0520] writes an array literal and the kernel omits it, so it is refused by name
-constructs: 0520, 1830
-program: program.ldn
-codes: L0010
-targets: linux-x86-64, macos-arm64
