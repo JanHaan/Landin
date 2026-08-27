@@ -100,6 +100,20 @@ package Landin.Backend is
                            or else Landin.IR.Is_Array
                                      (Of_Unit, Item, Slot));
 
+   --  Answer one target-neutral measurement instruction.  Aggregate
+   --  measurements carry only declaration-order scalar field types; this
+   --  target-owning seam derives their padded placement with Landin.Targets.
+   procedure Measurement_Extent
+     (Of_Unit   : Landin.IR.Unit;
+      Item      : Landin.IR.Item_Id;
+      Value     : Landin.IR.Value_Id;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+     with Pre => Landin.IR.Holds (Of_Unit, Item, Value)
+                 and then Landin.IR.Op_Of (Of_Unit, Item, Value)
+                          in Landin.IR.Measure_Size | Landin.IR.Measure_Align;
+
    function Value_Offset
      (Of_Frame : Frame; Value : Landin.IR.Value_Id)
      return Landin.Targets.Byte_Count;

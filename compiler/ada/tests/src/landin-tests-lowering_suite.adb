@@ -1994,6 +1994,63 @@ package body Landin.Tests.Lowering_Suite is
    end A_Computed_Local_Element_Reaches_Its_Slot;
 
    ------------------------------------------------------------------
+   --  A named aggregate measurement
+   ------------------------------------------------------------------
+
+   procedure A_Struct_Measurement_Carries_Its_Scalar_Fields
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Measurement_Carries_Its_Scalar_Fields
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "header: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    address: usize" & LF
+         & "    tail: u16" & LF
+         & "end header" & LF
+         & "alias: type = header" & LF
+         & "size: usize = sizeof alias" & LF
+         & "align: usize = alignof header" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "direct and aliased struct measurements are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Datum in IR.Item_Id'(1) .. 2 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Op_Of (Unit, Datum, 1)
+                 in IR.Measure_Size | IR.Measure_Align
+                 and then IR.Is_Aggregate_Measurement (Unit, Datum, 1)
+                 and then IR.Measurement_Field_Count (Unit, Datum, 1) = 3
+                 and then IR.Nth_Measurement_Field (Unit, Datum, 1, 1)
+                            = Landin.Types.U8
+                 and then IR.Nth_Measurement_Field (Unit, Datum, 1, 2)
+                            = Landin.Types.Usize
+                 and then IR.Nth_Measurement_Field (Unit, Datum, 1, 3)
+                            = Landin.Types.U16,
+               "each measurement carries declaration-order scalar types");
+         end loop;
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Verifier.Check (Unit).Kind
+              = Landin.IR.Verifier.Nothing_Wrong,
+            "the verifier accepts target-neutral aggregate measurements");
+      end;
+   end A_Struct_Measurement_Carries_Its_Scalar_Fields;
+
+   ------------------------------------------------------------------
    --  An internal array shape the source does not pin
    ------------------------------------------------------------------
 
@@ -2314,6 +2371,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a computed local element reaches its slot",
          A_Computed_Local_Element_Reaches_Its_Slot'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a struct measurement carries its scalar fields",
+         A_Struct_Measurement_Carries_Its_Scalar_Fields'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "an internal empty array has identity measurements",

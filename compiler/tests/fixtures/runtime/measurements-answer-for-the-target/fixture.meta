@@ -1,6 +1,6 @@
 class: runtime
-summary: [0370] scalar and nonzero fixed-array measurements answer with the x86-64 target facts
-constructs: 0370, 0160, 0520, 1795, 1770, 1800, 1970
+summary: [0370] scalar, fixed-array and ordinary-struct measurements answer with the x86-64 target facts
+constructs: 0160, 0370, 0520, 0670, 0710, 0750, 1770, 1795, 1800, 1940, 1970
 program: main.ldn
 status: 42
 targets: linux-x86-64

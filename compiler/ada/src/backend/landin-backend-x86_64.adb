@@ -383,21 +383,26 @@ package body Landin.Backend.X86_64 is
                   --  [0370]: the answer is a target fact, and this is the
                   --  first place in the compiler that has one.
                   declare
-                     Asked : constant Landin.Types.Scalar_Name :=
-                       Landin.IR.Measured_Of (Of_Unit, Item, Value);
                      Held : constant Held_Size := Size_Of_Value (Value);
-                     Answer : constant Natural :=
-                       (if Op = Landin.IR.Measure_Size
-                        then Landin.Targets.Bytes (Size_Of (Asked, Facts))
-                        else Natural
-                               (Landin.Targets.Alignment_Of
-                                  (Facts, Size_Of (Asked, Facts))));
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
                   begin
-                     Emit ("movabsq $" & Trimmed (Natural'Image (Answer))
-                           & ", %rax");
-                     Emit ("mov" & Suffix (Held) & " "
+                     Measurement_Extent
+                       (Of_Unit, Item, Value, Facts, Size, Alignment);
+                     declare
+                        Answer : constant String :=
+                          (if Op = Landin.IR.Measure_Size
+                           then Landin.Targets.Byte_Count'Image (Size)
+                           else Landin.Targets.Byte_Alignment'Image
+                                  (Alignment));
+                     begin
+                        Emit
+                          ("movabsq $" & Trimmed (Answer) & ", %rax");
+                        Emit
+                          ("mov" & Suffix (Held) & " "
                            & Accumulator (Held) & ", "
                            & Value_Cell (Value));
+                     end;
                   end;
 
                when Landin.IR.Truth =>
@@ -1391,18 +1396,15 @@ package body Landin.Backend.X86_64 is
                      when Landin.IR.Measure_Size
                         | Landin.IR.Measure_Align =>
                         declare
-                           Asked : constant Landin.Types.Scalar_Name :=
-                             Landin.IR.Measured_Of (Of_Unit, Item, Value);
+                           Size : Landin.Targets.Byte_Count;
+                           Alignment : Landin.Targets.Byte_Alignment;
                         begin
+                           Measurement_Extent
+                             (Of_Unit, Item, Value, Facts, Size, Alignment);
                            Held (Natural (Value)) :=
-                             Landin.Types.Folded
-                               (if Op = Landin.IR.Measure_Size
-                                then Landin.Targets.Bytes
-                                       (Size_Of (Asked, Facts))
-                                else Natural
-                                       (Landin.Targets.Alignment_Of
-                                          (Facts,
-                                           Size_Of (Asked, Facts))));
+                             (if Op = Landin.IR.Measure_Size
+                              then Landin.Types.Folded (Size)
+                              else Landin.Types.Folded (Alignment));
                         end;
 
                      when Landin.IR.Load_Datum =>

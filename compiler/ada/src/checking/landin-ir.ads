@@ -284,6 +284,11 @@ package Landin.IR is
    type Block_Id is range 0 .. Integer'Last;
    type Value_Id is range 0 .. Integer'Last;
 
+   --  A target-neutral aggregate shape: declaration-order scalar field
+   --  types, with no checker-computed offsets or byte counts.
+   type Scalar_Field_Array is
+     array (Positive range <>) of Landin.Types.Scalar_Name;
+
    No_Item  : constant Item_Id  := 0;
    No_Slot  : constant Slot_Id  := 0;
    No_Block : constant Block_Id := 0;
@@ -1035,13 +1040,40 @@ package Landin.IR is
    --  grammar keeps them apart: `integer` spells no sign, so no signed
    --  65-bit type is ever needed.  This is Landin.Types.Fits' pair,
    --  carried rather than folded into a pattern.
-   --  Which type [0370] is asking about.
+   function Is_Aggregate_Measurement
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Measure_Size | Measure_Align;
+
+   --  Which scalar type [0370] is asking about.  An aggregate measurement
+   --  instead carries the declaration-order field run below.
    function Measured_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Scalar_Name
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Measure_Size | Measure_Align;
+                          in Measure_Size | Measure_Align
+                 and then not Is_Aggregate_Measurement
+                                    (Of_Unit, Item, Value);
+
+   function Measurement_Field_Count
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Measure_Size | Measure_Align
+                 and then Is_Aggregate_Measurement
+                                    (Of_Unit, Item, Value);
+
+   function Nth_Measurement_Field
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id; Field : Positive)
+      return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Measure_Size | Measure_Align
+                 and then Is_Aggregate_Measurement (Of_Unit, Item, Value)
+                 and then Field
+                          <= Measurement_Field_Count (Of_Unit, Item, Value);
 
    function Emit_Measurement
      (Into     : in out Unit;
@@ -1053,7 +1085,28 @@ package Landin.IR is
      with Pre  => Is_Emitting (Into, Item)
                   and then Of_Code in Measure_Size | Measure_Align
                   and then Landin.Provenance.Is_Known (Site),
-          Post => Emitted (Into, Item, Emit_Measurement'Result, Of_Code);
+          Post => Emitted (Into, Item, Emit_Measurement'Result, Of_Code)
+                  and then not Is_Aggregate_Measurement
+                                     (Into, Item, Emit_Measurement'Result);
+
+   function Emit_Aggregate_Measurement
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Of_Code : Opcode;
+      Fields  : Scalar_Field_Array;
+      Gives   : Landin.Types.Scalar_Name;
+      Site    : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Of_Code in Measure_Size | Measure_Align
+                  and then Fields'Length > 0
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Aggregate_Measurement'Result, Of_Code)
+                  and then Is_Aggregate_Measurement
+                    (Into, Item, Emit_Aggregate_Measurement'Result)
+                  and then Measurement_Field_Count
+                    (Into, Item, Emit_Aggregate_Measurement'Result)
+                    = Fields'Length;
 
    function Number_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
@@ -1437,6 +1490,9 @@ private
       Number      : Landin.Types.Magnitude    := 0;
       Part        : Part_Position              := 1;
       Measured    : Landin.Types.Scalar_Name  := Landin.Types.Bool;
+      First_Measurement_Field : Natural        := 0;
+      Measurement_Field_Total : Natural        := 0;
+      Aggregate_Measurement : Boolean          := False;
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;
    end record;

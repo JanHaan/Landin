@@ -917,6 +917,37 @@ item 4 DATUM aliased_align result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 MEASURE_ALIGN usize
     2 LEAVE <- 1
+file positive/measurement-of-structs/program.ldn
+unit items 7
+item 1 DATUM direct_size result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 MEASURE_SIZE usize fields u8 u64 u16
+    2 LEAVE <- 1
+item 2 DATUM direct_align result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 MEASURE_ALIGN usize fields u8 u64 u16
+    2 LEAVE <- 1
+item 3 DATUM alias_size result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 MEASURE_SIZE usize fields u8 u64 u16
+    2 LEAVE <- 1
+item 4 DATUM alias_align result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 MEASURE_ALIGN usize fields u8 u64 u16
+    2 LEAVE <- 1
+item 5 DATUM forward_size result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 MEASURE_SIZE usize fields u8 u64 u16
+    2 LEAVE <- 1
+item 6 DATUM forward_align result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 MEASURE_ALIGN usize fields u8 u64 u16
+    2 LEAVE <- 1
+item 7 DATUM static_image result array params 0 slots 0 blocks 1 values 1
+  elements 2 of usize
+  image 24 8
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/module-array-initialized-from-source-name/program.ldn
 unit items 3
 item 1 DATUM typed_buffer result array params 0 slots 0 blocks 1 values 1

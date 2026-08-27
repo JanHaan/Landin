@@ -618,6 +618,24 @@ package body Landin.IR is
      return Landin.Types.Scalar_Name
      is (Held (Of_Unit, Item, Value).Measured);
 
+   function Is_Aggregate_Measurement
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     is (Held (Of_Unit, Item, Value).Aggregate_Measurement);
+
+   function Measurement_Field_Count
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     is (Held (Of_Unit, Item, Value).Measurement_Field_Total);
+
+   function Nth_Measurement_Field
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id; Field : Positive)
+      return Landin.Types.Scalar_Name
+   is
+      First : constant Natural :=
+        Held (Of_Unit, Item, Value).First_Measurement_Field;
+   begin
+      return Of_Unit.Fields (First + Field);
+   end Nth_Measurement_Field;
+
    function Number_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Magnitude
@@ -696,6 +714,31 @@ package body Landin.IR is
                          Site     => Site,
                          Measured => Measured,
                          others   => <>)));
+
+   function Emit_Aggregate_Measurement
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Of_Code : Opcode;
+      Fields  : Scalar_Field_Array;
+      Gives   : Landin.Types.Scalar_Name;
+      Site    : Landin.Provenance.Origin) return Value_Id
+   is
+      First : constant Natural := Natural (Into.Fields.Length);
+   begin
+      for Field of Fields loop
+         Into.Fields.Append (Field);
+      end loop;
+
+      return Append
+        (Into, Item,
+         Instruction'(Op                      => Of_Code,
+                      Result                  => Gives,
+                      Site                    => Site,
+                      First_Measurement_Field => First,
+                      Measurement_Field_Total => Fields'Length,
+                      Aggregate_Measurement   => True,
+                      others                  => <>));
+   end Emit_Aggregate_Measurement;
 
    function Emit_Truth
      (Into  : in out Unit;

@@ -552,8 +552,8 @@ package body Landin.Stages.Lowering is
 
             --  [0370]: the type asked about is carried into the IR and the
             --  target-dependent answer is not.  D17 decomposes a fixed array
-            --  into operations the IR already has: element measurement and a
-            --  target-neutral element count, multiplied for size.  A nonempty
+            --  into operations the IR already has; D44 carries an ordinary
+            --  struct as its declaration-order scalar field run.  A nonempty
             --  array has its element's alignment; the internal empty shape
             --  has size zero and alignment one.
             when Syn.Size_Of | Syn.Align_Of =>
@@ -565,7 +565,28 @@ package body Landin.Stages.Lowering is
                   Result : constant Ty.Scalar_Name :=
                     Scalar_At (Of_Tree, Node);
                begin
-                  if Held /= Ty.Fixed_Array then
+                  if Held = Ty.Aggregate then
+                     declare
+                        Declared : constant Res.Declaration_Id :=
+                          Landin.Checking.Body_Of
+                            (Types.all, Of_Tree, Asked);
+                        Fields : IR.Scalar_Field_Array
+                          (1 .. Landin.Checking.Layout_Field_Count
+                                  (Types.all, Declared));
+                     begin
+                        for Field in Fields'Range loop
+                           Fields (Field) :=
+                             Landin.Checking.Field_Type
+                               (Types.all, Declared, Field);
+                        end loop;
+
+                        return IR.Emit_Aggregate_Measurement
+                          (Unit.all, Filling,
+                           (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
+                            then IR.Measure_Size else IR.Measure_Align),
+                           Fields, Result, Site);
+                     end;
+                  elsif Held /= Ty.Fixed_Array then
                      return IR.Emit_Measurement
                               (Unit.all, Filling,
                                (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
@@ -2286,9 +2307,11 @@ package body Landin.Stages.Lowering is
                   end;
 
                when Syn.Size_Of | Syn.Align_Of =>
-                  --  [0370]: a measurement of a scalar type folds to the
+                  --  [0370]: a measurement of an enabled type folds to the
                   --  target's own byte count; the whole point of it being
-                  --  a `usize` is that a target answers.
+                  --  a `usize` is that a target answers.  D44's aggregate
+                  --  answer is the checked target layout here because this
+                  --  walk is forming a static datum image, not ordinary IR.
                   declare
                      Asked : constant Syn.Node_Id :=
                        Syn.Measured_Type (Of_Tree, Node);
@@ -2339,6 +2362,21 @@ package body Landin.Stages.Lowering is
                                    * Landin.Targets.Byte_Count
                                        (Landin.Targets.Bytes (Size)));
                            end if;
+                           Known := True;
+                        end;
+                     elsif Held = Ty.Aggregate then
+                        declare
+                           Declared : constant Res.Declaration_Id :=
+                             Landin.Checking.Body_Of
+                               (Types.all, Of_Tree, Asked);
+                        begin
+                           Value :=
+                             Ty.Folded
+                               (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
+                                then Landin.Checking.Layout_Size
+                                       (Types.all, Declared)
+                                else Landin.Checking.Layout_Alignment
+                                       (Types.all, Declared));
                            Known := True;
                         end;
                      end if;

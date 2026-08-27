@@ -1,0 +1,6 @@
+class: negative
+summary: D44 checks a struct measurement in every target-aware module fold before lowering can meet an overflowing value
+constructs: 0290, 0370, 0520, 0670, 0750, 1740, 1940
+program: program.ldn
+codes: L0300, L0300
+targets: linux-x86-64, macos-arm64
