@@ -178,11 +178,23 @@ package body Landin.IR.Dump is
                   for Field in
                     1 .. Measurement_Field_Count (Of_Unit, Item, Value)
                   loop
-                     Unbounded.Append
-                       (Fields,
-                        " " & Landin.Types.Spelling
-                          (Nth_Measurement_Field
-                             (Of_Unit, Item, Value, Field)));
+                     declare
+                        Part : constant Measurement_Field :=
+                          Nth_Measurement_Field
+                            (Of_Unit, Item, Value, Field);
+                     begin
+                        Unbounded.Append (Fields, " ");
+                        if Part.Kind = Scalar_Measurement_Field then
+                           Unbounded.Append
+                             (Fields, Landin.Types.Spelling (Part.Element));
+                        else
+                           Unbounded.Append
+                             (Fields,
+                              "[" & Trimmed
+                                (Element_Total'Image (Part.Length))
+                              & "]" & Landin.Types.Spelling (Part.Element));
+                        end if;
+                     end;
                   end loop;
                   return Lead & " fields" & Unbounded.To_String (Fields);
                end;

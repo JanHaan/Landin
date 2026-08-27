@@ -28,7 +28,7 @@ L0110  Live     [1740]: a run of tokens beginning no declaration or statement
 L0111  Live     an implementation limit on how deeply a construct nests
 L0200  Live     [1850]: one scope gives one name to one thing
 L0201  Live     [1860]: a name used and declared in no visible scope
-L0300  Live     [1880]: a literal whose value its context's type does not hold
+L0300  Live     a compile-time magnitude its context or target does not hold
 L0301  Live     [1890]: two types that must agree and do not
 L0302  Live     [1910]: a name read on a path that does not assign it
 L0303  Live     [1900]: a place that may not be written

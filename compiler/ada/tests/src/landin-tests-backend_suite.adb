@@ -2151,7 +2151,15 @@ package body Landin.Tests.Backend_Suite is
         & "end header" & LF
         & "header_alias: type = header" & LF
         & "struct_size: usize = sizeof header_alias" & LF
-        & "struct_align: usize = alignof header" & LF;
+        & "struct_align: usize = alignof header" & LF
+        & "nested: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    words: [2]usize" & LF
+        & "    tail: u16" & LF
+        & "end nested" & LF
+        & "nested_alias: type = nested" & LF
+        & "nested_size: usize = sizeof nested_alias" & LF
+        & "nested_align: usize = alignof nested" & LF;
 
       Native : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -2210,6 +2218,18 @@ package body Landin.Tests.Backend_Suite is
               and then Contains
                 (Thin, "struct_align:" & LF & HT & ".long 4" & LF),
             "a struct derives alignment from its target field run");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, "nested_size:" & LF & HT & ".quad 32" & LF)
+              and then Contains
+                (Thin, "nested_size:" & LF & HT & ".long 16" & LF),
+            "a compact array field contributes its target-sized extent");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, "nested_align:" & LF & HT & ".quad 8" & LF)
+              and then Contains
+                (Thin, "nested_align:" & LF & HT & ".long 4" & LF),
+            "an array field contributes its target element alignment");
       end;
    end A_Measurement_Follows_The_Target;
 

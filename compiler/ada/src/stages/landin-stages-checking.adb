@@ -199,9 +199,11 @@ package body Landin.Stages.Checking is
          --  binding without a value and nothing else visits one.
          if Syn.Kind (Of_Tree, Written) = Syn.Struct_Body then
             declare
-               Fields : Landin.Checking.Field_Type_Array
+               Fields : Landin.Checking.Field_Shape_Array
                  (1 .. Syn.Field_Count (Of_Tree, Written)) :=
-                   [others => Ty.U8];
+                   [others => (Kind    => Landin.Checking.Scalar_Field,
+                               Element => Ty.U8,
+                               Length  => 1)];
                Can_Lay_Out : Boolean := True;
             begin
                for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop
@@ -212,7 +214,21 @@ package body Landin.Stages.Checking is
                        Type_At (Of_Tree, Syn.Declared_Type (Of_Tree, Each));
                   begin
                      if Held in Ty.Scalar_Name then
-                        Fields (Index) := Held;
+                        Fields (Index) :=
+                          (Kind    => Landin.Checking.Scalar_Field,
+                           Element => Ty.Scalar_Name (Held),
+                           Length  => 1);
+                     elsif Held = Ty.Fixed_Array then
+                        Fields (Index) :=
+                          (Kind    => Landin.Checking.Fixed_Array_Field,
+                           Element => Landin.Checking.Array_Element
+                                        (Types.all, Of_Tree,
+                                         Syn.Declared_Type
+                                           (Of_Tree, Each)),
+                           Length  => Landin.Checking.Array_Length
+                                        (Types.all, Of_Tree,
+                                         Syn.Declared_Type
+                                           (Of_Tree, Each)));
                      else
                         Can_Lay_Out := False;
                      end if;
@@ -230,15 +246,6 @@ package body Landin.Stages.Checking is
                                       & " enabled yet",
                            Refused => Bad.Struct_Value,
                            Into    => Found);
-                     elsif Held = Ty.Fixed_Array then
-                        Bad.Report
-                          (Item    => Bad.Unsupported_Use,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Each),
-                           Message => "a field of an array type is not"
-                                      & " enabled yet",
-                           Refused => Bad.Array_Value,
-                           Into    => Found);
                      end if;
                   end;
                end loop;
@@ -249,8 +256,24 @@ package body Landin.Stages.Checking is
                        "a struct body has no declaration identity";
                   end if;
 
-                  Landin.Checking.Lay_Out
-                    (Types.all, For_Declaration, Fields, Facts);
+                  declare
+                     Fits : Boolean;
+                  begin
+                     Landin.Checking.Lay_Out
+                       (Types.all, For_Declaration, Fields, Facts, Fits);
+
+                     if not Fits then
+                        Bad.Report
+                          (Item    => Bad.Literal_Out_Of_Range,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Written),
+                           Message => "this struct is too large for the"
+                                      & " target's usize",
+                           Note    => "D45: every padded aggregate extent"
+                                      & " must fit the selected target",
+                           Into    => Found);
+                     end if;
+                  end;
                end if;
             end;
 
@@ -520,7 +543,21 @@ package body Landin.Stages.Checking is
               --  makes an array's identity its shape, which `[3]usize`
               --  carries wherever it is written.
               and then Syn.Kind (Of_Tree, Written)
-                       in Syn.Type_Reference | Syn.Array_Type;
+                       in Syn.Type_Reference | Syn.Array_Type
+              and then
+                (Held /= Ty.Aggregate
+                 or else
+                   (Landin.Checking.Body_Of
+                      (Types.all, Of_Tree, Written) /= Res.No_Declaration
+                    and then
+                      (not Landin.Checking.Has_Layout
+                         (Types.all,
+                          Landin.Checking.Body_Of
+                            (Types.all, Of_Tree, Written))
+                       or else Landin.Checking.Has_Only_Scalar_Fields
+                         (Types.all,
+                          Landin.Checking.Body_Of
+                            (Types.all, Of_Tree, Written)))));
             --  D21: an array binding may be initialized directly from a
             --  whole-array storage name.  Resolution makes that module
             --  storage at module scope and an in-scope storage declaration
@@ -1443,10 +1480,25 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Asked, Held);
                      end if;
 
-                     if Held in Ty.Scalar_Name
-                       or else Held in Ty.Fixed_Array | Ty.Aggregate
+                     if Held in Ty.Scalar_Name | Ty.Fixed_Array
+                       or else
+                         (Held = Ty.Aggregate
+                          and then Landin.Checking.Body_Of
+                            (Types.all, Of_Tree, Asked)
+                              /= Res.No_Declaration
+                          and then Landin.Checking.Has_Layout
+                            (Types.all,
+                             Landin.Checking.Body_Of
+                               (Types.all, Of_Tree, Asked)))
                      then
                         return Kept (Ty.Usize);
+                     end if;
+
+                     --  Type_At already reported the field that prevented a
+                     --  complete layout, including D45's padded-size limit.
+                     --  The measurement adds no second diagnosis.
+                     if Held = Ty.Aggregate then
+                        return Kept (Ty.Ill_Typed);
                      end if;
 
                      --  An unresolved or malformed type was already named by
@@ -3924,14 +3976,19 @@ package body Landin.Stages.Checking is
                           Landin.Checking.Body_Of
                             (Types.all, Of_Tree, Asked);
                      begin
-                        Value :=
-                          Ty.Folded
-                            (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
-                             then Landin.Checking.Layout_Size
-                                    (Types.all, Declared)
-                             else Landin.Checking.Layout_Alignment
-                                    (Types.all, Declared));
-                        Known := True;
+                        if Declared /= Res.No_Declaration
+                          and then Landin.Checking.Has_Layout
+                            (Types.all, Declared)
+                        then
+                           Value :=
+                             Ty.Folded
+                               (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
+                                then Landin.Checking.Layout_Size
+                                       (Types.all, Declared)
+                                else Landin.Checking.Layout_Alignment
+                                       (Types.all, Declared));
+                           Known := True;
+                        end if;
                      end;
                   end if;
                end;

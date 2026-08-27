@@ -1338,7 +1338,7 @@ declaration, so their computed reads meet no assignment requirement and
 their computed writes still assign nothing tracked. Every other refused
 value form — an inferred initializer not sourced by a direct storage name, a
 slice, `zeroed`, repetition, an array literal outside D23's one context,
-`lenof`, an array as a struct field — stays refused.
+`lenof`, or a runtime value of D45's array-field struct — stays refused.
 
 **Why:** treating one computed write as a whole assignment would admit
 uninitialized reads from every other position, exactly the failure D19
@@ -2494,4 +2494,60 @@ answer came from their own target description. It was declined.
 `positive/measurement-of-structs`; the one-report
 `negative/measuring-refused-types`;
 `negative/struct-measurement-fold-overflow`; the recorded IR dump; and
+`runtime/measurements-answer-for-the-target` on Linux x86-64.
+
+### D45 — A named ordinary struct may hold a fixed scalar array for measurement
+
+**The tour said** that a struct field has a type [0670], that fields are laid
+out in declaration order with target padding [0750], that a fixed array is a
+value with a compile-time length [0520], and that `sizeof T` and `alignof T`
+ask the target for byte measurements [0370]. D44 admitted only scalar fields,
+so the first aggregate field still had no representation the checker and
+backend shared.
+
+**Chosen:** a field of a named ordinary struct may be a fixed array of an
+enabled scalar, written directly or through an alias. Layout places that array
+once in declaration order, as one extent of length times target element size
+at the array's target alignment. D17's internal zero-element shape contributes
+size zero and alignment one here as everywhere else; this does not decide
+whether source may spell `[0]T`.
+
+The complete padded struct must fit the selected target's `usize`. If it does
+not, the checker reports L0300 at the struct body, records no layout, and a
+later measurement adds no second report. L0300 therefore owns compile-time
+magnitudes that a context or target cannot hold, including D18's array extent
+and this enclosing aggregate extent; it is not limited to a literal token.
+
+`sizeof T` and `alignof T` admit the resulting struct directly or through any
+representable alias chain and still produce `usize`. Lowering carries its
+declaration-order run in target-neutral IR: a scalar field is one scalar leaf,
+and an array field is one element-and-count leaf no matter how large its
+length. It carries no checker-computed offset, byte size or alignment. Each
+backend derives the padded answer from its own target facts. Module-scalar
+folds and static module array images use the same checked layout as D44. The
+verifier requires a scalar measurement leaf to have its canonical length one;
+the dump exposes an array leaf as `[N]element`.
+
+This decision does not enable a runtime value of a struct with an aggregate
+field: such a binding, parameter, return, whole copy, nested field place or
+indexed place remains refused. A struct field of struct type, nested aggregate
+composition, inline anonymous measurement and `lenof` on a struct also remain
+deferred. Scalar-field struct behaviour is unchanged.
+
+**Why the compact leaf:** D18 permits an array length no host or IR vector can
+enumerate, while its element and count are the complete representation-
+independent input to D17's extent rule. Replaying that leaf through target
+placement preserves D44's one authority for layout.
+
+**The alternatives:** expand one IR field per array element, or carry the
+checker-computed size and alignment. The first cannot represent enabled
+extents and the second puts a target answer into target-neutral IR, so both
+were declined. Refusing a zero-length field specially was also declined:
+D17 already defines the internal shape, and source legality remains one
+future decision for every `[0]T` context rather than one D45 exception.
+
+**Pinned by** the checker, target, lowering, verifier and backend public-seam
+cases; `positive/measurement-of-struct-array-fields`;
+`negative/struct-array-field-layout-overflow`; the reworked one-report
+`negative/struct-with-an-array-field`; the recorded IR dump; and
 `runtime/measurements-answer-for-the-target` on Linux x86-64.

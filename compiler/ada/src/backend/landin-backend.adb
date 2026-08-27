@@ -1,6 +1,7 @@
 package body Landin.Backend is
 
    use type Landin.IR.Element_Total;
+   use type Landin.IR.Measurement_Field_Kind;
    use type Landin.Targets.Byte_Count;
 
    ------------------------------------------------------------------
@@ -35,13 +36,38 @@ package body Landin.Backend is
             for Field in
               1 .. Landin.IR.Measurement_Field_Count (Of_Unit, Item, Value)
             loop
-               Landin.Targets.Place
-                 (Placed,
-                  Size_Of
-                    (Landin.IR.Nth_Measurement_Field
-                       (Of_Unit, Item, Value, Field),
-                     Facts),
-                  Facts, Ignored);
+               declare
+                  Part : constant Landin.IR.Measurement_Field :=
+                    Landin.IR.Nth_Measurement_Field
+                      (Of_Unit, Item, Value, Field);
+                  Held : constant Landin.Targets.Scalar_Size :=
+                    Size_Of (Part.Element, Facts);
+               begin
+                  if Part.Kind = Landin.IR.Scalar_Measurement_Field then
+                     Landin.Targets.Place
+                       (Placed, Held, Facts, Ignored);
+                  else
+                     declare
+                        Bytes : constant Landin.Targets.Byte_Count :=
+                          Landin.Targets.Byte_Count
+                            (Landin.Targets.Bytes (Held));
+                     begin
+                        if Landin.Targets.Byte_Count (Part.Length)
+                             > Landin.Targets.Byte_Count'Last / Bytes
+                        then
+                           raise Landin.Compiler_Defect with
+                             "an IR measurement array extent overflows";
+                        end if;
+
+                        Landin.Targets.Place
+                          (Placed,
+                           Landin.Targets.Byte_Count (Part.Length) * Bytes,
+                           (if Part.Length = 0 then 1
+                            else Landin.Targets.Alignment_Of (Facts, Held)),
+                           Ignored);
+                     end;
+                  end if;
+               end;
             end loop;
             Size := Landin.Targets.Size_Of (Placed);
             Alignment := Landin.Targets.Alignment_Of (Placed);

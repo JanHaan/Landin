@@ -147,6 +147,7 @@ package body Landin.Tests.Verifier_Suite is
       Operand_From_Another_Block,
       Result_Of_The_Wrong_Type,
       Measurement_Result_Is_Not_Usize,
+      Scalar_Measurement_Length_Is_Not_One,
       Operands_Of_Two_Types,
       Store_Of_The_Wrong_Type,
       Store_To_A_Parameter,
@@ -269,8 +270,25 @@ package body Landin.Tests.Verifier_Suite is
          when Measurement_Result_Is_Not_Usize =>
             N := IR.Emit_Aggregate_Measurement
               (Unit, A, IR.Measure_Size,
-               [Landin.Types.U8, Landin.Types.U32],
+               [(Kind    => IR.Scalar_Measurement_Field,
+                 Element => Landin.Types.U8,
+                 Length  => 1),
+                (Kind    => IR.Scalar_Measurement_Field,
+                 Element => Landin.Types.U32,
+                 Length  => 1)],
                Landin.Types.U32, Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Scalar_Measurement_Length_Is_Not_One =>
+            N := IR.Emit_Aggregate_Measurement
+              (Unit, A, IR.Measure_Size,
+               [(Kind    => IR.Scalar_Measurement_Field,
+                 Element => Landin.Types.U8,
+                 Length  => 2)],
+               Landin.Types.Usize, Site);
             pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -612,6 +630,8 @@ package body Landin.Tests.Verifier_Suite is
          (Operand_From_Another_Block, V.Operand_In_Another_Block),
          (Result_Of_The_Wrong_Type,   V.Result_Disagrees),
          (Measurement_Result_Is_Not_Usize, V.Result_Disagrees),
+         (Scalar_Measurement_Length_Is_Not_One,
+          V.Measurement_Field_Malformed),
          (Operands_Of_Two_Types,      V.Operands_Disagree),
          (Store_Of_The_Wrong_Type,    V.Store_Disagrees_With_Slot),
          (Store_To_A_Parameter,       V.Store_To_A_Parameter),

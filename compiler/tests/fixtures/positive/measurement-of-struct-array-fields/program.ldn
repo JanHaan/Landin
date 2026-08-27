@@ -1,0 +1,13 @@
+word_pair: type = [2]usize
+header: type = struct
+    tag: u8
+    words: word_pair
+    tail: u16
+end header
+
+alias: type = header
+direct_size: usize = sizeof header
+direct_align: usize = alignof header
+alias_size: usize = sizeof alias
+alias_align: usize = alignof alias
+static_image: [2]usize = [sizeof header, alignof alias]

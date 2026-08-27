@@ -284,10 +284,20 @@ package Landin.IR is
    type Block_Id is range 0 .. Integer'Last;
    type Value_Id is range 0 .. Integer'Last;
 
-   --  A target-neutral aggregate shape: declaration-order scalar field
-   --  types, with no checker-computed offsets or byte counts.
-   type Scalar_Field_Array is
-     array (Positive range <>) of Landin.Types.Scalar_Name;
+   --  A target-neutral aggregate measurement leaf.  D44 needs the scalar
+   --  form and D45 adds a compact fixed-scalar-array form; neither carries
+   --  a checker-computed offset, size or alignment.
+   type Measurement_Field_Kind is
+     (Scalar_Measurement_Field, Array_Measurement_Field);
+
+   type Measurement_Field is record
+      Kind    : Measurement_Field_Kind      := Scalar_Measurement_Field;
+      Element : Landin.Types.Scalar_Name    := Landin.Types.Bool;
+      Length  : Element_Total               := 1;
+   end record;
+
+   type Measurement_Field_Array is
+     array (Positive range <>) of Measurement_Field;
 
    No_Item  : constant Item_Id  := 0;
    No_Slot  : constant Slot_Id  := 0;
@@ -1067,7 +1077,7 @@ package Landin.IR is
 
    function Nth_Measurement_Field
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id; Field : Positive)
-      return Landin.Types.Scalar_Name
+      return Measurement_Field
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                           in Measure_Size | Measure_Align
@@ -1093,7 +1103,7 @@ package Landin.IR is
      (Into    : in out Unit;
       Item    : Item_Id;
       Of_Code : Opcode;
-      Fields  : Scalar_Field_Array;
+      Fields  : Measurement_Field_Array;
       Gives   : Landin.Types.Scalar_Name;
       Site    : Landin.Provenance.Origin) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
@@ -1579,6 +1589,10 @@ private
       Element_Type => Landin.Types.Scalar_Name,
       "="          => Landin.Types."=");
 
+   package Measurement_Field_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Measurement_Field);
+
    package Image_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Landin.Types.Folded,
@@ -1594,6 +1608,7 @@ private
       Operands   : Value_Ref_Vectors.Vector;
       Fields     : Field_Vectors.Vector;
       Slot_Fields : Field_Vectors.Vector;
+      Measurement_Fields : Measurement_Field_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
       --  D24: one folded scalar per array-datum position, laid end to end
       --  across items so a datum with no image contributes no bytes here.

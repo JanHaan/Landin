@@ -9,6 +9,14 @@ header: type = struct
 end header
 header_alias: type = header
 header_image: [2]usize = [sizeof header, alignof header_alias]
+array_header: type = struct
+    tag: u8
+    words: [2]usize
+    tail: u16
+end array_header
+array_header_alias: type = array_header
+array_header_image: [2]usize =
+    [sizeof array_header, alignof array_header_alias]
 
 public main: () -> (code: i32) =
     if sizeof u8 == 1 and alignof u8 == 1
@@ -23,6 +31,10 @@ public main: () -> (code: i32) =
         and sizeof header == 24 and alignof header == 8
         and sizeof header_alias == 24 and alignof header_alias == 8
         and header_image[0] == 24 and header_image[1] == 8
+        and sizeof array_header == 32 and alignof array_header == 8
+        and sizeof array_header_alias == 32
+        and alignof array_header_alias == 8
+        and array_header_image[0] == 32 and array_header_image[1] == 8
     then
         code = 42
     else
