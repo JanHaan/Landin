@@ -536,6 +536,20 @@ package body Landin.Stages.Lowering is
             when Syn.False_Literal =>
                return IR.Emit_Truth (Unit.all, Filling, False, Site);
 
+            when Syn.Zeroed_Literal =>
+               --  D40: the checker admits this expression form only as an
+               --  explicitly typed local scalar initializer.  Reuse the same
+               --  scalar constants as D10/D39, after which the binding path
+               --  emits its ordinary frame-slot store.
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Node) = Ty.Bool
+               then
+                  return IR.Emit_Truth (Unit.all, Filling, False, Site);
+               else
+                  return IR.Emit_Number
+                           (Unit.all, Filling, Scalar_At (Of_Tree, Node),
+                            0, False, Site);
+               end if;
+
             --  [0370]: the type asked about is carried into the IR and the
             --  target-dependent answer is not.  D17 decomposes a fixed array
             --  into operations the IR already has: element measurement and a
