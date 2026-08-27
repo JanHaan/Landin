@@ -155,6 +155,39 @@ file positive/array-types-alias-and-agree/program.ldn tokens 37
   341 342 4
   342 343 ]
   343 345 i8
+file positive/array-zeroed-assignment/program.ldn tokens 32
+  0 1 f
+  1 2 :
+  3 4 (
+  4 6 at
+  6 7 :
+  8 13 usize
+  13 14 )
+  15 17 ->
+  18 19 (
+  19 24 value
+  24 25 :
+  26 29 u32
+  29 30 )
+  31 32 =
+  37 40 mut
+  41 44 row
+  44 45 :
+  46 47 [
+  47 48 4
+  48 49 ]
+  49 52 u32
+  57 60 row
+  61 62 =
+  63 69 zeroed
+  74 79 value
+  80 81 =
+  82 85 row
+  85 86 [
+  86 88 at
+  88 89 ]
+  90 93 end
+  94 95 f
 file positive/assigned-on-every-path/program.ldn tokens 28
   0 1 f
   1 2 :
@@ -3067,26 +3100,6 @@ file negative/array-value-not-enabled/program.ldn tokens 24
   212 216 here
   217 220 end
   221 222 f
-file negative/array-zeroed-assignment-not-enabled/program.ldn tokens 19
-  0 1 f
-  1 2 :
-  3 4 (
-  4 5 )
-  6 8 ->
-  9 13 none
-  14 15 =
-  20 23 mut
-  24 27 row
-  27 28 :
-  29 30 [
-  30 31 4
-  31 32 ]
-  32 35 u32
-  40 43 row
-  44 45 =
-  46 52 zeroed
-  53 56 end
-  57 58 f
 file negative/assigned-on-one-path-only/program.ldn tokens 24
   0 1 f
   1 2 :
