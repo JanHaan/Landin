@@ -1,5 +1,11 @@
 mut calls: u32 = 0
 mut state: [3]u32
+module_bytes: [2]u8 = [of 0xA5]
+module_halves: [2]u16 = [2 of 0xBEEF]
+module_longs: [2]u32 = [of 0x89ABCDEF]
+module_quads: [2]u64 = [of 0x123456789ABCDEF0]
+module_through: [2]u64 = module_quads
+module_zero: [2]u64 = [of 0]
 
 next: (base: u32) -> (value: u32) =
     calls = calls + 1
@@ -20,6 +26,12 @@ public main: () -> (code: i32) =
         and quads[0] == 0x0123456789ABCDEF
         and quads[1] == 0x0123456789ABCDEF
         and state[0] == 22 and state[2] == 22
+        and module_bytes[0] == 0xA5 and module_bytes[1] == 0xA5
+        and module_halves[0] == 0xBEEF and module_halves[1] == 0xBEEF
+        and module_longs[0] == 0x89ABCDEF and module_longs[1] == 0x89ABCDEF
+        and module_quads[0] == 0x123456789ABCDEF0
+        and module_through[1] == 0x123456789ABCDEF0
+        and module_zero[0] == 0 and module_zero[1] == 0
     then
         code = 42
     else

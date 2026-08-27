@@ -144,11 +144,12 @@ package body Landin.Stages.Checking is
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean);
       procedure Check_Array_Repetition
-        (Of_Tree    : Syn.Tree;
-         Site_Node  : Syn.Node_Id;
-         Repetition : Syn.Node_Id;
-         Expected   : Landin.Checking.Element_Count;
-         Element    : Ty.Scalar_Name);
+        (Of_Tree      : Syn.Tree;
+         Site_Node    : Syn.Node_Id;
+         Repetition   : Syn.Node_Id;
+         Expected     : Landin.Checking.Element_Count;
+         Element      : Ty.Scalar_Name;
+         Static_Image : Boolean);
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Block
@@ -541,13 +542,13 @@ package body Landin.Stages.Checking is
             --  exact length and the scalar context.  Every element must
             --  also be [1940]'s "known", which Check_Module_Value asks
             --  once the checker settles the types.
-            --  D32 admits full-array repetition where a written local array
-            --  type supplies its shape.  D33's inferred form is admitted by
-            --  Infer before this written-declaration gate.
-            Is_Local_Repetition_Init : constant Boolean :=
+            --  D34 admits full-array repetition where a written nonzero array
+            --  type supplies its shape, for either module or local storage.
+            --  D33's inferred local form is admitted by Infer before this
+            --  written-declaration gate.
+            Is_Typed_Repetition_Init : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
-              and then Is_Local_Binding (Of_Tree, Node)
               and then Written /= Syn.No_Node
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
@@ -594,7 +595,7 @@ package body Landin.Stages.Checking is
               and then not Is_Zeroed_State
               and then not Is_Direct_Name_Init
               and then not Is_Local_Literal_Init
-              and then not Is_Local_Repetition_Init
+              and then not Is_Typed_Repetition_Init
               and then not Is_Module_Literal_Init
               and then not Is_Module_Zeroed_Init
               and then not Is_Local_Zeroed_Init
@@ -2076,11 +2077,12 @@ package body Landin.Stages.Checking is
       end Check_Array_Literal;
 
       procedure Check_Array_Repetition
-        (Of_Tree    : Syn.Tree;
-         Site_Node  : Syn.Node_Id;
-         Repetition : Syn.Node_Id;
-         Expected   : Landin.Checking.Element_Count;
-         Element    : Ty.Scalar_Name)
+        (Of_Tree      : Syn.Tree;
+         Site_Node    : Syn.Node_Id;
+         Repetition   : Syn.Node_Id;
+         Expected     : Landin.Checking.Element_Count;
+         Element      : Ty.Scalar_Name;
+         Static_Image : Boolean)
       is
          Count : constant Syn.Node_Id :=
            Syn.Repetition_Count (Of_Tree, Repetition);
@@ -2095,6 +2097,21 @@ package body Landin.Stages.Checking is
               (Types.all, Of_Tree, Repetition, Ty.Fixed_Array);
             Landin.Checking.Note_Array
               (Types.all, Of_Tree, Repetition, Expected, Element);
+         end if;
+
+         --  D34 deliberately does not decide whether [0580]'s zero-length
+         --  fixed-array type is legal source.  Repetition needs at least one
+         --  destination position, so a zero contextual extent is refused at
+         --  this construct rather than admitted as a zero-length array value.
+         if Expected = 0 then
+            Bad.Report
+              (Item    => Bad.Unsupported_Use,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Repetition),
+               Message => "array repetition needs a nonzero contextual length",
+               Refused => Bad.Array_Value,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Repetition);
          end if;
 
          if Count /= Syn.No_Node then
@@ -2133,6 +2150,42 @@ package body Landin.Stages.Checking is
          Require
            (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition), Element,
             Syn.Origin (Of_Tree, Site_Node), "the array element type");
+
+         if Static_Image then
+            declare
+               procedure Refuse_Excluded_Subtree (Where : Syn.Node_Id);
+
+               procedure Refuse_Excluded_Subtree (Where : Syn.Node_Id) is
+                  What : constant String :=
+                    (case Syn.Kind (Of_Tree, Where) is
+                        when Syn.Member_Selection => "a field selection",
+                        when Syn.Element_Index    => "an array index",
+                        when Syn.Array_Literal    => "a nested array literal",
+                        when others               => "");
+               begin
+                  if What /= "" then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Where),
+                        Message => What & " is not enabled as a module"
+                                   & " array repetition element",
+                        Refused => Bad.Array_Value,
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Where);
+                     return;
+                  end if;
+
+                  for Slot in 1 .. Syn.Slot_Count (Of_Tree, Where) loop
+                     Refuse_Excluded_Subtree
+                       (Syn.Slot (Of_Tree, Where, Slot));
+                  end loop;
+               end Refuse_Excluded_Subtree;
+            begin
+               Refuse_Excluded_Subtree
+                 (Syn.Repeated_Element (Of_Tree, Repetition));
+            end;
+         end if;
       end Check_Array_Repetition;
 
       procedure Check_Statement
@@ -2191,7 +2244,8 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Array_Length
                                 (Types.all, Of_Tree, Value),
                               Landin.Checking.Array_Element
-                                (Types.all, Of_Tree, Value));
+                                (Types.all, Of_Tree, Value),
+                              Static_Image => False);
                         else
                            declare
                               Got : constant Ty.Type_Kind :=
@@ -2238,29 +2292,19 @@ package body Landin.Stages.Checking is
                               Landin.Checking.Array_Element
                                 (Types.all, Of_Tree, Written));
                         elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition
-                          and then Is_Local_Binding (Of_Tree, Node)
                         then
-                           if Syn.Repetition_Count (Of_Tree, Value)
-                             = Syn.No_Node
-                           then
-                              Bad.Report
-                                (Item    => Bad.Unsupported_Use,
-                                 Source  => Syn.Source_Of (Of_Tree),
-                                 Where   => Syn.Where (Of_Tree, Value),
-                                 Message => "a local array initializer must"
-                                            & " write its repetition count",
-                                 Refused => Bad.Array_Value,
-                                 Into    => Found);
-                              Landin.Checking.Refuse
-                                (Types.all, Of_Tree, Value);
-                           else
-                              Check_Array_Repetition
-                                (Of_Tree, Node, Value,
-                                 Landin.Checking.Array_Length
-                                   (Types.all, Of_Tree, Written),
-                                 Landin.Checking.Array_Element
-                                   (Types.all, Of_Tree, Written));
-                           end if;
+                           --  D34: the written nonzero shape supplies a count
+                           --  when `of` has none.  At module scope the one
+                           --  scalar expression also takes D24's static-fold
+                           --  boundary.
+                           Check_Array_Repetition
+                             (Of_Tree, Node, Value,
+                              Landin.Checking.Array_Length
+                                (Types.all, Of_Tree, Written),
+                              Landin.Checking.Array_Element
+                                (Types.all, Of_Tree, Written),
+                              Static_Image =>
+                                not Is_Local_Binding (Of_Tree, Node));
                         elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
                         then
                            --  D23 for a local, D24 for a module binding:
@@ -2398,7 +2442,8 @@ package body Landin.Stages.Checking is
                            Landin.Checking.Array_Length
                              (Types.all, Of_Tree, Place),
                            Landin.Checking.Array_Element
-                             (Types.all, Of_Tree, Place));
+                             (Types.all, Of_Tree, Place),
+                           Static_Image => False);
                      elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal then
                         Check_Array_Literal
                           (Of_Tree, Place, Value,

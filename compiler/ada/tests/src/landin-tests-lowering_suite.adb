@@ -1208,6 +1208,62 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Array_Chain_Copies_The_Terminal_Image;
 
+   --  D34: a repetition folds one scalar and carries that one pattern through
+   --  direct-name chains, regardless of the target-sized declared extent.  A
+   --  zero pattern remains the absent image used for loader-zeroed storage.
+   procedure Module_Repetition_Images_Stay_Compact
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Repetition_Images_Stay_Compact
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut through: [4294967295]u8 = huge" & LF
+         & "mut huge: [4294967295]u8 = [of base + 5]" & LF
+         & "base: u8 = 160" & LF
+         & "mut wide: [2]u64 = [2 of 0x123456789ABCDEF0]" & LF
+         & "mut zero: [3]u32 = [of 0]" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "module repetitions and their through chain are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Datum in IR.Item_Id range 1 .. 2 loop
+            Landin.Testing.Check
+              (Item, IR.Is_Repeated_Image (Unit, Datum),
+               "the huge source and destination carry a repetition image");
+            Landin.Testing.Check
+              (Item,
+               IR."="
+                 (IR.Image_Length (Unit, Datum),
+                  IR.Element_Total'(4_294_967_295))
+               and then Landin.Types."="
+                 (IR.Repeated_Image_Value (Unit, Datum), 165),
+               "the chain keeps one folded pattern and the complete extent");
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            IR.Is_Repeated_Image (Unit, 4)
+            and then Landin.Types."="
+              (IR.Repeated_Image_Value (Unit, 4),
+               Landin.Types.Folded'(16#1234_5678_9ABC_DEF0#)),
+            "all eight bytes of a wide repeated pattern survive lowering");
+         Landin.Testing.Check
+           (Item, not IR.Has_Image (Unit, 5),
+            "a zero-pattern repetition remains an absent image");
+      end;
+   end Module_Repetition_Images_Stay_Compact;
+
    ------------------------------------------------------------------
 
    procedure A_Logical_Module_Value_Becomes_Blocks
@@ -1742,6 +1798,9 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a module array chain copies the terminal image",
          A_Module_Array_Chain_Copies_The_Terminal_Image'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "module repetition images stay compact",
+         Module_Repetition_Images_Stay_Compact'Access);
       Landin.Testing.Register
         (Into, "lowering", "a computed destination precedes its value",
          A_Computed_Destination_Precedes_Its_Value'Access);

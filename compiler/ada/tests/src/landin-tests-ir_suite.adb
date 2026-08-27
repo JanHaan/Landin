@@ -633,10 +633,11 @@ package body Landin.Tests.IR_Suite is
       declare
          Meanings : constant not null access Landin.Resolution.Table :=
            Landin.Stages.Meanings (Work);
-         Unit : Landin.IR.Unit;
-         Loaded : Landin.IR.Item_Id;
-         Blank  : Landin.IR.Item_Id;
-         Block  : Landin.IR.Block_Id;
+         Unit     : Landin.IR.Unit;
+         Loaded   : Landin.IR.Item_Id;
+         Repeated : Landin.IR.Item_Id;
+         Blank    : Landin.IR.Item_Id;
+         Block    : Landin.IR.Block_Id;
       begin
          Landin.IR.Prepare (Unit, Meanings.all);
 
@@ -651,8 +652,20 @@ package body Landin.Tests.IR_Suite is
          Landin.IR.Emit_Leave (Unit, Loaded, Landin.IR.No_Value, Site);
          Landin.IR.Leave_Block (Unit, Loaded);
 
-         Blank := Landin.IR.Add_Item
+         Repeated := Landin.IR.Add_Item
            (Unit, Landin.IR.Datum, 2, Landin.Types.Fixed_Array, Site);
+         Landin.IR.Set_Array
+           (Unit, Repeated, Landin.Types.U64, Landin.IR.Element_Total'Last);
+         Landin.IR.Set_Repeated_Array_Image
+           (Unit, Repeated, -81_985_529_216_486_896);
+         Block := Landin.IR.Add_Block
+           (Unit, Repeated, Landin.Resolution.Program_Scope, Site);
+         Landin.IR.Enter (Unit, Repeated, Block);
+         Landin.IR.Emit_Leave (Unit, Repeated, Landin.IR.No_Value, Site);
+         Landin.IR.Leave_Block (Unit, Repeated);
+
+         Blank := Landin.IR.Add_Item
+           (Unit, Landin.IR.Datum, 3, Landin.Types.Fixed_Array, Site);
          Landin.IR.Set_Array (Unit, Blank, Landin.Types.U32, 3);
          Block := Landin.IR.Add_Block
            (Unit, Blank, Landin.Resolution.Program_Scope, Site);
@@ -676,6 +689,19 @@ package body Landin.Tests.IR_Suite is
             Integer (Landin.IR.Nth_Image (Unit, Loaded, 2)),
             Integer'(-1),
             "a negative folded value survives the image");
+         Landin.Testing.Check
+           (Item, Landin.IR.Is_Repeated_Image (Unit, Repeated),
+            "a repeated image keeps its compact representation");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Image_Length (Unit, Repeated)
+              = Landin.IR.Element_Total'Last,
+            "a repeated image reports the target-sized declared extent");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Repeated_Image_Value (Unit, Repeated)
+              = Landin.Types.Folded'(-81_985_529_216_486_896),
+            "a repeated image carries one complete 64-bit pattern");
          Landin.Testing.Check
            (Item, not Landin.IR.Has_Image (Unit, Blank),
             "a datum whose image was never set stays without one");

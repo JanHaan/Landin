@@ -1,2 +1,0 @@
-typed: [3]u8 = [3 of 1]
-inferred := [3 of 1]

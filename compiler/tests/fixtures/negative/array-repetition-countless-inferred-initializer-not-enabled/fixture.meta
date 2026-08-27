@@ -1,6 +1,6 @@
 class: negative
-summary: a local array repetition initializer writes its count
+summary: a count-less repetition cannot supply an inferred local shape
 constructs: 0040, 0050, 0520, 0560, 1740, 1810
 program: program.ldn
-codes: L0304, L0304
+codes: L0304
 targets: linux-x86-64, macos-arm64

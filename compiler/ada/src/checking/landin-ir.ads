@@ -480,13 +480,13 @@ package Landin.IR is
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
 
-   --  D24: the source-order static image of an array datum, one folded
-   --  value per position.  An array item with no image is D10's all-zero
-   --  storage: the backend reserves it in `.bss` and this package does
-   --  not allocate a per-element run for it.  An array with an image is
-   --  written to `.data`, one directive per position.  A run and not one
-   --  operand per element, because [1940] admits a literal, an operator
-   --  of [1820] over literals, and a name bound to another module
+   --  D24: the source-order static image of an array literal datum, one
+   --  folded value per position.  An array item with no image is D10's
+   --  all-zero storage (or D34's zero-pattern repetition): the backend
+   --  reserves it in `.bss` and this package allocates no run for it.  A
+   --  literal image reaches `.data`, one directive per position.  A run and
+   --  not one operand per element, because [1940] admits a literal, an
+   --  operator of [1820] over literals, and a name bound to another module
    --  binding -- and each of those already folds to a single Folded value
    --  the backend can materialise.  Requires the count to match the array's
    --  declared length, so the reader is spared having to guess.
@@ -505,10 +505,41 @@ package Landin.IR is
                   and then Image_Length (Into, Item)
                            = Element_Total (Elements'Length);
 
+   --  D34's repetition image is one folded scalar plus the array shape,
+   --  never a run proportional to a target-sized extent.  A zero pattern is
+   --  represented by no image instead and remains loader-zeroed storage.
+   procedure Set_Repeated_Array_Image
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Value : Landin.Types.Folded)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item)
+                           = Landin.Types.Fixed_Array
+                  and then Array_Length (Into, Item) > 0
+                  and then not Has_Image (Into, Item)
+                  and then Landin.Types."/=" (Value, 0),
+          Post => Has_Image (Into, Item)
+                  and then Is_Repeated_Image (Into, Item)
+                  and then Landin.Types."="
+                             (Repeated_Image_Value (Into, Item), Value);
+
    function Has_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
+
+   function Is_Repeated_Image
+     (Of_Unit : Unit; Item : Item_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array;
+
+   function Repeated_Image_Value
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Folded
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array
+                 and then Is_Repeated_Image (Of_Unit, Item);
 
    function Image_Length
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
@@ -1417,10 +1448,12 @@ private
       --  [0520]'s shape, when Result says the item is an array.
       Element     : Landin.Types.Scalar_Name  := Landin.Types.Bool;
       Length      : Element_Total             := 0;
-      --  D24: the source-order static image, one Folded value per
-      --  position, or a run of count zero when the datum stays D10 zero.
+      --  D24's source-order static image is one Folded value per position.
+      --  D34 instead stores one value and marks it repeated; neither an
+      --  absent zero image nor a repetition allocates a target-sized run.
       Image       : Run;
       Has_Image   : Boolean                   := False;
+      Repeated_Image : Boolean                := False;
       Open        : Block_Id                  := No_Block;
    end record;
 

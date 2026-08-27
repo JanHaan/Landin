@@ -1905,7 +1905,7 @@ program contains. It was declined.
 **Pinned by** `positive/local-array-repetition`,
 `negative/array-repetition-count-mismatch`,
 `negative/array-repetition-element-mismatch`,
-`negative/array-repetition-local-initializer-needs-count`,
+`negative/array-repetition-countless-inferred-initializer-not-enabled`,
 `negative/array-repetition-reads-incoming-state`,
 `negative/array-repetition-not-enabled`, and
 `runtime/array-repetition-evaluates-once` on Linux x86-64.
@@ -1951,6 +1951,65 @@ declined.
 `negative/inferred-array-repetition-extent-overflow`,
 `negative/inferred-array-repetition-reads-incoming-state`,
 `negative/inferred-array-repetition-zero-count`,
-`negative/array-repetition-module-initializer-not-enabled`,
+`negative/array-repetition-inferred-module-initializer-not-enabled`,
 `negative/array-repetition-general-value-not-enabled`, and
+`runtime/array-repetition-evaluates-once` on Linux x86-64.
+
+### D34 — A written nonzero array shape admits either repetition spelling
+
+**The tour said** that `[N of expression]` may omit `N` when the type supplies
+its length [0560], and introduced repetition as a static pattern that lives in
+flash. D32 admitted only a counted explicitly typed local initializer, while D33
+admitted a counted inferred local; neither slice supplied the module static image
+or explained what a zero folded pattern becomes.
+
+**Chosen:** an explicitly typed fixed-array binding at module or local scope may
+be initialized by `[N of expression]` or `[of expression]` when its written
+contextual length is nonzero. The written type supplies D17's complete shape. A
+written `N` remains an exact assertion of that same length, and the one expression
+is checked against the scalar element type. This lifts D32's count requirement for
+an explicitly typed local without changing assignment or D33's inferred rule.
+
+For module state, the expression obeys the same [1940] compile-time-known and
+D24 target-aware scalar-fold boundary as one element of a module array literal:
+literals, [1820] operators and module scalar names may compose; calls, storage
+selection, an element index and a nested array literal remain refused. The fold
+produces one scalar pattern. A nonzero pattern is represented in IR by that one
+`Folded` value plus D17's existing compact shape, including through any D21 direct
+module-array name chain. A zero pattern records no image, just like D10, D27 and
+D28, and therefore remains loader-zeroed storage rather than bytes in `.data`.
+Neither image resolution, copying, verification nor dumping enumerates the
+extent.
+
+The Linux x86-64 backend emits a constant-size `.rept`/width-specific-directive/
+`.endr` sequence for a nonzero repeated image. The scalar directive is `.byte`,
+`.word`, `.long` or `.quad` according to the target element width. In particular,
+the eight-byte form does not use GNU `.fill`, whose value operand contributes at
+most four bytes and would discard the high half of a `u64` pattern. An absent zero
+image stays `.bss`.
+
+A repetition whose written contextual length is zero is refused at the
+repetition. This is a construct-specific nonzero requirement, not an admission or
+rejection of `[0]T` as source; [0580]'s empty-array legality remains undecided.
+D33's zero-count inferred refusal remains for the same reason. An inferred module
+initializer, a count-less inferred initializer, mixed-prefix form, argument,
+return, discard, nested repetition and every other general array value position
+remain refused.
+
+**Why one image value:** repetition writes one expression and every destination
+position receives the same target-width pattern. Materializing one value per
+position would lose the compact representation precisely for D18's target-sized
+extents, and copying such a run through a module name would repeat the same fault.
+
+**The alternative:** use GNU `.fill count,size,value` directly. Its compact count
+is attractive, but GNU assemblers truncate `value` to four bytes, so it cannot
+faithfully emit an arbitrary eight-byte element. The width-specific repeated
+scalar directive keeps both compact source and all pattern bits.
+
+**Pinned by** `positive/local-array-repetition`,
+`positive/module-array-repetition`,
+`negative/array-repetition-zero-context`,
+`negative/module-array-repetition-element-not-static`,
+`negative/array-repetition-countless-inferred-initializer-not-enabled`,
+`negative/array-repetition-inferred-module-initializer-not-enabled`, and
 `runtime/array-repetition-evaluates-once` on Linux x86-64.

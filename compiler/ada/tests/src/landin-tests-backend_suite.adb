@@ -1642,6 +1642,65 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Module_Array_Literal_Becomes_Data_Image;
 
+   --  D34: a nonzero repeated image is emitted as a constant number of
+   --  directives for every scalar width.  In particular, the eight-byte
+   --  pattern must not travel through GNU `.fill`'s four-byte value field.
+   procedure Module_Repetition_Uses_Compact_Full_Width_Directives
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Repetition_Uses_Compact_Full_Width_Directives
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "mut bytes: [3]u8 = [of 165]" & LF
+         & "mut words: [4]u16 = [of 4660]" & LF
+         & "mut longs: [5]u32 = [of 305419896]" & LF
+         & "mut quads: [6]u64 = [of 0x123456789ABCDEF0]" & LF
+         & "mut huge: [4294967295]u8 = [of 1]" & LF
+         & "mut zero: [7]u64 = [of 0]" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, "bytes:" & LF & HT & ".rept 3" & LF
+                            & HT & ".byte 165" & LF & HT & ".endr" & LF)
+            and then Contains
+              (Text, "words:" & LF & HT & ".rept 4" & LF
+                     & HT & ".word 4660" & LF & HT & ".endr" & LF)
+            and then Contains
+              (Text, "longs:" & LF & HT & ".rept 5" & LF
+                     & HT & ".long 305419896" & LF & HT & ".endr" & LF),
+            "one repeated directive preserves each one-to-four-byte pattern");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, "quads:" & LF & HT & ".rept 6" & LF
+                     & HT & ".quad 1311768467463790320" & LF
+                     & HT & ".endr" & LF),
+            "the repeated quad carries all eight bytes without .fill");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, "huge:" & LF & HT & ".rept 4294967295" & LF
+                     & HT & ".byte 1" & LF & HT & ".endr" & LF),
+            "a target-sized extent does not enlarge the assembly text");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, "zero:" & LF & HT & ".zero 56" & LF),
+            "a zero-pattern repetition remains reserved storage");
+      end;
+   end Module_Repetition_Uses_Compact_Full_Width_Directives;
+
    --  [0520]'s element, reached by an index the compiler knows.  It sits
    --  where the element size puts it, so `[4]u32` reads its third at four
    --  bytes times two, and a `[8]bool` reads its fifth one byte along at
@@ -2658,6 +2717,10 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a module array literal becomes data image",
          A_Module_Array_Literal_Becomes_Data_Image'Access);
+      Landin.Testing.Register
+        (Into, "backend",
+         "module repetition uses compact full-width directives",
+         Module_Repetition_Uses_Compact_Full_Width_Directives'Access);
       Landin.Testing.Register
         (Into, "backend", "zero data is reserved and not written",
          Zero_Data_Is_Reserved_And_Not_Written'Access);
