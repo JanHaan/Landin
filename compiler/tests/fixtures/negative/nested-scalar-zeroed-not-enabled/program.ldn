@@ -1,0 +1,1 @@
+value: u32 = zeroed + 1

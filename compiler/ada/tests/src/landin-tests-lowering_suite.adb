@@ -604,6 +604,45 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Value_Becomes_A_Datum;
 
+   --  D39 lowers contextual scalar `zeroed` through D10's existing scalar
+   --  zero operations, so no new IR value form or runtime initialization is
+   --  introduced.  The alias has already settled to its scalar here.
+   procedure A_Zeroed_Module_Scalar_Reuses_The_Zero_IR
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Zeroed_Module_Scalar_Reuses_The_Zero_IR
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "word: type = u32" & LF
+         & "number: word = zeroed" & LF
+         & "flag: bool = zeroed" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "typed scalar zeroed initializers lower");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 1, 1) = IR.Number
+                  and then IR.Number_Of (Unit, 1, 1) = 0,
+            "the integer initializer is D10's zero number");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, 2, 1) = IR.Truth
+                  and then not IR.Truth_Of (Unit, 2, 1),
+            "the bool initializer is D10's false truth");
+         Check_Terminators (Item, Unit, "two zeroed scalar datums");
+      end;
+   end A_Zeroed_Module_Scalar_Reuses_The_Zero_IR;
+
    ------------------------------------------------------------------
 
    --  R2.20: a direct-name initial image does not alias its source.  Each
@@ -1968,6 +2007,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a module value becomes a datum",
          A_Module_Value_Becomes_A_Datum'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a zeroed module scalar reuses zero IR",
+         A_Zeroed_Module_Scalar_Reuses_The_Zero_IR'Access);
       Landin.Testing.Register
         (Into, "lowering", "module array images keep distinct datums",
          Module_Array_Images_Keep_Distinct_Datums'Access);

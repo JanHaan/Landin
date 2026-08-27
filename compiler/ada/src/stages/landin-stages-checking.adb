@@ -2494,6 +2494,17 @@ package body Landin.Stages.Checking is
                            end;
                         end if;
                      end;
+                  elsif Wants in Ty.Scalar_Name
+                    and then not Is_Local_Binding (Of_Tree, Node)
+                    and then Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
+                  then
+                     --  D39: a written module scalar type is the one scalar
+                     --  context for `zeroed`; Type_At has already resolved an
+                     --  alias to the enabled scalar it denotes.  Locals,
+                     --  inference, assignment and general expressions still
+                     --  reach the ordinary refusal.
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Value, Wants);
                   else
                      Require
                        (Of_Tree, Value, Wants, Syn.Origin (Of_Tree, Node),
