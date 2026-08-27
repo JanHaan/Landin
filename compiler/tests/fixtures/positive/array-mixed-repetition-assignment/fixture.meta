@@ -1,0 +1,5 @@
+class: positive
+summary: mixed-prefix repetition assigns local and module fixed-array storage
+constructs: 0040, 0080, 0190, 0410, 0520, 0560, 1760, 1770, 1810, 1900, 1910
+program: program.ldn
+targets: linux-x86-64, macos-arm64

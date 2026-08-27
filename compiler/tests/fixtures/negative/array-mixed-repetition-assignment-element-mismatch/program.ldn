@@ -1,0 +1,9 @@
+prefix: () -> none =
+    mut row: [3]u8
+    row = [true, of 1]
+end prefix
+
+suffix: () -> none =
+    mut row: [3]u8
+    row = [1, of false]
+end suffix

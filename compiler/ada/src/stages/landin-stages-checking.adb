@@ -2117,8 +2117,8 @@ package body Landin.Stages.Checking is
          Landin.Checking.Note_Array
            (Types.all, Of_Tree, Repetition, Expected, Element);
 
-         --  The parser makes the prefix nonempty.  D36 also requires at least
-         --  one destination position to remain for the repeated suffix.
+         --  The parser makes the prefix nonempty.  D36/D37 also require at
+         --  least one destination position to remain for the repeated suffix.
          if Landin.Checking.Element_Count (Prefix) >= Expected then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
@@ -2126,7 +2126,7 @@ package body Landin.Stages.Checking is
                Where   => Syn.Where (Of_Tree, Repetition),
                Message => "this mixed repetition leaves no array suffix to"
                           & " fill",
-               Note    => "D36: a prefix of k elements requires 1 <= k < N",
+               Note    => "D36/D37: a prefix requires 1 <= k < N",
                Related => Syn.Origin (Of_Tree, Site_Node),
                Because => "the array context here",
                Into    => Found);
@@ -2518,7 +2518,20 @@ package body Landin.Stages.Checking is
                   --  count and scalar element type without making either a
                   --  general value.
                   if Wants = Ty.Fixed_Array then
-                     if Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition then
+                     if Syn.Kind (Of_Tree, Value)
+                          = Syn.Mixed_Array_Repetition
+                     then
+                        --  D37 gives this contextual mixed form the complete
+                        --  shape of its mutable fixed-array destination.
+                        Check_Mixed_Array_Repetition
+                          (Of_Tree, Place, Value,
+                           Landin.Checking.Array_Length
+                             (Types.all, Of_Tree, Place),
+                           Landin.Checking.Array_Element
+                             (Types.all, Of_Tree, Place));
+                     elsif Syn.Kind (Of_Tree, Value)
+                             = Syn.Array_Repetition
+                     then
                         Check_Array_Repetition
                           (Of_Tree, Place, Value,
                            Landin.Checking.Array_Length

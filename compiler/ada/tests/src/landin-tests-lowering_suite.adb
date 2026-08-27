@@ -987,6 +987,86 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Mixed_Repetition_Becomes_Prefix_Stores_And_One_Fill;
 
+   --  D37 reaches the assignment destination first, then stores each prefix
+   --  expression in source order and evaluates one scalar for one compact
+   --  suffix fill.  The same lowering serves frame slots and module datums.
+   procedure Mixed_Assignment_Becomes_Prefix_Stores_And_One_Fill
+     (Item : in out Landin.Testing.Context);
+
+   procedure Mixed_Assignment_Becomes_Prefix_Stores_And_One_Fill
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "mut state: [4]u32" & LF
+         & "f: () -> none =" & LF
+         & "    mut row: [5]u32" & LF
+         & "    row = [7, 8, of 9]" & LF
+         & "    state = [10, of 11]" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "both mixed-repetition assignments are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Slot_Count (Unit, 2), 1,
+            "the destination is the only frame slot");
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, 2), 11,
+            "ordered stores, two compact fills and return are emitted");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, 2, 1) = IR.Number
+            and then IR.Op_Of (Unit, 2, 2) = IR.Store_Field
+            and then IR.Reaches_A_Slot (Unit, 2, 2)
+            and then IR.Slot_Of (Unit, 2, 2) = 1
+            and then IR.Field_Of (Unit, 2, 2) = 1
+            and then IR.Op_Of (Unit, 2, 3) = IR.Number
+            and then IR.Op_Of (Unit, 2, 4) = IR.Store_Field
+            and then IR.Reaches_A_Slot (Unit, 2, 4)
+            and then IR.Slot_Of (Unit, 2, 4) = 1
+            and then IR.Field_Of (Unit, 2, 4) = 2,
+            "local prefix values are immediately stored left to right");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, 2, 5) = IR.Number
+            and then IR.Op_Of (Unit, 2, 6) = IR.Fill_Array
+            and then IR.First_Part_Of (Unit, 2, 6) = 3
+            and then IR.Destination_Of (Unit, 2, 6).Kind = IR.Frame_Slot
+            and then IR.Destination_Of (Unit, 2, 6).Slot = 1
+            and then IR.Nth_Operand (Unit, 2, 6, 1) = 5,
+            "one local scalar evaluation feeds the suffix fill");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, 2, 7) = IR.Number
+            and then IR.Op_Of (Unit, 2, 8) = IR.Store_Field
+            and then not IR.Reaches_A_Slot (Unit, 2, 8)
+            and then IR.Datum_Of (Unit, 2, 8) = 1
+            and then IR.Field_Of (Unit, 2, 8) = 1,
+            "the module prefix is stored in its datum");
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, 2, 9) = IR.Number
+            and then IR.Op_Of (Unit, 2, 10) = IR.Fill_Array
+            and then IR.First_Part_Of (Unit, 2, 10) = 2
+            and then IR.Destination_Of (Unit, 2, 10).Kind = IR.Module_Datum
+            and then IR.Destination_Of (Unit, 2, 10).Datum = 1
+            and then IR.Nth_Operand (Unit, 2, 10, 1) = 9,
+            "one module scalar evaluation feeds its suffix fill");
+      end;
+   end Mixed_Assignment_Becomes_Prefix_Stores_And_One_Fill;
+
    --  D29 forms a contextual assignment literal directly in its destination,
    --  preserving one expression-store pair per source element for both local
    --  and module storage rather than introducing a hidden array temporary.
@@ -1890,6 +1970,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a mixed repetition becomes stores and one fill",
          A_Mixed_Repetition_Becomes_Prefix_Stores_And_One_Fill'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "mixed assignment becomes stores and one fill",
+         Mixed_Assignment_Becomes_Prefix_Stores_And_One_Fill'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "an array literal assignment becomes ordered stores",

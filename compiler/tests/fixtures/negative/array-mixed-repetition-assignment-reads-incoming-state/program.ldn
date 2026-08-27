@@ -1,0 +1,9 @@
+prefix: () -> none =
+    mut row: [3]u8
+    row = [1, row[0], of 2]
+end prefix
+
+suffix: () -> none =
+    mut row: [3]u8
+    row = [1, of row[0]]
+end suffix

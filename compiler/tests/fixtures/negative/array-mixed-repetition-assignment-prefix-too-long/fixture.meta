@@ -1,0 +1,6 @@
+class: negative
+summary: a D37 assignment prefix must leave a nonempty destination suffix
+constructs: 0040, 0410, 0520, 0560, 1810, 1900
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,6 @@
+class: negative
+summary: D37 requires every prefix and repeated expression to match the destination element
+constructs: 0040, 0080, 0190, 0410, 0520, 0560, 1760, 1810, 1900
+program: program.ldn
+codes: L0301, L0301
+targets: linux-x86-64, macos-arm64
