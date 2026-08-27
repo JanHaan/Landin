@@ -2723,11 +2723,12 @@ package body Landin.Stages.Checking is
             when Syn.Assignment =>
                --  D49 supplies the fixed-array shape for a complete `zeroed`
                --  assignment.  D50 additionally recognizes a direct array
-               --  name or a selection as copy syntax; the source selection
-               --  is not typed until Check_Place accepts the destination, so
-               --  destination diagnostics remain first and alone.
+               --  name or a selection as copy syntax, and D52 recognizes
+               --  D29's literal syntax.  The source selection is not typed
+               --  until Check_Place accepts the destination, so destination
+               --  diagnostics remain first and alone.
                if Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                    = Syn.Zeroed_Literal
+                    in Syn.Zeroed_Literal | Syn.Array_Literal
                  or else Is_Direct_Array_Name
                    (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                  or else Syn.Kind
@@ -5465,13 +5466,25 @@ package body Landin.Stages.Checking is
                                  Whole_As => Initializer_Source);
 
                   when Syn.Assignment =>
-                     Read_Names (Of_Tree, Syn.Value_Of (Of_Tree, Item),
-                                 State);
+                     --  A refused destination owns the assignment report.
+                     --  Check_Assignment marks the unvisited value ill-typed,
+                     --  but a composite value still has children; do not walk
+                     --  those children and add definite-assignment reports for
+                     --  a statement that cannot be executed.  This also keeps
+                     --  D52's immutable-root L0303 first and alone when a
+                     --  literal element names the same local field.
+                     if Landin.Checking.Type_Of
+                          (Types.all, Of_Tree,
+                           Syn.Target_Of (Of_Tree, Item)) /= Ty.Ill_Typed
+                     then
+                        Read_Names
+                          (Of_Tree, Syn.Value_Of (Of_Tree, Item), State);
 
-                     --  D16: writing one field assigns that field and
-                     --  says nothing about the others, and reaching it is
-                     --  not a read of the struct it is in.
-                     Mark (Syn.Target_Of (Of_Tree, Item));
+                        --  D16: writing one field assigns that field and
+                        --  says nothing about the others, and reaching it is
+                        --  not a read of the struct it is in.
+                        Mark (Syn.Target_Of (Of_Tree, Item));
+                     end if;
 
                   when Syn.Increment | Syn.Decrement =>
                      --  [0400]: `inc x` is `x += 1`, so it reads x too.
