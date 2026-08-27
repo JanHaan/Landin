@@ -12,9 +12,10 @@ public main: () -> (code: i32) =
     at: usize = 1
     inc local.words[at]
     local.tail = 701
+    local.words = zeroed
 
-    if local.tag == 7 and local.words[0] == 700
-      and local.words[at] == 2 and local.tail == 701
+    if local.tag == 7 and local.words[0] == 0
+      and local.words[at] == 0 and local.tail == 701
     then
         code = 42
     else

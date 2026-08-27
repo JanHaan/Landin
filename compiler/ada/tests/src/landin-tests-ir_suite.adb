@@ -536,9 +536,12 @@ package body Landin.Tests.IR_Suite is
             (Kind => Landin.IR.Module_Datum, Datum => Datum),
             (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site);
          Copy := Landin.IR.Nth_Value (Unit, Routine, Block, 1);
+         --  This seam pins transport only; the verifier owns whether field 7
+         --  exists and has an array shape in a particular destination.
          Landin.IR.Emit_Array_Clear
            (Unit, Routine,
-            (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site);
+            (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site,
+            Field => 7);
          Clear := Landin.IR.Nth_Value (Unit, Routine, Block, 2);
          Fill_Value := Landin.IR.Emit_Number
            (Unit, Routine, Landin.Types.U16, 7, False, Site);
@@ -576,8 +579,10 @@ package body Landin.Tests.IR_Suite is
             and then Landin.IR.Destination_Of
                        (Unit, Routine, Clear).Kind = Landin.IR.Frame_Slot
             and then Landin.IR.Destination_Of
-                       (Unit, Routine, Clear).Slot = Slot,
-            "a whole-array clear carries only its compact destination");
+                       (Unit, Routine, Clear).Slot = Slot
+            and then Landin.IR.Element_Field_Of
+                       (Unit, Routine, Clear) = 7,
+            "an array clear carries its compact destination and field");
          Landin.Testing.Check_Equal
            (Item, Landin.IR.Operand_Count (Unit, Routine, Clear), 0,
             "clear metadata also stays constant at the target-width length");

@@ -1,0 +1,24 @@
+word: type = usize
+
+holder: type = struct
+    tag: u8
+    left: [2]word
+    right: [2]word
+    tail: u16
+end holder
+
+holder_alias: type = holder
+
+mut state: holder
+
+use: (at: usize) -> none =
+    state.left[0] = 9
+    state.left[1] = 8
+    state.left = zeroed
+    from_state: word = state.left[at]
+
+    mut local: holder_alias
+    local.left = zeroed
+    known: word = local.left[0]
+    computed: word = local.left[at]
+end use

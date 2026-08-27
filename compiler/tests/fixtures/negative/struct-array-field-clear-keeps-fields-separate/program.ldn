@@ -1,0 +1,10 @@
+holder: type = struct
+    left: [2]u8
+    right: [2]u8
+end holder
+
+read: (at: usize) -> (result: u8) =
+    mut local: holder
+    local.left = zeroed
+    result = local.right[at]
+end read

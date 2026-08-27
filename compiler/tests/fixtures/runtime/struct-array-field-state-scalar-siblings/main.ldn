@@ -14,9 +14,10 @@ public main: () -> (code: i32) =
         state.words[at] = 1
         inc state.words[at]
         state.tail = 701
+        state.words = zeroed
 
-        if state.tag == 7 and state.words[0] == 700
-          and state.words[at] == 2 and state.tail == 701
+        if state.tag == 7 and state.words[0] == 0
+          and state.words[at] == 0 and state.tail == 701
         then
             code = 42
         else
