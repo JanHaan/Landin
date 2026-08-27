@@ -1,0 +1,7 @@
+f: () -> (r: u32) =
+    r = 1
+end f
+
+source: [1]u32
+called := [f(), 1]
+indexed := [source[0], 1]

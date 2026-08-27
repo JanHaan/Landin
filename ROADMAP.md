@@ -2365,20 +2365,31 @@ conversion rule. The complete inferred extent is held to D18's target `usize`
 before its shape is recorded. The declaration and literal carry the same
 compact shape metadata, after which D23's existing lowering evaluates and
 stores the source run left to right and marks the local whole. This does not
-introduce a general array value or temporary. Module inference remains refused:
-D24's static image still starts from a written shape and then applies [1940].
+introduce a general array value or temporary.
 `positive/local-array-literal-inferred-length`,
-`negative/local-array-literal-inferred-element-mismatch`,
-`negative/module-array-literal-inferred-length-not-enabled`, and
-`runtime/local-array-literal-infers-and-initializes` pin the admitted form and
-that boundary.
+`negative/local-array-literal-inferred-element-mismatch`, and
+`runtime/local-array-literal-infers-and-initializes` pin the admitted form.
+
+D26 applies that same inferred shape at module scope, then asks D24's independent
+[1940] question of every element. The nonempty source count and first scalar
+context settle `[N]T`; each source expression must then be known, fold
+Target-aware to a value `T` holds, and become one source-order datum image.
+D21's typed and inferred direct-name destinations copy the terminal image into
+distinct storage exactly as they do for a written D24 literal. Calls, storage
+selections, nested arrays, fold overflow and out-of-range results retain D24's
+checker-owned refusals, and no general array value or IR operation is added.
+`positive/module-array-literal-inferred-length`,
+`negative/module-array-literal-inferred-boundaries`,
+`negative/module-array-literal-inferred-fold`, and
+`runtime/module-array-literal-infers-static-image` pin the shape, image and
+refusal boundary.
 
 What is still refused: array initializers other than D21's direct storage name,
-D23/D24's explicitly typed local and module literal, and D25's inferred local
-literal; general whole-array value positions; inferred module literal images;
-`zeroed` [0540]; repetition [0560]; slices [0570]; non-identifier `lenof`
-operands; and an array as a struct field. Each is its own slice, and the
-remaining value slices need the initialization work D21 did not settle.
+D23/D24's explicitly typed local and module literal, and D25/D26's inferred
+local and module literal; general whole-array value positions; `zeroed` [0540];
+repetition [0560]; slices [0570]; non-identifier `lenof` operands; and an array
+as a struct field. Each is its own slice, and the remaining value slices need
+the initialization work D21 did not settle.
 
 [0540] is worth naming now rather than when it bites: it says a type *has* a
 zero image when all-zero is a valid value for it, which is what lets a
