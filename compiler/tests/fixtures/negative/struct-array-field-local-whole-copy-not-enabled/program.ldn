@@ -1,0 +1,10 @@
+holder: type = struct
+    row: [2]u32
+    tail: u8
+end holder
+
+copy: () -> none =
+    mut left: holder
+    mut right: holder
+    right = left
+end copy

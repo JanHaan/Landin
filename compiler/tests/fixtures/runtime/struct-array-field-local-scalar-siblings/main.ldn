@@ -1,0 +1,17 @@
+holder: type = struct
+    tag: u8
+    words: [2]usize
+    tail: u16
+end holder
+
+public main: () -> (code: i32) =
+    mut local: holder
+    local.tag = 7
+    local.tail = 701
+
+    if local.tag == 7 and local.tail == 701 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

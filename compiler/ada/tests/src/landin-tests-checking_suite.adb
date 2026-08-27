@@ -1604,7 +1604,7 @@ package body Landin.Tests.Checking_Suite is
    procedure Struct_Array_Field_Extent_Follows_Usize
      (Item : in out Landin.Testing.Context);
 
-   procedure Struct_Array_Field_Storage_Is_Module_Only
+   procedure Struct_Array_Field_Storage_Classes_Are_Enabled
      (Item : in out Landin.Testing.Context);
 
    procedure Array_Extent_Follows_Usize
@@ -1692,10 +1692,10 @@ package body Landin.Tests.Checking_Suite is
       Check_Target (Landin.Targets.Linux_X86_64, True);
    end Struct_Array_Field_Extent_Follows_Usize;
 
-   --  D46 is deliberately a storage-class boundary: the same laid-out type
-   --  is zeroed module state, while a local still waits for a frame shape
-   --  that can describe its nested array field.
-   procedure Struct_Array_Field_Storage_Is_Module_Only
+   --  D47 adds a target-neutral frame shape for the same laid-out type D46
+   --  admitted as zeroed module state.  Both declaration-only storage
+   --  classes are enabled without forming a whole aggregate value.
+   procedure Struct_Array_Field_Storage_Classes_Are_Enabled
      (Item : in out Landin.Testing.Context)
    is
       Prefix : constant String :=
@@ -1723,7 +1723,7 @@ package body Landin.Tests.Checking_Suite is
          Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
          Landin.Testing.Check
            (Item, Landin.Stages.Failed (Work) /= Accepted,
-            "the storage class decides whether the shape is enabled");
+            "both declaration-only storage classes accept the shape");
       end Check_Source;
    begin
       Check_Source (Prefix & "mut state: holder" & LF, True);
@@ -1732,8 +1732,8 @@ package body Landin.Tests.Checking_Suite is
          & "f: () -> none =" & LF
          & "    mut state: holder" & LF
          & "end f" & LF,
-         False);
-   end Struct_Array_Field_Storage_Is_Module_Only;
+         True);
+   end Struct_Array_Field_Storage_Classes_Are_Enabled;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
@@ -1795,8 +1795,8 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "struct array field extent follows usize",
          Struct_Array_Field_Extent_Follows_Usize'Access);
       Landin.Testing.Register
-        (Into, "checking", "struct array field storage is module only",
-         Struct_Array_Field_Storage_Is_Module_Only'Access);
+        (Into, "checking", "struct array field storage classes are enabled",
+         Struct_Array_Field_Storage_Classes_Are_Enabled'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);

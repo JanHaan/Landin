@@ -1,0 +1,16 @@
+holder: type = struct
+    tag: u8
+    row: [2]usize
+    tail: u16
+end holder
+
+holder_alias: type = holder
+
+use: () -> none =
+    mut direct: holder
+    mut through_alias: holder_alias
+    direct.tail = 7
+    through_alias.tag = 1
+    seen_tail: u16 = direct.tail
+    seen_tag: u8 = through_alias.tag
+end use

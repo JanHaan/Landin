@@ -1,6 +1,6 @@
 class: negative
-summary: D46 admits array-field structs as module state but keeps local storage refused once
-constructs: 0520, 0670, 0750, 1740, 1830
+summary: D47 admits an array-field local cell but keeps its whole value refused once
+constructs: 0520, 0670, 0710, 0750, 1740, 1810, 1830
 program: program.ldn
 codes: L0304
 targets: linux-x86-64, macos-arm64

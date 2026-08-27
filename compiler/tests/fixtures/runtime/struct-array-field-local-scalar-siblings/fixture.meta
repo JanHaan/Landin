@@ -1,0 +1,6 @@
+class: runtime
+summary: D47 preserves assigned scalar sibling offsets around an inaccessible local array field
+constructs: 0190, 0350, 0520, 0670, 0710, 0750, 1810, 1820
+program: main.ldn
+status: 42
+targets: linux-x86-64

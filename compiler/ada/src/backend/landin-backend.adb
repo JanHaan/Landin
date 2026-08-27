@@ -125,14 +125,16 @@ package body Landin.Backend is
         1 .. Landin.IR.Slot_Field_Count (Of_Unit, Item, Slot)
       loop
          declare
+            Shape     : constant Landin.IR.Field_Shape :=
+              Landin.IR.Nth_Slot_Field_Shape
+                (Of_Unit, Item, Slot, Field);
+            Size      : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
             At_Offset : Landin.Targets.Byte_Count;
          begin
+            Field_Extent (Shape, Facts, Size, Alignment);
             Landin.Targets.Place
-              (Placed,
-               Size_Of
-                 (Landin.IR.Nth_Slot_Field (Of_Unit, Item, Slot, Field),
-                  Facts),
-               Facts, At_Offset);
+              (Placed, Size, Alignment, At_Offset);
 
             if Field = Wanted then
                Offset := At_Offset;
