@@ -109,13 +109,14 @@ keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
 ### [1770] The kernel's literals are integers, booleans, and contextual zero
 
 The kernel's literals are integers, the two booleans, and `zeroed` in the
-contexts D27, D28, D30, D39 and D40 admit. Integer literals are untyped and take
+contexts D27, D28, D30 and D39--D41 admit. Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
 and the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it
 the all-bits-zero image of its context. D27/D28 supply an explicitly typed module
 or local fixed-array initializer, D30 supplies a fixed-array assignment
-destination, and D39/D40 supply an explicitly typed module or local scalar
-initializer respectively. Floats
+destination, D39/D40 supply an explicitly typed module or local scalar
+initializer respectively, and D41 supplies a mutable scalar assignment
+destination. Floats
 [0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
 not enabled yet.
@@ -2247,9 +2248,9 @@ binding: `[mut] name: T = zeroed`. The written type must resolve, through any
 chain of type aliases, to one of [0120]'s enabled scalar types. That resolved
 scalar is the literal's context. Its compile-time-known value is `false` for
 `bool` and integer zero for every enabled integer type. The rule applies only to
-the complete initializer in that declaration. An inferred binding, an explicitly
-typed local scalar initializer, scalar assignment, a nested occurrence and every
-other expression position remain refused.
+the complete initializer in that declaration. D40 separately admits the local
+initializer and D41 the scalar assignment; an inferred binding, a nested
+occurrence and every other expression position remain refused.
 
 Lowering uses exactly D10's existing scalar-zero IR: a false `Truth` for `bool`
 and a zero `Number` of the resolved integer type. No new IR operation, startup
@@ -2270,7 +2271,88 @@ D27, D28 and D30. It was declined.
 **Pinned by** the checker, lowering and Linux x86-64 backend public-seam cases;
 `positive/module-scalar-zeroed-initializer`;
 `negative/inferred-zeroed-not-enabled`,
-`negative/local-scalar-zeroed-not-enabled`,
-`negative/scalar-zeroed-assignment-not-enabled`,
 `negative/nested-scalar-zeroed-not-enabled`; and
 `runtime/module-scalar-zeroed-reads-zero` on Linux x86-64.
+
+### D40 — A written local scalar gives `zeroed` its context
+
+**The tour said** that `zeroed` denotes the all-bits-zero image of the type its
+context supplies [0540], and that an initialized local has its value before a
+later statement reads it [0110]. It did not say whether a local scalar
+initializer supplied that context, whether an alias changed the answer, or how
+the value reached local storage.
+
+**Chosen:** `zeroed` may directly initialize an explicitly typed local scalar
+binding: `[mut] name: T = zeroed`. The written type must resolve, through any
+chain of aliases, to an enabled scalar type and supplies the literal's context.
+The value is `false` for `bool` and integer zero for every enabled integer type.
+The complete initializer establishes the binding as definitely assigned. D39
+separately governs module initialization and D41 assignment; inferred
+initialization, nested occurrences and every other expression position remain
+refused.
+
+Lowering emits D10's existing false `Truth` or typed zero `Number`, followed by
+the ordinary frame-slot `Store`. It introduces no new IR value, operation or
+local initialization path.
+
+**Why this boundary:** an explicitly typed local already supplies the same
+complete scalar context as D39's module declaration, and the existing
+constant/store path represents the result without making `zeroed` a general
+expression.
+
+**The alternative:** admit every expected-scalar expression context together.
+That would silently include assignment, arguments, returns and operands instead
+of preserving each contextual boundary for executable evidence. It was
+declined.
+
+**Pinned by** the checker and lowering public-seam cases;
+`positive/local-scalar-zeroed-initializer`;
+`negative/inferred-zeroed-not-enabled`,
+`negative/nested-scalar-zeroed-not-enabled`; and
+`runtime/local-scalar-zeroed-reads-zero` on Linux x86-64.
+
+### D41 — A mutable scalar assignment destination gives `zeroed` its context
+
+**The tour said** that assignment reaches its destination before evaluating its
+right-hand side [0410], that only a mutable binding may be assigned [1900], and
+that `zeroed` takes the all-bits-zero image of its context [0540]. It did not say
+whether a scalar destination supplied that context, whether aliases changed the
+answer, or when the assignment established local definite assignment.
+
+**Chosen:** `zeroed` may be the complete right-hand side of assignment to a
+mutable scalar local slot or module datum. The destination type must resolve,
+through any chain of aliases, to an enabled scalar type and supplies the
+literal's context. The value is `false` for `bool` and integer zero for every
+enabled integer type. The ordinary destination check runs first, retaining
+mutability and every invalid-place or invalid-type refusal. Only successful
+completion establishes the destination as definitely assigned.
+
+The destination is reached and evaluated before the right-hand side, as for
+every assignment. Lowering emits D10's existing false `Truth` or typed zero
+`Number`, then uses the ordinary scalar `Store` for a local slot or `Store_Datum`
+for a module datum. No new IR value, operation, temporary or backend path is
+introduced.
+
+Inferred initialization remains governed by D39/D40 and is refused without a
+written type. Assignment to a scalar struct field, array element or named return
+is not this direct-storage slice. A nested occurrence, argument, return, operand,
+discard and every other general `zeroed` expression remain refused; this rule
+admits only the complete contextual right-hand side of a direct binding
+assignment.
+
+**Why assignment:** the mutable destination already owns the scalar type and
+storage the literal needs. Reusing ordinary assignment preserves destination
+order, mutability, definite assignment and lowering rather than inventing a
+carried scalar `zeroed` value.
+
+**The alternative:** synthesize an independently typed zero value before
+reaching the destination. That would reverse [0410]'s assignment order and make
+a contextual form appear to be a general expression. It was declined.
+
+**Pinned by** the checker and lowering public-seam cases;
+`positive/scalar-zeroed-assignment`;
+`negative/immutable-scalar-zeroed-assignment`,
+`negative/scalar-subobject-zeroed-assignment-not-enabled`,
+`negative/inferred-zeroed-not-enabled`,
+`negative/nested-scalar-zeroed-not-enabled`; and
+`runtime/scalar-zeroed-assignment-clears-values` on Linux x86-64.

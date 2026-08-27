@@ -1,7 +1,0 @@
-mut module: u32
-
-f: () -> none =
-    mut local: bool
-    module = zeroed
-    local = zeroed
-end f

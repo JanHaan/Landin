@@ -1331,6 +1331,23 @@ package body Landin.Stages.Checking is
                     = Ty.Fixed_Array;
       end Is_Direct_Array_Name;
 
+      --  D41 is a direct-storage slice: scalar fields, array elements and
+      --  named returns remain separate contextual `zeroed` positions.
+      function Is_Direct_Binding_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Is_Direct_Binding_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+      begin
+         return Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+           and then Res.Sort_Of
+                      (Meanings.all,
+                       Res.Bound_To (Meanings.all, Of_Tree, Node))
+                    in Res.Module_Binding | Res.Local_Binding;
+      end Is_Direct_Binding_Name;
+
       function Synthesise
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
       is
@@ -1372,8 +1389,8 @@ package body Landin.Stages.Checking is
                  (Item    => Bad.Unsupported_Use,
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
-                  Message => "`zeroed` needs an explicitly typed array"
-                             & " initializer or assignment",
+                  Message => "`zeroed` needs a directly supplied initializer"
+                             & " or assignment type",
                   Refused => Bad.Zeroed_Value,
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
@@ -2656,9 +2673,21 @@ package body Landin.Stages.Checking is
                      return;
                   end if;
 
-                  Require
-                    (Of_Tree, Value, Wants, Syn.Origin (Of_Tree, Place),
-                     "the place written here");
+                  --  D41: as with D39/D40's written scalar declarations, a
+                  --  A mutable scalar binding supplies the contextual scalar
+                  --  type for `zeroed`.  Check_Place has already resolved
+                  --  aliases and refused immutable or invalid destinations.
+                  if Wants in Ty.Scalar_Name
+                    and then Is_Direct_Binding_Name (Of_Tree, Place)
+                    and then Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
+                  then
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Value, Wants);
+                  else
+                     Require
+                       (Of_Tree, Value, Wants, Syn.Origin (Of_Tree, Place),
+                        "the place written here");
+                  end if;
                end;
 
             when Syn.Increment | Syn.Decrement =>

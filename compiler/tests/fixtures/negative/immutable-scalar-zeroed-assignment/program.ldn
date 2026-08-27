@@ -1,0 +1,5 @@
+number: u32 = 1
+
+f: () -> none =
+    number = zeroed
+end f

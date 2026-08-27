@@ -1,0 +1,10 @@
+word: type = u32
+truth: type = bool
+mut module: word
+
+f: () -> (result: truth) =
+    mut local: truth
+    module = zeroed
+    local = zeroed
+    result = local
+end f
