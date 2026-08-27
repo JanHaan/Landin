@@ -773,6 +773,67 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 1, "one module literal was checked");
    end Module_Array_Literal_Takes_Its_Written_Shape;
 
+   --  D34: a nonzero written fixed-array type supplies the complete context
+   --  for either spelling, at module scope and for a local.  A written count
+   --  remains an assertion that the same contextual length was named.
+   procedure Typed_Repetition_Takes_Its_Written_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Typed_Repetition_Takes_Its_Written_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "repetition.ldn",
+         "seed: u64 = 0x123456789ABCDEF0" & LF
+         & "counted: [3]u64 = [3 of seed]" & LF
+         & "contextual: [2]u64 = [of seed + 1]" & LF
+         & "f: () -> none =" & LF
+         & "    local: [4]u64 = [of seed]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "module and local typed repetitions are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Array_Repetition
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Fixed_Array,
+                  "the contextual repetition is a fixed array");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 3, "all three typed repetitions carry a shape");
+   end Typed_Repetition_Takes_Its_Written_Shape;
+
    --  D33: the written repetition count and its one scalar expression supply
    --  an inferred local's compact D17 shape.  A typed expression retains its
    --  type and an untyped integer receives [0200]'s default.
@@ -915,6 +976,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "inferred repetition carries its source shape",
          Inferred_Repetition_Carries_Its_Source_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "typed repetition takes its written shape",
+         Typed_Repetition_Takes_Its_Written_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "a local array literal takes its written shape",
          Local_Array_Literal_Takes_Its_Written_Shape'Access);

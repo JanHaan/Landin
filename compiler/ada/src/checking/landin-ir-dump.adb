@@ -230,7 +230,13 @@ package body Landin.IR.Dump is
                --  D24: an initial image is the source-order run of folded
                --  values.  An array datum with no image is D10's zero and
                --  says so by omitting this line.
-               if Has_Image (Of_Unit, Id) then
+               if Is_Repeated_Image (Of_Unit, Id) then
+                  Put
+                    ("  image repeat "
+                     & Trimmed
+                         (Landin.Types.Folded'Image
+                            (Repeated_Image_Value (Of_Unit, Id))));
+               elsif Has_Image (Of_Unit, Id) then
                   declare
                      Rendered : Unbounded.Unbounded_String;
                   begin

@@ -1,0 +1,5 @@
+mut through: [4294967295]u8 = huge
+mut huge: [4294967295]u8 = [of base + 5]
+base: u8 = 160
+mut counted: [2]u64 = [2 of 0x123456789ABCDEF0]
+mut zero: [3]u32 = [of 0]

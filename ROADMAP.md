@@ -2479,14 +2479,33 @@ general-value negatives preserve those boundaries; and the existing runtime case
 now infers its side-effecting local while proving one evaluation and a complete
 fill.
 
+D34 admits either `[N of expression]` or contextual `[of expression]` for an
+explicitly typed local or module fixed-array initializer whose written length is
+nonzero. It therefore lifts D32's artificial count requirement for a typed local.
+A written count must still equal the contextual D17 length. A module expression
+uses D24's existing [1940] static scalar boundary and target-aware fold, producing
+one pattern rather than a per-position run. IR carries a nonzero repetition as
+one folded scalar plus the compact array shape, preserves that representation
+through D21 module-name chains, and keeps a zero pattern as the absent image used
+for loader-zeroed `.bss`; image resolution, verification and dumping never walk
+the extent. Linux x86-64 emits a constant-size `.rept` around one `.byte`,
+`.word`, `.long` or `.quad`, preserving all eight bytes without GNU `.fill`'s
+four-byte value truncation. The public checker, IR, lowering and backend seams pin
+the rule, a target-sized positive fixture pins compact through-chain handling,
+focused negatives pin zero context and non-static elements, and the runtime case
+reads 1/2/4/8-byte module patterns plus zero and through images. A zero contextual
+length is refused by repetition without admitting or rejecting `[0]T` source, so
+[0580] remains open.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
-and module literal, D27/D28's explicitly typed module and local `zeroed`, and
-D32's explicitly typed and D33's counted inferred local repetition; array
-assignments other than D20's direct storage name, D29's literal, D30's `zeroed`
-and D32's repetition; general whole-array value positions; inferred, scalar and
-every other `zeroed` [0540] context; mixed-prefix, count-less inferred,
-module-initializer and general-value repetition [0560]; slices [0570]; `lenof`
+and module literal, D27/D28's explicitly typed module and local `zeroed`, D33's
+counted inferred local repetition and D34's explicitly typed local and module
+repetition; array assignments other than D20's direct storage name, D29's
+literal, D30's `zeroed` and D32's repetition; general whole-array value
+positions; inferred, scalar and every other `zeroed` [0540] context;
+mixed-prefix, count-less inferred, inferred-module and general-value repetition
+[0560]; slices [0570]; `lenof`
 operands
 other than D14's direct name and D31's literal; and an array as a struct field.
 Each is its own slice, and the remaining

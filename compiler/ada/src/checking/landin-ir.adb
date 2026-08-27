@@ -245,18 +245,45 @@ package body Landin.IR is
       Into.Items (Positive (Item)) := Held;
    end Set_Array_Image;
 
+   procedure Set_Repeated_Array_Image
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Value : Landin.Types.Folded)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Image, Natural (Into.Images.Length));
+      Into.Images.Append (Value);
+      Held.Image.Count := 1;
+      Held.Has_Image := True;
+      Held.Repeated_Image := True;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Repeated_Array_Image;
+
    function Has_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
      is (Element (Of_Unit, Item).Has_Image);
 
+   function Is_Repeated_Image
+     (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Element (Of_Unit, Item).Repeated_Image);
+
+   function Repeated_Image_Value
+     (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Folded
+     is (Of_Unit.Images (Element (Of_Unit, Item).Image.First + 1));
+
    function Image_Length
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
-     is (Element_Total (Element (Of_Unit, Item).Image.Count));
+     is (if Is_Repeated_Image (Of_Unit, Item)
+         then Array_Length (Of_Unit, Item)
+         else Element_Total (Element (Of_Unit, Item).Image.Count));
 
    function Nth_Image
      (Of_Unit : Unit; Item : Item_Id; Index : Part_Position)
      return Landin.Types.Folded
-     is (Of_Unit.Images
-           (Element (Of_Unit, Item).Image.First + Positive (Index)));
+     is (if Is_Repeated_Image (Of_Unit, Item)
+         then Repeated_Image_Value (Of_Unit, Item)
+         else Of_Unit.Images
+                (Element (Of_Unit, Item).Image.First + Positive (Index)));
 
    function Is_Aggregate
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean

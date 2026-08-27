@@ -1,0 +1,4 @@
+module: [0]u8 = [of 1]
+f: () -> none =
+    local: [0]u8 = [0 of 1]
+end f
