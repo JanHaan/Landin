@@ -3,6 +3,8 @@ holder: type = struct
 end holder
 
 mut state: holder
+mut words: [3]u8
+
 f: () -> none =
-    state.row = [1, 2]
+    state.row = words
 end f

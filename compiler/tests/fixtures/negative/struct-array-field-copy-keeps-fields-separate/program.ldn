@@ -1,0 +1,12 @@
+holder: type = struct
+    left: [2]u8
+    right: [2]u8
+end holder
+
+f: () -> none =
+    mut source: holder
+    mut destination: holder
+    source.left = zeroed
+    destination.left = source.left
+    value: u8 = destination.right[0]
+end f

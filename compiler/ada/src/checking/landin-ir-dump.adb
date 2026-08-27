@@ -166,7 +166,19 @@ package body Landin.IR.Dump is
             when Copy_Array =>
                return Lead & " from "
                  & Endpoint (Source_Of (Of_Unit, Item, Value))
-                 & " to " & Endpoint (Destination_Of (Of_Unit, Item, Value));
+                 & (if Source_Field_Of (Of_Unit, Item, Value) = 0
+                    then ""
+                    else " field "
+                      & Trimmed
+                          (Natural'Image
+                             (Source_Field_Of (Of_Unit, Item, Value))))
+                 & " to " & Endpoint (Destination_Of (Of_Unit, Item, Value))
+                 & (if Element_Field_Of (Of_Unit, Item, Value) = 0
+                    then ""
+                    else " field "
+                      & Trimmed
+                          (Natural'Image
+                             (Element_Field_Of (Of_Unit, Item, Value))));
 
             when Clear_Array =>
                return Lead & " destination "

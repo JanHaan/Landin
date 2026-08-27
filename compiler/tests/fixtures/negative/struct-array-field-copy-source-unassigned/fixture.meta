@@ -1,0 +1,6 @@
+class: negative
+summary: D50 reads a local array-field copy source as a whole before assigning it
+constructs: 0520, 0670, 0750, 1810, 1820, 1910
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64

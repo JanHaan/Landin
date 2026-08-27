@@ -798,7 +798,8 @@ package body Landin.IR.Verifier is
                                  Bad : Fault_Kind;
                               begin
                                  Bad := Shape_Of
-                                   (Id, Source_Of (Of_Unit, Id, V), 0,
+                                   (Id, Source_Of (Of_Unit, Id, V),
+                                    Source_Field_Of (Of_Unit, Id, V),
                                     Source_Element, Source_Length);
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -806,7 +807,8 @@ package body Landin.IR.Verifier is
                                  end if;
 
                                  Bad := Shape_Of
-                                   (Id, Destination_Of (Of_Unit, Id, V), 0,
+                                   (Id, Destination_Of (Of_Unit, Id, V),
+                                    Element_Field_Of (Of_Unit, Id, V),
                                     Destination_Element, Destination_Length);
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,

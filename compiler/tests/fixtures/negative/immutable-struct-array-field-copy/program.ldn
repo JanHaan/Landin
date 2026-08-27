@@ -2,7 +2,9 @@ holder: type = struct
     row: [2]u8
 end holder
 
-mut state: holder
+state: holder
+
 f: () -> none =
-    state.row = [1, 2]
+    mut source: holder
+    state.row = source.row
 end f

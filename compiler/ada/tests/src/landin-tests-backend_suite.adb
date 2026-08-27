@@ -1154,6 +1154,97 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Wide_Array_Field_Clear_Uses_Registers;
 
+   --  D50 derives both copy endpoints from the selected target.  A module
+   --  field behind D18's wide prefix is register-formed on either side;
+   --  frame fields use the L0504-bounded target displacement.
+   procedure Array_Field_Copy_Derives_Both_Target_Addresses
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Copy_Derives_Both_Target_Addresses
+     (Item : in out Landin.Testing.Context)
+   is
+      Wide : constant String :=
+        "wide: type = struct" & LF
+        & "    prefix: [2147483648]u8" & LF
+        & "    row: [2]u8" & LF
+        & "end wide" & LF
+        & "mut source: wide" & LF
+        & "mut destination: wide" & LF
+        & "copy: () -> none =" & LF
+        & "    destination.row = source.row" & LF
+        & "end copy" & LF;
+      Local : constant String :=
+        "holder: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    row: [2]usize" & LF
+        & "    tail: u16" & LF
+        & "end holder" & LF
+        & "copy: () -> none =" & LF
+        & "    mut source: holder" & LF
+        & "    mut destination: holder" & LF
+        & "    source.row = zeroed" & LF
+        & "    destination.row = source.row" & LF
+        & "end copy" & LF;
+
+      procedure Check_Local
+        (Facts : Landin.Targets.Target_Facts;
+         Destination_Field : String;
+         Source_Field : String;
+         Bytes : String);
+
+      procedure Check_Local
+        (Facts : Landin.Targets.Target_Facts;
+         Destination_Field : String;
+         Source_Field : String;
+         Bytes : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Local, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  HT & "leaq " & Destination_Field & "(%rbp), %rdi" & LF
+                  & HT & "leaq " & Source_Field & "(%rbp), %rsi" & LF
+                  & HT & "movabsq $" & Bytes & ", %rcx" & LF
+                  & HT & "cld" & LF
+                  & HT & "rep movsb" & LF),
+               "both frame field addresses and the extent follow the target");
+         end;
+      end Check_Local;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower (Work, Wide, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "leaq destination(%rip), %rdi")
+            and then Contains (Text, HT & "addq %rdx, %rdi")
+            and then Contains (Text, HT & "leaq source(%rip), %rsi")
+            and then Contains (Text, HT & "addq %rdx, %rsi")
+            and then Occurrences
+              (Text, HT & "movabsq $2147483648, %rdx") = 2
+            and then Contains (Text, HT & "movabsq $2, %rcx")
+            and then Contains (Text, HT & "rep movsb"),
+            "both wide module field offsets are formed in registers");
+      end;
+
+      Check_Local (Landin.Targets.Linux_X86_64, "-56", "-24", "16");
+      Check_Local (Landin.Targets.Synthetic_32, "-28", "-12", "8");
+   end Array_Field_Copy_Derives_Both_Target_Addresses;
+
    --  A field is written where it is read [1810], and `inc` on one says
    --  what `x += 1` says [1900]: a load at the offset, a one, a trapping
    --  add and a store back to the same offset.
@@ -1333,7 +1424,7 @@ package body Landin.Tests.Backend_Suite is
       Ran       : Natural;
       Unit      : IR.Unit;
       Routine   : IR.Item_Id;
-      Slot      : IR.Slot_Id;
+      Slot, Other : IR.Slot_Id;
       Size      : Landin.Targets.Byte_Count;
       Alignment : Landin.Targets.Byte_Alignment;
       Site      : constant Landin.Provenance.Origin :=
@@ -1348,6 +1439,13 @@ package body Landin.Tests.Backend_Suite is
         (Unit, Routine, IR.No_Declaration, Site);
       IR.Add_Slot_Field
         (Unit, Routine, Slot,
+         (Kind    => IR.Array_Field_Shape,
+          Element => Landin.Types.U64,
+          Length  => 0));
+      Other := IR.Add_Aggregate_Slot
+        (Unit, Routine, IR.No_Declaration, Site);
+      IR.Add_Slot_Field
+        (Unit, Routine, Other,
          (Kind    => IR.Array_Field_Shape,
           Element => Landin.Types.U64,
           Length  => 0));
@@ -1370,6 +1468,10 @@ package body Landin.Tests.Backend_Suite is
          IR.Emit_Array_Clear
            (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Slot), Site,
             Field => 1);
+         IR.Emit_Array_Copy
+           (Unit, Routine, (Kind => IR.Frame_Slot, Slot => Slot),
+            (Kind => IR.Frame_Slot, Slot => Other), Site,
+            Source_Field => 1, Destination_Field => 1);
          IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
          IR.Leave_Block (Unit, Routine);
 
@@ -1382,9 +1484,10 @@ package body Landin.Tests.Backend_Suite is
          begin
             Landin.Testing.Check
               (Item,
-               Contains (Text, HT & "movabsq $0, %rcx")
-               and then Contains (Text, HT & "rep stosb"),
-               "clearing the internal empty field is one zero-byte clear");
+               Occurrences (Text, HT & "movabsq $0, %rcx") = 2
+               and then Contains (Text, HT & "rep stosb")
+               and then Contains (Text, HT & "rep movsb"),
+               "clearing and copying the empty field are zero-byte ops");
          end;
       end;
    end An_Empty_Array_Slot_Field_Has_Identity_Extent;
@@ -3153,6 +3256,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a wide array field clear uses registers",
          A_Wide_Array_Field_Clear_Uses_Registers'Access);
+      Landin.Testing.Register
+        (Into, "backend", "array field copy derives both addresses",
+         Array_Field_Copy_Derives_Both_Target_Addresses'Access);
       Landin.Testing.Register
         (Into, "backend", "a field is written at its own offset",
          A_Field_Is_Written_At_Its_Own_Offset'Access);

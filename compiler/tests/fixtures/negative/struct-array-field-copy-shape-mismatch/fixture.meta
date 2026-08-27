@@ -1,6 +1,6 @@
 class: negative
-summary: D50 keeps an array literal outside the contextual whole-field copy
+summary: D50 requires both array-field copy endpoints to have one D17 identity
 constructs: 0520, 0670, 0750, 1740, 1820
 program: program.ldn
-codes: L0304
+codes: L0301
 targets: linux-x86-64, macos-arm64

@@ -1385,13 +1385,16 @@ package body Landin.Stages.Lowering is
                            Destination : constant IR.Storage :=
                              Storage_For (Of_Tree, Named);
                         begin
-                           --  D49 is the only checker path that types a whole
-                           --  array-field selection.  Literal, repetition,
-                           --  fill and copy lowering remain field-zero-only.
+                           --  D49/D50 are the only checker paths that type a
+                           --  whole array-field selection.  Literal,
+                           --  repetition and fill lowering remain
+                           --  field-zero-only.
                            pragma Assert
                              (Field = 0
                               or else Syn.Kind (Of_Tree, Value)
-                                        = Syn.Zeroed_Literal);
+                                        in Syn.Zeroed_Literal
+                                           | Syn.Name_Reference
+                                           | Syn.Member_Selection);
 
                            if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
                            then
@@ -1492,14 +1495,33 @@ package body Landin.Stages.Lowering is
                                 (Unit.all, Filling, Destination, Site,
                                  Field => Field);
                            else
-                              --  D20 is one compact storage operation: D18
-                              --  permits a length the compiler host cannot
-                              --  enumerate.  The destination is still reached
-                              --  first as [0410] says.
-                              IR.Emit_Array_Copy
-                                (Unit.all, Filling,
-                                 Storage_For (Of_Tree, Value),
-                                 Destination, Site);
+                              --  D20/D50 are one compact storage operation:
+                              --  D18 permits a length the compiler host cannot
+                              --  enumerate.  Each positive field is an
+                              --  identity; the backend derives both offsets.
+                              declare
+                                 Source_Nested : constant Boolean :=
+                                   Syn.Kind (Of_Tree, Value)
+                                     = Syn.Member_Selection;
+                                 Source_Named : constant Syn.Node_Id :=
+                                   (if Source_Nested
+                                    then Syn.Target_Of (Of_Tree, Value)
+                                    else Value);
+                                 Source_Field : constant Natural :=
+                                   (if Source_Nested
+                                    then Landin.Checking.Field_Index
+                                      (Types.all, Of_Tree, Value)
+                                    else 0);
+                              begin
+                                 IR.Emit_Array_Copy
+                                   (Unit.all, Filling,
+                                    Source =>
+                                      Storage_For (Of_Tree, Source_Named),
+                                    Destination => Destination,
+                                    Site => Site,
+                                    Source_Field => Source_Field,
+                                    Destination_Field => Field);
+                              end;
                            end if;
                         end;
                      else
