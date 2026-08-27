@@ -1,0 +1,3 @@
+max: u64 = 18446744073709551615
+mut prefix_range: [3]u8 = [(1 << 3) + 250, of 1]
+mut suffix_overflow: [3]u64 = [1, of max + 1]

@@ -1,0 +1,25 @@
+bytes: [4]u8 = [1, of 0xA5]
+halves: [4]u16 = [2, of 0xBEEF]
+longs: [4]u32 = [3, of 0x89ABCDEF]
+quads: [4]u64 = [0x123456789ABCDEF0, of 0xFEDCBA9876543210]
+zero_suffix: [4]u32 = [7, 8, of 0]
+through: [4]u64 = quads
+full_zero: [4]u32 = [of 0]
+
+public main: () -> (code: i32) =
+    if bytes[0] == 1 and bytes[3] == 0xA5
+        and halves[0] == 2 and halves[3] == 0xBEEF
+        and longs[0] == 3 and longs[3] == 0x89ABCDEF
+        and quads[0] == 0x123456789ABCDEF0
+        and quads[3] == 0xFEDCBA9876543210
+        and through[0] == 0x123456789ABCDEF0
+        and through[2] == 0xFEDCBA9876543210
+        and zero_suffix[0] == 7 and zero_suffix[1] == 8
+        and zero_suffix[2] == 0 and zero_suffix[3] == 0
+        and full_zero[0] == 0 and full_zero[3] == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -637,6 +637,7 @@ package body Landin.Tests.IR_Suite is
          Unit     : Landin.IR.Unit;
          Loaded   : Landin.IR.Item_Id;
          Repeated : Landin.IR.Item_Id;
+         Hybrid   : Landin.IR.Item_Id;
          Blank    : Landin.IR.Item_Id;
          Block    : Landin.IR.Block_Id;
       begin
@@ -664,6 +665,21 @@ package body Landin.Tests.IR_Suite is
          Landin.IR.Enter (Unit, Repeated, Block);
          Landin.IR.Emit_Leave (Unit, Repeated, Landin.IR.No_Value, Site);
          Landin.IR.Leave_Block (Unit, Repeated);
+
+         Hybrid := Landin.IR.Add_Item
+           (Unit, Landin.IR.Datum, 4, Landin.Types.Fixed_Array, Site);
+         Landin.IR.Set_Array
+           (Unit, Hybrid, Landin.Types.U64, Landin.IR.Element_Total'Last);
+         Landin.IR.Set_Hybrid_Array_Image
+           (Unit, Hybrid,
+            Landin.Types.Folded_Array'(16#1234_5678_9ABC_DEF0#,
+                                       -81_985_529_216_486_896),
+            0);
+         Block := Landin.IR.Add_Block
+           (Unit, Hybrid, Landin.Resolution.Program_Scope, Site);
+         Landin.IR.Enter (Unit, Hybrid, Block);
+         Landin.IR.Emit_Leave (Unit, Hybrid, Landin.IR.No_Value, Site);
+         Landin.IR.Leave_Block (Unit, Hybrid);
 
          Blank := Landin.IR.Add_Item
            (Unit, Landin.IR.Datum, 3, Landin.Types.Fixed_Array, Site);
@@ -703,6 +719,17 @@ package body Landin.Tests.IR_Suite is
             Landin.IR.Repeated_Image_Value (Unit, Repeated)
               = Landin.Types.Folded'(-81_985_529_216_486_896),
             "a repeated image carries one complete 64-bit pattern");
+         Landin.Testing.Check_Equal
+           (Item, Natural (Landin.IR.Image_Prefix_Length (Unit, Hybrid)), 2,
+            "a hybrid records only its finite prefix length");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Image_Length (Unit, Hybrid)
+              = Landin.IR.Element_Total'Last
+              and then Landin.IR.Nth_Image (Unit, Hybrid, 1)
+                         = Landin.Types.Folded'(16#1234_5678_9ABC_DEF0#)
+              and then Landin.IR.Nth_Image (Unit, Hybrid, 3) = 0,
+            "a target-sized hybrid keeps prefix and one zero suffix value");
          Landin.Testing.Check
            (Item, not Landin.IR.Has_Image (Unit, Blank),
             "a datum whose image was never set stays without one");

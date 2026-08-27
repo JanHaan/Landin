@@ -144,11 +144,12 @@ package body Landin.Stages.Checking is
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean);
       procedure Check_Mixed_Array_Repetition
-        (Of_Tree    : Syn.Tree;
-         Site_Node  : Syn.Node_Id;
-         Repetition : Syn.Node_Id;
-         Expected   : Landin.Checking.Element_Count;
-         Element    : Ty.Scalar_Name);
+        (Of_Tree      : Syn.Tree;
+         Site_Node    : Syn.Node_Id;
+         Repetition   : Syn.Node_Id;
+         Expected     : Landin.Checking.Element_Count;
+         Element      : Ty.Scalar_Name;
+         Static_Image : Boolean);
       procedure Check_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -559,12 +560,11 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Array_Repetition;
-            --  D36 admits a mixed prefix only for an explicitly typed local;
-            --  every other mixed form remains a contextual array refusal.
-            Is_Local_Mixed_Repetition_Init : constant Boolean :=
+            --  D36/D38 admit a mixed prefix for an explicitly typed local or
+            --  module array; inferred and general-value forms remain refused.
+            Is_Typed_Mixed_Repetition_Init : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
-              and then Is_Local_Binding (Of_Tree, Node)
               and then Written /= Syn.No_Node
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
@@ -612,7 +612,7 @@ package body Landin.Stages.Checking is
               and then not Is_Direct_Name_Init
               and then not Is_Local_Literal_Init
               and then not Is_Typed_Repetition_Init
-              and then not Is_Local_Mixed_Repetition_Init
+              and then not Is_Typed_Mixed_Repetition_Init
               and then not Is_Module_Literal_Init
               and then not Is_Module_Zeroed_Init
               and then not Is_Local_Zeroed_Init
@@ -2104,18 +2104,26 @@ package body Landin.Stages.Checking is
       end Check_Array_Literal;
 
       procedure Check_Mixed_Array_Repetition
-        (Of_Tree    : Syn.Tree;
-         Site_Node  : Syn.Node_Id;
-         Repetition : Syn.Node_Id;
-         Expected   : Landin.Checking.Element_Count;
-         Element    : Ty.Scalar_Name)
+        (Of_Tree      : Syn.Tree;
+         Site_Node    : Syn.Node_Id;
+         Repetition   : Syn.Node_Id;
+         Expected     : Landin.Checking.Element_Count;
+         Element      : Ty.Scalar_Name;
+         Static_Image : Boolean)
       is
          Prefix : constant Natural := Syn.Element_Count (Of_Tree, Repetition);
       begin
-         Landin.Checking.Note
-           (Types.all, Of_Tree, Repetition, Ty.Fixed_Array);
-         Landin.Checking.Note_Array
-           (Types.all, Of_Tree, Repetition, Expected, Element);
+         --  Check_Module_Value may already have refused a non-static subtree
+         --  and marked the complete hybrid ill typed before this contextual
+         --  shape walk.  Do not note the same node a second time.
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Repetition)
+              = Ty.Undecided
+         then
+            Landin.Checking.Note
+              (Types.all, Of_Tree, Repetition, Ty.Fixed_Array);
+            Landin.Checking.Note_Array
+              (Types.all, Of_Tree, Repetition, Expected, Element);
+         end if;
 
          --  The parser makes the prefix nonempty.  D36/D37 also require at
          --  least one destination position to remain for the repeated suffix.
@@ -2143,6 +2151,46 @@ package body Landin.Stages.Checking is
          Require
            (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition), Element,
             Syn.Origin (Of_Tree, Site_Node), "the array element type");
+
+         if Static_Image then
+            declare
+               procedure Refuse_Excluded_Subtree (Where : Syn.Node_Id);
+
+               procedure Refuse_Excluded_Subtree (Where : Syn.Node_Id) is
+                  What : constant String :=
+                    (case Syn.Kind (Of_Tree, Where) is
+                        when Syn.Member_Selection => "a field selection",
+                        when Syn.Element_Index    => "an array index",
+                        when Syn.Array_Literal    => "a nested array literal",
+                        when others               => "");
+               begin
+                  if What /= "" then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Where),
+                        Message => What & " is not enabled as a module"
+                                   & " mixed array repetition element",
+                        Refused => Bad.Array_Value,
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Where);
+                     return;
+                  end if;
+
+                  for Slot in 1 .. Syn.Slot_Count (Of_Tree, Where) loop
+                     Refuse_Excluded_Subtree
+                       (Syn.Slot (Of_Tree, Where, Slot));
+                  end loop;
+               end Refuse_Excluded_Subtree;
+            begin
+               for Position in 1 .. Prefix loop
+                  Refuse_Excluded_Subtree
+                    (Syn.Nth_Element (Of_Tree, Repetition, Position));
+               end loop;
+               Refuse_Excluded_Subtree
+                 (Syn.Repeated_Element (Of_Tree, Repetition));
+            end;
+         end if;
       end Check_Mixed_Array_Repetition;
 
       procedure Check_Array_Repetition
@@ -2365,14 +2413,17 @@ package body Landin.Stages.Checking is
                         elsif Syn.Kind (Of_Tree, Value)
                                 = Syn.Mixed_Array_Repetition
                         then
-                           --  D36: only this explicitly typed local
-                           --  initializer gives a mixed prefix its shape.
+                           --  D36/D38: an explicitly typed local or module
+                           --  initializer gives a mixed prefix its shape; a
+                           --  module image additionally requires static folds.
                            Check_Mixed_Array_Repetition
                              (Of_Tree, Node, Value,
                               Landin.Checking.Array_Length
                                 (Types.all, Of_Tree, Written),
                               Landin.Checking.Array_Element
-                                (Types.all, Of_Tree, Written));
+                                (Types.all, Of_Tree, Written),
+                              Static_Image =>
+                                not Is_Local_Binding (Of_Tree, Node));
                         elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition
                         then
                            --  D34: the written nonzero shape supplies a count
@@ -2528,7 +2579,8 @@ package body Landin.Stages.Checking is
                            Landin.Checking.Array_Length
                              (Types.all, Of_Tree, Place),
                            Landin.Checking.Array_Element
-                             (Types.all, Of_Tree, Place));
+                             (Types.all, Of_Tree, Place),
+                           Static_Image => False);
                      elsif Syn.Kind (Of_Tree, Value)
                              = Syn.Array_Repetition
                      then
@@ -2750,6 +2802,7 @@ package body Landin.Stages.Checking is
              (Value /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Value)
                        in Syn.Array_Literal | Syn.Array_Repetition
+                          | Syn.Mixed_Array_Repetition
               and then Landin.Checking.Type_Of
                          (Types.all, Of_Tree, Value) = Ty.Fixed_Array);
 
@@ -3924,11 +3977,13 @@ package body Landin.Stages.Checking is
          end if;
 
          --  D24/D26 fold every module array literal element.  D34/D35 fold
-         --  the repetition's one element pattern through the same target-aware
-         --  boundary.  The contextual shape checks have already run.
+         --  one repetition pattern; D38 folds every finite prefix expression
+         --  and its one suffix pattern through the same target-aware boundary.
+         --  The contextual shape checks have already run.
          if Wanted = Ty.Fixed_Array
            and then Syn.Kind (Of_Tree, Value)
                     in Syn.Array_Literal | Syn.Array_Repetition
+                       | Syn.Mixed_Array_Repetition
          then
             declare
                Element : constant Ty.Scalar_Name :=
@@ -3947,6 +4002,12 @@ package body Landin.Stages.Checking is
                           (Syn.Nth_Element (Of_Tree, Value, Position),
                            Element);
                      end loop;
+                     if Syn.Kind (Of_Tree, Value)
+                          = Syn.Mixed_Array_Repetition
+                     then
+                        Check_Array_Element
+                          (Syn.Repeated_Element (Of_Tree, Value), Element);
+                     end if;
                   end if;
                end if;
             end;

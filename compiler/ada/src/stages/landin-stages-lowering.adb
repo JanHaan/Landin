@@ -2443,6 +2443,51 @@ package body Landin.Stages.Lowering is
             end if;
          end Set_Image_From_Repetition;
 
+         procedure Set_Image_From_Mixed_Repetition
+           (Id         : Res.Declaration_Id;
+            Of_Tree    : Syn.Tree;
+            Repetition : Syn.Node_Id);
+
+         procedure Set_Image_From_Mixed_Repetition
+           (Id         : Res.Declaration_Id;
+            Of_Tree    : Syn.Tree;
+            Repetition : Syn.Node_Id)
+         is
+            Count : constant Natural :=
+              Syn.Element_Count (Of_Tree, Repetition);
+            Values : Ty.Folded_Array (1 .. Count) := [others => 0];
+            Held  : Ty.Folded;
+            Known : Boolean;
+         begin
+            for Position in Values'Range loop
+               Fold_Constant
+                 (Of_Tree,
+                  Syn.Nth_Element (Of_Tree, Repetition, Position),
+                  Held, Known);
+               if not Known then
+                  raise Landin.Compiler_Defect with
+                    "a module mixed repetition prefix the checker accepted"
+                    & " did not fold at lowering";
+               end if;
+               Values (Position) := Held;
+            end loop;
+
+            Fold_Constant
+              (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition),
+               Held, Known);
+            if not Known then
+               raise Landin.Compiler_Defect with
+                 "a module mixed repetition suffix the checker accepted"
+                 & " did not fold at lowering";
+            end if;
+
+            --  D38 always records the hybrid, including a zero suffix.  Its
+            --  finite prefix makes the datum an explicit `.data` image.
+            IR.Set_Hybrid_Array_Image
+              (Unit.all, IR.Item_For (Unit.all, Id), Values, Held);
+            Made (Id) := True;
+         end Set_Image_From_Mixed_Repetition;
+
          procedure Copy_Image_From
            (Destination : Res.Declaration_Id;
             Source_Id   : Res.Declaration_Id);
@@ -2457,9 +2502,32 @@ package body Landin.Stages.Lowering is
               IR.Image_Length (Unit.all, Source_Item);
          begin
             if IR.Is_Repeated_Image (Unit.all, Source_Item) then
-               IR.Set_Repeated_Array_Image
-                 (Unit.all, IR.Item_For (Unit.all, Destination),
-                  IR.Repeated_Image_Value (Unit.all, Source_Item));
+               declare
+                  Prefix : constant IR.Element_Total :=
+                    IR.Image_Prefix_Length (Unit.all, Source_Item);
+               begin
+                  if Prefix = 0 then
+                     IR.Set_Repeated_Array_Image
+                       (Unit.all, IR.Item_For (Unit.all, Destination),
+                        IR.Repeated_Image_Value (Unit.all, Source_Item));
+                  else
+                     declare
+                        Values : Ty.Folded_Array
+                          (1 .. Positive (Prefix)) := [others => 0];
+                     begin
+                        for Position in Values'Range loop
+                           Values (Position) :=
+                             IR.Nth_Image
+                               (Unit.all, Source_Item,
+                                IR.Part_Position (Position));
+                        end loop;
+                        IR.Set_Hybrid_Array_Image
+                          (Unit.all, IR.Item_For (Unit.all, Destination),
+                           Values,
+                           IR.Repeated_Image_Value (Unit.all, Source_Item));
+                     end;
+                  end if;
+               end;
                Made (Destination) := True;
                return;
             end if;
@@ -2521,6 +2589,10 @@ package body Landin.Stages.Lowering is
                Set_Image_From_Literal (Id, Their_Tree.all, Value);
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Array_Repetition then
                Set_Image_From_Repetition (Id, Their_Tree.all, Value);
+            elsif Syn.Kind (Their_Tree.all, Value)
+                    = Syn.Mixed_Array_Repetition
+            then
+               Set_Image_From_Mixed_Repetition (Id, Their_Tree.all, Value);
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Name_Reference
               and then Res.Verdict_Of
                          (Meanings.all, Their_Tree.all, Value) = Res.Bound

@@ -35,6 +35,7 @@ package body Landin.Tests.Lowering_Suite is
    package IR renames Landin.IR;
 
    use type IR.Block_Id;
+   use type IR.Element_Total;
    use type IR.Item_Id;
    use type IR.Item_Kind;
    use type Landin.Platform.Read_Status;
@@ -1358,7 +1359,9 @@ package body Landin.Tests.Lowering_Suite is
          & "mut huge: [4294967295]u8 = [of base + 5]" & LF
          & "base: u8 = 160" & LF
          & "mut wide: [2]u64 = [2 of 0x123456789ABCDEF0]" & LF
-         & "mut zero: [3]u32 = [of 0]" & LF,
+         & "mut zero: [3]u32 = [of 0]" & LF
+         & "mut hybrid: [4294967295]u8 = [1, 2, of 0]" & LF
+         & "mut hybrid_through: [4294967295]u8 = hybrid" & LF,
          Ran);
 
       Landin.Testing.Check
@@ -1392,6 +1395,22 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Testing.Check
            (Item, not IR.Has_Image (Unit, 5),
             "a zero-pattern repetition remains an absent image");
+         for Datum in IR.Item_Id range 6 .. 7 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Is_Repeated_Image (Unit, Datum)
+               and then IR.Image_Prefix_Length (Unit, Datum) = 2
+               and then IR.Image_Length (Unit, Datum)
+                          = IR.Element_Total'(4_294_967_295)
+               and then Landin.Types."="
+                 (IR.Nth_Image (Unit, Datum, 1), 1)
+               and then Landin.Types."="
+                 (IR.Nth_Image (Unit, Datum, 2), 2)
+               and then Landin.Types."="
+                 (IR.Repeated_Image_Value (Unit, Datum), 0),
+               "a zero-suffix hybrid and its name copy stay compact"
+               & " and present");
+         end loop;
       end;
    end Module_Repetition_Images_Stay_Compact;
 

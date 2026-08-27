@@ -1725,18 +1725,37 @@ package body Landin.Backend.X86_64 is
 
          if Landin.IR.Is_Repeated_Image (Of_Unit, Item) then
             --  D34 uses `.rept` around one width-specific scalar directive.
-            --  This is constant-size assembly even for D18's target-sized
-            --  extents, and unlike GNU `.fill` it does not truncate an
-            --  eight-byte value to its low four bytes.
-            Emit
-              (".rept "
-               & Trimmed (Landin.IR.Element_Total'Image (Length)));
-            Emit
-              (Directive (Held) & " "
-               & Trimmed
-                   (Landin.Types.Folded'Image
-                      (Landin.IR.Repeated_Image_Value (Of_Unit, Item))));
-            Emit (".endr");
+            --  D38 writes its finite prefix first, then repeats one suffix
+            --  value for N - k positions.  Assembly size therefore depends on
+            --  the written prefix, never the target-sized extent; `.quad`
+            --  preserves all eight bytes unlike GNU `.fill`.
+            declare
+               Prefix : constant Landin.IR.Element_Total :=
+                 Landin.IR.Image_Prefix_Length (Of_Unit, Item);
+            begin
+               if Prefix > 0 then
+                  for Position in Landin.IR.Part_Position'(1)
+                                  .. Landin.IR.Part_Position (Prefix)
+                  loop
+                     Emit
+                       (Directive (Held) & " "
+                        & Trimmed
+                            (Landin.Types.Folded'Image
+                               (Landin.IR.Nth_Image
+                                  (Of_Unit, Item, Position))));
+                  end loop;
+               end if;
+               Emit
+                 (".rept "
+                  & Trimmed
+                      (Landin.IR.Element_Total'Image (Length - Prefix)));
+               Emit
+                 (Directive (Held) & " "
+                  & Trimmed
+                      (Landin.Types.Folded'Image
+                         (Landin.IR.Repeated_Image_Value (Of_Unit, Item))));
+               Emit (".endr");
+            end;
          else
             for Position in Landin.IR.Part_Position'(1)
                             .. Landin.IR.Part_Position (Length)

@@ -1,0 +1,6 @@
+class: runtime
+summary: module hybrid images preserve prefixes, suffixes, zero and full-width patterns
+constructs: 0040, 0050, 0300, 0520, 0560, 1740, 1810, 1940
+targets: linux-x86-64
+program: main.ldn
+status: 42
