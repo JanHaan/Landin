@@ -1,0 +1,17 @@
+packet: type = struct
+    tag: u8
+    payload: u64
+    tail: u16
+end packet
+
+alias: type = packet
+forward: type = later
+later: type = alias
+
+direct_size: usize = sizeof packet
+direct_align: usize = alignof packet
+alias_size: usize = sizeof alias
+alias_align: usize = alignof alias
+forward_size: usize = sizeof forward
+forward_align: usize = alignof forward
+static_image: [2]usize = [sizeof packet, alignof forward]

@@ -167,6 +167,26 @@ package body Landin.IR.Dump is
                         (First_Part_Of (Of_Unit, Item, Value)))
                  & Operands (Item, Value);
 
+            when Measure_Size | Measure_Align =>
+               if not Is_Aggregate_Measurement (Of_Unit, Item, Value) then
+                  return Lead & Operands (Item, Value);
+               end if;
+
+               declare
+                  Fields : Unbounded.Unbounded_String;
+               begin
+                  for Field in
+                    1 .. Measurement_Field_Count (Of_Unit, Item, Value)
+                  loop
+                     Unbounded.Append
+                       (Fields,
+                        " " & Landin.Types.Spelling
+                          (Nth_Measurement_Field
+                             (Of_Unit, Item, Value, Field)));
+                  end loop;
+                  return Lead & " fields" & Unbounded.To_String (Fields);
+               end;
+
             when Call =>
                declare
                   C : constant Item_Id := Callee_Of (Of_Unit, Item, Value);

@@ -14,6 +14,50 @@ package body Landin.Backend is
      is (Landin.Types.Storage_Size (Item, Facts));
 
    ------------------------------------------------------------------
+   --  A target-neutral measurement
+   ------------------------------------------------------------------
+
+   procedure Measurement_Extent
+     (Of_Unit   : Landin.IR.Unit;
+      Item      : Landin.IR.Item_Id;
+      Value     : Landin.IR.Value_Id;
+      Facts     : Landin.Targets.Target_Facts;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+   is
+   begin
+      if Landin.IR.Is_Aggregate_Measurement (Of_Unit, Item, Value) then
+         declare
+            Placed : Landin.Targets.Placement :=
+              Landin.Targets.Empty_Placement;
+            Ignored : Landin.Targets.Byte_Count;
+         begin
+            for Field in
+              1 .. Landin.IR.Measurement_Field_Count (Of_Unit, Item, Value)
+            loop
+               Landin.Targets.Place
+                 (Placed,
+                  Size_Of
+                    (Landin.IR.Nth_Measurement_Field
+                       (Of_Unit, Item, Value, Field),
+                     Facts),
+                  Facts, Ignored);
+            end loop;
+            Size := Landin.Targets.Size_Of (Placed);
+            Alignment := Landin.Targets.Alignment_Of (Placed);
+         end;
+      else
+         declare
+            Held : constant Landin.Targets.Scalar_Size :=
+              Size_Of (Landin.IR.Measured_Of (Of_Unit, Item, Value), Facts);
+         begin
+            Size := Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held));
+            Alignment := Landin.Targets.Alignment_Of (Facts, Held);
+         end;
+      end if;
+   end Measurement_Extent;
+
+   ------------------------------------------------------------------
    --  An aggregate cell
    ------------------------------------------------------------------
 

@@ -1,0 +1,5 @@
+class: positive
+summary: [0370] measures a named scalar-field struct directly, through aliases and in a static module image
+constructs: 0370, 0520, 0670, 0710, 0750, 1740, 1790, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

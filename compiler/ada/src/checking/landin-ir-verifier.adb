@@ -894,6 +894,15 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
+                           when Measure_Size | Measure_Align =>
+                              if Result_Of (Of_Unit, Id, V)
+                                /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
                            when Store =>
                               declare
                                  S : constant Slot_Id :=
