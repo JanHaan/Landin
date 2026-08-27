@@ -1,0 +1,15 @@
+mut state: [3]u32 = [7, 8, 9]
+
+public main: () -> (code: i32) =
+    mut local: [4]u64 = [10, 20, 30, 40]
+    state = zeroed
+    local = zeroed
+
+    if state[0] == 0 and state[2] == 0
+        and local[0] == 0 and local[3] == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -1,0 +1,5 @@
+class: positive
+summary: zeroed assigns a mutable fixed array as a whole
+constructs: 0040, 0060, 0080, 0520, 0540, 0570, 1760, 1770, 1810, 1900, 1910, 1950
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1240,6 +1240,13 @@ package body Landin.Stages.Lowering is
                                     end case;
                                  end;
                               end loop;
+                           elsif Syn.Kind (Of_Tree, Value)
+                                   = Syn.Zeroed_Literal
+                           then
+                              --  D30 reuses D28's one destination-only clear
+                              --  for either local or module runtime storage.
+                              IR.Emit_Array_Clear
+                                (Unit.all, Filling, Destination, Site);
                            else
                               --  D20 is one compact storage operation: D18
                               --  permits a length the compiler host cannot

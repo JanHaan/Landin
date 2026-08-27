@@ -2392,7 +2392,7 @@ validation treats it as a terminal zero image; lowering deliberately records no
 finite datum image, preserving D10's `.bss` representation and distinct storage
 through D21 chains. It is not synthesized as a general value and introduces no
 IR operation, so inferred bindings, assignment and scalar contexts remain
-refused. `positive/module-array-zeroed-initializer`, the three focused negative
+refused. `positive/module-array-zeroed-initializer`, the two focused negative
 boundaries, and `runtime/module-array-zeroed-reads-zero` pin the source and
 emitted-storage behavior.
 
@@ -2406,7 +2406,7 @@ datum image. Linux x86-64 forms the frame address and emits one `rep stosb` over
 the target byte extent; focused backend evidence makes `[3]usize` 24 bytes there
 and 12 under the synthetic 32-bit description. Existing flow treatment of an
 initializer assigns the array as a whole, which a computed-index positive case
-pins. `positive/local-array-zeroed-initializer`, the three unchanged negative
+pins. `positive/local-array-zeroed-initializer`, the two unchanged negative
 boundaries, and `runtime/local-array-zeroed-reads-zero` pin the source, lowering,
 target-width and runtime behavior.
 
@@ -2425,20 +2425,32 @@ pin shape, type and incoming definite-assignment state, and
 `runtime/array-literal-assignment-is-source-ordered` pins computed-index
 assignment and observable order.
 
+D30 admits `zeroed` as the other contextual assignment value for a mutable
+fixed-array place. It has no source expressions: after reaching the destination,
+lowering emits D28's one operandless `Clear_Array` against either a frame slot or
+module datum, and flow marks a local destination assigned as a whole. The
+verifier's existing storage-shape seam accepts both; Linux x86-64 forms the
+appropriate address and clears the target byte extent with one `rep stosb`.
+Focused lowering pins both destinations, and focused backend evidence makes a
+module `[3]usize` clear 24 bytes under Linux x86-64 and 12 under the synthetic
+32-bit facts. `positive/array-zeroed-assignment` pins computed-index definite
+assignment, while `runtime/array-zeroed-assignment-clears-storage` proves the
+complete local and module effect.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, and D27/D28's explicitly typed module and local `zeroed`;
-array assignments other than D20's direct storage name and D29's literal;
-general whole-array value positions; inferred, assignment, scalar and every
-other `zeroed` [0540] context; repetition [0560]; slices [0570]; non-identifier
-`lenof` operands; and an array as a struct field. Each is its own slice, and the
-remaining value slices need the initialization work D21 did not settle.
+array assignments other than D20's direct storage name, D29's literal and D30's
+`zeroed`; general whole-array value positions; inferred, scalar and every other
+`zeroed` [0540] context; repetition [0560]; slices [0570]; non-identifier `lenof`
+operands; and an array as a struct field. Each is its own slice, and the remaining
+value slices need the initialization work D21 did not settle.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
-which is what lets D27/D28's surrounding array be zeroed at all. Every element
-this kernel admits is a scalar and every scalar has one, so the check is vacuous
-today; it stops being vacuous when a pointer can be an element, because [0540]
-gives a pointer no zero image and there is no null to stand for one.
+which is what lets D27/D28/D30's surrounding array be zeroed at all. Every
+element this kernel admits is a scalar and every scalar has one, so the check is
+vacuous today; it stops being vacuous when a pointer can be an element, because
+[0540] gives a pointer no zero image and there is no null to stand for one.
 
 Promoting `[` took away more refusals than the three that are obvious, and a
 third review round measured what each one used to do. `sizeof [4]u8` — the very
