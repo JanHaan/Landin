@@ -1,0 +1,12 @@
+word: type = u32
+truth: type = bool
+
+integer: () -> (result: word) =
+    result = zeroed
+    return
+end integer
+
+boolean: () -> (result: truth) =
+    result = zeroed
+    return
+end boolean

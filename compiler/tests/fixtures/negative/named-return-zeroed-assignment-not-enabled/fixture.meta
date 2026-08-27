@@ -1,6 +1,0 @@
-class: negative
-summary: D42 leaves named-return zeroed assignment as a separate contextual position
-constructs: 0540, 1770, 1800, 1810, 1900
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

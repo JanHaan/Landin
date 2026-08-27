@@ -2387,9 +2387,9 @@ bounds behavior. A failed or refused assignment establishes nothing.
 
 D41's direct binding assignment remains unchanged. An immutable subobject, a
 selection from an invalid place, a nested subobject destination, and assignment to
-a named return remain outside this slice. Inferred initialization and every
-nested, argument, return, operand, discard or other general `zeroed` expression
-remain refused.
+a named return remain outside this slice; D43 treats the last as its own contextual
+position. Inferred initialization and every nested, argument, return, operand,
+discard or other general `zeroed` expression remain refused.
 
 **Why the selected type:** a scalar subobject already owns both the type and the
 storage that the contextual literal needs. Reusing the ordinary place and store
@@ -2403,8 +2403,48 @@ semantics this assignment must preserve. It was declined.
 **Pinned by** the checker and lowering public-seam cases;
 `positive/scalar-subobject-zeroed-assignment`;
 `negative/immutable-scalar-zeroed-assignment`,
-`negative/named-return-zeroed-assignment-not-enabled`,
 `negative/inferred-zeroed-not-enabled`, and
 `negative/nested-scalar-zeroed-not-enabled`;
 `runtime/scalar-subobject-zeroed-assignment-clears-values`; and
 `runtime/scalar-subobject-zeroed-computed-index-traps` on Linux x86-64.
+
+### D43 — A scalar named return gives complete `zeroed` assignment its context
+
+**The tour said** that a named return is a writable place [1800], that `return`
+carries the value previously assigned there [1810], that every return path must
+assign it [0930], and that `zeroed` takes the all-bits-zero image of its context
+[0540]. D41 supplied assignment context only from mutable local and module
+bindings, while D42 treated their immediate scalar subobjects separately.
+
+**Chosen:** `zeroed` may be the complete right-hand side of assignment to a scalar
+named return. The return's declared type must resolve, through every representable
+alias, to an enabled scalar and supplies `false` for `bool` or typed zero for every
+enabled integer. The ordinary place check still runs before the right-hand side,
+and successful ordinary assignment establishes the named return for [0930]'s
+definite-assignment check.
+
+Lowering reuses the named return's existing frame-slot `Store` path with D10's
+existing false `Truth` or typed zero `Number`. The explicit or implicit `return`
+then uses its ordinary load and `Leave`. No new scalar value form, temporary, IR
+operation, verifier rule or backend path is introduced.
+
+D39--D42's initializer, binding and immediate-subobject contexts remain unchanged.
+Immutable and invalid destinations retain the ordinary place refusals. A named-
+return subobject is not admitted by this rule; aggregate named returns are not an
+enabled value context and remain a separate future question. Inferred
+initialization and every nested, argument, return-expression, operand, discard or
+other general `zeroed` expression remain refused.
+
+**Why the named-return type:** the return place already owns the type and storage
+that the contextual literal needs. Its ordinary assignment is also exactly the
+flow event [0930] requires, so a special return initialization rule would duplicate
+both storage and definite-assignment semantics.
+
+**The alternative:** make `zeroed` an independently inferred scalar value usable by
+any return-related expression. That would erase the complete-right-hand-side
+boundary and broaden general scalar values well beyond the evidence. It was
+declined.
+
+**Pinned by** the checker and lowering public-seam cases;
+`positive/named-return-zeroed-assignment`; and
+`runtime/named-return-zeroed-reads-zero` on Linux x86-64.

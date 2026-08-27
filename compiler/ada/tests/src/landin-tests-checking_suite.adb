@@ -1357,6 +1357,65 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 1, "the local assigned zeroed node was checked");
    end Local_Scalar_Assignment_Gives_Zeroed_Its_Type;
 
+   --  D43: a scalar named return supplies `zeroed`'s resolved type, and the
+   --  ordinary assignment establishes the return place before `return`.
+   procedure Named_Return_Assignment_Gives_Zeroed_Its_Type
+     (Item : in out Landin.Testing.Context);
+
+   procedure Named_Return_Assignment_Gives_Zeroed_Its_Type
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "named-return-assignment.ldn",
+         "word: type = u32" & LF
+         & "f: () -> (result: word) =" & LF
+         & "    result = zeroed" & LF
+         & "    return" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a named return types zeroed and becomes assigned");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Zeroed_Literal
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.U32,
+                  "zeroed carries the resolved named-return type");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 1, "the named-return zeroed node was checked");
+   end Named_Return_Assignment_Gives_Zeroed_Its_Type;
+
    --  D42: an ordinary mutable struct field supplies `zeroed`'s resolved
    --  scalar type, including when an alias names the field type.
    procedure Struct_Field_Assignment_Gives_Zeroed_Its_Type
@@ -1572,6 +1631,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "local assignment gives zeroed its type",
          Local_Scalar_Assignment_Gives_Zeroed_Its_Type'Access);
+      Landin.Testing.Register
+        (Into, "checking", "named return gives zeroed its type",
+         Named_Return_Assignment_Gives_Zeroed_Its_Type'Access);
       Landin.Testing.Register
         (Into, "checking", "field assignment gives zeroed its type",
          Struct_Field_Assignment_Gives_Zeroed_Its_Type'Access);

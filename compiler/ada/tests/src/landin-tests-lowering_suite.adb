@@ -742,6 +742,50 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Scalar_Zeroed_Assignment_Uses_Ordinary_Stores;
 
+   --  D43 lowers named-return `zeroed` through the named return's existing
+   --  slot Store path before the ordinary return load and Leave.
+   procedure Named_Return_Zeroed_Uses_The_Ordinary_Store
+     (Item : in out Landin.Testing.Context);
+
+   procedure Named_Return_Zeroed_Uses_The_Ordinary_Store
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "truth: type = bool" & LF
+         & "f: () -> (result: truth) =" & LF
+         & "    result = zeroed" & LF
+         & "    return" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "named-return zeroed assignment lowers");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         One  : constant IR.Item_Id := 1;
+      begin
+         Landin.Testing.Check
+           (Item, IR.Value_Count (Unit, One) = 4
+                  and then IR.Op_Of (Unit, One, 1) = IR.Truth
+                  and then not IR.Truth_Of (Unit, One, 1)
+                  and then IR.Op_Of (Unit, One, 2) = IR.Store
+                  and then IR.Slot_Of (Unit, One, 2)
+                    = IR.Result_Slot (Unit, One)
+                  and then IR.Op_Of (Unit, One, 3) = IR.Load
+                  and then IR.Op_Of (Unit, One, 4) = IR.Leave,
+            "false uses the named-return Store path before return");
+         Check_Terminators (Item, Unit, "named-return zeroed assignment");
+      end;
+   end Named_Return_Zeroed_Uses_The_Ordinary_Store;
+
    --  D42 reuses the ordinary subobject store paths.  The selected scalar
    --  type chooses false or zero; a computed destination index is evaluated
    --  once and carried to Store_Element before the contextual RHS is formed.
@@ -2207,6 +2251,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "scalar zeroed assignment uses ordinary stores",
          Scalar_Zeroed_Assignment_Uses_Ordinary_Stores'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "named return zeroed uses ordinary store",
+         Named_Return_Zeroed_Uses_The_Ordinary_Store'Access);
       Landin.Testing.Register
         (Into, "lowering", "subobject zeroed uses ordinary stores",
          Scalar_Subobject_Zeroed_Uses_Ordinary_Stores'Access);
