@@ -109,12 +109,13 @@ keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
 ### [1770] The kernel's literals are integers, booleans, and contextual zero
 
 The kernel's literals are integers, the two booleans, and `zeroed` in the
-contexts D27, D28, D30 and D39 admit. Integer literals are untyped and take the
-type of their context [0190], defaulting to i32 with none [0200]; the bases and
-the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it the
-all-bits-zero image of its context. D27/D28 supply an explicitly typed module or
-local fixed-array initializer, D30 supplies a fixed-array assignment destination,
-and D39 supplies an explicitly typed module scalar initializer. Floats
+contexts D27, D28, D30, D39 and D40 admit. Integer literals are untyped and take
+the type of their context [0190], defaulting to i32 with none [0200]; the bases
+and the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it
+the all-bits-zero image of its context. D27/D28 supply an explicitly typed module
+or local fixed-array initializer, D30 supplies a fixed-array assignment
+destination, and D39/D40 supply an explicitly typed module or local scalar
+initializer respectively. Floats
 [0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
 not enabled yet.

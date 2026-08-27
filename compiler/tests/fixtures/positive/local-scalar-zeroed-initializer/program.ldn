@@ -1,0 +1,11 @@
+word: type = u32
+
+f: () -> (result: word) =
+    value: word = zeroed
+    flag: bool = zeroed
+    if flag then
+        result = 1
+    else
+        result = value
+    end if
+end f

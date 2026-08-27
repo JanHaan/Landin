@@ -1,0 +1,11 @@
+word: type = u64
+
+public main: () -> (code: i32) =
+    number: word = zeroed
+    flag: bool = zeroed
+    if number == 0 and not flag then
+        code = 42
+    else
+        code = 1
+    end if
+end main

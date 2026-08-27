@@ -643,6 +643,56 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Zeroed_Module_Scalar_Reuses_The_Zero_IR;
 
+   --  D40 uses the existing scalar constant/store path for a local: integers
+   --  become zero Numbers, bool becomes false Truth, and each is stored in its
+   --  ordinary frame slot.  The alias is settled before lowering.
+   procedure Local_Scalar_Zeroed_Uses_The_Constant_Store_Path
+     (Item : in out Landin.Testing.Context);
+
+   procedure Local_Scalar_Zeroed_Uses_The_Constant_Store_Path
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "word: type = u32" & LF
+         & "f: () -> (result: u32) =" & LF
+         & "    number: word = zeroed" & LF
+         & "    flag: bool = zeroed" & LF
+         & "    if flag then" & LF
+         & "        result = 1" & LF
+         & "    else" & LF
+         & "        result = number" & LF
+         & "    end if" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "typed local scalar zeroed initializers lower");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         One  : constant IR.Item_Id := 1;
+      begin
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, One, 1) = IR.Number
+                  and then IR.Number_Of (Unit, One, 1) = 0
+                  and then IR.Op_Of (Unit, One, 2) = IR.Store,
+            "the integer initializer is zero followed by its slot store");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, One, 3) = IR.Truth
+                  and then not IR.Truth_Of (Unit, One, 3)
+                  and then IR.Op_Of (Unit, One, 4) = IR.Store,
+            "the bool initializer is false followed by its slot store");
+         Check_Terminators (Item, Unit, "local scalar zeroed initializers");
+      end;
+   end Local_Scalar_Zeroed_Uses_The_Constant_Store_Path;
+
    ------------------------------------------------------------------
 
    --  R2.20: a direct-name initial image does not alias its source.  Each
@@ -2010,6 +2060,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a zeroed module scalar reuses zero IR",
          A_Zeroed_Module_Scalar_Reuses_The_Zero_IR'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "local scalar zeroed uses constant stores",
+         Local_Scalar_Zeroed_Uses_The_Constant_Store_Path'Access);
       Landin.Testing.Register
         (Into, "lowering", "module array images keep distinct datums",
          Module_Array_Images_Keep_Distinct_Datums'Access);
