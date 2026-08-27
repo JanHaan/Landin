@@ -1,5 +1,12 @@
+flags: type = struct
+    ready: bool
+end flags
 number: u32 = 1
+state: flags
+row: [1]u32
 
 f: () -> none =
     number = zeroed
+    state.ready = zeroed
+    row[0] = zeroed
 end f

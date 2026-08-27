@@ -1,6 +1,6 @@
 class: negative
-summary: a scalar module declaration does not make zeroed a nested or general expression
-constructs: 0040, 0190, 0540, 1740, 1760, 1770, 1820
+summary: a scalar declaration or subobject assignment does not make zeroed a nested or general expression
+constructs: 0040, 0190, 0420, 0540, 0670, 1740, 1760, 1770, 1800, 1810, 1820, 1900
 program: program.ldn
-codes: L0304
+codes: L0304, L0304
 targets: linux-x86-64, macos-arm64

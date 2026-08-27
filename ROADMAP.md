@@ -2596,11 +2596,28 @@ slot `Store` or `Store_Datum`, with no new value, temporary, IR operation or
 backend path. Successful completion establishes definite assignment. Public
 checker and lowering cases pin both storage kinds, alias resolution, typed
 constants, ordinary stores and local assignment state. A positive fixture covers
-both destinations, focused negatives retain immutability and refuse scalar field
-and element subobjects, and the Linux x86-64 runtime fixture overwrites nonzero
-integer and true bool values and reads zero and false back. Inferred
+both destinations, a focused negative retains immutability, and the Linux x86-64
+runtime fixture overwrites nonzero integer and true bool values and reads zero and
+false back. D42 separately governs scalar field and element subobjects. Inferred
 initialization, named returns, nested/general contexts and every other scalar
 `zeroed` use remain refused; no general scalar value was admitted.
+
+D42 admits `zeroed` as the complete right-hand side of assignment to an ordinary
+scalar struct field or fixed-array element selected immediately from a mutable
+local slot or module datum. The selected type resolves aliases and supplies false
+for `bool` or typed integer zero. The ordinary place check, destination-first
+order, exactly-once index evaluation, computed-index bounds check and definite-
+assignment effects remain unchanged. Lowering reuses `Store_Field` for a
+compiler-known position and `Store_Element` for a computed one, including their
+slot-reaching forms, without a new value, temporary, IR operation or backend path.
+Public checker and lowering cases pin alias resolution, false/zero selection,
+source order and both existing stores. The promoted positive fixture pins module
+and local field/element assignment and per-subobject definite assignment; focused
+negatives retain direct and subobject immutability, named-return separation,
+inference and nested/general refusals. Linux x86-64 runtime fixtures overwrite and
+read back both scalar kinds, count one computed index evaluation, and retain the
+ordinary out-of-bounds trap. D41 remains the direct-binding rule; nested
+subobjects, named returns and general scalar `zeroed` values were not admitted.
 
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
@@ -2609,9 +2626,10 @@ counted inferred local and module repetition, D34's explicitly typed local and
 module repetition and D36/D38's explicitly typed local and module mixed
 repetition; array assignments other than D20's direct storage name, D29's literal,
 D30's `zeroed`, D32's repetition and D37's mixed-prefix repetition; general
-whole-array value positions; inferred scalar initialization, scalar assignment,
-nested/general scalar and every other `zeroed` [0540] context beyond
-D27/D28/D30/D39/D40/D41; inferred initialization, nested and general-value mixed-prefix
+whole-array value positions; inferred scalar initialization, named-return and
+nested-subobject scalar assignment, nested/general scalar and every other `zeroed`
+[0540] context beyond D27/D28/D30/D39/D40/D41/D42; inferred initialization,
+nested and general-value mixed-prefix
 repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`
@@ -2621,7 +2639,7 @@ Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
-which is what lets D27/D28/D30's surrounding array and D39--D41's scalar be zeroed
+which is what lets D27/D28/D30's surrounding array and D39--D42's scalar be zeroed
 at all. Every element this kernel admits is a scalar and every scalar has one, so the check is
 vacuous today; it stops being vacuous when a pointer can be an element, because
 [0540] gives a pointer no zero image and there is no null to stand for one.
