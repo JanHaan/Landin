@@ -1580,6 +1580,43 @@ item 1 ROUTINE f result i32 params 1 slots 3 blocks 3 values 14
     12 STORE slot 2 <- 11
     13 LOAD i32 slot 2
     14 LEAVE <- 13
+file positive/scalar-subobject-zeroed-assignment/program.ldn
+unit items 5
+item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 u32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM row result array params 0 slots 0 blocks 1 values 1
+  elements 1 of u32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 ROUTINE f result none params 0 slots 0 blocks 1 values 5
+  block 1 scope 3 BLOCK length 5
+    1 NUMBER u32 0
+    2 STORE_FIELD <- 1
+    3 NUMBER u32 0
+    4 STORE_FIELD <- 3
+    5 LEAVE
+item 4 ROUTINE local_field result u32 params 0 slots 2 blocks 1 values 6
+  slot 1 result u32 return
+  slot 2 local aggregate
+  block 1 scope 5 BLOCK length 6
+    1 NUMBER u32 0
+    2 STORE_FIELD <- 1
+    3 LOAD_FIELD u32
+    4 STORE slot 1 <- 3
+    5 LOAD u32 slot 1
+    6 LEAVE <- 5
+item 5 ROUTINE local_element result u32 params 0 slots 2 blocks 1 values 6
+  slot 1 result u32 return
+  slot 2 local elements 1 of u32
+  block 1 scope 7 BLOCK length 6
+    1 NUMBER u32 0
+    2 STORE_FIELD <- 1
+    3 LOAD_FIELD u32
+    4 STORE slot 1 <- 3
+    5 LOAD u32 slot 1
+    6 LEAVE <- 5
 file positive/scalar-zeroed-assignment/program.ldn
 unit items 2
 item 1 DATUM module result u32 params 0 slots 0 blocks 1 values 2

@@ -1331,8 +1331,9 @@ package body Landin.Stages.Checking is
                     = Ty.Fixed_Array;
       end Is_Direct_Array_Name;
 
-      --  D41 is a direct-storage slice: scalar fields, array elements and
-      --  named returns remain separate contextual `zeroed` positions.
+      --  D41 is a direct-binding slice; D42 adds one ordinary scalar field or
+      --  fixed-array element selected immediately from that storage.  Nested
+      --  subobjects and named returns remain separate contextual positions.
       function Is_Direct_Binding_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
@@ -1347,6 +1348,21 @@ package body Landin.Stages.Checking is
                        Res.Bound_To (Meanings.all, Of_Tree, Node))
                     in Res.Module_Binding | Res.Local_Binding;
       end Is_Direct_Binding_Name;
+
+      function Is_Zeroed_Scalar_Place
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Is_Zeroed_Scalar_Place
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+      begin
+         return Is_Direct_Binding_Name (Of_Tree, Node)
+           or else
+             (Syn.Kind (Of_Tree, Node)
+                in Syn.Member_Selection | Syn.Element_Index
+              and then Is_Direct_Binding_Name
+                         (Of_Tree, Syn.Target_Of (Of_Tree, Node)));
+      end Is_Zeroed_Scalar_Place;
 
       function Synthesise
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
@@ -2673,12 +2689,12 @@ package body Landin.Stages.Checking is
                      return;
                   end if;
 
-                  --  D41: as with D39/D40's written scalar declarations, a
-                  --  A mutable scalar binding supplies the contextual scalar
-                  --  type for `zeroed`.  Check_Place has already resolved
-                  --  aliases and refused immutable or invalid destinations.
+                  --  D41/D42: a mutable scalar binding or an ordinary scalar
+                  --  field selected from one supplies the contextual type for
+                  --  `zeroed`.  Check_Place has already resolved aliases and
+                  --  refused immutable or invalid destinations.
                   if Wants in Ty.Scalar_Name
-                    and then Is_Direct_Binding_Name (Of_Tree, Place)
+                    and then Is_Zeroed_Scalar_Place (Of_Tree, Place)
                     and then Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
                   then
                      Landin.Checking.Note

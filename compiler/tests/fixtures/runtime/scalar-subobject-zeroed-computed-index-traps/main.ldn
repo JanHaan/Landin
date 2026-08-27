@@ -1,0 +1,10 @@
+mut row: [1]u32
+
+outside: () -> (at: usize) =
+    at = 1
+end outside
+
+public main: () -> (code: i32) =
+    row[outside()] = zeroed
+    code = 1
+end main

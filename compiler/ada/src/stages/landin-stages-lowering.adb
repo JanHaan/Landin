@@ -537,10 +537,10 @@ package body Landin.Stages.Lowering is
                return IR.Emit_Truth (Unit.all, Filling, False, Site);
 
             when Syn.Zeroed_Literal =>
-               --  D40: the checker admits this expression form only as an
-               --  explicitly typed local scalar initializer.  Reuse the same
-               --  scalar constants as D10/D39, after which the binding path
-               --  emits its ordinary frame-slot store.
+               --  D40--D42: the checker admits this expression only where a
+               --  scalar initializer or assignment destination supplies its
+               --  type.  Reuse D10/D39's constants; the surrounding binding or
+               --  assignment path emits its ordinary store.
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Node) = Ty.Bool
                then
                   return IR.Emit_Truth (Unit.all, Filling, False, Site);

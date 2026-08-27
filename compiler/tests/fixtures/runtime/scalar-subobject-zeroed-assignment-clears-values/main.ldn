@@ -1,0 +1,24 @@
+truth: type = bool
+flags: type = struct
+    ready: truth
+end flags
+mut state: flags
+mut row: [2]u32
+mut calls: usize
+
+next: () -> (at: usize) =
+    calls = calls + 1
+    at = 1
+end next
+
+public main: () -> (code: i32) =
+    state.ready = true
+    row[1] = 9
+    state.ready = zeroed
+    row[next()] = zeroed
+    if not state.ready and row[1] == 0 and calls == 1 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

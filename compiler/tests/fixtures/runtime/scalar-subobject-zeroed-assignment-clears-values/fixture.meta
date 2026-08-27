@@ -1,0 +1,6 @@
+class: runtime
+summary: D42 writes false and zero through ordinary scalar field and element stores while evaluating a computed index once
+constructs: 0040, 0080, 0190, 0340, 0350, 0410, 0420, 0520, 0540, 0570, 0670, 1740, 1760, 1770, 1800, 1810, 1900, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64
