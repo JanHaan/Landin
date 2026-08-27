@@ -1,0 +1,5 @@
+class: positive
+summary: R2.20 initializes typed and inferred module arrays from a direct module storage name
+constructs: 0050, 0060, 0080, 0110, 0520, 1740
+program: program.ldn
+targets: linux-x86-64, macos-arm64

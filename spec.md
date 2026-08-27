@@ -1232,41 +1232,49 @@ program never assigned. Both were declined.
 `negative/local-array-copy-not-assigned-on-every-path`, and
 `runtime/whole-arrays-copy-between-storage` on Linux x86-64.
 
-### D21 — A local array is initialized from a whole-array storage name
+### D21 — An array is initialized from a whole-array storage name
 
 **The tour said** that a binding may name its type and give it a value in one
 form [0040], that an inferred form takes the value's type [0050], and that a
 local declared without a value is assigned before it is read [1910]. It said
-nothing about what value a local array binding could receive at its
-declaration.
+nothing about what value an array binding could receive at its declaration.
 
-**Chosen:** a local array binding is initialized from a direct storage name
-in either its explicitly typed form — `[mut] name: [N]T = source` — or its
-inferred form — `[mut] name := source`. Both copy every element exactly as
-D20's assignment does between two storage places. `source` names a whole
-array: a module binding, a prior local wholly assigned by D19's sparse facts
-or by a D20 copy, or a prior local likewise initialized from a name. The
-explicit form requires the source's D17 identity to agree with its written
-type; the inferred form gives the destination the source's exact D17 length
-and element type. The destination is wholly assigned by the copy alone, and
-both mutable and immutable binding forms accept it because a declaration is
-not an assignment [0080].
+**Chosen:** a local or module array binding is initialized from a direct
+storage name in either its explicitly typed form —
+`[mut] name: [N]T = source` — or its inferred form —
+`[mut] name := source`. For a local, both copy every element exactly as D20's
+assignment does between two storage places. `source` names a whole array: a
+module binding, a prior local wholly assigned by D19's sparse facts or by a
+D20 copy, or a prior local likewise initialized from a name. The explicit
+form requires the source's D17 identity to agree with its written type; the
+inferred form gives the destination the source's exact D17 length and element
+type. The destination is wholly assigned by the copy alone, and both mutable
+and immutable binding forms accept it because a declaration is not an
+assignment [0080].
 
-Every other value position in a local array binding remains refused: an array
-literal [0520], `zeroed` [0540], repetition [0560], a slice [0570], a call,
-an indexed or selected subexpression, and every module-scope array
-initializer are each their own later slice. This decision does not enable a
-general array value or an array as a parameter, return, discard, or struct
-field. The source is read before the binding's scope begins [0110], so a
-local cannot initialize itself and an outer storage name may be shadowed.
+At module scope `source` is exactly one resolved module storage name. Its
+initial-image chain follows declaration identities, across forward references
+and type-alias chains, and must terminate at a module array whose initializer
+is omitted. A chain that returns to a declaration is [1940]'s value worked out
+from itself. Every terminating source image enabled now is D10's zero image;
+each destination nevertheless owns distinct storage initialized with that
+image rather than aliasing its source. Nothing runs before the entry point
+[1460], so no module-level copy instruction exists.
 
-**Why:** D20 already lowered a whole-array copy to one `Copy_Array`
+Every other array initializer value remains refused: an array literal [0520],
+`zeroed` [0540], repetition [0560], a slice [0570], a call, and an indexed or
+selected subexpression are each their own later slice. This decision does not
+enable a general array value or an array as a parameter, return, discard, or
+struct field. A local source is read before the binding's scope begins [0110],
+so a local cannot initialize itself and an outer storage name may be shadowed.
+
+**Why:** D20 already lowered a local whole-array copy to one `Copy_Array`
 instruction, D18's storage semantics already reached every ordinary local,
-and D19's flow state already gave a fully-copied array the single
-whole-array fact it needs. The one shape left to give a local array is the
-one shape a scalar local already has, and reusing the storage rule keeps
-compiler work and IR size independent of the target-sized D18 extent. The
-restriction to a direct source name keeps the check symmetric with D20 and
+and D19's flow state already gave a fully-copied array the single whole-array
+fact it needs. At module scope, following declaration identities proves the
+initial bytes without inventing initialization code or collapsing two storage
+symbols into one. In both scopes the restriction to a direct source name keeps
+compiler work and IR size independent of the target-sized D18 extent and
 defers every value form whose own semantic rule is a later slice.
 
 **The alternative:** widen the initializer to any array-typed expression, or
@@ -1278,11 +1286,15 @@ same narrow source rule as the explicit form without synthesizing an array
 `Name_Reference` anywhere else.
 
 **Pinned by** `positive/local-array-initialized-from-source-name`,
-`negative/module-array-initializer-not-enabled`,
+`positive/module-array-initialized-from-source-name`,
 `negative/local-array-initializer-from-unassigned`,
 `negative/array-initializer-length-mismatch`,
-`negative/array-initializer-element-mismatch`, and
-`runtime/local-array-initializer-copies-storage` on Linux x86-64.
+`negative/array-initializer-element-mismatch`,
+`negative/module-array-initializer-shape-mismatch`,
+`negative/module-array-initializer-non-name-refused`,
+`negative/module-array-initial-image-cycle`,
+`runtime/local-array-initializer-copies-storage`, and
+`runtime/module-array-initializers-copy-images` on Linux x86-64.
 
 ### D22 — Computed local array indexes use the whole-array fact
 

@@ -105,8 +105,7 @@ package body Landin.Stages.Checking is
       function Declared_As_Node
         (Of_Tree         : Syn.Tree;
          Node            : Syn.Node_Id;
-         For_Declaration : Res.Declaration_Id := Res.No_Declaration;
-         In_Local_Scope  : Boolean := False)
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
          return Ty.Type_Kind;
       procedure Check_Literal
         (Of_Tree : Syn.Tree;
@@ -447,8 +446,7 @@ package body Landin.Stages.Checking is
       function Declared_As_Node
         (Of_Tree         : Syn.Tree;
          Node            : Syn.Node_Id;
-         For_Declaration : Res.Declaration_Id := Res.No_Declaration;
-         In_Local_Scope  : Boolean := False)
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
          return Ty.Type_Kind
       is
          Written : constant Syn.Node_Id := Syn.Declared_Type (Of_Tree, Node);
@@ -481,17 +479,16 @@ package body Landin.Stages.Checking is
               --  carries wherever it is written.
               and then Syn.Kind (Of_Tree, Written)
                        in Syn.Type_Reference | Syn.Array_Type;
-            --  D21: a local array binding may be initialized directly from
-            --  a whole-array storage name.  A module binding of one still
-            --  needs no value at all -- D10 zeroes it -- so the caller must
-            --  say the scope is local before this admits the initializer.
-            --  Every other value form (an array literal, a call, `zeroed`,
-            --  or a slice) is deferred: none of them is a Name_Reference.
-            --  An inferred direct-name binding has no Written node and is
-            --  admitted separately by Infer.
+            --  D21: an array binding may be initialized directly from a
+            --  whole-array storage name.  Resolution makes that module
+            --  storage at module scope and an in-scope storage declaration
+            --  inside a body.  Every other
+            --  value form (an array literal, a call, `zeroed`, or a slice) is
+            --  deferred: none of them is a Name_Reference.  An inferred
+            --  direct-name binding has no Written node and is admitted
+            --  separately by Infer.
             Is_Direct_Name_Init : constant Boolean :=
-              In_Local_Scope
-              and then Held = Ty.Fixed_Array
+              Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
@@ -579,19 +576,12 @@ package body Landin.Stages.Checking is
             end if;
 
             declare
-               --  D21 admits the initializer only for a local binding, so
-               --  pass 1's view of a module binding still refuses one:
-               --  Sort_Of tells the two apart before Declared_As_Node sees
-               --  them.  A Parameter or a Named_Return keeps its former
-               --  refusal path because it is a Parameter or Named_Return
-               --  node, not a Binding one.
-               Local : constant Boolean :=
-                 Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding;
+               --  A Parameter or a Named_Return keeps its former refusal
+               --  path because it is not a Binding node.
                Held : constant Ty.Type_Kind :=
                  Declared_As_Node
                    (Of_Tree.all, Node,
-                    (if Is_Body then Id else Res.No_Declaration),
-                    In_Local_Scope => Local);
+                    (if Is_Body then Id else Res.No_Declaration));
             begin
                --  A declaration that names an existing aggregate is D15's
                --  alias and carries the identity the type position was given.
@@ -1178,6 +1168,10 @@ package body Landin.Stages.Checking is
 
                --  D17: an array's identity is its shape, so a name that
                --  holds one carries the shape to wherever it is indexed.
+               if Held = Ty.Ill_Typed then
+                  return Held;
+               end if;
+
                if Held = Ty.Fixed_Array then
                   if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                      = Ty.Undecided
@@ -1768,12 +1762,11 @@ package body Landin.Stages.Checking is
                declare
                   Value : constant Syn.Node_Id :=
                     Syn.Value_Of (Of_Tree, Node);
-                  --  D21: a body's binding is always a local, so this is
-                  --  where the initializer form is admitted.  Declared_As
-                  --  passes False for a module binding.
+                  --  D21's direct-name form is checked here for both a
+                  --  module binding and a binding inside a body; the latter
+                  --  is always local.
                   Wants : constant Ty.Type_Kind :=
-                    Declared_As_Node
-                      (Of_Tree, Node, In_Local_Scope => True);
+                    Declared_As_Node (Of_Tree, Node);
                begin
                   if Value = Syn.No_Node or else Wants = Ty.Ill_Typed then
                      --  The declaration has already explained why this value
@@ -2131,24 +2124,29 @@ package body Landin.Stages.Checking is
          end if;
 
          declare
-            --  Only a local binding may infer D17's shape from storage.  A
-            --  module initializer remains a general array value and follows
-            --  Synthesise's refusal, as do literals, calls, selections,
-            --  indexes and every other expression form.
-            Direct_Local_Array : constant Boolean :=
-              Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
-              and then Is_Direct_Array_Name (Of_Tree.all, Value);
+            --  D21 infers D17's shape only from a direct storage name, for a
+            --  local or module binding.  Literals, calls, selections, indexes
+            --  and every other expression form still follow Synthesise's
+            --  refusal.
+            Direct_Name : constant Boolean :=
+              Res.Sort_Of (Meanings.all, Id)
+                in Res.Local_Binding | Res.Module_Binding
+              and then Syn.Kind (Of_Tree.all, Value) = Syn.Name_Reference
+              and then Res.Verdict_Of (Meanings.all, Of_Tree.all, Value)
+                       = Res.Bound;
             Got : constant Ty.Type_Kind :=
-              (if Direct_Local_Array
+              (if Direct_Name
                then Selected_From (Of_Tree.all, Value)
                else Synthesise (Of_Tree.all, Value));
+            Direct_Array : constant Boolean :=
+              Direct_Name and then Got = Ty.Fixed_Array;
          begin
             if Got = Ty.Untyped_Integer then
                Commit_To (Of_Tree.all, Value, Ty.Default_Integer);
                Landin.Checking.Settle
                  (Types.all, Id, Ty.Type_Kind (Ty.Default_Integer));
             else
-               if Got = Ty.Fixed_Array and then Direct_Local_Array then
+               if Got = Ty.Fixed_Array and then Direct_Array then
                   Landin.Checking.Note_Array
                     (Types.all, Id,
                      Landin.Checking.Array_Length
@@ -2161,6 +2159,116 @@ package body Landin.Stages.Checking is
             end if;
          end;
       end Infer;
+
+      ------------------------------------------------------------
+      --  R2.20: every module array image reaches zeroed storage
+      ------------------------------------------------------------
+
+      type Image_State is (Unseen, Visiting, Valid, Invalid);
+      Image_States : array
+        (Res.Declaration_Id'(1)
+         .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all)))
+        of Image_State := [others => Unseen];
+
+      function Validate_Array_Image
+        (Id : Res.Declaration_Id) return Boolean;
+      procedure Validate_Array_Images;
+
+      function Validate_Array_Image
+        (Id : Res.Declaration_Id) return Boolean
+      is
+         Of_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Id));
+         Node  : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
+         Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree.all, Node);
+      begin
+         case Image_States (Id) is
+            when Valid =>
+               return True;
+
+            when Invalid =>
+               return False;
+
+            when Visiting =>
+               --  Declaration order chooses the first root, and marking the
+               --  entire path Invalid on the way out means this cycle earns
+               --  one [1940] report rather than one report per member.
+               Bad.Report
+                 (Item    => Bad.Not_Known_At_Compile_Time,
+                  Source  => Res.Source_Of (Meanings.all, Id),
+                  Where   => Syn.Anchor (Of_Tree.all, Node),
+                  Message => "the initial image of `"
+                             & Spelled (Syn.Name (Of_Tree.all, Node))
+                             & "` is worked out from itself",
+                  Note    => "[1940]: a chain that comes back to where it"
+                             & " began names nothing at all",
+                  Into    => Found);
+               Image_States (Id) := Invalid;
+               return False;
+
+            when Unseen =>
+               null;
+         end case;
+
+         Image_States (Id) := Visiting;
+
+         --  An omitted initializer is D10's zero image and the only leaf in
+         --  this slice.  Refused or mismatched initializer forms are left to
+         --  their existing diagnostics rather than producing graph fallout.
+         if Value = Syn.No_Node then
+            Image_States (Id) := Valid;
+            return True;
+         end if;
+
+         if Syn.Kind (Of_Tree.all, Value) /= Syn.Name_Reference
+           or else Res.Verdict_Of (Meanings.all, Of_Tree.all, Value)
+                   /= Res.Bound
+         then
+            Image_States (Id) := Invalid;
+            return False;
+         end if;
+
+         declare
+            Source_Id : constant Res.Declaration_Id :=
+              Res.Bound_To (Meanings.all, Of_Tree.all, Value);
+            Reaches_Zero : Boolean := False;
+         begin
+            if Res.Sort_Of (Meanings.all, Source_Id) = Res.Module_Binding
+              and then Landin.Checking.Type_Of (Types.all, Source_Id)
+                       = Ty.Fixed_Array
+              and then Landin.Checking.Array_Length (Types.all, Source_Id)
+                       = Landin.Checking.Array_Length (Types.all, Id)
+              and then Landin.Checking.Array_Element (Types.all, Source_Id)
+                       = Landin.Checking.Array_Element (Types.all, Id)
+            then
+               Reaches_Zero := Validate_Array_Image (Source_Id);
+            end if;
+
+            Image_States (Id) :=
+              (if Reaches_Zero then Valid else Invalid);
+            return Reaches_Zero;
+         end;
+      end Validate_Array_Image;
+
+      procedure Validate_Array_Images is
+      begin
+         for Id in Res.Declaration_Id'(1)
+                   .. Res.Declaration_Id
+                        (Res.Declaration_Count (Meanings.all))
+         loop
+            if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
+              and then Landin.Checking.Type_Of (Types.all, Id)
+                       = Ty.Fixed_Array
+            then
+               declare
+                  Reaches_Zero : constant Boolean :=
+                    Validate_Array_Image (Id);
+               begin
+                  pragma Unreferenced (Reaches_Zero);
+               end;
+            end if;
+         end loop;
+      end Validate_Array_Images;
 
       ------------------------------------------------------------
       --  [1940]: a module value is folded, because it cannot trap
@@ -3527,6 +3635,10 @@ package body Landin.Stages.Checking is
             Infer (Id);
          end if;
       end loop;
+
+      --  Module arrays have no run-before-main copy.  Their direct-name image
+      --  chains therefore have to terminate at D10's omitted initializer.
+      Validate_Array_Images;
 
       --  Pass three: the bodies, one tree at a time in source order.
       for Index in 1 .. Source_Count (Context) loop

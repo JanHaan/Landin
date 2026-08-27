@@ -977,6 +977,37 @@ file positive/measurement-of-fixed-arrays/program.ldn tokens 48
   186 187 =
   188 195 alignof
   196 202 packet
+file positive/module-array-initialized-from-source-name/program.ldn tokens 30
+  0 3 row
+  3 4 :
+  5 9 type
+  10 11 =
+  12 13 [
+  13 14 2
+  14 15 ]
+  15 18 u32
+  19 28 row_alias
+  28 29 :
+  30 34 type
+  35 36 =
+  37 40 row
+  122 125 mut
+  126 138 typed_buffer
+  138 139 :
+  140 149 row_alias
+  150 151 =
+  152 158 source
+  159 162 mut
+  163 178 inferred_buffer
+  179 181 :=
+  182 194 typed_buffer
+  195 198 mut
+  199 205 source
+  205 206 :
+  207 208 [
+  208 209 2
+  209 210 ]
+  210 213 u32
 file positive/module-binding-with-no-value-reads-zero/program.ldn tokens 44
   0 5 later
   5 6 :
@@ -3414,26 +3445,93 @@ file negative/missing-then/program.ldn tokens 25
   61 63 if
   64 67 end
   68 69 f
-file negative/module-array-initializer-not-enabled/program.ldn tokens 19
+file negative/module-array-initial-image-cycle/program.ldn tokens 18
+  0 3 mut
+  4 9 first
+  9 10 :
+  11 12 [
+  12 13 2
+  13 14 ]
+  14 17 u32
+  18 19 =
+  20 26 second
+  27 30 mut
+  31 37 second
+  37 38 :
+  39 40 [
+  40 41 2
+  41 42 ]
+  42 45 u32
+  46 47 =
+  48 53 first
+file negative/module-array-initializer-non-name-refused/program.ldn tokens 18
   0 6 source
   6 7 :
   8 9 [
   9 10 2
   10 11 ]
   11 14 u32
-  16 19 mut
-  20 32 typed_buffer
-  32 33 :
-  34 35 [
-  35 36 2
-  36 37 ]
-  37 40 u32
-  41 42 =
-  43 49 source
-  50 53 mut
-  54 69 inferred_buffer
-  70 72 :=
-  73 79 source
+  15 18 mut
+  19 30 destination
+  30 31 :
+  32 33 [
+  33 34 2
+  34 35 ]
+  35 38 u32
+  39 40 =
+  41 47 source
+  47 48 [
+  48 49 0
+  49 50 ]
+file negative/module-array-initializer-shape-mismatch/program.ldn tokens 48
+  0 13 length_source
+  13 14 :
+  15 16 [
+  16 17 3
+  17 18 ]
+  18 21 u32
+  22 33 bool_source
+  33 34 :
+  35 36 [
+  36 37 2
+  37 38 ]
+  38 42 bool
+  44 47 mut
+  48 60 wrong_length
+  60 61 :
+  62 63 [
+  63 64 2
+  64 65 ]
+  65 68 u32
+  69 70 =
+  71 84 length_source
+  85 88 mut
+  89 102 wrong_element
+  102 103 :
+  104 105 [
+  105 106 2
+  106 107 ]
+  107 110 u32
+  111 112 =
+  113 124 bool_source
+  188 191 mut
+  192 203 cycle_short
+  203 204 :
+  205 206 [
+  206 207 2
+  207 208 ]
+  208 211 u32
+  212 213 =
+  214 224 cycle_long
+  225 228 mut
+  229 239 cycle_long
+  239 240 :
+  241 242 [
+  242 243 3
+  243 244 ]
+  244 247 u32
+  248 249 =
+  250 261 cycle_short
 file negative/module-fold-no-type-holds/program.ldn tokens 7
   0 4 over
   4 5 :

@@ -1411,9 +1411,11 @@ package body Landin.Stages.Lowering is
          Filling := IR.Item_For (Unit.all, Id);
          Slots := No_Slots;
 
-         --  [0670]'s state: D10 zeroes it and the checker refused every
-         --  written value of one, so its block carries no value at all and
-         --  its storage is described by the fields the item was given.
+         --  Aggregate state has no runtime-producing value.  D10 zeroes a
+         --  struct, while R2.20 has proved that every direct-name module array
+         --  image chain terminates at a D10-zeroed array.  Each declaration
+         --  still owns a distinct datum whose storage is described by the
+         --  fields or shape the item was given, so its block carries no value.
          if Held in Ty.Aggregate | Ty.Fixed_Array then
             Open (Fresh (Of_Tree, Node, Res.Program_Scope));
             IR.Emit_Leave (Unit.all, Filling, IR.No_Value, Site);
