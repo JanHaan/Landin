@@ -1332,8 +1332,9 @@ package body Landin.Stages.Checking is
       end Is_Direct_Array_Name;
 
       --  D41 is a direct-binding slice; D42 adds one ordinary scalar field or
-      --  fixed-array element selected immediately from that storage.  Nested
-      --  subobjects and named returns remain separate contextual positions.
+      --  fixed-array element selected immediately from that storage.  D43 adds
+      --  a direct named return, but not one of its subobjects.  Nested
+      --  subobjects remain separate contextual positions.
       function Is_Direct_Binding_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
@@ -1355,8 +1356,16 @@ package body Landin.Stages.Checking is
       function Is_Zeroed_Scalar_Place
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
       is
+         Is_Direct_Named_Return : constant Boolean :=
+           Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+           and then Res.Sort_Of
+                      (Meanings.all,
+                       Res.Bound_To (Meanings.all, Of_Tree, Node))
+                    = Res.Named_Return;
       begin
          return Is_Direct_Binding_Name (Of_Tree, Node)
+           or else Is_Direct_Named_Return
            or else
              (Syn.Kind (Of_Tree, Node)
                 in Syn.Member_Selection | Syn.Element_Index
@@ -2689,10 +2698,11 @@ package body Landin.Stages.Checking is
                      return;
                   end if;
 
-                  --  D41/D42: a mutable scalar binding or an ordinary scalar
-                  --  field selected from one supplies the contextual type for
-                  --  `zeroed`.  Check_Place has already resolved aliases and
-                  --  refused immutable or invalid destinations.
+                  --  D41--D43: a mutable scalar binding, an ordinary scalar
+                  --  subobject selected from one, or a direct named return
+                  --  supplies the contextual type for `zeroed`.  Check_Place
+                  --  has already resolved aliases and refused immutable or
+                  --  invalid destinations.
                   if Wants in Ty.Scalar_Name
                     and then Is_Zeroed_Scalar_Place (Of_Tree, Place)
                     and then Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal

@@ -1,0 +1,20 @@
+word: type = u64
+truth: type = bool
+
+number: () -> (result: word) =
+    result = zeroed
+    return
+end number
+
+flag: () -> (result: truth) =
+    result = zeroed
+    return
+end flag
+
+public main: () -> (code: i32) =
+    if number() == 0 and not flag() then
+        code = 42
+    else
+        code = 1
+    end if
+end main

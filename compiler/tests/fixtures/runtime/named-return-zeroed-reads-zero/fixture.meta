@@ -1,0 +1,6 @@
+class: runtime
+summary: scalar named-return zeroed assignments return integer zero and false
+constructs: 0040, 0080, 0190, 0340, 0350, 0540, 1740, 1760, 1770, 1795, 1800, 1810, 1900
+program: main.ldn
+status: 42
+targets: linux-x86-64

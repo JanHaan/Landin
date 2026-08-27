@@ -1,0 +1,5 @@
+class: positive
+summary: D43 gives complete zeroed assignment the scalar named-return type
+constructs: 0540, 1770, 1800, 1810, 1900
+program: program.ldn
+targets: linux-x86-64, macos-arm64

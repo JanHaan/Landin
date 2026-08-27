@@ -1,3 +1,0 @@
-f: () -> (result: u32) =
-    result = zeroed
-end f

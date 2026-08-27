@@ -2598,9 +2598,10 @@ checker and lowering cases pin both storage kinds, alias resolution, typed
 constants, ordinary stores and local assignment state. A positive fixture covers
 both destinations, a focused negative retains immutability, and the Linux x86-64
 runtime fixture overwrites nonzero integer and true bool values and reads zero and
-false back. D42 separately governs scalar field and element subobjects. Inferred
-initialization, named returns, nested/general contexts and every other scalar
-`zeroed` use remain refused; no general scalar value was admitted.
+false back. D42 separately governs scalar field and element subobjects, and D43
+separately governs a scalar named return. Inferred initialization, nested/general
+contexts and every other scalar `zeroed` use remain refused; no general scalar
+value was admitted.
 
 D42 admits `zeroed` as the complete right-hand side of assignment to an ordinary
 scalar struct field or fixed-array element selected immediately from a mutable
@@ -2619,6 +2620,20 @@ read back both scalar kinds, count one computed index evaluation, and retain the
 ordinary out-of-bounds trap. D41 remains the direct-binding rule; nested
 subobjects, named returns and general scalar `zeroed` values were not admitted.
 
+D43 admits `zeroed` as the complete right-hand side of assignment to a scalar
+named return. Its declared type may be an alias chain and must resolve to an
+enabled scalar; it supplies false for `bool` or typed integer zero. The ordinary
+place check and assignment flow remain in force, so successful completion marks
+the named return assigned for [0930], and explicit or implicit `return` follows
+the existing load and `Leave` path. Lowering reuses D10's `Truth` or `Number` and
+the named return's ordinary frame-slot `Store`, without new IR or backend work.
+Public checker and lowering cases pin alias resolution, definite assignment and
+the existing store path. `positive/named-return-zeroed-assignment` covers both
+scalar kinds, and `runtime/named-return-zeroed-reads-zero` reads both returned
+values on Linux x86-64. D39--D42's contexts are unchanged; invalid destinations,
+named-return subobjects, inferred initialization and nested/general uses remain
+refused, and no general scalar `zeroed` value was admitted.
+
 What is still refused: array initializers other than D21's direct storage name,
 D23/D24's explicitly typed local and module literal, D25/D26's inferred local
 and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D35's
@@ -2626,9 +2641,9 @@ counted inferred local and module repetition, D34's explicitly typed local and
 module repetition and D36/D38's explicitly typed local and module mixed
 repetition; array assignments other than D20's direct storage name, D29's literal,
 D30's `zeroed`, D32's repetition and D37's mixed-prefix repetition; general
-whole-array value positions; inferred scalar initialization, named-return and
-nested-subobject scalar assignment, nested/general scalar and every other `zeroed`
-[0540] context beyond D27/D28/D30/D39/D40/D41/D42; inferred initialization,
+whole-array value positions; inferred scalar initialization, named-return
+subobject and nested-subobject scalar assignment, nested/general scalar and every
+other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43; inferred initialization,
 nested and general-value mixed-prefix
 repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
@@ -2639,7 +2654,7 @@ Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
-which is what lets D27/D28/D30's surrounding array and D39--D42's scalar be zeroed
+which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
 at all. Every element this kernel admits is a scalar and every scalar has one, so the check is
 vacuous today; it stops being vacuous when a pointer can be an element, because
 [0540] gives a pointer no zero image and there is no null to stand for one.
