@@ -1,5 +1,5 @@
 class: positive
-summary: D46 admits direct and aliased array-field structs as zeroed module state
+summary: D48 indexes direct and aliased array-field module state while the containing image stays zeroed
 constructs: 0520, 0670, 0750, 1740, 1830
 program: program.ldn
 targets: linux-x86-64, macos-arm64

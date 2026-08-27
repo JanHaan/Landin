@@ -1,0 +1,6 @@
+class: runtime
+summary: D48 traps a computed local array-field store before forming its address
+constructs: 0520, 0580, 0670, 0750, 1810, 1820, 1950
+program: main.ldn
+traps: yes
+targets: linux-x86-64

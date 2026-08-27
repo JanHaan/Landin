@@ -7,9 +7,15 @@ end holder
 public main: () -> (code: i32) =
     mut local: holder
     local.tag = 7
+    local.words[0] = 700
+    local.words[1] = 1
+    at: usize = 1
+    inc local.words[at]
     local.tail = 701
 
-    if local.tag == 7 and local.tail == 701 then
+    if local.tag == 7 and local.words[0] == 700
+      and local.words[at] == 2 and local.tail == 701
+    then
         code = 42
     else
         code = 1

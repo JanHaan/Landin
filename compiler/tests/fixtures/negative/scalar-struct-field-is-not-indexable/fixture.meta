@@ -1,0 +1,6 @@
+class: negative
+summary: D48 refuses indexing a scalar field without an assignment cascade
+constructs: 0520, 0670, 0750, 1810, 1820
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

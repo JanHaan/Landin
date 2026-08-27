@@ -138,6 +138,13 @@ package body Landin.IR.Dump is
                   return Lead & " slot "
                          & Trimmed
                              (Slot_Id'Image (Slot_Of (Of_Unit, Item, Value)))
+                         & (if Element_Field_Of (Of_Unit, Item, Value) = 0
+                            then ""
+                            else " field "
+                              & Trimmed
+                                  (Natural'Image
+                                     (Element_Field_Of
+                                        (Of_Unit, Item, Value))))
                          & Operands (Item, Value);
                end if;
 
@@ -146,6 +153,13 @@ package body Landin.IR.Dump is
                begin
                   return Lead & " datum " & Trimmed (Item_Id'Image (D))
                          & " " & Item_Named (D)
+                         & (if Element_Field_Of (Of_Unit, Item, Value) = 0
+                            then ""
+                            else " field "
+                              & Trimmed
+                                  (Natural'Image
+                                     (Element_Field_Of
+                                        (Of_Unit, Item, Value))))
                          & Operands (Item, Value);
                end;
 

@@ -1,6 +1,6 @@
 class: negative
-summary: D47 admits the local cell but refuses its array field without an extra definite-assignment report
+summary: D48 keeps the local array field itself refused and requires an indexed element to be assigned
 constructs: 0520, 0670, 0750, 1740, 1810, 1820
 program: program.ldn
-codes: L0304, L0304
+codes: L0304, L0302
 targets: linux-x86-64, macos-arm64

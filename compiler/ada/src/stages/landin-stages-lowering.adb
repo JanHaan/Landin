@@ -732,30 +732,43 @@ package body Landin.Stages.Lowering is
                declare
                   From : constant Syn.Node_Id :=
                     Syn.Target_Of (Of_Tree, Node);
+                  Nested : constant Boolean :=
+                    Syn.Kind (Of_Tree, From) = Syn.Member_Selection;
+                  Named : constant Syn.Node_Id :=
+                    (if Nested then Syn.Target_Of (Of_Tree, From) else From);
                   Means : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, From);
+                    Res.Bound_To (Meanings.all, Of_Tree, Named);
+                  Field : constant Natural :=
+                    (if Nested
+                     then Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, From)
+                     else 0);
                begin
                   if Res.Sort_Of (Meanings.all, Means)
                      = Res.Local_Binding
                   then
-                     if Is_Constant_Index (Of_Tree, Node) then
+                     if Is_Constant_Index (Of_Tree, Node)
+                       and then not Nested
+                     then
                         return IR.Emit_Load_Slot_Field
                                  (Unit.all, Filling,
-                                  Slot_For (Of_Tree, From, Means),
+                                  Slot_For (Of_Tree, Named, Means),
                                   Constant_Index (Of_Tree, Node),
                                   Scalar_At (Of_Tree, Node), Site);
                      end if;
 
                      return IR.Emit_Load_Slot_Element
                               (Unit.all, Filling,
-                               Slot_For (Of_Tree, From, Means),
+                               Slot_For (Of_Tree, Named, Means),
                                Lower_Expression
                                  (Of_Tree, Syn.Index_Of (Of_Tree, Node),
                                   Scope),
-                               Scalar_At (Of_Tree, Node), Site);
+                               Scalar_At (Of_Tree, Node), Site,
+                               Field => Field);
                   end if;
 
-                  if Is_Constant_Index (Of_Tree, Node) then
+                  if Is_Constant_Index (Of_Tree, Node) and then not Nested
+                  then
                      return IR.Emit_Load_Field
                               (Unit.all, Filling,
                                IR.Item_For (Unit.all, Means),
@@ -768,7 +781,8 @@ package body Landin.Stages.Lowering is
                             IR.Item_For (Unit.all, Means),
                             Lower_Expression
                               (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope),
-                            Scalar_At (Of_Tree, Node), Site);
+                            Scalar_At (Of_Tree, Node), Site,
+                            Field => Field);
                end;
 
             when Syn.Member_Selection =>
@@ -1051,7 +1065,11 @@ package body Landin.Stages.Lowering is
                function Index_For (Place : Syn.Node_Id) return IR.Value_Id is
                begin
                   if Syn.Kind (Of_Tree, Place) /= Syn.Element_Index
-                    or else Is_Constant_Index (Of_Tree, Place)
+                    or else
+                      (Is_Constant_Index (Of_Tree, Place)
+                       and then Syn.Kind
+                                  (Of_Tree, Syn.Target_Of (Of_Tree, Place))
+                                /= Syn.Member_Selection)
                   then
                      return IR.No_Value;
                   end if;
@@ -1065,25 +1083,38 @@ package body Landin.Stages.Lowering is
                   return IR.Value_Id
                is
                   From : Syn.Node_Id;
+                  Named : Syn.Node_Id;
                   Means : Res.Declaration_Id;
+                  Field : Natural;
                begin
                   if Index = IR.No_Value then
                      return Lower_Expression (Of_Tree, Place, Scope);
                   end if;
 
                   From := Syn.Target_Of (Of_Tree, Place);
-                  Means := Res.Bound_To (Meanings.all, Of_Tree, From);
+                  Named :=
+                    (if Syn.Kind (Of_Tree, From) = Syn.Member_Selection
+                     then Syn.Target_Of (Of_Tree, From)
+                     else From);
+                  Means := Res.Bound_To (Meanings.all, Of_Tree, Named);
+                  Field :=
+                    (if Syn.Kind (Of_Tree, From) = Syn.Member_Selection
+                     then Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, From)
+                     else 0);
                   if Res.Sort_Of (Meanings.all, Means) = Res.Local_Binding
                   then
                      return IR.Emit_Load_Slot_Element
                               (Unit.all, Filling,
-                               Slot_For (Of_Tree, From, Means),
-                               Index, Scalar_At (Of_Tree, Place), Site);
+                               Slot_For (Of_Tree, Named, Means),
+                               Index, Scalar_At (Of_Tree, Place), Site,
+                               Field => Field);
                   end if;
 
                   return IR.Emit_Load_Element
                            (Unit.all, Filling, IR.Item_For (Unit.all, Means),
-                            Index, Scalar_At (Of_Tree, Place), Site);
+                            Index, Scalar_At (Of_Tree, Place), Site,
+                            Field => Field);
                end Read_Place;
 
                procedure Write
@@ -1093,39 +1124,55 @@ package body Landin.Stages.Lowering is
                is
                   --  [1810]'s place is [1820]'s selection, so a field is
                   --  written where the binding holding it is named.
-                  Named : constant Syn.Node_Id :=
-                    (if Syn.Kind (Of_Tree, Place)
-                        in Syn.Member_Selection | Syn.Element_Index
+                  Selected : constant Syn.Node_Id :=
+                    (if Syn.Kind (Of_Tree, Place) = Syn.Element_Index
                      then Syn.Target_Of (Of_Tree, Place)
                      else Place);
+                  Named : constant Syn.Node_Id :=
+                    (if Syn.Kind (Of_Tree, Selected) = Syn.Member_Selection
+                     then Syn.Target_Of (Of_Tree, Selected)
+                     elsif Syn.Kind (Of_Tree, Place) = Syn.Member_Selection
+                     then Syn.Target_Of (Of_Tree, Place)
+                     else Selected);
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
                   if Syn.Kind (Of_Tree, Place) = Syn.Element_Index then
-                     if Res.Sort_Of (Meanings.all, Means)
-                        = Res.Local_Binding
-                     then
-                        if Index = IR.No_Value then
-                           IR.Emit_Store_Slot_Field
+                     declare
+                        Field : constant Natural :=
+                          (if Syn.Kind (Of_Tree, Selected)
+                                = Syn.Member_Selection
+                           then Landin.Checking.Field_Index
+                                  (Types.all, Of_Tree, Selected)
+                           else 0);
+                     begin
+                        if Res.Sort_Of (Meanings.all, Means)
+                           = Res.Local_Binding
+                        then
+                           if Index = IR.No_Value then
+                              IR.Emit_Store_Slot_Field
+                                (Unit.all, Filling,
+                                 Slot_For (Of_Tree, Named, Means),
+                                 Constant_Index (Of_Tree, Place),
+                                 Value, Site);
+                           else
+                              IR.Emit_Store_Slot_Element
+                                (Unit.all, Filling,
+                                 Slot_For (Of_Tree, Named, Means),
+                                 Index, Value, Site, Field => Field);
+                           end if;
+                        elsif Index = IR.No_Value then
+                           IR.Emit_Store_Field
                              (Unit.all, Filling,
-                              Slot_For (Of_Tree, Named, Means),
+                              IR.Item_For (Unit.all, Means),
                               Constant_Index (Of_Tree, Place), Value, Site);
                         else
-                           IR.Emit_Store_Slot_Element
+                           IR.Emit_Store_Element
                              (Unit.all, Filling,
-                              Slot_For (Of_Tree, Named, Means),
-                              Index, Value, Site);
+                              IR.Item_For (Unit.all, Means),
+                              Index, Value, Site, Field => Field);
                         end if;
-                     elsif Index = IR.No_Value then
-                        IR.Emit_Store_Field
-                          (Unit.all, Filling,
-                           IR.Item_For (Unit.all, Means),
-                           Constant_Index (Of_Tree, Place), Value, Site);
-                     else
-                        IR.Emit_Store_Element
-                          (Unit.all, Filling, IR.Item_For (Unit.all, Means),
-                           Index, Value, Site);
-                     end if;
+                     end;
                      return;
                   end if;
 

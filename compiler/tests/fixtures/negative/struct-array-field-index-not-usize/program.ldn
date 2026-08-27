@@ -1,0 +1,9 @@
+holder: type = struct
+    row: [2]u8
+end holder
+
+state: holder
+
+at: (i: u32) -> (r: u8) =
+    r = state.row[i]
+end at

@@ -1,0 +1,18 @@
+holder: type = struct
+    tag: u8
+    row: [2]u32
+end holder
+
+state: holder
+
+at: (i: usize) -> (r: u32) =
+    r = state.row[i]
+end at
+
+public main: () -> (code: i32) =
+    if at(2) == 0 then
+        code = 1
+    else
+        code = 2
+    end if
+end main

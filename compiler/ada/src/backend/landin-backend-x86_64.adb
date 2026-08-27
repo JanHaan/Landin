@@ -806,17 +806,25 @@ package body Landin.Backend.X86_64 is
                   --  unsigned comparison, trap on index >= length, and only
                   --  then scale it and add it to the array's base address.
                   --  D22 lets the base be a module datum's symbol or a
-                  --  frame slot's %rbp-relative address; the trap and the
-                  --  scaling are the same.
+                  --  frame slot's %rbp-relative address; D48 may move that
+                  --  base to an aggregate field.  The trap and scaling are
+                  --  the same.
                   declare
                      Reaches_Slot : constant Boolean :=
                        Landin.IR.Reaches_A_Slot (Of_Unit, Item, Value);
                      Index : constant Landin.IR.Value_Id :=
                        Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1);
+                     Field : constant Natural :=
+                       Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
                      Length : constant Landin.IR.Element_Total :=
                        (if Reaches_Slot
                         then Landin.IR.Slot_Element_Length
                                (Of_Unit, Item, Value)
+                        elsif Field > 0
+                        then Landin.IR.Nth_Field_Shape
+                               (Of_Unit,
+                                Landin.IR.Datum_Of (Of_Unit, Item, Value),
+                                Positive (Field)).Length
                         else Landin.IR.Array_Length
                                (Of_Unit,
                                 Landin.IR.Datum_Of (Of_Unit, Item, Value)));
@@ -824,6 +832,11 @@ package body Landin.Backend.X86_64 is
                        (if Reaches_Slot
                         then Landin.IR.Slot_Element_Type
                                (Of_Unit, Item, Value)
+                        elsif Field > 0
+                        then Landin.IR.Nth_Field_Shape
+                               (Of_Unit,
+                                Landin.IR.Datum_Of (Of_Unit, Item, Value),
+                                Positive (Field)).Element
                         else Landin.IR.Array_Element
                                (Of_Unit,
                                 Landin.IR.Datum_Of (Of_Unit, Item, Value)));
@@ -854,10 +867,17 @@ package body Landin.Backend.X86_64 is
                         Emit
                           ("leaq "
                            & Cell
-                               (Landin.Backend.Slot_Offset
-                                  (Layout,
-                                   Landin.IR.Slot_Of
-                                     (Of_Unit, Item, Value)))
+                               ((if Field = 0
+                                 then Landin.Backend.Slot_Offset
+                                        (Layout,
+                                         Landin.IR.Slot_Of
+                                           (Of_Unit, Item, Value))
+                                 else Landin.Backend.Field_Offset
+                                        (Of_Unit, Item, Layout,
+                                         Landin.IR.Slot_Of
+                                           (Of_Unit, Item, Value),
+                                         Landin.IR.Part_Position (Field),
+                                         Facts)))
                            & ", %rcx");
                         Emit ("addq %rax, %rcx");
                      else
@@ -865,6 +885,25 @@ package body Landin.Backend.X86_64 is
                               & Symbol
                                   (Landin.IR.Datum_Of (Of_Unit, Item, Value))
                               & "(%rip), %rcx");
+                        if Field > 0 then
+                           declare
+                              At_Offset : constant Landin.Targets.Byte_Count :=
+                                Field_Offset
+                                  (Landin.IR.Datum_Of
+                                     (Of_Unit, Item, Value),
+                                   Landin.IR.Part_Position (Field));
+                           begin
+                              if At_Offset > 0 then
+                                 Emit
+                                   ("movabsq $"
+                                    & Trimmed
+                                        (Landin.Targets.Byte_Count'Image
+                                           (At_Offset))
+                                    & ", %rdx");
+                                 Emit ("addq %rdx, %rcx");
+                              end if;
+                           end;
+                        end if;
                         Emit ("addq %rax, %rcx");
                      end if;
 
