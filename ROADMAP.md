@@ -2694,7 +2694,8 @@ the recorded IR and
 `runtime/struct-array-field-state-scalar-siblings` provide corpus and executable
 evidence. At D46, local storage, initialized module state, whole reads and copies,
 parameters, returns and selection of the array field remain refused; D47 below
-supersedes the local-storage boundary, D48 indexed access and D54 whole copy.
+supersedes the local-storage boundary, D48 indexed access, D54 whole copy and
+D55 the explicitly typed local direct-name initializer.
 Struct fields of struct type and broader nested composition are still outside
 the laid-out kernel.
 
@@ -2718,7 +2719,8 @@ field makes an x86-64 frame unaddressable.
 `runtime/struct-array-field-local-scalar-siblings` provide corpus and executable
 evidence. Local initialization, whole reads and copies, parameters, returns,
 selection of the array field remains refused; D48 below supersedes indexed
-access and D54 whole copy. Struct fields of struct type and broader nested
+access, D54 whole copy and D55 the explicitly typed direct-name local
+initializer. Struct fields of struct type and broader nested
 composition are still outside the laid-out kernel.
 
 D48 admits `s.f[i]` when `s` directly names D46 module state or a D47 local and
@@ -2865,7 +2867,25 @@ self-copy fixture, mutability/flow/initialization/nominal-identity negatives,
 the recorded IR and an executable independence fixture provide evidence.
 Initializers, arguments, returns, discards, operands, bare aggregate reads,
 struct-of-struct fields, fields of elements and nested arrays remain separate
-slices.
+slices; D55 below supersedes only the explicitly typed local direct-name
+initializer boundary.
+
+D55 admits an explicitly typed mutable or immutable local ordinary-struct
+binding initialized from a direct module or earlier local storage name of the
+same nominal type, including aliases and both scalar-only and fixed-array-field
+layouts. The source uses D54's complete whole-read rule, so every scalar bit and
+array-field whole or complete sparse fact must arrive on every path; module
+state remains complete, an internal empty field is vacuous, and [0110] makes a
+same-spelled source denote an outer binding. Lowering allocates the fresh
+aggregate slot and reuses D54's declaration-ordered scalar load/store pairs and
+compact D50 array-field copies into it. No new IR or backend invariant is
+introduced; public checker, lowering and backend seams pin nominal context,
+fresh storage and 64/32-bit field addresses. The positive module/local/alias/
+self-shadow fixture, source-completeness, contextual-form and nominal-identity
+negatives, the recorded IR and an executable independence fixture provide
+evidence. Inferred
+local and all module struct initializers, non-name values, `zeroed`, struct
+literals, calls, returns and general aggregate values remain separate slices.
 
 What is still refused: array initializers other than D21's direct storage name
 and D51's selected field for a local binding,
@@ -2885,9 +2905,10 @@ repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`
 operands
-other than D14's direct name and D31's literal; and initialized local or module
-state, general whole values, parameters or returns of a struct with an aggregate
-field beyond D54's contextual whole copy, plus selection or whole-place use of
+other than D14's direct name and D31's literal; and struct initialization other
+than D55's explicitly typed local direct-name form, general whole values,
+parameters or returns of a struct with an aggregate field beyond D54's
+contextual whole copy, plus selection or whole-place use of
 its array field beyond D48's indexed
 elements, D49's contextual clear, D50's contextual copy endpoints, D51's
 local initializer source, D52's contextual literal destination and D53's
@@ -2932,7 +2953,9 @@ destination while keeping repetition and every general-value boundary pinned.
 D53 migrated D32/D37's contextual repetition destination while keeping
 initializers and every general-value boundary pinned. D54 migrated contextual
 whole copy of the containing struct while keeping initializers, calls, returns
-and every general-value boundary pinned.
+and every general-value boundary pinned. D55 migrated the explicitly typed
+local direct-name struct initializer while keeping inference, module images,
+calls, returns and every general-value boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

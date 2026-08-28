@@ -1,0 +1,13 @@
+left: type = struct
+    row: [2]u32
+end left
+
+right: type = struct
+    row: [2]u32
+end right
+
+source: right
+
+copy: () -> none =
+    destination: left = source
+end copy

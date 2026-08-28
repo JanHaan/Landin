@@ -1,0 +1,6 @@
+class: negative
+summary: D55 keeps non-name struct initializer forms outside the typed local snapshot
+constructs: 0410, 0540, 0670, 0710, 0750, 1810
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

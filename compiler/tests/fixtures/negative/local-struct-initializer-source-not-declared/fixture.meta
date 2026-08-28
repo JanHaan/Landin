@@ -1,0 +1,6 @@
+class: negative
+summary: D55 leaves an unresolved local struct initializer source to name resolution
+constructs: 0670, 0710, 1810, 1860
+program: program.ldn
+codes: L0201
+targets: linux-x86-64, macos-arm64

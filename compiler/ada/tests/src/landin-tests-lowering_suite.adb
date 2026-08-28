@@ -2619,6 +2619,95 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Array_Bearing_Struct_Copy_Uses_Compact_Field_Operations;
 
+   --  D55 lowers a typed local struct initializer as D54's declaration-
+   --  ordered field run into the fresh aggregate slot.  No aggregate value
+   --  or initializer-specific opcode crosses the IR boundary.
+   procedure Local_Struct_Initializer_Copies_Into_Its_Fresh_Slot
+     (Item : in out Landin.Testing.Context);
+
+   procedure Local_Struct_Initializer_Copies_Into_Its_Fresh_Slot
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "    tail: u16" & LF
+         & "end holder" & LF
+         & "source: holder" & LF
+         & "copy: () -> none =" & LF
+         & "    first: holder = source" & LF
+         & "    second: holder = first" & LF
+         & "end copy" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "module and local names initialize fresh struct slots");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := 2;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Slot_Count (Unit, Routine), 2,
+            "each initialized struct owns one aggregate slot");
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, Routine), 11,
+            "two five-operation field copies precede the return");
+
+         for Copy in 0 .. 1 loop
+            declare
+               First : constant IR.Value_Id := IR.Value_Id (5 * Copy + 1);
+               Array_Copy : constant IR.Value_Id := First + 2;
+               Source : constant IR.Storage :=
+                 IR.Source_Of (Unit, Routine, Array_Copy);
+               Destination : constant IR.Storage :=
+                 IR.Destination_Of (Unit, Routine, Array_Copy);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  IR.Op_Of (Unit, Routine, First) = IR.Load_Field
+                  and then IR.Op_Of (Unit, Routine, First + 1)
+                             = IR.Store_Field
+                  and then IR.Op_Of (Unit, Routine, Array_Copy)
+                             = IR.Copy_Array
+                  and then IR.Source_Field_Of
+                             (Unit, Routine, Array_Copy) = 2
+                  and then IR.Element_Field_Of
+                             (Unit, Routine, Array_Copy) = 2
+                  and then IR.Op_Of (Unit, Routine, First + 3)
+                             = IR.Load_Field
+                  and then IR.Op_Of (Unit, Routine, First + 4)
+                             = IR.Store_Field,
+                  "each initializer copies scalar, array and scalar fields");
+               Landin.Testing.Check
+                 (Item,
+                  Destination.Kind = IR.Frame_Slot
+                  and then Destination.Slot = IR.Slot_Id (Copy + 1)
+                  and then
+                    (if Copy = 0
+                     then Source.Kind = IR.Module_Datum
+                     else Source.Kind = IR.Frame_Slot
+                       and then Source.Slot = 1),
+                  "the source feeds the initializer's own fresh slot");
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the initializer field runs verify");
+      end;
+   end Local_Struct_Initializer_Copies_Into_Its_Fresh_Slot;
+
    ------------------------------------------------------------------
    --  A named aggregate measurement
    ------------------------------------------------------------------
@@ -3099,6 +3188,9 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "array-bearing struct copy uses compact field operations",
          Array_Bearing_Struct_Copy_Uses_Compact_Field_Operations'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "local struct initializer copies to fresh slot",
+         Local_Struct_Initializer_Copies_Into_Its_Fresh_Slot'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "a struct measurement carries its scalar fields",

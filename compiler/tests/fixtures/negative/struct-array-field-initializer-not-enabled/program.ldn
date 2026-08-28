@@ -4,8 +4,3 @@ end holder
 
 state: holder
 typed: holder = state
-
-local: () -> none =
-    source: holder
-    typed_local: holder = source
-end local
