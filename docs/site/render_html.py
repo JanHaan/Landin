@@ -47,6 +47,7 @@ HERE = Path(__file__).resolve().parent
 SITE = HERE / "site"
 
 VERSION_LINE = "specification 0.1.0"
+LANDING_LINE = "built from scratch"
 REPO = "https://git.sr.ht/~sinnfrei/landin"
 #  The canonical host.  pages.sr.ht serves 701.dev as well and
 #  cannot redirect between the two, so every page says which of
@@ -1788,7 +1789,7 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
     extra = ('<script type="application/ld+json">'
              + json.dumps(ld, ensure_ascii=False) + "</script>")
     return page("Landin — a systems language from 32 KB to 32 TB",
-                VERSION_LINE, "Landin", hero, chr(10).join(body), nav,
+                LANDING_LINE, "Landin", hero, chr(10).join(body), nav,
                 "the repository", logo=True, out="index.html",
                 description=summary, extra=extra)
 
