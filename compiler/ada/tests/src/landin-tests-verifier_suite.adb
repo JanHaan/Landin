@@ -1648,6 +1648,46 @@ package body Landin.Tests.Verifier_Suite is
              Length         => 1,
              Cases          => 1,
              Payloads_First => 1),
+            Cases => [(First => 1, Count => 1)],
+            Payloads =>
+              [(Kind    => IR.Array_Field_Shape,
+                Element => Landin.Types.U8,
+                Length  => 3,
+                others  => <>)]);
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Selected,
+                     Offset => 0, Count => 1, Value => 1)),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Hybrid,
+                     Offset => 0, Count => 1, Value => 7)),
+            Landin.Types.Folded_Array'(1 => 5));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Nothing_Wrong,
+            "a selected case carries a compact array payload image");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind           => IR.Variant_Field_Shape,
+             Element        => Landin.Types.U8,
+             Length         => 1,
+             Cases          => 1,
+             Payloads_First => 1),
             Cases => [(First => 0, Count => 0)],
             Payloads => IR.No_Field_Shapes);
          IR.Set_Aggregate_Image

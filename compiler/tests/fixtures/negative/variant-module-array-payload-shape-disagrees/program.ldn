@@ -1,0 +1,9 @@
+packet: type = struct
+    kind: variant
+        row: (values: [3]u8)
+    end kind
+end packet
+
+short: packet = packet(kind: row(values: [1, 2]))
+counted: packet = packet(kind: row(values: [2 of 1]))
+wrong: packet = packet(kind: row(values: [true, 2, 3]))

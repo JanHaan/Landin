@@ -527,6 +527,8 @@ package body Landin.IR.Dump is
                                      Variant_Payload_Image_Of
                                        (Of_Unit, Id, F, Payload);
                               begin
+                                 Unbounded.Set_Unbounded_String
+                                   (Rendered, "");
                                  if Leaf.Kind = Scalar_Field_Shape then
                                     Put
                                       ("    payload "
@@ -542,6 +544,46 @@ package body Landin.IR.Dump is
                                        & Trimmed
                                            (Natural'Image (Payload))
                                        & " zeroed");
+                                 else
+                                    if Payload_Image.Form
+                                      in Finite | Hybrid
+                                    then
+                                       for P in 1 .. Payload_Image.Count loop
+                                          if P /= 1 then
+                                             Unbounded.Append
+                                               (Rendered, " ");
+                                          end if;
+                                          Unbounded.Append
+                                            (Rendered,
+                                             Trimmed
+                                               (Landin.Types.Folded'Image
+                                                  (Nth_Variant_Field_Element
+                                                     (Of_Unit, Id, F,
+                                                      Payload,
+                                                      Part_Position (P)))));
+                                       end loop;
+                                    end if;
+
+                                    if Payload_Image.Form
+                                      in Repeated | Hybrid
+                                    then
+                                       if Payload_Image.Form = Hybrid then
+                                          Unbounded.Append (Rendered, " ");
+                                       end if;
+                                       Unbounded.Append
+                                         (Rendered,
+                                          "repeat "
+                                          & Trimmed
+                                              (Landin.Types.Folded'Image
+                                                 (Payload_Image.Value)));
+                                    end if;
+
+                                    Put
+                                      ("    payload "
+                                       & Trimmed
+                                           (Natural'Image (Payload))
+                                       & " image "
+                                       & Unbounded.To_String (Rendered));
                                  end if;
                               end;
                            end loop;

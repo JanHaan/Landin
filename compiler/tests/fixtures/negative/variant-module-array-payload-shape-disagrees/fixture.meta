@@ -1,0 +1,6 @@
+class: negative
+summary: D82 keeps static variant array payloads at their declared length and element type
+constructs: 0520, 0530, 0560, 0580, 0670, 0680, 0700, 0710, 1790, 1795, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301, L0301, L0301

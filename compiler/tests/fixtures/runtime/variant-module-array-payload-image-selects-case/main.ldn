@@ -1,0 +1,33 @@
+packet: type = struct
+    prefix: u8
+    kind: variant
+        empty |
+        arrays: (finite: [3]u8, repeated: [3]u16, hybrid: [3]u8)
+    end kind
+    tail: u8
+end packet
+
+mut origin: packet = packet(
+    prefix: 5,
+    kind: arrays(
+        finite: [11, 13, 17],
+        repeated: [3 of 19],
+        hybrid: [23, of 29]
+    ),
+    tail: 31
+)
+mut copy: packet = origin
+
+public main: () -> (code: i32) =
+    origin.kind = empty
+    mut selected: bool = false
+    match copy.kind
+        empty: selected = false
+        arrays: selected = true
+    end match
+    if selected and copy.prefix == 5 and copy.tail == 31 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
