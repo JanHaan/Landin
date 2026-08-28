@@ -2996,12 +2996,30 @@ and relates it to the first; L0310 owns omitted fields. A trailing `of zeroed`
 fills unnamed scalar fields with typed zero/false and clears unnamed fixed-array
 fields compactly. Named array fields, general `of expression`, module images,
 inference, call-shaped construction, the all-fill spelling and general
-aggregate values remain refused. Named fields evaluate and commit in source
+aggregate values remain refused in D64; D65 below admits the existing
+contextual scalar-zero and fixed-array assignment forms at a label. Named
+fields evaluate and commit in source
 order, then the fill runs in declaration order; successful assignment records
 the existing complete aggregate definite-assignment facts. Parser, checker and
 lowering seams, focused diagnostics, positive/runtime fixtures and regenerated
 catalogue, construct, token and IR records provide evidence. No new IR,
 verifier, backend, layout or static-image invariant is introduced.
+
+D65 makes each D64 label the contextual destination of the field it names. A
+scalar label accepts D42's typed `zeroed`; a fixed-array label accepts D52's
+literal, D53's full or mixed repetition, D49's `zeroed`, and D50's direct or
+selected same-shape array source. Each form retains its existing immediate
+store, once-then-fill, compact copy or compact clear rule in label source order,
+before D64's declaration-order trailing fill. The checker reuses the existing
+shape, count, element and incoming-state checks, and lowering reuses the
+field-qualified D49--D53 operation family. Focused positive, runtime, mismatch,
+source-assignment, immutable-root and nested-value fixtures plus checker and
+lowering seams and regenerated token/IR records provide evidence. General
+`of expression` remains refused because one node cannot carry several field
+types without conversion or re-evaluation; inferred literals wait for
+construction, module literals wait for D60's nonzero image carrier, and the
+all-fill synonym and general aggregate values remain refused. No grammar,
+syntax, diagnostic, IR, verifier, backend, target or layout invariant changes.
 
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
@@ -3031,7 +3049,7 @@ contextual field literal and D53's contextual field repetition; general
 whole-array value positions; inferred scalar initialization, named-return
 subobject and nested-subobject scalar `zeroed` assignment beyond D62,
 nested/general scalar and every
-other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49/D57/D58/D59/D62; inferred initialization,
+other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49/D57/D58/D59/D62/D65; inferred initialization,
 nested and general-value mixed-prefix
 repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
@@ -3041,11 +3059,11 @@ other than D14's direct name and D31's literal; and struct initialization other
 than D55/D56's explicitly typed or inferred local direct-storage-name forms,
 D57's explicitly typed local zero image, D59's explicitly typed module zero
 image, D60's explicitly typed module direct-storage-name image chain and D61's
-inferred module direct-storage-name image chain, and D64's explicitly typed
-local labelled literal,
+inferred module direct-storage-name image chain, and D64/D65's explicitly typed
+local labelled literal and contextual field values,
 general whole values,
-module and inferred struct literals, named array-field values, general or
-all-field fills and call-shaped construction beyond D64's contextual literal,
+module and inferred struct literals, general or all-field fills and call-shaped
+construction beyond D64/D65's contextual literal,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
 its array field beyond D48's indexed
@@ -3121,6 +3139,9 @@ migration slice.
 D64 migrated the nonempty labelled spelling to contextual local initialization
 and whole assignment while keeping call-shaped construction, the all-fill
 spelling, module images, inference and every general aggregate value pinned.
+D65 migrated scalar `zeroed` and D49--D53's fixed-array forms into each written
+label while keeping heterogeneous fills, module images, inference, construction
+and every general aggregate value pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

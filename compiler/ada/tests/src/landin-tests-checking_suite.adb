@@ -2736,6 +2736,8 @@ package body Landin.Tests.Checking_Suite is
          & "    local: holder = (ready: true, tail: 5, tag: 3,"
          & " of zeroed)" & LF
          & "    state = (tail: 7, tag: 4, ready: false, of zeroed)" & LF
+         & "    contextual: holder = (row: [8, 9], ready: zeroed,"
+         & " tag: 6, tail: 10)" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -2775,7 +2777,10 @@ package body Landin.Tests.Checking_Suite is
                     (Types.all, Of_Tree.all,
                      Landin.Syntax.Nth_Field_Value
                        (Of_Tree.all, Node, 1)),
-                  (if Seen = 1 then 3 else 4),
+                  (case Seen is
+                      when 1 => 3,
+                      when 2 => 4,
+                      when others => 2),
                   "the first written label keeps its layout identity");
                Landin.Testing.Check_Equal
                  (Item,
@@ -2783,14 +2788,50 @@ package body Landin.Tests.Checking_Suite is
                     (Types.all, Of_Tree.all,
                      Landin.Syntax.Nth_Field_Value
                        (Of_Tree.all, Node, 2)),
-                  (if Seen = 1 then 4 else 1),
+                  (case Seen is
+                      when 1 => 4,
+                      when 2 => 1,
+                      when others => 3),
                   "the second written label keeps its layout identity");
+
+               if Seen = 3 then
+                  declare
+                     Row : constant Landin.Syntax.Node_Id :=
+                       Landin.Syntax.Value_Of
+                         (Of_Tree.all,
+                          Landin.Syntax.Nth_Field_Value
+                            (Of_Tree.all, Node, 1));
+                     Ready : constant Landin.Syntax.Node_Id :=
+                       Landin.Syntax.Value_Of
+                         (Of_Tree.all,
+                          Landin.Syntax.Nth_Field_Value
+                            (Of_Tree.all, Node, 2));
+                  begin
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Row)
+                            = Landin.Types.Fixed_Array
+                        and then Landin.Checking.Array_Length
+                          (Types.all, Of_Tree.all, Row) = 2
+                        and then Landin.Checking.Array_Element
+                          (Types.all, Of_Tree.all, Row)
+                            = Landin.Types.Usize,
+                        "the array label carries field two's whole shape");
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Ready)
+                            = Landin.Types.Bool,
+                        "the zeroed label carries field three's scalar type");
+                  end;
+               end if;
             end if;
          end loop;
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Seen, 2, "both contextual struct literals were checked");
+        (Item, Seen, 3, "all contextual struct literals were checked");
    end Struct_Literals_Carry_Body_And_Field_Identities;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
@@ -2889,7 +2930,7 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "struct array field storage classes are enabled",
          Struct_Array_Field_Storage_Classes_Are_Enabled'Access);
       Landin.Testing.Register
-        (Into, "checking", "struct literals carry body and field identities",
+        (Into, "checking", "struct literals carry body and field contexts",
          Struct_Literals_Carry_Body_And_Field_Identities'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",

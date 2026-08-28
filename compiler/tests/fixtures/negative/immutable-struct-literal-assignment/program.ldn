@@ -1,9 +1,10 @@
 point: type = struct
     x: i32
+    row: [2]u8
 end point
 
 state: point
 
 f: () -> none =
-    state = (x: 1)
+    state = (row: [1, 2], x: 1)
 end f
