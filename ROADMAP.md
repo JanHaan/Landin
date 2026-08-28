@@ -2788,7 +2788,8 @@ executable evidence. Module initializers from a field, general field values,
 literals and repetitions into a field, whole copies of the containing struct,
 parameters, returns, fields of elements, struct-of-struct fields and nested
 arrays remain separate slices; D51 below supersedes the local-initializer
-boundary and D52 supersedes the literal-destination boundary alone.
+boundary, D52 the literal-destination boundary and D53 the repetition-
+destination boundary.
 
 D51 admits a directly selected fixed-array field as the source of either D21
 local initializer spelling. The explicitly typed form requires the written D17
@@ -2804,7 +2805,8 @@ source-order shadowing, shape and definite-assignment negatives, the recorded
 IR, and an executable independence fixture provide corpus evidence. Module
 initializers from a field, general field values, literals and repetitions into
 a field, containing-struct copies, parameters, returns, fields of elements,
-struct-of-struct fields and nested arrays remain separate slices.
+struct-of-struct fields and nested arrays remain separate slices; D52 and D53
+below supersede the literal and repetition destination boundaries.
 
 D52 admits D29's nonempty contextual array literal as the destination value of
 a directly selected fixed-array field on D46 module state or a D47 local. The
@@ -2817,11 +2819,33 @@ element, leaving D29's direct-array `Store_Field` run unchanged and adding no
 IR operation. The verifier and backend reuse the checked field shape and derive
 wide module and 32/64-bit local addresses from target facts. Public checker,
 lowering and backend cases pin the seams. Context, mutability, incoming-state
-and branch negatives, the repetition refusal, recorded IR, and an executable
-source-order and sibling-independence fixture provide corpus evidence. Full and
-mixed repetition into a field, module initializers, general field values,
-containing-struct copies, parameters, returns, fields of elements,
-struct-of-struct fields and nested arrays remain separate slices.
+and branch negatives, recorded IR, and an executable source-order and sibling-
+independence fixture provide corpus evidence. Full and mixed repetition into a
+field, module initializers, general field values, containing-struct copies,
+parameters, returns, fields of elements, struct-of-struct fields and nested
+arrays remain separate slices; D53 below supersedes the repetition boundary.
+
+D53 admits D32's full and D37's mixed repetition assignment to a directly
+selected fixed-array field on D46 module state or a D47 local. The field
+supplies the exact nonzero length and scalar element type; [1900] still makes
+root mutability the first check. Source reads use incoming definite-assignment
+state. Full repetition evaluates its scalar once; mixed repetition stores its
+prefix left to right, evaluates the repeated suffix once, and normal completion
+establishes only the binding-and-field whole fact. Lowering gives `Fill_Array`
+the declaration-order destination field identity: full fill starts at one,
+while mixed prefixes reuse D52's constant-index `Store_Element` sequence and
+the suffix fill starts at `k + 1`. Direct D32/D37 operations remain field zero.
+The verifier checks an aggregate field exists and is an array before reading
+its shape, then reuses the existing start and scalar-type rules. The backend
+derives the field address, suffix offset, count and width from target facts;
+x86-64 register-forms a D18-wide module field and uses the L0504-bounded 64/32-
+bit frame displacement. Public checker, IR, verifier, lowering and backend
+cases pin the seams. Count/prefix/type/mutability/incoming-state/branch
+negatives, the recorded IR, and an executable once/order/sibling-independence
+fixture provide corpus and executable evidence. Initializers from field
+repetition, general field values, containing-struct copies, parameters,
+returns, fields of elements, struct-of-struct fields and nested arrays remain
+separate slices.
 
 What is still refused: array initializers other than D21's direct storage name
 and D51's selected field for a local binding,
@@ -2832,7 +2856,7 @@ module repetition and D36/D38's explicitly typed local and module mixed
 repetition; array assignments other than D20's direct storage name, D29's literal,
 D30's `zeroed`, D32's repetition, D37's mixed-prefix repetition, D49's
 contextual field clear, D50's contextual field copy endpoints and D52's
-contextual field literal; general
+contextual field literal and D53's contextual field repetition; general
 whole-array value positions; inferred scalar initialization, named-return
 subobject and nested-subobject scalar `zeroed` assignment, nested/general scalar and every
 other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49; inferred initialization,
@@ -2845,7 +2869,8 @@ other than D14's direct name and D31's literal; and initialized local or module
 state, whole values, parameters or returns of a struct with an aggregate
 field, plus selection or whole-place use of its array field beyond D48's indexed
 elements, D49's contextual clear, D50's contextual copy endpoints, D51's
-local initializer source and D52's contextual literal destination.
+local initializer source, D52's contextual literal destination and D53's
+contextual repetition destination.
 Each is its own slice, and the remaining
 value slices need the initialization work D21 did not settle.
 
@@ -2883,6 +2908,8 @@ copies and every general-value boundary pinned. D51 migrated the local
 initializer source in both D21 spellings while keeping module initializers and
 every general-value boundary pinned. D52 migrated D29's contextual literal
 destination while keeping repetition and every general-value boundary pinned.
+D53 migrated D32/D37's contextual repetition destination while keeping
+initializers and every general-value boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

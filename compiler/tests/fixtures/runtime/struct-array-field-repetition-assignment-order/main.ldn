@@ -1,0 +1,48 @@
+holder: type = struct
+    tag: u8
+    row: [4]usize
+    sibling: [2]usize
+    tail: u16
+end holder
+
+mut calls: usize = 0
+mut state: holder
+
+next: (base: usize) -> (value: usize) =
+    calls = calls + 1
+    value = base + calls
+end next
+
+public main: () -> (code: i32) =
+    state.tag = 7
+    state.sibling[0] = 90
+    state.sibling[1] = 91
+    state.tail = 701
+    state.row = [4 of next(10)]
+    state.row = [next(state.row[1]), of next(state.row[0])]
+
+    mut local: holder
+    local.tag = 8
+    local.sibling[0] = 92
+    local.sibling[1] = 93
+    local.tail = 702
+    local.row = [of next(20)]
+    local.row = [next(local.row[1]), next(local.row[0]), of next(local.row[1])]
+
+    if calls == 7
+      and state.tag == 7
+      and state.row[0] == 13 and state.row[1] == 16
+      and state.row[2] == 16 and state.row[3] == 16
+      and state.sibling[0] == 90 and state.sibling[1] == 91
+      and state.tail == 701
+      and local.tag == 8
+      and local.row[0] == 29 and local.row[1] == 35
+      and local.row[2] == 42 and local.row[3] == 42
+      and local.sibling[0] == 92 and local.sibling[1] == 93
+      and local.tail == 702
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
