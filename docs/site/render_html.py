@@ -1703,9 +1703,12 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
             '<section class="landing" id="what-it-looks-like">'
             '<h2>what it looks like</h2>'
             f'{chr(10).join(shown)}'
-            '<p class="more">Every construct is numbered, and the '
-            'numbers do not move. <a href="tour.html">Read the tour</a> '
-            'for the rest.</p></section>')
+            '<p class="more">These samples come from the tour and show the '
+            'designed language. The status above says which subset refine '
+            'accepts today; <a href="examples.html">the running examples</a> '
+            'show complete programs from that kernel. Every construct is '
+            'numbered, and the numbers do not move. '
+            '<a href="tour.html">Read the tour</a> for the rest.</p></section>')
 
     #  Four ways in, because the documents answer different questions and
     #  a reader who starts in the wrong one finds it slow going.

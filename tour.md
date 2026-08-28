@@ -497,8 +497,10 @@ is a property of the access path, not of the number.
 ### [0480] There is no null
 
 There is no null. "maybe a pointer" is an ordinary union of
-an atom and a pointer type; the compiler represents it as a
-plain pointer with 0 for the empty case.
+an atom and a pointer type. With one atom, the compiler represents
+it as a plain pointer with 0 for the empty case. The spelling does
+not decide how a union of several atoms and a pointer is laid out;
+R2.50 measures that case against R2.20's variant representation.
 ```landin
 none_found: atom
 maybe_ptr: type = none_found | ptr mut u32

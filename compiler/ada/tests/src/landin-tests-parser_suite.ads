@@ -1,7 +1,7 @@
 --  R1.40's parser, held to the corpus from both sides.
 --
 --  `check.py` derives every program under `fixtures/positive` from the
---  grammar in `tour.md` and refuses every one under `negative`.  This
+--  grammar in `spec.md` and refuses every one under `negative`.  This
 --  suite runs the parser over the same tree and requires the same verdict,
 --  which is what makes the grammar and the implementation one agreement
 --  rather than two opinions: a program the grammar derives and the parser
