@@ -28,6 +28,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
    use type Landin.Platform.Termination;
 
    Fixture_Root : constant String := "../tests/fixtures";
+   Selected     : Unbounded.Unbounded_String;
+
+   procedure Select_Fixture (Path : String) is
+   begin
+      Selected := Unbounded.To_Unbounded_String (Path);
+   end Select_Fixture;
 
    --  Mirrors compiler/ada/landin_common.gpr, so a harness run from
    --  compiler/ada finds the executable the same build produced.
@@ -92,6 +98,161 @@ package body Landin.Tests.Fixture_Execution_Suite is
       return Result;
    end Split;
 
+   function Label_Of (Item : Fixture) return String is
+     (Class_Directory (Class (Item)) & "/" & Name (Item));
+
+   function Codes_In (Text : String) return String;
+
+   function Codes_In (Text : String) return String is
+      Found : Unbounded.Unbounded_String;
+      Mark  : constant String := "error[";
+   begin
+      for Start in Text'Range loop
+         if Start + Mark'Length + 5 <= Text'Last
+           and then Text (Start .. Start + Mark'Length - 1) = Mark
+           and then Text (Start + Mark'Length + 5) = ']'
+         then
+            if Unbounded.Length (Found) > 0 then
+               Unbounded.Append (Found, ", ");
+            end if;
+
+            Unbounded.Append
+              (Found,
+               Text (Start + Mark'Length .. Start + Mark'Length + 4));
+         end if;
+      end loop;
+
+      return Unbounded.To_String (Found);
+   end Codes_In;
+
+   procedure Run_Recorded
+     (Case_Item : Fixture;
+      Host      : in out Landin.Platform.Filesystem'Class;
+      Program   : String;
+      Item      : in out Landin.Testing.Context);
+
+   procedure Run_Recorded
+     (Case_Item : Fixture;
+      Host      : in out Landin.Platform.Filesystem'Class;
+      Program   : String;
+      Item      : in out Landin.Testing.Context)
+   is
+      Label    : constant String := Label_Of (Case_Item);
+      Where    : constant String :=
+        Fixture_Root & "/" & Label & "/" & Expect (Case_Item);
+      Expected : Unbounded.Unbounded_String;
+      Read     : Landin.Platform.Read_Status;
+      Runner   : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Outcome  : Landin.Platform.Tool_Result;
+   begin
+      Host.Read_File (Where, Expected, Read);
+
+      if Read /= Landin.Platform.Read_Ok then
+         Landin.Testing.Fail
+           (Item, Label & ": expected file is unreadable");
+         return;
+      end if;
+
+      Runner.Run
+        (Program   => Program,
+         Arguments => Split (Args (Case_Item)),
+         Result    => Outcome,
+         Capture   =>
+           (if Stream (Case_Item) = Output
+            then Landin.Platform.Output_Only
+            else Landin.Platform.Merged));
+
+      Landin.Testing.Check_Equal
+        (Item,
+         Unbounded.To_String (Outcome.Output),
+         Unbounded.To_String (Expected),
+         Label & ": recorded "
+         & (if Stream (Case_Item) = Output
+            then "standard output" else "merged output"));
+      Landin.Testing.Check
+        (Item, Outcome.Ended = Landin.Platform.Exited,
+         Label & ": refine returned a status");
+      Landin.Testing.Check_Equal
+        (Item, Outcome.Exit_Code, Status (Case_Item),
+         Label & ": recorded exit status");
+   end Run_Recorded;
+
+   procedure Emit_Positive
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Program   : String;
+      Item      : in out Landin.Testing.Context);
+
+   procedure Emit_Positive
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Program   : String;
+      Item      : in out Landin.Testing.Context)
+   is
+      Label   : constant String := "positive/" & Name (Case_Item);
+      Source  : constant String :=
+        Fixture_Root & "/positive/" & Name (Case_Item) & "/"
+        & Landin.Testing.Fixtures.Program (Case_Item);
+      Written : constant String :=
+        Output_Directory & "positive-" & Name (Case_Item) & ".s";
+      Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Outcome : Landin.Platform.Tool_Result;
+      Args    : Landin.Platform.Path_List;
+   begin
+      Landin.Platform.Add (Args, Source);
+      Landin.Platform.Add (Args, "--emit=asm");
+      Landin.Platform.Add (Args, "-o");
+      Landin.Platform.Add (Args, Written);
+
+      Runner.Run (Program, Args, Outcome, Landin.Platform.Merged);
+
+      if Outcome.Ended /= Landin.Platform.Exited then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": refine was stopped before it could emit" & ASCII.LF
+            & Unbounded.To_String (Outcome.Output));
+      elsif Outcome.Exit_Code /= 0 then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": accepted but not emitted" & ASCII.LF
+            & Unbounded.To_String (Outcome.Output));
+      else
+         Landin.Testing.Check
+           (Item, Host.Exists (Written), Label & ": the assembly was written");
+      end if;
+   end Emit_Positive;
+
+   procedure Run_Negative
+     (Case_Item : Fixture;
+      Program   : String;
+      Item      : in out Landin.Testing.Context);
+
+   procedure Run_Negative
+     (Case_Item : Fixture;
+      Program   : String;
+      Item      : in out Landin.Testing.Context)
+   is
+      Label   : constant String := "negative/" & Name (Case_Item);
+      Source  : constant String :=
+        Fixture_Root & "/" & Label & "/"
+        & Landin.Testing.Fixtures.Program (Case_Item);
+      Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Outcome : Landin.Platform.Tool_Result;
+      Args    : Landin.Platform.Path_List;
+   begin
+      Landin.Platform.Add (Args, Source);
+      Runner.Run (Program, Args, Outcome, Landin.Platform.Merged);
+
+      Landin.Testing.Check
+        (Item, Outcome.Ended = Landin.Platform.Exited,
+         Label & ": refine returned a status");
+      Landin.Testing.Check_Equal
+        (Item, Outcome.Exit_Code, 1, Label & ": the program was refused");
+      Landin.Testing.Check_Equal
+        (Item, Codes_In (Unbounded.To_String (Outcome.Output)),
+         Codes (Case_Item), Label & ": the report carries its pinned codes");
+   end Run_Negative;
+
    procedure Recorded_Expectations_Hold
      (Item : in out Landin.Testing.Context);
 
@@ -120,58 +281,10 @@ package body Landin.Tests.Fixture_Execution_Suite is
       for Index in 1 .. Count (Found) loop
          declare
             Case_Item : constant Fixture := Nth (Found, Index);
-            Label     : constant String :=
-              Class_Directory (Class (Case_Item)) & "/" & Name (Case_Item);
          begin
             if Expect (Case_Item) /= "" then
                Ran := Ran + 1;
-
-               declare
-                  Where    : constant String :=
-                    Fixture_Root & "/"
-                    & Class_Directory (Class (Case_Item)) & "/"
-                    & Name (Case_Item) & "/" & Expect (Case_Item);
-                  Expected : Unbounded.Unbounded_String;
-                  Read     : Landin.Platform.Read_Status;
-                  Runner   :
-                    Landin.Platform.Native.Tools.Native_Tool_Runner;
-                  Outcome  : Landin.Platform.Tool_Result;
-               begin
-                  Host.Read_File (Where, Expected, Read);
-
-                  if Read /= Landin.Platform.Read_Ok then
-                     Landin.Testing.Fail
-                       (Item, Label & ": expected file is unreadable");
-                  else
-                     Runner.Run
-                       (Program   => Program,
-                        Arguments => Split (Args (Case_Item)),
-                        Result    => Outcome,
-                        Capture   =>
-                          (if Stream (Case_Item) = Output
-                           then Landin.Platform.Output_Only
-                           else Landin.Platform.Merged));
-
-                     Landin.Testing.Check_Equal
-                       (Item,
-                        Unbounded.To_String (Outcome.Output),
-                        Unbounded.To_String (Expected),
-                        Label & ": recorded "
-                        & (if Stream (Case_Item) = Output
-                           then "standard output" else "merged output"));
-                     --  A `refine` a signal killed has no status, and
-                     --  the field beside it holds zero, so a fixture
-                     --  expecting zero would be satisfied by a compiler
-                     --  that died after writing the right bytes.
-                     Landin.Testing.Check
-                       (Item,
-                        Outcome.Ended = Landin.Platform.Exited,
-                        Label & ": refine returned a status");
-                     Landin.Testing.Check_Equal
-                       (Item, Outcome.Exit_Code, Status (Case_Item),
-                        Label & ": recorded exit status");
-                  end if;
-               end;
+               Run_Recorded (Case_Item, Host, Program, Item);
             end if;
          end;
       end loop;
@@ -279,48 +392,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
               and then Landin.Testing.Fixtures.Program (Case_Item) /= ""
             then
                Ran := Ran + 1;
-
-               declare
-                  Label : constant String :=
-                    "positive/" & Name (Case_Item);
-                  Source : constant String :=
-                    Fixture_Root & "/positive/" & Name (Case_Item) & "/"
-                    & Landin.Testing.Fixtures.Program (Case_Item);
-                  Written : constant String :=
-                    Output_Directory & "positive-" & Name (Case_Item)
-                    & ".s";
-                  Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
-                  Outcome : Landin.Platform.Tool_Result;
-                  Args    : Landin.Platform.Path_List;
-               begin
-                  Landin.Platform.Add (Args, Source);
-                  Landin.Platform.Add (Args, "--emit=asm");
-                  Landin.Platform.Add (Args, "-o");
-                  Landin.Platform.Add (Args, Written);
-
-                  Runner.Run (Program, Args, Outcome,
-                              Landin.Platform.Merged);
-
-                  if Outcome.Ended /= Landin.Platform.Exited then
-                     Landin.Testing.Fail
-                       (Item,
-                        Label & ": refine was stopped before it could"
-                        & " emit" & ASCII.LF
-                        & Unbounded.To_String (Outcome.Output));
-                  elsif Outcome.Exit_Code /= 0 then
-                     --  An accepted program that cannot be emitted is
-                     --  either a backend gap or a compiler defect, and
-                     --  both are this case's business to surface.
-                     Landin.Testing.Fail
-                       (Item,
-                        Label & ": accepted but not emitted" & ASCII.LF
-                        & Unbounded.To_String (Outcome.Output));
-                  else
-                     Landin.Testing.Check
-                       (Item, Host.Exists (Written),
-                        Label & ": the assembly was written");
-                  end if;
-               end;
+               Emit_Positive (Case_Item, Host, Program, Item);
             end if;
          end;
       end loop;
@@ -340,6 +412,106 @@ package body Landin.Tests.Fixture_Execution_Suite is
    --  failure carries refine's own report, which is where L0500's note
    --  says which toolchain would satisfy it.
    ------------------------------------------------------------------
+
+   procedure Run_Runtime
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Program   : String;
+      Item      : in out Landin.Testing.Context);
+
+   procedure Run_Runtime
+     (Case_Item : Fixture;
+      Host      : Landin.Platform.Filesystem'Class;
+      Program   : String;
+      Item      : in out Landin.Testing.Context)
+   is
+      Label   : constant String := "runtime/" & Name (Case_Item);
+      Source  : constant String :=
+        Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
+        & Landin.Testing.Fixtures.Program (Case_Item);
+      Built   : constant String :=
+        Output_Directory & "runtime-" & Name (Case_Item);
+      Runner  : Landin.Platform.Native.Tools.Native_Tool_Runner;
+      Compile : Landin.Platform.Tool_Result;
+      Outcome : Landin.Platform.Tool_Result;
+      Args    : Landin.Platform.Path_List;
+      Nothing : Landin.Platform.Path_List;
+   begin
+      Landin.Platform.Add (Args, Source);
+
+      --  [1840]'s module scope is every file compiled together, so a
+      --  fixture that claims something about it hands `refine` more than
+      --  one source.
+      declare
+         Rest  : constant String := With_Sources (Case_Item);
+         First : Integer := Rest'First;
+
+         procedure Add_One (Named : String);
+
+         procedure Add_One (Named : String) is
+            Trimmed : constant String :=
+              Ada.Strings.Fixed.Trim (Named, Ada.Strings.Both);
+         begin
+            if Trimmed /= "" then
+               Landin.Platform.Add
+                 (Args,
+                  Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
+                  & Trimmed);
+            end if;
+         end Add_One;
+      begin
+         for Index in Rest'Range loop
+            if Rest (Index) = ',' then
+               Add_One (Rest (First .. Index - 1));
+               First := Index + 1;
+            end if;
+         end loop;
+
+         if First <= Rest'Last then
+            Add_One (Rest (First .. Rest'Last));
+         end if;
+      end;
+
+      Landin.Platform.Add (Args, "--emit=exe");
+      Landin.Platform.Add (Args, "-o");
+      Landin.Platform.Add (Args, Built);
+
+      Runner.Run (Program, Args, Compile, Landin.Platform.Merged);
+
+      if Compile.Ended /= Landin.Platform.Exited then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": refine was stopped before it could produce an"
+            & " executable" & ASCII.LF
+            & Unbounded.To_String (Compile.Output));
+      elsif Compile.Exit_Code /= 0 then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": refine could not produce an executable" & ASCII.LF
+            & Unbounded.To_String (Compile.Output));
+      elsif not Host.Exists (Built) then
+         Landin.Testing.Fail
+           (Item,
+            Label & ": refine reported success and wrote no executable at "
+            & Built);
+      else
+         Runner.Run (Built, Nothing, Outcome, Landin.Platform.Merged);
+
+         if Traps (Case_Item) then
+            Landin.Testing.Check
+              (Item, Outcome.Ended = Landin.Platform.Signaled,
+               Label & ": the program trapped rather than returning a"
+               & " status");
+         else
+            Landin.Testing.Check
+              (Item, Outcome.Ended = Landin.Platform.Exited,
+               Label & ": the program returned a status");
+            Landin.Testing.Check_Equal
+              (Item, Outcome.Exit_Code, Status (Case_Item),
+               Label & ": the program's own exit status");
+         end if;
+      end if;
+   end Run_Runtime;
 
    procedure Runtime_Fixtures_Execute
      (Item : in out Landin.Testing.Context);
@@ -368,113 +540,7 @@ package body Landin.Tests.Fixture_Execution_Suite is
          begin
             if Class (Case_Item) = Runtime then
                Ran := Ran + 1;
-
-               declare
-                  Label : constant String :=
-                    "runtime/" & Name (Case_Item);
-                  Source : constant String :=
-                    Fixture_Root & "/runtime/" & Name (Case_Item) & "/"
-                    & Landin.Testing.Fixtures.Program (Case_Item);
-                  Built : constant String :=
-                    Output_Directory & "runtime-" & Name (Case_Item);
-                  Runner  :
-                    Landin.Platform.Native.Tools.Native_Tool_Runner;
-                  Compile : Landin.Platform.Tool_Result;
-                  Outcome : Landin.Platform.Tool_Result;
-                  Args    : Landin.Platform.Path_List;
-                  Nothing : Landin.Platform.Path_List;
-               begin
-                  Landin.Platform.Add (Args, Source);
-
-                  --  [1840]'s module scope is every file compiled
-                  --  together, so a fixture that claims something about
-                  --  it hands `refine` more than one.
-                  declare
-                     Rest  : constant String :=
-                       With_Sources (Case_Item);
-                     First : Integer := Rest'First;
-
-                     procedure Add_One (Named : String);
-
-                     procedure Add_One (Named : String) is
-                        Trimmed : constant String :=
-                          Ada.Strings.Fixed.Trim
-                            (Named, Ada.Strings.Both);
-                     begin
-                        if Trimmed /= "" then
-                           Landin.Platform.Add
-                             (Args,
-                              Fixture_Root & "/runtime/"
-                              & Name (Case_Item) & "/" & Trimmed);
-                        end if;
-                     end Add_One;
-                  begin
-                     for Index in Rest'Range loop
-                        if Rest (Index) = ',' then
-                           Add_One (Rest (First .. Index - 1));
-                           First := Index + 1;
-                        end if;
-                     end loop;
-
-                     if First <= Rest'Last then
-                        Add_One (Rest (First .. Rest'Last));
-                     end if;
-                  end;
-
-                  Landin.Platform.Add (Args, "--emit=exe");
-                  Landin.Platform.Add (Args, "-o");
-                  Landin.Platform.Add (Args, Built);
-
-                  Runner.Run (Program, Args, Compile,
-                              Landin.Platform.Merged);
-
-                  --  How the compile ended is asked before what it
-                  --  returned, for the reason above: reading the zero
-                  --  beside Signaled would send a stale executable from an
-                  --  earlier run to be executed as though it were this
-                  --  fixture's answer.
-                  if Compile.Ended /= Landin.Platform.Exited then
-                     Landin.Testing.Fail
-                       (Item,
-                        Label & ": refine was stopped before it could"
-                        & " produce an executable" & ASCII.LF
-                        & Unbounded.To_String (Compile.Output));
-                  elsif Compile.Exit_Code /= 0 then
-                     Landin.Testing.Fail
-                       (Item,
-                        Label & ": refine could not produce an executable"
-                        & ASCII.LF
-                        & Unbounded.To_String (Compile.Output));
-                  elsif not Host.Exists (Built) then
-                     Landin.Testing.Fail
-                       (Item,
-                        Label & ": refine reported success and wrote no"
-                        & " executable at " & Built);
-                  else
-                     Runner.Run (Built, Nothing, Outcome,
-                                 Landin.Platform.Merged);
-
-                     --  [1960] makes a trap's encoding unstable, so a
-                     --  trapping fixture is held to having ended without
-                     --  a status and to nothing further: not to a signal
-                     --  number, and not to which operation trapped.
-                     if Traps (Case_Item) then
-                        Landin.Testing.Check
-                          (Item,
-                           Outcome.Ended = Landin.Platform.Signaled,
-                           Label & ": the program trapped rather than"
-                           & " returning a status");
-                     else
-                        Landin.Testing.Check
-                          (Item,
-                           Outcome.Ended = Landin.Platform.Exited,
-                           Label & ": the program returned a status");
-                        Landin.Testing.Check_Equal
-                          (Item, Outcome.Exit_Code, Status (Case_Item),
-                           Label & ": the program's own exit status");
-                     end if;
-                  end if;
-               end;
+               Run_Runtime (Case_Item, Host, Program, Item);
             end if;
          end;
       end loop;
@@ -484,6 +550,59 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Check
         (Item, Ran >= 1, "at least one runtime fixture was found");
    end Runtime_Fixtures_Execute;
+
+   procedure Selected_Fixture_Executes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Selected_Fixture_Executes
+     (Item : in out Landin.Testing.Context)
+   is
+      Host    : Landin.Platform.Native.Native_Filesystem;
+      Found   : Catalogue;
+      Program : constant String := Refine_Path;
+      Wanted  : constant String := Unbounded.To_String (Selected);
+      Ran     : Natural := 0;
+   begin
+      if not Host.Exists (Program) then
+         Landin.Testing.Fail
+           (Item,
+            "refine was not found at " & Program
+            & "; run the harness through scripts/test.sh");
+         return;
+      end if;
+
+      Discover (Found, Fixture_Root, Host);
+      Landin.Testing.Check_Equal
+        (Item, Problem_Count (Found), 0,
+         "the fixture tree parses before the selection is run");
+
+      for Index in 1 .. Count (Found) loop
+         declare
+            Case_Item : constant Fixture := Nth (Found, Index);
+         begin
+            if Label_Of (Case_Item) = Wanted then
+               Ran := Ran + 1;
+
+               if Expect (Case_Item) /= "" then
+                  Run_Recorded (Case_Item, Host, Program, Item);
+               elsif Class (Case_Item) = Positive_Program then
+                  Emit_Positive (Case_Item, Host, Program, Item);
+               elsif Class (Case_Item) = Negative_Program then
+                  Run_Negative (Case_Item, Program, Item);
+               elsif Class (Case_Item) = Runtime then
+                  Run_Runtime (Case_Item, Host, Program, Item);
+               else
+                  Landin.Testing.Fail
+                    (Item, Wanted & ": this fixture class has no focused"
+                     & " execution contract");
+               end if;
+            end if;
+         end;
+      end loop;
+
+      Landin.Testing.Check_Equal
+        (Item, Ran, 1, Wanted & ": exactly one fixture was selected");
+   end Selected_Fixture_Executes;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
@@ -496,6 +615,12 @@ package body Landin.Tests.Fixture_Execution_Suite is
       Landin.Testing.Register
         (Into, "fixture execution", "runtime fixtures execute",
          Runtime_Fixtures_Execute'Access);
+
+      if Unbounded.Length (Selected) > 0 then
+         Landin.Testing.Register
+           (Into, "fixture execution", "selected fixture executes",
+            Selected_Fixture_Executes'Access);
+      end if;
    end Register;
 
 end Landin.Tests.Fixture_Execution_Suite;

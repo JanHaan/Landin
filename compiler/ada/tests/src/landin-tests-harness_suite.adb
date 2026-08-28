@@ -78,6 +78,44 @@ package body Landin.Tests.Harness_Suite is
 
    procedure Failures_Are_Counted (Item : in out Landin.Testing.Context);
 
+   procedure Filters_Select_Exact_Cases
+     (Item : in out Landin.Testing.Context);
+
+   procedure Filters_Select_Exact_Cases
+     (Item : in out Landin.Testing.Context)
+   is
+      Scratch    : Landin.Testing.Registry;
+      Transcript : Unbounded.Unbounded_String;
+      Result     : Landin.Testing.Summary;
+   begin
+      Landin.Testing.Register
+        (Scratch, "alpha", "one", Always_Passes'Access);
+      Landin.Testing.Register
+        (Scratch, "alpha", "two", Always_Passes'Access);
+      Landin.Testing.Register
+        (Scratch, "beta", "one", Always_Passes'Access);
+
+      Landin.Testing.Run
+        (Scratch, "alpha", "two", Transcript, Result);
+
+      Landin.Testing.Check_Equal
+        (Item, Result.Cases, 1, "one exact case ran");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Transcript), "FILTERED"),
+         "the transcript labels a focused run");
+      Landin.Testing.Check
+        (Item, Contains (Unbounded.To_String (Transcript), "pass  two"),
+         "the selected case is in the transcript");
+      Landin.Testing.Check
+        (Item, not Contains (Unbounded.To_String (Transcript), "beta"),
+         "another suite is absent");
+
+      Landin.Testing.Run
+        (Scratch, "missing", "", Transcript, Result);
+      Landin.Testing.Check_Equal
+        (Item, Result.Cases, 0, "an unknown filter runs nothing");
+   end Filters_Select_Exact_Cases;
+
    procedure Failures_Are_Counted (Item : in out Landin.Testing.Context) is
       Scratch    : Landin.Testing.Registry;
       Transcript : Unbounded.Unbounded_String;
@@ -199,6 +237,9 @@ package body Landin.Tests.Harness_Suite is
       Landin.Testing.Register
         (Into, "harness", "failures are counted",
          Failures_Are_Counted'Access);
+      Landin.Testing.Register
+        (Into, "harness", "filters select exact cases",
+         Filters_Select_Exact_Cases'Access);
       Landin.Testing.Register
         (Into, "harness", "assertions can fail",
          Assertions_Can_Fail'Access);

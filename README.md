@@ -112,6 +112,11 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
 ./scripts/test.sh
 ```
 
+For checksum-safe focused feedback during an edit, use
+`./scripts/dev-test.sh --suite=NAME`, `--case=SUITE/NAME`, or
+`--fixture=CLASS/NAME`. These runs say `FILTERED`; the no-argument command
+above remains the complete suite.
+
 On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
 
 `refine --identify` will tell you what it is. Giving it one or more `.ldn`
