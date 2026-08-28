@@ -53,7 +53,7 @@ replaced.
 | `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the eleven scalar names, their widths, and ordinary storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Checking` | what type every node and declaration has, including a nominal aggregate's identity and scalar/fixed-array/unfolded-variant/depth-one ordinary runtime layout | decide a rule, or ask the host for a width |
-| `Landin.IR` | the target-neutral instructions: items, slots, blocks, values, an aggregate datum, slot or measurement's scalar, compact fixed-array, unfolded variant and depth-one nested ordinary shapes, declaration-order folded aggregate images with compact per-field finite, repeated, hybrid or selected-case payload segments, parent/child identities on depth-one scalar fields and fixed-array element or contextual whole-array operations, field/case/payload identities on variant element loads and stores, fills and array-copy destinations, compound-storage clears, variant tag/payload loads, selection, scalar payload writes and whole-part copies | hold a scope tree, name a machine, ask a width, or hold an offset or padding byte |
+| `Landin.IR` | the target-neutral instructions: items, slots, blocks, values, an aggregate datum, slot or measurement's scalar, compact fixed-array, unfolded variant and depth-one nested ordinary shapes, declaration-order folded aggregate images with compact per-field finite, repeated, hybrid or selected-case payload segments, parent/child identities on depth-one contextual ordinary-child, scalar-field and fixed-array operations, field/case/payload identities on variant element loads and stores, fills and array-copy destinations, compound-storage clears, variant tag/payload loads, selection, scalar payload writes and whole-part copies | hold a scope tree, name a machine, ask a width, or hold an offset or padding byte |
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit and target-aware fit of its static images | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where direct and depth-one scalar or fixed-array leaves sit inside an aggregate datum or slot, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
@@ -121,8 +121,9 @@ kernel: scalar constants and arithmetic, control flow and calls; module and
 local fixed-array indexing, copying, clearing and filling; and depth-one
 ordinary structs with scalar or fixed-array fields, whole copies and clears,
 compact folded module images, unfolded variant fields with contextual
-construction, inspection and whole copies, and scalar field and fixed-array
-element or contextual whole-array operations through one nested ordinary child. That is every
+construction, inspection and whole copies, plus contextual construction and
+copy of one nested ordinary child and scalar-field, fixed-array-element or
+contextual whole-array operations through it. That is every
 opcode `Landin.IR`
 spells, so the case that dispatches them is exhaustive: a new opcode fails to
 compile rather than raising `Compiler_Defect` at run time. R2.30's internal

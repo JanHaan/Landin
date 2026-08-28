@@ -4892,6 +4892,8 @@ package body Landin.Stages.Checking is
                         declare
                            Got : constant Ty.Type_Kind :=
                              (if Is_Direct_Binding_Name (Of_Tree, Value)
+                                   or else Syn.Kind (Of_Tree, Value)
+                                             = Syn.Member_Selection
                               then Selected_From (Of_Tree, Value)
                               else Synthesise (Of_Tree, Value));
                         begin
