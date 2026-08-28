@@ -1,0 +1,6 @@
+holder: type = struct
+    row: [2]u16
+end holder
+
+source: holder = (row: [1, true])
+copy: holder = (row: source.row)

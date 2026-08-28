@@ -3567,7 +3567,7 @@ Module state is complete under D10, so D16 gains no fact or flow rule. An
 inferred module `name := zeroed`, initialization from another struct name in
 this slice, a struct literal, call, argument, return, discard, operand, nested
 expression and general aggregate value remain refused. D60 later admits the
-typed direct-name static image chain and D66--D69 the typed module labelled
+typed direct-name static image chain and D66--D71 the typed module labelled
 literal. Fields of struct type, fields of elements and nested arrays keep their
 boundaries.
 
@@ -3629,7 +3629,7 @@ not read again for [1940], preserving its owning report without a cascade. An
 inferred module binding in this slice, a non-name initializer, struct literal,
 call, field selection, argument, return, discard, operand, nested expression
 and general aggregate value remain refused. D61 later admits the inferred
-direct-name form and D66--D69 the typed module labelled literal. D55/D56's
+direct-name form and D66--D71 the typed module labelled literal. D55/D56's
 local initializers and D57--D59's zero-image contexts are unchanged. Struct
 fields of struct type, fields of elements and nested arrays keep their
 boundaries.
@@ -3690,14 +3690,14 @@ only visits successfully settled arrays and aggregates.
 At this decision every constructible terminal image was zero. Lowering reused
 the inferred body to record one ordinary aggregate datum, compact field shapes
 and an operandless `Leave`; no finite image, runtime copy, clear, new
-instruction or target offset was introduced. D66--D69 later added
+instruction or target offset was introduced. D66--D71 later added
 target-neutral labelled scalar, finite, repeated and hybrid field images and
 copy those terminal images through the same D60/D61 declaration chain into
 distinct padded objects on 64- and 32-bit descriptions.
 
 A non-name initializer or `zeroed` without a written type, call,
 field selection, argument, return, discard, operand, nested expression and
-general aggregate value remain refused. D64--D68 admit a struct literal only
+general aggregate value remain refused. D64--D71 admit a struct literal only
 in their explicitly typed contextual local, assignment and module-image forms;
 inferred literals and call-shaped construction remain refused. D55/D56's local
 forms and D57--D60's contextual zero and typed module forms are unchanged.
@@ -3814,7 +3814,7 @@ still refuses it. The later literal slice must replace this lookahead with a
 real syntax node and grammar production, teach resolution that field labels are
 not ordinary name references, and migrate these fixtures to positive or
 later-stage evidence. D64 performs that migration and lowers local and
-assignment contexts field by field; D66--D69 add the target-neutral module
+assignment contexts field by field; D66--D71 add the target-neutral module
 static-image representation D60 deferred.
 
 **Why pin the refusal first:** the named before-state separates migration from
@@ -3973,7 +3973,8 @@ it again per field would violate the once-only rule. Inferred literals still
 have no nominal body and wait for [0700]'s construction decision. Module
 literals remain outside this slice; D66 later supplies D60's nonzero aggregate
 image carrier for scalar labels, D67 adds its finite-or-zero array-field form,
-D68 its repeated and hybrid forms, and D69 a direct module-array image source.
+D68 its repeated and hybrid forms, D69 a direct module-array image source, and
+D71 a selected module-array-field source.
 The all-`of`
 spelling remains D63's redundant parser refusal, and general aggregate values
 remain outside this slice.
@@ -4159,8 +4160,8 @@ the second leaves a needless asymmetry with `of zeroed`; and the last two
 violate target neutrality or [1460]. The complete compact carrier with only
 finite and absent producers was chosen. D68 later supplies repetition, and
 D69 follows a direct module-array image. D70 then permits an ordinary module
-array image to take a selected field; the selected-field label itself waits
-for D71's separate evidence.
+array image to take a selected field, and D71 permits a labelled field to take
+another selected field's image.
 
 **Pinned by** the IR, verifier, checker, lowering and backend public-seam cases;
 `positive/module-struct-literal-array-image`;
@@ -4170,7 +4171,6 @@ for D71's separate evidence.
 `negative/module-struct-literal-array-image-storage-read`;
 `negative/module-struct-literal-array-image-out-of-range`;
 `negative/module-struct-literal-array-image-fold-overflow`;
-`negative/module-struct-literal-array-image-forms-not-enabled`;
 `negative/module-struct-literal-empty-array-field-image`; the generated token
 and IR records; and `runtime/module-struct-literal-array-image-is-loaded` on
 Linux x86-64.
@@ -4221,9 +4221,9 @@ recursion or cycle rule is introduced.
 
 A direct module array storage name or selected array field remains L0304 as a
 labelled module image in this slice. D69 later follows the former through
-another datum's finite, repeated, hybrid or absent image; the latter retains
-the standing refusal of a selected field as an ordinary module array
-initializer until D70 supplies that rule. D71 may then reconsider the label.
+another datum's finite, repeated, hybrid or absent image; D70 supplies the
+ordinary module-array initializer rule for the latter, and D71 then admits it
+as a labelled module image too.
 Inferred literals, heterogeneous `of expression`, all-`of`, construction and
 general aggregate values remain refused. No grammar, syntax node, diagnostic
 code, runtime instruction, target fact or layout rule changes.
@@ -4249,8 +4249,7 @@ the last two violate target neutrality or [1460]. All were declined.
 `negative/module-struct-literal-array-image-out-of-range`;
 `negative/module-struct-literal-array-image-fold-overflow`;
 `negative/module-struct-literal-array-repetition-zero-length`;
-`negative/module-struct-literal-array-image-forms-not-enabled`; the generated
-token and IR records; and
+the generated token and IR records; and
 `runtime/module-struct-literal-array-image-is-loaded` on Linux x86-64.
 
 ### D69 — A module array image may fill a labelled fixed-array field
@@ -4276,10 +4275,8 @@ A length, element-type or non-array storage mismatch reports L0301 at the
 source name and relates it to the field label. An unresolved or already refused
 source keeps its existing owner without a second report; a source array-image
 cycle keeps D21's single L0305. A type declaration, selected field or other
-value remains L0304. In particular, `other.row` is not admitted here because
-an ordinary module array initializer still refuses a selected field in this
-slice. D70 moves that boundary for arrays; D71 separately decides whether a
-struct label may reuse it.
+value remains L0304 in this slice. D70 moves that boundary for ordinary module
+arrays, and D71 then lets a struct label reuse that contextual source.
 
 Image resolution visits the named array before gathering the struct image, so
 a forward finite, repeated or hybrid source cannot be mistaken for absent.
@@ -4305,7 +4302,6 @@ declined.
 `negative/module-struct-literal-array-image-copy-shape-mismatch`;
 `negative/module-struct-literal-array-image-copy-source-cycle`;
 `negative/module-struct-literal-array-image-copy-source-refused`;
-`negative/module-struct-literal-array-image-forms-not-enabled`;
 `negative/array-type-name-is-not-storage`; the generated token and IR records;
 and `runtime/module-struct-literal-array-image-copy-is-independent` on Linux
 x86-64.
@@ -4361,15 +4357,82 @@ without inventing a nominal or general value. Admitting only the typed form
 would add no safety or representation boundary. Delaying the whole rule would
 leave D69's reverse dependency artificially one-way. Admitting `other.row` as
 a label inside a struct literal is a second producer and validator edge; D71
-keeps that decision and its evidence separate. All other widenings were
-declined.
+adds that edge with separate cycle and descriptor evidence. All other
+widenings were declined.
 
 **Pinned by** the checker and lowering public-seam cases;
 `positive/module-array-from-struct-field`;
 `negative/module-array-from-struct-field-shape-mismatch`;
 `negative/module-array-from-struct-field-cycle-array-first`;
 `negative/module-array-from-struct-field-cycle-struct-first`;
-`negative/module-array-from-struct-field-source-refused`;
-`negative/module-struct-literal-array-image-forms-not-enabled`; the generated
-token and IR records; and
+`negative/module-array-from-struct-field-source-refused`; the generated token
+and IR records; and
 `runtime/module-array-from-struct-field-is-independent` on Linux x86-64.
+
+### D71 — A labelled fixed-array field takes a selected field's static image
+
+**The tour said** that a module initializer is an image present before the
+entry point [1460], that a fixed array's value is its element sequence [0520],
+and that a struct literal supplies labelled field images [0710]. D65 already
+accepts a selected fixed-array field as the contextual source of a runtime
+label. D69 admits a direct module array as the corresponding static source,
+and D70 lets an ordinary module array take a selected field's static image.
+
+**Chosen:** a fixed-array label in D66's explicitly typed module struct literal
+also accepts `s.f` when `s` directly names a module binding of an ordinary
+struct with a layout and `f` is one of its fixed-array fields with the label's
+exact D17 length and element type. A disagreement reports L0301 at the
+selection and relates it to the label. An unresolved or already refused root
+keeps its existing owner without a second report. A scalar selection, an
+element or nested selection, and a selection rooted at a type declaration
+remain refused. This remains a contextual image source rather than a general
+array or aggregate value.
+
+The destination field receives a copy of the selected field's resolved image:
+D67's finite run, D68's repeated or hybrid form, or the absent zero image. The
+root may be declared later, may itself follow a D60/D61 aggregate image chain,
+and may have received the selected field through D69, D70 or this rule. Each
+declaration owns distinct storage; a later write to the source, destination or
+another image-chain member changes only that storage. All-zero finite and
+hybrid images remain written, while an omitted, `zeroed` or zero-repetition
+field remains absent.
+
+Image validation follows the containing struct before accepting the label.
+The existing per-declaration `Visiting` state therefore also owns a pure
+struct-to-struct selected-field cycle and a cycle mixing D21, D69, D70 and
+D71: [1940]'s L0305 is reported once at the declaration first found revisited,
+and the remaining path becomes invalid silently. A refused source likewise
+does not acquire a second contextual report.
+
+Lowering resolves the source aggregate before reading its field descriptor,
+copies only the finite or hybrid prefix elements carried by that descriptor,
+and re-bases their offset at the destination aggregate's compact element run.
+The same helper copies an aggregate image through D60/D61, so both paths retain
+one canonical offset rule. The aggregate-image setter is still called once;
+the existing verifier rechecks descriptor form, count, offset and target fit,
+and the backend consumes it at D45's placed field offset. No IR, verifier,
+backend, target, grammar, syntax or diagnostic representation changes.
+
+**Why the direct selected field:** D65 already gives the runtime spelling this
+shape and D70 supplies the missing module-array image boundary. Reusing the
+same direct-root, whole-field rule closes the remaining edge between array and
+aggregate datums without making selection a general value.
+
+**The alternatives:** also admit a selected scalar field, an indexed element,
+a nested selection, an inferred struct literal or a general aggregate value;
+or delay the rule. The first three cross D24's static-expression and the
+depth-one storage boundaries, the next two require nominal construction or
+aggregate temporaries, and delay would leave D69/D70's contextual image graph
+artificially incomplete. All were declined.
+
+**Pinned by** the checker and lowering public-seam cases;
+`positive/module-struct-literal-selected-field-image`;
+`negative/module-struct-literal-selected-field-boundary`;
+`negative/module-struct-literal-selected-field-shape-mismatch`;
+`negative/module-struct-literal-selected-field-cycle-first`;
+`negative/module-struct-literal-selected-field-cycle-second`;
+`negative/module-struct-literal-selected-field-mixed-cycle`;
+`negative/module-struct-literal-selected-field-source-refused`; the generated
+token and IR records; and
+`runtime/module-struct-literal-selected-field-image-is-independent` on Linux
+x86-64.

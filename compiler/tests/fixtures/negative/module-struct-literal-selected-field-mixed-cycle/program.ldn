@@ -1,0 +1,7 @@
+holder: type = struct
+    row: [2]u8
+end holder
+
+first: holder = (row: array)
+array := second.row
+second: holder = (row: first.row)

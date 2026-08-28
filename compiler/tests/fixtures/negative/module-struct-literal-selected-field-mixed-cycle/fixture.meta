@@ -1,0 +1,6 @@
+class: negative
+summary: D71 reports one mixed array and struct selected-field image cycle
+constructs: 0520, 0670, 0710, 0750, 1740, 1810, 1820, 1940
+program: program.ldn
+codes: L0305
+targets: linux-x86-64, macos-arm64

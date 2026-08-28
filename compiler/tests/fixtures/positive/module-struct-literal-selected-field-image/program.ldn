@@ -1,0 +1,24 @@
+holder: type = struct
+    finite: [2]u16
+    finite_zero: [2]u16
+    repeated: [3]u8
+    hybrid: [3]u8
+    zero_repeat: [2]u8
+    omitted: [2]u8
+    roundtrip: [2]u16
+end holder
+
+copy: holder =
+    (finite: alias.finite, finite_zero: alias.finite_zero,
+     repeated: alias.repeated, hybrid: alias.hybrid,
+     zero_repeat: alias.zero_repeat, omitted: alias.omitted,
+     roundtrip: alias.roundtrip)
+inferred := copy
+alias: holder = inferred_alias
+inferred_alias := source
+source: holder =
+    (finite: [11, 13], finite_zero: [0, 0], repeated: [of 7],
+     hybrid: [1, of 2], zero_repeat: [of 0], roundtrip: selected,
+     of zeroed)
+selected := seed.finite
+seed: holder = (finite: [29, 31], of zeroed)
