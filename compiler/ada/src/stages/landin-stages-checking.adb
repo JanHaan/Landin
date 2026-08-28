@@ -1896,11 +1896,15 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection then
             declare
                From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
+               Direct : constant Boolean :=
+                 Syn.Kind (Of_Tree, From) = Syn.Name_Reference;
+               Depth_One : constant Boolean :=
+                 Syn.Kind (Of_Tree, From) = Syn.Member_Selection
+                 and then Syn.Kind
+                   (Of_Tree, Syn.Target_Of (Of_Tree, From))
+                     = Syn.Name_Reference;
             begin
-               if Syn.Kind (Of_Tree, From) = Syn.Name_Reference
-                 and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
-                          = Res.Bound
-               then
+               if Direct or else Depth_One then
                   declare
                      Held : constant Ty.Type_Kind :=
                        Selected_From (Of_Tree, From);
@@ -2640,10 +2644,11 @@ package body Landin.Stages.Checking is
                         return Kept (Ty.Ill_Typed);
                      end if;
 
-                     --  D46/D47 admit the containing storage and D48 admits
-                     --  an element only through Indexed_From.  The field by
-                     --  itself is still not a value or whole place.  Refuse it
-                     --  before Field_Type's scalar precondition.
+                     --  D46/D47 admit direct containing storage, D48 admits
+                     --  its element through Indexed_From, and D89 does the
+                     --  same through one ordinary child. The field by itself
+                     --  is still not a value or whole place. Refuse it before
+                     --  Field_Type's scalar precondition.
                      if Landin.Checking.Field_Kind_Of
                           (Types.all, Wrote, Which)
                           = Landin.Checking.Fixed_Array_Field

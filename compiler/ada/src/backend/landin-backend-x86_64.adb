@@ -354,20 +354,23 @@ package body Landin.Backend.X86_64 is
            (Place         : Landin.IR.Storage;
             Field         : Natural;
             Which         : Natural := 0;
-            Payload_Field : Natural := 0)
+            Payload_Field : Natural := 0;
+            Nested        : Natural := 0)
             return Landin.IR.Element_Total;
          function Array_Element_Of
            (Place         : Landin.IR.Storage;
             Field         : Natural;
             Which         : Natural := 0;
-            Payload_Field : Natural := 0)
+            Payload_Field : Natural := 0;
+            Nested        : Natural := 0)
             return Landin.Types.Scalar_Name;
          procedure Storage_Address
            (Place         : Landin.IR.Storage;
             Field         : Natural;
             Register      : String;
             Which         : Natural := 0;
-            Payload_Field : Natural := 0);
+            Payload_Field : Natural := 0;
+            Nested        : Natural := 0);
          function Whole_Clear_Extent
            (Place : Landin.IR.Storage; Field : Natural)
             return Landin.Targets.Byte_Count;
@@ -382,9 +385,15 @@ package body Landin.Backend.X86_64 is
            (Place         : Landin.IR.Storage;
             Field         : Natural;
             Which         : Natural := 0;
-            Payload_Field : Natural := 0) return Landin.IR.Element_Total
+            Payload_Field : Natural := 0;
+            Nested        : Natural := 0) return Landin.IR.Element_Total
          is
          begin
+            if Nested > 0 then
+               return Landin.IR.Nth_Aggregate_Field
+                 (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
+                  Positive (Nested)).Length;
+            end if;
             if Payload_Field > 0 then
                return Landin.IR.Nth_Variant_Case_Field
                  (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
@@ -410,9 +419,15 @@ package body Landin.Backend.X86_64 is
            (Place         : Landin.IR.Storage;
             Field         : Natural;
             Which         : Natural := 0;
-            Payload_Field : Natural := 0) return Landin.Types.Scalar_Name
+            Payload_Field : Natural := 0;
+            Nested        : Natural := 0) return Landin.Types.Scalar_Name
          is
          begin
+            if Nested > 0 then
+               return Landin.IR.Nth_Aggregate_Field
+                 (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
+                  Positive (Nested)).Element;
+            end if;
             if Payload_Field > 0 then
                return Landin.IR.Nth_Variant_Case_Field
                  (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
@@ -439,7 +454,8 @@ package body Landin.Backend.X86_64 is
             Field         : Natural;
             Register      : String;
             Which         : Natural := 0;
-            Payload_Field : Natural := 0) is
+            Payload_Field : Natural := 0;
+            Nested        : Natural := 0) is
          begin
             case Place.Kind is
                when Landin.IR.Module_Datum =>
@@ -473,6 +489,24 @@ package body Landin.Backend.X86_64 is
                               Landin.IR.Part_Position (Field), Facts)))
                      & ", " & Register);
             end case;
+
+            if Nested > 0 then
+               declare
+                  At_Offset : constant Landin.Targets.Byte_Count :=
+                    Nested_Field_Offset
+                      (Stored_Field_Shape (Place, Positive (Field)),
+                       Positive (Nested));
+               begin
+                  if At_Offset > 0 then
+                     Emit
+                       ("movabsq $"
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image (At_Offset))
+                        & ", %rdx");
+                     Emit ("addq %rdx, " & Register);
+                  end if;
+               end;
+            end if;
 
             if Payload_Field > 0 then
                declare
@@ -1144,8 +1178,8 @@ package body Landin.Backend.X86_64 is
                   --  then scale it and add it to the array's base address.
                   --  D22 lets the base be a module datum's symbol or a
                   --  frame slot's %rbp-relative address; D48 may move that
-                  --  base to an aggregate field.  The trap and scaling are
-                  --  the same.
+                  --  base to an aggregate field.  D89 may move it once more
+                  --  to a fixed array inside that ordinary child.
                   declare
                      Reaches_Slot : constant Boolean :=
                        Landin.IR.Reaches_A_Slot (Of_Unit, Item, Value);
@@ -1153,6 +1187,8 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Nth_Operand (Of_Unit, Item, Value, 1);
                      Field : constant Natural :=
                        Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
+                     Nested : constant Natural :=
+                       Landin.IR.Nested_Field_Of (Of_Unit, Item, Value);
                      Which : constant Natural :=
                        Landin.IR.Variant_Case_Of (Of_Unit, Item, Value);
                      Payload_Field : constant Natural :=
@@ -1168,10 +1204,10 @@ package body Landin.Backend.X86_64 is
                                 (Of_Unit, Item, Value)));
                      Length : constant Landin.IR.Element_Total :=
                        Array_Length_Of
-                         (Place, Field, Which, Payload_Field);
+                         (Place, Field, Which, Payload_Field, Nested);
                      Kind : constant Landin.Types.Scalar_Name :=
                        Array_Element_Of
-                         (Place, Field, Which, Payload_Field);
+                         (Place, Field, Which, Payload_Field, Nested);
                      Held : constant Held_Size := Size_Of (Kind, Facts);
                      Safe : constant String := Value_Label (Value) & "_index";
                   begin
@@ -1194,7 +1230,7 @@ package body Landin.Backend.X86_64 is
                      --  and D84's selected payload offset; only after the
                      --  bounds check above is the scaled index added.
                      Storage_Address
-                       (Place, Field, "%rcx", Which, Payload_Field);
+                       (Place, Field, "%rcx", Which, Payload_Field, Nested);
                      Emit ("addq %rax, %rcx");
 
                      if Op = Landin.IR.Load_Element then

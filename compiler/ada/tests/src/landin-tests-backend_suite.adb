@@ -2795,6 +2795,64 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "8", "l");
    end A_Nested_Scalar_Field_Follows_The_Target;
 
+   --  D89 places the parent child and then its compact fixed-array leaf.
+   --  Both offsets change with pointer width while the two IR identities do
+   --  not, and the computed element is added only after both placements.
+   procedure A_Nested_Array_Element_Follows_The_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Nested_Array_Element_Follows_The_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "inner: type = struct" & LF
+        & "    lead: u8" & LF
+        & "    word: usize" & LF
+        & "    row: [3]i32" & LF
+        & "end inner" & LF
+        & "outer: type = struct" & LF
+        & "    prefix: u16" & LF
+        & "    nested: inner" & LF
+        & "end outer" & LF
+        & "mut state: outer = zeroed" & LF
+        & "f: (index: usize) -> (r: i32) =" & LF
+        & "    state.nested.row[index] = 7" & LF
+        & "    r = state.nested.row[index]" & LF
+        & "end f" & LF;
+
+      procedure Check_Target
+        (Facts        : Landin.Targets.Target_Facts;
+         Parent, Leaf : String);
+
+      procedure Check_Target
+        (Facts        : Landin.Targets.Target_Facts;
+         Parent, Leaf : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+            Address : constant String :=
+              HT & "leaq state(%rip), %rcx" & LF
+              & HT & "movabsq $" & Parent & ", %rdx" & LF
+              & HT & "addq %rdx, %rcx" & LF
+              & HT & "movabsq $" & Leaf & ", %rdx" & LF
+              & HT & "addq %rdx, %rcx" & LF
+              & HT & "addq %rax, %rcx" & LF;
+         begin
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Text, Address), 2,
+               "both element operations replay both target offsets");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "8", "16");
+      Check_Target (Landin.Targets.Synthetic_32, "4", "8");
+   end A_Nested_Array_Element_Follows_The_Target;
+
    --  D32 repeats an element count rather than a byte count, and selects the
    --  repeated-store width from the target's scalar facts.  `usize` therefore
    --  uses qwords on Linux x86-64 and longwords under Synthetic_32 while the
@@ -4523,6 +4581,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a nested scalar field follows the target",
          A_Nested_Scalar_Field_Follows_The_Target'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a nested array element follows the target",
+         A_Nested_Array_Element_Follows_The_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "an array fill follows the target element width",
          An_Array_Fill_Follows_The_Target_Element_Width'Access);

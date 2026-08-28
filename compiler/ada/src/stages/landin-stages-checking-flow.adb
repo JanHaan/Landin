@@ -170,11 +170,26 @@ package body Landin.Stages.Checking.Flow is
 
       subtype Tracked_Field is Natural range 0 .. Widest_Struct;
 
+      Array_Path_Stride : constant Natural := Widest_Struct + 1;
+
+      function Nested_Array_Path
+        (Parent, Child : Tracked_Field) return Natural
+      is (Natural (Parent) * Array_Path_Stride + Natural (Child));
+
+      function Is_Nested_Array_Path (Path : Natural) return Boolean
+      is (Path > Widest_Struct);
+
+      function Array_Parent (Path : Natural) return Tracked_Field
+      is (Tracked_Field (Path / Array_Path_Stride));
+
+      function Array_Child (Path : Natural) return Tracked_Field
+      is (Tracked_Field (Path mod Array_Path_Stride));
+
       type Assigned_Fields is array (Tracked, Tracked_Field) of Boolean;
 
       type Element_Fact is record
          Declaration : Res.Declaration_Id;
-         Field       : Tracked_Field;
+         Field       : Natural;
          Position    : Ty.Magnitude;
       end record;
 
@@ -193,7 +208,7 @@ package body Landin.Stages.Checking.Flow is
 
       type Array_Fact is record
          Declaration : Res.Declaration_Id;
-         Field       : Tracked_Field;
+         Field       : Natural;
       end record;
 
       function "<" (Left, Right : Array_Fact) return Boolean
@@ -245,7 +260,7 @@ package body Landin.Stages.Checking.Flow is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Id      : out Res.Declaration_Id;
-         Field   : out Tracked_Field);
+         Field   : out Natural);
       function Declaration_At
         (Src : Landin.Source.Source_Id; Node : Syn.Node_Id)
         return Res.Declaration_Id;
@@ -276,30 +291,30 @@ package body Landin.Stages.Checking.Flow is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Id      : Res.Declaration_Id;
-         Field   : Tracked_Field;
+         Field   : Natural;
          Position : Ty.Magnitude;
          State   : Assigned_Set);
       procedure Require_Computed_Element
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Id      : Res.Declaration_Id;
-         Field   : Tracked_Field;
+         Field   : Natural;
          State   : Assigned_Set);
       function Array_Length_For
-        (Id : Res.Declaration_Id; Field : Tracked_Field)
+        (Id : Res.Declaration_Id; Field : Natural)
          return Landin.Checking.Element_Count;
       function Array_Label
-        (Id : Res.Declaration_Id; Field : Tracked_Field) return String;
+        (Id : Res.Declaration_Id; Field : Natural) return String;
       function Array_Is_Assigned
         (Id    : Res.Declaration_Id;
-         Field : Tracked_Field;
+         Field : Natural;
          State : Assigned_Set) return Boolean;
       procedure Require_Array
         (Of_Tree  : Syn.Tree;
          Node     : Syn.Node_Id;
          Id       : Res.Declaration_Id;
          State    : Assigned_Set;
-         Field    : Tracked_Field := 0;
+         Field    : Natural := 0;
          Whole_As : Whole_Array_Read := Assignment_Source);
 
       --  Which declaration a declaring node is.  Landin.Resolution
@@ -353,7 +368,7 @@ package body Landin.Stages.Checking.Flow is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Id      : out Res.Declaration_Id;
-         Field   : out Tracked_Field)
+         Field   : out Natural)
       is
       begin
          Id := Res.No_Declaration;
@@ -378,13 +393,37 @@ package body Landin.Stages.Checking.Flow is
                Which : constant Natural :=
                  Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
             begin
-               if Which in 1 .. Widest_Struct
-                 and then Syn.Kind (Of_Tree, From) = Syn.Name_Reference
+               if Which not in 1 .. Widest_Struct then
+                  return;
+               end if;
+
+               if Syn.Kind (Of_Tree, From) = Syn.Name_Reference
                  and then Res.Verdict_Of (Meanings.all, Of_Tree, From)
                           = Res.Bound
                then
                   Id := Res.Bound_To (Meanings.all, Of_Tree, From);
                   Field := Which;
+                  return;
+               end if;
+
+               if Syn.Kind (Of_Tree, From) = Syn.Member_Selection then
+                  declare
+                     Root : constant Syn.Node_Id :=
+                       Syn.Target_Of (Of_Tree, From);
+                     Parent : constant Natural :=
+                       Landin.Checking.Field_Index
+                         (Types.all, Of_Tree, From);
+                  begin
+                     if Parent in 1 .. Widest_Struct
+                       and then Syn.Kind (Of_Tree, Root)
+                                  = Syn.Name_Reference
+                       and then Res.Verdict_Of
+                         (Meanings.all, Of_Tree, Root) = Res.Bound
+                     then
+                        Id := Res.Bound_To (Meanings.all, Of_Tree, Root);
+                        Field := Nested_Array_Path (Parent, Which);
+                     end if;
+                  end;
                end if;
             end;
          end if;
@@ -519,7 +558,7 @@ package body Landin.Stages.Checking.Flow is
       end Require_Assigned;
 
       function Array_Length_For
-        (Id : Res.Declaration_Id; Field : Tracked_Field)
+        (Id : Res.Declaration_Id; Field : Natural)
          return Landin.Checking.Element_Count
       is
       begin
@@ -527,31 +566,64 @@ package body Landin.Stages.Checking.Flow is
             return Landin.Checking.Array_Length (Types.all, Id);
          end if;
 
+         if Is_Nested_Array_Path (Field) then
+            declare
+               Parent_Body : constant Res.Declaration_Id :=
+                 Landin.Checking.Body_Of (Types.all, Id);
+               Child_Body : constant Res.Declaration_Id :=
+                 Landin.Checking.Field_Shape_Of
+                   (Types.all, Parent_Body, Array_Parent (Field))
+                     .Aggregate_Body;
+            begin
+               return Landin.Checking.Field_Array_Length
+                 (Types.all, Child_Body, Array_Child (Field));
+            end;
+         end if;
+
          return Landin.Checking.Field_Array_Length
                   (Types.all, Landin.Checking.Body_Of (Types.all, Id), Field);
       end Array_Length_For;
 
       function Array_Label
-        (Id : Res.Declaration_Id; Field : Tracked_Field) return String
+        (Id : Res.Declaration_Id; Field : Natural) return String
       is
+         Outer_Body : constant Res.Declaration_Id :=
+           Landin.Checking.Body_Of (Types.all, Id);
       begin
          if Field = 0 then
             return Spelled (Res.Name_Of (Meanings.all, Id));
          end if;
 
+         if Is_Nested_Array_Path (Field) then
+            declare
+               Parent : constant Tracked_Field := Array_Parent (Field);
+               Child_Body : constant Res.Declaration_Id :=
+                 Landin.Checking.Field_Shape_Of
+                   (Types.all, Outer_Body, Parent).Aggregate_Body;
+            begin
+               return Spelled (Res.Name_Of (Meanings.all, Id)) & "."
+                 & Field_Named (Outer_Body, Parent) & "."
+                 & Field_Named (Child_Body, Array_Child (Field));
+            end;
+         end if;
+
          return Spelled (Res.Name_Of (Meanings.all, Id)) & "."
-           & Field_Named (Landin.Checking.Body_Of (Types.all, Id), Field);
+           & Field_Named (Outer_Body, Field);
       end Array_Label;
 
       function Array_Is_Assigned
         (Id    : Res.Declaration_Id;
-         Field : Tracked_Field;
+         Field : Natural;
          State : Assigned_Set) return Boolean
       is
          Assigned : Landin.Checking.Element_Count := 0;
       begin
          if not Is_Tracked (Id)
            or else Array_Sets.Contains (State.Whole_Arrays, (Id, Field))
+           or else
+             (Is_Nested_Array_Path (Field)
+              and then State.Fields
+                (Positive (Id), Array_Parent (Field)))
            or else Array_Length_For (Id, Field) = 0
          then
             return True;
@@ -573,7 +645,7 @@ package body Landin.Stages.Checking.Flow is
          Node     : Syn.Node_Id;
          Id       : Res.Declaration_Id;
          State    : Assigned_Set;
-         Field    : Tracked_Field := 0;
+         Field    : Natural := 0;
          Whole_As : Whole_Array_Read := Assignment_Source) is
       begin
          if Array_Is_Assigned (Id, Field, State) then
@@ -614,7 +686,7 @@ package body Landin.Stages.Checking.Flow is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Id      : Res.Declaration_Id;
-         Field   : Tracked_Field;
+         Field   : Natural;
          State   : Assigned_Set) is
       begin
          --  D22: a computed local index cannot be covered by D19's sparse
@@ -659,12 +731,16 @@ package body Landin.Stages.Checking.Flow is
         (Of_Tree  : Syn.Tree;
          Node     : Syn.Node_Id;
          Id       : Res.Declaration_Id;
-         Field    : Tracked_Field;
+         Field    : Natural;
          Position : Ty.Magnitude;
          State    : Assigned_Set) is
       begin
          if not Is_Tracked (Id)
            or else Array_Sets.Contains (State.Whole_Arrays, (Id, Field))
+           or else
+             (Is_Nested_Array_Path (Field)
+              and then State.Fields
+                (Positive (Id), Array_Parent (Field)))
            or else Element_Sets.Contains
                      (State.Elements, (Id, Field, Position))
          then
@@ -721,7 +797,7 @@ package body Landin.Stages.Checking.Flow is
                Where : constant Syn.Node_Id := Syn.Index_Of (Of_Tree, Node);
                Position : Ty.Magnitude;
                Id : Res.Declaration_Id;
-               Field : Tracked_Field;
+               Field : Natural;
             begin
                Read_Names (Of_Tree, Where, State);
                Array_Base (Of_Tree, From, Id, Field);
@@ -937,6 +1013,50 @@ package body Landin.Stages.Checking.Flow is
                   end if;
                end loop;
 
+               --  D89 gives a whole parent assignment the meaning of every
+               --  nested array element.  Keep the other branch's sparse or
+               --  whole nested-array representation when those facts meet.
+               for Fact of Branch.Elements loop
+                  if Is_Nested_Array_Path (Fact.Field)
+                    and then Is_Tracked (Fact.Declaration)
+                    and then Left.Fields
+                      (Positive (Fact.Declaration),
+                       Array_Parent (Fact.Field))
+                  then
+                     Element_Sets.Include (Merged.Elements, Fact);
+                  end if;
+               end loop;
+               for Fact of Left.Elements loop
+                  if Is_Nested_Array_Path (Fact.Field)
+                    and then Is_Tracked (Fact.Declaration)
+                    and then Branch.Fields
+                      (Positive (Fact.Declaration),
+                       Array_Parent (Fact.Field))
+                  then
+                     Element_Sets.Include (Merged.Elements, Fact);
+                  end if;
+               end loop;
+               for Whole of Branch.Whole_Arrays loop
+                  if Is_Nested_Array_Path (Whole.Field)
+                    and then Is_Tracked (Whole.Declaration)
+                    and then Left.Fields
+                      (Positive (Whole.Declaration),
+                       Array_Parent (Whole.Field))
+                  then
+                     Array_Sets.Include (Merged.Whole_Arrays, Whole);
+                  end if;
+               end loop;
+               for Whole of Left.Whole_Arrays loop
+                  if Is_Nested_Array_Path (Whole.Field)
+                    and then Is_Tracked (Whole.Declaration)
+                    and then Branch.Fields
+                      (Positive (Whole.Declaration),
+                       Array_Parent (Whole.Field))
+                  then
+                     Array_Sets.Include (Merged.Whole_Arrays, Whole);
+                  end if;
+               end loop;
+
                --  D88 gives assigning a whole ordinary child the meaning of
                --  assigning each nested scalar leaf.  Preserve the leaf from
                --  the other branch when the two representations meet.
@@ -974,7 +1094,7 @@ package body Landin.Stages.Checking.Flow is
                     Syn.Index_Of (Of_Tree, Node);
                   Position : Ty.Magnitude;
                   Id : Res.Declaration_Id;
-                  Field : Tracked_Field;
+                  Field : Natural;
                begin
                   --  Reaching an element destination reads its index even
                   --  though it does not read the element being selected.

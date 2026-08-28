@@ -1841,10 +1841,16 @@ parent and child identities, lowering and verified IR retain both without a
 target offset, and the backend recursively places them against the selected
 target. The intermediate child remains no general aggregate value.
 
+The third increment extends that path to a scalar element of a fixed-array
+leaf in the child. Known-element and whole-array assignment facts retain the
+two field identities, the verifier checks the bounded child shape, and the
+backend places both fields before adding the checked scaled index. The nested
+array itself remains contextual rather than becoming a general value.
+
 Aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
-Aggregate values include the other nonzero nested-ordinary forms R2.20 deliberately left
-contextual: nested field selection, construction and copy, deeper recursive
+Aggregate values include the other nonzero nested-ordinary forms R2.20
+left contextual: whole nested field selection, construction and copy, deeper recursive
 composition, aggregate variant payloads and D17's fixed arrays whose element
 is an aggregate. They reuse R2.20's neutral shape provenance rather than
 reopening its target layout.

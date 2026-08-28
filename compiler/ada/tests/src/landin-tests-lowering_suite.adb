@@ -3705,6 +3705,108 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Nested_Scalar_Fields_Carry_Both_Identities;
 
+   --  D89 gives an element operation the same two source identities without
+   --  flattening the child or recording a target-derived byte offset.
+   procedure Nested_Array_Elements_Carry_Both_Identities
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Array_Elements_Carry_Both_Identities
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "inner: type = struct" & LF
+         & "    lead: u8" & LF
+         & "    word: usize" & LF
+         & "    row: [3]i32" & LF
+         & "end inner" & LF
+         & "outer: type = struct" & LF
+         & "    prefix: u16" & LF
+         & "    nested: inner" & LF
+         & "end outer" & LF
+         & "mut state: outer = zeroed" & LF
+         & "use: (index: usize) -> (r: i32) =" & LF
+         & "    mut local: outer = zeroed" & LF
+         & "    state.nested.row[index] = 19" & LF
+         & "    local.nested.row[index] = 23" & LF
+         & "    r = state.nested.row[index]" & LF
+         & "      + local.nested.row[index]" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "nested fixed-array elements are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Loads, Stores : Natural := 0;
+         Datum_Load, Slot_Load, Datum_Store, Slot_Store : Boolean := False;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, 2) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+               Op : constant IR.Opcode := IR.Op_Of (Unit, 2, Value);
+            begin
+               if Op in IR.Load_Element | IR.Store_Element
+                 and then IR.Nested_Field_Of (Unit, 2, Value) > 0
+               then
+                  Landin.Testing.Check
+                    (Item,
+                     IR.Element_Field_Of (Unit, 2, Value) = 2
+                       and then IR.Nested_Field_Of (Unit, 2, Value) = 3,
+                     "the operation carries parent and child identities");
+                  if Op = IR.Load_Element then
+                     Loads := Loads + 1;
+                     if IR.Reaches_A_Slot (Unit, 2, Value) then
+                        Slot_Load := True;
+                        Landin.Testing.Check
+                          (Item,
+                           IR.Slot_Element_Shape_Is_Valid (Unit, 2, Value)
+                           and then IR.Slot_Element_Length
+                             (Unit, 2, Value) = 3
+                           and then IR.Slot_Element_Type
+                             (Unit, 2, Value) = Landin.Types.I32,
+                           "the slot accessor follows the child run");
+                     else
+                        Datum_Load := True;
+                     end if;
+                  else
+                     Stores := Stores + 1;
+                     if IR.Reaches_A_Slot (Unit, 2, Value) then
+                        Slot_Store := True;
+                        Landin.Testing.Check
+                          (Item,
+                           IR.Slot_Element_Shape_Is_Valid (Unit, 2, Value)
+                           and then IR.Slot_Element_Length
+                             (Unit, 2, Value) = 3
+                           and then IR.Slot_Element_Type
+                             (Unit, 2, Value) = Landin.Types.I32,
+                           "the slot store accessor follows the child run");
+                     else
+                        Datum_Store := True;
+                     end if;
+                  end if;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item,
+            Loads = 2 and then Stores = 2
+              and then Datum_Load and then Slot_Load
+              and then Datum_Store and then Slot_Store,
+            "both storage classes carry one nested element read and write");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts both nested array paths");
+      end;
+   end Nested_Array_Elements_Carry_Both_Identities;
+
    --  D75 gives D74's target-neutral carrier to both module and frame
    --  storage.  The zero image remains one whole-storage clear, not one
    --  instruction per tag, payload field, or padding byte.
@@ -4685,6 +4787,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "nested scalar fields carry both identities",
          Nested_Scalar_Fields_Carry_Both_Identities'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "nested array elements carry both identities",
+         Nested_Array_Elements_Carry_Both_Identities'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "variant storage carries cases and one clear",
