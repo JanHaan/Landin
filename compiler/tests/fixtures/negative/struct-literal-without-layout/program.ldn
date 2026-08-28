@@ -1,0 +1,10 @@
+holder: type = struct
+    value: f32
+end holder
+
+mut state: holder
+
+write: () -> none =
+    local: holder = (value: 1)
+    state = (value: 2)
+end write

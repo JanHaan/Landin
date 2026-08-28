@@ -1,0 +1,6 @@
+class: negative
+summary: D64 keeps zeroed contextual to the whole fill rather than one named field value
+constructs: 0190, 0540, 0670, 0710, 1810, 1830
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

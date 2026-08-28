@@ -295,12 +295,15 @@ and neither derives from a call, because nothing selects from one
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
-primary     ::= literal | array_literal | array_repetition | indexed | call
-              | measurement | "(" expression ")"
+primary     ::= literal | array_literal | array_repetition | struct_literal
+              | indexed | call | measurement | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
 array_repetition ::= "[" integer "of" expression "]"
                    | "[" "of" expression "]"
                    | "[" expression ("," expression)* "," "of" expression "]"
+struct_literal ::= "(" field_value ("," field_value)*
+                   ("," "of" expression)? ")"
+field_value ::= identifier ":" expression
 indexed     ::= selection ("[" expression "]")*
 selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
@@ -3803,3 +3806,101 @@ no stable construct owner or migration evidence. All were declined.
 `negative/struct-literal-not-enabled`;
 `negative/construction-not-enabled`; the generated construct matrix and token
 dump; and the automatic parser truncation suite.
+
+D64 later supersedes this refusal for the nonempty labelled form by adding its
+grammar and contextual syntax node. The all-`of` and call-shaped construction
+forms retain D63's parser-owned refusal and recovery rule; the all-`of` form is
+then cited to [0720], its surviving construct, rather than [0710]'s enabled
+labelled form.
+
+### D64 — A labelled struct literal writes contextual local storage
+
+**The tour said** that an ordinary struct image names fields in parentheses
+[0710], that their written order determines evaluation [0410], and that a
+trailing `of` supplies fields not written individually [0720]. D63 first gave
+the unambiguous spelling one parser-owned refusal. D23 and D29 separately
+settled the initializer and immediate-write assignment contexts for arrays,
+while D57/D58 supplied the corresponding whole-struct storage contexts.
+
+**Chosen:** `struct_literal` and `field_value` are enabled by [1810]'s grammar.
+A labelled literal is admitted only as (a) the initializer of an explicitly
+typed local binding whose written type resolves to an enabled named ordinary
+struct, or (b) the complete right-hand side of assignment to a directly named
+mutable module or local binding of such a type. The context supplies [0710]'s
+nominal body. Inferred bindings, module initializers, discards, operands,
+arguments, returns and every general aggregate-value position remain L0304.
+The call-shaped construction `T(field: value)` and the all-fill spelling
+`(of zeroed)` remain parser-owned L0010 refusals.
+
+Labels may appear in any order. Each must name a field of the contextual body;
+an unknown label keeps L0308. A field may be named at most once: the second
+label reports L0309, related to the first. Without a trailing fill every field
+must be named; one L0310 at the literal lists the missing fields in declaration
+order. Named fields in this slice must be scalar, and each value is checked in
+that field's resolved scalar context. A named fixed-array field remains the
+existing nested-array L0304, and a named scalar value `zeroed` remains the
+existing nested contextual-literal L0304.
+
+The only trailing fill admitted is `of zeroed`. It writes every unnamed scalar
+field as typed integer zero or `false` and clears every unnamed fixed-array
+field with D49's compact whole-field operation. General `of expression` is
+L0304: one expression node cannot simultaneously commit to heterogeneous field
+types, and choosing an implicit conversion or duplication rule is deferred.
+The all-fill form remains refused because D57/D58 already spell the complete
+zero image directly as `zeroed`.
+
+Named expressions are evaluated and committed immediately in source order,
+regardless of declaration or layout order. The fill follows them and visits
+unnamed fields in declaration order. Thus a later field expression observes an
+earlier field write to the same destination, exactly as D29 exposes array
+literal writes; no hidden aggregate temporary or atomic commit exists. Reads
+inside all named expressions are checked against the definite-assignment state
+arriving at the statement. On successful completion the destination receives
+D54/D58's whole-aggregate assignment facts: every scalar field and every
+fixed-array field is complete. A typed local initialized by the literal has a
+value and is consequently untracked, as other initialized locals are.
+
+The tree carries one `Struct_Literal` with an optional fill slot and a written
+run of `Field_Value` nodes. A field label belongs to its `Field_Value`; it is not
+a `Name_Reference` and resolution never binds it. The checker records the
+nominal body on the literal and the declaration-order field identity on every
+valid label. Lowering emits an ordinary scalar field store immediately after
+each named expression, then typed scalar-zero stores and field-qualified array
+clears for the fill. It introduces no aggregate value, new IR operation,
+verifier rule, backend address form, target layout or static image. A module
+initializer remains refused because D60's representation is deliberately
+zero-only and a nonzero terminal image has no target-neutral carrier yet.
+A body whose earlier field or extent refusal prevented layout silently refuses
+the contextual literal as well: the owning field or L0300 report is not
+followed by a layout query or a second diagnostic.
+
+**Why this boundary:** the two contexts already own aggregate storage, nominal
+identity, definite assignment and field-shaped lowering. Enabling them proves
+the literal's evaluation rule without opening aggregate temporaries or a
+nonzero module image. Including `of zeroed` also reaches array-bearing structs
+without making a nested array literal a field value.
+
+**The alternatives:** admit only the local initializer, admit arbitrary named
+array fields, admit a general heterogeneous `of` expression, make the literal
+a general aggregate value, or add a nonzero module image at the same time. The
+first leaves D29's exposed-write question open; the next two need nested-array
+and per-field commitment rules; the fourth needs aggregate temporaries; and the
+last needs the representation D60 explicitly deferred. All were declined.
+
+**Pinned by** the parser, checker and lowering public-seam cases;
+`positive/struct-literal-contexts`;
+`negative/struct-literal-field-named-twice`;
+`negative/struct-literal-field-not-given`;
+`negative/struct-literal-unknown-field`;
+`negative/struct-literal-array-field-not-enabled`;
+`negative/struct-literal-of-expression-not-enabled`;
+`negative/struct-literal-field-zeroed-not-enabled`;
+`negative/struct-literal-field-type-mismatch`;
+`negative/struct-literal-reads-incoming-state`;
+`negative/struct-literal-without-layout`;
+`negative/immutable-struct-literal-assignment`;
+`negative/module-struct-literal-initializer-not-enabled`;
+`negative/struct-array-field-layout-overflow`;
+`negative/struct-literal-not-enabled`; the generated catalogue, construct,
+token and IR records; and `runtime/struct-literal-order-and-fill` on Linux
+x86-64.

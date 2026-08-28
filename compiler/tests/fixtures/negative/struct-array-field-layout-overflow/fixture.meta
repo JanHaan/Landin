@@ -1,6 +1,6 @@
 class: negative
-summary: D45 refuses a struct whose individually valid fixed-array field leaves no room for the next field's padding
-constructs: 0370, 0520, 0670, 0750, 1770, 1790
+summary: D45 refuses a struct whose valid array field overflows padded layout, and D64 does not revisit that absent layout
+constructs: 0370, 0520, 0670, 0710, 0720, 0750, 1770, 1790, 1810
 program: program.ldn
 codes: L0300
 targets: linux-x86-64, macos-arm64

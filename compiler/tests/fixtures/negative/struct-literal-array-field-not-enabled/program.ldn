@@ -1,0 +1,8 @@
+holder: type = struct
+    row: [2]u8
+    tag: u8
+end holder
+
+f: () -> none =
+    local: holder = (row: [1, 2], tag: 3)
+end f

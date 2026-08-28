@@ -1,0 +1,6 @@
+class: negative
+summary: D64 keeps a named fixed-array field value outside the first struct literal slice
+constructs: 0520, 0670, 0710, 0750, 1810, 1830
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

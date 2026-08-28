@@ -84,8 +84,8 @@
 0680   tour        -                                  Struct with a variant part
 0690   tour        -                                  A case with no payload is written bare
 0700   tour        refused refused-by-name            Construction and conversion use the same form
-0710   tour        accepted emitted executed refused refused-by-name A struct literal is untyped
-0720   tour        refused                            'of' fills every field the literal did not name
+0710   tour        accepted emitted executed refused  A struct literal is untyped
+0720   tour        accepted emitted executed refused refused-by-name 'of' fills every field the literal did not name
 0730   tour        -                                  A register has three kinds of field
 0740   tour        -                                  Access behaviour is data, not keywords
 0750   tour        accepted emitted executed refused  Fields keep the order you wrote them

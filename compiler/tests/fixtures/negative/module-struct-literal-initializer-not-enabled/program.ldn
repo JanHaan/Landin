@@ -1,0 +1,5 @@
+point: type = struct
+    x: i32
+end point
+
+origin: point = (x: 0)

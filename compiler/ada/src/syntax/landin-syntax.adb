@@ -28,11 +28,13 @@ package body Landin.Syntax is
             when Array_Literal            => 0,
             when Array_Repetition         => 2,
             when Mixed_Array_Repetition   => 1,
+            when Struct_Literal           => 1,
             when Literal_Kind             => 0,
             --  The one slot is [1790]'s type, not an expression.
             when Size_Of | Align_Of       => 1,
             when Unary_Kind               => 1,
             when Binary_Kind              => 2,
+            when Field_Value              => 1,
             when Error_Type | Type_Name
                | Type_Reference           => 0,
             --  The bound and the element type.
@@ -200,6 +202,16 @@ package body Landin.Syntax is
      is (Run_Length (Of_Tree, Id));
 
    function Nth_Element
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
+
+   function Struct_Fill (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Field_Value_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Field_Value
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
 

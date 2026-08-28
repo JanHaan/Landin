@@ -2707,6 +2707,92 @@ package body Landin.Tests.Checking_Suite is
          True);
    end Struct_Array_Field_Storage_Classes_Are_Enabled;
 
+   --  D64 carries one nominal body on the contextual literal and records
+   --  each source label as a declaration-order field identity.  The syntax
+   --  order deliberately differs from layout order.
+   procedure Struct_Literals_Carry_Body_And_Field_Identities
+     (Item : in out Landin.Testing.Context);
+
+   procedure Struct_Literals_Carry_Body_And_Field_Identities
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "struct-literals.ldn",
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]usize" & LF
+         & "    ready: bool" & LF
+         & "    tail: u16" & LF
+         & "end holder" & LF
+         & "mut state: holder" & LF
+         & "f: () -> none =" & LF
+         & "    local: holder = (ready: true, tail: 5, tag: 3,"
+         & " of zeroed)" & LF
+         & "    state = (tail: 7, tag: 4, ready: false, of zeroed)" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "typed local and whole-assignment literals are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Struct_Literal
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Aggregate
+                  and then Landin.Checking.Body_Of
+                    (Types.all, Of_Tree.all, Node)
+                      /= Landin.Resolution.No_Declaration,
+                  "the literal carries its contextual nominal body");
+               Landin.Testing.Check_Equal
+                 (Item,
+                  Landin.Checking.Field_Index
+                    (Types.all, Of_Tree.all,
+                     Landin.Syntax.Nth_Field_Value
+                       (Of_Tree.all, Node, 1)),
+                  (if Seen = 1 then 3 else 4),
+                  "the first written label keeps its layout identity");
+               Landin.Testing.Check_Equal
+                 (Item,
+                  Landin.Checking.Field_Index
+                    (Types.all, Of_Tree.all,
+                     Landin.Syntax.Nth_Field_Value
+                       (Of_Tree.all, Node, 2)),
+                  (if Seen = 1 then 4 else 1),
+                  "the second written label keeps its layout identity");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 2, "both contextual struct literals were checked");
+   end Struct_Literals_Carry_Body_And_Field_Identities;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2802,6 +2888,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "struct array field storage classes are enabled",
          Struct_Array_Field_Storage_Classes_Are_Enabled'Access);
+      Landin.Testing.Register
+        (Into, "checking", "struct literals carry body and field identities",
+         Struct_Literals_Carry_Body_And_Field_Identities'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);

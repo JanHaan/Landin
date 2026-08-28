@@ -2982,10 +2982,26 @@ binary expressions over bindings named `of` remain unchanged. No dormant
 syntax node, resolution rule, checker value,
 lowering operation, verifier invariant, backend layout or diagnostic code is
 introduced. Parser public-seam, focused negative and automatic truncation
-cases plus regenerated construct and token records provide evidence. The later
-enabling slice must add the grammar and real field-labelled node and migrate
-these frontend refusals; a module literal separately needs D60's deferred
-nonzero static aggregate image.
+cases plus regenerated construct and token records provide evidence. D64 below
+adds the grammar and real field-labelled node for the nonempty labelled form.
+The all-fill and call-shaped spellings remain parser refusals, and a module
+literal separately needs D60's deferred nonzero static aggregate image.
+
+D64 enables [0710]'s nonempty labelled ordinary-struct literal in an explicitly
+typed local initializer and as the complete right-hand side of assignment to a
+directly named mutable module or local ordinary struct. The contextual nominal
+body resolves labels and scalar types; labels are freely ordered but unique,
+and a literal without a fill names every field. L0309 owns a duplicate label
+and relates it to the first; L0310 owns omitted fields. A trailing `of zeroed`
+fills unnamed scalar fields with typed zero/false and clears unnamed fixed-array
+fields compactly. Named array fields, general `of expression`, module images,
+inference, call-shaped construction, the all-fill spelling and general
+aggregate values remain refused. Named fields evaluate and commit in source
+order, then the fill runs in declaration order; successful assignment records
+the existing complete aggregate definite-assignment facts. Parser, checker and
+lowering seams, focused diagnostics, positive/runtime fixtures and regenerated
+catalogue, construct, token and IR records provide evidence. No new IR,
+verifier, backend, layout or static-image invariant is introduced.
 
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
@@ -3025,10 +3041,11 @@ other than D14's direct name and D31's literal; and struct initialization other
 than D55/D56's explicitly typed or inferred local direct-storage-name forms,
 D57's explicitly typed local zero image, D59's explicitly typed module zero
 image, D60's explicitly typed module direct-storage-name image chain and D61's
-inferred module direct-storage-name image chain,
+inferred module direct-storage-name image chain, and D64's explicitly typed
+local labelled literal,
 general whole values,
-ordinary-struct literals and call-shaped construction beyond D63's named
-parser refusal,
+module and inferred struct literals, named array-field values, general or
+all-field fills and call-shaped construction beyond D64's contextual literal,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
 its array field beyond D48's indexed
@@ -3101,6 +3118,9 @@ D63 replaced the accidental ordinary-struct literal and call-shaped
 construction syntax cascades with one named frontend refusal per construct,
 while keeping both spellings outside the enabled grammar for their later
 migration slice.
+D64 migrated the nonempty labelled spelling to contextual local initialization
+and whole assignment while keeping call-shaped construction, the all-fill
+spelling, module images, inference and every general aggregate value pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

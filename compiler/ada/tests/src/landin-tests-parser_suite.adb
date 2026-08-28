@@ -329,7 +329,7 @@ package body Landin.Tests.Parser_Suite is
    end Mixed_Repetition_Preserves_Contextual_Of;
 
    ------------------------------------------------------------------
-   --  Named ordinary-struct refusals
+   --  Ordinary-struct literal recognition and retained refusals
    ------------------------------------------------------------------
 
    procedure Struct_Literal_Shapes_Are_Refused_Once
@@ -363,14 +363,14 @@ package body Landin.Tests.Parser_Suite is
          & "  y: i32" & ASCII.LF
          & "end point" & ASCII.LF
          & "origin: point = (x: 1, y: (2))" & ASCII.LF,
-         "L0010", "a nested field image");
+         "", "a nested field image");
 
       Check_Program
         ("point: type = struct" & ASCII.LF
          & "  x: i32" & ASCII.LF
          & "end point" & ASCII.LF
          & "origin: point = (x: 1",
-         "L0010", "a truncated field image");
+         "L0103", "a truncated field image");
 
       Check_Program
         ("point: type = struct" & ASCII.LF
@@ -659,7 +659,7 @@ package body Landin.Tests.Parser_Suite is
         (Into, "parser", "preserves contextual of in mixed repetition",
          Mixed_Repetition_Preserves_Contextual_Of'Access);
       Landin.Testing.Register
-        (Into, "parser", "names struct literal and construction once",
+        (Into, "parser", "parses struct literals and names refusals once",
          Struct_Literal_Shapes_Are_Refused_Once'Access);
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
