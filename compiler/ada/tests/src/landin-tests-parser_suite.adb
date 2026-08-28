@@ -150,6 +150,9 @@ package body Landin.Tests.Parser_Suite is
 
    procedure Agrees_With_The_Corpus (Item : in out Landin.Testing.Context)
    is
+      --  Deliberate real-host exception: this robustness case mutates the
+      --  repository fixture tree itself, just as the corpus agreement case
+      --  does, rather than testing a stage through the fake filesystem.
       Host      : Landin.Platform.Native.Native_Filesystem;
       Catalogue : Fixtures.Catalogue;
       Accepted  : Natural := 0;
@@ -619,6 +622,134 @@ package body Landin.Tests.Parser_Suite is
          "every truncation yielded a tree whose invariants hold");
    end Survives_Every_Truncation;
 
+   --  Truncation exercises one shape of damage at every byte and no other.
+   --  A recovering parser also has to survive bytes inserted, deleted or
+   --  replaced inside otherwise real programs, and input with no program
+   --  beneath it at all.  Fixed arithmetic rather than a host random source
+   --  keeps the exact cases reproducible in debug, release and on every host.
+   procedure Survives_Deterministic_Mutations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Survives_Deterministic_Mutations
+     (Item : in out Landin.Testing.Context)
+   is
+      type Random_Word is mod 2 ** 32;
+
+      State : Random_Word := 16#7011_7501#;
+
+      Mutations_Per_Program : constant Positive := 3;
+      Random_Streams        : constant Positive := 512;
+      Random_Length_Limit   : constant Positive := 96;
+
+      Host      : Landin.Platform.Native.Native_Filesystem;
+      Catalogue : Fixtures.Catalogue;
+      Tried     : Natural := 0;
+      Broken    : Natural := 0;
+
+      function Pick (Limit : Positive) return Positive;
+      function Byte return Character;
+      procedure Check_Text (Text : String);
+
+      function Pick (Limit : Positive) return Positive is
+      begin
+         State := State * 1_664_525 + 1_013_904_223;
+         return Positive (Natural (State mod Random_Word (Limit)) + 1);
+      end Pick;
+
+      function Byte return Character
+        is (Character'Val (Pick (256) - 1));
+
+      procedure Check_Text (Text : String) is
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse (Text, Codes, Total, Nodes, Held);
+         Tried := Tried + 1;
+
+         if not Held or else Nodes = 0 then
+            Broken := Broken + 1;
+         end if;
+      end Check_Text;
+   begin
+      Fixtures.Discover (Catalogue, Corpus, Host);
+
+      for Index in 1 .. Fixtures.Count (Catalogue) loop
+         declare
+            Fixture : constant Fixtures.Fixture :=
+              Fixtures.Nth (Catalogue, Index);
+            Class   : constant Fixtures.Fixture_Class :=
+              Fixtures.Class (Fixture);
+         begin
+            if Class in Fixtures.Positive_Program | Fixtures.Negative_Program
+              and then Fixtures.Program (Fixture) /= ""
+            then
+               declare
+                  Path : constant String :=
+                    Corpus & "/" & Fixtures.Class_Directory (Class) & "/"
+                    & Fixtures.Name (Fixture) & "/"
+                    & Fixtures.Program (Fixture);
+                  Content : Unbounded.Unbounded_String;
+                  Status  : Landin.Platform.Read_Status;
+               begin
+                  Host.Read_File (Path, Content, Status);
+
+                  if Status = Landin.Platform.Read_Ok
+                    and then Unbounded.Length (Content) > 0
+                  then
+                     for Mutation in 1 .. Mutations_Per_Program loop
+                        declare
+                           Mutated : Unbounded.Unbounded_String := Content;
+                           Length  : constant Positive :=
+                             Unbounded.Length (Mutated);
+                           Site    : constant Positive := Pick (Length);
+                        begin
+                           case Mutation is
+                              when 1 =>
+                                 Mutated := Unbounded.Delete
+                                   (Mutated, Site, Site);
+                              when 2 =>
+                                 Mutated := Unbounded.Replace_Slice
+                                   (Mutated, Site, Site,
+                                    String'(1 => Byte));
+                              when 3 =>
+                                 Mutated := Unbounded.Insert
+                                   (Mutated, Pick (Length + 1),
+                                    String'(1 => Byte));
+                           end case;
+
+                           Check_Text (Unbounded.To_String (Mutated));
+                        end;
+                     end loop;
+                  end if;
+               end;
+            end if;
+         end;
+      end loop;
+
+      for Stream in 1 .. Random_Streams loop
+         pragma Unreferenced (Stream);
+         declare
+            Text : Unbounded.Unbounded_String;
+         begin
+            for Position in 1 .. Pick (Random_Length_Limit) loop
+               pragma Unreferenced (Position);
+               Unbounded.Append (Text, Byte);
+            end loop;
+
+            Check_Text (Unbounded.To_String (Text));
+         end;
+      end loop;
+
+      Landin.Testing.Check
+        (Item, Tried > 1_000,
+         "the corpus and raw bytes supplied deterministic mutations");
+      Landin.Testing.Check_Equal
+        (Item, Broken, 0,
+         "every mutation yielded a tree whose invariants hold");
+   end Survives_Deterministic_Mutations;
+
    --  Recursive descent has to stop before the host's stack does, and
    --  Storage_Error is not a diagnostic.  Well past the limit, so the
    --  case does not have to know the limit's exact value.
@@ -807,6 +938,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
          Survives_Every_Truncation'Access);
+      Landin.Testing.Register
+        (Into, "parser", "survives deterministic mutations",
+         Survives_Deterministic_Mutations'Access);
       Landin.Testing.Register
         (Into, "parser", "deep nesting is reported",
          Deep_Nesting_Is_Reported'Access);

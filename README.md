@@ -138,8 +138,9 @@ roadmap item that enables it.
 Implementation proceeds in executable vertical slices rather than waiting for
 every design foundation to be settled in advance. R0's Ada 2022 bootstrap
 chassis and R1's executable language kernel are complete: the compiler builds
-and passes its suite on macOS arm64, in a pinned `linux/amd64` container, and
-on x86-64 hardware in CI, where its Linux binaries run. R2 is active; R2.20's
+on macOS arm64 and passes its full suite there when the Linux target toolchain
+is present; the pinned `linux/amd64` container and x86-64 CI run the Linux
+binaries. R2 is active; R2.20's
 target-parametric aggregate and variant representation is complete, and R2.30
 owns functions, control-flow expressions, declared errors and the aggregate ABI.
 Language and architecture questions are resolved when the first vertical

@@ -1,0 +1,18 @@
+--  [1750]: a line end is space and never terminates a statement.  The minus
+--  continues the initializer, and the bracket continues the assignment
+--  target, exactly as though each pair were on one line.
+mut values: [1]i32 = [0]
+
+public main: () -> (code: i32) =
+    value: i32 = 1
+        - 2
+
+    values
+    [0] = 42
+
+    if value == 0 - 1 and values[0] == 42 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

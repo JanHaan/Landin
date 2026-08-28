@@ -75,7 +75,8 @@ replaced.
 | `Landin.Stages` | the compilation context, the stage interface, pipelines, and everything a stage builds that outlives it | know which stages exist, or which order they run in |
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
 | `Landin.Stages.Resolution` | the order the trees are walked in | own the resolution table, or a code |
-| `Landin.Stages.Checking` | the three type passes and the assignment walk | own a table, a code, or a width |
+| `Landin.Stages.Checking` | the three type passes and checking-stage diagnostic order | own a table, a code, or a width |
+| `Landin.Stages.Checking.Flow` | definite assignment and control-flow fact merging | decide a type or lower a value |
 | `Landin.Stages.Lowering` | the walk that builds and verifies the IR, and refusing to run on a refused program | own the Unit, work out a scope, or raise a diagnostic |
 | `Landin.Driver` | argument and `--emit` classification, pipeline orchestration, output/toolchain selection and the result | implement a language rule |
 | `Refine` | printing and the exit status | contain a decision |
@@ -126,7 +127,8 @@ compile rather than raising `Compiler_Defect` at run time. What it cannot do is
 pass a seventh argument: [1650] hands six in registers and the stack half is
 not written, so the driver refuses a wider routine as `L0503` before anything
 is emitted rather than letting an accepted program meet an internal defect.
-`ROADMAP.md` R4.40 owns the stack arguments that retire it.
+`ROADMAP.md` R2.30 owns the internal stack arguments that retire it; R4.40
+later completes their C ABI classification.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver
@@ -167,15 +169,16 @@ to the driver, and R1.40 is where that happened — and its row stays so its
 number is never handed to another rule.
 
 Both halves are held to the grammar from both sides. `check.py` compares
-`Landin.Tokens`' reserved words with the tour's own `keyword` production,
+`Landin.Tokens`' reserved words with `spec.md`'s own `keyword` production,
 derives every positive program in the corpus from the grammar and refuses
 every negative one the frontend rejects, and compares
 `Landin.Syntax.Precedence` with [1820]'s own
 levels, operators, fold and first sets. The harness lexes every program in the
 corpus and compares each token with what `check.py`'s independent tokeniser
 produced, parses every one and requires the same verdict `check.py` reached,
-and parses every truncation of every one to prove that a half-written file
-yields a tree and not a crash.
+parses every truncation of every one, mutates every corpus program by byte
+insertion, deletion and replacement, and parses fixed-seed raw byte streams.
+Each must yield a tree whose invariants hold rather than a crash.
 
 `Landin.Syntax` is a flat table, not a pointer structure: a `Node_Id` is a
 dense integer, so R1.50's names, R1.60's types and R1.70's values each go in

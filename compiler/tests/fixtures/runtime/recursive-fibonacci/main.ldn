@@ -1,7 +1,8 @@
 --  The smallest program that is a program rather than a probe: a function
 --  that calls itself twice, one call's result feeding an operator, over a
---  frame that has to survive both.  fib(25) is 242785 calls deep enough to
---  find a prologue or an epilogue that only looked right.
+--  frame that has to survive both.  fib(25) makes 242785 calls and reaches
+--  25 nested fib frames, 26 including main: enough to find a prologue or an
+--  epilogue that only looked right.
 fib: (n: u32) -> (r: u32) =
     r = n
 
