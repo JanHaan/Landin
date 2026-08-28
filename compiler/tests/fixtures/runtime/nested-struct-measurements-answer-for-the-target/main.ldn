@@ -1,0 +1,21 @@
+inner: type = struct
+    byte: u8
+    word: usize
+    row: [3]u16
+end inner
+
+outer: type = struct
+    prefix: u16
+    nested: inner
+    tail: u8
+end outer
+
+public main: () -> (code: i32) =
+    if sizeof inner == 24 and alignof inner == 8
+        and sizeof outer == 40 and alignof outer == 8
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

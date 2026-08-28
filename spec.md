@@ -165,8 +165,10 @@ A binding names one thing, and says how much it may change.
 The full form, the inferred form and the mutable form are [0040],
 [0050] and [0060]; a binding with no value must be assigned before
 it is read [0080]. The kernel's types are the eleven scalar names, fixed arrays,
-and what [1795] declares from them: aliases and named ordinary structs with
-enabled scalar or fixed-array fields. Variants and the other TYPES YOU DECLARE
+and what [1795] declares from them: aliases, named ordinary structs and D74's
+named variant-bearing structs. Enabled runtime leaves are scalar or fixed
+array; D86 additionally composes one named ordinary struct field for
+measurement while retaining its value boundary. The other TYPES YOU DECLARE
 remain deferred. A type position holds a declared name either way, since
 [1760] makes the eleven ordinary declared names the kernel
 predeclares; the grammar spells them out because they are the
@@ -5272,3 +5274,50 @@ only scalar value an expression needs.
 `negative/variant-match-array-binding-index-out-of-range`; the generated token
 and IR records; and
 `runtime/variant-match-array-payload-bindings-update-storage` on Linux x86-64.
+
+### D86 — A named ordinary struct field has a measured layout
+
+**The tour said** that fields stay in written order with their natural
+alignment [0750], that a named struct introduces one nominal type [0710], and
+that `sizeof` and `alignof` answer for a type [0370]. D44/D45 measured scalar
+and fixed-array fields, but a field whose type was another named struct still
+stopped the containing layout even though the child already had a complete
+target-parametric size and alignment.
+
+**Chosen:** a top-level field of an ordinary struct may name a laid-out child
+ordinary struct whose own fields are scalar or fixed arrays. The child remains
+one declaration-order field. Its size is the child's complete padded size and
+its alignment is the child's alignment; the containing placement then applies
+[0750] exactly as it does to any other field. Aliases carry the same child body
+identity. This slice is deliberately depth one and excludes a child with a
+variant part or another aggregate field; a struct inside a variant payload
+keeps its existing L0304 boundary.
+
+This is layout and measurement only. Declaring, initializing, constructing,
+copying, clearing, selecting or otherwise forming storage or a value of the
+containing nested-struct type remains one L0304 (or R2.30's `Struct_ABI` for a
+parameter or return). An inferred construction is refused from its nominal
+body before lowering, so the measurement carrier cannot leak into a datum or
+frame slot.
+
+The checking table carries the child declaration identity, never its bytes.
+Aggregate measurement IR carries an `Aggregate_Field_Shape` whose child is a
+bounded declaration-order run of scalar or compact fixed-array shapes. The
+verifier proves that run and its depth-one leaves before any accessor reads
+them, and rejects the same shape in datum and slot runs. The backend recursively
+replays those neutral leaves against the selected target. Thus a 32-bit target
+may give the child and parent different extents from Linux x86-64 without any
+target offset, padding or host representation entering the IR.
+
+**Why measurement first:** variants followed this same D74/D75 split. It gives
+layout a target-executed fact before storage must decide nested selection,
+definite-assignment paths, images, clear and copy. Flattening the child into the
+parent would lose nominal provenance and make later debugger information
+reconstruct it; carrying a target byte extent would make the IR target-specific.
+
+**Pinned by** the checking, lowering and verifier public seams;
+`positive/measurement-of-nested-struct-field`;
+`negative/struct-with-a-struct-field`;
+`negative/nested-struct-construction-not-enabled`; the generated layout, token
+and IR records; and
+`runtime/nested-struct-measurements-answer-for-the-target` on Linux x86-64.

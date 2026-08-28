@@ -74,6 +74,21 @@ package body Landin.IR.Dump is
             when Array_Field_Shape =>
                return "[" & Trimmed (Element_Total'Image (Shape.Length))
                  & "]" & Landin.Types.Spelling (Shape.Element);
+            when Aggregate_Field_Shape =>
+               Unbounded.Append (Result, "struct (");
+               for Field in 1 .. Aggregate_Field_Count
+                 (Of_Unit, Shape)
+               loop
+                  if Field > 1 then
+                     Unbounded.Append (Result, ",");
+                  end if;
+                  Unbounded.Append
+                    (Result,
+                     Shape_Text
+                       (Nth_Aggregate_Field (Of_Unit, Shape, Field)));
+               end loop;
+               Unbounded.Append (Result, ")");
+               return Unbounded.To_String (Result);
             when Variant_Field_Shape =>
                Unbounded.Append
                  (Result,

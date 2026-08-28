@@ -32,6 +32,9 @@ target linux-x86-64
   u8 | usize u8 | [3]u16        0 8         24     8
   u8 variant u16                0 8 32      40     8
 
+  nested aggregate              child offset size   align
+  u16 {u8 usize [3]u16} u8      8            40     8
+
 target synthetic-32
   pointer   32 bits, aligned 4
   stack     aligned 8
@@ -60,3 +63,6 @@ target synthetic-32
   variant                       offsets     size   align
   u8 | usize u8 | [3]u16        0 4         12     4
   u8 variant u16                0 4 16      20     4
+
+  nested aggregate              child offset size   align
+  u16 {u8 usize [3]u16} u8      4            24     4

@@ -1137,6 +1137,13 @@ item 4 DATUM aliased_align result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 MEASURE_ALIGN usize
     2 LEAVE <- 1
+file positive/measurement-of-nested-struct-field/program.ldn
+unit items 1
+item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1
+  elements 8 of usize
+  image 24 8 24 8 40 8 8 4
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/measurement-of-struct-array-fields/program.ldn
 unit items 5
 item 1 DATUM direct_size result usize params 0 slots 0 blocks 1 values 2

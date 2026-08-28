@@ -1,0 +1,19 @@
+inner: type = struct
+    byte: u8
+    word: usize
+    row: [3]u16
+end inner
+
+same: type = inner
+
+outer: type = struct
+    prefix: u16
+    nested: same
+    tail: u8
+end outer
+
+measurements: [8]usize =
+    [sizeof inner, alignof inner,
+     sizeof same, alignof same,
+     sizeof outer, alignof outer,
+     sizeof [2]u32, alignof [2]u32]
