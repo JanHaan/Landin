@@ -369,10 +369,12 @@ package body Landin.IR.Dump is
                end;
             end loop;
 
-            --  D66: aggregate images are declaration-order field folds.
+            --  D66: aggregate images begin with declaration-order field folds.
             --  Omitted and explicit whole-zero images have no run and keep
             --  the dump unchanged; a fixed-array field's zero placeholder is
             --  shown like every other entry without inventing target bytes.
+            --  D67 prints each finite field segment separately, still as
+            --  folds rather than target widths, offsets or padding.
             if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
               and then Has_Image (Of_Unit, Id)
             then
@@ -391,6 +393,32 @@ package body Landin.IR.Dump is
                   end loop;
                   Put ("  image " & Unbounded.To_String (Rendered));
                end;
+
+               for F in 1 .. Field_Count (Of_Unit, Id) loop
+                  declare
+                     Image : constant Aggregate_Field_Image :=
+                       Field_Image_Of (Of_Unit, Id, F);
+                     Rendered : Unbounded.Unbounded_String;
+                  begin
+                     if Image.Form = Finite then
+                        for P in 1 .. Image.Count loop
+                           if P /= 1 then
+                              Unbounded.Append (Rendered, " ");
+                           end if;
+                           Unbounded.Append
+                             (Rendered,
+                              Trimmed
+                                (Landin.Types.Folded'Image
+                                   (Nth_Field_Element
+                                      (Of_Unit, Id, F,
+                                       Part_Position (P)))));
+                        end loop;
+                        Put
+                          ("  field " & Trimmed (Natural'Image (F))
+                           & " image " & Unbounded.To_String (Rendered));
+                     end if;
+                  end;
+               end loop;
             end if;
 
             for S in 1 .. Slot_Count (Of_Unit, Id) loop

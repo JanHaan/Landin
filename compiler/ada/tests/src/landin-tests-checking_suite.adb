@@ -2707,9 +2707,9 @@ package body Landin.Tests.Checking_Suite is
          True);
    end Struct_Array_Field_Storage_Classes_Are_Enabled;
 
-   --  D64/D66 carry one nominal body on the contextual literal and record
-   --  each source label as a declaration-order field identity.  The syntax
-   --  order deliberately differs from layout order.
+   --  D64/D66/D67 carry one nominal body on the contextual literal, record
+   --  each source label as a declaration-order field identity, and give a
+   --  module array label its field's complete static shape.
    procedure Struct_Literals_Carry_Body_And_Field_Identities
      (Item : in out Landin.Testing.Context);
 
@@ -2731,8 +2731,8 @@ package body Landin.Tests.Checking_Suite is
          & "    ready: bool" & LF
          & "    tail: u16" & LF
          & "end holder" & LF
-         & "image: holder = (ready: true, tail: 11, tag: 2,"
-         & " of zeroed)" & LF
+         & "image: holder = (ready: true, row: [8, 9], tail: 11,"
+         & " tag: 2)" & LF
          & "mut state: holder" & LF
          & "f: () -> none =" & LF
          & "    local: holder = (ready: true, tail: 5, tag: 3,"
@@ -2749,7 +2749,7 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
-         "typed local and whole-assignment literals are accepted");
+         "typed module, local and whole-assignment literals are accepted");
 
       declare
          Of_Tree : constant not null access constant Landin.Syntax.Tree :=
@@ -2791,13 +2791,33 @@ package body Landin.Tests.Checking_Suite is
                      Landin.Syntax.Nth_Field_Value
                        (Of_Tree.all, Node, 2)),
                   (case Seen is
-                      when 1 => 4,
+                      when 1 => 2,
                       when 2 => 4,
                       when 3 => 1,
                       when others => 3),
                   "the second written label keeps its layout identity");
 
-               if Seen = 4 then
+               if Seen = 1 then
+                  declare
+                     Row : constant Landin.Syntax.Node_Id :=
+                       Landin.Syntax.Value_Of
+                         (Of_Tree.all,
+                          Landin.Syntax.Nth_Field_Value
+                            (Of_Tree.all, Node, 2));
+                  begin
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Row)
+                            = Landin.Types.Fixed_Array
+                        and then Landin.Checking.Array_Length
+                          (Types.all, Of_Tree.all, Row) = 2
+                        and then Landin.Checking.Array_Element
+                          (Types.all, Of_Tree.all, Row)
+                            = Landin.Types.Usize,
+                        "the static array label carries field two's shape");
+                  end;
+               elsif Seen = 4 then
                   declare
                      Row : constant Landin.Syntax.Node_Id :=
                        Landin.Syntax.Value_Of

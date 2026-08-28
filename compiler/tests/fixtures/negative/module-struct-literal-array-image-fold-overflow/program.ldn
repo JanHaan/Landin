@@ -1,0 +1,6 @@
+holder: type = struct
+    row: [2]u64
+end holder
+
+max: u64 = 18446744073709551615
+state: holder = (row: [max + 1, 4294967296 * 4294967296])

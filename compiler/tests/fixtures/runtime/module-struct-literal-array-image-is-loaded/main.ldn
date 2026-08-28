@@ -1,0 +1,29 @@
+holder: type = struct
+    tag: u8
+    row: [2]u16
+    flags: [2]bool
+end holder
+
+mut origin: holder =
+    (flags: [true, false], row: [11, 13], tag: 5)
+copy: holder = origin
+inferred := copy
+
+public main: () -> (code: i32) =
+    origin.tag = 7
+    origin.row[0] = 17
+    origin.row[1] = 19
+    origin.flags[0] = false
+    origin.flags[1] = true
+
+    if copy.tag == 5 and copy.row[0] == 11 and copy.row[1] == 13
+      and copy.flags[0] and not copy.flags[1]
+      and inferred.tag == 5 and inferred.row[0] == 11
+      and inferred.row[1] == 13 and inferred.flags[0]
+      and not inferred.flags[1]
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

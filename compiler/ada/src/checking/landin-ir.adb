@@ -251,10 +251,35 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
      is (Element (Of_Unit, Item).Length);
 
+   function Field_Image_Element_Count
+     (Fields : Aggregate_Field_Image_Array) return Element_Total
+   is
+      Result : Element_Total := 0;
+   begin
+      for Field of Fields loop
+         Result := Result + Element_Total (Field.Count);
+      end loop;
+      return Result;
+   end Field_Image_Element_Count;
+
    procedure Set_Aggregate_Image
      (Into   : in out Unit;
       Item   : Item_Id;
       Fields : Landin.Types.Folded_Array)
+   is
+      Arrays : constant Aggregate_Field_Image_Array (Fields'Range) :=
+        [others => (others => <>)];
+      Elements : constant Landin.Types.Folded_Array (1 .. 0) := [];
+   begin
+      Set_Aggregate_Image (Into, Item, Fields, Arrays, Elements);
+   end Set_Aggregate_Image;
+
+   procedure Set_Aggregate_Image
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Fields  : Landin.Types.Folded_Array;
+      Arrays  : Aggregate_Field_Image_Array;
+      Elements : Landin.Types.Folded_Array)
    is
       Held : Item_Record := Element (Into, Item);
    begin
@@ -263,9 +288,46 @@ package body Landin.IR is
          Into.Images.Append (Fields (Field));
          Held.Image.Count := Held.Image.Count + 1;
       end loop;
+      for Position in Elements'Range loop
+         Into.Images.Append (Elements (Position));
+         Held.Image.Count := Held.Image.Count + 1;
+      end loop;
+
+      Open_Run
+        (Held.Aggregate_Images, Natural (Into.Aggregate_Images.Length));
+      for Field in Arrays'Range loop
+         Into.Aggregate_Images.Append (Arrays (Field));
+         Held.Aggregate_Images.Count := Held.Aggregate_Images.Count + 1;
+      end loop;
       Held.Has_Image := True;
       Into.Items (Positive (Item)) := Held;
    end Set_Aggregate_Image;
+
+   function Aggregate_Field_Image_Count
+     (Of_Unit : Unit; Item : Item_Id) return Natural
+     is (Element (Of_Unit, Item).Aggregate_Images.Count);
+
+   function Field_Image_Of
+     (Of_Unit : Unit; Item : Item_Id; Field : Positive)
+      return Aggregate_Field_Image
+     is (Of_Unit.Aggregate_Images
+           (Element (Of_Unit, Item).Aggregate_Images.First + Field));
+
+   function Nth_Field_Element
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Field   : Positive;
+      Position : Part_Position) return Landin.Types.Folded
+   is
+      Image : constant Aggregate_Field_Image :=
+        Field_Image_Of (Of_Unit, Item, Field);
+   begin
+      return Of_Unit.Images
+        (Element (Of_Unit, Item).Image.First
+         + Field_Count (Of_Unit, Item)
+         + Image.Offset
+         + Positive (Position));
+   end Nth_Field_Element;
 
    function Nth_Field_Image
      (Of_Unit : Unit; Item : Item_Id; Field : Positive)

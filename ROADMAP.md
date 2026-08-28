@@ -3022,14 +3022,15 @@ lowering seams and regenerated token/IR records provide evidence. General
 types without conversion or re-evaluation; inferred literals wait for
 construction, module literals remain outside D65, and the all-fill synonym and
 general aggregate values remain refused. D66 later supplies D60's nonzero
-image carrier for scalar labels; labelled array images remain separate. No grammar,
+image carrier for scalar labels, and D67 its finite-or-zero array-field form.
+No grammar,
 syntax, diagnostic, IR, verifier, backend, target or layout invariant changes.
 
 D66 admits an explicitly typed mutable or immutable module ordinary struct
 initialized by D64's nonempty labelled literal when every named field is
 scalar and known under [1940]. D64's label, duplicate, missing and `of zeroed`
-rules remain; an explicitly named array field is L0304 and waits for a compact
-per-field image extension. IR records one target-neutral folded entry per
+rules remain; D67 later supersedes the explicit-array-label refusal with a
+compact finite-or-zero field image. IR records one target-neutral folded entry per
 declaration-order field, using zero for unnamed scalar fields and for the
 absent image of every array field; verifier checks hold the run to the field
 count, array placeholders to zero and scalar folds to the selected target.
@@ -3040,8 +3041,26 @@ and whole-`zeroed` initializers stay absent `.bss` images. D60/D61 chains copy
 the folded terminal into distinct datums. IR/verifier/checker/lowering/backend
 seams, focused static-image refusals, regenerated records and a runtime
 distinct-storage fixture provide evidence. Inferred literals, labelled array
-images, heterogeneous fills, construction and general aggregate values remain
-separate slices.
+images beyond D67's finite-or-zero form, heterogeneous fills, construction and
+general aggregate values remain separate slices.
+
+D67 admits a labelled fixed-array field in D66's explicitly typed module
+struct literal when its value is a nonempty finite array literal of exactly the
+field's D17 shape or contextual `zeroed`. Elements keep D24's known-value,
+static-subtree, fold and selected-target range owners; zero-length fields admit
+only the absent `zeroed` image. D66's flat declaration-order fold run and zero
+array placeholders stay intact beside a compact per-field descriptor run and
+concatenated finite element folds. The verifier proves descriptor counts,
+canonical offsets, field kinds, finite lengths and target fit before access,
+and reserves repeated and hybrid forms for a later producer. The backend emits
+finite elements with target-derived widths at D45's placed field offset and
+zeroes absent fields and padding; an all-zero finite literal remains written
+`.data`. D60/D61 image chains copy descriptors and elements into distinct
+datums. IR/verifier/checker/lowering/backend seams, static-image refusals,
+generated records and a runtime chain-and-independence fixture provide
+evidence. Repetition and direct-name or selected-field image copy, inferred
+literals, heterogeneous fills, construction and general aggregate values
+remain separate slices.
 
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
@@ -3083,10 +3102,12 @@ D57's explicitly typed local zero image, D59's explicitly typed module zero
 image, D60's explicitly typed module direct-storage-name image chain and D61's
 inferred module direct-storage-name image chain, and D64/D65's explicitly typed
 local labelled literal and contextual field values, plus D66's explicitly
-typed module scalar-labelled static image,
+typed module scalar-labelled static image and D67's finite-or-zero labelled
+array-field image,
 general whole values,
-inferred struct literals, labelled module array-field images, general or
-all-field fills and call-shaped construction beyond D64--D66's contextual
+inferred struct literals, labelled module array-field repetition or image-copy
+forms, general or all-field fills and call-shaped construction beyond
+D64--D67's contextual
 literal,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
@@ -3170,6 +3191,10 @@ D66 migrated the scalar-labelled typed module struct literal into a
 target-neutral static field image while keeping inferred literals, labelled
 array-field images, heterogeneous fills, construction and every general
 aggregate value pinned.
+D67 migrated finite and `zeroed` labelled fixed-array fields into that
+target-neutral module struct image, while keeping repetition, image-copy,
+inference, heterogeneous fills, construction and every general aggregate
+value pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

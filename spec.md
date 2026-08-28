@@ -3949,7 +3949,7 @@ may be heterogeneous; converting it per field is not enabled, and evaluating
 it again per field would violate the once-only rule. Inferred literals still
 have no nominal body and wait for [0700]'s construction decision. Module
 literals remain outside this slice; D66 later supplies D60's nonzero aggregate
-image carrier for scalar labels, while array labels wait for a later image
+image carrier for scalar labels, and D67 adds its finite-or-zero array-field
 form. The all-`of`
 spelling remains D63's redundant parser refusal, and general aggregate values
 remain outside this slice.
@@ -3992,11 +3992,12 @@ module scope when `T` resolves to an enabled named ordinary struct with a
 layout. The written type supplies the literal's nominal body. D64's freely
 ordered, unique labels, L0308 unknown-field owner, L0309 duplicate owner and
 L0310 missing-field owner apply unchanged. Each explicitly named field in this
-first static carrier must be scalar. A trailing `of zeroed` supplies zero or
+first static carrier must be scalar. D67 later supersedes that boundary for a
+finite or `zeroed` fixed-array label. A trailing `of zeroed` supplies zero or
 `false` to every unnamed scalar field and the absent zero image to every
 unnamed fixed-array field. A fixed-array field named explicitly is L0304 in
-this slice; its D65 literal, repetition, copy and clear images need a compact
-per-field image form and remain a later decision.
+this slice; D67 later admits its finite literal and `zeroed` forms through a
+compact per-field image, while repetition and copy remain later decisions.
 
 Each scalar field expression must be known without execution under [1940]: a
 literal, contextual scalar `zeroed`, an enabled operator over known operands,
@@ -4053,10 +4054,94 @@ and backend invariants can be stated. All were declined here.
 
 **Pinned by** the IR, verifier, checker, lowering and backend public-seam cases;
 `positive/module-struct-literal-initializer`;
-`negative/module-struct-literal-array-label-not-enabled`;
 `negative/module-struct-literal-inferred-not-enabled`;
 `negative/module-struct-literal-selection-not-enabled`;
 `negative/module-struct-literal-value-not-known`;
 `negative/module-struct-literal-field-out-of-range`;
 `negative/module-struct-literal-field-fold-overflow`; the generated token and
 IR records; and `runtime/module-struct-literal-image-is-loaded` on Linux x86-64.
+
+### D67 — A labelled fixed-array module field has a finite or zero image
+
+**The tour said** that an ordinary struct image names its fields [0710], that
+an array literal names its elements [0410], and that nothing runs before the
+entry point [1460]. D24 established finite target-neutral module array images,
+D60/D61 established declaration-identity struct image chains, and D66 left one
+zero placeholder for every fixed-array field until a compact field image could
+own its elements.
+
+**Chosen:** a fixed-array label in D66's explicitly typed module struct literal
+accepts a nonempty array literal of exactly the field's D17 length and element
+type, or contextual `zeroed`. Each literal element must be known without
+execution under [1940] and follows D24's static exclusions and folding owners:
+a call reports L0305, a selected field, index or nested image reports L0304,
+and a fold beyond the compiler's widest magnitude or the selected target type
+reports L0300. A length or element disagreement keeps the existing L0301
+owner. `zeroed` denotes the absent all-zero field image, including for D17's
+internal zero-length shape; a written finite literal remains nonempty, so it
+cannot initialize that shape.
+
+D66's flat aggregate image remains one `Folded` placeholder per field in
+declaration order, and every array placeholder remains zero. A parallel
+per-field descriptor says `Absent` or `Finite`; a finite descriptor names an
+offset and count in one concatenated run of source folds stored after the flat
+field run. `Repeated` and `Hybrid` descriptor forms are reserved so the next
+slice can extend the carrier without replacing it, but the verifier refuses
+either form in D67. The carrier contains no target width, offset, padding byte
+or machine identity.
+
+The IR setter records the flat folds, descriptors and finite elements as one
+item image operation. The verifier first proves the flat and descriptor counts,
+canonical finite offsets, scalar-field absence, zero array placeholders and
+the total element extent; only then does it read each finite element and check
+that fold against the field's selected-target element type. These are explicit
+checks in builds without contract assertions. A malformed finite length,
+out-of-target fold, descriptor on a scalar field or reserved form is a verifier
+fault before a backend accessor can consume it.
+
+The backend replays D45's target placement. An absent array field emits zero
+for its complete target extent; a finite field emits one directive of the
+target element width for each fold, while every inter-field gap and tail byte
+remains zero. A finite literal whose elements are all zero is still a written
+`.data` image, as D24 and D66 require; `zeroed` and an unnamed field supplied by
+`of zeroed` remain absent within that written aggregate image. D60/D61 chains
+copy every descriptor and finite fold into each distinct destination datum, so
+forward references, aliases, inferred links and independence after mutation
+remain unchanged.
+
+Full and mixed repetition, a direct array storage name and a selected
+fixed-array field remain L0304 as labelled module images. Repetition needs the
+reserved compact suffix forms; copy needs image resolution through another
+datum and retains the existing refusal of a selected field as a module array
+initializer. Inferred struct literals, a general `of expression`, the all-`of`
+spelling, construction and general aggregate values remain outside this slice.
+No grammar, syntax node, diagnostic code, runtime instruction, target fact or
+layout rule changes.
+
+**Why a descriptor beside the flat run:** D66's scalar image and its verifier
+contract remain stable, while a field can own a finite source image without
+embedding target bytes or flattening element positions into aggregate fields.
+Keeping every segment in the item's existing image run preserves the IR's
+single-owner partition invariant and makes declaration-chain copying atomic at
+the representation seam.
+
+**The alternatives:** admit every D65 form at once, admit only the finite form,
+add name-chain copy before a general carrier, flatten target bytes, or emit a
+startup routine. The first and third add recursive image and cycle questions;
+the second leaves a needless asymmetry with `of zeroed`; and the last two
+violate target neutrality or [1460]. The complete compact carrier with only
+finite and absent producers was chosen; its repetition and copy producers wait
+for their own evidence.
+
+**Pinned by** the IR, verifier, checker, lowering and backend public-seam cases;
+`positive/module-struct-literal-array-image`;
+`negative/module-struct-literal-array-image-length-mismatch`;
+`negative/module-struct-literal-array-image-element-mismatch`;
+`negative/module-struct-literal-array-image-value-not-known`;
+`negative/module-struct-literal-array-image-storage-read`;
+`negative/module-struct-literal-array-image-out-of-range`;
+`negative/module-struct-literal-array-image-fold-overflow`;
+`negative/module-struct-literal-array-image-forms-not-enabled`;
+`negative/module-struct-literal-empty-array-field-image`; the generated token
+and IR records; and `runtime/module-struct-literal-array-image-is-loaded` on
+Linux x86-64.
