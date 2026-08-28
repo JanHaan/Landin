@@ -1,0 +1,6 @@
+class: negative
+summary: D63 names [0710]'s value-position ordinary-struct field image once while it remains outside [1810]'s enabled grammar
+constructs: 0710, 0720, 1810, 1830
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0010, L0010, L0010, L0010

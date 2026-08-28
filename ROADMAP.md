@@ -2968,10 +2968,24 @@ field-qualified `Store_Element`, so the verifier, backend, target layout and
 module static-image rules are unchanged. Checker/lowering seams, focused
 mutability, nesting and sparse-fact fixtures, the recorded dump and a runtime
 bounds trap provide evidence. Every deeper scalar place and general `zeroed`
-value remains separate. Before an ordinary-struct literal slice migrates source,
-the value-position `(` identifier `:` shape needs a named parser refusal and a
-pinned before-state; today it falls through the parenthesized-expression path
-and produces an unnamed syntax cascade.
+value remains separate. D63 below supplies the named parser refusal and pinned
+before-state required before an ordinary-struct literal slice migrates source.
+
+D63 refuses [0710]'s value-position ordinary-struct field image and [0700]'s
+call-shaped construction once by name with the frontend's existing L0010 while
+both remain outside [1810]'s enabled grammar. The parser recognizes `(` followed
+by `identifier :`, an unambiguous contextual `(of expression)`, and a call
+whose first argument begins `identifier :`; it skips balanced nested
+parentheses or stops at end of input and suppresses a second indexing refusal
+during recovery. Ordinary parenthesized expressions, positional calls and
+binary expressions over bindings named `of` remain unchanged. No dormant
+syntax node, resolution rule, checker value,
+lowering operation, verifier invariant, backend layout or diagnostic code is
+introduced. Parser public-seam, focused negative and automatic truncation
+cases plus regenerated construct and token records provide evidence. The later
+enabling slice must add the grammar and real field-labelled node and migrate
+these frontend refusals; a module literal separately needs D60's deferred
+nonzero static aggregate image.
 
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
@@ -3013,6 +3027,8 @@ D57's explicitly typed local zero image, D59's explicitly typed module zero
 image, D60's explicitly typed module direct-storage-name image chain and D61's
 inferred module direct-storage-name image chain,
 general whole values,
+ordinary-struct literals and call-shaped construction beyond D63's named
+parser refusal,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
 its array field beyond D48's indexed
@@ -3081,6 +3097,10 @@ keeping non-name and nonzero static images, nested expressions and general
 values pinned.
 D62 migrated scalar `zeroed` assignment through a D48 fixed-array field element
 while keeping every deeper place and general contextual value pinned.
+D63 replaced the accidental ordinary-struct literal and call-shaped
+construction syntax cascades with one named frontend refusal per construct,
+while keeping both spellings outside the enabled grammar for their later
+migration slice.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

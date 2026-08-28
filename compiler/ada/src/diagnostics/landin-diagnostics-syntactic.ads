@@ -84,11 +84,11 @@ package Landin.Diagnostics.Syntactic is
    --  where a parameter's does, which is why the parser names the construct
    --  and not the lexeme it saw.
    --
-   --  Nine of the fifteen are ordinary identifiers to the scan, because
-   --  [1760] reserves seventeen words and none of them is `loop`, `while`,
-   --  `for`, `match`, `defer`, `undo`, `try`, `fail`, `break` or
-   --  `continue`.  Without this table the compiler would say that `loop`
-   --  is a name that needs a `:` after it, which is true and useless.
+   --  Several are ordinary identifiers to the scan, because [1760]
+   --  reserves seventeen words and none of them is `loop`, `while`, `for`,
+   --  `match`, `defer`, `undo`, `try`, `fail`, `break` or `continue`.
+   --  Without this table the compiler would say that `loop` is a name that
+   --  needs a `:` after it, which is true and useless.
    type Refused_Construct is
      (Try_Expression,
       Fail_Statement,
@@ -117,7 +117,11 @@ package Landin.Diagnostics.Syntactic is
       --  [1820] indexes what a selection named, so the brackets come
       --  last: a field of an element is [0670]'s struct inside [0520]'s
       --  array, which is the element the layout cannot hold yet.
-      Selection_From_An_Index);
+      Selection_From_An_Index,
+      --  [0710]'s value-position field image and [0700]'s call-shaped
+      --  construction are outside [1810]'s enabled expression grammar.
+      Struct_Literal,
+      Construction);
 
    --  Where the tour describes it.  Ordered by construct so that a reader
    --  can check the column against tour.md by running down it, and
@@ -147,7 +151,9 @@ package Landin.Diagnostics.Syntactic is
             when Slice_Type           => "[0570]",
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
-            when Selection_From_An_Index => "[0520]")
+            when Selection_From_An_Index => "[0520]",
+            when Struct_Literal        => "[0710]",
+            when Construction          => "[0700]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  What the parser hands over: a rule, a place, and the sentence a user
@@ -198,7 +204,9 @@ private
                | Slice_Type
                | Array_Repetition
                | Indexing
-               | Selection_From_An_Index => "R2.20",
+               | Selection_From_An_Index
+               | Struct_Literal
+               | Construction          => "R2.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter       => "R2.40",
             --  R2.50 sources [0900] for the parameter conventions.
