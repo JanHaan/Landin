@@ -3450,6 +3450,124 @@ item 2 ROUTINE bind_payloads result none params 0 slots 4 blocks 19 values 57
   block 19 scope 11 BLOCK length 2
     55 NUMBER i32 0
     56 JUMP target 11
+file positive/variant-module-case-image/program.ldn
+unit items 6
+item 1 DATUM seed result u8 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u8 10
+    2 LEAVE <- 1
+item 2 DATUM origin result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 variant u8 cases3 () (u8,u16) ([2]u32)
+  field 3 u8
+  image 7 0 17
+  field 2 case 2
+    payload 1 image 11
+    payload 2 image 13
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM copy result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 variant u8 cases3 () (u8,u16) ([2]u32)
+  field 3 u8
+  image 7 0 17
+  field 2 case 2
+    payload 1 image 11
+    payload 2 image 13
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM inferred result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 variant u8 cases3 () (u8,u16) ([2]u32)
+  field 3 u8
+  image 19 0 23
+  field 2 case 3
+    payload 1 zeroed
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 DATUM bare result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 variant u8 cases3 () (u8,u16) ([2]u32)
+  field 3 u8
+  image 29 0 31
+  field 2 case 1
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 6 ROUTINE read result none params 0 slots 3 blocks 19 values 52
+  slot 1 - u8
+  slot 2 - u8
+  slot 3 - u8
+  block 1 scope 3 BLOCK length 6
+    1 LOAD_VARIANT_TAG u8 from datum 3 copy field 2
+    2 STORE slot 1 <- 1
+    3 LOAD u8 slot 1
+    4 NUMBER u8 0
+    5 EQUAL_TO bool <- 3 4
+    6 BRANCH target 3 alternative 4 <- 5
+  block 2 scope 3 BLOCK length 6
+    18 LOAD_VARIANT_TAG u8 from datum 4 inferred field 2
+    19 STORE slot 2 <- 18
+    20 LOAD u8 slot 2
+    21 NUMBER u8 0
+    22 EQUAL_TO bool <- 20 21
+    23 BRANCH target 9 alternative 10 <- 22
+  block 3 scope 4 BLOCK length 2
+    7 LOAD_FIELD u8
+    8 JUMP target 2
+  block 4 scope 3 BLOCK length 4
+    9 LOAD u8 slot 1
+    10 NUMBER u8 1
+    11 EQUAL_TO bool <- 9 10
+    12 BRANCH target 5 alternative 6 <- 11
+  block 5 scope 5 BLOCK length 2
+    13 LOAD_VARIANT_FIELD u16 from datum 3 copy field 2 case 2 payload field 2
+    14 JUMP target 2
+  block 6 scope 3 BLOCK length 1
+    15 JUMP target 7
+  block 7 scope 6 BLOCK length 2
+    16 LOAD_FIELD u8
+    17 JUMP target 2
+  block 8 scope 3 BLOCK length 6
+    35 LOAD_VARIANT_TAG u8 from datum 5 bare field 2
+    36 STORE slot 3 <- 35
+    37 LOAD u8 slot 3
+    38 NUMBER u8 0
+    39 EQUAL_TO bool <- 37 38
+    40 BRANCH target 15 alternative 16 <- 39
+  block 9 scope 7 BLOCK length 2
+    24 LOAD_FIELD u8
+    25 JUMP target 8
+  block 10 scope 3 BLOCK length 4
+    26 LOAD u8 slot 2
+    27 NUMBER u8 1
+    28 EQUAL_TO bool <- 26 27
+    29 BRANCH target 11 alternative 12 <- 28
+  block 11 scope 8 BLOCK length 2
+    30 LOAD_FIELD u8
+    31 JUMP target 8
+  block 12 scope 3 BLOCK length 1
+    32 JUMP target 13
+  block 13 scope 9 BLOCK length 2
+    33 LOAD_FIELD u8
+    34 JUMP target 8
+  block 14 scope 3 BLOCK length 1
+    52 LEAVE
+  block 15 scope 10 BLOCK length 2
+    41 LOAD_FIELD u8
+    42 JUMP target 14
+  block 16 scope 3 BLOCK length 4
+    43 LOAD u8 slot 3
+    44 NUMBER u8 1
+    45 EQUAL_TO bool <- 43 44
+    46 BRANCH target 17 alternative 18 <- 45
+  block 17 scope 11 BLOCK length 2
+    47 LOAD_FIELD u8
+    48 JUMP target 14
+  block 18 scope 3 BLOCK length 1
+    49 JUMP target 19
+  block 19 scope 12 BLOCK length 2
+    50 LOAD_FIELD u8
+    51 JUMP target 14
 file positive/variant-part-measured/program.ldn
 unit items 1
 item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1

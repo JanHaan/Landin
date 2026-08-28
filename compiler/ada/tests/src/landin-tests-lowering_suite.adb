@@ -2175,7 +2175,17 @@ package body Landin.Tests.Lowering_Suite is
          & " copied_hybrid: hybrid_source)" & LF
          & "copy: holder = origin" & LF
          & "inferred := copy" & LF
-         & "blank: holder = zeroed" & LF,
+         & "blank: holder = zeroed" & LF
+         & "choice: type = struct" & LF
+         & "    kind: variant" & LF
+         & "        leaf |" & LF
+         & "        pair: (first: u8, second: u16)" & LF
+         & "    end kind" & LF
+         & "end choice" & LF
+         & "selected: choice = choice(kind: pair(first: 11,"
+         & " second: 13))" & LF
+         & "selected_copy: choice = selected" & LF
+         & "selected_inferred := choice(kind: leaf)" & LF,
          Ran);
 
       Landin.Testing.Check
@@ -2239,6 +2249,29 @@ package body Landin.Tests.Lowering_Suite is
             IR.Result_Of (Unit, 8) = Landin.Types.Aggregate
             and then not IR.Has_Image (Unit, 8),
             "the whole-zero aggregate still has no written image");
+
+         for Datum in IR.Item_Id range 9 .. 10 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Has_Image (Unit, Datum)
+               and then IR.Field_Image_Of
+                 (Unit, Datum, 1).Form = IR.Selected
+               and then IR.Field_Image_Of
+                 (Unit, Datum, 1).Value = 2
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 1).Value = 11
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 2).Value = 13,
+               "a selected variant image and its copy carry payload folds");
+         end loop;
+         Landin.Testing.Check
+           (Item,
+            IR.Has_Image (Unit, 11)
+            and then IR.Field_Image_Of
+              (Unit, 11, 1).Form = IR.Selected
+            and then IR.Field_Image_Of (Unit, 11, 1).Value = 1
+            and then IR.Field_Image_Of (Unit, 11, 1).Count = 0,
+            "an inferred bare case remains an explicit selected image");
       end;
    end A_Module_Struct_Literal_Records_And_Copies_Its_Image;
 

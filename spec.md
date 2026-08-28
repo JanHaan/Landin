@@ -4674,7 +4674,6 @@ boundary. All were declined.
 public seams; `positive/variant-part-measured`;
 `negative/variant-part-empty`; `negative/variant-case-duplicate`;
 `negative/variant-payload-struct-field-not-enabled`;
-`negative/variant-value-not-enabled`;
 `negative/variant-case-value-not-enabled`;
 `negative/variant-abi-not-enabled`; the generated construct, token, IR and
 target-layout records; the backend seam against both target descriptions; and
@@ -4745,7 +4744,6 @@ target-neutral carrier. All were declined.
 
 **Pinned by** the lowering, verifier and backend public seams;
 `positive/variant-zeroed-storage`;
-`negative/variant-value-not-enabled`;
 `negative/variant-part-selection-not-enabled`; the generated token and IR
 records; and `runtime/variant-zeroed-storage-is-distinct` on Linux x86-64.
 
@@ -4764,10 +4762,10 @@ a directly named mutable module or local struct in the same way. A directly
 selected variant part of such a mutable root may also be assigned either
 form. The case identity must belong to that exact part. A case from another
 part is L0301 at the value; an immutable root keeps L0303 first and alone.
-Module static struct images, inferred module construction and every general
-value position remain L0304 `Variant_Value` boundaries. D80 later admits a
-whole variant-bearing copy whose source and destination are direct runtime
-storage places.
+Module static struct images and inferred module construction remain outside
+this slice until D81; every general value position remains an L0304
+`Variant_Value` boundary. D80 later admits a whole variant-bearing copy whose
+source and destination are direct runtime storage places.
 
 A bare case is legal only when its payload is empty. A labelled case
 construction gives each payload field at most once, using D64's L0308/L0309/
@@ -4807,16 +4805,14 @@ complete padded part. Admitting array payload literals or repetitions would
 add D52/D53's write sequence inside the case and is a later extension. D77
 adds tag matching; D78 adds scalar payload binding while retaining that
 fixed-array boundary. D79 also lets a call-shaped case construction infer a
-fresh local binding; module inference still waits for a nonzero static
-variant image.
+fresh local binding; D81 later supplies the nonzero static variant image and
+admits module inference.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-case-construction`;
 `negative/immutable-variant-case-assignment`;
 `negative/variant-case-does-not-belong`;
-`negative/variant-case-payload-disagrees`;
-`negative/variant-case-construction-contexts-not-enabled`;
-`negative/variant-value-not-enabled`; the generated token and IR records; and
+`negative/variant-case-payload-disagrees`; the generated token and IR records; and
 `runtime/variant-case-construction-runs-in-source-order` on Linux x86-64.
 
 ### D77 — A match exhaustively selects one variant case by its tag
@@ -4937,10 +4933,10 @@ selected part is cleared, its tag is written, and scalar payload fields are
 stored directly. The inferred local is distinct storage and may immediately be
 selected or matched under D77/D78.
 
-An inferred module binding remains refused. Unlike a fresh local slot, it has
-no runtime destination: [1460] requires a static image, and D75 currently
-carries only the absent all-zero variant image. Typed module case images and
-their inferred form therefore remain one later representation decision.
+An inferred module binding remains refused in this slice. Unlike a fresh local
+slot, it has no runtime destination: [1460] requires a static image, and D75
+currently carries only the absent all-zero variant image. D81 later adds that
+representation and admits both the typed and inferred module forms.
 Arguments, returns and general aggregate values remain outside this contextual
 rule and retain their existing owners.
 
@@ -4957,9 +4953,7 @@ scopes merely because one lacks that representation would preserve an
 accidental asymmetry.
 
 **Pinned by** the lowering public seam;
-`positive/variant-case-construction`;
-`negative/variant-case-construction-contexts-not-enabled`; the generated token
-and IR records; and
+`positive/variant-case-construction`; the generated token and IR records; and
 `runtime/variant-case-construction-runs-in-source-order` on Linux x86-64.
 
 ### D80 — A whole variant-bearing struct copies between runtime storage
@@ -5003,12 +4997,72 @@ and make the copy sequence depend on the tag. Copying the whole struct as one
 opaque byte operation would duplicate D54's established scalar/array paths and
 erase their verifier types. One compact operation for the only union-shaped
 field keeps the IR target-neutral and the existing field semantics visible.
-Static nonzero variant images, inferred module construction, general aggregate
-values, arguments and returns remain separate decisions; the last two retain
-R2.30's ABI owner.
+Static nonzero variant images and inferred module construction follow in D81.
+General aggregate values, arguments and returns remain separate decisions;
+the last two retain R2.30's ABI owner.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-whole-copy`;
-`negative/variant-whole-copy-source-unassigned`;
-`negative/variant-value-not-enabled`; the generated token and IR records; and
+`negative/variant-whole-copy-source-unassigned`; the generated token and IR records; and
 `runtime/variant-whole-copy-is-distinct` on Linux x86-64.
+
+### D81 — A module variant construction is a static selected-case image
+
+**The tour said** that a module binding may carry a value [0040], that nothing
+runs before the entry point [1460], and that a variant value selects one case
+and its payload [0680]--[0700]. D66--D71 gave ordinary structs a target-neutral
+static image, while D75 kept a variant part absent and all-zero and D76/D79
+constructed nonzero cases only into runtime storage.
+
+**Chosen:** an explicitly typed module struct literal or nominal construction
+may select D76's bare or labelled variant case. A call-shaped construction may
+also infer the module binding's nominal body, as D79 already does for a local.
+Every labelled scalar payload expression must be [1940]-known and must fit its
+contextual scalar type on the selected target; excluded storage reads remain
+L0304, an unknown fold remains L0305, and an overflowing or out-of-range fold
+remains L0300. A fixed-array payload still accepts only `zeroed`. Omitted
+payload fields covered by `of zeroed` retain their zero image.
+
+The selected case is a static image, not startup code. The aggregate field's
+flat fold stays zero. Its top-level image descriptor has form `Selected`, a
+one-based case in `Value`, and an offset/count selecting one declaration-order
+payload-descriptor run appended after the aggregate's top-level descriptors.
+A scalar payload descriptor carries its folded value; a fixed-array payload
+reuses D67/D68's absent/finite/repeated/hybrid shape and element run, although
+only the absent zero form is produced in this slice. Offsets select descriptors
+or folds, never target bytes. The old setter delegates with an empty payload
+run, so every D66--D71 image keeps the same carrier.
+
+The verifier first proves the top-level descriptor run, selected case and
+payload run before any payload accessor. It then proves each scalar fold and
+array descriptor against that case's D74 leaf shape and the selected target.
+Malformed nesting, case identities, counts, offsets, patterns and values are
+explicit release-build faults. The backend replays D74's tag-first placement,
+writes `case - 1` at the tag width, inserts this target's gaps, writes scalar
+payloads at their widths, emits array payload images, and zeroes the inactive
+tail of the maximum payload extent. Selecting the first case explicitly is
+still a written `.data` image even when every byte is zero; D75's omitted or
+whole-`zeroed` value alone remains absent `.bss` storage.
+
+D60/D61 module struct image chains copy the selected descriptor, payload
+descriptors and element folds into distinct destination storage. Forward
+references and cycles keep their existing declaration-identity validation;
+a cycle reports L0305 once. Later runtime writes never alias a copied image.
+General aggregate values, arguments and returns remain refused, with the last
+two retaining R2.30's ABI owner. Fixed-array payload literals/repetitions and
+fixed-array match aliases remain later R2.20 decisions.
+
+**Why one extended descriptor run:** target bytes would duplicate the image per
+target and abandon the IR boundary; startup stores would contradict [1460]; a
+second item-owned vector would introduce another partition invariant for data
+the existing field-image run already orders. One selected descriptor plus a
+contiguous payload run makes the case explicit, keeps every width and offset in
+the backend, and lets D60's existing image-chain machinery copy the complete
+value without inspecting target layout.
+
+**Pinned by** the lowering, verifier and backend public seams;
+`positive/variant-module-case-image`;
+`negative/variant-module-case-image-value-not-known`;
+`negative/variant-module-case-image-storage-read`;
+`negative/variant-module-case-image-out-of-range`; the generated token and IR records; and
+`runtime/variant-module-case-image-is-distinct` on Linux x86-64.

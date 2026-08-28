@@ -1,0 +1,6 @@
+class: runtime
+summary: D81 copies static selected variant images into distinct module storage
+constructs: 0050, 0080, 0410, 0670, 0680, 0690, 0700, 0710, 0750, 1210, 1220, 1460, 1740, 1790, 1795, 1810, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

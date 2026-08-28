@@ -1,0 +1,42 @@
+seed: u8 = 10
+
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u16) |
+        row: (values: [2]u32)
+    end kind
+    tail: u8
+end choice
+
+origin: choice = choice(
+    prefix: 7,
+    kind: pair(first: seed + 1, second: 13),
+    tail: 17
+)
+copy: choice = origin
+inferred := choice(
+    prefix: 19,
+    kind: row(values: zeroed),
+    tail: 23
+)
+bare: choice = (prefix: 29, kind: leaf, tail: 31)
+
+read: () -> none =
+    match copy.kind
+        leaf: _ = copy.prefix
+        pair(first, second): _ = second
+        row: _ = copy.tail
+    end match
+    match inferred.kind
+        leaf: _ = inferred.prefix
+        pair: _ = inferred.tail
+        row: _ = inferred.prefix
+    end match
+    match bare.kind
+        leaf: _ = bare.prefix
+        pair: _ = bare.tail
+        row: _ = bare.tail
+    end match
+end read
