@@ -1058,6 +1058,16 @@ field, so it wants that field assigned above it, exactly as `inc n` wants
 `n`. Every arm of an `if` merges its fields the way [1910] already merges
 its names, and no condition is believed there either.
 
+D54 later applies the same field boundary when an array-bearing struct is
+copied whole. Scalar fields keep these individual bits; a fixed-array field is
+complete only through its own D48 sparse facts or D49/D50/D52/D53 whole-field
+fact.
+Normal completion assigns every destination scalar bit and every destination
+array-field whole fact without conflating the two representations.
+A binding or assignment the checker has already refused reads nothing for
+definite assignment: the statement cannot execute, so its owning report is not
+followed by an L0302 from an otherwise unassigned source inside it.
+
 **Why the field and not the binding:** [1910] tracks the thing an assignment
 writes, and an assignment to a place writes a field. It is also the answer
 that survives: a parameter of struct type arrives assigned in every field, a
@@ -1341,8 +1351,9 @@ declaration, so their computed reads meet no assignment requirement and
 their computed writes still assign nothing tracked. Every other refused
 value form — an inferred initializer not sourced by a direct storage name, a
 slice, `zeroed`, repetition, an array literal outside D23's one context,
-`lenof`, a whole value of D46/D47's array-field struct, or its array field
-as a whole value or place — stays refused. D48 separately admits one element
+`lenof`, a general whole value of D46/D47's array-field struct outside D54's
+contextual copy, or its array field as a whole value or place — stays refused.
+D48 separately admits one element
 selected through that field.
 
 **Why:** treating one computed write as a whole assignment would admit
@@ -2598,8 +2609,9 @@ local declaration of the same struct also reported L0304 in this slice because
 the frame's aggregate-slot representation remained scalar-field-only; D47
 supersedes that storage boundary. An initializer, whole
 read or copy, parameter, return and every other whole-value context remain
-refused. Struct fields of struct type and other nested aggregate composition
-remain outside D45 and therefore outside this decision. D17's internal
+refused in this slice; D54 later supersedes the whole-copy boundary alone.
+Struct fields of struct type and other nested aggregate composition remain
+outside D45 and therefore outside this decision. D17's internal
 zero-length field rule is unchanged, and source `[0]T` legality remains
 undecided.
 
@@ -2635,7 +2647,7 @@ were declined.
 **Pinned by** the checker, lowering, verifier and backend public-seam cases;
 `positive/struct-array-field-module-state`;
 `negative/struct-array-field-selection-not-enabled`;
-`negative/struct-array-field-whole-copy-not-enabled`; the recorded IR dump; and
+the recorded IR dump; and
 `runtime/struct-array-field-state-scalar-siblings` on Linux x86-64.
 
 ### D47 — An array-field struct may be declaration-only local storage
@@ -2663,8 +2675,9 @@ nested place: selection reported L0304 once and the definite-assignment
 recovery walk added no whole-struct report. D48 supersedes that boundary for an
 indexed element and gives it a field-qualified fact. A local
 initializer, whole read or copy, parameter, return and every other whole-value
-context remain refused. Struct fields of struct type and broader nested
-aggregate composition also remain outside the laid-out kernel.
+context remain refused in this slice; D54 later supersedes the whole-copy
+boundary alone. Struct fields of struct type and broader nested aggregate
+composition also remain outside the laid-out kernel.
 
 Lowering records the cell as one aggregate slot whose declaration-order field
 run uses D45's neutral shape: a scalar leaf has canonical length one and a
@@ -2699,7 +2712,6 @@ definite-assignment and calling-convention questions. Both were declined.
 cases; `positive/struct-array-field-local-storage`;
 `negative/struct-with-an-array-field`;
 `negative/struct-array-field-local-selection-not-enabled`;
-`negative/struct-array-field-local-whole-copy-not-enabled`;
 `negative/struct-array-field-local-unassigned-scalar`; the recorded IR dump;
 and `runtime/struct-array-field-local-scalar-siblings` on Linux x86-64.
 
@@ -2883,8 +2895,8 @@ refused as a module initializer source, argument, return, discard, operand, or
 bare read, and as a literal, repetition, or other non-`zeroed`, non-copy
 assignment destination. D51 later admits it as a local initializer source
 without changing those positions, and D52 later admits a literal destination
-alone. Whole copies of the containing struct keep D46's refusal, so D50 does
-not make the scalar-only `Copy_Field` path consume an array shape.
+alone. Whole copies of the containing struct keep D46's refusal in this slice;
+D54 later gives the field-wise lowering path an explicit array branch.
 
 Lowering emits one compact `Copy_Array` carrying both root storage identities
 and both field identities, never target offsets, temporaries, or one operation
@@ -2959,8 +2971,8 @@ selected field is still refused as either a typed or inferred module
 initializer, argument, return, discard, operand or bare read. It is not a
 literal or repetition destination at this boundary; D52 later admits the
 literal destination alone. Whole copies of the containing struct keep D46's
-refusal; fields of elements, struct-of-struct fields and nested arrays remain
-outside the laid-out kernel.
+refusal here and are admitted later by D54; fields of elements,
+struct-of-struct fields and nested arrays remain outside the laid-out kernel.
 
 Lowering emits D21's one compact `Copy_Array` from the containing root storage,
 carrying the field's declaration-order identity as D50's source field, into the
@@ -3040,7 +3052,8 @@ mixed repetition are a separate decision admitted later by D53; `zeroed` other
 than D49, copies other than D50, module
 initializers, arguments, returns, discards, operands, bare reads, fields of
 elements, struct-of-struct fields and nested arrays keep their existing
-boundaries. In particular, D52 itself does not widen `Fill_Array`.
+boundaries. Whole copies of the containing struct remain refused here and are
+admitted later by D54. In particular, D52 itself does not widen `Fill_Array`.
 
 **Why reuse element stores:** a literal already names one expression per
 position, and D48 already represents the containing field plus an element
@@ -3118,8 +3131,9 @@ both 64- and 32-bit target descriptions.
 This is one contextual assignment rule, not a general field value or place.
 Repetition in local or module initializers from a field, arguments, returns,
 discards, operands, bare reads, fields of elements, struct-of-struct fields and
-nested arrays remains refused. D53 does not change module static images or
-admit a field as an independently carried repetition value.
+nested arrays remains refused. A whole copy of the containing struct remains
+refused in this slice and is admitted later by D54. D53 does not change module
+static images or admit a field as an independently carried repetition value.
 
 **Why reuse the compact fill:** D32/D37 already evaluate one repeated scalar
 and keep IR size independent of the target-sized extent, while D48/D52 already
@@ -3145,3 +3159,83 @@ were declined.
 `negative/struct-array-field-repetition-not-on-every-path`; the recorded IR
 dump; and `runtime/struct-array-field-repetition-assignment-order` on Linux
 x86-64.
+
+### D54 — An array-bearing struct is copied field by field
+
+**The tour said** that assignment reaches its destination before its value
+[0410], that assigning an array copies its complete value [0520], that a struct
+has its declared fields [0670], that named structs have nominal identity
+[0710], and that a declaration-only local must be assigned before it is read
+[1910]. D16 made each scalar field of a struct local an independent assignment
+fact. D46 and D47 admitted module and local storage with fixed-scalar-array
+fields, while their whole-copy boundary remained refused.
+
+**Chosen:** `destination = source` is admitted when both directly name D46
+module state or D47 declaration-only local storage of the same nominal ordinary
+struct, directly or through aliases, and every field is an enabled scalar or a
+fixed array of enabled scalars. [0710] still refuses two distinct, same-shaped
+struct declarations with L0301. The destination root must be mutable; L0303
+owns an immutable destination first and alone. This is the existing contextual
+struct assignment, not a general aggregate value.
+
+A module source is complete under D10. Before a tracked local source is copied,
+every scalar field must have D16's field fact and every fixed-array field must
+be complete under D48--D53: either its D49/D50/D52/D53 binding-and-field whole
+fact exists or its D48 sparse element facts cover the declared length. An
+internal zero-length
+field is vacuously complete. The first incomplete field owns D16's L0302 and is
+named in the report. Self-copy follows the same read rule, so it cannot turn an
+unassigned object into an assigned one. A merge retains only the contributing
+facts present on every arriving path.
+
+Normal completion assigns every destination field independently. A scalar
+field receives its D16 bit; a fixed-array field receives its binding-and-field
+whole fact, without assigning a scalar sibling or conflating two array fields.
+Lowering visits fields in declaration order. A scalar field keeps the existing
+`Load_Field` and `Store_Field` pair. A fixed-array field emits one D50
+`Copy_Array` whose source and destination carry that field's declaration-order
+identity. No target offset, hidden aggregate temporary, whole-aggregate opcode,
+or operation per array element is introduced. Exact self-copy names identical
+ranges and the existing forward byte copy preserves them.
+
+The verifier and backends need no new boundary: D50 already checks both
+positive field identities before reading their equal array shapes, and D53's
+storage-address path derives datum and frame field addresses from target facts.
+Linux x86-64 therefore register-forms a D18-wide module field and uses
+L0504-bounded frame displacements on both 64- and 32-bit target descriptions.
+
+Initializers, arguments, returns, discards, operands, bare whole reads and every
+other general value of the struct remain refused, as do struct fields of struct
+type, fields of elements and nested arrays. In particular, an explicitly typed
+or inferred module initializer from an array-bearing struct name reports the
+existing L0304 once, as do the two local spellings. The inferred spelling is
+not D21's direct-array source: before D54 it could silently settle an aggregate
+binding with no value representation, while D54 routes it through the ordinary
+whole-value refusal without changing forward-name or cycle ownership.
+Parameters and returns still need their own calling-convention decision.
+
+**Why field-wise copy:** the enabled aggregate representation already names
+each scalar or compact array field, and D16 plus D48--D53 already state exactly
+what makes each one initialized. Reusing those identities keeps compiler work
+and IR size independent of D18's array extent while preserving the nominal
+struct rule and target-neutral layout.
+
+**The alternatives:** keep whole copy scalar-only, flatten each array into a
+scalar operation per element, add one opaque aggregate-copy instruction, or
+make the struct a general value. The first leaves two equally laid-out storage
+classes needlessly asymmetric; the second cannot represent every enabled
+extent; the third hides the field-shaped verification and assignment facts;
+and the fourth settles unrelated initializer, call and return rules. All were
+declined.
+
+**Pinned by** the checker, lowering and backend public-seam cases;
+`positive/struct-array-field-whole-copy`;
+`negative/struct-array-field-whole-copy-source-unassigned`;
+`negative/struct-array-field-whole-copy-not-on-every-path`;
+`negative/struct-array-field-whole-self-copy-unassigned`;
+`negative/immutable-struct-array-field-whole-copy`;
+`negative/struct-array-field-initializer-not-enabled`;
+`negative/struct-array-field-inferred-initializer-not-enabled`;
+`negative/inferred-struct-initializer-not-enabled`;
+`negative/struct-copy-across-types`; the recorded IR dump; and
+`runtime/struct-array-field-whole-copy` on Linux x86-64.

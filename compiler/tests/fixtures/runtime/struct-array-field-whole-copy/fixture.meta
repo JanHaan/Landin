@@ -1,0 +1,6 @@
+class: runtime
+summary: D54 copies every scalar and array field independently across storage classes
+constructs: 0080, 0190, 0410, 0520, 0670, 0710, 0750, 1740, 1810, 1900, 1910
+program: main.ldn
+status: 42
+targets: linux-x86-64

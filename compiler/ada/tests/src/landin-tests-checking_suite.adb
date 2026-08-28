@@ -364,10 +364,8 @@ package body Landin.Tests.Checking_Suite is
                Machine_Size, "its size follows the target");
 
             Landin.Testing.Check
-              (Item, Landin.Checking.Has_Layout (Types.all, Nested)
-                     and then not Landin.Checking.Has_Only_Scalar_Fields
-                       (Types.all, Nested),
-               "an array-field struct has a layout but no scalar value run");
+              (Item, Landin.Checking.Has_Layout (Types.all, Nested),
+               "an array-field struct has its complete compact layout");
             Landin.Testing.Check
               (Item,
                Landin.Checking.Field_Kind_Of (Types.all, Nested, 2)
@@ -1859,6 +1857,100 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 4, "all contextual field repetitions were checked");
    end Array_Field_Repetitions_Carry_Their_Destination_Shape;
 
+   --  D54 admits the one aggregate expression context as soon as every
+   --  field has an enabled copy representation.  Nominal identity stays on
+   --  both names while D16 and D48 account for scalar and array fields.
+   procedure Array_Bearing_Struct_Copy_Uses_Each_Field_Fact
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Bearing_Struct_Copy_Uses_Each_Field_Fact
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "array-bearing-struct-copy.ldn",
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "    tail: u16" & LF
+         & "end holder" & LF
+         & "same: type = holder" & LF
+         & "mut left: holder" & LF
+         & "mut right: same" & LF
+         & "f: (at: usize) -> (result: u32) =" & LF
+         & "    right = left" & LF
+         & "    mut source: same" & LF
+         & "    source.tag = 1" & LF
+         & "    source.row[0] = 20" & LF
+         & "    source.row[1] = 22" & LF
+         & "    source.tail = 3" & LF
+         & "    mut destination: holder" & LF
+         & "    destination = source" & LF
+         & "    right = destination" & LF
+         & "    destination = left" & LF
+         & "    destination = destination" & LF
+         & "    result = destination.row[at]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "whole copies cross module and local storage after complete reads");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Assignment
+            then
+               declare
+                  Target : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Target_Of (Of_Tree.all, Node);
+                  Value : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Value_Of (Of_Tree.all, Node);
+               begin
+                  if Landin.Checking.Type_Of
+                       (Types.all, Of_Tree.all, Target)
+                       = Landin.Types.Aggregate
+                  then
+                     Seen := Seen + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Value)
+                            = Landin.Types.Aggregate
+                        and then Landin.Checking.Body_Of
+                          (Types.all, Of_Tree.all, Target)
+                            = Landin.Checking.Body_Of
+                                (Types.all, Of_Tree.all, Value),
+                        "each whole copy keeps one nominal struct identity");
+                  end if;
+               end;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 5, "every whole aggregate assignment was checked");
+   end Array_Bearing_Struct_Copy_Uses_Each_Field_Fact;
+
    --  D50: a fixed-array field may supply or receive D20's complete copy.
    --  The source read uses the field-qualified whole-array fact established
    --  by D49 or an earlier copy, rather than D16's scalar-field bit.
@@ -2225,6 +2317,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array field repetitions carry destination shape",
          Array_Field_Repetitions_Carry_Their_Destination_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array-bearing struct copy uses each field fact",
+         Array_Bearing_Struct_Copy_Uses_Each_Field_Fact'Access);
       Landin.Testing.Register
         (Into, "checking", "array field copy uses whole field facts",
          Array_Field_Copy_Uses_Whole_Field_Facts'Access);

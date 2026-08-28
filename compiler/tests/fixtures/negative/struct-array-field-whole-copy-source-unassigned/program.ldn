@@ -1,0 +1,14 @@
+holder: type = struct
+    tag: u8
+    row: [2]u32
+    tail: u16
+end holder
+
+copy: () -> none =
+    mut source: holder
+    source.tag = 1
+    source.row[0] = 2
+    source.tail = 3
+    mut destination: holder
+    destination = source
+end copy
