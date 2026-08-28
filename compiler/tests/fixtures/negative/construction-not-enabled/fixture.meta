@@ -1,6 +1,6 @@
 class: negative
-summary: D63 names [0700]'s call-shaped ordinary-struct construction once while named arguments remain outside [1810]'s enabled grammar
+summary: D72 keeps construction contextual rather than making an ordinary struct a discard, operand or argument value
 constructs: 0700, 1810, 1830
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0010, L0010
+codes: L0304, L0304, L0304

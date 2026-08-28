@@ -3003,8 +3003,9 @@ lowering operation, verifier invariant, backend layout or diagnostic code is
 introduced. Parser public-seam, focused negative and automatic truncation
 cases plus regenerated construct and token records provide evidence. D64 below
 adds the grammar and real field-labelled node for the nonempty labelled form.
-The all-fill and call-shaped spellings remain parser refusals. D64 later adds
-the labelled literal node and D66--D71 its target-neutral module static image.
+The all-fill and call-shaped spellings remain parser refusals at that point.
+D64 later adds the labelled literal node, D66--D71 its target-neutral module
+static image, and D72 its nominal construction spelling.
 
 D64 enables [0710]'s nonempty labelled ordinary-struct literal in an explicitly
 typed local initializer and as the complete right-hand side of assignment to a
@@ -3037,7 +3038,8 @@ source-assignment, immutable-root and nested-value fixtures plus checker and
 lowering seams and regenerated token/IR records provide evidence. General
 `of expression` remains refused because one node cannot carry several field
 types without conversion or re-evaluation; inferred literals wait for
-construction, module literals remain outside D65, and the all-fill synonym and
+construction, which D72 later supplies; module literals remain outside D65,
+and the all-fill synonym and
 general aggregate values remain refused. D66 later supplies D60's nonzero
 image carrier for scalar labels, D67 its finite-or-zero array-field form, and
 D68 its repeated and hybrid field images.
@@ -3146,6 +3148,20 @@ cycle fixtures, generated records and a runtime independence case provide
 evidence. No IR, verifier, backend, target, grammar, syntax or diagnostic
 representation changes.
 
+D72 enables [0700]'s call-shaped ordinary-struct construction as a nominally
+typed spelling of D64's labelled literal. `T(field: value, ...[, of zeroed])`
+is admitted as a typed or inferred local or module initializer and as the
+complete right-hand side of whole assignment to directly named mutable struct
+storage. A typed destination must share `T`'s [0710] body; an inferred binding
+carries that body before settling. The existing D64--D71 field, ordering,
+definite-assignment and static-image rules apply unchanged, so construction
+writes directly to its contextual destination and introduces no aggregate
+temporary or new IR/backend representation. Scalar, function and binding
+callees are L0301; positional conversion, the all-`of` form, bare inferred
+literals and every general-value use remain refused. Parser, checker and
+lowering seams, focused positive/negative fixtures, regenerated records and a
+runtime source-order/module-image case provide evidence.
+
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
 D33--D36/D38's repetitions, and D51/D70's selected field for a local or module
@@ -3168,10 +3184,12 @@ outside those rules.
 Struct initialization is contextual too: D55/D56 admit typed and inferred local
 direct-name copies; D57 and D59 typed local and module zero images; D60/D61
 typed and inferred module image chains; D64/D65 typed local labelled literals
-and whole assignments; and D66--D71 typed module labelled images. General
-whole values, inferred struct literals, heterogeneous or all-field fills and
-call-shaped construction remain refused. Parameters and returns of any struct
-type require R2.30's aggregate ABI. An array field may otherwise be reached
+and whole assignments; D66--D71 typed module labelled images; and D72 nominal
+construction in typed or inferred local/module initializers and whole
+assignments. General whole values, bare inferred struct literals,
+heterogeneous or all-field fills, positional conversion and construction in a
+general expression remain refused. Parameters and returns of any struct type
+require R2.30's aggregate ABI. An array field may otherwise be reached
 only through D48's indexed elements, D49's contextual clear, D50's copy
 endpoints, D51's local initializer source, and D52/D53's literal or repetition
 destination. Each remaining boundary is its own slice rather than an implicit
@@ -3266,6 +3284,10 @@ construction and aggregate inference pinned.
 D71 migrated a selected fixed-array field into a typed module struct literal's
 label, while keeping scalar, indexed, nested and type-root selections,
 inference, construction and every general aggregate value pinned.
+D72 migrated call-shaped nominal construction into typed and inferred local or
+module initializers and whole assignment, while keeping bare inference,
+positional conversion, all-`of`, aggregate temporaries, general values and the
+R2.30 struct ABI pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

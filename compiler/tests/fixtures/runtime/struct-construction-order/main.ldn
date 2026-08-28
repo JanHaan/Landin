@@ -1,0 +1,20 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+origin := point(x: 10, y: 20)
+copy: point = origin
+
+public main: () -> (code: i32) =
+    mut here: point = point(x: 1, y: 2)
+    here = point(x: here.y, y: here.x)
+    if here.x == 2 and here.y == 2
+      and origin.x == 10 and origin.y == 20
+      and copy.x == 10 and copy.y == 20
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

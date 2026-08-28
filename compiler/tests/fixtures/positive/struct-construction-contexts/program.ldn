@@ -1,0 +1,27 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+same: type = point
+
+origin := point(x: 10, y: 20)
+typed: point = point(y: 2, x: 1)
+aliased: same = same(x: 3, y: 4)
+copy: point = origin
+
+packet: type = struct
+    tag: u8
+    row: [2]u16
+end packet
+
+words: [2]u16 = [11, 13]
+image := packet(row: words, tag: 7)
+
+f: () -> none =
+    local := point(x: 5, y: 6)
+    typed_local: point = point(y: 8, x: 7)
+    mut assigned: point
+    assigned = same(x: 9, y: 10)
+    _ = local.x + typed_local.y + assigned.x
+end f

@@ -125,10 +125,12 @@ package Landin.Syntax is
       --  D36's mixed-prefix repetition.  Its one fixed slot is the repeated
       --  expression; its trailing run is the nonempty literal prefix.
       Mixed_Array_Repetition,
-      --  [0710]'s contextual ordinary-struct image.  Its one fixed slot is
-      --  [0720]'s optional `of` expression; its trailing run is Field_Value
-      --  in written order.  A label is the Field_Value node's own name and
-      --  not a Name_Reference that resolution should bind.
+      --  [0710]'s contextual ordinary-struct image.  Its first fixed slot is
+      --  [0720]'s optional `of` expression; D72's second is the optional
+      --  nominal type node supplied by [0700]'s construction.  Its
+      --  trailing run is Field_Value in written order.  A label is the
+      --  Field_Value node's own name and not a Name_Reference that resolution
+      --  should bind.
       Struct_Literal,
       Integer_Literal,
       True_Literal,
@@ -523,8 +525,13 @@ package Landin.Syntax is
                   and then Index <= Element_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Element'Result);
 
-   --  [0710]'s written field run and [0720]'s optional trailing fill.
+   --  [0710]'s written field run, [0720]'s optional trailing fill and D72's
+   --  optional nominal type.  Constructed_Type is No_Node for a bare literal.
    function Struct_Fill (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Struct_Literal;
+
+   function Constructed_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Struct_Literal;
 

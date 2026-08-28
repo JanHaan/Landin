@@ -1,0 +1,11 @@
+point: type = struct
+    x: i32
+end point
+
+state: point
+
+f: () -> none =
+    local: point
+    state = point(x: 1)
+    local = point(x: 2)
+end f
