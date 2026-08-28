@@ -1,0 +1,10 @@
+left: type = struct
+    tag: u8
+end left
+
+right: type = struct
+    tag: u8
+end right
+
+source: right
+copy: left = source

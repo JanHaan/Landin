@@ -581,14 +581,15 @@ package body Landin.Stages.Checking is
                         = Syn.Member_Selection
                     and then Admit_Array_Field
                       (Of_Tree, Syn.Value_Of (Of_Tree, Node))));
-            --  D55: a written local struct type supplies the nominal
-            --  context for one initializer copied directly from storage.
+            --  D55/D60: a written local or module struct type supplies the
+            --  nominal context for one initializer copied directly from
+            --  storage.  The module form copies a static image rather than
+            --  executing a runtime copy.
             --  Resolution has already stopped the pipeline for an unresolved
             --  name; a resolved type declaration is not runtime storage.
             Is_Direct_Struct_Init : constant Boolean :=
               Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
-              and then Is_Local_Binding (Of_Tree, Node)
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Name_Reference
@@ -3240,13 +3241,17 @@ package body Landin.Stages.Checking is
             end;
          end Refuse_Unreadable_Subtree;
       begin
-         --  A contextual initializer boundary already owns a refused value.
-         --  In particular, D51 keeps a selected field out of a module
-         --  initializer with L0304; [1940] must not add a second report for
-         --  the same node after that refusal has made it Ill_Typed.
-         if Value /= Syn.No_Node
-           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
-                    = Ty.Ill_Typed
+         --  A contextual initializer boundary already owns a refused binding
+         --  or value.  Every Declared_As_Node refusal marks the written type,
+         --  while D51's selected field marks the value; [1940] must not add a
+         --  second report after either refusal.
+         if (Written /= Syn.No_Node
+             and then Landin.Checking.Type_Of
+                        (Types.all, Of_Tree, Written) = Ty.Ill_Typed)
+           or else
+             (Value /= Syn.No_Node
+              and then Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+                         = Ty.Ill_Typed)
          then
             return;
          end if;
@@ -3589,7 +3594,7 @@ package body Landin.Stages.Checking is
       end Infer;
 
       ------------------------------------------------------------
-      --  R2.20: every module array image reaches zeroed storage
+      --  R2.20: every module array or struct image reaches static storage
       ------------------------------------------------------------
 
       type Image_State is (Unseen, Visiting, Valid, Invalid);
@@ -3598,11 +3603,11 @@ package body Landin.Stages.Checking is
          .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all)))
         of Image_State := [others => Unseen];
 
-      function Validate_Array_Image
+      function Validate_Module_Image
         (Id : Res.Declaration_Id) return Boolean;
-      procedure Validate_Array_Images;
+      procedure Validate_Module_Images;
 
-      function Validate_Array_Image
+      function Validate_Module_Image
         (Id : Res.Declaration_Id) return Boolean
       is
          Of_Tree : constant not null access constant Syn.Tree :=
@@ -3640,8 +3645,9 @@ package body Landin.Stages.Checking is
 
          Image_States (Id) := Visiting;
 
-         --  An omitted initializer is D10's zero image; D24 admits a
-         --  literal terminal image and D27 spells the zero image explicitly.
+         --  An omitted initializer is D10's zero image; D24 admits an array
+         --  literal terminal image, while D27 and D59 spell array and struct
+         --  zero images explicitly.
          --  Refused or mismatched initializer forms are left to their existing
          --  diagnostics rather than producing graph fallout.
          if Value = Syn.No_Node then
@@ -3667,26 +3673,41 @@ package body Landin.Stages.Checking is
          declare
             Source_Id : constant Res.Declaration_Id :=
               Res.Bound_To (Meanings.all, Of_Tree.all, Value);
-            Reaches_Zero : Boolean := False;
+            Reaches_Image : Boolean := False;
          begin
             if Res.Sort_Of (Meanings.all, Source_Id) = Res.Module_Binding
-              and then Landin.Checking.Type_Of (Types.all, Source_Id)
-                       = Ty.Fixed_Array
-              and then Landin.Checking.Array_Length (Types.all, Source_Id)
-                       = Landin.Checking.Array_Length (Types.all, Id)
-              and then Landin.Checking.Array_Element (Types.all, Source_Id)
-                       = Landin.Checking.Array_Element (Types.all, Id)
             then
-               Reaches_Zero := Validate_Array_Image (Source_Id);
+               if Landin.Checking.Type_Of (Types.all, Id) = Ty.Fixed_Array
+                 and then Landin.Checking.Type_Of (Types.all, Source_Id)
+                          = Ty.Fixed_Array
+                 and then Landin.Checking.Array_Length (Types.all, Source_Id)
+                          = Landin.Checking.Array_Length (Types.all, Id)
+                 and then Landin.Checking.Array_Element (Types.all, Source_Id)
+                          = Landin.Checking.Array_Element (Types.all, Id)
+               then
+                  Reaches_Image := Validate_Module_Image (Source_Id);
+               elsif Landin.Checking.Type_Of (Types.all, Id) = Ty.Aggregate
+                 and then Landin.Checking.Type_Of (Types.all, Source_Id)
+                          = Ty.Aggregate
+                 and then Landin.Checking.Body_Of (Types.all, Source_Id)
+                          = Landin.Checking.Body_Of (Types.all, Id)
+               then
+                  --  D60: ordinary module structs currently have only D10
+                  --  and D59's zero terminal images.  Following identities
+                  --  still rejects a value chain that returns to itself.  A
+                  --  body with no layout has already refused the compilation;
+                  --  this graph walk adds no fallout for it.
+                  Reaches_Image := Validate_Module_Image (Source_Id);
+               end if;
             end if;
 
             Image_States (Id) :=
-              (if Reaches_Zero then Valid else Invalid);
-            return Reaches_Zero;
+              (if Reaches_Image then Valid else Invalid);
+            return Reaches_Image;
          end;
-      end Validate_Array_Image;
+      end Validate_Module_Image;
 
-      procedure Validate_Array_Images is
+      procedure Validate_Module_Images is
       begin
          for Id in Res.Declaration_Id'(1)
                    .. Res.Declaration_Id
@@ -3694,17 +3715,17 @@ package body Landin.Stages.Checking is
          loop
             if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
               and then Landin.Checking.Type_Of (Types.all, Id)
-                       = Ty.Fixed_Array
+                       in Ty.Fixed_Array | Ty.Aggregate
             then
                declare
-                  Reaches_Zero : constant Boolean :=
-                    Validate_Array_Image (Id);
+                  Reaches_Image : constant Boolean :=
+                    Validate_Module_Image (Id);
                begin
-                  pragma Unreferenced (Reaches_Zero);
+                  pragma Unreferenced (Reaches_Image);
                end;
             end if;
          end loop;
-      end Validate_Array_Images;
+      end Validate_Module_Images;
 
       ------------------------------------------------------------
       --  [1940]: a module value is folded, because it cannot trap
@@ -5793,9 +5814,10 @@ package body Landin.Stages.Checking is
          end if;
       end loop;
 
-      --  Module arrays have no run-before-main copy.  Their direct-name image
-      --  chains therefore have to terminate at D10's omitted initializer.
-      Validate_Array_Images;
+      --  Module arrays and structs have no run-before-main copy.  Their
+      --  direct-name image chains therefore have to terminate at a static
+      --  image rather than returning to a declaration already being visited.
+      Validate_Module_Images;
 
       --  Pass three: the bodies, one tree at a time in source order.
       for Index in 1 .. Source_Count (Context) loop

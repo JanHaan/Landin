@@ -2,6 +2,8 @@ holder: type = struct
     value: u32
 end holder
 
+module_copy: holder = holder
+
 mut destination: holder
 
 copy: () -> none =

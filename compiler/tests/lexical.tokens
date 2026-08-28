@@ -2947,6 +2947,81 @@ file positive/module-scalar-zeroed-initializer/program.ldn tokens 16
   49 53 bool
   54 55 =
   56 62 zeroed
+file positive/module-struct-initialized-from-name/program.ldn tokens 74
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 tag
+  29 30 :
+  31 33 u8
+  38 41 row
+  41 42 :
+  43 44 [
+  44 45 2
+  45 46 ]
+  46 51 usize
+  56 60 tail
+  60 61 :
+  62 65 u16
+  66 69 end
+  70 76 holder
+  78 82 same
+  82 83 :
+  84 88 type
+  89 90 =
+  91 97 holder
+  99 102 mut
+  103 108 first
+  108 109 :
+  110 114 same
+  115 116 =
+  117 125 terminal
+  126 132 second
+  132 133 :
+  134 140 holder
+  141 142 =
+  143 148 first
+  149 157 terminal
+  157 158 :
+  159 165 holder
+  167 173 public
+  174 181 observe
+  181 182 :
+  183 184 (
+  184 185 )
+  186 188 ->
+  189 190 (
+  190 195 value
+  195 196 :
+  197 202 usize
+  202 203 )
+  204 205 =
+  210 215 value
+  216 217 =
+  218 223 first
+  223 224 .
+  224 227 row
+  227 228 [
+  228 229 0
+  229 230 ]
+  231 232 +
+  233 239 second
+  239 240 .
+  240 243 row
+  243 244 [
+  244 245 1
+  245 246 ]
+  247 248 +
+  249 257 terminal
+  257 258 .
+  258 261 row
+  261 262 [
+  262 263 0
+  263 264 ]
+  265 268 end
+  269 276 observe
 file positive/module-struct-zeroed-initializer/program.ldn tokens 86
   0 6 holder
   6 7 :
@@ -8978,6 +9053,58 @@ file negative/module-scalar-storage-selection/program.ldn tokens 34
   110 111 [
   111 112 0
   112 113 ]
+file negative/module-struct-initial-image-cycle/program.ldn tokens 22
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 tag
+  29 30 :
+  31 33 u8
+  34 37 end
+  38 44 holder
+  46 49 mut
+  50 55 first
+  55 56 :
+  57 63 holder
+  64 65 =
+  66 72 second
+  73 76 mut
+  77 83 second
+  83 84 :
+  85 91 holder
+  92 93 =
+  94 99 first
+file negative/module-struct-initializer-nominal-mismatch/program.ldn tokens 28
+  0 4 left
+  4 5 :
+  6 10 type
+  11 12 =
+  13 19 struct
+  24 27 tag
+  27 28 :
+  29 31 u8
+  32 35 end
+  36 40 left
+  42 47 right
+  47 48 :
+  49 53 type
+  54 55 =
+  56 62 struct
+  67 70 tag
+  70 71 :
+  72 74 u8
+  75 78 end
+  79 84 right
+  86 92 source
+  92 93 :
+  94 99 right
+  100 104 copy
+  104 105 :
+  106 110 left
+  111 112 =
+  113 119 source
 file negative/module-struct-zeroed-initializer-nested-not-enabled/program.ldn tokens 23
   0 6 holder
   6 7 :
@@ -10004,28 +10131,6 @@ file negative/struct-array-field-inferred-initializer-not-enabled/program.ldn to
   64 72 inferred
   73 75 :=
   76 81 state
-file negative/struct-array-field-initializer-not-enabled/program.ldn tokens 21
-  0 6 holder
-  6 7 :
-  8 12 type
-  13 14 =
-  15 21 struct
-  26 29 row
-  29 30 :
-  31 32 [
-  32 33 2
-  33 34 ]
-  34 37 u32
-  38 41 end
-  42 48 holder
-  50 55 state
-  55 56 :
-  57 63 holder
-  64 69 typed
-  69 70 :
-  71 77 holder
-  78 79 =
-  80 85 state
 file negative/struct-array-field-initializer-not-on-every-path/program.ldn tokens 49
   0 6 holder
   6 7 :
@@ -11308,7 +11413,7 @@ file negative/struct-state-read-as-a-value/program.ldn tokens 26
   245 250 state
   251 254 end
   255 256 f
-file negative/struct-type-name-is-not-storage/program.ldn tokens 34
+file negative/struct-type-name-is-not-storage/program.ldn tokens 39
   0 6 holder
   6 7 :
   8 12 type
@@ -11319,30 +11424,35 @@ file negative/struct-type-name-is-not-storage/program.ldn tokens 34
   33 36 u32
   37 40 end
   41 47 holder
-  49 52 mut
-  53 64 destination
-  64 65 :
-  66 72 holder
-  74 78 copy
-  78 79 :
-  80 81 (
-  81 82 )
-  83 85 ->
-  86 90 none
-  91 92 =
-  97 102 typed
-  102 103 :
-  104 110 holder
-  111 112 =
-  113 119 holder
-  124 132 inferred
-  133 135 :=
-  136 142 holder
-  147 158 destination
-  159 160 =
-  161 167 holder
-  168 171 end
-  172 176 copy
+  49 60 module_copy
+  60 61 :
+  62 68 holder
+  69 70 =
+  71 77 holder
+  79 82 mut
+  83 94 destination
+  94 95 :
+  96 102 holder
+  104 108 copy
+  108 109 :
+  110 111 (
+  111 112 )
+  113 115 ->
+  116 120 none
+  121 122 =
+  127 132 typed
+  132 133 :
+  134 140 holder
+  141 142 =
+  143 149 holder
+  154 162 inferred
+  163 165 :=
+  166 172 holder
+  177 188 destination
+  189 190 =
+  191 197 holder
+  198 201 end
+  202 206 copy
 file negative/struct-value-not-enabled/program.ldn tokens 22
   0 5 point
   5 6 :

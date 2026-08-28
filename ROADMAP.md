@@ -2887,8 +2887,9 @@ self-shadow fixture, source-completeness, contextual-form and nominal-identity
 negatives, the recorded IR and an executable independence fixture provide
 evidence. Inferred local initialization remains separate in this slice and is
 admitted by D56 below only from a direct storage name. All module struct
-initializers, non-name values, `zeroed`, struct literals, calls, returns and
-general aggregate values remain separate slices.
+initializers remain separate in this slice; D59 admits the typed zero image and
+D60 the typed direct-name image chain. Non-name values, struct literals, calls,
+returns and general aggregate values remain separate slices.
 
 D57 admits `zeroed` as the contextual initializer of an explicitly typed local
 ordinary struct. One existing `Clear_Array` instruction with field zero clears
@@ -2923,6 +2924,22 @@ extent in `.bss`, so every field and padding byte is zero without making
 compiler work proportional to a D18-sized field. Checker, lowering and backend
 seams, explicit/inferred and static-name boundary fixtures, recorded dumps and
 a runtime distinct-storage fixture provide evidence. Inference, module copies,
+nested expressions and general aggregate values remain separate slices; D60
+below admits the typed direct-name module image chain.
+
+D60 admits an explicitly typed mutable or immutable module ordinary struct
+initialized from a direct module storage name of the same nominal type. Like
+D21's array rule, the static image chain follows declaration identities across
+aliases and forward references, owns distinct storage at every declaration and
+must terminate rather than returning to itself; the latter reports [1940]'s
+existing L0305 once. Every terminal image currently constructible is D10/D59's
+all-zero image, so lowering emits the same compact field-shaped aggregate datum
+with no instruction or finite image, and the backend reserves each target-
+derived padded extent separately in `.bss` on 64- and 32-bit descriptions. A
+refused written initializer is not reread for [1940], preserving its owning
+report. Checker/lowering/backend seams, forward/alias/nominal/cycle/type-name
+fixtures, recorded dumps and a runtime storage-independence fixture provide
+evidence. Inferred module initialization, non-name and nonzero struct images,
 nested expressions and general aggregate values remain separate slices.
 
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
@@ -2960,7 +2977,7 @@ operands
 other than D14's direct name and D31's literal; and struct initialization other
 than D55/D56's explicitly typed or inferred local direct-storage-name forms,
 D57's explicitly typed local zero image and D59's explicitly typed module zero
-image,
+image, and D60's explicitly typed module direct-storage-name image chain,
 general whole values,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
@@ -3022,6 +3039,9 @@ while keeping static images, inference, nested expressions and general values
 pinned.
 D59 migrated the explicitly typed module struct zero image while keeping
 inference, module copies, nested expressions and general values pinned.
+D60 migrated the explicitly typed module direct-storage-name struct image
+chain while keeping inference, non-name and nonzero static images, nested
+expressions and general values pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the
