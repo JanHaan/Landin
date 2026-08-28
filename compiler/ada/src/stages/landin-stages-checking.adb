@@ -1387,6 +1387,15 @@ package body Landin.Stages.Checking is
       function Indexed_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
+      function Is_Direct_Module_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
+      function Is_Module_Array_Field
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Length  : Landin.Checking.Element_Count;
+         Element : Ty.Scalar_Name) return Boolean;
+
       --  D49/D50 admit that same fixed-array field as a whole place only
       --  when assignment supplies `zeroed` or another fixed-array storage
       --  endpoint as its complete contextual value.  D51 reuses the note for
@@ -1520,6 +1529,38 @@ package body Landin.Stages.Checking is
 
          return False;
       end Admit_Array_Field;
+
+      function Is_Direct_Module_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+      begin
+         return Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+           and then Syn.Kind
+             (Of_Tree, Syn.Target_Of (Of_Tree, Node)) = Syn.Name_Reference
+           and then Res.Verdict_Of
+             (Meanings.all, Of_Tree, Syn.Target_Of (Of_Tree, Node))
+               = Res.Bound
+           and then Res.Sort_Of
+             (Meanings.all,
+              Res.Bound_To
+                (Meanings.all, Of_Tree, Syn.Target_Of (Of_Tree, Node)))
+               = Res.Module_Binding;
+      end Is_Direct_Module_Field;
+
+      function Is_Module_Array_Field
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Length  : Landin.Checking.Element_Count;
+         Element : Ty.Scalar_Name) return Boolean
+      is
+      begin
+         return Is_Direct_Module_Field (Of_Tree, Node)
+           and then Admit_Array_Field (Of_Tree, Node)
+           and then Landin.Checking.Array_Length
+             (Types.all, Of_Tree, Node) = Length
+           and then Landin.Checking.Array_Element
+             (Types.all, Of_Tree, Node) = Element;
+      end Is_Module_Array_Field;
 
       function Indexed_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
@@ -2498,8 +2539,9 @@ package body Landin.Stages.Checking is
             --  selected field in D49--D53.  Each established array spelling
             --  keeps its own shape check and diagnostic owner.  D67 admits
             --  the finite and zero static forms; D68 adds D34/D38's compact
-            --  repetitions, and D69 follows one direct module-array image
-            --  name without making the selected field a general value.
+            --  repetitions, D69 follows one direct module-array image name,
+            --  and D71 follows one directly selected module struct field
+            --  without making either source a general value.
             if Static_Image then
                case Syn.Kind (Of_Tree, Value) is
                   when Syn.Array_Literal =>
@@ -2599,6 +2641,42 @@ package body Landin.Stages.Checking is
                         end if;
                      end;
 
+                  when Syn.Member_Selection =>
+                     declare
+                        Is_Module_Storage : constant Boolean :=
+                          Is_Direct_Module_Field (Of_Tree, Value);
+                        Admitted : constant Boolean :=
+                          Is_Module_Storage
+                          and then Admit_Array_Field (Of_Tree, Value);
+                        Got : constant Ty.Type_Kind :=
+                          (if Admitted
+                           then Selected_From (Of_Tree, Value)
+                           else Synthesise (Of_Tree, Value));
+                     begin
+                        if Got = Ty.Ill_Typed then
+                           --  The root declaration, its layout or the field
+                           --  lookup already owns the report.
+                           null;
+                        elsif Is_Module_Storage
+                          and then not Is_Module_Array_Field
+                            (Of_Tree, Value, Expected, Element)
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this is not an array field of the"
+                                         & " type named by this label",
+                              Note    => "D17: an array's length and element"
+                                         & " type are its identity",
+                              Related => Syn.Origin (Of_Tree, Field),
+                              Because => "the field named here",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        end if;
+                     end;
+
                   when others =>
                      Bad.Report
                        (Item    => Bad.Unsupported_Use,
@@ -2606,7 +2684,8 @@ package body Landin.Stages.Checking is
                         Where   => Syn.Where (Of_Tree, Value),
                         Message => "a module struct array field takes a"
                                    & " finite literal, repetition, `zeroed`"
-                                   & " or a module array name in this slice",
+                                   & " or a module array or array-field name"
+                                   & " in this slice",
                         Refused => Bad.Array_Value,
                         Into    => Found);
                      Landin.Checking.Refuse
@@ -4186,12 +4265,12 @@ package body Landin.Stages.Checking is
          end if;
 
          if Syn.Kind (Of_Tree.all, Value) = Syn.Struct_Literal then
-            --  D69 adds one static-image edge from a labelled array field to
-            --  a direct module array datum.  Follow only a well-shaped edge;
-            --  every malformed label keeps Check_Struct_Literal's existing
-            --  diagnostic owner.  Arrays cannot source from struct fields,
-            --  so this adds no new cycle class: a source array chain either
-            --  reaches its image or reports its own existing [1940] cycle.
+            --  D69 follows a direct module array datum; D71 follows one
+            --  directly selected field by way of its containing module
+            --  struct.  Follow only well-shaped edges.  Every malformed
+            --  label keeps Check_Struct_Literal's diagnostic owner, while
+            --  the shared Visiting state owns every array/struct mixture that
+            --  comes back to a declaration already on the image path.
             declare
                Wrote : constant Res.Declaration_Id :=
                  Landin.Checking.Body_Of (Types.all, Id);
@@ -4252,6 +4331,34 @@ package body Landin.Stages.Checking is
                               Reaches_Image := False;
                            end if;
                         end;
+                     elsif Which /= 0
+                       and then Landin.Checking.Field_Kind_Of
+                         (Types.all, Wrote, Which)
+                           = Landin.Checking.Fixed_Array_Field
+                       and then Syn.Kind (Of_Tree.all, Image_Value)
+                                  = Syn.Member_Selection
+                     then
+                        declare
+                           Source : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree.all, Image_Value);
+                           Edge_Is_Valid : constant Boolean :=
+                             Is_Module_Array_Field
+                               (Of_Tree.all, Image_Value,
+                                Landin.Checking.Field_Array_Length
+                                  (Types.all, Wrote, Which),
+                                Landin.Checking.Field_Array_Element
+                                  (Types.all, Wrote, Which));
+                        begin
+                           if Edge_Is_Valid then
+                              Reaches_Image :=
+                                Validate_Module_Image
+                                  (Res.Bound_To
+                                     (Meanings.all, Of_Tree.all, Source))
+                                and then Reaches_Image;
+                           else
+                              Reaches_Image := False;
+                           end if;
+                        end;
                      end if;
                   end;
                end loop;
@@ -4273,29 +4380,15 @@ package body Landin.Stages.Checking is
             declare
                From : constant Syn.Node_Id :=
                  Syn.Target_Of (Of_Tree.all, Value);
-               Admitted : constant Boolean :=
-                 Admit_Array_Field (Of_Tree.all, Value);
+               Edge_Is_Valid : constant Boolean :=
+                 Landin.Checking.Type_Of (Types.all, Id) = Ty.Fixed_Array
+                 and then Is_Module_Array_Field
+                   (Of_Tree.all, Value,
+                    Landin.Checking.Array_Length (Types.all, Id),
+                    Landin.Checking.Array_Element (Types.all, Id));
                Reaches_Image : Boolean := False;
             begin
-               if Admitted
-                 and then Syn.Kind (Of_Tree.all, From) = Syn.Name_Reference
-                 and then Res.Verdict_Of
-                   (Meanings.all, Of_Tree.all, From) = Res.Bound
-                 and then Res.Sort_Of
-                   (Meanings.all,
-                    Res.Bound_To (Meanings.all, Of_Tree.all, From))
-                      = Res.Module_Binding
-                 and then Landin.Checking.Type_Of
-                   (Types.all, Id) = Ty.Fixed_Array
-                 and then Landin.Checking.Type_Of
-                   (Types.all, Of_Tree.all, Value) = Ty.Fixed_Array
-                 and then Landin.Checking.Array_Length
-                   (Types.all, Of_Tree.all, Value)
-                     = Landin.Checking.Array_Length (Types.all, Id)
-                 and then Landin.Checking.Array_Element
-                   (Types.all, Of_Tree.all, Value)
-                     = Landin.Checking.Array_Element (Types.all, Id)
-               then
+               if Edge_Is_Valid then
                   Reaches_Image :=
                     Validate_Module_Image
                       (Res.Bound_To (Meanings.all, Of_Tree.all, From));

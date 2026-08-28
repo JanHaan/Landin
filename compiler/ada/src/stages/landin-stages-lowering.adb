@@ -2901,6 +2901,41 @@ package body Landin.Stages.Lowering is
          --  gathers that field's compact descriptor.
          procedure Resolve_Image (Id : Res.Declaration_Id);
 
+         procedure Copy_Field_Descriptor
+           (Source_Item  : IR.Item_Id;
+            Source_Field : Positive;
+            Cursor       : in out Natural;
+            Image        : out IR.Aggregate_Field_Image;
+            Elements     : in out Ty.Folded_Array);
+
+         procedure Copy_Field_Descriptor
+           (Source_Item  : IR.Item_Id;
+            Source_Field : Positive;
+            Cursor       : in out Natural;
+            Image        : out IR.Aggregate_Field_Image;
+            Elements     : in out Ty.Folded_Array)
+         is
+         begin
+            Image :=
+              IR.Field_Image_Of (Unit.all, Source_Item, Source_Field);
+            Image.Offset := Cursor;
+
+            if Image.Form in IR.Finite | IR.Hybrid then
+               for Position in 1 .. Image.Count loop
+                  Elements (Cursor + Position) :=
+                    IR.Nth_Field_Element
+                      (Unit.all, Source_Item, Source_Field,
+                       IR.Part_Position (Position));
+               end loop;
+            elsif Image.Count /= 0 then
+               raise Landin.Compiler_Defect with
+                 "an absent or repeated aggregate field image carried"
+                 & " finite elements";
+            end if;
+
+            Cursor := Cursor + Image.Count;
+         end Copy_Field_Descriptor;
+
          procedure Set_Image_From_Struct_Literal
            (Id      : Res.Declaration_Id;
             Of_Tree : Syn.Tree;
@@ -2963,6 +2998,38 @@ package body Landin.Stages.Lowering is
                                    else Natural
                                      (IR.Image_Length
                                         (Unit.all, Source_Item)));
+                           end;
+                        end if;
+                     end;
+                  elsif Syn.Kind
+                    (Of_Tree, Syn.Value_Of (Of_Tree, Field))
+                      = Syn.Member_Selection
+                    and then IR.Nth_Field_Shape
+                      (Unit.all, Item, Which).Kind
+                        = IR.Array_Field_Shape
+                  then
+                     declare
+                        Value : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Field);
+                        From : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Value);
+                        Source_Id : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Of_Tree, From);
+                     begin
+                        Resolve_Image (Source_Id);
+                        if Made (Source_Id) then
+                           declare
+                              Source_Item : constant IR.Item_Id :=
+                                IR.Item_For (Unit.all, Source_Id);
+                              Source_Field : constant Positive :=
+                                Positive
+                                  (Landin.Checking.Field_Index
+                                     (Types.all, Of_Tree, Value));
+                           begin
+                              Element_Count := Element_Count
+                                + IR.Field_Image_Of
+                                    (Unit.all, Source_Item,
+                                     Source_Field).Count;
                            end;
                         end if;
                      end;
@@ -3143,11 +3210,31 @@ package body Landin.Stages.Lowering is
                               end if;
                            end;
                         elsif Syn.Kind (Of_Tree, Value)
+                                = Syn.Member_Selection
+                        then
+                           declare
+                              From : constant Syn.Node_Id :=
+                                Syn.Target_Of (Of_Tree, Value);
+                              Source_Id : constant Res.Declaration_Id :=
+                                Res.Bound_To
+                                  (Meanings.all, Of_Tree, From);
+                           begin
+                              Resolve_Image (Source_Id);
+                              if Made (Source_Id) then
+                                 Copy_Field_Descriptor
+                                   (IR.Item_For (Unit.all, Source_Id),
+                                    Positive
+                                      (Landin.Checking.Field_Index
+                                         (Types.all, Of_Tree, Value)),
+                                    Cursor, Images (Which), Elements);
+                              end if;
+                           end;
+                        elsif Syn.Kind (Of_Tree, Value)
                                 /= Syn.Zeroed_Literal
                         then
                            raise Landin.Compiler_Defect with
                              "a module struct array-field image outside"
-                             & " D69 reached lowering";
+                             & " D69/D71 reached lowering";
                         end if;
                      end;
                   end if;
@@ -3271,16 +3358,8 @@ package body Landin.Stages.Lowering is
                   for Field in 1 .. Fields loop
                      Values (Field) :=
                        IR.Nth_Field_Image (Unit.all, Source_Item, Field);
-                     Images (Field) :=
-                       IR.Field_Image_Of (Unit.all, Source_Item, Field);
-                     Images (Field).Offset := Cursor;
-                     for Position in 1 .. Images (Field).Count loop
-                        Elements (Cursor + Position) :=
-                          IR.Nth_Field_Element
-                            (Unit.all, Source_Item, Field,
-                             IR.Part_Position (Position));
-                     end loop;
-                     Cursor := Cursor + Images (Field).Count;
+                     Copy_Field_Descriptor
+                       (Source_Item, Field, Cursor, Images (Field), Elements);
                   end loop;
                   IR.Set_Aggregate_Image
                     (Unit.all, IR.Item_For (Unit.all, Destination), Values,

@@ -1,0 +1,9 @@
+holder: type = struct
+    row: [2]u16
+    tag: u8
+end holder
+
+source: holder
+scalar_selection: holder = (row: zeroed, tag: source.tag)
+element_selection: holder = (row: source.row[0], tag: 0)
+type_root: holder = (row: holder.row, tag: 0)

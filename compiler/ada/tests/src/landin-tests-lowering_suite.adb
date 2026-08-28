@@ -2062,9 +2062,81 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Array_Copies_A_Struct_Field_Image;
 
-   --  D66--D69 extend D60/D61's module struct image chain with scalar folds,
-   --  compact finite, repeated and hybrid array-field segments, and a direct
-   --  module-array source.  Every destination gets its own run; a zero
+   --  D71 copies a selected aggregate field descriptor into another module
+   --  struct image, rebasing its finite prefix at the destination's compact
+   --  element cursor.  Aggregate chains reuse the same descriptor copier.
+   procedure A_Module_Struct_Field_Copies_A_Struct_Field_Image
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Struct_Field_Copies_A_Struct_Field_Image
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    finite: [2]u16" & LF
+         & "    repeated: [3]u8" & LF
+         & "    hybrid: [3]u8" & LF
+         & "    zero_repeat: [2]u8" & LF
+         & "    omitted: [2]u8" & LF
+         & "end holder" & LF
+         & "source: holder = (finite: [11, 13], repeated: [of 17],"
+         & " hybrid: [19, of 23], zero_repeat: [of 0], of zeroed)" & LF
+         & "copy: holder = (finite: source.finite,"
+         & " repeated: source.repeated, hybrid: source.hybrid,"
+         & " zero_repeat: source.zero_repeat, omitted: source.omitted)" & LF
+         & "through: holder = copy" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "selected field descriptors and their aggregate chain lower");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Datum in IR.Item_Id range 2 .. 3 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Has_Image (Unit, Datum)
+               and then IR.Image_Length (Unit, Datum) = 8
+               and then IR.Field_Image_Of
+                 (Unit, Datum, 1).Form = IR.Finite
+               and then IR.Nth_Field_Element
+                 (Unit, Datum, 1, 1) = 11
+               and then IR.Nth_Field_Element
+                 (Unit, Datum, 1, 2) = 13,
+               "the finite selected field is rebased and copied");
+            Landin.Testing.Check
+              (Item,
+               IR.Field_Image_Of (Unit, Datum, 2).Form = IR.Repeated
+               and then IR.Field_Image_Of (Unit, Datum, 2).Count = 0
+               and then IR.Field_Image_Of (Unit, Datum, 2).Value = 17
+               and then IR.Field_Image_Of
+                 (Unit, Datum, 3).Form = IR.Hybrid
+               and then IR.Field_Image_Of (Unit, Datum, 3).Offset = 2
+               and then IR.Field_Image_Of (Unit, Datum, 3).Count = 1
+               and then IR.Nth_Field_Element
+                 (Unit, Datum, 3, 1) = 19
+               and then IR.Field_Image_Of (Unit, Datum, 3).Value = 23,
+               "repeated and hybrid selected fields stay canonical");
+            Landin.Testing.Check
+              (Item,
+               IR.Field_Image_Of (Unit, Datum, 4).Form = IR.Absent
+               and then IR.Field_Image_Of
+                 (Unit, Datum, 5).Form = IR.Absent,
+               "zero-pattern and omitted selected fields stay absent");
+         end loop;
+      end;
+   end A_Module_Struct_Field_Copies_A_Struct_Field_Image;
+
+   --  D66--D71 extend D60/D61's module struct image chain with scalar folds,
+   --  compact finite, repeated and hybrid array-field segments, and direct or
+   --  selected array sources.  Every destination gets its own run; a zero
    --  repetition keeps an absent field.
    procedure A_Module_Struct_Literal_Records_And_Copies_Its_Image
      (Item : in out Landin.Testing.Context);
@@ -3733,6 +3805,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a module array copies a struct field image",
          A_Module_Array_Copies_A_Struct_Field_Image'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a struct field copies a struct field image",
+         A_Module_Struct_Field_Copies_A_Struct_Field_Image'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "a module struct literal records and copies its image",
