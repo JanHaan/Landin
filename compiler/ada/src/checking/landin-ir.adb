@@ -663,6 +663,23 @@ package body Landin.IR is
       return Made;
    end Add_Parameter;
 
+   function Add_Aggregate_Parameter
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+   is
+      Made : constant Slot_Id :=
+        Add_Aggregate_Slot (Into, Item, Declares, Site);
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Parameters, Natural (Into.Parameters.Length));
+      Into.Parameters.Append (Made);
+      Held.Parameters.Count := Held.Parameters.Count + 1;
+      Into.Items (Positive (Item)) := Held;
+      return Made;
+   end Add_Aggregate_Parameter;
+
    function Parameter_Count (Of_Unit : Unit; Item : Item_Id) return Natural
      is (Element (Of_Unit, Item).Parameters.Count);
 
@@ -1025,6 +1042,19 @@ package body Landin.IR is
 
       return Value_Id (Held.Values.Count);
    end Append;
+
+   function Emit_Storage_Address
+     (Into : in out Unit;
+      Item  : Item_Id;
+      Place : Storage;
+      Site  : Landin.Provenance.Origin) return Value_Id
+     is (Append
+           (Into, Item,
+            Instruction'(Op          => Storage_Address,
+                         Result      => Landin.Types.Usize,
+                         Site        => Site,
+                         Destination => Place,
+                         others      => <>)));
 
    function Emit_Number
      (Into    : in out Unit;

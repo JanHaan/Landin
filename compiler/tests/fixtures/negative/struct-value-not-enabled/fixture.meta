@@ -1,6 +1,0 @@
-class: negative
-summary: [0670] declares a struct type, while R2.30 owns passing one through the ABI, so parameters and returns are refused rather than the declaration
-constructs: 0670, 1795, 1830
-program: program.ldn
-codes: L0304, L0304
-targets: linux-x86-64, macos-arm64

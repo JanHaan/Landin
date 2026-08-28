@@ -200,6 +200,9 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id) return IR.Value_Id;
 
+      function Storage_For
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
+
       function Lower_Call
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -564,6 +567,23 @@ package body Landin.Stages.Lowering is
          return Slots (Positive (Id));
       end Slot_For;
 
+      function Storage_For
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage
+      is
+         Means : constant Res.Declaration_Id :=
+           Res.Bound_To (Meanings.all, Of_Tree, Node);
+      begin
+         if Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding then
+            return
+              (Kind => IR.Module_Datum,
+               Datum => IR.Item_For (Unit.all, Means));
+         end if;
+
+         return
+           (Kind => IR.Frame_Slot,
+            Slot => Slot_For (Of_Tree, Node, Means));
+      end Storage_For;
+
       ------------------------------------------------------------
       --  [0410]: `and` and `or` short-circuit, so they are blocks
       ------------------------------------------------------------
@@ -647,12 +667,22 @@ package body Landin.Stages.Lowering is
                Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
-               Given (Which) := Lower_Expression (Of_Tree, Argument, Scope);
+               if Type_At (Of_Tree, Argument) = Ty.Aggregate then
+                  Given (Which) :=
+                    IR.Emit_Storage_Address
+                      (Unit.all, Filling, Storage_For (Of_Tree, Argument),
+                       Site_Of (Of_Tree, Argument));
+               else
+                  Given (Which) :=
+                    Lower_Expression (Of_Tree, Argument, Scope);
+               end if;
 
                if Which < Count then
                   Saved (Which) :=
                     IR.Add_Slot
-                      (Unit.all, Filling, Scalar_At (Of_Tree, Argument),
+                      (Unit.all, Filling,
+                       (if Type_At (Of_Tree, Argument) = Ty.Aggregate
+                        then Ty.Usize else Scalar_At (Of_Tree, Argument)),
                        Res.No_Declaration, Site_Of (Of_Tree, Argument));
                   IR.Emit_Store
                     (Unit.all, Filling, Saved (Which), Given (Which),
@@ -1151,7 +1181,7 @@ package body Landin.Stages.Lowering is
                   end if;
 
                   if Res.Sort_Of (Meanings.all, Means)
-                     = Res.Local_Binding
+                     /= Res.Module_Binding
                   then
                      if Is_Constant_Index (Of_Tree, Node)
                        and then not Selected_Array
@@ -1573,9 +1603,6 @@ package body Landin.Stages.Lowering is
                   Source_Parent : Natural := 0;
                   Destination_Parent : Natural := 0);
 
-               function Storage_For
-                 (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
-
                procedure Write_Array_Value
                  (Value       : Syn.Node_Id;
                   Destination : IR.Storage;
@@ -1595,24 +1622,6 @@ package body Landin.Stages.Lowering is
                   Wrote       : Res.Declaration_Id;
                   Destination : IR.Storage;
                   Parent_Field : Natural := 0);
-
-               function Storage_For
-                 (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage
-               is
-                  Means : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, Node);
-               begin
-                  if Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
-                  then
-                     return
-                       (Kind => IR.Module_Datum,
-                        Datum => IR.Item_For (Unit.all, Means));
-                  end if;
-
-                  return
-                    (Kind => IR.Frame_Slot,
-                     Slot => Slot_For (Of_Tree, Node, Means));
-               end Storage_For;
 
                procedure Copy_Field
                  (Wrote      : Res.Declaration_Id;
@@ -2927,14 +2936,25 @@ package body Landin.Stages.Lowering is
                Held : constant Ty.Type_Kind :=
                  Landin.Checking.Type_Of (Types.all, Id);
             begin
-               if Held not in Ty.Scalar_Name then
+               if Held = Ty.Aggregate then
+                  Slots (Positive (Id)) :=
+                    IR.Add_Aggregate_Parameter
+                      (Unit.all, Filling, Id, Site_Of (Of_Tree, Param));
+                  for Field in
+                    1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
+                  loop
+                     Add_Stored_Field
+                       (Id, Field, Slot => Slots (Positive (Id)));
+                  end loop;
+               elsif Held in Ty.Scalar_Name then
+                  Slots (Positive (Id)) :=
+                    IR.Add_Parameter
+                      (Unit.all, Filling, Held, Id,
+                       Site_Of (Of_Tree, Param));
+               else
                   raise Landin.Compiler_Defect with
-                    "a parameter reached the lowering with no scalar type";
+                    "a parameter reached the lowering with no storable type";
                end if;
-
-               Slots (Positive (Id)) :=
-                 IR.Add_Parameter
-                   (Unit.all, Filling, Held, Id, Site_Of (Of_Tree, Param));
             end;
          end loop;
 

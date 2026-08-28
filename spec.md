@@ -5602,3 +5602,37 @@ graphs or the ABI.
 **Pinned by** the checker, lowering and verifier public seams;
 `negative/nested-struct-child-inference-unassigned`; the generated token and
 IR records; and `runtime/nested-struct-child-values` on Linux x86-64.
+
+### D94 — An ordinary struct argument is copied into callee storage
+
+**The tour said** that an unmarked parameter is `in` [0900], calls evaluate
+arguments left to right [0410], and an ordinary struct has nominal identity
+[0710]. The scalar internal convention had no rule for carrying the complete
+storage of one.
+
+**Chosen:** a parameter may have an ordinary struct type whose fields are
+scalar or fixed arrays, without an ordinary-child or variant field. A call may
+supply a direct module or frame storage name of exactly that nominal type. The
+source must be definitely assigned in full. Construction, nested-child paths,
+struct-returning calls and other aggregate expressions remain refused in this
+argument position.
+
+One aggregate occupies one position in the existing internal argument run. The
+caller forms a target-neutral `Storage_Address` carrier; the first six
+positions use integer registers and later positions use D86's eight-byte stack
+slots. The carrier is not a Landin pointer and cannot be named by source. The
+callee preserves every incoming aggregate carrier before copying, derives the
+complete padded extent from its selected target, and copies the bytes into a
+fresh aggregate parameter slot before the body runs. Reads therefore use
+ordinary field and array operations against independent by-value storage.
+
+**Why an internal address and defensive copy:** flattening fields would make
+one source parameter consume a target-dependent number of argument positions,
+while aliasing caller storage would change `in` from a value convention into a
+hidden reference convention. The neutral carrier keeps offsets, padding and
+extent out of verified IR; the callee-side copy makes the observable value
+independent and leaves R4.40 to classify C aggregates separately.
+
+**Pinned by** the checker, lowering, malformed-IR verifier and backend public
+seams; `negative/struct-argument-unassigned`; the generated token and IR
+records; and `runtime/struct-arguments-cross-calls` on Linux x86-64.

@@ -60,6 +60,8 @@ package body Landin.IR.Verifier is
             when Aggregate_Datum_Is_Not_A_Value =>
                "a datum load or store names an aggregate, which is"
                & " storage and not a value yet",
+            when Storage_Address_Is_Not_An_Aggregate =>
+               "an internal aggregate address names non-aggregate storage",
             when Field_Out_Of_Range =>
                "a field load names a field the aggregate does not have",
             when Field_Is_Not_A_Scalar =>
@@ -153,7 +155,7 @@ package body Landin.IR.Verifier is
             when Constant_Kind => 0,
             --  [0370] carries a type and not an operand.
             when Measure_Size | Measure_Align => 0,
-            when Load          => 0,
+            when Load | Storage_Address => 0,
             when Load_Datum    => 0,
             when Load_Field    => 0,
             when Store_Field   => 1,
@@ -1401,6 +1403,17 @@ package body Landin.IR.Verifier is
                         --  not exist has to be caught before anything
                         --  asks it a question.
                         case Op is
+                           when Storage_Address =>
+                              if Is_Datum
+                                or else not Is_Whole_Aggregate
+                                  (Id, Destination_Of (Of_Unit, Id, V))
+                              then
+                                 return
+                                   (Kind =>
+                                      Storage_Address_Is_Not_An_Aggregate,
+                                    Item => Id, Block => Block, Value => V);
+                              end if;
+
                            when Load | Store =>
                               if not Holds
                                        (Of_Unit, Id,
@@ -2034,6 +2047,15 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
+                           when Storage_Address =>
+                              if Result_Of (Of_Unit, Id, V)
+                                /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
                            when Measure_Size | Measure_Align =>
                               if Result_Of (Of_Unit, Id, V)
                                 /= Landin.Types.Usize
@@ -2313,18 +2335,29 @@ package body Landin.IR.Verifier is
                                  for P in
                                    1 .. Parameter_Count (Of_Unit, C)
                                  loop
-                                    if Type_Of
-                                         (Of_Unit, C,
-                                          Nth_Parameter (Of_Unit, C, P))
-                                       /= Result_Of
-                                            (Of_Unit, Id,
-                                             Nth_Operand
-                                               (Of_Unit, Id, V, P))
-                                    then
-                                       return (Kind => Operands_Disagree,
-                                               Item => Id, Block => Block,
-                                               Value => V);
-                                    end if;
+                                    declare
+                                       Parameter : constant Slot_Id :=
+                                         Nth_Parameter (Of_Unit, C, P);
+                                       Argument : constant Value_Id :=
+                                         Nth_Operand (Of_Unit, Id, V, P);
+                                       Agrees : constant Boolean :=
+                                         (if Is_Aggregate
+                                               (Of_Unit, C, Parameter)
+                                          then Result_Of
+                                                 (Of_Unit, Id, Argument)
+                                                 = Landin.Types.Usize
+                                          else Type_Of
+                                                 (Of_Unit, C, Parameter)
+                                               = Result_Of
+                                                   (Of_Unit, Id, Argument));
+                                    begin
+                                       if not Agrees then
+                                          return
+                                            (Kind => Operands_Disagree,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    end;
                                  end loop;
                               end;
 
