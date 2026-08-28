@@ -563,8 +563,17 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then
-                (Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                   = Syn.Name_Reference
+                ((Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                    = Syn.Name_Reference
+                  and then Res.Verdict_Of
+                    (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                      = Res.Bound
+                  and then Res.Sort_Of
+                    (Meanings.all,
+                     Res.Bound_To
+                       (Meanings.all, Of_Tree,
+                        Syn.Value_Of (Of_Tree, Node)))
+                      in Res.Module_Binding | Res.Local_Binding)
                  or else
                    (Is_Local_Binding (Of_Tree, Node)
                     and then Syn.Kind
@@ -574,8 +583,8 @@ package body Landin.Stages.Checking is
                       (Of_Tree, Syn.Value_Of (Of_Tree, Node))));
             --  D55: a written local struct type supplies the nominal
             --  context for one initializer copied directly from storage.
-            --  Like D21's array gate, syntax admits an unresolved name so
-            --  resolution keeps sole ownership of a name that names nothing.
+            --  Resolution has already stopped the pipeline for an unresolved
+            --  name; a resolved type declaration is not runtime storage.
             Is_Direct_Struct_Init : constant Boolean :=
               Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
@@ -583,6 +592,14 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Name_Reference
+              and then Res.Verdict_Of
+                (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                  = Res.Bound
+              and then Res.Sort_Of
+                (Meanings.all,
+                 Res.Bound_To
+                   (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node)))
+                  in Res.Module_Binding | Res.Local_Binding
               and then Landin.Checking.Body_Of
                 (Types.all, Of_Tree, Written) /= Res.No_Declaration;
             --  D23 admits a literal only where its written local array type
@@ -1475,6 +1492,10 @@ package body Landin.Stages.Checking is
       begin
          return Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
            and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+           and then Res.Sort_Of
+                      (Meanings.all,
+                       Res.Bound_To (Meanings.all, Of_Tree, Node))
+                    in Res.Module_Binding | Res.Local_Binding
            and then Settled_Type
                       (Res.Bound_To (Meanings.all, Of_Tree, Node))
                     = Ty.Fixed_Array;
@@ -2566,6 +2587,11 @@ package body Landin.Stages.Checking is
                           and then Landin.Checking.Type_Of
                                      (Types.all, Of_Tree, Value)
                                    = Ty.Fixed_Array;
+                        Inferred_Struct : constant Boolean :=
+                          Is_Local_Binding (Of_Tree, Node)
+                          and then Is_Direct_Binding_Name (Of_Tree, Value)
+                          and then Landin.Checking.Type_Of
+                            (Types.all, Of_Tree, Value) = Ty.Aggregate;
                      begin
                         if Inferred_Array
                           and then Syn.Kind (Of_Tree, Value)
@@ -2592,6 +2618,7 @@ package body Landin.Stages.Checking is
                            declare
                               Got : constant Ty.Type_Kind :=
                                 (if Is_Direct_Array_Name (Of_Tree, Value)
+                                      or else Inferred_Struct
                                  then Selected_From (Of_Tree, Value)
                                  else Synthesise (Of_Tree, Value));
                            begin
@@ -2623,7 +2650,9 @@ package body Landin.Stages.Checking is
                         Written : constant Syn.Node_Id :=
                           Syn.Declared_Type (Of_Tree, Node);
                         Got : constant Ty.Type_Kind :=
-                          Selected_From (Of_Tree, Value);
+                          (if Is_Direct_Binding_Name (Of_Tree, Value)
+                           then Selected_From (Of_Tree, Value)
+                           else Synthesise (Of_Tree, Value));
                      begin
                         if Got = Ty.Ill_Typed then
                            null;
@@ -2720,7 +2749,9 @@ package body Landin.Stages.Checking is
                            --  of the general-value refusal.
                            declare
                               Got : constant Ty.Type_Kind :=
-                                Selected_From (Of_Tree, Value);
+                                (if Is_Direct_Binding_Name (Of_Tree, Value)
+                                 then Selected_From (Of_Tree, Value)
+                                 else Synthesise (Of_Tree, Value));
                            begin
                               if Got = Ty.Ill_Typed then
                                  null;
@@ -2831,7 +2862,9 @@ package body Landin.Stages.Checking is
                   if Wants = Ty.Aggregate then
                      declare
                         Got : constant Ty.Type_Kind :=
-                          Selected_From (Of_Tree, Value);
+                          (if Is_Direct_Binding_Name (Of_Tree, Value)
+                           then Selected_From (Of_Tree, Value)
+                           else Synthesise (Of_Tree, Value));
                      begin
                         if Got = Ty.Ill_Typed then
                            null;
@@ -2914,9 +2947,12 @@ package body Landin.Stages.Checking is
                                 = Syn.Member_Selection
                               and then Admit_Array_Field (Of_Tree, Value));
                            Got : constant Ty.Type_Kind :=
-                             Selected_From (Of_Tree, Value);
+                             (if Admitted
+                                   or else Is_Direct_Binding_Name
+                                     (Of_Tree, Value)
+                              then Selected_From (Of_Tree, Value)
+                              else Synthesise (Of_Tree, Value));
                         begin
-                           pragma Unreferenced (Admitted);
                            if Got = Ty.Ill_Typed then
                               null;
                            elsif Got /= Ty.Fixed_Array
@@ -3437,38 +3473,52 @@ package body Landin.Stages.Checking is
 
          declare
             --  D21 infers D17's shape from a direct storage name for a local
-            --  or module binding.  D51 adds a directly selected fixed-array
-            --  field only for a local binding; module images and every other
-            --  expression form still follow Synthesise's refusal.  Settling
-            --  an untouched source here is intentional for a forward array
-            --  name; the Underway guard preserves the cycle's single report,
-            --  and the Fixed_Array test keeps an aggregate name on its whole-
-            --  value refusal instead of settling a representationless value.
-            Direct_Name : constant Boolean :=
+            --  or module binding.  D56 admits an aggregate source for a local
+            --  only after carrying its nominal body identity.  Settling an
+            --  untouched source is intentional for a forward module name;
+            --  the Underway guard preserves a cycle's single report.  A type
+            --  declaration is a name but owns no runtime storage.
+            Named_Storage : constant Boolean :=
               Res.Sort_Of (Meanings.all, Id)
                 in Res.Local_Binding | Res.Module_Binding
               and then Syn.Kind (Of_Tree.all, Value) = Syn.Name_Reference
               and then Res.Verdict_Of (Meanings.all, Of_Tree.all, Value)
                        = Res.Bound
-              and then Landin.Checking.State_Of
-                (Types.all,
+              and then Res.Sort_Of
+                (Meanings.all,
                  Res.Bound_To (Meanings.all, Of_Tree.all, Value))
-                   /= Landin.Checking.Underway
-              and then Settled_Type
-                (Res.Bound_To (Meanings.all, Of_Tree.all, Value))
-                  = Ty.Fixed_Array;
+                  in Res.Local_Binding | Res.Module_Binding;
+            Named : constant Res.Declaration_Id :=
+              (if Named_Storage
+               then Res.Bound_To (Meanings.all, Of_Tree.all, Value)
+               else Res.No_Declaration);
+            Named_Type : constant Ty.Type_Kind :=
+              (if Named_Storage
+                    and then Landin.Checking.State_Of (Types.all, Named)
+                               /= Landin.Checking.Underway
+               then Settled_Type (Named)
+               else Ty.Ill_Typed);
+            Direct_Name : constant Boolean :=
+              Named_Storage and then Named_Type = Ty.Fixed_Array;
+            Direct_Struct : constant Boolean :=
+              Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
+              and then Named_Storage
+              and then Named_Type = Ty.Aggregate
+              and then Landin.Checking.Body_Of (Types.all, Named)
+                         /= Res.No_Declaration;
             Direct_Field : constant Boolean :=
               Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
               and then Syn.Kind (Of_Tree.all, Value) = Syn.Member_Selection
               and then Admit_Array_Field (Of_Tree.all, Value);
             Direct_Source : constant Boolean :=
-              Direct_Name or else Direct_Field;
+              Direct_Name or else Direct_Field or else Direct_Struct;
             Got : constant Ty.Type_Kind :=
               (if Direct_Source
                then Selected_From (Of_Tree.all, Value)
                else Synthesise (Of_Tree.all, Value));
             Direct_Array : constant Boolean :=
-              Direct_Source and then Got = Ty.Fixed_Array;
+              (Direct_Name or else Direct_Field)
+              and then Got = Ty.Fixed_Array;
          begin
             if Got = Ty.Untyped_Integer then
                Commit_To (Of_Tree.all, Value, Ty.Default_Integer);
@@ -3481,6 +3531,16 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Array_Length
                        (Types.all, Of_Tree.all, Value),
                      Landin.Checking.Array_Element
+                       (Types.all, Of_Tree.all, Value));
+               end if;
+
+               if Got = Ty.Aggregate and then Direct_Struct then
+                  --  D56: an inferred aggregate has no written type node from
+                  --  which Declared_As can copy [0710]'s identity.  Carry the
+                  --  source body's declaration before settling the new local.
+                  Landin.Checking.Note_Body
+                    (Types.all, Id,
+                     Landin.Checking.Body_Of
                        (Types.all, Of_Tree.all, Value));
                end if;
 

@@ -1,0 +1,9 @@
+words: type = [2]u32
+
+mut destination: [2]u32
+
+copy: () -> none =
+    typed: [2]u32 = words
+    inferred := words
+    destination = words
+end copy

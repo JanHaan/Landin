@@ -2042,6 +2042,102 @@ package body Landin.Tests.Checking_Suite is
          "three explicit local struct initializers were checked");
    end Local_Struct_Initializer_Keeps_Its_Nominal_Source;
 
+   --  D56 infers the same nominal body from a direct struct storage name.
+   --  The inferred declaration must carry that identity before later
+   --  selections, copies and lowering ask for its layout.
+   procedure Inferred_Local_Struct_Keeps_Its_Nominal_Source
+     (Item : in out Landin.Testing.Context);
+
+   procedure Inferred_Local_Struct_Keeps_Its_Nominal_Source
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "inferred-local-struct-initializers.ldn",
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "    tail: u16" & LF
+         & "end holder" & LF
+         & "same: type = holder" & LF
+         & "state: holder" & LF
+         & "f: (at: usize) -> (result: u32) =" & LF
+         & "    mut source: same" & LF
+         & "    source.tag = 1" & LF
+         & "    source.row = zeroed" & LF
+         & "    source.tail = 2" & LF
+         & "    local := source" & LF
+         & "    aliased := local" & LF
+         & "    snapshot := state" & LF
+         & "    mut state := state" & LF
+         & "    result = aliased.row[at] + snapshot.row[at]"
+         & " + state.row[at]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "module and completed local sources infer local structs");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Id in Landin.Provenance.Declaration_Id'(1)
+                   .. Landin.Provenance.Declaration_Id
+                        (Landin.Resolution.Declaration_Count (Meanings.all))
+         loop
+            if Landin.Resolution.Sort_Of (Meanings.all, Id)
+                 = Landin.Resolution.Local_Binding
+              and then Landin.Checking.Type_Of (Types.all, Id)
+                         = Landin.Types.Aggregate
+            then
+               declare
+                  Node : constant Landin.Syntax.Node_Id :=
+                    Landin.Resolution.Node_Of (Meanings.all, Id);
+                  Value : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Value_Of (Of_Tree.all, Node);
+               begin
+                  if Value /= Landin.Syntax.No_Node
+                    and then Landin.Syntax.Declared_Type
+                               (Of_Tree.all, Node) = Landin.Syntax.No_Node
+                  then
+                     Seen := Seen + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Value)
+                            = Landin.Types.Aggregate
+                        and then Landin.Checking.Body_Of (Types.all, Id)
+                          = Landin.Checking.Body_Of
+                              (Types.all, Of_Tree.all, Value),
+                        "the inferred local carries its source struct body");
+                  end if;
+               end;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 4,
+         "four inferred local struct initializers were checked");
+   end Inferred_Local_Struct_Keeps_Its_Nominal_Source;
+
    --  D50: a fixed-array field may supply or receive D20's complete copy.
    --  The source read uses the field-qualified whole-array fact established
    --  by D49 or an earlier copy, rather than D16's scalar-field bit.
@@ -2414,6 +2510,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "local struct initializer keeps nominal source",
          Local_Struct_Initializer_Keeps_Its_Nominal_Source'Access);
+      Landin.Testing.Register
+        (Into, "checking", "inferred local struct keeps nominal source",
+         Inferred_Local_Struct_Keeps_Its_Nominal_Source'Access);
       Landin.Testing.Register
         (Into, "checking", "array field copy uses whole field facts",
          Array_Field_Copy_Uses_Whole_Field_Facts'Access);

@@ -1,0 +1,13 @@
+holder: type = struct
+    tag: u8
+    row: [2]u32
+end holder
+
+copy: (condition: bool) -> none =
+    mut source: holder
+    source.tag = 1
+    if condition then
+        source.row = zeroed
+    end if
+    destination := source
+end copy

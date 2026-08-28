@@ -2695,7 +2695,7 @@ the recorded IR and
 evidence. At D46, local storage, initialized module state, whole reads and copies,
 parameters, returns and selection of the array field remain refused; D47 below
 supersedes the local-storage boundary, D48 indexed access, D54 whole copy and
-D55 the explicitly typed local direct-name initializer.
+D55/D56 the explicitly typed or inferred local direct-storage-name initializer.
 Struct fields of struct type and broader nested composition are still outside
 the laid-out kernel.
 
@@ -2719,8 +2719,8 @@ field makes an x86-64 frame unaddressable.
 `runtime/struct-array-field-local-scalar-siblings` provide corpus and executable
 evidence. Local initialization, whole reads and copies, parameters, returns,
 selection of the array field remains refused; D48 below supersedes indexed
-access, D54 whole copy and D55 the explicitly typed direct-name local
-initializer. Struct fields of struct type and broader nested
+access, D54 whole copy and D55/D56 the explicitly typed or inferred direct-
+storage-name local initializer. Struct fields of struct type and broader nested
 composition are still outside the laid-out kernel.
 
 D48 admits `s.f[i]` when `s` directly names D46 module state or a D47 local and
@@ -2862,13 +2862,15 @@ reuse `Load_Field`/`Store_Field`, while each array field is one compact D50
 `Copy_Array` with the same positive source and destination field identity. The
 verifier and backend reuse D50/D53's checked shapes and target-derived
 addresses, including a full-width module offset and 64/32-bit frame placement.
+The direct source must resolve to storage; the name of a struct type declaration
+owns no runtime address and is refused with the existing whole-value report.
 Public checker, lowering and backend seams, the positive module/local/alias/
 self-copy fixture, mutability/flow/initialization/nominal-identity negatives,
 the recorded IR and an executable independence fixture provide evidence.
 Initializers, arguments, returns, discards, operands, bare aggregate reads,
 struct-of-struct fields, fields of elements and nested arrays remain separate
-slices; D55 below supersedes only the explicitly typed local direct-name
-initializer boundary.
+slices; D55 and D56 below supersede the explicitly typed and inferred local
+direct-storage-name initializer boundaries.
 
 D55 admits an explicitly typed mutable or immutable local ordinary-struct
 binding initialized from a direct module or earlier local storage name of the
@@ -2883,9 +2885,24 @@ introduced; public checker, lowering and backend seams pin nominal context,
 fresh storage and 64/32-bit field addresses. The positive module/local/alias/
 self-shadow fixture, source-completeness, contextual-form and nominal-identity
 negatives, the recorded IR and an executable independence fixture provide
-evidence. Inferred
-local and all module struct initializers, non-name values, `zeroed`, struct
-literals, calls, returns and general aggregate values remain separate slices.
+evidence. Inferred local initialization remains separate in this slice and is
+admitted by D56 below only from a direct storage name. All module struct
+initializers, non-name values, `zeroed`, struct literals, calls, returns and
+general aggregate values remain separate slices.
+
+D56 admits a mutable or immutable inferred local ordinary-struct binding from
+a direct module or earlier local storage name. The checker carries the source's
+nominal body declaration onto the new local before settling it as an aggregate;
+this closes the bodyless inferred-aggregate hole without introducing structural
+typing or a general aggregate value. D54/D55's complete source read and fresh,
+declaration-ordered slot copy apply unchanged, including compact array-field
+copies and target-derived 64/32-bit addresses. A type declaration is not
+storage and is refused in the D20/D21 array paths and D54--D56 struct paths.
+Public checker, lowering and backend seams, module/local/alias/self-shadow and
+runtime independence positives, source-completeness negatives, recorded dumps
+and explicit type-name refusals provide evidence. Module inference, non-name
+initializers, aggregate `zeroed`, static struct images, calls, returns and
+general aggregate values remain separate slices.
 
 What is still refused: array initializers other than D21's direct storage name
 and D51's selected field for a local binding,
@@ -2906,7 +2923,8 @@ count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`
 operands
 other than D14's direct name and D31's literal; and struct initialization other
-than D55's explicitly typed local direct-name form, general whole values,
+than D55/D56's explicitly typed or inferred local direct-storage-name forms,
+general whole values,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
 its array field beyond D48's indexed
@@ -2956,6 +2974,10 @@ whole copy of the containing struct while keeping initializers, calls, returns
 and every general-value boundary pinned. D55 migrated the explicitly typed
 local direct-name struct initializer while keeping inference, module images,
 calls, returns and every general-value boundary pinned.
+D56 migrated the inferred local direct-storage-name struct initializer while
+keeping module images, non-name initializers, calls, returns and every
+general-value boundary pinned; its audit also pinned that a type declaration
+name is not runtime storage in the D20/D21 and D54--D56 contextual copy paths.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the
