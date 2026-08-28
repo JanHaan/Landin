@@ -1859,9 +1859,13 @@ identities.
 
 The sixth increment admits the nested child and fixed-array leaf as copy
 sources for explicitly typed local initializers. Their written destination
-type supplies the identity and fresh storage; inferred and module initializers
-remain deferred. Neither path becomes a general value, parameter, return or
-discard.
+type supplies the identity and fresh storage; module initializers remain
+deferred.
+
+The seventh increment lets a local infer that same nominal child identity or
+fixed-array shape from the complete nested storage source. It remains a direct
+copy into a fresh slot, not a general value; module inference, parameters,
+returns and discards remain deferred.
 
 Aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
