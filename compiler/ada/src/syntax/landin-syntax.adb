@@ -45,7 +45,7 @@ package body Landin.Syntax is
             when Struct_Body              => 0,
             when Field                    => 1,
             when Variant_Part
-               | Variant_Case             => 0,
+               | Variant_Case | Match_Binding => 0,
             when Parameter | Named_Return => 1,
             when If_Arm | Match_Arm       => 2,
             when Block                    => 0);
@@ -189,6 +189,14 @@ package body Landin.Syntax is
 
    function Match_Pattern (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
+
+   function Match_Binding_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Match_Binding
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
 
    function Statement_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      is (Run_Length (Of_Tree, Id));

@@ -1,0 +1,6 @@
+class: runtime
+summary: D78 reads scalar payload aliases and writes inout aliases to matched storage
+constructs: 0080, 0190, 0670, 0680, 0690, 1210, 1220, 1810, 1900
+program: main.ldn
+status: 42
+targets: linux-x86-64

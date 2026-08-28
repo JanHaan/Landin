@@ -202,6 +202,7 @@ package Landin.Syntax is
       Named_Return,
       If_Arm,
       Match_Arm,
+      Match_Binding,
       Block);
 
    --  The bands overlap where the grammar reuses a rule in two places, and
@@ -241,7 +242,7 @@ package Landin.Syntax is
                     | Named_Return | Name_Reference | Type_Name
                     | Type_Declaration | Type_Reference | Field
                     | Variant_Part | Variant_Case
-                    | Member_Selection | Field_Value);
+                    | Match_Binding | Member_Selection | Field_Value);
 
    ------------------------------------------------------------------
    --  Trees
@@ -351,7 +352,7 @@ package Landin.Syntax is
 
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
-                 and then Kind (Of_Tree, Id) = Binding;
+                 and then Kind (Of_Tree, Id) in Binding | Match_Binding;
 
    --  No Error node anywhere in this subtree, so R1.60 may check it and
    --  R1.70 may lower it.  A hole poisons every node above it, which is how
@@ -512,6 +513,20 @@ package Landin.Syntax is
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) = Match_Arm,
           Post => Contains (Of_Tree, Match_Pattern'Result);
+
+   function Match_Binding_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Match_Arm;
+
+   function Nth_Match_Binding
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Match_Arm
+                  and then Index <= Match_Binding_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Match_Binding'Result)
+                  and then Kind (Of_Tree, Nth_Match_Binding'Result)
+                           = Match_Binding;
 
    function Statement_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)

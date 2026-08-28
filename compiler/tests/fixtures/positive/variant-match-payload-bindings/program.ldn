@@ -1,0 +1,30 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u8) |
+        row: (values: [2]u8)
+    end kind
+end choice
+
+mut state: choice
+
+bind_payloads: () -> none =
+    mut local: choice = zeroed
+    local.kind = pair(first: 20, second: 21)
+    match local.kind
+        leaf: _ = 0
+        pair(first, inout second): if true then
+            _ = first
+            second = second + 1
+        end if
+        row: _ = 0
+    end match
+    match state.kind
+        leaf: _ = 0
+        pair(first, inout second): if true then
+            _ = first
+            second = second
+        end if
+        row: _ = 0
+    end match
+end bind_payloads

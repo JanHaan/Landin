@@ -3351,6 +3351,93 @@ item 2 ROUTINE match_variants result none params 0 slots 4 blocks 13 values 42
   block 13 scope 9 BLOCK length 2
     40 NUMBER i32 3
     41 JUMP target 8
+file positive/variant-match-payload-bindings/program.ldn
+unit items 2
+item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 variant u8 cases3 () (u8,u8) ([2]u8)
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 ROUTINE bind_payloads result none params 0 slots 4 blocks 19 values 57
+  slot 1 local aggregate fields variant u8 cases3 () (u8,u8) ([2]u8)
+  slot 2 - u8
+  slot 3 - u8
+  slot 4 - u8
+  block 1 scope 3 BLOCK length 12
+    1 CLEAR_ARRAY destination slot 1
+    2 SELECT_VARIANT destination slot 1 field 1 case 2
+    3 NUMBER u8 20
+    4 STORE_VARIANT_FIELD destination slot 1 field 1 case 2 payload field 1 <- 3
+    5 NUMBER u8 21
+    6 STORE_VARIANT_FIELD destination slot 1 field 1 case 2 payload field 2 <- 5
+    7 LOAD_VARIANT_TAG u8 from slot 1 field 1
+    8 STORE slot 2 <- 7
+    9 LOAD u8 slot 2
+    10 NUMBER u8 0
+    11 EQUAL_TO bool <- 9 10
+    12 BRANCH target 3 alternative 4 <- 11
+  block 2 scope 3 BLOCK length 6
+    34 LOAD_VARIANT_TAG u8 from datum 1 state field 1
+    35 STORE slot 4 <- 34
+    36 LOAD u8 slot 4
+    37 NUMBER u8 0
+    38 EQUAL_TO bool <- 36 37
+    39 BRANCH target 12 alternative 13 <- 38
+  block 3 scope 4 BLOCK length 2
+    13 NUMBER i32 0
+    14 JUMP target 2
+  block 4 scope 3 BLOCK length 4
+    15 LOAD u8 slot 2
+    16 NUMBER u8 1
+    17 EQUAL_TO bool <- 15 16
+    18 BRANCH target 5 alternative 6 <- 17
+  block 5 scope 5 BLOCK length 2
+    19 TRUTH bool true
+    20 BRANCH target 8 alternative 9 <- 19
+  block 6 scope 3 BLOCK length 1
+    31 JUMP target 10
+  block 7 scope 5 BLOCK length 1
+    30 JUMP target 2
+  block 8 scope 6 BLOCK length 8
+    21 LOAD_VARIANT_FIELD u8 from slot 1 field 1 case 2 payload field 1
+    22 LOAD_VARIANT_FIELD u8 from slot 1 field 1 case 2 payload field 2
+    23 STORE slot 3 <- 22
+    24 NUMBER u8 1
+    25 LOAD u8 slot 3
+    26 ADD u8 <- 25 24
+    27 STORE_VARIANT_FIELD destination slot 1 field 1 case 2 payload field 2 <- 26
+    28 JUMP target 7
+  block 9 scope 5 BLOCK length 1
+    29 JUMP target 7
+  block 10 scope 7 BLOCK length 2
+    32 NUMBER i32 0
+    33 JUMP target 2
+  block 11 scope 3 BLOCK length 1
+    57 LEAVE
+  block 12 scope 8 BLOCK length 2
+    40 NUMBER i32 0
+    41 JUMP target 11
+  block 13 scope 3 BLOCK length 4
+    42 LOAD u8 slot 4
+    43 NUMBER u8 1
+    44 EQUAL_TO bool <- 42 43
+    45 BRANCH target 14 alternative 15 <- 44
+  block 14 scope 9 BLOCK length 2
+    46 TRUTH bool true
+    47 BRANCH target 17 alternative 18 <- 46
+  block 15 scope 3 BLOCK length 1
+    54 JUMP target 19
+  block 16 scope 9 BLOCK length 1
+    53 JUMP target 11
+  block 17 scope 10 BLOCK length 4
+    48 LOAD_VARIANT_FIELD u8 from datum 1 state field 1 case 2 payload field 1
+    49 LOAD_VARIANT_FIELD u8 from datum 1 state field 1 case 2 payload field 2
+    50 STORE_VARIANT_FIELD destination datum 1 state field 1 case 2 payload field 2 <- 49
+    51 JUMP target 16
+  block 18 scope 9 BLOCK length 1
+    52 JUMP target 16
+  block 19 scope 11 BLOCK length 2
+    55 NUMBER i32 0
+    56 JUMP target 11
 file positive/variant-part-measured/program.ldn
 unit items 1
 item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1

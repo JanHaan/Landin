@@ -538,7 +538,7 @@ package body Landin.Tests.Parser_Suite is
          & "    pair(value): _ = value" & ASCII.LF
          & "  end match" & ASCII.LF
          & "end f" & ASCII.LF,
-         "L0010", "payload bindings retain D78's named refusal");
+         "", "payload bindings are parsed in source order");
    end Match_Statements_Are_Parsed;
 
    ------------------------------------------------------------------

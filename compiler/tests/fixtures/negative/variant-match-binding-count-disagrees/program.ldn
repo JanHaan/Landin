@@ -1,7 +1,7 @@
 choice: type = struct
     kind: variant
         leaf |
-        pair: (value: u8)
+        pair: (first: u8, second: u8)
     end kind
 end choice
 
@@ -9,7 +9,7 @@ mut state: choice
 
 f: () -> none =
     match state.kind
-        leaf: _ = 1
-        pair(value): _ = 2
+        leaf: _ = 0
+        pair(first): _ = first
     end match
 end f

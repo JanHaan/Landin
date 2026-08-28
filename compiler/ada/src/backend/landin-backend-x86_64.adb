@@ -829,6 +829,42 @@ package body Landin.Backend.X86_64 is
                      Carry (Held, "(%rcx)", Value_Cell (Value));
                   end;
 
+               when Landin.IR.Load_Variant_Field =>
+                  declare
+                     Source : constant Landin.IR.Storage :=
+                       Landin.IR.Source_Of (Of_Unit, Item, Value);
+                     Field : constant Positive := Positive
+                       (Landin.IR.Element_Field_Of
+                          (Of_Unit, Item, Value));
+                     Shape : constant Landin.IR.Field_Shape :=
+                       Stored_Field_Shape (Source, Field);
+                     Which : constant Positive := Positive
+                       (Landin.IR.Variant_Case_Of
+                          (Of_Unit, Item, Value));
+                     Payload_Field : constant Positive := Positive
+                       (Landin.IR.Variant_Payload_Field_Of
+                          (Of_Unit, Item, Value));
+                     Leaf : constant Landin.IR.Field_Shape :=
+                       Landin.IR.Nth_Variant_Case_Field
+                         (Of_Unit, Shape, Which, Payload_Field);
+                     At_Offset : constant Landin.Targets.Byte_Count :=
+                       Landin.Backend.Variant_Payload_Field_Offset
+                         (Of_Unit, Shape, Which, Payload_Field, Facts);
+                     Held : constant Held_Size :=
+                       Size_Of (Leaf.Element, Facts);
+                  begin
+                     Storage_Address (Source, Field, "%rcx");
+                     if At_Offset > 0 then
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (At_Offset))
+                           & ", %rdx");
+                        Emit ("addq %rdx, %rcx");
+                     end if;
+                     Carry (Held, "(%rcx)", Value_Cell (Value));
+                  end;
+
                when Landin.IR.Select_Variant =>
                   declare
                      Destination : constant Landin.IR.Storage :=
@@ -1806,6 +1842,7 @@ package body Landin.Backend.X86_64 is
                         | Landin.IR.Copy_Array | Landin.IR.Clear_Array
                         | Landin.IR.Fill_Array
                         | Landin.IR.Load_Variant_Tag
+                        | Landin.IR.Load_Variant_Field
                         | Landin.IR.Select_Variant
                         | Landin.IR.Store_Variant_Field
                         | Landin.IR.Jump | Landin.IR.Branch =>

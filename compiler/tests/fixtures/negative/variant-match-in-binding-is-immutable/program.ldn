@@ -1,0 +1,15 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        pair: (value: u8)
+    end kind
+end choice
+
+mut state: choice
+
+f: () -> none =
+    match state.kind
+        leaf: _ = 0
+        pair(value): value = 1
+    end match
+end f

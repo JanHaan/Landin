@@ -1,6 +1,0 @@
-class: negative
-summary: D77 leaves variant payload bindings to D78
-constructs: 0680, 0690, 1210, 1220, 1810, 1830
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0010
