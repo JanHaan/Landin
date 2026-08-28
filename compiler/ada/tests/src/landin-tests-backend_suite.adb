@@ -1010,9 +1010,9 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_State_Follows_Its_Target;
 
-   --  D66--D68 write scalar, finite, repeated and hybrid array-field folds at
-   --  target-derived offsets, zero absent fields and padding, and keep an
-   --  explicitly written all-zero literal in `.data`.
+   --  D66--D71 write scalar, finite, repeated and hybrid array-field folds at
+   --  target-derived offsets.  D81--D83 do the same inside a selected variant
+   --  payload, including direct and selected module image sources.
    procedure A_Module_Struct_Literal_Becomes_Data_Image
      (Item : in out Landin.Testing.Context);
 
@@ -1057,7 +1057,21 @@ package body Landin.Tests.Backend_Suite is
         & "array_selected: choice = choice(kind: arrays("
         & "finite: [17, 19], repeated: [of 23],"
         & " hybrid: [29, of 31], blank: zeroed))" & LF
-        & "array_selected_copy: choice = array_selected" & LF;
+        & "array_selected_copy: choice = array_selected" & LF
+        & "payload_holder: type = struct" & LF
+        & "    repeated: [2]u16" & LF
+        & "    blank: [2]bool" & LF
+        & "end payload_holder" & LF
+        & "array_copied: choice = choice(kind: arrays("
+        & "finite: variant_finite_source,"
+        & " repeated: variant_payload_fields.repeated,"
+        & " hybrid: variant_hybrid_source,"
+        & " blank: variant_payload_fields.blank))" & LF
+        & "array_copied_copy: choice = array_copied" & LF
+        & "variant_finite_source: [2]u8 = [43, 47]" & LF
+        & "variant_hybrid_source: [3]u8 = [53, of 59]" & LF
+        & "variant_payload_fields: payload_holder = ("
+        & "repeated: [of 61], blank: [of false])" & LF;
    begin
       declare
          Work : Landin.Stages.Compilation :=
@@ -1196,6 +1210,43 @@ package body Landin.Tests.Backend_Suite is
                   & HT & ".zero 1" & LF
                   & HT & ".size array_selected_copy, 14" & LF),
                "selected array payloads emit every compact image form");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  "array_copied:" & LF
+                  & HT & ".byte 2" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".byte 43" & LF
+                  & HT & ".byte 47" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".word 61" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".byte 53" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".byte 59" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".zero 2" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".size array_copied, 14" & LF)
+               and then Contains
+                 (Text,
+                  "array_copied_copy:" & LF
+                  & HT & ".byte 2" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".byte 43" & LF
+                  & HT & ".byte 47" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".word 61" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".byte 53" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".byte 59" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".zero 2" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".size array_copied_copy, 14" & LF),
+               "selected image sources emit and copy on the 32-bit target");
          end;
       end;
 
@@ -1292,6 +1343,26 @@ package body Landin.Tests.Backend_Suite is
                & HT & ".zero 1" & LF
                & HT & ".size array_selected, 14" & LF),
             "selected array payloads are target-neutral folds");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Emitted (Work),
+               "array_copied:" & LF
+               & HT & ".byte 2" & LF
+               & HT & ".zero 1" & LF
+               & HT & ".byte 43" & LF
+               & HT & ".byte 47" & LF
+               & HT & ".rept 2" & LF
+               & HT & ".word 61" & LF
+               & HT & ".endr" & LF
+               & HT & ".byte 53" & LF
+               & HT & ".rept 2" & LF
+               & HT & ".byte 59" & LF
+               & HT & ".endr" & LF
+               & HT & ".zero 2" & LF
+               & HT & ".zero 1" & LF
+               & HT & ".size array_copied, 14" & LF),
+            "selected image sources stay target-neutral on 64-bit");
       end;
    end A_Module_Struct_Literal_Becomes_Data_Image;
 

@@ -1,0 +1,67 @@
+packet: type = struct
+    prefix: u8
+    kind: variant
+        empty |
+        arrays: (
+            direct_finite: [2]u8,
+            direct_repeat: [2]u16,
+            direct_hybrid: [3]u8,
+            direct_zero: [2]bool,
+            selected_finite: [2]u8,
+            selected_repeat: [2]u16,
+            selected_hybrid: [3]u8,
+            selected_zero: [2]bool,
+            selected_omitted: [2]u32
+        )
+    end kind
+    tail: u8
+end packet
+
+holder: type = struct
+    finite: [2]u8
+    repeated: [2]u16
+    hybrid: [3]u8
+    zero: [2]bool
+    omitted: [2]u32
+end holder
+
+origin: packet = packet(
+    prefix: 5,
+    kind: arrays(
+        direct_finite: finite_source,
+        direct_repeat: repeated_source,
+        direct_hybrid: hybrid_source,
+        direct_zero: zero_source,
+        selected_finite: fields.finite,
+        selected_repeat: fields.repeated,
+        selected_hybrid: fields.hybrid,
+        selected_zero: fields.zero,
+        selected_omitted: fields.omitted
+    ),
+    tail: 31
+)
+copy: packet = origin
+inferred := copy
+
+fields: holder = (
+    finite: finite_source,
+    repeated: repeated_source,
+    hybrid: hybrid_source,
+    zero: zero_source,
+    of zeroed
+)
+finite_source: [2]u8 = [11, 13]
+repeated_source: [2]u16 = [of 17]
+hybrid_source: [3]u8 = [19, of 23]
+zero_source: [2]bool = [of false]
+
+read: () -> none =
+    match copy.kind
+        empty: _ = copy.prefix
+        arrays: _ = copy.tail
+    end match
+    match inferred.kind
+        empty: _ = inferred.prefix
+        arrays: _ = inferred.tail
+    end match
+end read

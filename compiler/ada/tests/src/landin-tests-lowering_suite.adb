@@ -2138,8 +2138,9 @@ package body Landin.Tests.Lowering_Suite is
 
    --  D66--D71 extend D60/D61's module struct image chain with scalar folds,
    --  compact finite, repeated and hybrid array-field segments, and direct or
-   --  selected array sources.  Every destination gets its own run; a zero
-   --  repetition keeps an absent field.
+   --  selected array sources.  D81--D83 carry the same forms inside a selected
+   --  variant case, including direct and selected module array sources.  Every
+   --  destination gets its own run; a zero repetition keeps an absent field.
    procedure A_Module_Struct_Literal_Records_And_Copies_Its_Image
      (Item : in out Landin.Testing.Context);
 
@@ -2191,7 +2192,21 @@ package body Landin.Tests.Lowering_Suite is
          & "array_selected: choice = choice(kind: arrays("
          & "finite: [17, 19], repeated: [of 23],"
          & " hybrid: [29, of 31], blank: zeroed))" & LF
-         & "array_selected_copy: choice = array_selected" & LF,
+         & "array_selected_copy: choice = array_selected" & LF
+         & "payload_holder: type = struct" & LF
+         & "    repeated: [2]u16" & LF
+         & "    blank: [2]bool" & LF
+         & "end payload_holder" & LF
+         & "array_copied: choice = choice(kind: arrays("
+         & "finite: variant_finite_source,"
+         & " repeated: variant_payload_fields.repeated,"
+         & " hybrid: variant_hybrid_source,"
+         & " blank: variant_payload_fields.blank))" & LF
+         & "array_copied_copy: choice = array_copied" & LF
+         & "variant_finite_source: [2]u8 = [43, 47]" & LF
+         & "variant_hybrid_source: [3]u8 = [53, of 59]" & LF
+         & "variant_payload_fields: payload_holder = ("
+         & "repeated: [of 61], blank: [of false])" & LF,
          Ran);
 
       Landin.Testing.Check
@@ -2305,6 +2320,34 @@ package body Landin.Tests.Lowering_Suite is
                and then IR.Variant_Payload_Image_Of
                  (Unit, Datum, 1, 4).Form = IR.Absent,
                "a selected array payload and its copy keep every form");
+         end loop;
+
+         for Datum in IR.Item_Id range 14 .. 15 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Has_Image (Unit, Datum)
+               and then IR.Field_Image_Of
+                 (Unit, Datum, 1).Form = IR.Selected
+               and then IR.Field_Image_Of (Unit, Datum, 1).Value = 3
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 1).Form = IR.Finite
+               and then IR.Nth_Variant_Field_Element
+                 (Unit, Datum, 1, 1, 1) = 43
+               and then IR.Nth_Variant_Field_Element
+                 (Unit, Datum, 1, 1, 2) = 47
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 2).Form = IR.Repeated
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 2).Value = 61
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 3).Form = IR.Hybrid
+               and then IR.Nth_Variant_Field_Element
+                 (Unit, Datum, 1, 3, 1) = 53
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 3).Value = 59
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 4).Form = IR.Absent,
+               "variant payload image sources are resolved and rebased");
          end loop;
       end;
    end A_Module_Struct_Literal_Records_And_Copies_Its_Image;

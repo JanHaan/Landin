@@ -1,0 +1,37 @@
+packet: type = struct
+    prefix: u8
+    kind: variant
+        empty |
+        arrays: (direct: [2]u8, selected: [2]u16)
+    end kind
+    tail: u8
+end packet
+
+holder: type = struct
+    row: [2]u16
+end holder
+
+mut origin: packet = packet(
+    prefix: 5,
+    kind: arrays(direct: source, selected: fields.row),
+    tail: 31
+)
+mut copy: packet = origin
+mut source: [2]u8 = [11, 13]
+mut fields: holder = (row: [17, 19])
+
+public main: () -> (code: i32) =
+    source[0] = 23
+    fields.row[0] = 29
+    origin.kind = empty
+    mut selected: bool = false
+    match copy.kind
+        empty: selected = false
+        arrays: selected = true
+    end match
+    if selected and copy.prefix == 5 and copy.tail == 31 then
+        code = 42
+    else
+        code = 1
+    end if
+end main
