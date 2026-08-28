@@ -1,34 +1,50 @@
 #!/usr/bin/env python3
 """The faces the pages are set in, and the one place they are declared.
 
-Two families are vendored under `fonts/`, each as the subset webfont
-package its source delivers: `Nunito Sans` for prose and `MonoLisaCode`
-for code.  Every rendering of them goes through here -- the `@font-face`
-block a page carries, the stacks its `--ui` and `--mono` hold, and the
-list of files the site build copies beside the pages -- so a family can
-be replaced in one place and no consumer can name a face the repository
-does not ship.
+Two families set the pages, each as the subset webfont package its source
+delivers: `Nunito Sans` for prose and `MonoLisaText` for code.  Every
+rendering of them goes through here -- the `@font-face` block a page
+carries, the stacks its `--ui` and `--mono` hold, and the list of files
+the site build copies beside the pages -- so a family can be replaced in
+one place and no consumer can name a face the repository does not ship.
+
+They do not live in the same place.  Nunito Sans is under the OFL and is
+vendored under `fonts/`.  MonoLisa is under a EULA that licenses it to
+one licensee and forbids supplying the font data to anyone else, so its
+package lives in a private repository -- `landin-fonts`, found through
+`LANDIN_FONTS` or beside this one -- and a checkout without it renders
+the pages in the stack behind the family.  `missing()` says when that
+happened, and `scripts/site.sh --publish` refuses to publish that way.
 
 The `@font-face` rules are not written here either.  Each family keeps
 its source's own stylesheet, which is what states the weight axis and
 the unicode ranges; this file reads those, rewrites the `src` urls to the
 files beside the pages, and adds `font-display` to a face that came
-without one.  Transcribing 80 unicode ranges into Python would be 80
-chances to mistype one, and the subsetting is the reason a reader of an
-English page fetches 50 KB of monospace instead of 660 KB.
+without one.  Transcribing thirty unicode ranges into Python would be
+thirty chances to mistype one, and the subsetting is the reason a reader
+of an English page fetches one subset of a family instead of all of it.
 
-    python3 fonts.py            what is vendored, and what it covers
+    python3 fonts.py            what is available, and what it covers
+    python3 fonts.py --require  exit 1 naming any family that is not
 
 Standard library only, like everything else the site build reads.
 """
 
 from __future__ import annotations
 
+import os
 import re
+import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 VENDOR = HERE / "fonts"
+
+#  Where a licensed family is looked for: the variable first, then a
+#  checkout of landin-fonts beside this repository, which is where the CI
+#  gate's pages task clones it and where a developer's own copy sits.
+LICENSED_VAR = "LANDIN_FONTS"
+LICENSED_DEFAULT = HERE.parent.parent / "landin-fonts"
 
 #  Where the faces go beside the pages, and how a page asks for them.
 #  Flat, because the pages are flat: one directory of woff2 files next to
@@ -42,11 +58,11 @@ OUT_DIR = "fonts"
 #  should look like it did last year, not like Times.
 FAMILIES = (
     dict(role="ui", family="Nunito Sans",
-         css="nunito-sans/nunito-sans.css",
+         css="nunito-sans/nunito-sans.css", licensed=False,
          fallback=('-apple-system', 'BlinkMacSystemFont', '"Segoe UI"',
                    'Inter', 'Roboto', '"Helvetica Neue"', 'sans-serif')),
-    dict(role="mono", family="MonoLisaCode",
-         css="monolisa-code/monolisa-code.css",
+    dict(role="mono", family="MonoLisaText",
+         css="monolisa/monolisa.css", licensed=True,
          fallback=('ui-monospace', 'SFMono-Regular', '"SF Mono"', 'Menlo',
                    'Consolas', '"Liberation Mono"', 'monospace')),
 )
@@ -87,17 +103,38 @@ class Face:
         """The `@font-face` rule, on one line, pointing at `prefix`.
 
         One line per face because the block is inlined into every page:
-        as the sources write it, eighty faces come to 16 KB a page and
-        260 KB across the site, for whitespace.
+        as the sources write it, thirty faces are kilobytes a page, for
+        whitespace.
         """
         parts = [f"src:url({prefix}{self.name}) format(\"woff2\")"]
         parts += [f"{k}:{v}" for k, v in self.decls.items() if k != "src"]
         return "@font-face{%s}" % ";".join(parts)
 
 
+def licensed_root() -> Path:
+    """Where the licensed families are looked for on this host."""
+    return Path(os.environ.get(LICENSED_VAR) or LICENSED_DEFAULT)
+
+
+def stylesheet(spec) -> Path:
+    """The path of a family's own stylesheet on this host."""
+    root = licensed_root() if spec["licensed"] else VENDOR
+    return root / spec["css"]
+
+
+def available(spec) -> bool:
+    """Whether a family's package is on this host at all."""
+    return stylesheet(spec).is_file()
+
+
+def missing() -> list[str]:
+    """The families this host cannot set the pages in, by name."""
+    return [spec["family"] for spec in FAMILIES if not available(spec)]
+
+
 def _read(spec) -> tuple[str, list[Face]]:
     """Read a family's own stylesheet into its license and its faces."""
-    source = VENDOR / spec["css"]
+    source = stylesheet(spec)
     text = source.read_text(encoding="utf-8")
     header = "".join(m.group(0) for m in PRESERVED.finditer(text))
 
@@ -115,7 +152,7 @@ def _read(spec) -> tuple[str, list[Face]]:
         path = source.parent / "woff2" / Path(found.group(1)).name
         if not path.is_file():
             raise FileNotFoundError(
-                f"{spec['css']} asks for {path.name}, which is not vendored")
+                f"{spec['css']} asks for {path.name}, which is not there")
 
         family = decls.get("font-family", "").strip("'\"")
         if family != spec["family"]:
@@ -132,19 +169,32 @@ def _read(spec) -> tuple[str, list[Face]]:
     return header, faces
 
 
-def faces(role: str | None = None) -> list[Face]:
-    """Every vendored subset, or every subset of one role."""
-    out = []
+def _present(role: str | None = None):
+    """The families this host has, or those of one role.
+
+    A vendored family that is not there is a broken checkout and raises;
+    a licensed one that is not there is an ordinary host and is skipped.
+    """
     for spec in FAMILIES:
-        if role in (None, spec["role"]):
-            out += _read(spec)[1]
+        if role not in (None, spec["role"]):
+            continue
+        if spec["licensed"] and not available(spec):
+            continue
+        yield spec
+
+
+def faces(role: str | None = None) -> list[Face]:
+    """Every available subset, or every subset of one role."""
+    out = []
+    for spec in _present(role):
+        out += _read(spec)[1]
     return out
 
 
 def css(prefix: str = OUT_DIR + "/") -> str:
     """The `@font-face` block a page carries, urls under `prefix`."""
     out = []
-    for spec in FAMILIES:
+    for spec in _present():
         header, group = _read(spec)
         if header:
             out.append(header)
@@ -153,7 +203,12 @@ def css(prefix: str = OUT_DIR + "/") -> str:
 
 
 def stack(role: str) -> str:
-    """What `--ui` or `--mono` holds: the family, then the fallbacks."""
+    """What `--ui` or `--mono` holds: the family, then the fallbacks.
+
+    The family is named whether or not this host has it: a page rendered
+    without the faces still says what it wants to be set in, and a reader
+    who has the family installed sees it.
+    """
     for spec in FAMILIES:
         if spec["role"] == role:
             quoted = spec["family"]
@@ -164,7 +219,7 @@ def stack(role: str) -> str:
 
 
 def family(role: str) -> str:
-    """The vendored family a role is set in, unquoted."""
+    """The family a role is set in, unquoted."""
     for spec in FAMILIES:
         if spec["role"] == role:
             return spec["family"]
@@ -186,37 +241,50 @@ def files() -> list[tuple[str, Path]]:
 
 
 def uncovered(text: str, role: str | None = None) -> set[str]:
-    """The characters in `text` that no vendored subset carries.
+    """The characters in `text` that no available subset carries.
 
     A page whose prose has drifted outside the subsets that were vendored
     for it renders those characters in a fallback face, or in the last
     resort font, and nothing about the build says so.  This is how the
-    build says so.
+    build says so.  A family this host does not have covers nothing and
+    is not consulted; `missing()` is what reports that.
     """
     spans = {}
-    for spec in FAMILIES:
-        if role in (None, spec["role"]):
-            spans[spec["role"]] = [
-                pair for face in _read(spec)[1] for pair in face.ranges]
+    for spec in _present(role):
+        spans[spec["role"]] = [
+            pair for face in _read(spec)[1] for pair in face.ranges]
 
-    missing = set()
+    found = set()
     for char in set(text):
         if char in "\n\r\t":
             continue
         point = ord(char)
         for pairs in spans.values():
             if not any(low <= point <= high for low, high in pairs):
-                missing.add(char)
+                found.add(char)
                 break
-    return missing
+    return found
 
 
-def main() -> int:
+def main(argv) -> int:
+    absent = missing()
+    if "--require" in argv:
+        for name in absent:
+            print(f"fonts: {name} is not available; set {LICENSED_VAR} or "
+                  f"check out landin-fonts at {LICENSED_DEFAULT}")
+        return 1 if absent else 0
+
     for spec in FAMILIES:
+        if not available(spec):
+            print(f"{spec['role']:>5}  {spec['family']}: not available "
+                  f"(looked in {stylesheet(spec).parent})")
+            print(f"       {stack(spec['role'])}")
+            continue
         header, group = _read(spec)
         total = sum(face.path.stat().st_size for face in group)
+        where = "licensed" if spec["licensed"] else "vendored"
         print(f"{spec['role']:>5}  {spec['family']}: "
-              f"{len(group)} subsets, {total // 1024} KiB vendored")
+              f"{len(group)} subsets, {total // 1024} KiB {where}")
         print(f"       {stack(spec['role'])}")
     block = css()
     print(f"\n{len(block)} bytes of @font-face, "
@@ -225,4 +293,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

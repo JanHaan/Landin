@@ -2722,6 +2722,13 @@ def check_fonts(full_run):
     their sources subset them rather than trimmed to the documents, so
     this is a check the vendoring is still wide enough and not a check the
     documents stayed narrow.
+
+    The code face is licensed rather than vendored -- its EULA forbids
+    passing the files on, so they live in a private checkout the module
+    finds through `LANDIN_FONTS` or beside this repository.  A host
+    without that checkout is an ordinary host, not a broken one: the
+    family's coverage is reported skipped rather than failed, and
+    `scripts/site.sh --publish` is what refuses to go without it.
     """
     if not full_run:
         return []
@@ -2736,17 +2743,40 @@ def check_fonts(full_run):
     code = io.open(module, encoding="utf-8").read()
     css = io.open(site, encoding="utf-8").read()
 
+    #  Where the module looks for a licensed family, read out of the
+    #  module the same way its families are, so this check and the
+    #  renderer cannot look in two different places.
+    var = re.search(r'LICENSED_VAR = "([^"]+)"', code)
+    default = re.search(r'LICENSED_DEFAULT = HERE\.parent\.parent / "([^"]+)"',
+                        code)
+    if not (var and default):
+        out.append((module, 1, "no licensed-family location this check "
+                               "can read"))
+        return out
+    licensed_root = os.environ.get(var.group(1)) or os.path.join(
+        os.path.dirname(ROOT), default.group(1))
+
     #  Each family, its own stylesheet, and the ranges its subsets carry.
-    families = re.findall(r'family="([^"]+)",\s*\n\s*css="([^"]+)"', code)
+    families = re.findall(
+        r'family="([^"]+)",\s*\n\s*css="([^"]+)", licensed=(True|False)',
+        code)
     if not families:
-        out.append((module, 1, "no vendored family this check can read"))
+        out.append((module, 1, "no family this check can read"))
     covered = {}
-    for family, relative in families:
-        source = os.path.join(ROOT, "assets/fonts", relative)
-        if not os.path.exists(source):
-            out.append((module, 1, "%s names %s, which is not vendored"
-                                   % (family, relative)))
-            continue
+    for family, relative, licensed in families:
+        if licensed == "True":
+            source = os.path.join(licensed_root, relative)
+            if not os.path.exists(source):
+                print("check_fonts: %s is not available on this host "
+                      "(looked in %s); its coverage was not checked"
+                      % (family, os.path.dirname(source)))
+                continue
+        else:
+            source = os.path.join(ROOT, "assets/fonts", relative)
+            if not os.path.exists(source):
+                out.append((module, 1, "%s names %s, which is not vendored"
+                                       % (family, relative)))
+                continue
         sheet = io.open(source, encoding="utf-8").read()
         spans = []
         for face in re.findall(r"@font-face\s*\{(.*?)\}", sheet, re.S):

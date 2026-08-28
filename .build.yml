@@ -29,6 +29,18 @@ packages:
 #  replace the contents of the pages site and nothing else.
 oauth: pages.sr.ht/PAGES:RW
 
+#  The code face the pages are set in is licensed, not open, and lives in
+#  the private landin-fonts repository; the pages task clones it with this
+#  deploy key.  Only a build submitted by the account holding the secret
+#  receives it, which is one more reason a mailed patch never publishes.
+#  It is not a `sources:` entry because those are cloned before any task
+#  runs, and a build without the key would fail there, in the gate.
+#
+#  TODO(jan): replace with the UUID of the builds.sr.ht ssh_key secret
+#  that holds a read-only deploy key for git.sr.ht/~sinnfrei/landin-fonts.
+secrets:
+  - 00000000-0000-0000-0000-000000000000
+
 environment:
   LANDIN_TOOLCHAINS: /home/build/toolchains
   LANDIN_BUILD_TAG: srht-x86-64
@@ -89,4 +101,6 @@ tasks:
           echo "landin: ${GIT_REF:-no ref} is not main; not publishing"
           exit 0
       fi
+      #  Beside the repository, which is where assets/fonts.py looks.
+      git clone --depth 1 git@git.sr.ht:~sinnfrei/landin-fonts ../landin-fonts
       ./scripts/site.sh --publish
