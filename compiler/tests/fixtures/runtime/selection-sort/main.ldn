@@ -1,0 +1,44 @@
+--  The current kernel has recursion and fixed arrays, but no loops or
+--  aggregate parameters yet.  The search and outer pass are recursive, and
+--  both operate on the module array initialized here.
+mut values: [8]i32 = [18, 3, -5, 11, 3, 0, -20, 8]
+
+minimum_from: (scan: usize, best: usize) -> (found: usize) =
+    found = best
+
+    if scan < lenof values then
+        mut candidate: usize = best
+        if values[scan] < values[best] then
+            candidate = scan
+        end if
+        found = minimum_from(scan + 1, candidate)
+    end if
+end minimum_from
+
+selection_sort_from: (at: usize) -> none =
+    return when at >= lenof values
+
+    smallest: usize = minimum_from(at + 1, at)
+    saved: i32 = values[at]
+    values[at] = values[smallest]
+    values[smallest] = saved
+    selection_sort_from(at + 1)
+end selection_sort_from
+
+public main: () -> (code: i32) =
+    selection_sort_from(0)
+
+    if values[0] == -20
+        and values[1] == -5
+        and values[2] == 0
+        and values[3] == 3
+        and values[4] == 3
+        and values[5] == 8
+        and values[6] == 11
+        and values[7] == 18
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

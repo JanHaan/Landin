@@ -918,6 +918,10 @@ def render_sample(lines, hl, links):
 # --------------------------------------------------------------------------
 
 GUIDES = [
+    dict(key="examples", src="examples.md", out="examples.html",
+         nav="running examples", group="the language",
+         blurb="Four complete programs the compiler emits and the Linux "
+               "gate runs: recursive Fibonacci and three sorting algorithms."),
     dict(key="readme", src="README.md", out="readme.html",
          nav="the project", group="the project",
          blurb="What Landin is, what is in the repository, and how to build "
@@ -1581,7 +1585,7 @@ def write_resources(docs):
     A sitemap is worth more here than on most sites: almost nothing links
     in yet, so there is little for a crawler to follow.  It is generated
     with the pages rather than kept beside them, because a hand-written
-    list of fifteen files is a list that goes stale on the sixteenth.
+    list written by hand is a list that goes stale on the next document.
     """
     pages = ["index.html"] + [d["out"] for d in docs]
     urls = "".join(
@@ -1687,7 +1691,7 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
             'numbers do not move. <a href="tour.html">Read the tour</a> '
             'for the rest.</p></section>')
 
-    #  Three ways in, because the documents answer different questions and
+    #  Four ways in, because the documents answer different questions and
     #  a reader who starts in the wrong one finds it slow going.
     routes = [
         ("tour.html", "learn the language",
@@ -1700,6 +1704,9 @@ def index_page(docs, counts, intro, status, progress, samples, symbols):
         ("handoff.html", "understand the design",
          "The design in one page, the principles behind it, and which "
          "decisions must not be quietly reversed."),
+        ("examples.html", "run real programs",
+         "Recursive Fibonacci, insertion sort, selection sort and merge "
+         "sort: complete sources the Linux gate builds and executes."),
     ]
     cards = "".join(
         f'<a class="route" href="{href}"><strong>{esc(head)}</strong>'
@@ -1940,7 +1947,7 @@ USAGE = """render the documentation as HTML
     python3 render_html.py tour.md spec.md      render only those
 
 An unrecognised argument is refused rather than ignored: '--verfiy' used to
-render all fifteen pages without checking one of them."""
+render all sixteen pages without checking one of them."""
 
 
 def main(argv):
