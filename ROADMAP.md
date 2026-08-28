@@ -1828,10 +1828,14 @@ Depends on: R2.20, R1.70, R1.80
 
 Implement full function values, named returns, control-flow expressions,
 traps, declared atom-set errors, `fail`, `try`, call-site `else`, `defer` and
-`undo`, together with Linux x86-64 internal calling/lowering rules. Those
-rules include ordinary Landin arguments and returns on the stack, retiring
-`L0503` before the R3 parser workload; R4.40 later supplies the complete C ABI
-classification rather than owning this internal limit. Aggregate
+`undo`, together with Linux x86-64 internal calling/lowering rules. The first
+completed increment retains the six-register scalar prefix and places every
+later scalar argument in an aligned run of eight-byte stack slots, copied into
+ordinary callee slots and reclaimed by the caller. Its runtime case crosses
+both a seventh and an eighth argument, and `L0503` is retired rather than
+reassigned. Aggregate arguments and returns remain in this item; R4.40 later
+supplies complete C ABI classification rather than owning this internal
+convention. Aggregate
 values include the nonzero nested-ordinary forms R2.20 deliberately left
 contextual: nested field selection, construction and copy, deeper recursive
 composition, aggregate variant payloads and D17's fixed arrays whose element

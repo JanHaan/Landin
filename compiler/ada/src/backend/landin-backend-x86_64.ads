@@ -37,11 +37,12 @@
 --  [0320] and D13 fill with zeros beyond it while x86-64 would mask the
 --  count, and a signed amount is tested for being negative, because [1950]
 --  leaves the ones the compiler could not read to the trap.  A call fills
---  [1650]'s six argument registers from its operands in order, each at its
---  own parameter's width, and takes the result from the accumulator into a
---  frame cell; a callee returning none leaves nothing to take.  The frame is
---  a multiple of the target's stack alignment, so `%rsp` still meets the ABI
---  where a call is made.
+--  the internal convention's six argument registers from its operands in
+--  order, each at its own parameter's width.  Later scalar arguments occupy
+--  eight-byte stack slots in source order; the outgoing run is rounded to the
+--  target's stack alignment and reclaimed after the call.  The result comes
+--  from the accumulator into a frame cell; a callee returning none leaves
+--  nothing to take.
 --
 --  A module value is data and not code.  [1460] says nothing runs before the
 --  entry point, so a datum's block is folded here rather than executed, and
@@ -71,13 +72,6 @@ with Landin.Source.Names;
 with Landin.Targets;
 
 package Landin.Backend.X86_64 is
-
-   --  How many arguments [1650]'s ABI hands in registers, and so how many
-   --  this backend can pass at all: the rest go on the stack and that is
-   --  not written yet.  Named here because the driver refuses a wider
-   --  routine before anything is emitted, and a number in two places is a
-   --  number that will disagree with itself.
-   Register_Arguments : constant := 6;
 
    --  Every frame cell is addressed from %rbp and the prologue subtracts the
    --  whole extent as an immediate.  Both encodings carry a signed 32-bit
