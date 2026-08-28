@@ -10,7 +10,7 @@ are the specification; these pages are a reading of them.
 |---|---|---|
 | the tour | `tour.md` | as a literate document: every `[NNNN]` construct becomes a block holding its prose and the code that follows, and every citation becomes a link to the construct it names |
 | the prototypes | `prototype-{1..4}-*.txt` | as listings, because in those the code is the argument, with the closing findings pulled out as entries |
-| the guides | the Markdown documents named in `GUIDES` | as ordinary prose, with `[NNNN]` citations linked into the tour and links between documents rewritten to the pages they name |
+| the guides | the Markdown documents named in `GUIDES`, including `examples.md` | as ordinary prose, with `[NNNN]` citations linked into the tour and links between documents rewritten to the pages they name |
 
 Nothing here is a parser, and the highlighting is not written here. It comes
 from [`highlight/landin_highlight.py`](../../highlight/README.md), the one
@@ -80,7 +80,7 @@ A page that quietly lost a paragraph fails the build rather than going up.
 
 It reads the document's own region — `<main>` without the navigation, the bar
 or the footer. Over the whole page it counted the furniture as content: the
-sidebar names all fifteen documents and repeats every section title, so a
+sidebar names all sixteen documents and repeats every section title, so a
 heading deleted from the body still balanced against the copy of it in the
 navigation. It reported every word present while 79 citations had gone inert.
 

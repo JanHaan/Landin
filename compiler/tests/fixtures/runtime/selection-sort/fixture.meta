@@ -1,0 +1,6 @@
+class: runtime
+summary: recursive selection sort finds each minimum and orders a literal-initialized fixed array in place
+constructs: 0040, 0370, 0520, 0570, 1800, 1810, 1920, 1940, 1950, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

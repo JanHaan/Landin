@@ -47,7 +47,7 @@ LANGUAGE_FILES = [SPEC_NAME, TOUR_NAME, "prototype-1-driver.md",
                   "prototype-4-app.md"]
 ROADMAP = "ROADMAP.md"
 FILES = LANGUAGE_FILES + [ROADMAP]
-LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md",
+LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md", "examples.md",
                      "docs/environments.md",
                      "docs/agents/issue-tracker.md",
                      "docs/agents/triage-labels.md",
@@ -57,6 +57,17 @@ LIVE_DOCS = FILES + ["AGENTS.md", "README.md", "handoff.md",
                      "compiler/tests/README.md",
                      "compiler/tests/harness-cases/README.md",
                      "docs/site/README.md"]
+
+RUNNING_EXAMPLES = [
+    ("Recursive Fibonacci",
+     "compiler/tests/fixtures/runtime/recursive-fibonacci/main.ldn"),
+    ("Insertion sort",
+     "compiler/tests/fixtures/runtime/insertion-sort/main.ldn"),
+    ("Selection sort",
+     "compiler/tests/fixtures/runtime/selection-sort/main.ldn"),
+    ("Merge sort",
+     "compiler/tests/fixtures/runtime/merge-sort/main.ldn"),
+]
 
 #  Every word the language reserves. Kept here rather than imported from
 #  docs/site/render_html.py because the highlighter's set is about colour
@@ -2855,6 +2866,86 @@ def check_unfenced_code(full_run):
     return out
 
 
+def check_running_examples(full_run):
+    """The examples page shows the runtime sources the gate actually runs.
+
+    A copied listing is useful only while it stays the program named beneath
+    it.  The runtime fixture remains authoritative: each section carries its
+    exact source in one Landin fence, and its metadata keeps saying that the
+    harness executes it and expects status 42.
+    """
+    if not full_run:
+        return []
+
+    document = os.path.join(ROOT, "examples.md")
+    source_paths = [os.path.join(ROOT, source)
+                    for _, source in RUNNING_EXAMPLES]
+    metadata_paths = [os.path.join(os.path.dirname(source), "fixture.meta")
+                      for source in source_paths]
+    missing = absent([document] + source_paths + metadata_paths)
+    if missing:
+        return missing
+
+    lines = io.open(document, encoding="utf-8").read().splitlines()
+    out = []
+    landin_fences = sum(line == "```landin" for line in lines)
+    if landin_fences != len(RUNNING_EXAMPLES):
+        out.append(("examples.md", 1,
+                    "the page has %d Landin listings for %d running examples"
+                    % (landin_fences, len(RUNNING_EXAMPLES))))
+
+    for title, source in RUNNING_EXAMPLES:
+        heading = "## " + title
+        found = [at for at, line in enumerate(lines) if line == heading]
+        if len(found) != 1:
+            out.append(("examples.md", 1,
+                        "%r has %d sections instead of one"
+                        % (title, len(found))))
+            continue
+
+        start = found[0]
+        end = next((at for at in range(start + 1, len(lines))
+                    if lines[at].startswith("## ")), len(lines))
+        section = lines[start + 1:end]
+        if source not in "\n".join(section):
+            out.append(("examples.md", start + 1,
+                        "%s does not name its runtime source %s"
+                        % (title, source)))
+
+        openings = [at for at in range(start + 1, end)
+                    if lines[at] == "```landin"]
+        if len(openings) != 1:
+            out.append(("examples.md", start + 1,
+                        "%s has %d Landin listings instead of one"
+                        % (title, len(openings))))
+            continue
+        opened = openings[0]
+        closed = next((at for at in range(opened + 1, end)
+                       if lines[at] == "```"), None)
+        if closed is None:
+            out.append(("examples.md", opened + 1,
+                        "%s's Landin listing is never closed" % title))
+            continue
+
+        shown = "\n".join(lines[opened + 1:closed]) + "\n"
+        actual = io.open(os.path.join(ROOT, source),
+                         encoding="utf-8").read()
+        if shown != actual:
+            out.append(("examples.md", opened + 1,
+                        "%s's listing differs from %s" % (title, source)))
+
+        metadata = io.open(
+            os.path.join(ROOT, os.path.dirname(source), "fixture.meta"),
+            encoding="utf-8").read().splitlines()
+        for required in ("class: runtime", "program: main.ldn", "status: 42"):
+            if required not in metadata:
+                out.append((source, 1,
+                            "%s is showcased as running but its metadata "
+                            "does not say %r" % (title, required)))
+
+    return out
+
+
 def check_table_shape(full_run):
     """Every row of a table has the cell count its header has.
 
@@ -3124,6 +3215,7 @@ def main(argv):
     extra += check_comment_forms(full_run)
     extra += check_ascii_dashes(full_run)
     extra += check_unfenced_code(full_run)
+    extra += check_running_examples(full_run)
     extra += check_table_shape(full_run)
     extra += check_icon(full_run)
     extra += check_fonts(full_run)
