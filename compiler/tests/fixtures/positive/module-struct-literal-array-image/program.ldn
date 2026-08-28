@@ -2,15 +2,24 @@ holder: type = struct
     tag: u8
     row: [2]u16
     flags: [2]bool
+    repeated: [2]u16
+    mixed: [3]u16
+    zero_repeat: [2]u8
+    zero_hybrid: [3]u8
+    truths: [2]bool
     tail: usize
 end holder
 
 same: type = holder
 seed: u16 = 10
 mut origin: holder =
-    (flags: [true, false], tail: 7, row: [seed + 1, 13], tag: 5)
+    (flags: [true, false], tail: 7, row: [seed + 1, 13], tag: 5,
+     repeated: [of 17], mixed: [19, of 23], zero_repeat: [of 0],
+     zero_hybrid: [0, of 0], truths: [of true])
 copy: holder = origin
 inferred := copy
 aliased: same = inferred
 blank: holder =
-    (row: zeroed, tag: 0, flags: zeroed, tail: 0)
+    (row: zeroed, tag: 0, flags: zeroed, repeated: zeroed,
+     mixed: zeroed, zero_repeat: zeroed, zero_hybrid: zeroed,
+     truths: zeroed, tail: 0)

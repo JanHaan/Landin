@@ -4086,9 +4086,9 @@ declaration order, and every array placeholder remains zero. A parallel
 per-field descriptor says `Absent` or `Finite`; a finite descriptor names an
 offset and count in one concatenated run of source folds stored after the flat
 field run. `Repeated` and `Hybrid` descriptor forms are reserved so the next
-slice can extend the carrier without replacing it, but the verifier refuses
-either form in D67. The carrier contains no target width, offset, padding byte
-or machine identity.
+slice can extend the carrier without replacing it; the verifier refuses either
+form in D67, and D68 later supplies their canonical meanings. The carrier
+contains no target width, offset, padding byte or machine identity.
 
 The IR setter records the flat folds, descriptors and finite elements as one
 item image operation. The verifier first proves the flat and descriptor counts,
@@ -4111,12 +4111,12 @@ remain unchanged.
 
 Full and mixed repetition, a direct array storage name and a selected
 fixed-array field remain L0304 as labelled module images. Repetition needs the
-reserved compact suffix forms; copy needs image resolution through another
-datum and retains the existing refusal of a selected field as a module array
-initializer. Inferred struct literals, a general `of expression`, the all-`of`
-spelling, construction and general aggregate values remain outside this slice.
-No grammar, syntax node, diagnostic code, runtime instruction, target fact or
-layout rule changes.
+reserved compact suffix forms and is admitted by D68; copy needs image
+resolution through another datum and retains the existing refusal of a
+selected field as a module array initializer. Inferred struct literals, a
+general `of expression`, the all-`of` spelling, construction and general
+aggregate values remain outside this slice. No grammar, syntax node,
+diagnostic code, runtime instruction, target fact or layout rule changes.
 
 **Why a descriptor beside the flat run:** D66's scalar image and its verifier
 contract remain stable, while a field can own a finite source image without
@@ -4145,3 +4145,80 @@ for their own evidence.
 `negative/module-struct-literal-empty-array-field-image`; the generated token
 and IR records; and `runtime/module-struct-literal-array-image-is-loaded` on
 Linux x86-64.
+
+### D68 — A repeated module struct field image stays compact
+
+**The tour said** that a full repetition writes one value into every array
+position [0560], that a mixed repetition writes its prefix before repeating
+one final value [0410], and that nothing runs before the entry point [1460].
+D34 and D38 established compact repeated and hybrid images for module arrays;
+D67 reserved the same two descriptor forms beside each fixed-array field.
+
+**Chosen:** a fixed-array label in D66's explicitly typed module struct literal
+also accepts D34's full repetition and D38's mixed-prefix repetition. The
+written or inferred count and the field's D17 length must agree; a mixed prefix
+must leave a nonempty suffix. Every prefix and repeated expression has the
+field's scalar element type, must be known without execution under [1940], and
+keeps D24/D34/D38's static-subtree, widest-fold and selected-target range
+owners. Thus a count or element disagreement reports L0301, a zero contextual
+length or excluded storage read reports L0304, an unknown call reports L0305,
+and an overflowing or out-of-target fold reports L0300.
+
+A `Repeated` descriptor has count zero, a nonzero folded pattern and no element
+segment. A full zero repetition is canonicalized to D34's `Absent` image rather
+than carrying a redundant zero pattern. A `Hybrid` descriptor has a prefix
+count `k` with `1 <= k < length`, stores exactly those `k` source-order folds
+in D67's concatenated element run, and carries one folded suffix pattern. A
+hybrid remains a written image even when its prefix and suffix are all zero, as
+D38 decided. The flat aggregate field placeholder remains zero in every case;
+the representation still carries no target width, field offset or padding.
+
+The IR setter records all flat folds, descriptors and finite or hybrid-prefix
+elements in one item-owned run. The verifier first proves the aggregate-image
+and descriptor partitions, field count, canonical offsets, field kinds and
+form-specific count rules. Only then may it read a prefix or pattern and check
+each fold against the selected target. A repeated zero pattern and a hybrid
+whose prefix consumes the field are noncanonical verifier faults. These checks
+are ordinary release-build code rather than contracts.
+
+The backend replays D45's placement, emits a finite or hybrid prefix with the
+field element's target directive, and emits a compact `.rept` suffix for a
+repeated or hybrid field. Absent zero repetitions, inter-field gaps and tail
+padding remain `.zero`. The same target-neutral descriptor therefore selects
+`.long` for `usize` on a 32-bit target and `.quad` on a 64-bit target without
+changing the IR. D60/D61 chains already copy each descriptor, its suffix value
+and its compact prefix into distinct destination datums, so no new image
+recursion or cycle rule is introduced.
+
+A direct module array storage name or selected array field remains L0304 as a
+labelled module image. Resolving the former requires following another datum's
+finite, repeated or hybrid image and is deferred to D69; the latter retains the
+standing refusal of a selected field as an ordinary module array initializer.
+Inferred literals, heterogeneous `of expression`, all-`of`, construction and
+general aggregate values remain refused. No grammar, syntax node, diagnostic
+code, runtime instruction, target fact or layout rule changes.
+
+**Why finish the reserved carrier first:** repetition adds no image dependency:
+all its folds are children of the terminal literal. Name-copy labels would add
+a second datum to image resolution, while selected-field copy would cross an
+existing module-array boundary. Completing the local descriptor meanings keeps
+this slice acyclic and gives the verifier and backend one invariant at a time.
+
+**The alternatives:** admit repetition together with direct and selected image
+copy, admit only full repetition, flatten the expanded field into target bytes,
+or synthesize startup stores. The first combines a compact producer with image
+recursion, the second leaves D38's already represented hybrid form unused, and
+the last two violate target neutrality or [1460]. All were declined.
+
+**Pinned by** the IR, verifier, checker, lowering and backend public-seam cases;
+`positive/module-struct-literal-array-image`;
+`negative/module-struct-literal-array-image-length-mismatch`;
+`negative/module-struct-literal-array-image-element-mismatch`;
+`negative/module-struct-literal-array-image-value-not-known`;
+`negative/module-struct-literal-array-image-storage-read`;
+`negative/module-struct-literal-array-image-out-of-range`;
+`negative/module-struct-literal-array-image-fold-overflow`;
+`negative/module-struct-literal-array-repetition-zero-length`;
+`negative/module-struct-literal-array-image-forms-not-enabled`; the generated
+token and IR records; and
+`runtime/module-struct-literal-array-image-is-loaded` on Linux x86-64.

@@ -3105,7 +3105,7 @@ file positive/module-struct-initialized-from-name/program.ldn tokens 74
   263 264 ]
   265 268 end
   269 276 observe
-file positive/module-struct-literal-array-image/program.ldn tokens 101
+file positive/module-struct-literal-array-image/program.ldn tokens 190
   0 6 holder
   6 7 :
   8 12 type
@@ -3126,87 +3126,176 @@ file positive/module-struct-literal-array-image/program.ldn tokens 101
   62 63 2
   63 64 ]
   64 68 bool
-  73 77 tail
-  77 78 :
-  79 84 usize
-  85 88 end
-  89 95 holder
-  97 101 same
-  101 102 :
-  103 107 type
-  108 109 =
-  110 116 holder
-  117 121 seed
-  121 122 :
-  123 126 u16
-  127 128 =
-  129 131 10
-  132 135 mut
-  136 142 origin
-  142 143 :
-  144 150 holder
-  151 152 =
-  157 158 (
-  158 163 flags
-  163 164 :
-  165 166 [
-  166 170 true
-  170 171 ,
-  172 177 false
-  177 178 ]
-  178 179 ,
-  180 184 tail
-  184 185 :
-  186 187 7
-  187 188 ,
-  189 192 row
-  192 193 :
-  194 195 [
-  195 199 seed
-  200 201 +
-  202 203 1
-  203 204 ,
-  205 207 13
-  207 208 ]
-  208 209 ,
-  210 213 tag
-  213 214 :
-  215 216 5
-  216 217 )
-  218 222 copy
-  222 223 :
-  224 230 holder
-  231 232 =
-  233 239 origin
-  240 248 inferred
-  249 251 :=
-  252 256 copy
-  257 264 aliased
-  264 265 :
-  266 270 same
-  271 272 =
-  273 281 inferred
-  282 287 blank
-  287 288 :
-  289 295 holder
-  296 297 =
-  302 303 (
-  303 306 row
-  306 307 :
-  308 314 zeroed
-  314 315 ,
-  316 319 tag
-  319 320 :
-  321 322 0
-  322 323 ,
-  324 329 flags
-  329 330 :
-  331 337 zeroed
-  337 338 ,
-  339 343 tail
-  343 344 :
-  345 346 0
-  346 347 )
+  73 81 repeated
+  81 82 :
+  83 84 [
+  84 85 2
+  85 86 ]
+  86 89 u16
+  94 99 mixed
+  99 100 :
+  101 102 [
+  102 103 3
+  103 104 ]
+  104 107 u16
+  112 123 zero_repeat
+  123 124 :
+  125 126 [
+  126 127 2
+  127 128 ]
+  128 130 u8
+  135 146 zero_hybrid
+  146 147 :
+  148 149 [
+  149 150 3
+  150 151 ]
+  151 153 u8
+  158 164 truths
+  164 165 :
+  166 167 [
+  167 168 2
+  168 169 ]
+  169 173 bool
+  178 182 tail
+  182 183 :
+  184 189 usize
+  190 193 end
+  194 200 holder
+  202 206 same
+  206 207 :
+  208 212 type
+  213 214 =
+  215 221 holder
+  222 226 seed
+  226 227 :
+  228 231 u16
+  232 233 =
+  234 236 10
+  237 240 mut
+  241 247 origin
+  247 248 :
+  249 255 holder
+  256 257 =
+  262 263 (
+  263 268 flags
+  268 269 :
+  270 271 [
+  271 275 true
+  275 276 ,
+  277 282 false
+  282 283 ]
+  283 284 ,
+  285 289 tail
+  289 290 :
+  291 292 7
+  292 293 ,
+  294 297 row
+  297 298 :
+  299 300 [
+  300 304 seed
+  305 306 +
+  307 308 1
+  308 309 ,
+  310 312 13
+  312 313 ]
+  313 314 ,
+  315 318 tag
+  318 319 :
+  320 321 5
+  321 322 ,
+  328 336 repeated
+  336 337 :
+  338 339 [
+  339 341 of
+  342 344 17
+  344 345 ]
+  345 346 ,
+  347 352 mixed
+  352 353 :
+  354 355 [
+  355 357 19
+  357 358 ,
+  359 361 of
+  362 364 23
+  364 365 ]
+  365 366 ,
+  367 378 zero_repeat
+  378 379 :
+  380 381 [
+  381 383 of
+  384 385 0
+  385 386 ]
+  386 387 ,
+  393 404 zero_hybrid
+  404 405 :
+  406 407 [
+  407 408 0
+  408 409 ,
+  410 412 of
+  413 414 0
+  414 415 ]
+  415 416 ,
+  417 423 truths
+  423 424 :
+  425 426 [
+  426 428 of
+  429 433 true
+  433 434 ]
+  434 435 )
+  436 440 copy
+  440 441 :
+  442 448 holder
+  449 450 =
+  451 457 origin
+  458 466 inferred
+  467 469 :=
+  470 474 copy
+  475 482 aliased
+  482 483 :
+  484 488 same
+  489 490 =
+  491 499 inferred
+  500 505 blank
+  505 506 :
+  507 513 holder
+  514 515 =
+  520 521 (
+  521 524 row
+  524 525 :
+  526 532 zeroed
+  532 533 ,
+  534 537 tag
+  537 538 :
+  539 540 0
+  540 541 ,
+  542 547 flags
+  547 548 :
+  549 555 zeroed
+  555 556 ,
+  557 565 repeated
+  565 566 :
+  567 573 zeroed
+  573 574 ,
+  580 585 mixed
+  585 586 :
+  587 593 zeroed
+  593 594 ,
+  595 606 zero_repeat
+  606 607 :
+  608 614 zeroed
+  614 615 ,
+  616 627 zero_hybrid
+  627 628 :
+  629 635 zeroed
+  635 636 ,
+  642 648 truths
+  648 649 :
+  650 656 zeroed
+  656 657 ,
+  658 662 tail
+  662 663 :
+  664 665 0
+  665 666 )
 file positive/module-struct-literal-initializer/program.ldn tokens 110
   0 6 holder
   6 7 :
@@ -9945,7 +10034,7 @@ file negative/module-struct-initializer-nominal-mismatch/program.ldn tokens 28
   106 110 left
   111 112 =
   113 119 source
-file negative/module-struct-literal-array-image-element-mismatch/program.ldn tokens 33
+file negative/module-struct-literal-array-image-element-mismatch/program.ldn tokens 67
   0 6 holder
   6 7 :
   8 12 type
@@ -9979,7 +10068,41 @@ file negative/module-struct-literal-array-image-element-mismatch/program.ldn tok
   96 101 false
   101 102 ]
   102 103 )
-file negative/module-struct-literal-array-image-fold-overflow/program.ldn tokens 35
+  104 108 full
+  108 109 :
+  110 116 holder
+  117 118 =
+  119 120 (
+  120 123 tag
+  123 124 :
+  125 126 1
+  126 127 ,
+  128 131 row
+  131 132 :
+  133 134 [
+  134 136 of
+  137 142 false
+  142 143 ]
+  143 144 )
+  145 150 mixed
+  150 151 :
+  152 158 holder
+  159 160 =
+  161 162 (
+  162 165 tag
+  165 166 :
+  167 168 1
+  168 169 ,
+  170 173 row
+  173 174 :
+  175 176 [
+  176 177 7
+  177 178 ,
+  179 181 of
+  182 187 false
+  187 188 ]
+  188 189 )
+file negative/module-struct-literal-array-image-fold-overflow/program.ldn tokens 65
   0 6 holder
   6 7 :
   8 12 type
@@ -10015,7 +10138,37 @@ file negative/module-struct-literal-array-image-fold-overflow/program.ldn tokens
   127 137 4294967296
   137 138 ]
   138 139 )
-file negative/module-struct-literal-array-image-forms-not-enabled/program.ldn tokens 67
+  140 144 full
+  144 145 :
+  146 152 holder
+  153 154 =
+  155 156 (
+  156 159 row
+  159 160 :
+  161 162 [
+  162 164 of
+  165 168 max
+  169 170 +
+  171 172 1
+  172 173 ]
+  173 174 )
+  175 180 mixed
+  180 181 :
+  182 188 holder
+  189 190 =
+  191 192 (
+  192 195 row
+  195 196 :
+  197 198 [
+  198 199 1
+  199 200 ,
+  201 203 of
+  204 214 4294967296
+  215 216 *
+  217 227 4294967296
+  227 228 ]
+  228 229 )
+file negative/module-struct-literal-array-image-forms-not-enabled/program.ldn tokens 54
   0 6 holder
   6 7 :
   8 12 type
@@ -10050,40 +10203,27 @@ file negative/module-struct-literal-array-image-forms-not-enabled/program.ldn to
   94 95 :
   96 102 zeroed
   102 103 )
-  104 112 repeated
-  112 113 :
-  114 120 holder
-  121 122 =
-  123 124 (
-  124 127 row
-  127 128 :
-  129 130 [
-  130 131 2
-  132 134 of
-  135 136 1
-  136 137 ]
-  137 138 )
-  139 145 copied
-  145 146 :
-  147 153 holder
-  154 155 =
-  156 157 (
-  157 160 row
-  160 161 :
-  162 168 source
-  168 169 )
-  170 178 selected
-  178 179 :
-  180 186 holder
-  187 188 =
-  189 190 (
-  190 193 row
-  193 194 :
-  195 200 state
-  200 201 .
-  201 204 row
-  204 205 )
-file negative/module-struct-literal-array-image-length-mismatch/program.ldn tokens 31
+  104 110 copied
+  110 111 :
+  112 118 holder
+  119 120 =
+  121 122 (
+  122 125 row
+  125 126 :
+  127 133 source
+  133 134 )
+  135 143 selected
+  143 144 :
+  145 151 holder
+  152 153 =
+  154 155 (
+  155 158 row
+  158 159 :
+  160 165 state
+  165 166 .
+  166 169 row
+  169 170 )
+file negative/module-struct-literal-array-image-length-mismatch/program.ldn tokens 68
   0 6 holder
   6 7 :
   8 12 type
@@ -10115,7 +10255,44 @@ file negative/module-struct-literal-array-image-length-mismatch/program.ldn toke
   93 94 7
   94 95 ]
   95 96 )
-file negative/module-struct-literal-array-image-out-of-range/program.ldn tokens 28
+  97 101 full
+  101 102 :
+  103 109 holder
+  110 111 =
+  112 113 (
+  113 116 tag
+  116 117 :
+  118 119 1
+  119 120 ,
+  121 124 row
+  124 125 :
+  126 127 [
+  127 128 1
+  129 131 of
+  132 133 7
+  133 134 ]
+  134 135 )
+  136 141 mixed
+  141 142 :
+  143 149 holder
+  150 151 =
+  152 153 (
+  153 156 tag
+  156 157 :
+  158 159 1
+  159 160 ,
+  161 164 row
+  164 165 :
+  166 167 [
+  167 168 7
+  168 169 ,
+  170 171 9
+  171 172 ,
+  173 175 of
+  176 178 11
+  178 179 ]
+  179 180 )
+file negative/module-struct-literal-array-image-out-of-range/program.ldn tokens 74
   0 6 holder
   6 7 :
   8 12 type
@@ -10144,7 +10321,53 @@ file negative/module-struct-literal-array-image-out-of-range/program.ldn tokens 
   83 85 10
   85 86 ]
   86 87 )
-file negative/module-struct-literal-array-image-storage-read/program.ldn tokens 78
+  88 92 full
+  92 93 :
+  94 100 holder
+  101 102 =
+  103 104 (
+  104 107 row
+  107 108 :
+  109 110 [
+  110 112 of
+  113 116 200
+  117 118 +
+  119 122 100
+  122 123 ]
+  123 124 )
+  125 137 mixed_prefix
+  137 138 :
+  139 145 holder
+  146 147 =
+  148 149 (
+  149 152 row
+  152 153 :
+  154 155 [
+  155 158 200
+  159 160 +
+  161 164 100
+  164 165 ,
+  166 168 of
+  169 171 10
+  171 172 ]
+  172 173 )
+  174 186 mixed_suffix
+  186 187 :
+  188 194 holder
+  195 196 =
+  197 198 (
+  198 201 row
+  201 202 :
+  203 204 [
+  204 206 10
+  206 207 ,
+  208 210 of
+  211 214 200
+  215 216 +
+  217 220 100
+  220 221 ]
+  221 222 )
+file negative/module-struct-literal-array-image-storage-read/program.ldn tokens 131
   0 5 point
   5 6 :
   7 11 type
@@ -10163,7 +10386,7 @@ file negative/module-struct-literal-array-image-storage-read/program.ldn tokens 
   69 72 row
   72 73 :
   74 75 [
-  75 76 1
+  75 76 2
   76 77 ]
   77 80 u16
   81 84 end
@@ -10192,38 +10415,91 @@ file negative/module-struct-literal-array-image-storage-read/program.ldn tokens 
   153 158 state
   158 159 .
   159 160 x
-  160 161 ]
-  161 162 )
-  163 170 indexed
-  170 171 :
-  172 178 holder
-  179 180 =
-  181 182 (
-  182 185 row
-  185 186 :
-  187 188 [
-  188 194 source
-  194 195 [
-  195 196 0
-  196 197 ]
-  197 198 ]
-  198 199 )
-  200 206 nested
-  206 207 :
-  208 214 holder
-  215 216 =
-  217 218 (
-  218 221 row
-  221 222 :
-  223 224 [
-  224 229 state
-  229 230 .
-  230 231 x
-  232 233 +
-  234 235 1
-  235 236 ]
-  236 237 )
-file negative/module-struct-literal-array-image-value-not-known/program.ldn tokens 51
+  160 161 ,
+  162 163 1
+  163 164 ]
+  164 165 )
+  166 173 indexed
+  173 174 :
+  175 181 holder
+  182 183 =
+  184 185 (
+  185 188 row
+  188 189 :
+  190 191 [
+  191 197 source
+  197 198 [
+  198 199 0
+  199 200 ]
+  200 201 ,
+  202 203 1
+  203 204 ]
+  204 205 )
+  206 212 nested
+  212 213 :
+  214 220 holder
+  221 222 =
+  223 224 (
+  224 227 row
+  227 228 :
+  229 230 [
+  230 235 state
+  235 236 .
+  236 237 x
+  238 239 +
+  240 241 1
+  241 242 ,
+  243 244 1
+  244 245 ]
+  245 246 )
+  247 251 full
+  251 252 :
+  253 259 holder
+  260 261 =
+  262 263 (
+  263 266 row
+  266 267 :
+  268 269 [
+  269 271 of
+  272 277 state
+  277 278 .
+  278 279 x
+  279 280 ]
+  280 281 )
+  282 294 mixed_prefix
+  294 295 :
+  296 302 holder
+  303 304 =
+  305 306 (
+  306 309 row
+  309 310 :
+  311 312 [
+  312 318 source
+  318 319 [
+  319 320 0
+  320 321 ]
+  321 322 ,
+  323 325 of
+  326 327 1
+  327 328 ]
+  328 329 )
+  330 342 mixed_suffix
+  342 343 :
+  344 350 holder
+  351 352 =
+  353 354 (
+  354 357 row
+  357 358 :
+  359 360 [
+  360 361 1
+  361 362 ,
+  363 365 of
+  366 371 state
+  371 372 .
+  372 373 x
+  373 374 ]
+  374 375 )
+file negative/module-struct-literal-array-image-value-not-known/program.ldn tokens 109
   0 6 answer
   6 7 :
   8 9 (
@@ -10275,6 +10551,90 @@ file negative/module-struct-literal-array-image-value-not-known/program.ldn toke
   161 162 7
   162 163 ]
   163 164 )
+  165 169 full
+  169 170 :
+  171 177 holder
+  178 179 =
+  180 181 (
+  181 184 tag
+  184 185 :
+  186 187 1
+  187 188 ,
+  189 192 row
+  192 193 :
+  194 195 [
+  195 197 of
+  198 204 answer
+  204 205 (
+  205 206 )
+  206 207 ]
+  207 208 )
+  209 221 mixed_prefix
+  221 222 :
+  223 229 holder
+  230 231 =
+  232 233 (
+  233 236 tag
+  236 237 :
+  238 239 1
+  239 240 ,
+  241 244 row
+  244 245 :
+  246 247 [
+  247 253 answer
+  253 254 (
+  254 255 )
+  255 256 ,
+  257 259 of
+  260 261 7
+  261 262 ]
+  262 263 )
+  264 276 mixed_suffix
+  276 277 :
+  278 284 holder
+  285 286 =
+  287 288 (
+  288 291 tag
+  291 292 :
+  293 294 1
+  294 295 ,
+  296 299 row
+  299 300 :
+  301 302 [
+  302 303 7
+  303 304 ,
+  305 307 of
+  308 314 answer
+  314 315 (
+  315 316 )
+  316 317 ]
+  317 318 )
+file negative/module-struct-literal-array-repetition-zero-length/program.ldn tokens 25
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 row
+  29 30 :
+  31 32 [
+  32 33 0
+  33 34 ]
+  34 36 u8
+  37 40 end
+  41 47 holder
+  49 54 state
+  54 55 :
+  56 62 holder
+  63 64 =
+  65 66 (
+  66 69 row
+  69 70 :
+  71 72 [
+  72 74 of
+  75 76 1
+  76 77 ]
+  77 78 )
 file negative/module-struct-literal-empty-array-field-image/program.ldn tokens 24
   0 6 holder
   6 7 :

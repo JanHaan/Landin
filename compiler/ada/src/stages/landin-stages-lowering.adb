@@ -19,6 +19,7 @@ package body Landin.Stages.Lowering is
 
    use type IR.Block_Id;
    use type IR.Element_Total;
+   use type IR.Field_Image_Form;
    use type IR.Field_Shape_Kind;
    use type IR.Item_Id;
    use type IR.Slot_Id;
@@ -2924,7 +2925,7 @@ package body Landin.Stages.Lowering is
                   Nodes (Which) := Field;
                   if Syn.Kind
                        (Of_Tree, Syn.Value_Of (Of_Tree, Field))
-                       = Syn.Array_Literal
+                       in Syn.Array_Literal | Syn.Mixed_Array_Repetition
                   then
                      Element_Count := Element_Count
                        + Syn.Element_Count
@@ -2966,9 +2967,15 @@ package body Landin.Stages.Lowering is
                               end if;
                               Values (Which) := Held;
                            end;
-                        elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+                        elsif Syn.Kind (Of_Tree, Value)
+                                in Syn.Array_Literal
+                                   | Syn.Mixed_Array_Repetition
                         then
-                           Images (Which).Form := IR.Finite;
+                           Images (Which).Form :=
+                             (if Syn.Kind (Of_Tree, Value)
+                                   = Syn.Array_Literal
+                              then IR.Finite
+                              else IR.Hybrid);
                            Images (Which).Count :=
                              Syn.Element_Count (Of_Tree, Value);
                            for Position in
@@ -2993,12 +3000,56 @@ package body Landin.Stages.Lowering is
                               end;
                            end loop;
                            Cursor := Cursor + Images (Which).Count;
+                           if Images (Which).Form = IR.Hybrid then
+                              declare
+                                 Held  : Ty.Folded;
+                                 Known : Boolean;
+                              begin
+                                 Fold_Constant
+                                   (Of_Tree,
+                                    Syn.Repeated_Element (Of_Tree, Value),
+                                    Held, Known);
+                                 if not Known then
+                                    raise Landin.Compiler_Defect with
+                                      "a module struct hybrid suffix the"
+                                      & " checker accepted did not fold at"
+                                      & " lowering";
+                                 end if;
+                                 Images (Which).Value := Held;
+                              end;
+                           end if;
+                        elsif Syn.Kind (Of_Tree, Value)
+                                = Syn.Array_Repetition
+                        then
+                           declare
+                              Held  : Ty.Folded;
+                              Known : Boolean;
+                           begin
+                              Fold_Constant
+                                (Of_Tree,
+                                 Syn.Repeated_Element (Of_Tree, Value),
+                                 Held, Known);
+                              if not Known then
+                                 raise Landin.Compiler_Defect with
+                                   "a module struct repetition pattern the"
+                                   & " checker accepted did not fold at"
+                                   & " lowering";
+                              end if;
+
+                              --  D34's full zero pattern is the absent
+                              --  field image.  A mixed zero suffix remains
+                              --  present above because its prefix is written.
+                              if Held /= 0 then
+                                 Images (Which).Form := IR.Repeated;
+                                 Images (Which).Value := Held;
+                              end if;
+                           end;
                         elsif Syn.Kind (Of_Tree, Value)
                                 /= Syn.Zeroed_Literal
                         then
                            raise Landin.Compiler_Defect with
                              "a module struct array-field image outside"
-                             & " D67 reached lowering";
+                             & " D68 reached lowering";
                         end if;
                      end;
                   end if;

@@ -4,3 +4,5 @@ holder: type = struct
 end holder
 
 state: holder = (tag: 1, row: [7])
+full: holder = (tag: 1, row: [1 of 7])
+mixed: holder = (tag: 1, row: [7, 9, of 11])

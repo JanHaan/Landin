@@ -1383,13 +1383,162 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Repeated,
+                     Offset => 0, Count => 0, Value => 0)),
+            Landin.Types.Folded_Array'(1 .. 0 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Field_Image_Pattern_Not_Canonical,
+            "a repeated zero pattern must use the absent form");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U8,
+             Length  => 2));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Hybrid,
+                     Offset => 0, Count => 2, Value => 1)),
+            Landin.Types.Folded_Array'(1, 2));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Field_Image_Pattern_Not_Canonical,
+            "a hybrid prefix must leave a repeated suffix");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.Usize,
+             Length  => 2));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Repeated,
+                     Offset => 0, Count => 0, Value => 2 ** 32)),
+            Landin.Types.Folded_Array'(1 .. 0 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Synthetic_32),
+            V.Aggregate_Field_Image_Value_Does_Not_Fit,
+            "a repeated usize pattern follows the 32-bit target");
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Nothing_Wrong,
+            "the same repeated usize pattern fits the 64-bit target");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U8,
+             Length  => 1));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Absent,
                      Offset => 0, Count => 0, Value => 1)),
             Landin.Types.Folded_Array'(1 .. 0 => 0));
          Finish (Unit, Datum, Site);
          Expect
            (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
-            V.Aggregate_Field_Image_Form_Not_Carried,
-            "repetition stays reserved until D68 supplies its rule");
+            V.Aggregate_Field_Image_Pattern_Not_Canonical,
+            "an absent field image cannot hide a pattern value");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U8,
+             Length  => 1));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Finite,
+                     Offset => 0, Count => 1, Value => 1)),
+            Landin.Types.Folded_Array'(1 => 7));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Field_Image_Pattern_Not_Canonical,
+            "a finite field image cannot also carry a suffix pattern");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.Bool,
+             Length  => 2));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Repeated,
+                     Offset => 0, Count => 0, Value => 2)),
+            Landin.Types.Folded_Array'(1 .. 0 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Field_Image_Value_Does_Not_Fit,
+            "a repeated bool pattern must remain zero or one");
       end;
    end Malformed_Aggregate_Images_Are_Rejected;
 

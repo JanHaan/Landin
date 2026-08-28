@@ -1,0 +1,6 @@
+class: negative
+summary: D68 retains D34's nonzero requirement for a repeated field image
+constructs: 0040, 0520, 0560, 0670, 0710, 0750, 1740, 1810, 1940
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

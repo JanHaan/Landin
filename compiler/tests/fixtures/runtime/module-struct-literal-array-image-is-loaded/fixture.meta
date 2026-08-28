@@ -1,6 +1,6 @@
 class: runtime
-summary: D67 emits finite array-field images at target offsets and copies them into independent module storage
-constructs: 0040, 0080, 0190, 0410, 0520, 0670, 0710, 0750, 1460, 1740, 1810, 1940
+summary: D67/D68 emit finite and repetition field images into independent storage
+constructs: 0040, 0080, 0190, 0410, 0520, 0540, 0560, 0670, 0710, 0750, 1460, 1740, 1810, 1940
 program: main.ldn
 status: 42
 targets: linux-x86-64

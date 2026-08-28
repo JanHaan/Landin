@@ -102,7 +102,7 @@ package Landin.IR.Verifier is
       Aggregate_Field_Image_Length_Disagrees,
       Aggregate_Field_Image_Value_Does_Not_Fit,
       Aggregate_Field_Image_On_Scalar_Field,
-      Aggregate_Field_Image_Form_Not_Carried,
+      Aggregate_Field_Image_Pattern_Not_Canonical,
       --  Calls [1920].
       Callee_Is_Not_A_Routine,
       Call_Inside_A_Datum,

@@ -400,19 +400,33 @@ package body Landin.IR.Dump is
                        Field_Image_Of (Of_Unit, Id, F);
                      Rendered : Unbounded.Unbounded_String;
                   begin
-                     if Image.Form = Finite then
-                        for P in 1 .. Image.Count loop
-                           if P /= 1 then
+                     if Image.Form /= Absent then
+                        if Image.Form in Finite | Hybrid then
+                           for P in 1 .. Image.Count loop
+                              if P /= 1 then
+                                 Unbounded.Append (Rendered, " ");
+                              end if;
+                              Unbounded.Append
+                                (Rendered,
+                                 Trimmed
+                                   (Landin.Types.Folded'Image
+                                      (Nth_Field_Element
+                                         (Of_Unit, Id, F,
+                                          Part_Position (P)))));
+                           end loop;
+                        end if;
+
+                        if Image.Form in Repeated | Hybrid then
+                           if Image.Form = Hybrid then
                               Unbounded.Append (Rendered, " ");
                            end if;
                            Unbounded.Append
                              (Rendered,
-                              Trimmed
-                                (Landin.Types.Folded'Image
-                                   (Nth_Field_Element
-                                      (Of_Unit, Id, F,
-                                       Part_Position (P)))));
-                        end loop;
+                              "repeat "
+                              & Trimmed
+                                  (Landin.Types.Folded'Image (Image.Value)));
+                        end if;
+
                         Put
                           ("  field " & Trimmed (Natural'Image (F))
                            & " image " & Unbounded.To_String (Rendered));
