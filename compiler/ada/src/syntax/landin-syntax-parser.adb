@@ -2454,12 +2454,14 @@ package body Landin.Syntax.Parser is
             end Parse_If;
 
             --  match ::= "match" expression match_arm+ "end" "match"
-            --  match_arm ::= identifier ":" statement              D77
+            --  match_arm ::= identifier ("(" match_binding
+            --                ("," match_binding)* ")")? ":" statement
+            --  match_binding ::= "inout"? identifier                D78
             --
             --  One statement per arm is the first executable boundary and
             --  is deliberately independent of indentation.  An `if` may be
-            --  that statement when an arm needs a statement block.  D78
-            --  adds the parenthesized payload-binding list.
+            --  that statement when an arm needs a statement block.  D78's
+            --  bindings are positional aliases for that case's payload.
             function Parse_Match (Context : Frame) return Node_Id is
                At_Match : constant Landin.Source.Span := Here;
                Subject  : Node_Id;
@@ -2498,6 +2500,7 @@ package body Landin.Syntax.Parser is
                      Named   : constant Landin.Source.Names.Name_Id :=
                        Named_Here;
                      Pattern, Runs, Statement : Node_Id;
+                     Bindings : Slot_Vectors.Vector;
                      Kept : Boolean;
                   begin
                      Advance;
@@ -2507,13 +2510,53 @@ package body Landin.Syntax.Parser is
                         Named    => Named);
 
                      if Peek = Tok.Left_Paren then
-                        Refuse
-                          (Item    => Syn.Match_Payload_Binding,
-                           Where   => Here,
-                           Message => "variant payload bindings are not"
-                                      & " enabled yet");
                         Advance;
-                        Resync_Parentheses;
+                        loop
+                           declare
+                              Mutable : Boolean := False;
+                              At_Name : Landin.Source.Span;
+                              Bound   : Landin.Source.Names.Name_Id;
+                           begin
+                              if Peek = Tok.Identifier
+                                and then Named_Here = Convention_Id (By_Inout)
+                              then
+                                 Mutable := True;
+                                 Advance;
+                              end if;
+
+                              if Peek /= Tok.Identifier then
+                                 Complain
+                                   (Item    => Syn.Name_Expected,
+                                    Where   => Here,
+                                    Message => "a payload binding needs a"
+                                               & " name",
+                                    Note    => "D78: case(name, inout name)"
+                                               & " `:` statement");
+                                 Resync (List_Anchor);
+                                 exit;
+                              end if;
+
+                              At_Name := Here;
+                              Bound := Named_Here;
+                              Advance;
+                              Bindings.Append
+                                (Add (Of_Kind  => Match_Binding,
+                                      At_Token => At_Name,
+                                      Named    => Bound,
+                                      Mutable  => Mutable));
+                           end;
+
+                           exit when Peek /= Tok.Comma;
+                           Advance;
+                        end loop;
+
+                        Kept := Expect
+                          (Wanted  => Tok.Right_Paren,
+                           Message => "payload bindings end with `)`",
+                           Note    => "D78: case(name, inout name)"
+                                      & " `:` statement",
+                           Related => At_Case,
+                           Because => "this match arm");
                      end if;
 
                      Kept := Expect
@@ -2534,7 +2577,8 @@ package body Landin.Syntax.Parser is
                        (Add (Of_Kind  => Match_Arm,
                              At_Token => At_Case,
                              Extent   => Join (At_Case, After_Previous),
-                             Children => [Pattern, Runs]));
+                             Children => [Pattern, Runs]
+                                         & To_List (Bindings)));
                   end;
                end loop;
 

@@ -165,6 +165,7 @@ package body Landin.Resolution is
             --  has only the module scope to name one in.
             when Landin.Syntax.Type_Declaration     => Module_Type,
             when Landin.Syntax.Variant_Case         => Case_Name,
+            when Landin.Syntax.Match_Binding        => Pattern_Binding,
             when Landin.Syntax.Parameter            => Parameter,
             when Landin.Syntax.Named_Return         => Named_Return,
             when Landin.Syntax.Binding              =>

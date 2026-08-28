@@ -1141,6 +1141,7 @@ package body Landin.Tests.Verifier_Suite is
          Payload_Field_Out_Of_Range,
          Payload_Field_Is_Not_A_Scalar,
          Payload_Value_Disagrees,
+         Payload_Result_Disagrees,
          Tag_Result_Disagrees,
          Operation_Inside_A_Datum);
 
@@ -1227,6 +1228,11 @@ package body Landin.Tests.Verifier_Suite is
                  (Unit, Routine,
                   (Kind => IR.Frame_Slot, Slot => Aggregate),
                   1, 2, 1, Value, Site);
+            when Payload_Result_Disagrees =>
+               Value := IR.Emit_Variant_Field_Load
+                 (Unit, Routine,
+                  (Kind => IR.Frame_Slot, Slot => Aggregate),
+                  1, 2, 1, Landin.Types.U16, Site);
             when Tag_Result_Disagrees =>
                Value := IR.Emit_Variant_Tag_Load
                  (Unit, Routine,
@@ -1278,6 +1284,7 @@ package body Landin.Tests.Verifier_Suite is
          (Payload_Field_Is_Not_A_Scalar,
           V.Variant_Payload_Field_Is_Not_A_Scalar),
          (Payload_Value_Disagrees, V.Variant_Payload_Value_Disagrees),
+         (Payload_Result_Disagrees, V.Variant_Payload_Result_Disagrees),
          (Tag_Result_Disagrees, V.Variant_Tag_Result_Disagrees),
          (Operation_Inside_A_Datum, V.Variant_Operation_Inside_A_Datum)];
    begin

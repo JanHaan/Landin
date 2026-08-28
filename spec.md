@@ -257,7 +257,7 @@ is dropped that way is the one place the kernel accepts an
 expression standing alone.
 A match is D77's exhaustive tag selection. Its subject is one directly
 selected variant part and each case arm carries one statement; D78 extends
-the arm with payload bindings without changing this statement production.
+the arm with positional payload bindings.
 A place is [1820]'s indexed selection, so a binding, a field of a struct, or
 an enabled array element is written
 and stepped exactly as the binding holding it is. What may be
@@ -275,7 +275,8 @@ if          ::= "if" expression "then" statement*
                 ("else" statement*)?
                 "end" "if"
 match       ::= "match" expression match_arm+ "end" "match"
-match_arm  ::= identifier ":" statement
+match_arm  ::= identifier ("(" match_binding ("," match_binding)* ")")? ":" statement
+match_binding ::= "inout"? identifier
 place       ::= indexed
 
 ```
@@ -4701,12 +4702,14 @@ form fail rather than change what zero means.
 Common scalar and fixed-array fields retain their existing field rules. A
 whole successful zero write establishes D16's scalar and D48's whole-array
 facts for those common fields; D77 gives the established variant part one tag
-fact without exposing its payload yet. A
+fact, and D78 may expose the selected case's scalar payload through arm-local
+aliases. A
 selection of the part itself is one L0304 `Variant_Value` when read. D76
 admits the directly selected mutable part as one contextual case destination;
 whole copy, inferred variant-bearing construction, arguments, returns and
 every general aggregate value remain refused. Parameters and named returns
-retain R2.30's `Struct_ABI` owner. D77 owns tag matching and D78 payload bindings.
+retain R2.30's `Struct_ABI` owner. D77 owns tag matching and D78 scalar payload
+bindings.
 
 The IR uses the same target-neutral `Variant_Field_Shape` for measurement,
 datum and aggregate-slot field runs. One unit-wide case-run and payload-shape
@@ -4779,7 +4782,7 @@ payload fields their zero image. Labelled scalar expressions are then
 evaluated exactly once in written order and stored immediately, so a later
 expression observes every earlier program write. A refused destination reads
 none of them. D16 records the complete selected part as assigned; D77 is the
-first consumer of that tag and D78 owns payload bindings.
+first consumer of that tag and D78 reads or mutates scalar payload leaves.
 
 The IR adds two destination-only operations. `Select_Variant` carries a
 storage identity, top-level field identity and one-based case identity;
@@ -4799,7 +4802,7 @@ padding outside the selected value's zero image; copying a whole
 variant-bearing struct would need a source tag and selected-payload rule;
 admitting array payload literals or repetitions would add D52/D53's write
 sequence inside the case and is a later extension. D77 adds tag matching;
-payload binding remains D78.
+D78 adds scalar payload binding while retaining that fixed-array boundary.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-case-construction`;
@@ -4824,8 +4827,8 @@ source order of arms is otherwise free. A duplicate is L0311, a missing case
 is L0312, and a case from another part is D76's L0301 identity mismatch. This
 first boundary gives each arm exactly one statement, with an `if` usable as
 that statement when a nested run is needed. D78 adds [1220]'s parenthesized
-payload bindings. Wildcards, scalar or nested subjects, payload bindings and
-general variant values remain refused.
+payload bindings. Wildcards, scalar or nested subjects and general variant
+values remain refused.
 
 The subject is read once before any arm. Definite assignment therefore asks
 for the selected part's established-case fact on entry; D75's whole zero image
@@ -4858,7 +4861,55 @@ was declined because [0410] gives the subject one evaluation.
 `negative/variant-match-not-exhaustive`;
 `negative/variant-match-case-does-not-belong`;
 `negative/variant-match-unassigned`;
-`negative/variant-match-not-on-every-path`;
-`negative/variant-match-payload-bindings-not-enabled`; the generated token,
+`negative/variant-match-not-on-every-path`; the generated token,
 diagnostic and IR records; and `runtime/variant-match-selects-tag` on Linux
 x86-64.
+
+### D78 — Match-arm names alias scalar payload fields
+
+**The tour said** that [1220] binds a selected case's payload by position and
+that `inout` is the spelling which permits a write. D77 selected the case and
+entered an arm, but deliberately left its payload bytes inaccessible.
+
+**Chosen:** an arm may write a parenthesized, comma-separated binding after
+its case name. The names correspond positionally to every payload field in
+declaration order; when parentheses are present their count must match exactly
+(L0301), while omitting parentheses continues to ignore the complete payload.
+A plain binding is an immutable `in` alias and `inout name` is mutable. Both
+refer directly to the matched object: reading loads that payload field, and an
+`inout` assignment updates it in place. Each binding is visible only in its
+arm's sibling scope. Duplicate names retain L0200 and a use outside the arm
+retains L0201.
+
+This slice binds scalar payload fields. A fixed-array payload binding is L0304;
+it needs the separate question of whether [1220] exposes an array alias or a
+whole contextual value. Omitting bindings still permits a case with any
+payload, so D77's tag-only matching remains unchanged. Parameters and returns
+remain R2.30's ABI work.
+
+Lowering records no copied local. It maps each arm-local declaration identity
+to the subject storage, top-level variant field, source-order case and
+declaration-order payload field. `Load_Variant_Field` carries those identities
+and its scalar result; an `inout` write reuses D76's
+`Store_Variant_Field`. The verifier proves the aggregate, case and scalar leaf
+before checking the result or operand type. The backend replays D74's payload
+placement on the selected target. These are explicit release-build checks, and
+no source or target byte offset enters the IR.
+
+**Why aliases rather than copied locals:** [1220]'s `inout` makes an arm write
+observable after the match. A copy-in/copy-out rule would add hidden completion
+and early-return semantics, while a copied immutable binding would make the two
+conventions denote different objects. One direct alias rule answers both.
+Named rather than positional omission was declined because field identity is
+already declaration order; array aliases were deferred rather than silently
+copying a whole array.
+
+**Pinned by** the parser, IR, lowering and verifier public seams; the resolution
+and checking fixture paths; `positive/variant-match-payload-bindings`;
+`negative/variant-match-binding-count-disagrees`;
+`negative/variant-match-array-binding-not-enabled`;
+`negative/variant-match-in-binding-is-immutable`;
+`negative/variant-match-binding-named-twice`;
+`negative/variant-match-binding-outside-arm`; the generated token, diagnostic
+and IR records; and `runtime/variant-match-payload-bindings-update-storage` on
+Linux x86-64.

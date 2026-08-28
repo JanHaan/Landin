@@ -3480,7 +3480,10 @@ package body Landin.Tests.Lowering_Suite is
          & "    state.kind = pair(first: 2, second: 3)" & LF
          & "    match local.kind" & LF
          & "        leaf: _ = 1" & LF
-         & "        pair: _ = 2" & LF
+         & "        pair(first, inout second): if true then" & LF
+         & "            _ = first" & LF
+         & "            second = second" & LF
+         & "        end if" & LF
          & "        row: _ = 3" & LF
          & "    end match" & LF
          & "    match state.kind" & LF
@@ -3498,7 +3501,7 @@ package body Landin.Tests.Lowering_Suite is
 
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
-         Selects, Stores, Tag_Loads : Natural := 0;
+         Selects, Stores, Tag_Loads, Payload_Loads : Natural := 0;
          Slot_Row, Datum_Pair, Wide_Payload : Boolean := False;
          Slot_Tag, Datum_Tag : Boolean := False;
       begin
@@ -3551,13 +3554,26 @@ package body Landin.Tests.Lowering_Suite is
                         and then IR.Result_Of (Unit, 2, Id)
                           = Landin.Types.U8);
                   end;
+               elsif Op = IR.Load_Variant_Field then
+                  Payload_Loads := Payload_Loads + 1;
+                  Landin.Testing.Check
+                    (Item,
+                     IR.Source_Of (Unit, 2, Id).Kind = IR.Frame_Slot
+                     and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Payload_Field_Of
+                       (Unit, 2, Id) in 1 | 2,
+                     "payload aliases carry their selected source");
                end if;
             end;
          end loop;
 
          Landin.Testing.Check
-           (Item, Selects = 3 and then Stores = 2,
-            "each case selects once and scalar payloads write once");
+           (Item, Selects = 3 and then Stores = 3,
+            "case construction and inout aliases write scalar payloads");
+         Landin.Testing.Check_Equal
+           (Item, Payload_Loads, 2,
+            "each referenced payload alias loads from matched storage");
          Landin.Testing.Check
            (Item, Slot_Row and then Datum_Pair and then Wide_Payload,
             "storage, part, case, payload and scalar type all survive");

@@ -1,0 +1,5 @@
+class: positive
+summary: D78 binds scalar payload fields by position and mutates only inout aliases
+constructs: 0080, 0190, 0670, 0680, 0690, 1210, 1220, 1810, 1900
+program: program.ldn
+targets: linux-x86-64, macos-arm64
