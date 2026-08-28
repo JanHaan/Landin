@@ -37,7 +37,11 @@ line_end and comment produce no token at all and are discarded where they
 are found; the rest of that layer spells out part of one of those and
 produces nothing of its own. Every other rule reads the tokens that remain,
 and a quoted word or sign in one of them stands for the single token
-spelled that way. A token is as long as it can be, comments excepted, whose
+spelled that way. A quoted word is not thereby reserved: when [1760]'s
+keyword rule omits it, the token is an identifier whose spelling the
+enclosing production recognises. Thus 'of', 'lenof' and 'variant' remain
+ordinary names everywhere their contextual productions do not meet them.
+A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
 the one name 'incx', which is why [1750] says what separates two tokens.
 
@@ -70,7 +74,10 @@ any run of them may sit between two tokens. Two tokens whose
 spellings would run together into one longer token need at least
 one, which is the whole of the rule: 'mut x' is two tokens and
 'mutx' is one name. Otherwise space carries no meaning, and no
-rule below this layer mentions it.
+rule below this layer mentions it. A line end therefore never
+terminates a statement: when the token after it can continue the
+expression or selection before it, it does. This is [1060]'s
+one-line rule read from the other direction.
 ```landin-grammar
 space       ::= " " | "\t" | line_end | comment
 line_end    ::= "\n" | "\r\n" | "\r"
@@ -696,9 +703,18 @@ have chosen instead — because a decision written in the same voice as a
 transcription looks like it was always there, and [1050] was missed twice by
 a reader who assumed exactly that.
 
-A decision leaves this register when something closes it: a program that
-cannot be written, a target that cannot be reached, or a paragraph of the
-tour that turns out to have settled it after all. None has yet.
+A decision leaves this register only when new evidence closes it: a program
+that cannot be written, a target that cannot be reached, or a paragraph of the
+tour that turns out to have settled it after all. Completed implementation
+does not remove a decision, because its alternative and fixture remain useful
+review evidence. The completed roadmap item records the delivered vertical
+slice; this register does not repeat its implementation diary.
+
+The register is chronological, but its completed R2.20 decisions fall into
+four reading groups: D15--D16 establish declared types and field assignment;
+D17--D43 establish fixed arrays and contextual storage; D44--D72 plus
+D86--D87 establish ordinary aggregates; and D73--D85 establish variants.
+Individual headings remain stable citation targets.
 
 ### D1 — A named return lives in the signature scope
 

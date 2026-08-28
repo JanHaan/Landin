@@ -188,7 +188,7 @@
 1720   tour        -                                  What the language claims, at this version, plainly
 1730   tour        -                                  Check once, then carry the proof
 1740   spec        accepted emitted executed refused  A program is declarations, in any order
-1750   spec        accepted emitted refused           A source file is bytes
+1750   spec        accepted emitted executed refused  A source file is bytes
 1760   spec        accepted emitted executed refused  Identifiers are lower case, and no identifier is a keyword
 1770   spec        accepted emitted executed refused  The kernel's literals are integers, booleans, and contextual zero
 1780   spec        accepted emitted refused           A comment ends a token, and its opener says which kind it is
