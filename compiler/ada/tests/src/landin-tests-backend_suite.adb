@@ -3233,8 +3233,13 @@ package body Landin.Tests.Backend_Suite is
         & "    end kind" & LF
         & "    tail: u16" & LF
         & "end tagged" & LF
+        & "mut variant_state: tagged" & LF
         & "variant_size: usize = sizeof tagged" & LF
-        & "variant_align: usize = alignof tagged" & LF;
+        & "variant_align: usize = alignof tagged" & LF
+        & "clear_variant: () -> none =" & LF
+        & "    mut local: tagged = zeroed" & LF
+        & "    variant_state = zeroed" & LF
+        & "end clear_variant" & LF;
 
       Native : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -3317,6 +3322,20 @@ package body Landin.Tests.Backend_Suite is
               and then Contains
                 (Thin, "variant_align:" & LF & HT & ".long 4" & LF),
             "a variant inherits the maximum target payload alignment");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Wide, "variant_state:" & LF & HT & ".zero 40" & LF)
+              and then Contains
+                (Thin, "variant_state:" & LF & HT & ".zero 20" & LF),
+            "variant-bearing module storage reserves its padded extent");
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Wide, HT & "movabsq $40, %rcx") = 2
+              and then Occurrences (Thin, HT & "movabsq $20, %rcx") = 2
+              and then Occurrences (Wide, HT & "rep stosb") = 2
+              and then Occurrences (Thin, HT & "rep stosb") = 2,
+            "module and local zero images clear one target-derived extent");
       end;
    end A_Measurement_Follows_The_Target;
 

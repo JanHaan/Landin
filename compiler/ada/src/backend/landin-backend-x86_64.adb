@@ -230,7 +230,7 @@ package body Landin.Backend.X86_64 is
          Wanted : Landin.IR.Element_Total;
          Offset : out Landin.Targets.Byte_Count);
 
-      function Has_Array_Field
+      function Has_Wide_Field
         (Item : Landin.IR.Item_Id) return Boolean;
 
       procedure Place_Fields
@@ -271,7 +271,7 @@ package body Landin.Backend.X86_64 is
                At_Offset : Landin.Targets.Byte_Count;
             begin
                Landin.Backend.Field_Extent
-                 (Shape, Facts, Size, Alignment);
+                 (Of_Unit, Shape, Facts, Size, Alignment);
                Landin.Targets.Place
                  (Placed, Size, Alignment, At_Offset);
 
@@ -282,7 +282,9 @@ package body Landin.Backend.X86_64 is
          end loop;
       end Place_Fields;
 
-      function Has_Array_Field (Item : Landin.IR.Item_Id) return Boolean is
+      --  A compact array or unfolded variant can make a later module field's
+      --  target-derived offset exceed a signed relocation displacement.
+      function Has_Wide_Field (Item : Landin.IR.Item_Id) return Boolean is
       begin
          if Landin.IR.Result_Of (Of_Unit, Item) /= Landin.Types.Aggregate
          then
@@ -291,13 +293,14 @@ package body Landin.Backend.X86_64 is
 
          for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
             if Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field).Kind
-                 = Landin.IR.Array_Field_Shape
+                 in Landin.IR.Array_Field_Shape
+                    | Landin.IR.Variant_Field_Shape
             then
                return True;
             end if;
          end loop;
          return False;
-      end Has_Array_Field;
+      end Has_Wide_Field;
 
       function Field_Offset
         (Item : Landin.IR.Item_Id; Field : Landin.IR.Part_Position)
@@ -1032,7 +1035,7 @@ package body Landin.Backend.X86_64 is
                      --  question to an unencodable relocation.
                      if (Landin.IR.Result_Of (Of_Unit, Datum)
                            = Landin.Types.Fixed_Array
-                         or else Has_Array_Field (Datum))
+                         or else Has_Wide_Field (Datum))
                        and then At_Offset > 0
                      then
                         Emit ("leaq " & Symbol (Datum) & "(%rip), %rcx");
@@ -1790,7 +1793,7 @@ package body Landin.Backend.X86_64 is
                  (Item, Field_Placement, Landin.IR.Element_Total (Field),
                   At_Field);
                Landin.Backend.Field_Extent
-                 (Shape, Facts, Field_Size, Field_Alignment);
+                 (Of_Unit, Shape, Facts, Field_Size, Field_Alignment);
                pragma Unreferenced (Field_Placement, Field_Alignment);
 
                if At_Field > Written then

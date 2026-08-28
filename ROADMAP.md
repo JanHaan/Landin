@@ -3170,12 +3170,16 @@ scalar/fixed-array payloads and an unfolded source-order tag have one
 target-neutral layout; and `sizeof`/`alignof` replay it on both target
 descriptions. The tag is first and uses `u8`, `u16` or `u32` according to case
 count; each payload uses D44/D45 layout and the part reserves the maximum padded
-payload at their maximum alignment. A measurement-only IR carrier transports
-the tag and per-case shape runs through the verifier and backend without
-admitting a variant datum or slot. Parser, resolution, lowering, verifier and
-target seams, focused positive/negative fixtures, generated records and a
-Linux runtime measurement provide evidence. D75 owns storage and the zero
-image; construction and matching remain later R2.20 slices.
+payload at their maximum alignment. A target-neutral IR carrier transports the
+tag and per-case shape runs through the verifier and backend. D75 reuses that
+carrier for distinct module datums and aggregate frame slots, makes tag zero
+select the first source-order case, and admits only declaration storage plus
+typed `zeroed` initialization and whole assignment. Module storage stays one
+padded absent image in `.bss`; runtime zeroing is one D57/D58 whole-storage
+clear over the same target-derived extent. Parser, resolution, lowering,
+verifier and target seams, focused positive/negative fixtures, generated
+records and Linux runtime cases provide evidence. D76--D78 own construction,
+matching and payload bindings.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3192,7 +3196,7 @@ selected field. D70 also copies a selected field into an ordinary module array.
 Inferred scalar initialization; count-less inferred and general-value full or
 mixed repetition [0560]; slices [0570]; and `lenof` operands other than D14's
 direct name and D31's literal remain refused. `zeroed` remains contextual: its
-enabled sites are D27/D28/D30, D39--D43, D49, D57--D59, D62 and D64--D67;
+enabled sites are D27/D28/D30, D39--D43, D49, D57--D59, D62, D64--D67 and D75;
 named-return subobjects, deeper nested places and every general value use stay
 outside those rules.
 
@@ -3210,12 +3214,13 @@ endpoints, D51's local initializer source, and D52/D53's literal or repetition
 destination. Each remaining boundary is its own slice rather than an implicit
 extension of the contextual forms above.
 
-Variant declarations and target-dependent measurements are enabled by D74.
-Storage or a value of a variant-bearing struct remains refused: no datum, frame
-slot, zero image, copy, literal, assignment, case construction or match exists
-yet. Parameters and returns retain R2.30's aggregate ABI owner. D75 must first
-establish storage and the zero image from the unfolded tag/payload layout;
-D76--D78 then own construction, matching and payload bindings.
+Variant declarations and target-dependent measurements are enabled by D74;
+D75 adds module and local storage plus typed initialization and whole
+assignment with the complete zero image. Whole copies, labelled literals,
+inferred initialization, case construction, direct variant-part access,
+matching and payload bindings remain refused. Parameters and returns retain
+R2.30's aggregate ABI owner. D76--D78 own construction, matching and payload
+bindings respectively.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3318,6 +3323,9 @@ D74 migrated that refusal into declaration syntax, module-visible case
 identities and a measured tag-first unfolded layout, while keeping every
 variant storage and value form, construction and matching pinned for the next
 variant slices.
+D75 migrated declaration storage and the complete zero image onto that same
+target-neutral carrier, while keeping copies, literals, inferred values,
+construction, direct part access, matching and payload bindings pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

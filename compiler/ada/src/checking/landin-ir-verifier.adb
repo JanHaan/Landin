@@ -102,6 +102,9 @@ package body Landin.IR.Verifier is
             when Aggregate_Image_On_Array_Field =>
                "an aggregate datum's first image form carries a nonzero"
                & " value for a fixed-array field",
+            when Aggregate_Image_On_Variant_Field =>
+               "a variant-bearing aggregate datum carries a written image"
+               & " although D75 admits only its absent zero image",
             when Aggregate_Field_Image_Length_Disagrees =>
                "an aggregate datum's field-image run disagrees with its"
                & " declared fields",
@@ -284,6 +287,68 @@ package body Landin.IR.Verifier is
             when Frame_Slot =>
               Holds (Of_Unit, Item, Place.Slot)
               and then Is_Aggregate (Of_Unit, Item, Place.Slot));
+
+      --  D74 introduced this carrier for measurements; D75 uses the same
+      --  target-neutral shape for datum and slot storage.  Prove every run
+      --  and leaf before any accessor reads it, in every build mode.
+      function Field_Shape_Is_Malformed (Shape : Field_Shape)
+        return Boolean;
+
+      function Field_Shape_Is_Malformed (Shape : Field_Shape)
+        return Boolean
+      is
+      begin
+         if Shape.Kind = Scalar_Field_Shape then
+            return Shape.Length /= 1
+              or else Shape.Cases /= 0
+              or else Shape.Payloads_First /= 0;
+         elsif Shape.Kind = Array_Field_Shape then
+            return Shape.Cases /= 0 or else Shape.Payloads_First /= 0;
+         end if;
+
+         if Shape.Length /= 1
+           or else Shape.Element not in
+             Landin.Types.U8 | Landin.Types.U16 | Landin.Types.U32
+           or else Shape.Cases = 0
+           or else Shape.Payloads_First = 0
+           or else Shape.Payloads_First > Variant_Case_Run_Count (Of_Unit)
+           or else Shape.Cases
+             > Variant_Case_Run_Count (Of_Unit)
+                 - Shape.Payloads_First + 1
+         then
+            return True;
+         end if;
+
+         for Which in 1 .. Shape.Cases loop
+            if not Variant_Case_Run_Is_Valid (Of_Unit, Shape, Which) then
+               return True;
+            end if;
+
+            for Payload in 1 ..
+              Variant_Case_Field_Count (Of_Unit, Shape, Which)
+            loop
+               declare
+                  Leaf : constant Field_Shape :=
+                    Nth_Variant_Case_Field
+                      (Of_Unit, Shape, Which, Payload);
+               begin
+                  --  D74/D75 keep payloads depth one.  A future nested
+                  --  aggregate representation must choose its own carrier.
+                  if Leaf.Kind = Variant_Field_Shape
+                    or else Leaf.Cases /= 0
+                    or else Leaf.Payloads_First /= 0
+                    or else
+                      (Leaf.Kind = Scalar_Field_Shape
+                       and then Leaf.Length /= 1)
+                  then
+                     return True;
+                  end if;
+               end;
+            end loop;
+         end loop;
+
+         return False;
+      end Field_Shape_Is_Malformed;
 
    begin
       if not Is_Prepared (Of_Unit) then
@@ -480,9 +545,7 @@ package body Landin.IR.Verifier is
                      Shape : constant Field_Shape :=
                        Nth_Field_Shape (Of_Unit, Id, Field);
                   begin
-                     if Shape.Kind = Scalar_Field_Shape
-                       and then Shape.Length /= 1
-                     then
+                     if Field_Shape_Is_Malformed (Shape) then
                         return (Kind => Field_Shape_Malformed,
                                 Item => Id, others => <>);
                      end if;
@@ -500,9 +563,7 @@ package body Landin.IR.Verifier is
                           Nth_Slot_Field_Shape
                             (Of_Unit, Id, Slot_Id (Slot), Field);
                      begin
-                        if Shape.Kind = Scalar_Field_Shape
-                          and then Shape.Length /= 1
-                        then
+                        if Field_Shape_Is_Malformed (Shape) then
                            return (Kind => Field_Shape_Malformed,
                                    Item => Id, others => <>);
                         end if;
@@ -653,7 +714,11 @@ package body Landin.IR.Verifier is
                               Item => Id, others => <>);
                         end if;
 
-                        if Shape.Kind = Scalar_Field_Shape then
+                        if Shape.Kind = Variant_Field_Shape then
+                           return
+                             (Kind => Aggregate_Image_On_Variant_Field,
+                              Item => Id, others => <>);
+                        elsif Shape.Kind = Scalar_Field_Shape then
                            if Image.Form /= Absent or else Image.Count /= 0
                            then
                               return
@@ -1430,86 +1495,10 @@ package body Landin.IR.Verifier is
                                          Nth_Measurement_Field
                                            (Of_Unit, Id, V, Field);
                                     begin
-                                       if Part.Kind = Scalar_Field_Shape
-                                         and then Part.Length /= 1
-                                       then
+                                       if Field_Shape_Is_Malformed (Part) then
                                           return
                                             (Field_Shape_Malformed,
                                              Id, Block, V);
-                                       end if;
-
-                                       if Part.Kind
-                                            in Scalar_Field_Shape
-                                               | Array_Field_Shape
-                                         and then (Part.Cases /= 0
-                                                   or else
-                                                     Part.Payloads_First /= 0)
-                                       then
-                                          return
-                                            (Field_Shape_Malformed,
-                                             Id, Block, V);
-                                       end if;
-
-                                       if Part.Kind = Variant_Field_Shape
-                                       then
-                                          if Part.Length /= 1
-                                            or else Part.Element not in
-                                              Landin.Types.U8
-                                                | Landin.Types.U16
-                                                | Landin.Types.U32
-                                            or else Part.Cases = 0
-                                            or else Part.Payloads_First = 0
-                                            or else Part.Payloads_First
-                                              > Measurement_Case_Run_Count
-                                                  (Of_Unit)
-                                            or else Part.Cases
-                                              > Measurement_Case_Run_Count
-                                                  (Of_Unit)
-                                                    - Part.Payloads_First + 1
-                                          then
-                                             return
-                                               (Field_Shape_Malformed,
-                                                Id, Block, V);
-                                          end if;
-
-                                          for Which in 1 .. Part.Cases loop
-                                             if not Variant_Case_Run_Is_Valid
-                                               (Of_Unit, Part, Which)
-                                             then
-                                                return
-                                                  (Field_Shape_Malformed,
-                                                   Id, Block, V);
-                                             end if;
-
-                                             for Payload in 1 ..
-                                               Variant_Case_Field_Count
-                                                 (Of_Unit, Part, Which)
-                                             loop
-                                                declare
-                                                   Leaf : constant
-                                                     Field_Shape :=
-                                                       Nth_Variant_Case_Field
-                                                         (Of_Unit, Part,
-                                                          Which, Payload);
-                                                begin
-                                                   if Leaf.Kind =
-                                                        Variant_Field_Shape
-                                                     or else Leaf.Cases /= 0
-                                                     or else
-                                                       Leaf.Payloads_First /= 0
-                                                     or else
-                                                       (Leaf.Kind =
-                                                          Scalar_Field_Shape
-                                                        and then
-                                                          Leaf.Length /= 1)
-                                                   then
-                                                      return
-                                                        (Field_Shape_Malformed,
-                                                         Id, Block, V);
-                                                   end if;
-                                                end;
-                                             end loop;
-                                          end loop;
                                        end if;
                                     end;
                                  end loop;

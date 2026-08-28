@@ -6452,6 +6452,118 @@ file positive/variant-part-measured/program.ldn tokens 147
   763 770 alignof
   771 784 variant_first
   784 785 ]
+file positive/variant-zeroed-storage/program.ldn tokens 111
+  0 6 choice
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 32 prefix
+  32 33 :
+  34 36 u8
+  41 45 kind
+  45 46 :
+  47 54 variant
+  63 67 leaf
+  68 69 |
+  78 82 wide
+  82 83 :
+  84 85 (
+  85 89 word
+  89 90 :
+  91 96 usize
+  96 97 ,
+  98 102 byte
+  102 103 :
+  104 106 u8
+  106 107 )
+  108 109 |
+  118 121 row
+  121 122 :
+  123 124 (
+  124 130 values
+  130 131 :
+  132 133 [
+  133 134 3
+  134 135 ]
+  135 138 u16
+  138 139 )
+  144 147 end
+  148 152 kind
+  157 161 tail
+  161 162 :
+  163 166 u16
+  167 170 end
+  171 177 choice
+  179 183 same
+  183 184 :
+  185 189 type
+  190 191 =
+  192 198 choice
+  200 205 state
+  205 206 :
+  207 213 choice
+  214 217 mut
+  218 223 reset
+  223 224 :
+  225 229 same
+  230 231 =
+  232 238 zeroed
+  240 251 use_storage
+  251 252 :
+  253 254 (
+  254 255 )
+  256 258 ->
+  259 263 none
+  264 265 =
+  270 273 mut
+  274 279 local
+  279 280 :
+  281 287 choice
+  292 295 mut
+  296 307 initialized
+  307 308 :
+  309 313 same
+  314 315 =
+  316 322 zeroed
+  327 332 local
+  333 334 =
+  335 341 zeroed
+  346 351 reset
+  352 353 =
+  354 360 zeroed
+  365 366 _
+  367 368 =
+  369 374 state
+  374 375 .
+  375 381 prefix
+  386 387 _
+  388 389 =
+  390 395 state
+  395 396 .
+  396 400 tail
+  405 406 _
+  407 408 =
+  409 414 local
+  414 415 .
+  415 421 prefix
+  426 427 _
+  428 429 =
+  430 435 local
+  435 436 .
+  436 440 tail
+  445 446 _
+  447 448 =
+  449 460 initialized
+  460 461 .
+  461 467 prefix
+  472 473 _
+  474 475 =
+  476 487 initialized
+  487 488 .
+  488 492 tail
+  493 496 end
+  497 508 use_storage
 file positive/wrapping-operators/program.ldn tokens 18
   0 1 f
   1 2 :
@@ -15864,6 +15976,60 @@ file negative/variant-part-empty/program.ldn tokens 12
   47 51 kind
   52 55 end
   56 61 empty
+file negative/variant-part-selection-not-enabled/program.ldn tokens 53
+  0 6 choice
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 30 kind
+  30 31 :
+  32 39 variant
+  48 52 leaf
+  53 54 |
+  63 69 number
+  69 70 :
+  71 72 (
+  72 77 value
+  77 78 :
+  79 81 u8
+  81 82 )
+  87 90 end
+  91 95 kind
+  96 99 end
+  100 106 choice
+  108 111 mut
+  112 117 state
+  117 118 :
+  119 125 choice
+  127 131 read
+  131 132 :
+  133 134 (
+  134 135 )
+  136 138 ->
+  139 143 none
+  144 145 =
+  150 155 value
+  156 158 :=
+  159 164 state
+  164 165 .
+  165 169 kind
+  170 173 end
+  174 178 read
+  180 185 write
+  185 186 :
+  187 188 (
+  188 189 )
+  190 192 ->
+  193 197 none
+  198 199 =
+  204 209 state
+  209 210 .
+  210 214 kind
+  215 216 =
+  217 223 zeroed
+  224 227 end
+  228 233 write
 file negative/variant-payload-struct-field-not-enabled/program.ldn tokens 29
   0 5 inner
   5 6 :
@@ -15894,7 +16060,7 @@ file negative/variant-payload-struct-field-not-enabled/program.ldn tokens 29
   124 128 kind
   129 132 end
   133 138 outer
-file negative/variant-value-not-enabled/program.ldn tokens 77
+file negative/variant-value-not-enabled/program.ldn tokens 72
   0 6 choice
   6 7 :
   8 12 type
@@ -15922,56 +16088,51 @@ file negative/variant-value-not-enabled/program.ldn tokens 77
   123 131 declared
   131 132 :
   133 139 choice
-  140 152 zeroed_state
-  152 153 :
-  154 160 choice
-  161 162 =
-  163 169 zeroed
-  170 183 literal_state
+  140 153 literal_state
+  153 154 :
+  155 161 choice
+  162 163 =
+  164 165 (
+  165 169 kind
+  169 170 :
+  171 175 leaf
+  175 176 )
+  177 183 copied
   183 184 :
   185 191 choice
   192 193 =
-  194 195 (
-  195 199 kind
-  199 200 :
-  201 205 leaf
-  205 206 )
-  207 213 copied
-  213 214 :
+  194 202 declared
+  203 211 inferred
+  212 214 :=
   215 221 choice
-  222 223 =
-  224 232 declared
-  233 241 inferred
-  242 244 :=
-  245 251 choice
+  221 222 (
+  222 228 prefix
+  228 229 :
+  230 231 1
+  231 232 ,
+  233 235 of
+  236 242 zeroed
+  242 243 )
+  245 249 make
+  249 250 :
   251 252 (
-  252 258 prefix
-  258 259 :
-  260 261 1
-  261 262 ,
-  263 265 of
-  266 272 zeroed
-  272 273 )
-  275 279 make
-  279 280 :
-  281 282 (
-  282 283 )
-  284 286 ->
-  287 291 none
-  292 293 =
-  298 303 local
-  304 306 :=
-  307 313 choice
-  313 314 (
-  314 320 prefix
-  320 321 :
-  322 323 1
-  323 324 ,
-  325 327 of
-  328 334 zeroed
-  334 335 )
-  336 339 end
-  340 344 make
+  252 253 )
+  254 256 ->
+  257 261 none
+  262 263 =
+  268 273 local
+  274 276 :=
+  277 283 choice
+  283 284 (
+  284 290 prefix
+  290 291 :
+  292 293 1
+  293 294 ,
+  295 297 of
+  298 304 zeroed
+  304 305 )
+  306 309 end
+  310 314 make
 file negative/wide-integer-not-enabled/program.ldn tokens 5
   0 4 wide
   4 5 :

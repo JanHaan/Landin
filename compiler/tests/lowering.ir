@@ -3243,6 +3243,34 @@ item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1
   image 1 1 8 4 40 8 32 8
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/variant-zeroed-storage/program.ldn
+unit items 3
+item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 variant u8 cases3 () (usize,u8) ([3]u16)
+  field 3 u16
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM reset result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 variant u8 cases3 () (usize,u8) ([3]u16)
+  field 3 u16
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 ROUTINE use_storage result none params 0 slots 2 blocks 1 values 10
+  slot 1 local aggregate fields u8 variant u8 cases3 () (usize,u8) ([3]u16) u16
+  slot 2 initialized aggregate fields u8 variant u8 cases3 () (usize,u8) ([3]u16) u16
+  block 1 scope 3 BLOCK length 10
+    1 CLEAR_ARRAY destination slot 2
+    2 CLEAR_ARRAY destination slot 1
+    3 CLEAR_ARRAY destination datum 2 reset
+    4 LOAD_FIELD u8
+    5 LOAD_FIELD u16
+    6 LOAD_FIELD u8
+    7 LOAD_FIELD u16
+    8 LOAD_FIELD u8
+    9 LOAD_FIELD u16
+    10 LEAVE
 file positive/wrapping-operators/program.ldn
 unit items 1
 item 1 ROUTINE f result u8 params 1 slots 3 blocks 1 values 8

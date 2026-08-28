@@ -7,7 +7,6 @@ choice: type = struct
 end choice
 
 declared: choice
-zeroed_state: choice = zeroed
 literal_state: choice = (kind: leaf)
 copied: choice = declared
 inferred := choice(prefix: 1, of zeroed)
