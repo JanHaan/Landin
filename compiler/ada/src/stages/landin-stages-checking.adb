@@ -2904,6 +2904,11 @@ package body Landin.Stages.Checking is
          function Subtree_Was_Refused
            (Node : Syn.Node_Id) return Boolean;
 
+         procedure Check_Fixed_Array_Payload
+           (Label : Syn.Node_Id;
+            Given : Syn.Node_Id;
+            Shape : Landin.Checking.Field_Shape);
+
          function Subtree_Was_Refused
            (Node : Syn.Node_Id) return Boolean
          is
@@ -2925,6 +2930,112 @@ package body Landin.Stages.Checking is
             end loop;
             return False;
          end Subtree_Was_Refused;
+
+         procedure Check_Fixed_Array_Payload
+           (Label : Syn.Node_Id;
+            Given : Syn.Node_Id;
+            Shape : Landin.Checking.Field_Shape)
+         is
+            procedure Require_Known (Each : Syn.Node_Id);
+
+            procedure Require_Known (Each : Syn.Node_Id) is
+            begin
+               if not Subtree_Was_Refused (Each)
+                 and then not Is_Known (Of_Tree, Each)
+               then
+                  Bad.Report
+                    (Item    => Bad.Not_Known_At_Compile_Time,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Each),
+                     Message => "this variant payload image value has to be"
+                                & " known when the module image is formed",
+                     Note    => "[1940]: nothing runs before the entry"
+                                & " point [1460]",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Each);
+               end if;
+            end Require_Known;
+         begin
+            pragma Assert (Shape.Kind = Landin.Checking.Fixed_Array_Field);
+
+            if not Static_Image then
+               if Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal then
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Given, Ty.Fixed_Array);
+                  Landin.Checking.Note_Array
+                    (Types.all, Of_Tree, Given,
+                     Shape.Length, Shape.Element);
+               else
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Given),
+                     Message => "a fixed-array case payload accepts only"
+                                & " `zeroed` in this runtime slice",
+                     Refused => Bad.Array_Value,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Given);
+               end if;
+               return;
+            end if;
+
+            --  D82 reuses D67/D68's finite and compact static array images
+            --  inside D81's selected payload descriptor run.  The label is
+            --  the contextual site, exactly as a D65 struct-array label is.
+            case Syn.Kind (Of_Tree, Given) is
+               when Syn.Array_Literal =>
+                  Check_Array_Literal
+                    (Of_Tree, Label, Given, Shape.Length, Shape.Element,
+                     Static_Image => True);
+                  for Position in
+                    1 .. Syn.Element_Count (Of_Tree, Given)
+                  loop
+                     Require_Known
+                       (Syn.Nth_Element (Of_Tree, Given, Position));
+                  end loop;
+
+               when Syn.Array_Repetition =>
+                  Check_Array_Repetition
+                    (Of_Tree, Label, Given, Shape.Length, Shape.Element,
+                     Static_Image => True);
+                  Require_Known (Syn.Repeated_Element (Of_Tree, Given));
+
+               when Syn.Mixed_Array_Repetition =>
+                  Check_Mixed_Array_Repetition
+                    (Of_Tree, Label, Given, Shape.Length, Shape.Element,
+                     Static_Image => True);
+                  for Position in
+                    1 .. Syn.Element_Count (Of_Tree, Given)
+                  loop
+                     Require_Known
+                       (Syn.Nth_Element (Of_Tree, Given, Position));
+                  end loop;
+                  Require_Known (Syn.Repeated_Element (Of_Tree, Given));
+
+               when Syn.Zeroed_Literal =>
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Given, Ty.Fixed_Array);
+                  Landin.Checking.Note_Array
+                    (Types.all, Of_Tree, Given,
+                     Shape.Length, Shape.Element);
+
+               when others =>
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Given),
+                     Message => "a module fixed-array case payload takes a"
+                                & " finite literal, repetition or `zeroed`"
+                                & " in this slice",
+                     Refused => Bad.Array_Value,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Given);
+            end case;
+
+            if Subtree_Was_Refused (Given) then
+               Landin.Checking.Refuse (Types.all, Of_Tree, Given);
+            end if;
+         end Check_Fixed_Array_Payload;
       begin
          pragma Assert (Syn.Kind (Body_Tree.all, Part) = Syn.Variant_Part);
 
@@ -3126,28 +3237,8 @@ package body Landin.Stages.Checking is
                                  end if;
 
                               when Landin.Checking.Fixed_Array_Field =>
-                                 if Syn.Kind (Of_Tree, Given)
-                                      = Syn.Zeroed_Literal
-                                 then
-                                    Landin.Checking.Note
-                                      (Types.all, Of_Tree, Given,
-                                       Ty.Fixed_Array);
-                                    Landin.Checking.Note_Array
-                                      (Types.all, Of_Tree, Given,
-                                       Shape.Length, Shape.Element);
-                                 else
-                                    Bad.Report
-                                      (Item    => Bad.Unsupported_Use,
-                                       Source  => Syn.Source_Of (Of_Tree),
-                                       Where   => Syn.Where (Of_Tree, Given),
-                                       Message => "a fixed-array case"
-                                                  & " payload accepts only"
-                                                  & " `zeroed` in this slice",
-                                       Refused => Bad.Array_Value,
-                                       Into    => Found);
-                                    Landin.Checking.Refuse
-                                      (Types.all, Of_Tree, Given);
-                                 end if;
+                                 Check_Fixed_Array_Payload
+                                   (Label, Given, Shape);
 
                               when Landin.Checking.Variant_Field =>
                                  raise Landin.Compiler_Defect with
@@ -6474,6 +6565,50 @@ package body Landin.Stages.Checking is
                                           Check_Image_Scalar
                                             (Syn.Value_Of (Of_Tree, Label),
                                              Shape.Element);
+                                       elsif Shape.Kind =
+                                         Landin.Checking.Fixed_Array_Field
+                                         and then Shape.Element
+                                           in Ty.Integer_Name
+                                       then
+                                          declare
+                                             Given : constant Syn.Node_Id :=
+                                               Syn.Value_Of
+                                                 (Of_Tree, Label);
+                                          begin
+                                             if Syn.Kind (Of_Tree, Given)
+                                                  = Syn.Array_Repetition
+                                             then
+                                                Check_Image_Scalar
+                                                  (Syn.Repeated_Element
+                                                     (Of_Tree, Given),
+                                                   Shape.Element);
+                                             elsif Syn.Kind (Of_Tree, Given)
+                                               in Syn.Array_Literal
+                                                  | Syn
+                                                    .Mixed_Array_Repetition
+                                             then
+                                                for Position in
+                                                  1 .. Syn.Element_Count
+                                                         (Of_Tree, Given)
+                                                loop
+                                                   Check_Image_Scalar
+                                                     (Syn.Nth_Element
+                                                        (Of_Tree, Given,
+                                                         Position),
+                                                      Shape.Element);
+                                                end loop;
+
+                                                if Syn.Kind (Of_Tree, Given)
+                                                     = Syn
+                                                       .Mixed_Array_Repetition
+                                                then
+                                                   Check_Image_Scalar
+                                                     (Syn.Repeated_Element
+                                                        (Of_Tree, Given),
+                                                      Shape.Element);
+                                                end if;
+                                             end if;
+                                          end;
                                        end if;
                                     end;
                                  end loop;

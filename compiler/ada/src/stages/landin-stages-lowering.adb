@@ -3508,6 +3508,43 @@ package body Landin.Stages.Lowering is
                                IR.Nth_Field_Shape
                                  (Unit.all, Item, Which),
                                Selected);
+
+                        --  D82's finite and hybrid payload images append
+                        --  their prefix folds to the same item-owned image
+                        --  run as D67's top-level array fields.  Count them
+                        --  before opening that single run below.
+                        if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
+                           for Payload_Position in
+                             1 .. Syn.Field_Value_Count (Of_Tree, Value)
+                           loop
+                              declare
+                                 Label : constant Syn.Node_Id :=
+                                   Syn.Nth_Field_Value
+                                     (Of_Tree, Value, Payload_Position);
+                                 Payload : constant Positive := Positive
+                                   (Landin.Checking.Field_Index
+                                      (Types.all, Of_Tree, Label));
+                                 Leaf : constant IR.Field_Shape :=
+                                   IR.Nth_Variant_Case_Field
+                                     (Unit.all,
+                                      IR.Nth_Field_Shape
+                                        (Unit.all, Item, Which),
+                                      Selected, Payload);
+                                 Given : constant Syn.Node_Id :=
+                                   Syn.Value_Of (Of_Tree, Label);
+                              begin
+                                 if Leaf.Kind = IR.Array_Field_Shape
+                                   and then Syn.Kind (Of_Tree, Given)
+                                     in Syn.Array_Literal
+                                        | Syn.Mixed_Array_Repetition
+                                 then
+                                    Element_Count := Element_Count
+                                      + Syn.Element_Count
+                                          (Of_Tree, Given);
+                                 end if;
+                              end;
+                           end loop;
+                        end if;
                      end;
                   elsif Syn.Kind
                        (Of_Tree, Syn.Value_Of (Of_Tree, Field))
@@ -3691,6 +3728,117 @@ package body Landin.Stages.Lowering is
                                                & " accepted did not fold";
                                           end if;
                                           Image.Value := Held;
+                                       end;
+                                    elsif Leaf.Kind = IR.Array_Field_Shape
+                                      and then Payload_Nodes (Payload)
+                                        /= Syn.No_Node
+                                    then
+                                       declare
+                                          Given : constant Syn.Node_Id :=
+                                            Syn.Value_Of
+                                              (Of_Tree,
+                                               Payload_Nodes (Payload));
+                                       begin
+                                          if Syn.Kind (Of_Tree, Given)
+                                            in Syn.Array_Literal
+                                               | Syn.Mixed_Array_Repetition
+                                          then
+                                             Image.Form :=
+                                               (if Syn.Kind (Of_Tree, Given)
+                                                    = Syn.Array_Literal
+                                                then IR.Finite
+                                                else IR.Hybrid);
+                                             Image.Count :=
+                                               Syn.Element_Count
+                                                 (Of_Tree, Given);
+                                             for Position in
+                                               1 .. Image.Count
+                                             loop
+                                                declare
+                                                   Held : Ty.Folded;
+                                                   Known : Boolean;
+                                                begin
+                                                   Fold_Constant
+                                                     (Of_Tree,
+                                                      Syn.Nth_Element
+                                                        (Of_Tree, Given,
+                                                         Position),
+                                                      Held, Known);
+                                                   if not Known then
+                                                      raise
+                                                        Landin.Compiler_Defect
+                                                        with "a module"
+                                                        & " variant array"
+                                                        & " payload element"
+                                                        & " did not fold";
+                                                   end if;
+                                                   Elements
+                                                     (Cursor + Position) :=
+                                                       Held;
+                                                end;
+                                             end loop;
+                                             Cursor := Cursor + Image.Count;
+
+                                             if Image.Form = IR.Hybrid then
+                                                declare
+                                                   Held : Ty.Folded;
+                                                   Known : Boolean;
+                                                begin
+                                                   Fold_Constant
+                                                     (Of_Tree,
+                                                      Syn.Repeated_Element
+                                                        (Of_Tree, Given),
+                                                      Held, Known);
+                                                   if not Known then
+                                                      raise
+                                                        Landin.Compiler_Defect
+                                                        with "a module"
+                                                        & " variant hybrid"
+                                                        & " payload suffix"
+                                                        & " did not fold";
+                                                   end if;
+                                                   Image.Value := Held;
+                                                end;
+                                             end if;
+                                          elsif Syn.Kind (Of_Tree, Given)
+                                                  = Syn.Array_Repetition
+                                          then
+                                             declare
+                                                Held : Ty.Folded;
+                                                Known : Boolean;
+                                             begin
+                                                Fold_Constant
+                                                  (Of_Tree,
+                                                   Syn.Repeated_Element
+                                                     (Of_Tree, Given),
+                                                   Held, Known);
+                                                if not Known then
+                                                   raise
+                                                     Landin.Compiler_Defect
+                                                     with "a module variant"
+                                                     & " array payload"
+                                                     & " pattern did not"
+                                                     & " fold";
+                                                end if;
+
+                                                --  D34 parity: a full zero
+                                                --  pattern is the absent
+                                                --  payload image.  D38 keeps
+                                                --  a zero hybrid suffix
+                                                --  written above.
+                                                if Held /= 0 then
+                                                   Image.Form := IR.Repeated;
+                                                   Image.Value := Held;
+                                                end if;
+                                             end;
+                                          elsif Syn.Kind (Of_Tree, Given)
+                                                  /= Syn.Zeroed_Literal
+                                          then
+                                             raise Landin.Compiler_Defect
+                                               with "a module variant array"
+                                               & " payload outside D82"
+                                               & " reached lowering";
+                                          end if;
                                        end;
                                     elsif Leaf.Kind =
                                       IR.Variant_Field_Shape

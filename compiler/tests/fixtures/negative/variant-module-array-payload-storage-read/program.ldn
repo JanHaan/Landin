@@ -1,0 +1,10 @@
+source: [3]u8 = [1, 2, 3]
+
+packet: type = struct
+    kind: variant
+        row: (values: [3]u8)
+    end kind
+end packet
+
+finite: packet = packet(kind: row(values: [source[0], 2, 3]))
+repeated: packet = packet(kind: row(values: [of source[0]]))
