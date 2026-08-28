@@ -1,0 +1,6 @@
+class: runtime
+summary: D86 nested-struct measurements replay the Linux x86-64 child layout rather than the host Ada representation
+constructs: 0160, 0370, 0520, 0670, 0750, 1795, 1800, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

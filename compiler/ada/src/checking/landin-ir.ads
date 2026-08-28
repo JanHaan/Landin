@@ -303,11 +303,13 @@ package Landin.IR is
    type Value_Id is range 0 .. Integer'Last;
 
    --  One target-neutral aggregate field shape.  D44 needs the scalar form,
-   --  D45 adds the compact fixed-scalar-array form for measurement, and D46
-   --  uses that same representation-independent input for module storage.
-   --  Item and measurement runs remain separate APIs and vectors.
+   --  D45 adds the compact fixed-scalar-array form for measurement, D46
+   --  uses that input for module storage, D74 adds the unfolded variant,
+   --  and D86 adds a measurement-only nested aggregate field run.  Item and
+   --  measurement runs remain separate APIs and vectors.
    type Field_Shape_Kind is
-     (Scalar_Field_Shape, Array_Field_Shape, Variant_Field_Shape);
+     (Scalar_Field_Shape, Array_Field_Shape, Aggregate_Field_Shape,
+      Variant_Field_Shape);
 
    type Field_Shape is record
       Kind    : Field_Shape_Kind          := Scalar_Field_Shape;
@@ -1493,6 +1495,21 @@ package Landin.IR is
    function Variant_Case_Run_Count (Of_Unit : Unit) return Natural;
 
    function Variant_Field_Shape_Count (Of_Unit : Unit) return Natural;
+
+   function Aggregate_Field_Run_Is_Valid
+     (Of_Unit : Unit; Shape : Field_Shape) return Boolean
+     with Pre => Shape.Kind = Aggregate_Field_Shape;
+
+   function Aggregate_Field_Count
+     (Of_Unit : Unit; Shape : Field_Shape) return Natural
+     with Pre => Shape.Kind = Aggregate_Field_Shape;
+
+   function Nth_Aggregate_Field
+     (Of_Unit : Unit; Shape : Field_Shape; Field : Positive)
+      return Field_Shape
+     with Pre => Shape.Kind = Aggregate_Field_Shape
+                 and then Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
+                 and then Field <= Aggregate_Field_Count (Of_Unit, Shape);
 
    function Variant_Case_Run_Is_Valid
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)

@@ -207,9 +207,11 @@ package Landin.Checking is
    type Element_Count is range 0 .. 2 ** 64 - 1;
 
    --  Field order is declaration order [0750].  D45 adds one compact
-   --  aggregate leaf to the scalar one: a fixed array of enabled scalars.
-   --  The array remains one field no matter how large its source length is.
-   type Field_Kind is (Scalar_Field, Fixed_Array_Field, Variant_Field);
+   --  fixed-array leaf, D74 an unfolded variant part, and D86 a
+   --  measurement-only named ordinary child.  The child keeps its nominal
+   --  body; no target offset or byte extent is stored here.
+   type Field_Kind is
+     (Scalar_Field, Fixed_Array_Field, Aggregate_Field, Variant_Field);
 
    type Field_Shape is record
       Kind    : Field_Kind               := Scalar_Field;
@@ -217,6 +219,7 @@ package Landin.Checking is
       Length  : Element_Count            := 1;
       Cases   : Natural                  := 0;
       Payloads_First : Natural           := 0;
+      Aggregate_Body : Declaration_Id    := No_Declaration;
    end record;
 
    type Field_Shape_Array is
@@ -265,6 +268,12 @@ package Landin.Checking is
                                          = Fields'Length);
 
    function Has_Variant_Part (Of_Table : Table; Id : Declaration_Id)
+     return Boolean
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id);
+
+   function Has_Aggregate_Field (Of_Table : Table; Id : Declaration_Id)
      return Boolean
      with Pre => Is_Prepared (Of_Table)
                  and then Contains (Of_Table, Id)

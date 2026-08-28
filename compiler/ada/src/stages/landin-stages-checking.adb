@@ -293,11 +293,13 @@ package body Landin.Stages.Checking is
 
                procedure Check_Leaf
                  (Each : Syn.Node_Id;
-                  Into : out Landin.Checking.Field_Shape);
+                  Into : out Landin.Checking.Field_Shape;
+                  Aggregate_Allowed : Boolean);
 
                procedure Check_Leaf
                  (Each : Syn.Node_Id;
-                  Into : out Landin.Checking.Field_Shape)
+                  Into : out Landin.Checking.Field_Shape;
+                  Aggregate_Allowed : Boolean)
                is
                   Held : constant Ty.Type_Kind :=
                     Type_At (Of_Tree, Syn.Declared_Type (Of_Tree, Each));
@@ -322,11 +324,40 @@ package body Landin.Stages.Checking is
                                      (Types.all, Of_Tree,
                                       Syn.Declared_Type (Of_Tree, Each)),
                         others  => <>);
+                  elsif Held = Ty.Aggregate
+                    and then Aggregate_Allowed
+                  then
+                     declare
+                        Child_Body : constant Res.Declaration_Id :=
+                          Landin.Checking.Body_Of
+                            (Types.all, Of_Tree,
+                             Syn.Declared_Type (Of_Tree, Each));
+                     begin
+                        if Child_Body /= Res.No_Declaration
+                          and then Landin.Checking.Has_Layout
+                            (Types.all, Child_Body)
+                          and then not Landin.Checking.Has_Variant_Part
+                            (Types.all, Child_Body)
+                          and then not Landin.Checking.Has_Aggregate_Field
+                            (Types.all, Child_Body)
+                        then
+                           Into :=
+                             (Kind    => Landin.Checking.Aggregate_Field,
+                              Element => Ty.Bool,
+                              Length  => 1,
+                              Aggregate_Body => Child_Body,
+                              others  => <>);
+                        else
+                           Can_Lay_Out := False;
+                        end if;
+                     end;
                   else
                      Can_Lay_Out := False;
                   end if;
 
-                  if Held = Ty.Aggregate then
+                  if Held = Ty.Aggregate
+                    and then Into.Kind /= Landin.Checking.Aggregate_Field
+                  then
                      Bad.Report
                        (Item    => Bad.Unsupported_Use,
                         Source  => Syn.Source_Of (Of_Tree),
@@ -344,7 +375,7 @@ package body Landin.Stages.Checking is
                        Syn.Nth_Field (Of_Tree, Written, Index);
                   begin
                      if Syn.Kind (Of_Tree, Each) = Syn.Field then
-                        Check_Leaf (Each, Fields (Index));
+                        Check_Leaf (Each, Fields (Index), True);
                      else
                         declare
                            Count : constant Natural :=
@@ -359,7 +390,8 @@ package body Landin.Stages.Checking is
                               Element        => Tag,
                               Length         => 1,
                               Cases          => Count,
-                              Payloads_First => Next_Case);
+                              Payloads_First => Next_Case,
+                              others         => <>);
 
                            for Which in 1 .. Count loop
                               declare
@@ -381,7 +413,7 @@ package body Landin.Stages.Checking is
                                     Check_Leaf
                                       (Syn.Nth_Payload_Field
                                          (Of_Tree, Variant, Position),
-                                       Payloads (Next_Payload));
+                                       Payloads (Next_Payload), False);
                                     Next_Payload := Next_Payload + 1;
                                  end loop;
                               end;
@@ -705,6 +737,22 @@ package body Landin.Stages.Checking is
                   Wrote : constant Res.Declaration_Id :=
                     Landin.Checking.Body_Of (Types.all, Of_Tree, Nominal);
                begin
+                  if Landin.Checking.Has_Layout (Types.all, Wrote)
+                    and then Landin.Checking.Has_Aggregate_Field
+                      (Types.all, Wrote)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Nominal),
+                        Message => "a nested-struct value is not enabled"
+                                   & " yet",
+                        Refused => Bad.Struct_Value,
+                        Into    => Found);
+                     Landin.Checking.Refuse
+                       (Types.all, Of_Tree, Literal);
+                     return Res.No_Declaration;
+                  end if;
                   return Wrote;
                end;
             elsif Held = Ty.Ill_Typed then
@@ -809,6 +857,12 @@ package body Landin.Stages.Checking is
               and then Landin.Checking.Has_Layout
                 (Types.all, Struct_Body_Id)
               and then Landin.Checking.Has_Variant_Part
+                (Types.all, Struct_Body_Id);
+            Aggregate_Bearing : constant Boolean :=
+              Struct_Body_Id /= Res.No_Declaration
+              and then Landin.Checking.Has_Layout
+                (Types.all, Struct_Body_Id)
+              and then Landin.Checking.Has_Aggregate_Field
                 (Types.all, Struct_Body_Id);
             --  D46 admits [1740]'s declaration-only module state once D45
             --  laid out all of its scalar and fixed-array fields: D10 makes
@@ -1034,6 +1088,31 @@ package body Landin.Stages.Checking is
                      Into    => Found);
                end if;
 
+               return Ty.Ill_Typed;
+            end if;
+
+            if Held = Ty.Aggregate
+              and then Aggregate_Bearing
+              and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
+            then
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                  = Ty.Undecided
+               then
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message => "a value of a nested-struct type is not"
+                                & " enabled yet",
+                     Refused =>
+                       (if Syn.Kind (Of_Tree, Node)
+                              in Syn.Parameter | Syn.Named_Return
+                        then Bad.Struct_ABI
+                        else Bad.Struct_Value),
+                     Into    => Found);
+               end if;
                return Ty.Ill_Typed;
             end if;
 
@@ -3331,6 +3410,10 @@ package body Landin.Stages.Checking is
                                  Check_Fixed_Array_Payload
                                    (Label, Given, Shape);
 
+                              when Landin.Checking.Aggregate_Field =>
+                                 raise Landin.Compiler_Defect with
+                                   "a nested aggregate payload reached D76";
+
                               when Landin.Checking.Variant_Field =>
                                  raise Landin.Compiler_Defect with
                                    "a nested variant payload reached D76";
@@ -3813,6 +3896,10 @@ package body Landin.Stages.Checking is
 
                      when Landin.Checking.Fixed_Array_Field =>
                         Check_Array_Field (Field, Value, Which);
+
+                     when Landin.Checking.Aggregate_Field =>
+                        raise Landin.Compiler_Defect with
+                          "a nested aggregate literal reached checking";
 
                      when Landin.Checking.Variant_Field =>
                         Check_Variant_Value
@@ -6811,6 +6898,10 @@ package body Landin.Stages.Checking is
                               end;
                            end if;
 
+                        when Landin.Checking.Aggregate_Field =>
+                           raise Landin.Compiler_Defect with
+                             "a nested aggregate image reached checking";
+
                         when Landin.Checking.Variant_Field =>
                            declare
                               Selected : constant Positive :=
@@ -7436,6 +7527,7 @@ package body Landin.Stages.Checking is
                          not State.Fields (Positive (Id), Each),
                        when Landin.Checking.Fixed_Array_Field =>
                          not Array_Is_Assigned (Id, Each, State),
+                       when Landin.Checking.Aggregate_Field => False,
                        when Landin.Checking.Variant_Field => False)
                then
                   Require_Assigned
@@ -8025,6 +8117,8 @@ package body Landin.Stages.Checking is
                                  when Landin.Checking.Fixed_Array_Field =>
                                     Array_Sets.Include
                                       (State.Whole_Arrays, (Id, Each));
+                                 when Landin.Checking.Aggregate_Field =>
+                                    null;
                                  when Landin.Checking.Variant_Field =>
                                     State.Fields
                                       (Positive (Id), Each) := True;

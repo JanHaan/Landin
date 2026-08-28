@@ -379,6 +379,10 @@ package body Landin.Stages.Lowering is
                         (Types.all, Wrote, Field)),
                    others  => <>));
 
+            when Landin.Checking.Aggregate_Field =>
+               raise Landin.Compiler_Defect with
+                 "nested aggregate storage reached lowering";
+
             when Landin.Checking.Variant_Field =>
                declare
                   Source : constant Landin.Checking.Field_Shape :=
@@ -731,7 +735,7 @@ package body Landin.Stages.Lowering is
                               then
                                  Total := Total
                                    + Landin.Checking.Field_Shape_Of
-                                       (Types.all, Declared, Field).Cases;
+                                      (Types.all, Declared, Field).Cases;
                               end if;
                            end loop;
                            return Total;
@@ -755,6 +759,16 @@ package body Landin.Stages.Lowering is
                                       Landin.Checking.Variant_Case_Field_Count
                                         (Types.all, Declared, Field, Which);
                                  end loop;
+                              elsif Landin.Checking.Field_Kind_Of
+                                (Types.all, Declared, Field)
+                                  = Landin.Checking.Aggregate_Field
+                              then
+                                 Total := Total
+                                   + Landin.Checking.Layout_Field_Count
+                                       (Types.all,
+                                        Landin.Checking.Field_Shape_Of
+                                          (Types.all, Declared, Field)
+                                            .Aggregate_Body);
                               end if;
                            end loop;
                            return Total;
@@ -793,6 +807,48 @@ package body Landin.Stages.Lowering is
                                       (Landin.Checking.Field_Array_Length
                                          (Types.all, Declared, Field)),
                                     others  => <>);
+
+                              when Landin.Checking.Aggregate_Field =>
+                                 declare
+                                    Shape : constant
+                                      Landin.Checking.Field_Shape :=
+                                        Landin.Checking.Field_Shape_Of
+                                          (Types.all, Declared, Field);
+                                    Child : constant Res.Declaration_Id :=
+                                      Shape.Aggregate_Body;
+                                    Count : constant Natural :=
+                                      Landin.Checking.Layout_Field_Count
+                                        (Types.all, Child);
+                                 begin
+                                    Fields (Field) :=
+                                      (Kind           =>
+                                         IR.Aggregate_Field_Shape,
+                                       Element        => Ty.Bool,
+                                       Length         => 1,
+                                       Cases          => Count,
+                                       Payloads_First => Next_Payload);
+
+                                    for Position in 1 .. Count loop
+                                       declare
+                                          Part : constant Landin.Checking
+                                            .Field_Shape :=
+                                              Landin.Checking.Field_Shape_Of
+                                                (Types.all, Child, Position);
+                                       begin
+                                          Payloads (Next_Payload) :=
+                                            (Kind =>
+                                               (if Part.Kind =
+                                                  Landin.Checking.Scalar_Field
+                                                then IR.Scalar_Field_Shape
+                                                else IR.Array_Field_Shape),
+                                             Element => Part.Element,
+                                             Length  => IR.Element_Total
+                                               (Part.Length),
+                                             others  => <>);
+                                          Next_Payload := Next_Payload + 1;
+                                       end;
+                                    end loop;
+                                 end;
 
                               when Landin.Checking.Variant_Field =>
                                  declare
@@ -1523,6 +1579,10 @@ package body Landin.Stages.Lowering is
                            Source_Field => Field,
                            Destination_Field => Field);
 
+                     when Landin.Checking.Aggregate_Field =>
+                        raise Landin.Compiler_Defect with
+                          "nested aggregate copy reached lowering";
+
                      when Landin.Checking.Variant_Field =>
                         IR.Emit_Variant_Copy
                           (Unit.all, Filling,
@@ -1749,6 +1809,11 @@ package body Landin.Stages.Lowering is
                                 (Syn.Value_Of (Of_Tree, Label), Destination,
                                  Field, Which, Payload_Field);
 
+                           when Landin.Checking.Aggregate_Field =>
+                              raise Landin.Compiler_Defect with
+                                "a nested aggregate payload reached"
+                                & " lowering";
+
                            when Landin.Checking.Variant_Field =>
                               raise Landin.Compiler_Defect with
                                 "a nested variant payload reached lowering";
@@ -1817,6 +1882,11 @@ package body Landin.Stages.Lowering is
                               Write_Array_Value
                                 (Value, Destination, Field);
 
+                           when Landin.Checking.Aggregate_Field =>
+                              raise Landin.Compiler_Defect with
+                                "a nested aggregate literal reached"
+                                & " lowering";
+
                            when Landin.Checking.Variant_Field =>
                               Write_Variant_Value
                                 (Value, Wrote, Field, Destination);
@@ -1855,6 +1925,11 @@ package body Landin.Stages.Lowering is
                                  IR.Emit_Array_Clear
                                    (Unit.all, Filling, Destination, Site,
                                     Field => Field);
+
+                              when Landin.Checking.Aggregate_Field =>
+                                 raise Landin.Compiler_Defect with
+                                   "a nested aggregate fill reached"
+                                   & " lowering";
 
                               when Landin.Checking.Variant_Field =>
                                  --  D75's zero image selects the first case.

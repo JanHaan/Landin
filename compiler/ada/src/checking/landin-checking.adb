@@ -209,6 +209,16 @@ package body Landin.Checking is
          elsif Field.Kind = Fixed_Array_Field then
             Array_Extent
               (Field.Length, Field.Element, Facts, Size, Alignment);
+         elsif Field.Kind = Aggregate_Field then
+            if Field.Aggregate_Body = No_Declaration
+              or else not Contains (Into, Field.Aggregate_Body)
+              or else not Has_Layout (Into, Field.Aggregate_Body)
+            then
+               raise Landin.Compiler_Defect with
+                 "an aggregate field has no laid-out body";
+            end if;
+            Size := Layout_Size (Into, Field.Aggregate_Body);
+            Alignment := Layout_Alignment (Into, Field.Aggregate_Body);
          else
             if Field.Cases = 0
               or else Field.Payloads_First = 0
@@ -394,6 +404,18 @@ package body Landin.Checking is
       end loop;
       return False;
    end Has_Variant_Part;
+
+   function Has_Aggregate_Field (Of_Table : Table; Id : Declaration_Id)
+     return Boolean
+   is
+   begin
+      for Field in 1 .. Layout_Field_Count (Of_Table, Id) loop
+         if Field_Kind_Of (Of_Table, Id, Field) = Aggregate_Field then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Has_Aggregate_Field;
 
    function Field_Shape_Of
      (Of_Table : Table; Id : Declaration_Id; Field : Positive)

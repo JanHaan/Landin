@@ -213,6 +213,7 @@ package body Landin.Tests.Verifier_Suite is
       Result_Of_The_Wrong_Type,
       Measurement_Result_Is_Not_Usize,
       Scalar_Measurement_Length_Is_Not_One,
+      Aggregate_Measurement_Run_Overflows,
       Variant_Measurement_Tag_Is_Signed,
       Variant_Measurement_Case_Run_Overflows,
       Variant_Datum_Tag_Is_Signed,
@@ -452,6 +453,25 @@ package body Landin.Tests.Verifier_Suite is
                  Length  => 2,
              others => <>)],
                Landin.Types.Usize, Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Aggregate_Measurement_Run_Overflows =>
+            N := IR.Emit_Aggregate_Measurement
+              (Unit, A, IR.Measure_Size,
+               [(Kind           => IR.Aggregate_Field_Shape,
+                 Element        => Landin.Types.Bool,
+                 Length         => 1,
+                 Cases          => Natural'Last,
+                 Payloads_First => 1)],
+               Landin.Types.Usize, Site,
+               Payloads =>
+                 [(Kind    => IR.Scalar_Field_Shape,
+                   Element => Landin.Types.U8,
+                   Length  => 1,
+                   others  => <>)]);
             pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -1004,6 +1024,8 @@ package body Landin.Tests.Verifier_Suite is
          (Result_Of_The_Wrong_Type,   V.Result_Disagrees),
          (Measurement_Result_Is_Not_Usize, V.Result_Disagrees),
          (Scalar_Measurement_Length_Is_Not_One,
+          V.Field_Shape_Malformed),
+         (Aggregate_Measurement_Run_Overflows,
           V.Field_Shape_Malformed),
          (Variant_Measurement_Tag_Is_Signed,
           V.Field_Shape_Malformed),

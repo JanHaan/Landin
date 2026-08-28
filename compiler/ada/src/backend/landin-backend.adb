@@ -32,6 +32,41 @@ package body Landin.Backend is
          return;
       end if;
 
+      if Shape.Kind = Landin.IR.Aggregate_Field_Shape then
+         declare
+            Placed : Landin.Targets.Placement :=
+              Landin.Targets.Empty_Placement;
+            Ignored : Landin.Targets.Byte_Count;
+         begin
+            for Field in 1 .. Landin.IR.Aggregate_Field_Count
+              (Of_Unit, Shape)
+            loop
+               declare
+                  Part_Size : Landin.Targets.Byte_Count;
+                  Part_Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  Field_Extent
+                    (Of_Unit,
+                     Landin.IR.Nth_Aggregate_Field
+                       (Of_Unit, Shape, Field),
+                     Facts, Part_Size, Part_Alignment);
+                  if not Landin.Targets.Can_Place
+                    (Placed, Part_Size, Part_Alignment,
+                     Landin.Targets.Maximum_Object_Size (Facts))
+                  then
+                     raise Landin.Compiler_Defect with
+                       "a nested aggregate extent overflows";
+                  end if;
+                  Landin.Targets.Place
+                    (Placed, Part_Size, Part_Alignment, Ignored);
+               end;
+            end loop;
+            Size := Landin.Targets.Size_Of (Placed);
+            Alignment := Landin.Targets.Alignment_Of (Placed);
+            return;
+         end;
+      end if;
+
       if Shape.Kind = Landin.IR.Variant_Field_Shape then
          declare
             Payload_Size : Landin.Targets.Byte_Count := 0;

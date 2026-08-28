@@ -100,9 +100,9 @@ package Landin.Backend is
                            or else Landin.IR.Is_Array
                                      (Of_Unit, Item, Slot));
 
-   --  The target extent of one compact scalar or fixed-array field.  Both
-   --  D45 measurement, D46 module storage and D47 frame storage replay this
-   --  same leaf.
+   --  The target extent of one neutral field shape.  D86 recursively replays
+   --  a measurement-only aggregate run; runtime datum and slot runs retain
+   --  the scalar, fixed-array and unfolded-variant shapes.
    procedure Field_Extent
      (Of_Unit   : Landin.IR.Unit;
       Shape     : Landin.IR.Field_Shape;

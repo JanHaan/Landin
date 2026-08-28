@@ -427,10 +427,12 @@ package body Landin.IR.Verifier is
       --  D74 introduced this carrier for measurements; D75 uses the same
       --  target-neutral shape for datum and slot storage.  Prove every run
       --  and leaf before any accessor reads it, in every build mode.
-      function Field_Shape_Is_Malformed (Shape : Field_Shape)
+      function Field_Shape_Is_Malformed
+        (Shape : Field_Shape; Aggregate_Allowed : Boolean := False)
         return Boolean;
 
-      function Field_Shape_Is_Malformed (Shape : Field_Shape)
+      function Field_Shape_Is_Malformed
+        (Shape : Field_Shape; Aggregate_Allowed : Boolean := False)
         return Boolean
       is
       begin
@@ -440,6 +442,34 @@ package body Landin.IR.Verifier is
               or else Shape.Payloads_First /= 0;
          elsif Shape.Kind = Array_Field_Shape then
             return Shape.Cases /= 0 or else Shape.Payloads_First /= 0;
+         elsif Shape.Kind = Aggregate_Field_Shape then
+            if not Aggregate_Allowed
+              or else Shape.Length /= 1
+              or else Shape.Element /= Landin.Types.Bool
+              or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
+            then
+               return True;
+            end if;
+
+            for Field in 1 .. Aggregate_Field_Count (Of_Unit, Shape) loop
+               declare
+                  Leaf : constant Field_Shape :=
+                    Nth_Aggregate_Field (Of_Unit, Shape, Field);
+               begin
+                  if Leaf.Kind not in
+                       Scalar_Field_Shape | Array_Field_Shape
+                    or else Leaf.Cases /= 0
+                    or else Leaf.Payloads_First /= 0
+                    or else
+                      (Leaf.Kind = Scalar_Field_Shape
+                       and then Leaf.Length /= 1)
+                  then
+                     return True;
+                  end if;
+               end;
+            end loop;
+
+            return False;
          end if;
 
          if Shape.Length /= 1
@@ -1813,7 +1843,9 @@ package body Landin.IR.Verifier is
                                          Nth_Measurement_Field
                                            (Of_Unit, Id, V, Field);
                                     begin
-                                       if Field_Shape_Is_Malformed (Part) then
+                                       if Field_Shape_Is_Malformed
+                                         (Part, Aggregate_Allowed => True)
+                                       then
                                           return
                                             (Field_Shape_Malformed,
                                              Id, Block, V);

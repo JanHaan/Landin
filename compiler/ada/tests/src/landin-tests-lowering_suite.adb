@@ -3469,6 +3469,71 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Struct_Measurement_Carries_Variant_Cases;
 
+   --  D86 carries one named child struct as a measurement-only field run.
+   --  The child remains target-neutral: the backend replays these leaves
+   --  rather than receiving the checker's target byte size.
+   procedure A_Struct_Measurement_Carries_A_Nested_Field
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Measurement_Carries_A_Nested_Field
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "inner: type = struct" & LF
+         & "    byte: u8" & LF
+         & "    word: usize" & LF
+         & "    row: [3]u16" & LF
+         & "end inner" & LF
+         & "outer: type = struct" & LF
+         & "    prefix: u16" & LF
+         & "    nested: inner" & LF
+         & "    tail: u8" & LF
+         & "end outer" & LF
+         & "size: usize = sizeof outer" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a nested-struct declaration can be measured");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Shape : constant IR.Field_Shape :=
+           IR.Nth_Measurement_Field (Unit, 1, 1, 2);
+         Byte_Field : constant IR.Field_Shape :=
+           IR.Nth_Aggregate_Field (Unit, Shape, 1);
+         Word_Field : constant IR.Field_Shape :=
+           IR.Nth_Aggregate_Field (Unit, Shape, 2);
+         Row_Field : constant IR.Field_Shape :=
+           IR.Nth_Aggregate_Field (Unit, Shape, 3);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Shape.Kind = IR.Aggregate_Field_Shape
+              and then IR.Aggregate_Field_Run_Is_Valid (Unit, Shape)
+              and then IR.Aggregate_Field_Count (Unit, Shape) = 3
+              and then Byte_Field.Kind = IR.Scalar_Field_Shape
+              and then Byte_Field.Element = Landin.Types.U8
+              and then Word_Field.Kind = IR.Scalar_Field_Shape
+              and then Word_Field.Element = Landin.Types.Usize
+              and then Row_Field.Kind = IR.Array_Field_Shape
+              and then Row_Field.Element = Landin.Types.U16
+              and then Row_Field.Length = 3,
+            "the child keeps its declaration-order target-neutral leaves");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Verifier.Check (Unit).Kind
+              = Landin.IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the nested measurement run");
+      end;
+   end A_Struct_Measurement_Carries_A_Nested_Field;
+
    --  D75 gives D74's target-neutral carrier to both module and frame
    --  storage.  The zero image remains one whole-storage clear, not one
    --  instruction per tag, payload field, or padding byte.
@@ -4437,6 +4502,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a struct measurement carries variant case runs",
          A_Struct_Measurement_Carries_Variant_Cases'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a struct measurement carries a nested field run",
+         A_Struct_Measurement_Carries_A_Nested_Field'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "variant storage carries cases and one clear",

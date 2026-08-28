@@ -3306,6 +3306,12 @@ shape for `lenof` and indexed `in`/`inout` access while retaining L0304 for bare
 or whole-array use. General reads of the variant part remain refused.
 Parameters and returns retain R2.30's aggregate ABI owner.
 
+D86 additionally measures a named scalar/array-only ordinary struct as one
+field of another ordinary struct on both described target shapes. It does not
+yet allocate or form a value of that containing type: nested storage, field
+selection, zero images, copies, literals and construction remain refused, as
+do deeper nesting and aggregate variant payloads.
+
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
 at all. Every element this kernel admits is a scalar and every scalar has one, so the check is
@@ -3435,6 +3441,9 @@ aliases and general array or aggregate values pinned.
 D85 migrated fixed-array payload bindings into arm-local indexed `in`/`inout`
 aliases, while keeping bare and whole-array uses and general array values
 pinned.
+D86 migrated a depth-one named ordinary struct field into target-parametric
+layout and measurement, while keeping nested storage, selection, images,
+construction and every nested value form pinned for the following slices.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the
