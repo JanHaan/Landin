@@ -1,0 +1,28 @@
+inner: type = struct
+    value: i32
+    row: [2]i32
+end inner
+
+outer: type = struct
+    prefix: u16
+    nested: inner
+    tail: u8
+end outer
+
+template: inner = (value: 7, row: [3, 4])
+mut global: outer = zeroed
+
+answer: () -> (result: i32) =
+    mut local: outer
+    local.nested = zeroed
+    global.nested = inner(value: 5, row: [1, 2])
+    local.nested = global.nested
+    global.nested = template
+    result = local.nested.value + local.nested.row[0]
+           + local.nested.row[1] + global.nested.value
+           + global.nested.row[0] + global.nested.row[1]
+end answer
+
+public main: () -> (code: i32) =
+    code = answer()
+end main

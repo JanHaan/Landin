@@ -5393,8 +5393,9 @@ child without making any path through it a value or place.
 scalar field of that child is a value and a place as `parent.child.field`.
 The binding at the root decides mutability exactly as for a direct field. The
 intermediate `parent.child` remains neither a general aggregate value nor a
-whole place, so discarding, copying, passing or returning it remains L0304.
-D89 separately admits indexed scalar elements of a fixed-array leaf.
+whole place in this slice. D91 separately admits contextual whole-child
+assignment; discarding, passing and returning it remain L0304. D89 separately
+admits indexed scalar elements of a fixed-array leaf.
 
 Definite assignment retains the two declaration-order field identities. A
 write establishes that nested scalar leaf and no sibling; a read requires
@@ -5500,3 +5501,42 @@ endpoint identities also avoids flattening either nominal child.
 **Pinned by** the lowering, verifier and backend public seams;
 `negative/nested-struct-array-copy-unassigned`; the generated token and IR
 records; and `runtime/nested-struct-array-values` on Linux x86-64.
+
+### D91 — One ordinary child has contextual aggregate assignment forms
+
+**The tour said** that a whole ordinary struct may be zeroed, constructed and
+copied [0540] [0710], while D87 gave a parent one recursively laid-out ordinary
+child but intentionally left `parent.child` without value/place operations.
+D88--D90 then proved every scalar and fixed-array leaf path independently.
+
+**Chosen:** `parent.child` is a contextual aggregate assignment place. It
+accepts `zeroed`, a matching labelled literal or nominal construction, and a
+storage copy from either a direct value of the child's nominal type or the
+same child path in another parent. The root binding decides mutability. The
+child remains no general expression value, local initializer, parameter,
+return, operand or discard; source selection is admitted only for the matching
+storage-copy context.
+
+A successful whole-child assignment establishes the parent-field fact, which
+already denotes every D88/D89 leaf. A whole-child copy source requires that
+fact on every arriving path; independently assigning some leaves does not
+invent an aggregate value. Module state remains initialized by D10.
+
+`zeroed` uses one whole-child clear carrying the parent field identity.
+Construction lowers each scalar or fixed-array child leaf with that parent as
+its first identity and the child field as its second. Copy lowering does the
+same independently for source and destination, reusing scalar field and
+compact array-copy operations rather than adding an aggregate temporary. The
+verifier recognizes a whole `Aggregate_Field_Shape` clear and validates each
+leaf operation; the backend derives the child's padded extent and both endpoint
+offsets only after target selection.
+
+**Why not a general child value:** every accepted form has known destination
+storage and can commit directly in [0410]'s order. A first-class child value
+would require temporary representation, ABI rules and expression lifetime
+without helping these assignments. Keeping its nominal parent identity on
+each operation also avoids flattening D86's boundary.
+
+**Pinned by** the lowering, verifier and backend public seams;
+`negative/nested-struct-child-copy-unassigned`; the generated token and IR
+records; and `runtime/nested-struct-child-values` on Linux x86-64.

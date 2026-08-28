@@ -14890,6 +14890,53 @@ file negative/nested-struct-array-element-unassigned/program.ldn tokens 60
   206 207 ]
   208 211 end
   212 216 read
+file negative/nested-struct-child-copy-unassigned/program.ldn tokens 46
+  0 5 inner
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 30 value
+  30 31 :
+  32 35 i32
+  36 39 end
+  40 45 inner
+  47 52 outer
+  52 53 :
+  54 58 type
+  59 60 =
+  61 67 struct
+  72 78 nested
+  78 79 :
+  80 85 inner
+  86 89 end
+  90 95 outer
+  97 101 copy
+  101 102 :
+  103 104 (
+  104 105 )
+  106 108 ->
+  109 113 none
+  114 115 =
+  120 123 mut
+  124 130 source
+  130 131 :
+  132 137 outer
+  142 145 mut
+  146 157 destination
+  157 158 :
+  159 164 outer
+  165 166 =
+  167 173 zeroed
+  178 189 destination
+  189 190 .
+  190 196 nested
+  197 198 =
+  199 205 source
+  205 206 .
+  206 212 nested
+  213 216 end
+  217 221 copy
 file negative/nested-struct-construction-not-enabled/program.ldn tokens 66
   0 5 inner
   5 6 :
