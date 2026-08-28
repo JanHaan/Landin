@@ -1562,7 +1562,9 @@ package body Landin.IR.Verifier is
                                  Bad := Shape_Of
                                    (Id, Source_Of (Of_Unit, Id, V),
                                     Source_Field_Of (Of_Unit, Id, V),
-                                    Source_Element, Source_Length);
+                                    Source_Element, Source_Length,
+                                    Nested => Source_Nested_Field_Of
+                                      (Of_Unit, Id, V));
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
@@ -1574,6 +1576,8 @@ package body Landin.IR.Verifier is
                                     Destination_Element, Destination_Length,
                                     Variant_Case_Of (Of_Unit, Id, V),
                                     Variant_Payload_Field_Of
+                                      (Of_Unit, Id, V),
+                                    Nested => Nested_Field_Of
                                       (Of_Unit, Id, V));
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -1701,7 +1705,9 @@ package body Landin.IR.Verifier is
                                     --  Shape_Of reports it before an accessor.
                                     Bad := Shape_Of
                                       (Id, Destination, Field,
-                                       Element, Length);
+                                       Element, Length,
+                                       Nested => Nested_Field_Of
+                                         (Of_Unit, Id, V));
                                  end if;
 
                                  if Bad /= Nothing_Wrong then
@@ -1767,6 +1773,8 @@ package body Landin.IR.Verifier is
                                       Element, Length,
                                       Variant_Case_Of (Of_Unit, Id, V),
                                       Variant_Payload_Field_Of
+                                        (Of_Unit, Id, V),
+                                      Nested => Nested_Field_Of
                                         (Of_Unit, Id, V));
                               begin
                                  if Bad /= Nothing_Wrong then

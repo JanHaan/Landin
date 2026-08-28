@@ -1320,6 +1320,13 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Copy_Array | Copy_Variant;
 
+   --  D90's fixed-array field inside Source_Field_Of's ordinary child.
+   --  Zero keeps D20/D50's direct source path.
+   function Source_Nested_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
+
    function Destination_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
@@ -1367,15 +1374,16 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
 
-   --  D88's scalar field, or D89's fixed-array field, inside a depth-one
-   --  ordinary child.  Zero keeps the direct operation; a positive identity
+   --  D88's scalar field, or D89/D90's fixed-array field, inside a depth-one
+   --  ordinary child. Zero keeps the direct operation; a positive identity
    --  is declaration order inside the child and never a target offset.
    function Nested_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field
-                             | Load_Element | Store_Element;
+                             | Load_Element | Store_Element
+                             | Copy_Array | Clear_Array | Fill_Array;
 
    --  D48's containing aggregate field for an element operation, D49's
    --  destination field for a clear, D50's destination field for a copy,
@@ -1818,7 +1826,9 @@ package Landin.IR is
       Destination : Storage;
       Site       : Landin.Provenance.Origin;
       Source_Field : Natural := 0;
+      Source_Nested_Field : Natural := 0;
       Destination_Field : Natural := 0;
+      Destination_Nested_Field : Natural := 0;
       Destination_Variant_Case : Natural := 0;
       Destination_Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
@@ -1839,7 +1849,8 @@ package Landin.IR is
       Item       : Item_Id;
       Destination : Storage;
       Site       : Landin.Provenance.Origin;
-      Field      : Natural := 0)
+      Field      : Natural := 0;
+      Nested_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
 
@@ -1851,6 +1862,7 @@ package Landin.IR is
       Value       : Value_Id;
       Site        : Landin.Provenance.Origin;
       Field       : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
@@ -2035,6 +2047,7 @@ private
       Named       : Item_Id                   := No_Item;
       Source      : Storage                   := (others => <>);
       Source_Field : Natural                  := 0;
+      Source_Nested_Part : Natural             := 0;
       Destination : Storage                   := (others => <>);
       Target      : Block_Id                  := No_Block;
       Alternative : Block_Id                  := No_Block;

@@ -1578,6 +1578,7 @@ package body Landin.Stages.Lowering is
                  (Value       : Syn.Node_Id;
                   Destination : IR.Storage;
                   Field       : Natural;
+                  Nested_Field : Natural := 0;
                   Variant_Case : Natural := 0;
                   Variant_Payload_Field : Natural := 0);
 
@@ -1679,6 +1680,7 @@ package body Landin.Stages.Lowering is
                  (Value       : Syn.Node_Id;
                   Destination : IR.Storage;
                   Field       : Natural;
+                  Nested_Field : Natural := 0;
                   Variant_Case : Natural := 0;
                   Variant_Payload_Field : Natural := 0)
                is
@@ -1714,6 +1716,7 @@ package body Landin.Stages.Lowering is
                                  IR.Emit_Store_Element
                                    (Unit.all, Filling, Destination.Datum,
                                     Index, Element, Site, Field => Field,
+                                    Nested_Field => Nested_Field,
                                     Variant_Case => Variant_Case,
                                     Variant_Payload_Field =>
                                       Variant_Payload_Field);
@@ -1721,6 +1724,7 @@ package body Landin.Stages.Lowering is
                                  IR.Emit_Store_Slot_Element
                                    (Unit.all, Filling, Destination.Slot,
                                     Index, Element, Site, Field => Field,
+                                    Nested_Field => Nested_Field,
                                     Variant_Case => Variant_Case,
                                     Variant_Payload_Field =>
                                       Variant_Payload_Field);
@@ -1789,6 +1793,7 @@ package body Landin.Stages.Lowering is
                           (Of_Tree,
                            Syn.Repeated_Element (Of_Tree, Value), Scope),
                         Site, Field => Field,
+                        Nested_Field => Nested_Field,
                         Variant_Case => Variant_Case,
                         Variant_Payload_Field => Variant_Payload_Field);
                   elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition
@@ -1799,26 +1804,46 @@ package body Landin.Stages.Lowering is
                           (Of_Tree,
                            Syn.Repeated_Element (Of_Tree, Value), Scope),
                         Site, Field => Field,
+                        Nested_Field => Nested_Field,
                         Variant_Case => Variant_Case,
                         Variant_Payload_Field => Variant_Payload_Field);
                   elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
                      if Variant_Payload_Field = 0 then
                         IR.Emit_Array_Clear
                           (Unit.all, Filling, Destination, Site,
-                           Field => Field);
+                           Field => Field, Nested_Field => Nested_Field);
                      end if;
                   else
                      --  D20/D50: a whole array source is storage, optionally
                      --  qualified by its containing aggregate field.
                      declare
-                        Source_Nested : constant Boolean :=
+                        Source_Selected : constant Boolean :=
                           Syn.Kind (Of_Tree, Value) = Syn.Member_Selection;
+                        Source_Depth_One : constant Boolean :=
+                          Source_Selected
+                          and then Syn.Kind
+                            (Of_Tree, Syn.Target_Of (Of_Tree, Value))
+                              = Syn.Member_Selection;
+                        Source_Middle : constant Syn.Node_Id :=
+                          (if Source_Depth_One
+                           then Syn.Target_Of (Of_Tree, Value)
+                           else Syn.No_Node);
                         Source_Named : constant Syn.Node_Id :=
-                          (if Source_Nested
+                          (if Source_Depth_One
+                           then Syn.Target_Of (Of_Tree, Source_Middle)
+                           elsif Source_Selected
                            then Syn.Target_Of (Of_Tree, Value)
                            else Value);
                         Source_Field : constant Natural :=
-                          (if Source_Nested
+                          (if Source_Depth_One
+                           then Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Source_Middle)
+                           elsif Source_Selected
+                           then Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Value)
+                           else 0);
+                        Source_Child : constant Natural :=
+                          (if Source_Depth_One
                            then Landin.Checking.Field_Index
                              (Types.all, Of_Tree, Value)
                            else 0);
@@ -1829,7 +1854,9 @@ package body Landin.Stages.Lowering is
                            Destination => Destination,
                            Site => Site,
                            Source_Field => Source_Field,
+                           Source_Nested_Field => Source_Child,
                            Destination_Field => Field,
+                           Destination_Nested_Field => Nested_Field,
                            Destination_Variant_Case => Variant_Case,
                            Destination_Variant_Payload_Field =>
                              Variant_Payload_Field);
@@ -1889,7 +1916,8 @@ package body Landin.Stages.Lowering is
                               --  complete padded part before any label ran.
                               Write_Array_Value
                                 (Syn.Value_Of (Of_Tree, Label), Destination,
-                                 Field, Which, Payload_Field);
+                                 Field, Variant_Case => Which,
+                                 Variant_Payload_Field => Payload_Field);
 
                            when Landin.Checking.Aggregate_Field =>
                               raise Landin.Compiler_Defect with
@@ -2410,15 +2438,36 @@ package body Landin.Stages.Lowering is
                               --  that storage is a containing struct; no
                               --  opcode or target offset is introduced.
                               declare
-                                 Source_Nested : constant Boolean :=
+                                 Source_Selected : constant Boolean :=
                                    Syn.Kind (Of_Tree, Value)
                                      = Syn.Member_Selection;
+                                 Source_Depth_One : constant Boolean :=
+                                   Source_Selected
+                                   and then Syn.Kind
+                                     (Of_Tree,
+                                      Syn.Target_Of (Of_Tree, Value))
+                                        = Syn.Member_Selection;
+                                 Source_Middle : constant Syn.Node_Id :=
+                                   (if Source_Depth_One
+                                    then Syn.Target_Of (Of_Tree, Value)
+                                    else Syn.No_Node);
                                  Source_Named : constant Syn.Node_Id :=
-                                   (if Source_Nested
+                                   (if Source_Depth_One
+                                    then Syn.Target_Of
+                                      (Of_Tree, Source_Middle)
+                                    elsif Source_Selected
                                     then Syn.Target_Of (Of_Tree, Value)
                                     else Value);
                                  Source_Field : constant Natural :=
-                                   (if Source_Nested
+                                   (if Source_Depth_One
+                                    then Landin.Checking.Field_Index
+                                      (Types.all, Of_Tree, Source_Middle)
+                                    elsif Source_Selected
+                                    then Landin.Checking.Field_Index
+                                      (Types.all, Of_Tree, Value)
+                                    else 0);
+                                 Source_Child : constant Natural :=
+                                   (if Source_Depth_One
                                     then Landin.Checking.Field_Index
                                       (Types.all, Of_Tree, Value)
                                     else 0);
@@ -2432,7 +2481,8 @@ package body Landin.Stages.Lowering is
                                         (Kind => IR.Frame_Slot,
                                          Slot => Where),
                                     Site => Site,
-                                    Source_Field => Source_Field);
+                                    Source_Field => Source_Field,
+                                    Source_Nested_Field => Source_Child);
                               end;
                            end if;
                         elsif Landin.Checking.Type_Of (Types.all, Id)
@@ -2582,24 +2632,45 @@ package body Landin.Stages.Lowering is
                              Syn.Value_Of (Of_Tree, Stmt);
                            Place : constant Syn.Node_Id :=
                              Syn.Target_Of (Of_Tree, Stmt);
-                           Nested : constant Boolean :=
+                           Selected : constant Boolean :=
                              Syn.Kind (Of_Tree, Place)
                                = Syn.Member_Selection;
+                           Depth_One : constant Boolean :=
+                             Selected
+                             and then Syn.Kind
+                               (Of_Tree, Syn.Target_Of (Of_Tree, Place))
+                                 = Syn.Member_Selection;
+                           Middle : constant Syn.Node_Id :=
+                             (if Depth_One
+                              then Syn.Target_Of (Of_Tree, Place)
+                              else Syn.No_Node);
                            Named : constant Syn.Node_Id :=
-                             (if Nested
+                             (if Depth_One
+                              then Syn.Target_Of (Of_Tree, Middle)
+                              elsif Selected
                               then Syn.Target_Of (Of_Tree, Place)
                               else Place);
                            Field : constant Natural :=
-                             (if Nested
+                             (if Depth_One
+                              then Landin.Checking.Field_Index
+                                (Types.all, Of_Tree, Middle)
+                              elsif Selected
+                              then Landin.Checking.Field_Index
+                                (Types.all, Of_Tree, Place)
+                              else 0);
+                           Child : constant Natural :=
+                             (if Depth_One
                               then Landin.Checking.Field_Index
                                 (Types.all, Of_Tree, Place)
                               else 0);
                            Destination : constant IR.Storage :=
                              Storage_For (Of_Tree, Named);
                         begin
-                           --  D49--D53 and D65 share one field-qualified
-                           --  lowering rule for every contextual array value.
-                           Write_Array_Value (Value, Destination, Field);
+                           --  D49--D53/D65 and D90 share one field-qualified
+                           --  lowering rule for each contextual array value.
+                           Write_Array_Value
+                             (Value, Destination, Field,
+                              Nested_Field => Child);
                         end;
                      else
                         declare

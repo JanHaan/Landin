@@ -1844,8 +1844,13 @@ target. The intermediate child remains no general aggregate value.
 The third increment extends that path to a scalar element of a fixed-array
 leaf in the child. Known-element and whole-array assignment facts retain the
 two field identities, the verifier checks the bounded child shape, and the
-backend places both fields before adding the checked scaled index. The nested
-array itself remains contextual rather than becoming a general value.
+backend places both fields before adding the checked scaled index.
+
+The fourth increment gives that fixed-array leaf the contextual assignment
+forms direct array fields already have: literals, repetitions, `zeroed` and
+storage-to-storage copies. Compact IR operations keep an independent
+parent/child pair for each endpoint, and the leaf remains no general value,
+parameter, return, discard or standalone initializer.
 
 Aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.

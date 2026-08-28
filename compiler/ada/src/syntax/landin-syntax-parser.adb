@@ -2848,7 +2848,9 @@ package body Landin.Syntax.Parser is
                            Message => "an array literal has at least one"
                                       & " element",
                            Note    => "[0520]: an array literal writes its"
-                                      & " elements between the brackets");
+                                      & " elements between the brackets",
+                           Related => At_Item,
+                           Because => "the array starts here");
                         Advance;
                         Depth := Depth - 1;
                         return Add
