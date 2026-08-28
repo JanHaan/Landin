@@ -30,11 +30,13 @@ packages:
 oauth: pages.sr.ht/PAGES:RW
 
 #  The code face the pages are set in is licensed, not open, and lives in
-#  the private landin-fonts repository; the pages task clones it with this
-#  deploy key.  Only a build submitted by the account holding the secret
+#  the private landin-fonts repository; the pages task clones it with the
+#  existing repository SSH key.  The same secret lets the separate mirror
+#  job write GitHub.  Only a build submitted by the account holding it
 #  receives it, which is one more reason a mailed patch never publishes.
-#  It is not a `sources:` entry because those are cloned before any task
-#  runs, and a build without the key would fail there, in the gate.
+#  The font repository is not a `sources:` entry because those are cloned
+#  before any task runs, and a build without the key would fail there, in
+#  the gate.
 secrets:
   - be6acc31-1dff-4c27-94c0-d223f13d5f8a
 

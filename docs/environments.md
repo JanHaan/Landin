@@ -1,9 +1,10 @@
 # Development and validation environments
 
 `ROADMAP.md` R0.70 owns this document. It records which environment produces
-which kind of evidence. Hosting is git.sr.ht with builds.sr.ht, selected at
-R0.70; only the CI manifests name that provider, while every command they run
-below is an ordinary repository command.
+which kind of evidence. Canonical hosting is git.sr.ht with builds.sr.ht,
+selected at R0.70; GitHub holds an automated mirror only. Only the CI
+manifests name those providers, while every validation command they run below
+is an ordinary repository command.
 
 ## The three environments
 
@@ -24,6 +25,11 @@ runs after every check above has passed, so a red gate cannot put a page up,
 and a build with no secrets — a mailed patch has none — never reaches it. It
 is there because a page that moves only when somebody remembers to run
 `scripts/site.sh --publish` is a page that drifts from the document it reads.
+
+A separate non-gate, `.builds/github-mirror.yml`, uses the existing repository
+SSH secret to copy every SourceHut branch and tag to
+https://github.com/JanHaan/Landin. It carries no evidence and cannot affect the
+Linux gate's verdict; git.sr.ht remains canonical.
 
 Native macOS arm64 is a *development* loop at R0. It becomes a validated
 target of its own at R5, with its own compiler build, platform tools and
@@ -223,5 +229,5 @@ emitted for.
 
 Hosting is therefore no longer an open question: the repository lives on
 git.sr.ht and its CI is builds.sr.ht. `scripts/` stays provider-neutral —
-nothing in it names a provider — and `.build.yml` is the one file that does,
-which is what makes it replaceable.
+nothing in it names a provider — and the CI manifests are the files that do,
+which is what keeps those integrations replaceable.
