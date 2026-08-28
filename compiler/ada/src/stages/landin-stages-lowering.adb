@@ -1352,26 +1352,40 @@ package body Landin.Stages.Lowering is
                         elsif Landin.Checking.Type_Of (Types.all, Id)
                                 = Ty.Aggregate
                         then
-                           --  D55: the destination slot is fresh and the
-                           --  direct source is existing storage.  Reuse
-                           --  D54's declaration-ordered scalar/array field
-                           --  copy without forming an aggregate value.
-                           declare
-                              Wrote : constant Res.Declaration_Id :=
-                                Landin.Checking.Body_Of (Types.all, Id);
-                              Source : constant IR.Storage :=
-                                Storage_For (Of_Tree, Value);
-                              Destination : constant IR.Storage :=
-                                (Kind => IR.Frame_Slot, Slot => Where);
-                           begin
-                              for Field in
-                                1 .. Landin.Checking.Layout_Field_Count
-                                       (Types.all, Wrote)
-                              loop
-                                 Copy_Field
-                                   (Wrote, Source, Destination, Field);
-                              end loop;
-                           end;
+                           if Syn.Kind (Of_Tree, Value)
+                                = Syn.Zeroed_Literal
+                           then
+                              --  D57: one whole-storage clear writes the
+                              --  complete padded image of the fresh aggregate
+                              --  slot; field zero identifies the whole cell.
+                              IR.Emit_Array_Clear
+                                (Unit.all, Filling,
+                                 Destination =>
+                                   IR.Storage'
+                                     (Kind => IR.Frame_Slot, Slot => Where),
+                                 Site => Site);
+                           else
+                              --  D55: the destination slot is fresh and the
+                              --  direct source is existing storage.  Reuse
+                              --  D54's declaration-ordered scalar/array field
+                              --  copy without forming an aggregate value.
+                              declare
+                                 Wrote : constant Res.Declaration_Id :=
+                                   Landin.Checking.Body_Of (Types.all, Id);
+                                 Source : constant IR.Storage :=
+                                   Storage_For (Of_Tree, Value);
+                                 Destination : constant IR.Storage :=
+                                   (Kind => IR.Frame_Slot, Slot => Where);
+                              begin
+                                 for Field in
+                                   1 .. Landin.Checking.Layout_Field_Count
+                                          (Types.all, Wrote)
+                                 loop
+                                    Copy_Field
+                                      (Wrote, Source, Destination, Field);
+                                 end loop;
+                              end;
+                           end if;
                         else
                            IR.Emit_Store
                              (Unit.all, Filling, Where,

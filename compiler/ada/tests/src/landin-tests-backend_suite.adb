@@ -1388,19 +1388,24 @@ package body Landin.Tests.Backend_Suite is
         & "source: holder" & LF
         & "copy: () -> none =" & LF
         & "    local: holder = source" & LF
+        & "    empty: holder = zeroed" & LF
         & "end copy" & LF;
 
       procedure Check_Target
         (Facts        : Landin.Targets.Target_Facts;
          Destination : String;
          Field_Offset : String;
-         Bytes        : String);
+         Bytes        : String;
+         Clear_At     : String;
+         Clear_Bytes  : String);
 
       procedure Check_Target
         (Facts        : Landin.Targets.Target_Facts;
          Destination : String;
          Field_Offset : String;
-         Bytes        : String)
+         Bytes        : String;
+         Clear_At     : String;
+         Clear_Bytes  : String)
       is
          Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
          Ran : Natural;
@@ -1420,13 +1425,20 @@ package body Landin.Tests.Backend_Suite is
                and then Contains (Text, HT & "addq %rdx, %rsi")
                and then Contains
                  (Text, HT & "movabsq $" & Bytes & ", %rcx")
-               and then Contains (Text, HT & "rep movsb"),
+               and then Contains (Text, HT & "rep movsb")
+               and then Contains
+                 (Text, HT & "leaq " & Clear_At & "(%rbp), %rdi")
+               and then Contains
+                 (Text, HT & "movabsq $" & Clear_Bytes & ", %rcx")
+               and then Contains (Text, HT & "rep stosb"),
                "the initialized field addresses follow the target");
          end;
       end Check_Target;
    begin
-      Check_Target (Landin.Targets.Linux_X86_64, "-24", "8", "16");
-      Check_Target (Landin.Targets.Synthetic_32, "-12", "4", "8");
+      Check_Target
+        (Landin.Targets.Linux_X86_64, "-24", "8", "16", "-64", "32");
+      Check_Target
+        (Landin.Targets.Synthetic_32, "-12", "4", "8", "-32", "16");
    end Local_Struct_Initializer_Derives_Field_Addresses;
 
    --  D56 reuses the same fresh-slot copy after inference carried the source
