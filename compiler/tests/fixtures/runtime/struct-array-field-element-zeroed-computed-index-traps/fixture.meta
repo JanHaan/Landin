@@ -1,0 +1,6 @@
+class: runtime
+summary: D62 keeps D48's computed array-field element bounds trap before the zeroed store
+constructs: 0080, 0520, 0540, 0570, 0670, 0750, 1740, 1800, 1810, 1820, 1900, 1920, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

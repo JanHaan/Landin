@@ -2417,7 +2417,8 @@ ordinary scalar struct field or fixed-array element selected immediately from a
 mutable local slot or module datum. The selected field or element type must
 resolve, through every representable alias, to an enabled scalar type and supplies
 the literal's context. The value is `false` for `bool` and integer zero for every
-enabled integer type.
+enabled integer type. D62 later applies this same scalar rule when D48's element
+is reached through a fixed-array field of that directly named storage.
 
 The ordinary place check runs first, retaining mutability and every invalid-place,
 invalid-selection and invalid-type refusal. The destination and a computed index
@@ -2433,9 +2434,10 @@ array as a whole; a computed element retains the existing per-element facts and
 bounds behavior. A failed or refused assignment establishes nothing.
 
 D41's direct binding assignment remains unchanged. An immutable subobject, a
-selection from an invalid place, a nested subobject destination, and assignment to
-a named return remain outside this slice; D43 treats the last as its own contextual
-position. D49 separately treats one fixed-array field as a contextual `zeroed`
+selection from an invalid place, a nested subobject destination in this slice,
+and assignment to a named return remain outside it; D43 treats the last as its
+own contextual position and D62 later admits the one nested shape D48 already
+makes an ordinary scalar place. D49 separately treats one fixed-array field as a contextual `zeroed`
 destination without changing this scalar rule. Inferred initialization and every nested, argument, return, operand,
 discard or other general `zeroed` expression remain refused.
 
@@ -2453,6 +2455,9 @@ semantics this assignment must preserve. It was declined.
 `negative/immutable-scalar-zeroed-assignment`,
 `negative/inferred-zeroed-not-enabled`, and
 `negative/nested-scalar-zeroed-not-enabled`;
+`positive/struct-array-field-element-zeroed`;
+`negative/struct-array-field-element-zeroed-immutable`;
+`negative/struct-array-field-element-zeroed-nested`;
 `runtime/scalar-subobject-zeroed-assignment-clears-values`; and
 `runtime/scalar-subobject-zeroed-computed-index-traps` on Linux x86-64.
 
@@ -3691,3 +3696,56 @@ cause. All were declined.
 `negative/module-struct-inferred-non-name-not-enabled`;
 `negative/struct-type-name-is-not-storage`; the recorded IR dump; and
 `runtime/module-struct-initializers-copy-images` on Linux x86-64.
+
+### D62 — `zeroed` reaches a fixed-array field element
+
+**The tour said** that assignment reaches its destination before its value
+[0410], that selection and indexing reach a scalar subobject [0520], that only
+writable places may be assigned [1900], and that `zeroed` takes the all-bits-zero
+image of its context [0540]. D42 applied that context to an immediate scalar
+field or fixed-array element, while D48 later made `s.f[i]` an ordinary scalar
+place without revisiting D42's structural destination list.
+
+**Chosen:** `zeroed` may be the complete right-hand side of assignment to an
+`Element_Index` whose target is a fixed-array `Member_Selection` from a directly
+named mutable local or module binding. The element type must resolve to an
+enabled scalar and supplies `false` for `bool` or typed integer zero. This is
+D42's scalar image at D48's place: it does not make the selected array field a
+whole value or make `zeroed` a general expression.
+
+The ordinary place check remains first. It resolves the containing struct and
+field, checks the index type and compiler-known bound, and retains root
+mutability and every invalid-place refusal before the value is considered. A
+computed index is evaluated exactly once and keeps D48's runtime bounds trap.
+A nested occurrence such as `s.f[i] = zeroed + 1` remains refused with the
+existing L0304, and a refused destination produces no additional flow report.
+
+Successful completion has D48's ordinary definite-assignment effect: a
+compiler-known index records only `(binding, field, position)`, a computed index
+records no sparse fact, and neither assigns a sibling position or the array
+field as a whole. Lowering reuses D42's typed `Truth` or `Number` and D48's
+field-qualified `Store_Element`; the verifier and backend therefore gain no new
+operation, shape, ordering rule, address calculation or target invariant. A
+module root is runtime storage reached from a function body, not a module
+initial image, so D60's zero-only static-image boundary is unchanged.
+
+**Why this place:** D48 already types and represents its element as an ordinary
+scalar place. Keeping `zeroed` refused there would make the literal depend on
+the number of selectors rather than on the destination semantics it uses.
+
+**The alternatives:** admit every scalar place accepted by `Check_Place`, or
+wait for general aggregate values. The first would silently choose the rule for
+future struct-of-struct and element-field chains whose representation is not
+settled; the second leaves a currently representable scalar place asymmetric
+for no semantic reason. Both were declined. The structural destination list is
+extended by exactly this D48 shape and may become a type-based test when deeper
+places are designed.
+
+**Pinned by** the checker and lowering public-seam cases;
+`positive/struct-array-field-element-zeroed`;
+`negative/struct-array-field-element-zeroed-immutable`;
+`negative/struct-array-field-element-zeroed-nested`;
+`negative/struct-array-field-element-zeroed-keeps-facts-separate`; the recorded
+IR dump; and
+`runtime/struct-array-field-element-zeroed-computed-index-traps` on Linux
+x86-64.

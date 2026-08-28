@@ -1,0 +1,20 @@
+word: type = u32
+truth: type = bool
+holder: type = struct
+    flags: [1]truth
+    words: [2]word
+end holder
+mut state: holder
+
+set: (at: usize) -> (result: u32) =
+    mut local: holder
+    state.flags[0] = zeroed
+    state.words[at] = zeroed
+    local.flags[0] = zeroed
+    local.words[0] = zeroed
+    if local.flags[0] then
+        result = 1
+    else
+        result = local.words[0]
+    end if
+end set

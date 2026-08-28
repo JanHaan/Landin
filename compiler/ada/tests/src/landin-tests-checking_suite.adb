@@ -1534,7 +1534,8 @@ package body Landin.Tests.Checking_Suite is
    end Struct_Field_Assignment_Gives_Zeroed_Its_Type;
 
    --  D42: a fixed-array element supplies `zeroed`'s resolved scalar element
-   --  type, including when an alias names that element type.
+   --  type, including when an alias names that element type.  D62 applies the
+   --  same rule through a D48 array field on module and local storage.
    procedure Array_Element_Assignment_Gives_Zeroed_Its_Type
      (Item : in out Landin.Testing.Context);
 
@@ -1551,9 +1552,19 @@ package body Landin.Tests.Checking_Suite is
       Src := Landin.Stages.Add_Source
         (Work, "element-assignment.ldn",
          "word: type = u32" & LF
+         & "truth: type = bool" & LF
+         & "holder: type = struct" & LF
+         & "    flags: [1]truth" & LF
+         & "    words: [2]word" & LF
+         & "end holder" & LF
          & "mut row: [2]word" & LF
+         & "mut state: holder" & LF
          & "f: () -> none =" & LF
+         & "    mut local: holder" & LF
          & "    row[1] = zeroed" & LF
+         & "    state.flags[0] = zeroed" & LF
+         & "    local.words[0] = zeroed" & LF
+         & "    _ = local.words[0]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -1563,7 +1574,7 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
-         "a mutable fixed-array element gives zeroed its type");
+         "direct and array-field elements give zeroed their scalar type");
 
       declare
          Of_Tree : constant not null access constant Landin.Syntax.Tree :=
@@ -1582,14 +1593,16 @@ package body Landin.Tests.Checking_Suite is
                Landin.Testing.Check
                  (Item,
                   Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
-                    = Landin.Types.U32,
-                  "element zeroed carries the resolved alias type");
+                    = (if Seen = 2
+                       then Landin.Types.Bool
+                       else Landin.Types.U32),
+                  "element zeroed carries the direct or field element type");
             end if;
          end loop;
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Seen, 1, "the element zeroed node was checked");
+        (Item, Seen, 3, "all element zeroed nodes were checked");
    end Array_Element_Assignment_Gives_Zeroed_Its_Type;
 
    --  D49: the selected fixed-array field supplies both the contextual

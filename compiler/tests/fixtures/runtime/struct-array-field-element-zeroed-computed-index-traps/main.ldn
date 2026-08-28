@@ -1,0 +1,13 @@
+holder: type = struct
+    row: [1]u32
+end holder
+mut state: holder
+
+outside: () -> (at: usize) =
+    at = 1
+end outside
+
+public main: () -> (code: i32) =
+    state.row[outside()] = zeroed
+    code = 1
+end main

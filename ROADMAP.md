@@ -2957,6 +2957,22 @@ refusals, recorded dumps and a runtime independence fixture provide evidence.
 Non-name and nonzero static images, nested expressions and general aggregate
 values remain separate slices.
 
+D62 admits `zeroed` as the complete right-hand side of assignment to a scalar
+element reached through a D48 fixed-array field on directly named mutable module
+or local struct storage. It amends D42's structural place list without making
+the array field a whole value: the ordinary place check keeps root mutability,
+index typing, compiler-known bounds and destination-first ownership; D48 keeps
+exactly-once computed-index traps and per-`(binding, field, position)` definite-
+assignment facts. Lowering reuses D42's typed false or integer zero and D48's
+field-qualified `Store_Element`, so the verifier, backend, target layout and
+module static-image rules are unchanged. Checker/lowering seams, focused
+mutability, nesting and sparse-fact fixtures, the recorded dump and a runtime
+bounds trap provide evidence. Every deeper scalar place and general `zeroed`
+value remains separate. Before an ordinary-struct literal slice migrates source,
+the value-position `(` identifier `:` shape needs a named parser refusal and a
+pinned before-state; today it falls through the parenthesized-expression path
+and produces an unnamed syntax cascade.
+
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
 nominal body declaration onto the new local before settling it as an aggregate;
@@ -2983,8 +2999,9 @@ D30's `zeroed`, D32's repetition, D37's mixed-prefix repetition, D49's
 contextual field clear, D50's contextual field copy endpoints and D52's
 contextual field literal and D53's contextual field repetition; general
 whole-array value positions; inferred scalar initialization, named-return
-subobject and nested-subobject scalar `zeroed` assignment, nested/general scalar and every
-other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49/D57/D58/D59; inferred initialization,
+subobject and nested-subobject scalar `zeroed` assignment beyond D62,
+nested/general scalar and every
+other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49/D57/D58/D59/D62; inferred initialization,
 nested and general-value mixed-prefix
 repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
@@ -3062,6 +3079,8 @@ expressions and general values pinned.
 D61 migrated the inferred module direct-storage-name struct image chain while
 keeping non-name and nonzero static images, nested expressions and general
 values pinned.
+D62 migrated scalar `zeroed` assignment through a D48 fixed-array field element
+while keeping every deeper place and general contextual value pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

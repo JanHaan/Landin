@@ -1,0 +1,6 @@
+class: negative
+summary: D62 keeps root mutability first for zeroed through an array-field element
+constructs: 0080, 0520, 0540, 0670, 0750, 1740, 1810, 1820, 1900
+program: program.ldn
+codes: L0303, L0303
+targets: linux-x86-64, macos-arm64
