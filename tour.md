@@ -1,7 +1,7 @@
 # Learn Landin in Y minutes
 
-Ada, but small. Zig, but sweeter. One systems language from 32KB to
-32TB. Move fast, keep the pointers, and let the compiler tell you when
+Ada, but small. Zig, but sweeter. One systems language from 32 KB to
+32 TB. Move fast, keep the pointers, and let the compiler tell you when
 you are being an idiot.
 
 Named after Peter Landin, who coined the term "syntactic sugar" and
@@ -2198,7 +2198,7 @@ A package is a named collection of modules with a version
 and an origin. Names have two levels, owner and package,
 and a directory under a search root is the package it names.
 Exactly one version of a package name exists in a program:
-duplicated code is untenable at 32KB, the types are
+duplicated code is untenable at 32 KB, the types are
 nominal, and there is one conformance register. A version
 conflict is therefore a hard error and somebody upgrades.
 
@@ -2744,4 +2744,3 @@ what it refused.
   already pays for them: the frame pointer is always present, the
   callee-saved discipline is explicit, and nothing rides in a
   reserved register.
-
