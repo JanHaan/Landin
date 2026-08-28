@@ -1,0 +1,12 @@
+make: () -> (value: u8) =
+    value = 1
+end make
+
+packet: type = struct
+    kind: variant
+        row: (values: [3]u8)
+    end kind
+end packet
+
+finite: packet = packet(kind: row(values: [1, make(), 3]))
+repeated: packet = packet(kind: row(values: [of make()]))

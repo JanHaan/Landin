@@ -1,0 +1,8 @@
+packet: type = struct
+    kind: variant
+        row: (values: [3]u8)
+    end kind
+end packet
+
+finite: packet = packet(kind: row(values: [300, 2, 3]))
+repeated: packet = packet(kind: row(values: [of 300]))

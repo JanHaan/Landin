@@ -1045,13 +1045,19 @@ package body Landin.Tests.Backend_Suite is
         & "choice: type = struct" & LF
         & "    kind: variant" & LF
         & "        leaf |" & LF
-        & "        pair: (first: u8, second: u16)" & LF
+        & "        pair: (first: u8, second: u16) |" & LF
+        & "        arrays: (finite: [2]u8, repeated: [2]u16,"
+        & " hybrid: [3]u8, blank: [2]bool)" & LF
         & "    end kind" & LF
         & "end choice" & LF
         & "selected: choice = choice(kind: pair(first: 11,"
         & " second: 13))" & LF
         & "selected_copy: choice = selected" & LF
-        & "selected_inferred := choice(kind: leaf)" & LF;
+        & "selected_inferred := choice(kind: leaf)" & LF
+        & "array_selected: choice = choice(kind: arrays("
+        & "finite: [17, 19], repeated: [of 23],"
+        & " hybrid: [29, of 31], blank: zeroed))" & LF
+        & "array_selected_copy: choice = array_selected" & LF;
    begin
       declare
          Work : Landin.Stages.Compilation :=
@@ -1134,7 +1140,8 @@ package body Landin.Tests.Backend_Suite is
                   & HT & ".byte 11" & LF
                   & HT & ".zero 1" & LF
                   & HT & ".word 13" & LF
-                  & HT & ".size selected, 6" & LF)
+                  & HT & ".zero 8" & LF
+                  & HT & ".size selected, 14" & LF)
                and then Contains
                  (Text,
                   "selected_copy:" & LF
@@ -1143,14 +1150,52 @@ package body Landin.Tests.Backend_Suite is
                   & HT & ".byte 11" & LF
                   & HT & ".zero 1" & LF
                   & HT & ".word 13" & LF
-                  & HT & ".size selected_copy, 6" & LF)
+                  & HT & ".zero 8" & LF
+                  & HT & ".size selected_copy, 14" & LF)
                and then Contains
                  (Text,
                   "selected_inferred:" & LF
                   & HT & ".byte 0" & LF
-                  & HT & ".zero 5" & LF
-                  & HT & ".size selected_inferred, 6" & LF),
+                  & HT & ".zero 13" & LF
+                  & HT & ".size selected_inferred, 14" & LF),
                "selected variant images write tags, payloads and padding");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  "array_selected:" & LF
+                  & HT & ".byte 2" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".byte 17" & LF
+                  & HT & ".byte 19" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".word 23" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".byte 29" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".byte 31" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".zero 2" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".size array_selected, 14" & LF)
+               and then Contains
+                 (Text,
+                  "array_selected_copy:" & LF
+                  & HT & ".byte 2" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".byte 17" & LF
+                  & HT & ".byte 19" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".word 23" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".byte 29" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".byte 31" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".zero 2" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".size array_selected_copy, 14" & LF),
+               "selected array payloads emit every compact image form");
          end;
       end;
 
@@ -1224,8 +1269,29 @@ package body Landin.Tests.Backend_Suite is
                & HT & ".byte 11" & LF
                & HT & ".zero 1" & LF
                & HT & ".word 13" & LF
-               & HT & ".size selected, 6" & LF),
+               & HT & ".zero 8" & LF
+               & HT & ".size selected, 14" & LF),
             "the same selected image follows 64-bit placement");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Emitted (Work),
+               "array_selected:" & LF
+               & HT & ".byte 2" & LF
+               & HT & ".zero 1" & LF
+               & HT & ".byte 17" & LF
+               & HT & ".byte 19" & LF
+               & HT & ".rept 2" & LF
+               & HT & ".word 23" & LF
+               & HT & ".endr" & LF
+               & HT & ".byte 29" & LF
+               & HT & ".rept 2" & LF
+               & HT & ".byte 31" & LF
+               & HT & ".endr" & LF
+               & HT & ".zero 2" & LF
+               & HT & ".zero 1" & LF
+               & HT & ".size array_selected, 14" & LF),
+            "selected array payloads are target-neutral folds");
       end;
    end A_Module_Struct_Literal_Becomes_Data_Image;
 

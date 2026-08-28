@@ -2179,13 +2179,19 @@ package body Landin.Tests.Lowering_Suite is
          & "choice: type = struct" & LF
          & "    kind: variant" & LF
          & "        leaf |" & LF
-         & "        pair: (first: u8, second: u16)" & LF
+         & "        pair: (first: u8, second: u16) |" & LF
+         & "        arrays: (finite: [2]u8, repeated: [2]u16,"
+         & " hybrid: [3]u8, blank: [2]bool)" & LF
          & "    end kind" & LF
          & "end choice" & LF
          & "selected: choice = choice(kind: pair(first: 11,"
          & " second: 13))" & LF
          & "selected_copy: choice = selected" & LF
-         & "selected_inferred := choice(kind: leaf)" & LF,
+         & "selected_inferred := choice(kind: leaf)" & LF
+         & "array_selected: choice = choice(kind: arrays("
+         & "finite: [17, 19], repeated: [of 23],"
+         & " hybrid: [29, of 31], blank: zeroed))" & LF
+         & "array_selected_copy: choice = array_selected" & LF,
          Ran);
 
       Landin.Testing.Check
@@ -2272,6 +2278,34 @@ package body Landin.Tests.Lowering_Suite is
             and then IR.Field_Image_Of (Unit, 11, 1).Value = 1
             and then IR.Field_Image_Of (Unit, 11, 1).Count = 0,
             "an inferred bare case remains an explicit selected image");
+
+         for Datum in IR.Item_Id range 12 .. 13 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Has_Image (Unit, Datum)
+               and then IR.Field_Image_Of
+                 (Unit, Datum, 1).Form = IR.Selected
+               and then IR.Field_Image_Of (Unit, Datum, 1).Value = 3
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 1).Form = IR.Finite
+               and then IR.Nth_Variant_Field_Element
+                 (Unit, Datum, 1, 1, 1) = 17
+               and then IR.Nth_Variant_Field_Element
+                 (Unit, Datum, 1, 1, 2) = 19
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 2).Form = IR.Repeated
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 2).Value = 23
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 3).Form = IR.Hybrid
+               and then IR.Nth_Variant_Field_Element
+                 (Unit, Datum, 1, 3, 1) = 29
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 3).Value = 31
+               and then IR.Variant_Payload_Image_Of
+                 (Unit, Datum, 1, 4).Form = IR.Absent,
+               "a selected array payload and its copy keep every form");
+         end loop;
       end;
    end A_Module_Struct_Literal_Records_And_Copies_Its_Image;
 

@@ -1,0 +1,46 @@
+packet: type = struct
+    prefix: u8
+    kind: variant
+        empty |
+        arrays: (
+            finite: [3]u8,
+            repeated: [3]u16,
+            hybrid: [3]u8,
+            blank: [2]bool
+        )
+    end kind
+    tail: u8
+end packet
+
+origin: packet = packet(
+    prefix: 5,
+    kind: arrays(
+        finite: [11, 13, 17],
+        repeated: [3 of 19],
+        hybrid: [23, of 29],
+        blank: zeroed
+    ),
+    tail: 31
+)
+copy: packet = origin
+inferred := packet(
+    prefix: 37,
+    kind: arrays(
+        finite: [0, 0, 0],
+        repeated: [of 0],
+        hybrid: [0, of 0],
+        blank: [true, false]
+    ),
+    tail: 41
+)
+
+read: () -> none =
+    match copy.kind
+        empty: _ = copy.prefix
+        arrays: _ = copy.tail
+    end match
+    match inferred.kind
+        empty: _ = inferred.prefix
+        arrays: _ = inferred.tail
+    end match
+end read

@@ -5049,8 +5049,9 @@ descriptors and element folds into distinct destination storage. Forward
 references and cycles keep their existing declaration-identity validation;
 a cycle reports L0305 once. Later runtime writes never alias a copied image.
 General aggregate values, arguments and returns remain refused, with the last
-two retaining R2.30's ABI owner. Fixed-array payload literals/repetitions and
-fixed-array match aliases remain later R2.20 decisions.
+two retaining R2.30's ABI owner. D82 adds finite and repeated fixed-array
+payload images; direct image-name copies, runtime fixed-array payload writes
+and fixed-array match aliases remain later R2.20 decisions.
 
 **Why one extended descriptor run:** target bytes would duplicate the image per
 target and abandon the IR boundary; startup stores would contradict [1460]; a
@@ -5066,3 +5067,52 @@ value without inspecting target layout.
 `negative/variant-module-case-image-storage-read`;
 `negative/variant-module-case-image-out-of-range`; the generated token and IR records; and
 `runtime/variant-module-case-image-is-distinct` on Linux x86-64.
+
+### D82 — A static selected case carries finite and repeated array payloads
+
+**The tour said** that a case payload is labelled like a construction [0700]
+and that array literals and repetitions describe complete fixed arrays
+[0530], [0560]. D81 reserved the selected case's fixed-array payload descriptor
+and made only its absent zero image constructible.
+
+**Chosen:** in D81's typed or inferred module construction, a labelled
+fixed-array payload accepts D67's finite nonempty literal, D68's full or mixed
+repetition, or `zeroed`. Its contextual length and scalar element type come
+from the selected D74 payload leaf. Length, count and element disagreements
+keep D17/D29/D32's L0301 owners. Every element, prefix and repeated pattern
+must be [1940]-known; an excluded storage read is L0304, an unknown fold is
+L0305, and an overflowing or out-of-range fold is L0300. A direct module array
+name or selected array field remains refused in this slice; D83 may add image
+copy without making the payload a general value.
+
+No carrier changes. A finite payload descriptor owns its complete fold run; a
+full nonzero repetition carries one `Repeated` pattern; a mixed form carries
+its finite prefix plus one `Hybrid` suffix pattern. D34's full zero repetition
+is the absent image, while D38's mixed zero suffix remains written. The folds
+are appended to D81's one item-owned image run, and the payload descriptor's
+offset is rebased through that run. D60/D61 copies preserve every form in
+distinct module storage.
+
+The verifier already proves these four canonical payload forms, their lengths,
+offsets and per-target scalar fit before reading any fold. The backend already
+replays the selected case's payload placement: it emits finite directives or
+compact `.rept` runs at the element width, inserts target padding and zeroes
+the inactive tail. D82 therefore changes only contextual checking and image
+production, while extending the public lowering, verifier and backend evidence
+over the carrier D81 established.
+
+**Why static forms first:** they exercise every reserved array payload image
+without adding the two-level runtime address carried by D83's stores, fills and
+copies. Limiting D82 to finite literals alone would make `zeroed` and compact
+repetition needlessly asymmetric with D67/D68. Direct image-name copy is a
+separate source-resolution edge; runtime construction and match aliases need
+new executable payload operations and definite-assignment facts.
+
+**Pinned by** the lowering, verifier and backend public seams;
+`positive/variant-module-array-payload-image`;
+`negative/variant-module-array-payload-shape-disagrees`;
+`negative/variant-module-array-payload-not-known`;
+`negative/variant-module-array-payload-storage-read`;
+`negative/variant-module-array-payload-out-of-range`; the generated token and
+IR records; and
+`runtime/variant-module-array-payload-image-selects-case` on Linux x86-64.

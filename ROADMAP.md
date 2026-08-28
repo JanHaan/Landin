@@ -3237,8 +3237,13 @@ descriptor points at declaration-order payload descriptors; the verifier proves
 their case shapes and target fit before access, and the backend replays D74's
 tag, payload placement and zero padding on both target descriptions. Static
 fold ownership, forward chains, distinct storage and Linux execution are pinned
-by focused fixtures, public seams and generated records. Fixed-array payload
-literals/repetitions and fixed-array match aliases remain separate decisions.
+by focused fixtures, public seams and generated records. D82 fills the reserved
+fixed-array payload descriptors with D67/D68's finite, repeated and hybrid
+static forms. The verifier/backend carrier is unchanged; focused shape, fold,
+range and storage-read diagnostics plus public seams, generated records and a
+Linux runtime case pin the image. Direct array-image name copies, runtime
+fixed-array payload writes and fixed-array match aliases remain separate
+decisions.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3285,9 +3290,10 @@ matching of that selected part, and D78 binds scalar payload fields as
 arm-local `in`/`inout` aliases. D79 admits inferred local case construction.
 D80 admits runtime whole copies and local direct-name initializers. D81 adds
 static selected-case images, inferred module construction and module image
-chains. General reads of the part, fixed-array payload construction beyond
-`zeroed`, and fixed-array payload bindings remain refused. Parameters and
-returns retain R2.30's aggregate ABI owner.
+chains. D82 adds finite and repeated fixed-array payloads to those static
+images. General reads of the part, direct array-image payload copies, runtime
+fixed-array payload construction and fixed-array payload bindings remain
+refused. Parameters and returns retain R2.30's aggregate ABI owner.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3406,6 +3412,9 @@ D81 migrated typed and inferred module case construction plus module image
 chains onto a target-neutral selected-case and payload-descriptor carrier,
 while keeping general aggregate values and the fixed-array payload extensions
 pinned.
+D82 migrated finite, repeated and hybrid fixed-array payloads into that static
+selected-case carrier, while keeping direct image-name sources, runtime array
+payload writes, match aliases and general aggregate values pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the
