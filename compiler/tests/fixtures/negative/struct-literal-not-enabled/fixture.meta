@@ -1,6 +1,6 @@
 class: negative
-summary: D64 keeps the all-of struct image and call-shaped construction outside the enabled grammar
-constructs: 0700, 0720, 1810, 1830
+summary: D72 keeps the all-of struct image outside the enabled grammar
+constructs: 0720, 1810, 1830
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0010, L0010
+codes: L0010

@@ -6,5 +6,7 @@ mut state: holder
 
 write: () -> none =
     local: holder = (value: 1)
+    constructed := holder(value: 2)
     state = (value: 2)
+    state = holder(value: 3)
 end write

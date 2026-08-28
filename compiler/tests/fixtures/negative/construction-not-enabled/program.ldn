@@ -3,8 +3,11 @@ point: type = struct
     y: i32
 end point
 
-origin: point = point(x: 0, y: 0)
+take: (value: i32) -> none =
+end take
 
 f: () -> none =
     _ = point(x: 1, y: 2)
+    _ = point(x: 3, y: 4) + 1
+    take(point(x: 5, y: 6))
 end f

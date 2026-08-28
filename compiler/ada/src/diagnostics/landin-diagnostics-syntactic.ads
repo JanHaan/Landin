@@ -118,11 +118,10 @@ package Landin.Diagnostics.Syntactic is
       --  last: a field of an element is [0670]'s struct inside [0520]'s
       --  array, which is the element the layout cannot hold yet.
       Selection_From_An_Index,
-      --  D64 parses [0710]'s nonempty labelled form.  [0720]'s all-`of`
-      --  spelling and [0700]'s call-shaped construction remain outside
-      --  [1810]'s enabled expression grammar.
-      Struct_All_Of,
-      Construction);
+      --  D64 parses [0710]'s nonempty labelled form and D72 its call-shaped
+      --  construction.  [0720]'s all-`of` spelling remains outside [1810]'s
+      --  enabled expression grammar.
+      Struct_All_Of);
 
    --  Where the tour describes it.  Ordered by construct so that a reader
    --  can check the column against tour.md by running down it, and
@@ -153,8 +152,7 @@ package Landin.Diagnostics.Syntactic is
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
             when Selection_From_An_Index => "[0520]",
-            when Struct_All_Of         => "[0720]",
-            when Construction          => "[0700]")
+            when Struct_All_Of         => "[0720]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
    --  What the parser hands over: a rule, a place, and the sentence a user
@@ -206,8 +204,7 @@ private
                | Array_Repetition
                | Indexing
                | Selection_From_An_Index
-               | Struct_All_Of
-               | Construction          => "R2.20",
+               | Struct_All_Of         => "R2.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter       => "R2.40",
             --  R2.50 sources [0900] for the parameter conventions.

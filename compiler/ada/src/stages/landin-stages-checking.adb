@@ -108,6 +108,15 @@ package body Landin.Stages.Checking is
       function Declared_As (Id : Res.Declaration_Id) return Ty.Type_Kind;
       function Is_Local_Binding
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      function Construction_Body
+        (Of_Tree : Syn.Tree; Literal : Syn.Node_Id)
+         return Res.Declaration_Id;
+      function Construction_Agrees
+        (Of_Tree  : Syn.Tree;
+         Literal  : Syn.Node_Id;
+         Expected : Res.Declaration_Id;
+         Related  : Landin.Provenance.Origin;
+         Because  : String) return Boolean;
       function Declared_As_Node
         (Of_Tree         : Syn.Tree;
          Node            : Syn.Node_Id;
@@ -499,6 +508,116 @@ package body Landin.Stages.Checking is
             end;
          end;
       end Type_At;
+
+      --  D72: construction is a Struct_Literal whose optional nominal slot
+      --  is a type position.  It supplies [0710]'s body to an inferred
+      --  binding and must agree with a typed binding or assignment place.
+      --  The literal itself remembers a failed callee so later contextual
+      --  passes decline to add a second report.
+      function Construction_Body
+        (Of_Tree : Syn.Tree; Literal : Syn.Node_Id)
+         return Res.Declaration_Id
+      is
+         Nominal : constant Syn.Node_Id :=
+           Syn.Constructed_Type (Of_Tree, Literal);
+      begin
+         if Nominal = Syn.No_Node
+           or else Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
+                     = Ty.Ill_Typed
+         then
+            return Res.No_Declaration;
+         end if;
+
+         --  A resolved binding or function in this position is a permanent
+         --  construction error, not a deferred call-shaped value feature.
+         if Syn.Kind (Of_Tree, Nominal) = Syn.Type_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Nominal)
+                      = Res.Bound
+           and then Res.Sort_Of
+             (Meanings.all,
+              Res.Bound_To (Meanings.all, Of_Tree, Nominal))
+                /= Res.Module_Type
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Nominal),
+               Message => "this name is not a type, so it cannot construct"
+                          & " a struct",
+               Note    => "[0700]: construction applies a type to labelled"
+                          & " field values",
+               Related => Syn.Origin (Of_Tree, Literal),
+               Because => "this construction",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
+            return Res.No_Declaration;
+         end if;
+
+         declare
+            Held : constant Ty.Type_Kind := Type_At (Of_Tree, Nominal);
+         begin
+            if Held = Ty.Aggregate then
+               return Landin.Checking.Body_Of
+                 (Types.all, Of_Tree, Nominal);
+            elsif Held = Ty.Ill_Typed then
+               --  Type_At either reported the missing/refused type or
+               --  inherited its earlier owner.  Mark the enclosing value so
+               --  module recovery does not walk the failed type a second
+               --  time.
+               Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
+            else
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Nominal),
+                  Message => "this is not an ordinary struct type",
+                  Note    => "[0700]: construction applies a struct type to"
+                             & " labelled field values",
+                  Related => Syn.Origin (Of_Tree, Literal),
+                  Because => "this construction",
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
+            end if;
+
+            return Res.No_Declaration;
+         end;
+      end Construction_Body;
+
+      function Construction_Agrees
+        (Of_Tree  : Syn.Tree;
+         Literal  : Syn.Node_Id;
+         Expected : Res.Declaration_Id;
+         Related  : Landin.Provenance.Origin;
+         Because  : String) return Boolean
+      is
+         Nominal : constant Syn.Node_Id :=
+           Syn.Constructed_Type (Of_Tree, Literal);
+         Wrote : Res.Declaration_Id;
+      begin
+         if Nominal = Syn.No_Node then
+            return True;
+         end if;
+
+         Wrote := Construction_Body (Of_Tree, Literal);
+         if Wrote = Res.No_Declaration then
+            return False;
+         elsif Wrote /= Expected then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Nominal),
+               Message => "this constructs a different struct type",
+               Note    => "[0710]: two structs are one type when one"
+                          & " declaration wrote both, and never otherwise",
+               Related => Related,
+               Because => Because,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
+            return False;
+         end if;
+
+         return True;
+      end Construction_Agrees;
 
       function Is_Local_Binding
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean is
@@ -3170,8 +3289,21 @@ package body Landin.Stages.Checking is
                           Is_Direct_Binding_Name (Of_Tree, Value)
                           and then Landin.Checking.Type_Of
                             (Types.all, Of_Tree, Value) = Ty.Aggregate;
+                        Inferred_Construction : constant Boolean :=
+                          Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
+                          and then Syn.Constructed_Type (Of_Tree, Value)
+                                     /= Syn.No_Node
+                          and then Landin.Checking.Type_Of
+                            (Types.all, Of_Tree, Value) = Ty.Aggregate;
                      begin
-                        if Inferred_Array
+                        if Inferred_Construction then
+                           Check_Struct_Literal
+                             (Of_Tree, Value,
+                              Landin.Checking.Body_Of
+                                (Types.all, Of_Tree, Value),
+                              Static_Image =>
+                                not Is_Local_Binding (Of_Tree, Node));
+                        elsif Inferred_Array
                           and then Syn.Kind (Of_Tree, Value)
                                    = Syn.Array_Literal
                         then
@@ -3226,12 +3358,22 @@ package body Landin.Stages.Checking is
                      begin
                         if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
                         then
-                           Check_Struct_Literal
-                             (Of_Tree, Value,
-                              Landin.Checking.Body_Of
-                                (Types.all, Of_Tree, Written),
-                              Static_Image =>
-                                not Is_Local_Binding (Of_Tree, Node));
+                           declare
+                              Expected : constant Res.Declaration_Id :=
+                                Landin.Checking.Body_Of
+                                  (Types.all, Of_Tree, Written);
+                           begin
+                              if Construction_Agrees
+                                (Of_Tree, Value, Expected,
+                                 Syn.Origin (Of_Tree, Node),
+                                 "the type declared here")
+                              then
+                                 Check_Struct_Literal
+                                   (Of_Tree, Value, Expected,
+                                    Static_Image =>
+                                      not Is_Local_Binding (Of_Tree, Node));
+                              end if;
+                           end;
                         elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
                         then
                            --  D57: the written nominal type is the literal's
@@ -3463,11 +3605,21 @@ package body Landin.Stages.Checking is
                begin
                   if Wants = Ty.Aggregate then
                      if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
-                        Check_Struct_Literal
-                          (Of_Tree, Value,
-                           Landin.Checking.Body_Of
-                             (Types.all, Of_Tree, Place),
-                           Static_Image => False);
+                        declare
+                           Expected : constant Res.Declaration_Id :=
+                             Landin.Checking.Body_Of
+                               (Types.all, Of_Tree, Place);
+                        begin
+                           if Construction_Agrees
+                             (Of_Tree, Value, Expected,
+                              Syn.Origin (Of_Tree, Place),
+                              "the place written here")
+                           then
+                              Check_Struct_Literal
+                                (Of_Tree, Value, Expected,
+                                 Static_Image => False);
+                           end if;
+                        end;
                      elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
                         --  D58: a direct mutable struct place supplies both
                         --  [0540]'s aggregate context and [0710]'s body.  The
@@ -3786,10 +3938,13 @@ package body Landin.Stages.Checking is
          --  literal at the literal boundary.  Do not send its labelled run
          --  through the generic subtree refusal a second time.
          Module_Struct_Literal : constant Boolean :=
-           Written /= Syn.No_Node
-           and then Value /= Syn.No_Node
+           Value /= Syn.No_Node
            and then Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
-           and then Type_At (Of_Tree, Written) = Ty.Aggregate;
+           and then
+             ((Written /= Syn.No_Node
+               and then Type_At (Of_Tree, Written) = Ty.Aggregate)
+              or else Landin.Checking.Type_Of
+                (Types.all, Of_Tree, Value) = Ty.Aggregate);
 
          procedure Refuse_Unreadable_Subtree (Where : Syn.Node_Id);
 
@@ -3893,6 +4048,32 @@ package body Landin.Stages.Checking is
 
          if Value = Syn.No_Node then
             Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+            return;
+         end if;
+
+         --  D72: unlike a bare inferred literal, construction supplies the
+         --  nominal body before the declaration is settled.  The field walk
+         --  remains contextual and runs in Check_Statement.
+         if Res.Sort_Of (Meanings.all, Id)
+              in Res.Local_Binding | Res.Module_Binding
+           and then Syn.Kind (Of_Tree.all, Value) = Syn.Struct_Literal
+           and then Syn.Constructed_Type (Of_Tree.all, Value) /= Syn.No_Node
+         then
+            declare
+               Wrote : constant Res.Declaration_Id :=
+                 Construction_Body (Of_Tree.all, Value);
+            begin
+               if Wrote = Res.No_Declaration then
+                  Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+               else
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree.all, Value, Ty.Aggregate);
+                  Landin.Checking.Note_Body
+                    (Types.all, Of_Tree.all, Value, Wrote);
+                  Landin.Checking.Note_Body (Types.all, Id, Wrote);
+                  Landin.Checking.Settle (Types.all, Id, Ty.Aggregate);
+               end if;
+            end;
             return;
          end if;
 

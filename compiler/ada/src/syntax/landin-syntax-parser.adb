@@ -311,7 +311,9 @@ package body Landin.Syntax.Parser is
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id;
             function Parse_Unary return Node_Id;
             function Parse_Primary return Node_Id;
-            function Parse_Struct_Literal return Node_Id;
+            function Parse_Struct_Literal
+              (Nominal : Node_Id;
+               Starts  : Landin.Source.Span) return Node_Id;
             function Parse_Call
               (Name_At : Landin.Source.Span;
                Named   : Landin.Source.Names.Name_Id) return Node_Id;
@@ -2594,7 +2596,7 @@ package body Landin.Syntax.Parser is
                   if Ahead (1) = Tok.Identifier
                     and then Ahead (2) = Tok.Colon
                   then
-                     return Parse_Struct_Literal;
+                     return Parse_Struct_Literal (No_Node, At_Item);
                   elsif Ahead (1) = Tok.Identifier
                     and then Named_Ahead (1) = Of_Id
                     and then Pre.Begins_Expression (Ahead (2))
@@ -2739,18 +2741,21 @@ package body Landin.Syntax.Parser is
             --  struct_literal ::= "(" field_value ("," field_value)*
             --                     ("," "of" expression)? ")"       [1810]
             --  field_value ::= identifier ":" expression
-            function Parse_Struct_Literal return Node_Id is
-               At_Item : constant Landin.Source.Span := Here;
+            function Parse_Struct_Literal
+              (Nominal : Node_Id;
+               Starts  : Landin.Source.Span) return Node_Id
+            is
+               At_Paren : constant Landin.Source.Span := Here;
                Fields  : Slot_Vectors.Vector;
                Fill    : Node_Id := No_Node;
                Failed  : Boolean := False;
             begin
-               if Too_Deep (At_Item) then
+               if Too_Deep (At_Paren) then
                   Advance;
                   Resync_Parentheses;
                   return Add
-                    (Error_Expression, At_Item,
-                     Join (At_Item, After_Previous));
+                    (Error_Expression, Starts,
+                     Join (Starts, After_Previous));
                end if;
 
                Depth := Depth + 1;
@@ -2820,7 +2825,7 @@ package body Landin.Syntax.Parser is
                   Message => "a struct literal is closed with `)`",
                   Note    => "[1810]: struct_literal keeps its fields"
                              & " between parentheses",
-                  Related => At_Item,
+                  Related => At_Paren,
                   Because => "opened here")
                then
                   Failed := True;
@@ -2833,17 +2838,17 @@ package body Landin.Syntax.Parser is
 
                if Failed then
                   return Add
-                    (Error_Expression, At_Item,
-                     Join (At_Item, After_Previous));
+                    (Error_Expression, Starts,
+                     Join (Starts, After_Previous));
                end if;
 
                declare
-                  Head : constant Slot_List (1 .. 1) := [Fill];
+                  Head : constant Slot_List (1 .. 2) := [Fill, Nominal];
                   Made : constant Node_Id :=
                     Add
                       (Of_Kind  => Struct_Literal,
-                       At_Token => At_Item,
-                       Extent   => Join (At_Item, After_Previous),
+                       At_Token => Starts,
+                       Extent   => Join (Starts, After_Previous),
                        Children => Head & To_List (Fields));
                begin
                   --  Indexing a real literal is now its own refused shape,
@@ -2862,10 +2867,37 @@ package body Landin.Syntax.Parser is
               (Name_At : Landin.Source.Span;
                Named   : Landin.Source.Names.Name_Id) return Node_Id
             is
-               Callee : constant Node_Id :=
-                 Add (Name_Reference, Name_At, Named => Named);
+               Callee : Node_Id := No_Node;
                Args   : Slot_Vectors.Vector;
             begin
+               --  D72: a labelled argument run is [0700]'s construction,
+               --  not a call.  The leading name is resolved as a type and
+               --  the existing Struct_Literal carries every field rule.
+               if Peek = Tok.Left_Paren
+                 and then Ahead (1) = Tok.Identifier
+                 and then Ahead (2) = Tok.Colon
+               then
+                  declare
+                     Nominal : Node_Id := No_Node;
+                  begin
+                     for Item in Scalar_Name loop
+                        if Scalar_Id (Item) = Named then
+                           Nominal :=
+                             Add (Type_Name, Name_At, Named => Named);
+                           exit;
+                        end if;
+                     end loop;
+
+                     if Nominal = No_Node then
+                        Nominal :=
+                          Add (Type_Reference, Name_At, Named => Named);
+                     end if;
+
+                     return Parse_Struct_Literal (Nominal, Name_At);
+                  end;
+               end if;
+
+               Callee := Add (Name_Reference, Name_At, Named => Named);
                if not Expect
                         (Wanted  => Tok.Left_Paren,
                          Message => "a call opens its arguments with `(`",
@@ -2878,17 +2910,19 @@ package body Landin.Syntax.Parser is
                     (Error_Expression, Name_At, Children => [Callee]);
                end if;
 
-               --  [0700]'s call-shaped named construction begins like a
-               --  call but its first `name:` argument cannot derive from
-               --  [1810].  Keep it outside the enabled grammar and recover
-               --  as one refused construct.  D64 owns labelled literal
-               --  fields, but [1810] still has no named-argument construction
-               --  whose callee supplies their nominal type.
-               if Peek = Tok.Identifier and then Ahead (1) = Tok.Colon then
+               --  The all-`of` spelling remains the same named refusal as a
+               --  bare all-`of` literal.  It carries no labelled field from
+               --  which D72's construction grammar could begin.
+               if Peek = Tok.Identifier
+                 and then Named_Here = Of_Id
+                 and then Pre.Begins_Expression (Ahead (1))
+                 and then not Pre.Is_Binary (Ahead (1))
+               then
                   Refuse
-                    (Item    => Syn.Construction,
+                    (Item    => Syn.Struct_All_Of,
                      Where   => Name_At,
-                     Message => "construction is not enabled yet");
+                     Message => "an all-`of` construction is not enabled"
+                                & " yet");
                   Resync_Parentheses;
 
                   while Peek = Tok.Left_Bracket loop

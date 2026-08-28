@@ -83,7 +83,7 @@
 0670   tour        accepted emitted executed refused refused-by-name Struct, block form and inline form
 0680   tour        -                                  Struct with a variant part
 0690   tour        -                                  A case with no payload is written bare
-0700   tour        refused refused-by-name            Construction and conversion use the same form
+0700   tour        accepted emitted executed refused  Construction and conversion use the same form
 0710   tour        accepted emitted executed refused  A struct literal is untyped
 0720   tour        accepted emitted executed refused refused-by-name 'of' fills every field the literal did not name
 0730   tour        -                                  A register has three kinds of field

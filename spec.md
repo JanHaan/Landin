@@ -294,14 +294,15 @@ takes what a selection named: 'a[i]' and 'a.b[i]' are both written
 and neither derives from a call, because nothing selects from one
 [1820] and nothing indexes one either.
 An ordinary-struct literal is [0710]'s nonempty run of labelled field values,
-optionally followed by [0720]'s contextual fill. D64--D68 state the contexts
-that admit it; the call-shaped construction `T(field: value)` and the all-fill
-spelling remain refused by name.
+optionally followed by [0720]'s contextual fill. D64--D71 state the contexts
+that admit it. D72's construction prefixes the same run with the ordinary
+struct type it builds; the all-fill spelling remains refused by name.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
 primary     ::= literal | array_literal | array_repetition | struct_literal
-              | indexed | call | measurement | "(" expression ")"
+              | construction | indexed | call | measurement
+              | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
 array_repetition ::= "[" integer "of" expression "]"
                    | "[" "of" expression "]"
@@ -309,6 +310,8 @@ array_repetition ::= "[" integer "of" expression "]"
 struct_literal ::= "(" field_value ("," field_value)*
                    ("," "of" expression)? ")"
 field_value ::= identifier ":" expression
+construction ::= identifier "(" field_value ("," field_value)*
+                 ("," "of" expression)? ")"
 indexed     ::= selection ("[" expression "]")*
 selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
@@ -3699,7 +3702,8 @@ A non-name initializer or `zeroed` without a written type, call,
 field selection, argument, return, discard, operand, nested expression and
 general aggregate value remain refused. D64--D71 admit a struct literal only
 in their explicitly typed contextual local, assignment and module-image forms;
-inferred literals and call-shaped construction remain refused. D55/D56's local
+inferred literals and call-shaped construction remain refused in this decision;
+D72 later supplies nominal construction. D55/D56's local
 forms and D57--D60's contextual zero and typed module forms are unchanged.
 Struct fields of struct type, fields of elements and nested arrays keep their
 boundaries.
@@ -3828,15 +3832,16 @@ resolution and whole-value policy before any value is admitted; the last has
 no stable construct owner or migration evidence. All were declined.
 
 **Pinned by** the parser public-seam case;
-`negative/struct-literal-not-enabled`;
-`negative/construction-not-enabled`; the generated construct matrix and token
-dump; and the automatic parser truncation suite.
+`negative/struct-literal-not-enabled`; the generated construct matrix and
+token dump; and the automatic parser truncation suite. D72 later migrates the
+construction fixture to the checker-owned contextual boundary.
 
 D64 later supersedes this refusal for the nonempty labelled form by adding its
-grammar and contextual syntax node. The all-`of` and call-shaped construction
-forms retain D63's parser-owned refusal and recovery rule; the all-`of` form is
-then cited to [0720], its surviving construct, rather than [0710]'s enabled
-labelled form.
+grammar and contextual syntax node. D72 later supersedes the call-shaped
+construction refusal by attaching a nominal type to that same node. The
+all-`of` form alone retains D63's parser-owned refusal and recovery rule and is
+cited to [0720], its surviving construct, rather than [0710]'s enabled labelled
+form.
 
 ### D64 — A labelled struct literal writes contextual local storage
 
@@ -3855,8 +3860,9 @@ mutable module or local binding of such a type. The context supplies [0710]'s
 nominal body. Inferred bindings, discards, operands, arguments, returns and
 every general aggregate-value position remain L0304. Module initializers remain
 L0304 in this slice; D66 later admits their scalar-labelled static-image subset.
-The call-shaped construction `T(field: value)` and the all-fill spelling
-`(of zeroed)` remain parser-owned L0010 refusals.
+The call-shaped construction `T(field: value)` remains a parser-owned L0010
+refusal until D72 supplies its nominal type. The all-fill spelling
+`(of zeroed)` remains refused by name.
 
 Labels may appear in any order. Each must name a field of the contextual body;
 an unknown label keeps L0308. A field may be named at most once: the second
@@ -3970,7 +3976,8 @@ general array value is introduced. A general trailing `of expression` remains
 refused: the one expression node has one committed type, while omitted fields
 may be heterogeneous; converting it per field is not enabled, and evaluating
 it again per field would violate the once-only rule. Inferred literals still
-have no nominal body and wait for [0700]'s construction decision. Module
+have no nominal body and wait for [0700]'s construction decision, which D72
+later supplies. Module
 literals remain outside this slice; D66 later supplies D60's nonzero aggregate
 image carrier for scalar labels, D67 adds its finite-or-zero array-field form,
 D68 its repeated and hybrid forms, D69 a direct module-array image source, and
@@ -4036,7 +4043,8 @@ keeps D24's overflow owners: a fold beyond the compiler's widest magnitude or
 beyond the field's selected-target type reports L0300. An inferred module
 binding still has no nominal body and keeps L0304; a general `of expression`,
 the all-`of` spelling, call-shaped construction and general aggregate value
-remain refused.
+remain refused in this decision; D72 later supplies contextual nominal
+construction.
 
 The target-neutral aggregate image is one `Folded` entry per field in [0750]'s
 declaration order. A scalar entry is its folded value. An unnamed scalar entry
@@ -4143,7 +4151,8 @@ reserved compact suffix forms and is admitted by D68; copy needs image
 resolution through another datum and retains the existing refusal of a
 selected field as a module array initializer. Inferred struct literals, a
 general `of expression`, the all-`of` spelling, construction and general
-aggregate values remain outside this slice. No grammar, syntax node,
+aggregate values remain outside this slice; D72 later supplies construction
+only. No grammar, syntax node,
 diagnostic code, runtime instruction, target fact or layout rule changes.
 
 **Why a descriptor beside the flat run:** D66's scalar image and its verifier
@@ -4225,7 +4234,8 @@ another datum's finite, repeated, hybrid or absent image; D70 supplies the
 ordinary module-array initializer rule for the latter, and D71 then admits it
 as a labelled module image too.
 Inferred literals, heterogeneous `of expression`, all-`of`, construction and
-general aggregate values remain refused. No grammar, syntax node, diagnostic
+general aggregate values remain refused here; D72 later supplies construction.
+No grammar, syntax node, diagnostic
 code, runtime instruction, target fact or layout rule changes.
 
 **Why finish the reserved carrier first:** repetition adds no image dependency:
@@ -4292,7 +4302,8 @@ target, grammar, syntax or diagnostic representation changes.
 **Why direct storage only:** it completes D21 parity without making an array
 field a general value. Selected-field copy would read another aggregate's
 descriptor and contradict the ordinary module-array initializer boundary;
-construction or inferred literals need nominal-body and grammar decisions.
+construction or inferred literals need nominal-body and grammar decisions,
+which D72 later supplies together.
 Restricting the source to finite images would save no representation and would
 arbitrarily discard D34/D38 forms the carrier already represents. All were
 declined.
@@ -4422,7 +4433,8 @@ aggregate datums without making selection a general value.
 a nested selection, an inferred struct literal or a general aggregate value;
 or delay the rule. The first three cross D24's static-expression and the
 depth-one storage boundaries, the next two require nominal construction or
-aggregate temporaries, and delay would leave D69/D70's contextual image graph
+aggregate temporaries (D72 later supplies only the former), and delay would
+leave D69/D70's contextual image graph
 artificially incomplete. All were declined.
 
 **Pinned by** the checker and lowering public-seam cases;
@@ -4436,3 +4448,79 @@ artificially incomplete. All were declined.
 token and IR records; and
 `runtime/module-struct-literal-selected-field-image-is-independent` on Linux
 x86-64.
+
+### D72 — Construction names the ordinary struct a labelled literal builds
+
+**The tour said** that construction applies a type to labelled fields [0700],
+that two ordinary structs have one type only when one declaration wrote both
+[0710], and that field expressions run in source order [0410]. D64--D71 had
+already implemented the same labelled run wherever a destination supplied its
+nominal body, but a bare inferred literal deliberately had no such source.
+
+**Chosen:** `T(field: value, ...[, of zeroed])` is a labelled `Struct_Literal`
+whose optional nominal slot names `T`. It is admitted in exactly the storage
+contexts already owned by D64--D71: as the initializer of a typed or inferred
+local or module binding, and as the complete right-hand side of assignment to a
+directly named mutable local or module ordinary struct. A typed binding or
+assignment place must have `T`'s [0710] body; disagreement reports L0301 at
+`T`, related to the destination. An inferred binding records `T`'s body before
+settling the declaration. Through a type alias, the body remains the aliased
+declaration rather than the spelling used here.
+
+`T` must denote an enabled ordinary struct. A scalar type or a name denoting a
+function or binding is a permanent L0301 error; an unresolved or already
+refused type keeps its type-position owner. A body whose field or target-extent
+refusal prevented layout silently refuses the construction after that owning
+report. Positional `T(value)` remains the existing call/conversion-shaped
+refusal, and `T(of zeroed)` remains a parser-owned L0010 refusal. A bare
+inferred literal still has no nominal identity and remains L0304.
+
+Every field rule is the one the literal already has. Labels remain freely
+ordered but unique; missing and unknown labels keep L0310 and L0308; scalar,
+array, repetition, `zeroed`, direct-name and selected-field values keep
+D64--D71's contextual checks. Runtime labels are evaluated and committed
+immediately in source order, followed by declaration-order fill, and a
+successful whole assignment records the existing complete aggregate facts.
+Module construction is a static image: known-value, folding, compact
+array-field descriptors, image chains, cycle ownership and target emission are
+unchanged. Construction is terminal as a literal and adds no image-graph edge.
+
+The syntax tree uses no new node kind. `Struct_Literal` now has two fixed
+slots: [0720]'s optional fill and D72's optional nominal type, followed by the
+existing `Field_Value` run. Bare literals put `No_Node` in the nominal slot.
+Resolution treats the nominal as a type position; the checker records its body
+on the literal or inferred declaration. Lowering continues to write directly
+into the binding, assignment place or module image. There is no aggregate
+temporary, IR operation, verifier rule, backend address form, target fact or
+layout change.
+
+Construction in an argument, return, discard, operand, nested expression or any
+other general expression position remains L0304. Struct parameters and returns
+still require R2.30's aggregate ABI. Construction does not enable [0700]'s
+scalar conversion form, anonymous struct types, struct-of-struct fields,
+heterogeneous `of expression` or the all-field synonym.
+
+**Why this boundary:** the nominal prefix supplies exactly the identity that
+prevented D64's bare literal from supporting inference. All three destination
+contexts already have storage, definite-assignment and static-image rules, so
+admitting them together removes a syntactic asymmetry without pretending an
+ordinary struct is a first-class expression value.
+
+**The alternatives:** parse a dormant construction refused everywhere, admit
+only inferred or local construction, add general aggregate temporaries, or
+include positional conversion and the aggregate ABI. The first repeats D63's
+declined half-migration; the next two arbitrarily split identical contextual
+destinations; and the last two require representation and calling-convention
+work this slice deliberately does not have. All were declined.
+
+**Pinned by** the parser, checker and lowering public-seam cases;
+`positive/struct-construction-contexts`;
+`negative/construction-not-enabled`;
+`negative/struct-construction-nominal-mismatch`;
+`negative/struct-construction-callee-not-struct`;
+`negative/struct-construction-type-not-declared`;
+`negative/immutable-struct-construction-assignment`;
+`negative/struct-construction-all-of-not-enabled`;
+`negative/struct-literal-without-layout`;
+the generated construct, token and IR records; and
+`runtime/struct-construction-order` on Linux x86-64.
