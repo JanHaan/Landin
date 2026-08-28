@@ -602,13 +602,12 @@ package body Landin.Stages.Checking is
                   in Res.Module_Binding | Res.Local_Binding
               and then Landin.Checking.Body_Of
                 (Types.all, Of_Tree, Written) /= Res.No_Declaration;
-            --  D57: the written local struct supplies [0540]'s complete
-            --  all-bits-zero image.  Module images, inference and assignment
+            --  D57/D59: the written local or module struct supplies [0540]'s
+            --  complete all-bits-zero image.  Inference and general values
             --  remain separate contextual positions.
-            Is_Local_Struct_Zeroed_Init : constant Boolean :=
+            Is_Struct_Zeroed_Init : constant Boolean :=
               Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
-              and then Is_Local_Binding (Of_Tree, Node)
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Zeroed_Literal
@@ -731,7 +730,7 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
               and then not Is_Direct_Struct_Init
-              and then not Is_Local_Struct_Zeroed_Init
+              and then not Is_Struct_Zeroed_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided

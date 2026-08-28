@@ -932,10 +932,9 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_State_Becomes_Zeroed_Data;
 
-   --  The same declaration against two descriptions, so an array field's
-   --  element width and the aggregate's tail padding follow the target
-   --  rather than the host: this is 32 bytes on Linux x86-64 and 16 on
-   --  the synthetic 32-bit description.
+   --  D59's explicit static zero image against two descriptions: an array
+   --  field's element width and the aggregate's tail padding follow the
+   --  target rather than the host.  The absent image remains padded .bss.
    procedure A_Struct_State_Follows_Its_Target
      (Item : in out Landin.Testing.Context);
 
@@ -948,7 +947,7 @@ package body Landin.Tests.Backend_Suite is
         & "    row: [2]usize" & LF
         & "    ready: bool" & LF
         & "end machine" & LF
-        & "mut state: machine" & LF;
+        & "mut state: machine = zeroed" & LF;
    begin
       declare
          Work : Landin.Stages.Compilation :=
