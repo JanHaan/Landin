@@ -1258,6 +1258,66 @@ def check_pinned_toolchain(full_run):
     return out
 
 
+def check_developer_loops(full_run):
+    """Fast feedback must stay separate from the complete build and suite.
+
+    These are small shell transcriptions of the R0.30 and R0.70 dispositions.
+    The failure mode is quiet: one duplicated command restores minutes of
+    repeated work, or an incremental setting leaks into the canonical gate.
+    """
+    if not full_run:
+        return []
+
+    required = {
+        "scripts/build.sh": (
+            'Incremental="${LANDIN_BUILD_INCREMENTAL:-no}"',
+            'set -- -m2 "$@"',
+            "checksum manifest unchanged; developer build is current",
+            "source inventory or project changed; rebuilding from clean",
+            "sources changed since the last build; rebuilding from clean",
+        ),
+        "scripts/dev-build.sh": (
+            "LANDIN_BUILD_INCREMENTAL=yes",
+            'exec "$(dirname -- "$0")/build.sh" "$@"',
+        ),
+        "scripts/dev-test.sh": (
+            "LANDIN_BUILD_INCREMENTAL=yes",
+            'exec "$(dirname -- "$0")/test.sh" "$@"',
+        ),
+        "scripts/linux-loop.sh": (
+            "set -- ./scripts/test.sh",
+        ),
+        "scripts/test.sh": (
+            'if [ "$#" -eq 1 ] && [ "$1" = "--record-and-run" ]',
+            '"$LANDIN_BUILD_DIR/bin/landin_tests" --record',
+            '"$LANDIN_BUILD_DIR/bin/landin_tests"',
+        ),
+    }
+
+    out = []
+    for relative, snippets in required.items():
+        path = os.path.join(ROOT, relative)
+        if not os.path.exists(path):
+            out.append((relative, 1, "the development-loop script is missing"))
+            continue
+        script = io.open(path, encoding="utf-8").read()
+        for snippet in snippets:
+            if snippet not in script:
+                out.append((relative, 1,
+                            "the development-loop invariant is missing: %s"
+                            % snippet))
+        if not os.stat(path).st_mode & 0o111:
+            out.append((relative, 1, "the script is not executable"))
+
+    loop = os.path.join(ROOT, "scripts/linux-loop.sh")
+    if os.path.exists(loop):
+        script = io.open(loop, encoding="utf-8").read()
+        if "./scripts/build.sh && ./scripts/test.sh" in script:
+            out.append(("scripts/linux-loop.sh", 1,
+                        "the default loop builds twice; test.sh owns the build"))
+    return out
+
+
 def token_dump():
     """The corpus, tokenised, as text both implementations can compare.
 
@@ -3272,6 +3332,7 @@ def main(argv):
     stale_paths = LIVE_DOCS if full_run else paths
     extra += check_stale_backlog(stale_paths, full_run)
     extra += check_pinned_toolchain(full_run)
+    extra += check_developer_loops(full_run)
     extra += check_grammar_corpus(full_run)
     extra += check_token_vocabulary(full_run)
     extra += check_precedence_table(full_run)

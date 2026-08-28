@@ -132,49 +132,80 @@ package body Landin.Testing is
       Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
       Result      : out Summary)
    is
+   begin
+      Run (In_Registry, "", "", Transcript, Result);
+   end Run;
+
+   procedure Run
+     (In_Registry : Registry;
+      Suite_Filter : String;
+      Case_Filter  : String;
+      Transcript   : out Ada.Strings.Unbounded.Unbounded_String;
+      Result       : out Summary)
+   is
       Ordered : Entry_Vectors.Vector := In_Registry.Items;
       Current : Unbounded.Unbounded_String;
+
+      function Matches (Item : Entry_Record) return Boolean;
+
+      function Matches (Item : Entry_Record) return Boolean is
+        ((Suite_Filter = ""
+          or else Unbounded.To_String (Item.Suite) = Suite_Filter)
+         and then
+           (Case_Filter = ""
+            or else Unbounded.To_String (Item.Name) = Case_Filter));
    begin
       Transcript := Unbounded.Null_Unbounded_String;
       Result := (others => 0);
       Sorting.Sort (Ordered);
 
+      if Suite_Filter /= "" then
+         Unbounded.Append
+           (Transcript,
+            "FILTERED suite=" & Suite_Filter
+            & (if Case_Filter = "" then ""
+               else " case=" & Case_Filter)
+            & LF & LF);
+      end if;
+
       for Item of Ordered loop
-         if Item.Suite /= Current then
-            Current := Item.Suite;
-            Unbounded.Append
-              (Transcript, Unbounded.To_String (Current) & LF);
-         end if;
-
-         declare
-            State : Context;
-            Label : constant String := Unbounded.To_String (Item.Name);
-         begin
-            --  A case that raises is a case that failed, not a run that
-            --  stopped.  Letting it propagate loses every case after it,
-            --  and the transcript then says nothing about either.
-            begin
-               Item.Run.all (State);
-            exception
-               when Error : others =>
-                  Note
-                    (State,
-                     "raised " & Ada.Exceptions.Exception_Name (Error)
-                     & ": " & Ada.Exceptions.Exception_Message (Error));
-            end;
-
-            Result.Cases  := Result.Cases + 1;
-            Result.Checks := Result.Checks + Checks (State);
-
-            if Failures (State) = 0 then
-               Result.Passed := Result.Passed + 1;
-               Unbounded.Append (Transcript, "  pass  " & Label & LF);
-            else
-               Result.Failed := Result.Failed + 1;
-               Unbounded.Append (Transcript, "  FAIL  " & Label & LF);
-               Unbounded.Append (Transcript, Failure_Text (State));
+         if Matches (Item) then
+            if Item.Suite /= Current then
+               Current := Item.Suite;
+               Unbounded.Append
+                 (Transcript, Unbounded.To_String (Current) & LF);
             end if;
-         end;
+
+            declare
+               State : Context;
+               Label : constant String := Unbounded.To_String (Item.Name);
+            begin
+               --  A case that raises is a case that failed, not a run that
+               --  stopped.  Letting it propagate loses every case after it,
+               --  and the transcript then says nothing about either.
+               begin
+                  Item.Run.all (State);
+               exception
+                  when Error : others =>
+                     Note
+                       (State,
+                        "raised " & Ada.Exceptions.Exception_Name (Error)
+                        & ": " & Ada.Exceptions.Exception_Message (Error));
+               end;
+
+               Result.Cases  := Result.Cases + 1;
+               Result.Checks := Result.Checks + Checks (State);
+
+               if Failures (State) = 0 then
+                  Result.Passed := Result.Passed + 1;
+                  Unbounded.Append (Transcript, "  pass  " & Label & LF);
+               else
+                  Result.Failed := Result.Failed + 1;
+                  Unbounded.Append (Transcript, "  FAIL  " & Label & LF);
+                  Unbounded.Append (Transcript, Failure_Text (State));
+               end if;
+            end;
+         end if;
       end loop;
 
       Unbounded.Append

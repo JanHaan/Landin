@@ -34,6 +34,12 @@ python3 check.py prototype-2-parser.md
 ./scripts/build.sh
 ./scripts/test.sh
 
+# Fast checksum-safe developer feedback.  The selectors are exact names;
+# these runs are visibly FILTERED and do not replace the complete suite.
+./scripts/dev-test.sh --suite='fixture execution'
+./scripts/dev-test.sh --case='harness/filters select exact cases'
+./scripts/dev-test.sh --fixture=negative/variant-match-duplicate
+
 # Remove this host's build artefacts (--all removes every host's).
 ./scripts/clean.sh
 
@@ -58,9 +64,22 @@ A push also submits `.builds/nix.yml`, which checks the `nix develop` shell and 
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
 
-`scripts/test.sh` builds and then runs `compiler/ada`'s test program; `scripts/linux-loop.sh` runs the same thing in the pinned Linux image. Those are the two runnable test commands. There is no separate lint or typecheck step: the pinned build treats every warning as an error and enforces GNAT style checks. Warnings are policy, not preference — do not silence one without a recorded reason.
+`scripts/test.sh` builds and then runs `compiler/ada`'s complete test program;
+`scripts/linux-loop.sh` runs the same thing in the pinned Linux image. Those
+are the two runnable test gates. `scripts/dev-build.sh` and
+`scripts/dev-test.sh` use GPRbuild's checksum mode for fast feedback, and the
+latter accepts one exact `--suite`, `--case`, or `--fixture` selector. A
+filtered run says `FILTERED` in its transcript and is not gate evidence. There
+is no separate lint or typecheck step: the pinned build treats every warning
+as an error and enforces GNAT style checks. Warnings are policy, not preference
+— do not silence one without a recorded reason.
 
-Staleness is decided by source checksums, not timestamps: `build.sh` rebuilds from clean when the manifest disagrees, because an edited-and-reverted file keeps a newer mtime than the object built from it and gprbuild would serve the stale object.
+Staleness is decided by source checksums, not timestamps: `build.sh` rebuilds
+from clean when the manifest disagrees, because an edited-and-reverted file
+keeps a newer mtime than the object built from it and gprbuild would serve the
+stale object. The developer wrappers instead pass the pinned GPRbuild's `-m2`
+checksum mode; source inventory or project-file changes still force a clean
+tree.
 
 ## Sources of truth
 

@@ -9,6 +9,7 @@
 #  LANDIN_GPRBUILD_HOME  directory whose bin/ holds the pinned GPRbuild
 #  LANDIN_BUILD_MODE     debug (default) or release
 #  LANDIN_BUILD_TAG      per-host object directory (default: os-arch)
+#  LANDIN_BUILD_INCREMENTAL  yes only through the developer wrappers
 
 set -eu
 

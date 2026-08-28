@@ -6,6 +6,7 @@
 
 with Ada.Command_Line;
 with Ada.Directories;
+with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 with Ada.Text_IO;
 
@@ -38,6 +39,14 @@ procedure Landin_Tests is
    Cases      : Landin.Testing.Registry;
    Transcript : Unbounded.Unbounded_String;
    Result     : Landin.Testing.Summary;
+
+   type Requested_Mode is
+     (Run_All, Record_Artefacts, Run_Suite, Run_Case, Run_Fixture, Misuse);
+
+   Mode         : Requested_Mode := Run_All;
+   Suite_Filter : Unbounded.Unbounded_String;
+   Case_Filter  : Unbounded.Unbounded_String;
+   Fixture      : Unbounded.Unbounded_String;
 
    --  Every suite resolves the repository's trees relative to compiler/ada
    --  and writes its scratch files under build/ there.  Run from anywhere
@@ -72,6 +81,12 @@ procedure Landin_Tests is
 
    function Trimmed (Name : Suite_Name) return String;
 
+   function Starts_With (Text, Prefix : String) return Boolean;
+
+   procedure Read_Arguments;
+
+   procedure Print_Usage;
+
    function Trimmed (Name : Suite_Name) return String is
       Last : Natural := Name'Last;
    begin
@@ -81,14 +96,86 @@ procedure Landin_Tests is
       return Name (Name'First .. Last);
    end Trimmed;
 
+   function Starts_With (Text, Prefix : String) return Boolean is
+     (Text'Length >= Prefix'Length
+      and then Text (Text'First .. Text'First + Prefix'Length - 1) = Prefix);
+
+   procedure Print_Usage is
+   begin
+      Text_IO.Put_Line
+        (Text_IO.Standard_Error,
+         "usage: landin_tests [--record | --suite=NAME |"
+         & " --case=SUITE/NAME | --fixture=CLASS/NAME]");
+   end Print_Usage;
+
+   procedure Read_Arguments is
+   begin
+      if Ada.Command_Line.Argument_Count = 0 then
+         return;
+      elsif Ada.Command_Line.Argument_Count /= 1 then
+         Mode := Misuse;
+         return;
+      end if;
+
+      declare
+         Argument : constant String := Ada.Command_Line.Argument (1);
+      begin
+         if Argument = "--record" then
+            Mode := Record_Artefacts;
+         elsif Starts_With (Argument, "--suite=")
+           and then Argument'Length > 8
+         then
+            Mode := Run_Suite;
+            Suite_Filter := Unbounded.To_Unbounded_String
+              (Argument (Argument'First + 8 .. Argument'Last));
+         elsif Starts_With (Argument, "--case=")
+           and then Argument'Length > 7
+         then
+            declare
+               Value : constant String :=
+                 Argument (Argument'First + 7 .. Argument'Last);
+               Slash : constant Natural :=
+                 Ada.Strings.Fixed.Index (Value, "/");
+            begin
+               if Slash = 0
+                 or else Slash = Value'First
+                 or else Slash = Value'Last
+               then
+                  Mode := Misuse;
+               else
+                  Mode := Run_Case;
+                  Suite_Filter := Unbounded.To_Unbounded_String
+                    (Value (Value'First .. Slash - 1));
+                  Case_Filter := Unbounded.To_Unbounded_String
+                    (Value (Slash + 1 .. Value'Last));
+               end if;
+            end;
+         elsif Starts_With (Argument, "--fixture=")
+           and then Argument'Length > 10
+         then
+            Mode := Run_Fixture;
+            Fixture := Unbounded.To_Unbounded_String
+              (Argument (Argument'First + 10 .. Argument'Last));
+         else
+            Mode := Misuse;
+         end if;
+      end;
+   end Read_Arguments;
+
 begin
+   Read_Arguments;
+
+   if Mode = Misuse then
+      Print_Usage;
+      Ada.Command_Line.Set_Exit_Status (2);
+      return;
+   end if;
+
    --  Recording writes the artefact and runs no case, so a run that
    --  recorded can never be mistaken for a run that passed.  Chosen only
    --  by an argument a human typed: no environment variable, and nothing
    --  that rewrites a golden because it did not match.
-   if Ada.Command_Line.Argument_Count = 1
-     and then Ada.Command_Line.Argument (1) = "--record"
-   then
+   if Mode = Record_Artefacts then
       declare
          Path  : constant String := "../tests/lowering.ir";
          Wrote : Boolean;
@@ -136,6 +223,11 @@ begin
       return;
    end if;
 
+   if Mode = Run_Fixture then
+      Landin.Tests.Fixture_Execution_Suite.Select_Fixture
+        (Unbounded.To_String (Fixture));
+   end if;
+
    Landin.Tests.Backend_Suite.Register (Cases);
    Landin.Tests.Catalogue_Suite.Register (Cases);
    Landin.Tests.Checking_Suite.Register (Cases);
@@ -163,10 +255,34 @@ begin
       end if;
    end loop;
 
-   Landin.Testing.Run (Cases, Transcript, Result);
+   case Mode is
+      when Run_All =>
+         Landin.Testing.Run (Cases, Transcript, Result);
+      when Run_Suite =>
+         Landin.Testing.Run
+           (Cases, Unbounded.To_String (Suite_Filter), "",
+            Transcript, Result);
+      when Run_Case =>
+         Landin.Testing.Run
+           (Cases,
+            Unbounded.To_String (Suite_Filter),
+            Unbounded.To_String (Case_Filter),
+            Transcript, Result);
+      when Run_Fixture =>
+         Landin.Testing.Run
+           (Cases, "fixture execution", "selected fixture executes",
+            Transcript, Result);
+      when Record_Artefacts | Misuse =>
+         raise Landin.Compiler_Defect with "test mode reached the runner";
+   end case;
+
    Text_IO.Put (Unbounded.To_String (Transcript));
 
    if Result.Failed > 0 or else Result.Cases = 0 then
+      if Result.Cases = 0 then
+         Text_IO.Put_Line
+           (Text_IO.Standard_Error, "landin_tests: no test case matched");
+      end if;
       Ada.Command_Line.Set_Exit_Status (1);
    end if;
 end Landin_Tests;

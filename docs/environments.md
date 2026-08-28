@@ -54,6 +54,35 @@ The local Linux loop runs the very same scripts inside the pinned image:
 ./scripts/linux-loop.sh sh -c '...'  # anything else, in the same environment
 ```
 
+For the edit/test loop, two developer wrappers retain checksum-safe staleness
+checking while avoiding a clean rebuild for every Ada edit:
+
+```sh
+./scripts/dev-build.sh
+./scripts/dev-test.sh --suite='fixture execution'
+./scripts/dev-test.sh --case='harness/filters select exact cases'
+./scripts/dev-test.sh --fixture=runtime/variant-match-selects-tag
+
+./scripts/linux-loop.sh ./scripts/dev-test.sh \
+  --fixture=negative/variant-match-duplicate
+```
+
+The selectors are exact, accept one selection at a time, and print `FILTERED`
+in the transcript. They are fast feedback, not validation evidence. The
+developer build asks the pinned GPRbuild for checksum-based Ada recompilation;
+a changed source inventory or project file still makes it clean. The ordinary
+`build.sh`, no-argument `test.sh`, and no-argument `linux-loop.sh` remain the
+canonical complete commands.
+
+The R2.20 session profile had enough timestamps to set the priority: clean
+debug and release builds and whole-fixture runs occupied almost all measured
+time, while all six measured container lifecycle phases rounded to zero
+seconds and the complete one-shot startup stayed below one second. Keeping a
+persistent container would add state without attacking the bottleneck. The
+default Linux loop instead stopped calling `build.sh` before `test.sh`, since
+`test.sh` already owns its build, and `test.sh --record-and-run` now records
+and runs after one build when both are deliberately requested.
+
 The loop asks for 4 GiB, and `LANDIN_LINUX_MEMORY` overrides it. That is not
 a preference. A release build is `-O2` with `-gnatn`, so gprbuild's `-j0`
 runs one `gnat1` per core doing cross-unit inlining, and in a default-sized
