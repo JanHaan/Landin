@@ -1,0 +1,12 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        number: (value: u8)
+    end kind
+end choice
+
+use: (state: choice) -> none =
+end use
+
+make: () -> (result: choice) =
+end make

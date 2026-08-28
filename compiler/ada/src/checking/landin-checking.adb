@@ -183,9 +183,12 @@ package body Landin.Checking is
       Id    : Declaration_Id;
       Fields : Field_Shape_Array;
       Facts : Landin.Targets.Target_Facts;
-      Fits  : out Boolean)
+      Fits  : out Boolean;
+      Cases : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes)
    is
       Built : Aggregate_Layout;
+      Layout_Possible : Boolean := True;
 
       procedure Extent_Of
         (Field     : Field_Shape;
@@ -203,9 +206,102 @@ package body Landin.Checking is
          if Field.Kind = Scalar_Field then
             Size := Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held));
             Alignment := Landin.Targets.Alignment_Of (Facts, Held);
-         else
+         elsif Field.Kind = Fixed_Array_Field then
             Array_Extent
               (Field.Length, Field.Element, Facts, Size, Alignment);
+         else
+            if Field.Cases = 0
+              or else Field.Payloads_First = 0
+              or else Field.Payloads_First > Cases'Length
+              or else Field.Cases
+                        > Cases'Length - Field.Payloads_First + 1
+            then
+               raise Landin.Compiler_Defect with
+                 "a variant field has a malformed case run";
+            end if;
+
+            declare
+               Payload_Size : Landin.Targets.Byte_Count := 0;
+               Payload_Alignment : Landin.Targets.Byte_Alignment := 1;
+               Tag_Size : constant Landin.Targets.Scalar_Size := Held;
+               Tag_Bytes : constant Landin.Targets.Byte_Count :=
+                 Landin.Targets.Byte_Count
+                   (Landin.Targets.Bytes (Tag_Size));
+               Part : Landin.Targets.Placement :=
+                 Landin.Targets.Empty_Placement;
+               Ignored : Landin.Targets.Byte_Count;
+            begin
+               for Which in 1 .. Field.Cases loop
+                  declare
+                     Run : constant Case_Run :=
+                       Cases (Field.Payloads_First + Which - 1);
+                     Placed : Landin.Targets.Placement :=
+                       Landin.Targets.Empty_Placement;
+                  begin
+                     if Run.Count > 0
+                       and then (Run.First = 0
+                                 or else Run.First > Payloads'Length
+                                 or else Run.Count
+                                           > Payloads'Length - Run.First + 1)
+                     then
+                        raise Landin.Compiler_Defect with
+                          "a variant payload has a malformed field run";
+                     end if;
+
+                     for Position in 1 .. Run.Count loop
+                        declare
+                           Part_Size : Landin.Targets.Byte_Count;
+                           Part_Alignment : Landin.Targets.Byte_Alignment;
+                        begin
+                           if Payloads (Run.First + Position - 1).Kind
+                                = Variant_Field
+                           then
+                              raise Landin.Compiler_Defect with
+                                "a nested variant payload reached layout";
+                           end if;
+                           Extent_Of
+                             (Payloads (Run.First + Position - 1),
+                              Part_Size, Part_Alignment);
+                           if not Landin.Targets.Can_Place
+                             (Placed, Part_Size, Part_Alignment,
+                              Landin.Targets.Maximum_Object_Size (Facts))
+                           then
+                              Layout_Possible := False;
+                              Size := 0;
+                              Alignment := 1;
+                              return;
+                           end if;
+                           Landin.Targets.Place
+                             (Placed, Part_Size, Part_Alignment, Ignored);
+                        end;
+                     end loop;
+
+                     Payload_Size := Landin.Targets.Byte_Count'Max
+                       (Payload_Size, Landin.Targets.Size_Of (Placed));
+                     Payload_Alignment :=
+                       Landin.Targets.Byte_Alignment'Max
+                         (Payload_Alignment,
+                          Landin.Targets.Alignment_Of (Placed));
+                  end;
+               end loop;
+
+               Landin.Targets.Place (Part, Tag_Size, Facts, Ignored);
+               if not Landin.Targets.Can_Place
+                 (Part, Payload_Size, Payload_Alignment,
+                  Landin.Targets.Maximum_Object_Size (Facts))
+               then
+                  Layout_Possible := False;
+                  Size := 0;
+                  Alignment := 1;
+                  return;
+               end if;
+               Landin.Targets.Place
+                 (Part, Payload_Size, Payload_Alignment, Ignored);
+               Size := Landin.Targets.Size_Of (Part);
+               Alignment := Landin.Targets.Alignment_Of (Part);
+
+               pragma Assert (Size >= Tag_Bytes);
+            end;
          end if;
       end Extent_Of;
    begin
@@ -218,6 +314,10 @@ package body Landin.Checking is
             Ignored   : Landin.Targets.Byte_Count;
          begin
             Extent_Of (Fields (Field), Size, Alignment);
+            if not Layout_Possible then
+               Fits := False;
+               return;
+            end if;
             if not Landin.Targets.Can_Place
                      (Built.Placed, Size, Alignment,
                       Landin.Targets.Maximum_Object_Size (Facts))
@@ -230,28 +330,108 @@ package body Landin.Checking is
          end;
       end loop;
 
-      Built.First := Natural (Into.Field_Offsets.Length) + 1;
-      Built.Count := Fields'Length;
-      Built.Placed := Landin.Targets.Empty_Placement;
+      --  Payload shapes and their case runs precede the containing
+      --  struct's top-level field run.  Rebase the source-local indexes
+      --  while retaining the same target-neutral shape.
+      declare
+         Payload_Base : constant Natural :=
+           Natural (Into.Field_Shapes.Length);
+         Case_Base : constant Natural := Natural (Into.Case_Runs.Length);
+      begin
+         for Payload of Payloads loop
+            Into.Field_Shapes.Append (Payload);
+         end loop;
 
-      for Field in Fields'Range loop
-         declare
-            Size      : Landin.Targets.Byte_Count;
-            Alignment : Landin.Targets.Byte_Alignment;
-            At_Offset : Landin.Targets.Byte_Count;
-         begin
-            Extent_Of (Fields (Field), Size, Alignment);
-            Landin.Targets.Place
-              (Built.Placed, Size, Alignment, At_Offset);
-            Into.Field_Offsets.Append (At_Offset);
-            Into.Field_Shapes.Append (Fields (Field));
-         end;
-      end loop;
+         for Run of Cases loop
+            Into.Case_Runs.Append
+              (Case_Run'(First =>
+                  (if Run.Count = 0 then 0 else Payload_Base + Run.First),
+                Count => Run.Count));
+         end loop;
+
+         Built.First := Natural (Into.Field_Offsets.Length) + 1;
+         Built.Shape_First := Natural (Into.Field_Shapes.Length) + 1;
+         Built.Count := Fields'Length;
+         Built.Placed := Landin.Targets.Empty_Placement;
+
+         for Field in Fields'Range loop
+            declare
+               Size      : Landin.Targets.Byte_Count;
+               Alignment : Landin.Targets.Byte_Alignment;
+               At_Offset : Landin.Targets.Byte_Count;
+               Stored    : Field_Shape := Fields (Field);
+            begin
+               Extent_Of (Fields (Field), Size, Alignment);
+               if not Layout_Possible then
+                  Fits := False;
+                  return;
+               end if;
+               Landin.Targets.Place
+                 (Built.Placed, Size, Alignment, At_Offset);
+               Into.Field_Offsets.Append (At_Offset);
+               if Stored.Kind = Variant_Field then
+                  Stored.Payloads_First :=
+                    Case_Base + Stored.Payloads_First;
+               end if;
+               Into.Field_Shapes.Append (Stored);
+            end;
+         end loop;
+      end;
 
       Built.Ready := True;
       Into.Layouts (Natural (Id)) := Built;
       Fits := True;
    end Lay_Out;
+
+   function Has_Variant_Part (Of_Table : Table; Id : Declaration_Id)
+     return Boolean
+   is
+   begin
+      for Field in 1 .. Layout_Field_Count (Of_Table, Id) loop
+         if Field_Kind_Of (Of_Table, Id, Field) = Variant_Field then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Has_Variant_Part;
+
+   function Field_Shape_Of
+     (Of_Table : Table; Id : Declaration_Id; Field : Positive)
+      return Field_Shape
+   is
+      Layout : Aggregate_Layout renames
+        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+   begin
+      return Of_Table.Field_Shapes (Layout.Shape_First + Field - 1);
+   end Field_Shape_Of;
+
+   function Variant_Case_Field_Count
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive;
+      Which    : Positive) return Natural
+   is
+      Shape : constant Field_Shape := Field_Shape_Of
+        (Of_Table, Id, Field);
+   begin
+      return Of_Table.Case_Runs
+        (Shape.Payloads_First + Which - 1).Count;
+   end Variant_Case_Field_Count;
+
+   function Nth_Variant_Case_Field
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive;
+      Which    : Positive;
+      Payload_Field : Positive) return Field_Shape
+   is
+      Shape : constant Field_Shape := Field_Shape_Of
+        (Of_Table, Id, Field);
+      Run : constant Case_Run := Of_Table.Case_Runs
+        (Shape.Payloads_First + Which - 1);
+   begin
+      return Of_Table.Field_Shapes (Run.First + Payload_Field - 1);
+   end Nth_Variant_Case_Field;
 
    function Field_Offset
      (Of_Table : Table;
@@ -272,7 +452,8 @@ package body Landin.Checking is
       Layout : Aggregate_Layout renames
         Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
    begin
-      return Of_Table.Field_Shapes (Layout.First + Field - 1).Element;
+      return Of_Table.Field_Shapes
+        (Layout.Shape_First + Field - 1).Element;
    end Field_Type;
 
    function Field_Kind_Of
@@ -283,7 +464,8 @@ package body Landin.Checking is
       Layout : Aggregate_Layout renames
         Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
    begin
-      return Of_Table.Field_Shapes (Layout.First + Field - 1).Kind;
+      return Of_Table.Field_Shapes
+        (Layout.Shape_First + Field - 1).Kind;
    end Field_Kind_Of;
 
    function Field_Array_Length
@@ -294,7 +476,8 @@ package body Landin.Checking is
       Layout : Aggregate_Layout renames
         Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
    begin
-      return Of_Table.Field_Shapes (Layout.First + Field - 1).Length;
+      return Of_Table.Field_Shapes
+        (Layout.Shape_First + Field - 1).Length;
    end Field_Array_Length;
 
    function Field_Array_Element
@@ -305,7 +488,8 @@ package body Landin.Checking is
       Layout : Aggregate_Layout renames
         Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
    begin
-      return Of_Table.Field_Shapes (Layout.First + Field - 1).Element;
+      return Of_Table.Field_Shapes
+        (Layout.Shape_First + Field - 1).Element;
    end Field_Array_Element;
 
    function Layout_Extent (Of_Table : Table; Id : Declaration_Id)

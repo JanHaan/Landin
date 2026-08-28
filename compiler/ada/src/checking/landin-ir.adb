@@ -157,7 +157,8 @@ package body Landin.IR is
    begin
       Add_Field
         (Into, Item,
-         (Kind => Scalar_Field_Shape, Element => Of_Type, Length => 1));
+         (Kind => Scalar_Field_Shape, Element => Of_Type, Length => 1,
+          others => <>));
    end Add_Field;
 
    procedure Add_Field
@@ -497,7 +498,8 @@ package body Landin.IR is
    begin
       Add_Slot_Field
         (Into, Item, Slot,
-         (Kind => Scalar_Field_Shape, Element => Of_Type, Length => 1));
+         (Kind => Scalar_Field_Shape, Element => Of_Type, Length => 1,
+          others => <>));
    end Add_Slot_Field;
 
    procedure Add_Slot_Field
@@ -779,6 +781,47 @@ package body Landin.IR is
       return Of_Unit.Measurement_Fields (First + Field);
    end Nth_Measurement_Field;
 
+   function Measurement_Case_Run_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Measurement_Cases.Length));
+
+   function Measurement_Field_Shape_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Measurement_Fields.Length));
+
+   function Variant_Case_Run_Is_Valid
+     (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
+      return Boolean
+   is
+      Run : constant Case_Run := Of_Unit.Measurement_Cases
+        (Shape.Payloads_First + Which - 1);
+   begin
+      return (if Run.Count = 0
+              then Run.First = 0
+              else Run.First > 0
+                   and then Run.First
+                              <= Measurement_Field_Shape_Count (Of_Unit)
+                   and then Run.Count
+                              <= Measurement_Field_Shape_Count (Of_Unit)
+                                   - Run.First + 1);
+   end Variant_Case_Run_Is_Valid;
+
+   function Variant_Case_Field_Count
+     (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
+      return Natural
+     is (Of_Unit.Measurement_Cases
+           (Shape.Payloads_First + Which - 1).Count);
+
+   function Nth_Variant_Case_Field
+     (Of_Unit : Unit;
+      Shape   : Field_Shape;
+      Which   : Positive;
+      Field   : Positive) return Field_Shape
+   is
+      Run : constant Case_Run := Of_Unit.Measurement_Cases
+        (Shape.Payloads_First + Which - 1);
+   begin
+      return Of_Unit.Measurement_Fields (Run.First + Field - 1);
+   end Nth_Variant_Case_Field;
+
    function Number_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Magnitude
@@ -864,24 +907,53 @@ package body Landin.IR is
       Of_Code : Opcode;
       Fields  : Field_Shape_Array;
       Gives   : Landin.Types.Scalar_Name;
-      Site    : Landin.Provenance.Origin) return Value_Id
+      Site    : Landin.Provenance.Origin;
+      Cases   : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes) return Value_Id
    is
-      First : constant Natural :=
+      Payload_Base : constant Natural :=
         Natural (Into.Measurement_Fields.Length);
+      Case_Base : constant Natural :=
+        Natural (Into.Measurement_Cases.Length);
    begin
-      for Field of Fields loop
-         Into.Measurement_Fields.Append (Field);
+      for Payload of Payloads loop
+         Into.Measurement_Fields.Append (Payload);
       end loop;
 
-      return Append
-        (Into, Item,
-         Instruction'(Op                      => Of_Code,
-                      Result                  => Gives,
-                      Site                    => Site,
-                      First_Measurement_Field => First,
-                      Measurement_Field_Total => Fields'Length,
-                      Aggregate_Measurement   => True,
-                      others                  => <>));
+      for Run of Cases loop
+         Into.Measurement_Cases.Append
+           (Case_Run'
+              (First =>
+                 (if Run.Count = 0 then 0 else Payload_Base + Run.First),
+               Count => Run.Count));
+      end loop;
+
+      declare
+         First : constant Natural :=
+           Natural (Into.Measurement_Fields.Length);
+      begin
+         for Field of Fields loop
+            declare
+               Stored : Field_Shape := Field;
+            begin
+               if Stored.Kind = Variant_Field_Shape then
+                  Stored.Payloads_First :=
+                    Case_Base + Stored.Payloads_First;
+               end if;
+               Into.Measurement_Fields.Append (Stored);
+            end;
+         end loop;
+
+         return Append
+           (Into, Item,
+            Instruction'(Op                      => Of_Code,
+                         Result                  => Gives,
+                         Site                    => Site,
+                         First_Measurement_Field => First,
+                         Measurement_Field_Total => Fields'Length,
+                         Aggregate_Measurement   => True,
+                         others                  => <>));
+      end;
    end Emit_Aggregate_Measurement;
 
    function Emit_Truth

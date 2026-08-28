@@ -291,15 +291,28 @@ package Landin.IR is
    --  D45 adds the compact fixed-scalar-array form for measurement, and D46
    --  uses that same representation-independent input for module storage.
    --  Item and measurement runs remain separate APIs and vectors.
-   type Field_Shape_Kind is (Scalar_Field_Shape, Array_Field_Shape);
+   type Field_Shape_Kind is
+     (Scalar_Field_Shape, Array_Field_Shape, Variant_Field_Shape);
 
    type Field_Shape is record
       Kind    : Field_Shape_Kind          := Scalar_Field_Shape;
       Element : Landin.Types.Scalar_Name    := Landin.Types.Bool;
       Length  : Element_Total               := 1;
+      Cases   : Natural                     := 0;
+      Payloads_First : Natural              := 0;
    end record;
 
    type Field_Shape_Array is array (Positive range <>) of Field_Shape;
+
+   type Case_Run is record
+      First : Natural := 0;
+      Count : Natural := 0;
+   end record;
+
+   type Case_Run_Array is array (Positive range <>) of Case_Run;
+
+   No_Field_Shapes : constant Field_Shape_Array (1 .. 0) := [];
+   No_Case_Runs    : constant Case_Run_Array (1 .. 0) := [];
 
    No_Item  : constant Item_Id  := 0;
    No_Slot  : constant Slot_Id  := 0;
@@ -1317,6 +1330,55 @@ package Landin.IR is
                  and then Field
                           <= Measurement_Field_Count (Of_Unit, Item, Value);
 
+   function Measurement_Case_Run_Count (Of_Unit : Unit) return Natural;
+
+   function Measurement_Field_Shape_Count (Of_Unit : Unit) return Natural;
+
+   function Variant_Case_Run_Is_Valid
+     (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
+      return Boolean
+     with Pre => Shape.Kind = Variant_Field_Shape
+                 and then Shape.Cases > 0
+                 and then Which <= Shape.Cases
+                 and then Shape.Payloads_First > 0
+                 and then Shape.Payloads_First
+                            <= Measurement_Case_Run_Count (Of_Unit)
+                 and then Shape.Cases
+                            <= Measurement_Case_Run_Count (Of_Unit)
+                                 - Shape.Payloads_First + 1;
+
+   function Variant_Case_Field_Count
+     (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
+      return Natural
+     with Pre => Shape.Kind = Variant_Field_Shape
+                 and then Shape.Cases > 0
+                 and then Which <= Shape.Cases
+                 and then Shape.Payloads_First > 0
+                 and then Shape.Payloads_First
+                            <= Measurement_Case_Run_Count (Of_Unit)
+                 and then Shape.Cases
+                            <= Measurement_Case_Run_Count (Of_Unit)
+                                 - Shape.Payloads_First + 1;
+
+   function Nth_Variant_Case_Field
+     (Of_Unit : Unit;
+      Shape   : Field_Shape;
+      Which   : Positive;
+      Field   : Positive) return Field_Shape
+     with Pre => Shape.Kind = Variant_Field_Shape
+                 and then Shape.Cases > 0
+                 and then Which <= Shape.Cases
+                 and then Shape.Payloads_First > 0
+                 and then Shape.Payloads_First
+                            <= Measurement_Case_Run_Count (Of_Unit)
+                 and then Shape.Cases
+                            <= Measurement_Case_Run_Count (Of_Unit)
+                                 - Shape.Payloads_First + 1
+                 and then Variant_Case_Run_Is_Valid
+                   (Of_Unit, Shape, Which)
+                 and then Field <= Variant_Case_Field_Count
+                   (Of_Unit, Shape, Which);
+
    function Emit_Measurement
      (Into     : in out Unit;
       Item     : Item_Id;
@@ -1337,7 +1399,9 @@ package Landin.IR is
       Of_Code : Opcode;
       Fields  : Field_Shape_Array;
       Gives   : Landin.Types.Scalar_Name;
-      Site    : Landin.Provenance.Origin) return Value_Id
+      Site    : Landin.Provenance.Origin;
+      Cases   : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Of_Code in Measure_Size | Measure_Align
                   and then Fields'Length > 0
@@ -1830,6 +1894,10 @@ private
      (Index_Type   => Positive,
       Element_Type => Field_Shape);
 
+   package Case_Run_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Case_Run);
+
    package Image_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Landin.Types.Folded,
@@ -1850,6 +1918,7 @@ private
       Fields     : Field_Shape_Vectors.Vector;
       Slot_Fields : Field_Shape_Vectors.Vector;
       Measurement_Fields : Field_Shape_Vectors.Vector;
+      Measurement_Cases : Case_Run_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
       --  D24: one folded scalar per array-datum position, laid end to end
       --  across items so a datum with no image contributes no bytes here.

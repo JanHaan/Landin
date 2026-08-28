@@ -1,0 +1,6 @@
+class: negative
+summary: D74 keeps a variant payload at depth-one scalar or fixed-array fields
+constructs: 0670, 0680, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0304

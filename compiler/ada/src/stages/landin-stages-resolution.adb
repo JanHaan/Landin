@@ -292,6 +292,64 @@ package body Landin.Stages.Resolution is
          end;
       end loop;
 
+      --  [0690]'s case names are module-visible atoms.  Declare them only
+      --  after every ordinary module declaration, so a collision has one
+      --  deterministic winner independent of file order and a later case
+      --  may be used before the type that contains it is written.
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Trees.all, Nth_Source (Context, Index));
+         begin
+            for Position in
+              1 .. Syn.Declaration_Count (Of_Tree.all)
+            loop
+               declare
+                  Node : constant Syn.Node_Id :=
+                    Syn.Nth_Declaration (Of_Tree.all, Position);
+               begin
+                  if Syn.Kind (Of_Tree.all, Node) = Syn.Type_Declaration
+                    and then Syn.Kind
+                      (Of_Tree.all,
+                       Syn.Declared_Type (Of_Tree.all, Node))
+                        = Syn.Struct_Body
+                  then
+                     declare
+                        Struct_Node : constant Syn.Node_Id :=
+                          Syn.Declared_Type (Of_Tree.all, Node);
+                     begin
+                        for Member in 1 .. Syn.Field_Count
+                          (Of_Tree.all, Struct_Node)
+                        loop
+                           declare
+                              Part : constant Syn.Node_Id :=
+                                Syn.Nth_Field
+                                  (Of_Tree.all, Struct_Node, Member);
+                           begin
+                              if Syn.Kind (Of_Tree.all, Part)
+                                   = Syn.Variant_Part
+                              then
+                                 for Which in 1 .. Syn.Case_Count
+                                   (Of_Tree.all, Part)
+                                 loop
+                                    Declare_One
+                                      (Of_Tree.all,
+                                       Syn.Nth_Case
+                                         (Of_Tree.all, Part, Which),
+                                       Landin.Resolution.Program_Scope,
+                                       Resolve_Declared => False);
+                                 end loop;
+                              end if;
+                           end;
+                        end loop;
+                     end;
+                  end if;
+               end;
+            end loop;
+         end;
+      end loop;
+
       --  Pass two: the bodies, in the same order, so the report is read
       --  top to bottom of the file it is about.
       for Index in 1 .. Source_Count (Context) loop

@@ -1,0 +1,9 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        number: (value: u8)
+    end kind
+end choice
+
+as_value := leaf
+as_construction := number(value: 1)

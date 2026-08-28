@@ -209,16 +209,31 @@ package Landin.Checking is
    --  Field order is declaration order [0750].  D45 adds one compact
    --  aggregate leaf to the scalar one: a fixed array of enabled scalars.
    --  The array remains one field no matter how large its source length is.
-   type Field_Kind is (Scalar_Field, Fixed_Array_Field);
+   type Field_Kind is (Scalar_Field, Fixed_Array_Field, Variant_Field);
 
    type Field_Shape is record
       Kind    : Field_Kind               := Scalar_Field;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Length  : Element_Count            := 1;
+      Cases   : Natural                  := 0;
+      Payloads_First : Natural           := 0;
    end record;
 
    type Field_Shape_Array is
      array (Positive range <>) of Field_Shape;
+
+   --  One case's payload is a slice of the payload Field_Shape array
+   --  supplied to Lay_Out.  A bare case has Count = 0.  These are source
+   --  identities only; target offsets are deliberately absent.
+   type Case_Run is record
+      First : Natural := 0;
+      Count : Natural := 0;
+   end record;
+
+   type Case_Run_Array is array (Positive range <>) of Case_Run;
+
+   No_Field_Shapes : constant Field_Shape_Array (1 .. 0) := [];
+   No_Case_Runs    : constant Case_Run_Array (1 .. 0) := [];
 
    --  Every query accepts either the body declaration or any alias of it;
    --  Body_Of is the canonical key, just as it is for nominal equality.
@@ -238,7 +253,9 @@ package Landin.Checking is
       Id    : Declaration_Id;
       Fields : Field_Shape_Array;
       Facts : Landin.Targets.Target_Facts;
-      Fits  : out Boolean)
+      Fits  : out Boolean;
+      Cases : Case_Run_Array := No_Case_Runs;
+      Payloads : Field_Shape_Array := No_Field_Shapes)
      with Pre  => Is_Prepared (Into)
                   and then Contains (Into, Id)
                   and then Body_Of (Into, Id) = Id
@@ -246,6 +263,51 @@ package Landin.Checking is
           Post => Has_Layout (Into, Id) = Fits
                   and then (if Fits then Layout_Field_Count (Into, Id)
                                          = Fields'Length);
+
+   function Has_Variant_Part (Of_Table : Table; Id : Declaration_Id)
+     return Boolean
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id);
+
+   function Field_Shape_Of
+     (Of_Table : Table; Id : Declaration_Id; Field : Positive)
+      return Field_Shape
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id)
+                 and then Field <= Layout_Field_Count (Of_Table, Id);
+
+   function Variant_Case_Field_Count
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive;
+      Which    : Positive) return Natural
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id)
+                 and then Field <= Layout_Field_Count (Of_Table, Id)
+                 and then Field_Shape_Of (Of_Table, Id, Field).Kind
+                            = Variant_Field
+                 and then Which <= Field_Shape_Of
+                   (Of_Table, Id, Field).Cases;
+
+   function Nth_Variant_Case_Field
+     (Of_Table : Table;
+      Id       : Declaration_Id;
+      Field    : Positive;
+      Which    : Positive;
+      Payload_Field : Positive) return Field_Shape
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Id)
+                 and then Has_Layout (Of_Table, Id)
+                 and then Field <= Layout_Field_Count (Of_Table, Id)
+                 and then Field_Shape_Of (Of_Table, Id, Field).Kind
+                            = Variant_Field
+                 and then Which <= Field_Shape_Of
+                   (Of_Table, Id, Field).Cases
+                 and then Payload_Field <= Variant_Case_Field_Count
+                   (Of_Table, Id, Field, Which);
 
    function Field_Offset
      (Of_Table : Table;
@@ -557,8 +619,16 @@ private
      (Index_Type   => Positive,
       Element_Type => Field_Shape);
 
+   package Case_Run_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Case_Run);
+
    type Aggregate_Layout is record
       Ready  : Boolean := False;
+      --  Payload shapes share Field_Shapes but have no top-level offset.
+      --  Keep the two run starts distinct once a variant contributes those
+      --  extra shapes between ordinary aggregate layouts.
+      Shape_First : Natural := 0;
       First  : Natural := 0;
       Count  : Natural := 0;
       Placed : Landin.Targets.Placement := Landin.Targets.Empty_Placement;
@@ -587,6 +657,7 @@ private
       Layouts      : Layout_Vectors.Vector;
       Field_Offsets : Offset_Vectors.Vector;
       Field_Shapes : Field_Shape_Vectors.Vector;
+      Case_Runs    : Case_Run_Vectors.Vector;
       Scalars      : Scalar_Identities :=
         [others => Landin.Source.Names.No_Name];
    end record;

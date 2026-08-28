@@ -1,0 +1,17 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        number: (value: u8)
+    end kind
+end choice
+
+declared: choice
+zeroed_state: choice = zeroed
+literal_state: choice = (kind: leaf)
+copied: choice = declared
+inferred := choice(prefix: 1, of zeroed)
+
+make: () -> none =
+    local := choice(prefix: 1, of zeroed)
+end make
