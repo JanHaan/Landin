@@ -2731,6 +2731,70 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "24");
    end A_Nested_Struct_Clear_Follows_The_Target_Extent;
 
+   --  D88 replays both neutral field identities only after a target is
+   --  selected.  Pointer width changes the padding before both the child and
+   --  its `usize` leaf, so the same source reaches a different byte offset.
+   procedure A_Nested_Scalar_Field_Follows_The_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Nested_Scalar_Field_Follows_The_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "inner: type = struct" & LF
+        & "    byte: u8" & LF
+        & "    word: usize" & LF
+        & "end inner" & LF
+        & "outer: type = struct" & LF
+        & "    prefix: u16" & LF
+        & "    nested: inner" & LF
+        & "end outer" & LF
+        & "mut state: outer = zeroed" & LF
+        & "f: () -> (r: usize) =" & LF
+        & "    state.nested.word = 7" & LF
+        & "    r = state.nested.word" & LF
+        & "end f" & LF;
+
+      procedure Check_Target
+        (Facts  : Landin.Targets.Target_Facts;
+         Offset : String;
+         Suffix : String);
+
+      procedure Check_Target
+        (Facts  : Landin.Targets.Target_Facts;
+         Offset : String;
+         Suffix : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+            Address : constant String :=
+              HT & "leaq state(%rip), %rcx" & LF
+              & HT & "movabsq $" & Offset & ", %rdx" & LF
+              & HT & "addq %rdx, %rcx" & LF;
+         begin
+            Landin.Testing.Check
+              (Item,
+               Occurrences (Text, Address) = 2
+                 and then Contains
+                   (Text, HT & "mov" & Suffix & " %"
+                    & (if Suffix = "q" then "rax" else "eax")
+                    & ", (%rcx)")
+                 and then Contains
+                   (Text, HT & "mov" & Suffix & " (%rcx), %"
+                    & (if Suffix = "q" then "rax" else "eax")),
+               "the nested leaf is loaded and stored at its target offset");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "16", "q");
+      Check_Target (Landin.Targets.Synthetic_32, "8", "l");
+   end A_Nested_Scalar_Field_Follows_The_Target;
+
    --  D32 repeats an element count rather than a byte count, and selects the
    --  repeated-store width from the target's scalar facts.  `usize` therefore
    --  uses qwords on Linux x86-64 and longwords under Synthetic_32 while the
@@ -4456,6 +4520,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a nested struct clear follows target extent",
          A_Nested_Struct_Clear_Follows_The_Target_Extent'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a nested scalar field follows the target",
+         A_Nested_Scalar_Field_Follows_The_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "an array fill follows the target element width",
          An_Array_Fill_Follows_The_Target_Element_Width'Access);

@@ -831,6 +831,10 @@ package body Landin.IR is
      return Part_Position
      is (Held (Of_Unit, Item, Value).Part);
 
+   function Nested_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     is (Held (Of_Unit, Item, Value).Nested_Part);
+
    function Element_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      is (Held (Of_Unit, Item, Value).Element_Field);
@@ -1181,15 +1185,17 @@ package body Landin.IR is
       Datum  : Item_Id;
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Nested_Field : Natural := 0) return Value_Id
      is (Append
            (Into, Item,
-            Instruction'(Op     => Load_Field,
-                         Result => Result,
-                         Site   => Site,
-                         Named  => Datum,
-                         Part   => Field,
-                         others => <>)));
+            Instruction'(Op          => Load_Field,
+                         Result      => Result,
+                         Site        => Site,
+                         Named       => Datum,
+                         Part        => Field,
+                         Nested_Part => Nested_Field,
+                         others      => <>)));
 
    function Emit_Load_Slot_Field
      (Into   : in out Unit;
@@ -1197,15 +1203,17 @@ package body Landin.IR is
       Slot   : Slot_Id;
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Nested_Field : Natural := 0) return Value_Id
      is (Append
            (Into, Item,
-            Instruction'(Op     => Load_Field,
-                         Result => Result,
-                         Site   => Site,
-                         Slot   => Slot,
-                         Part   => Field,
-                         others => <>)));
+            Instruction'(Op          => Load_Field,
+                         Result      => Result,
+                         Site        => Site,
+                         Slot        => Slot,
+                         Part        => Field,
+                         Nested_Part => Nested_Field,
+                         others      => <>)));
 
    procedure Emit_Store_Slot_Field
      (Into  : in out Unit;
@@ -1213,14 +1221,16 @@ package body Landin.IR is
       Slot  : Slot_Id;
       Field : Part_Position;
       Value : Value_Id;
-      Site  : Landin.Provenance.Origin)
+      Site  : Landin.Provenance.Origin;
+      Nested_Field : Natural := 0)
    is
       Made : Instruction :=
-        Instruction'(Op     => Store_Field,
-                     Site   => Site,
-                     Slot   => Slot,
-                     Part   => Field,
-                     others => <>);
+        Instruction'(Op          => Store_Field,
+                     Site        => Site,
+                     Slot        => Slot,
+                     Part        => Field,
+                     Nested_Part => Nested_Field,
+                     others      => <>);
       Where : Value_Id;
    begin
       Made.First_Arg := Natural (Into.Operands.Length);
@@ -1236,14 +1246,16 @@ package body Landin.IR is
       Datum : Item_Id;
       Field : Part_Position;
       Value : Value_Id;
-      Site  : Landin.Provenance.Origin)
+      Site  : Landin.Provenance.Origin;
+      Nested_Field : Natural := 0)
    is
       Made : Instruction :=
-        Instruction'(Op     => Store_Field,
-                     Site   => Site,
-                     Named  => Datum,
-                     Part   => Field,
-                     others => <>);
+        Instruction'(Op          => Store_Field,
+                     Site        => Site,
+                     Named       => Datum,
+                     Part        => Field,
+                     Nested_Part => Nested_Field,
+                     others      => <>);
       Where : Value_Id;
    begin
       Made.First_Arg := Natural (Into.Operands.Length);

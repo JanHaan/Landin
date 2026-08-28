@@ -5355,10 +5355,11 @@ the child's internal and tail padding, as one whole-storage operation. Module
 and local cells are distinct.
 
 This slice does not make the child selection a value or place. `s.child`,
-`s.child.field`, nonzero labelled literals, construction, inference, whole
-copy, static nonzero images, deeper nesting and aggregate variant payloads stay
-L0304; parameters and returns retain R2.30's aggregate-ABI owner. Those are
-value-path decisions, not hidden consequences of allocating a cell.
+nonzero labelled literals, construction, inference, whole copy, static nonzero
+images, deeper nesting and aggregate variant payloads stay L0304; parameters
+and returns retain R2.30's aggregate-ABI owner. D88 separately admits
+`s.child.field` for scalar leaves. Those are value-path decisions, not hidden
+consequences of allocating a cell.
 
 Runtime datum and slot shapes reuse D86's target-neutral
 `Aggregate_Field_Shape`: the parent points at one bounded child run of scalar
@@ -5381,3 +5382,42 @@ ABI work owns the remaining nonzero/general-value boundary.
 `negative/nested-struct-construction-not-enabled`; the generated token and IR
 records; and `runtime/nested-struct-zero-storage-keeps-neighbours` on Linux
 x86-64.
+
+### D88 — A scalar leaf may be selected through one ordinary child
+
+**The tour said** that member selection is left to right and may chain as
+`a.b.c` [0420] [1820], while D87 deliberately allocated a depth-one ordinary
+child without making any path through it a value or place.
+
+**Chosen:** when a parent binding has D86/D87's one named ordinary child, a
+scalar field of that child is a value and a place as `parent.child.field`.
+The binding at the root decides mutability exactly as for a direct field. The
+intermediate `parent.child` remains neither a general aggregate value nor a
+whole place, so discarding, copying, passing or returning it remains L0304.
+A fixed-array leaf of the child also remains outside this slice.
+
+Definite assignment retains the two declaration-order field identities. A
+write establishes that nested scalar leaf and no sibling; a read requires
+that leaf on every arriving path. Assigning the whole parent `zeroed`
+establishes every child leaf, and branch merging treats that whole-child fact
+and the corresponding nested facts as two representations of the same
+assignment. Module state keeps D10's initialized rule unchanged.
+
+Lowering carries the parent field and child field as two target-neutral
+identities on the existing scalar field load or store. The verifier proves
+that the first names an `Aggregate_Field_Shape`, that its bounded child run
+contains the second, and that the selected child shape is scalar. Only the
+backend replays the two nested placements against the target: the same `usize`
+leaf may therefore have a different module or frame offset on the two target
+descriptions without an offset or padding byte entering the IR.
+
+**Why not flatten the child:** flattening would erase the nominal boundary D86
+preserved and make debugger provenance reconstruct it. Treating the child as a
+general aggregate value would silently decide whole copies and the ABI this
+slice does not implement. Two field identities are the smallest carrier that
+implements the chain the tour already writes while retaining those boundaries.
+
+**Pinned by** the lowering, verifier and backend public seams;
+`negative/nested-struct-scalar-field-unassigned`;
+`negative/struct-with-a-struct-field`; the generated token and IR records; and
+`runtime/nested-struct-scalar-fields` on Linux x86-64.

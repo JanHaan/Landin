@@ -1,0 +1,33 @@
+inner: type = struct
+    lead: u8
+    value: i32
+end inner
+
+outer: type = struct
+    prefix: u16
+    nested: inner
+    tail: u8
+end outer
+
+mut global: outer = zeroed
+
+answer: () -> (result: i32) =
+    mut local: outer
+    global.nested.value = 19
+    local.nested.value = 23
+    result = global.nested.value + local.nested.value
+end answer
+
+merged: (whole: bool) -> (result: i32) =
+    mut local: outer
+    if whole then
+        local = zeroed
+    else
+        local.nested.value = 0
+    end if
+    result = local.nested.value
+end merged
+
+public main: () -> (code: i32) =
+    code = answer() + merged(true) + merged(false)
+end main

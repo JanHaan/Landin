@@ -227,6 +227,7 @@ package body Landin.Tests.Verifier_Suite is
       Datum_Load_Names_A_Routine,
       Datum_Load_Names_An_Aggregate,
       Field_Beyond_The_Aggregate,
+      Nested_Field_Beyond_The_Child,
       Field_Operation_Names_An_Array,
       Field_Store_Names_An_Array,
       Slot_Field_Operation_Names_An_Array,
@@ -316,6 +317,19 @@ package body Landin.Tests.Verifier_Suite is
              Length         => 1,
              Cases          => 1,
              Payloads_First => 1));
+      elsif Harm = Nested_Field_Beyond_The_Child then
+         IR.Add_Field
+           (Unit, G,
+            (Kind           => IR.Aggregate_Field_Shape,
+             Element        => Landin.Types.Bool,
+             Length         => 1,
+             Cases          => 1,
+             Payloads_First => 1),
+            IR.No_Case_Runs,
+            [(Kind    => IR.Scalar_Field_Shape,
+              Element => Landin.Types.U32,
+              Length  => 1,
+              others  => <>)]);
       elsif Harm = Aggregate_Scalar_Length_Is_Not_One then
          IR.Add_Field
            (Unit, G,
@@ -570,6 +584,15 @@ package body Landin.Tests.Verifier_Suite is
             --  G has one field, and this names its second.
             N := IR.Emit_Load_Field
                    (Unit, A, G, 2, Landin.Types.U32, Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Nested_Field_Beyond_The_Child =>
+            N := IR.Emit_Load_Field
+                   (Unit, A, G, 1, Landin.Types.U32, Site,
+                    Nested_Field => 2);
             pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -1047,6 +1070,7 @@ package body Landin.Tests.Verifier_Suite is
          (Datum_Load_Names_An_Aggregate,
           V.Aggregate_Datum_Is_Not_A_Value),
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
+         (Nested_Field_Beyond_The_Child, V.Field_Is_Not_A_Scalar),
          (Field_Operation_Names_An_Array, V.Field_Is_Not_A_Scalar),
          (Field_Store_Names_An_Array, V.Field_Is_Not_A_Scalar),
          (Slot_Field_Operation_Names_An_Array,
