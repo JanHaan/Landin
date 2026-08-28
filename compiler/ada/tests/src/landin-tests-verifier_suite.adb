@@ -228,6 +228,7 @@ package body Landin.Tests.Verifier_Suite is
       Datum_Load_Names_An_Aggregate,
       Field_Beyond_The_Aggregate,
       Nested_Field_Beyond_The_Child,
+      Nested_Element_Beyond_The_Child,
       Field_Operation_Names_An_Array,
       Field_Store_Names_An_Array,
       Slot_Field_Operation_Names_An_Array,
@@ -317,7 +318,9 @@ package body Landin.Tests.Verifier_Suite is
              Length         => 1,
              Cases          => 1,
              Payloads_First => 1));
-      elsif Harm = Nested_Field_Beyond_The_Child then
+      elsif Harm in Nested_Field_Beyond_The_Child
+                    | Nested_Element_Beyond_The_Child
+      then
          IR.Add_Field
            (Unit, G,
             (Kind           => IR.Aggregate_Field_Shape,
@@ -594,6 +597,17 @@ package body Landin.Tests.Verifier_Suite is
                    (Unit, A, G, 1, Landin.Types.U32, Site,
                     Nested_Field => 2);
             pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Nested_Element_Beyond_The_Child =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.Usize, 1, False, Site);
+            M := IR.Emit_Load_Element
+                   (Unit, A, G, N, Landin.Types.U32, Site,
+                    Field => 1, Nested_Field => 2);
+            pragma Assert (M /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -1071,6 +1085,8 @@ package body Landin.Tests.Verifier_Suite is
           V.Aggregate_Datum_Is_Not_A_Value),
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
          (Nested_Field_Beyond_The_Child, V.Field_Is_Not_A_Scalar),
+         (Nested_Element_Beyond_The_Child,
+          V.Element_Field_Is_Not_An_Array),
          (Field_Operation_Names_An_Array, V.Field_Is_Not_A_Scalar),
          (Field_Store_Names_An_Array, V.Field_Is_Not_A_Scalar),
          (Slot_Field_Operation_Names_An_Array,

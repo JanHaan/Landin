@@ -1367,14 +1367,15 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
 
-   --  D88's field inside Field_Of's depth-one ordinary child.  Zero keeps
-   --  the direct D16 field operation; a positive identity is declaration
-   --  order inside the child and never a target offset.
+   --  D88's scalar field, or D89's fixed-array field, inside a depth-one
+   --  ordinary child.  Zero keeps the direct operation; a positive identity
+   --  is declaration order inside the child and never a target offset.
    function Nested_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Field | Store_Field;
+                          in Load_Field | Store_Field
+                             | Load_Element | Store_Element;
 
    --  D48's containing aggregate field for an element operation, D49's
    --  destination field for a clear, D50's destination field for a copy,
@@ -1396,6 +1397,24 @@ package Landin.IR is
                              | Load_Variant_Field
                              | Select_Variant | Store_Variant_Field;
 
+   --  D86's bounded child-shape run.  These queries sit beside the nested
+   --  element accessors because their contracts validate D89's second field
+   --  identity before any accessor can index it.
+   function Aggregate_Field_Run_Is_Valid
+     (Of_Unit : Unit; Shape : Field_Shape) return Boolean
+     with Pre => Shape.Kind = Aggregate_Field_Shape;
+
+   function Aggregate_Field_Count
+     (Of_Unit : Unit; Shape : Field_Shape) return Natural
+     with Pre => Shape.Kind = Aggregate_Field_Shape;
+
+   function Nth_Aggregate_Field
+     (Of_Unit : Unit; Shape : Field_Shape; Field : Positive)
+      return Field_Shape
+     with Pre => Shape.Kind = Aggregate_Field_Shape
+                 and then Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
+                 and then Field <= Aggregate_Field_Count (Of_Unit, Shape);
+
    --  Which array a slot-reaching element operation names.  Only
    --  meaningful when Reaches_A_Slot is true; a computed module-array
    --  element carries no slot and asks Datum_Of instead.  The reached
@@ -1403,62 +1422,17 @@ package Landin.IR is
    --  aggregate: Slot_Array_Length and Slot_Array_Element have that
    --  requirement in their own preconditions, and putting it here lets
    --  the caller be caught above the raise those two would emit.
+   function Slot_Element_Shape_Is_Valid
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean;
+
    function Slot_Element_Length
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Element_Total
-     with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Element | Store_Element
-                 and then Reaches_A_Slot (Of_Unit, Item, Value)
-                 and then Holds (Of_Unit, Item,
-                                 Slot_Of (Of_Unit, Item, Value))
-                 and then
-                   (if Element_Field_Of (Of_Unit, Item, Value) = 0
-                    then Is_Array
-                           (Of_Unit, Item,
-                            Slot_Of (Of_Unit, Item, Value))
-                    else Is_Aggregate
-                           (Of_Unit, Item,
-                            Slot_Of (Of_Unit, Item, Value))
-                      and then Element_Field_Of (Of_Unit, Item, Value)
-                                 <= Slot_Field_Count
-                                      (Of_Unit, Item,
-                                       Slot_Of (Of_Unit, Item, Value))
-                      and then Nth_Slot_Field_Shape
-                                 (Of_Unit, Item,
-                                  Slot_Of (Of_Unit, Item, Value),
-                                  Positive
-                                    (Element_Field_Of
-                                       (Of_Unit, Item, Value))).Kind
-                                 = Array_Field_Shape);
+     with Pre => Slot_Element_Shape_Is_Valid (Of_Unit, Item, Value);
 
    function Slot_Element_Type
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Scalar_Name
-     with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Element | Store_Element
-                 and then Reaches_A_Slot (Of_Unit, Item, Value)
-                 and then Holds (Of_Unit, Item,
-                                 Slot_Of (Of_Unit, Item, Value))
-                 and then
-                   (if Element_Field_Of (Of_Unit, Item, Value) = 0
-                    then Is_Array
-                           (Of_Unit, Item,
-                            Slot_Of (Of_Unit, Item, Value))
-                    else Is_Aggregate
-                           (Of_Unit, Item,
-                            Slot_Of (Of_Unit, Item, Value))
-                      and then Element_Field_Of (Of_Unit, Item, Value)
-                                 <= Slot_Field_Count
-                                      (Of_Unit, Item,
-                                       Slot_Of (Of_Unit, Item, Value))
-                      and then Nth_Slot_Field_Shape
-                                 (Of_Unit, Item,
-                                  Slot_Of (Of_Unit, Item, Value),
-                                  Positive
-                                    (Element_Field_Of
-                                       (Of_Unit, Item, Value))).Kind
-                                 = Array_Field_Shape);
+     with Pre => Slot_Element_Shape_Is_Valid (Of_Unit, Item, Value);
 
    function Callee_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
@@ -1517,21 +1491,6 @@ package Landin.IR is
    function Variant_Case_Run_Count (Of_Unit : Unit) return Natural;
 
    function Variant_Field_Shape_Count (Of_Unit : Unit) return Natural;
-
-   function Aggregate_Field_Run_Is_Valid
-     (Of_Unit : Unit; Shape : Field_Shape) return Boolean
-     with Pre => Shape.Kind = Aggregate_Field_Shape;
-
-   function Aggregate_Field_Count
-     (Of_Unit : Unit; Shape : Field_Shape) return Natural
-     with Pre => Shape.Kind = Aggregate_Field_Shape;
-
-   function Nth_Aggregate_Field
-     (Of_Unit : Unit; Shape : Field_Shape; Field : Positive)
-      return Field_Shape
-     with Pre => Shape.Kind = Aggregate_Field_Shape
-                 and then Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
-                 and then Field <= Aggregate_Field_Count (Of_Unit, Shape);
 
    function Variant_Case_Run_Is_Valid
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
@@ -1775,7 +1734,8 @@ package Landin.IR is
    --  [1950]'s runtime-selected array element.  Index is operand one; a
    --  store's value is operand two.  The verifier holds the former to
    --  `usize`, the latter and the result to the array's element type, and
-   --  Datum either to an array item or to D48's named aggregate field.
+   --  Datum either to an array item, D48's named aggregate field, or D89's
+   --  fixed-array leaf inside one ordinary child.
    function Emit_Load_Element
      (Into   : in out Unit;
       Item   : Item_Id;
@@ -1784,6 +1744,7 @@ package Landin.IR is
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
       Field  : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
@@ -1801,6 +1762,7 @@ package Landin.IR is
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
       Field : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
@@ -1811,7 +1773,8 @@ package Landin.IR is
 
    --  The same element operations reaching a slot in this item's own frame
    --  [1810].  Field zero names an Add_Array_Slot shape; D48's positive
-   --  field names a compact fixed-array leaf of an aggregate slot.
+   --  field names a compact fixed-array leaf of an aggregate slot, and D89's
+   --  Nested_Field names that leaf inside the field's ordinary child.
    function Emit_Load_Slot_Element
      (Into   : in out Unit;
       Item   : Item_Id;
@@ -1820,6 +1783,7 @@ package Landin.IR is
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
       Field  : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
@@ -1838,6 +1802,7 @@ package Landin.IR is
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
       Field : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)

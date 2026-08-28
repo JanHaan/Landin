@@ -5394,7 +5394,7 @@ scalar field of that child is a value and a place as `parent.child.field`.
 The binding at the root decides mutability exactly as for a direct field. The
 intermediate `parent.child` remains neither a general aggregate value nor a
 whole place, so discarding, copying, passing or returning it remains L0304.
-A fixed-array leaf of the child also remains outside this slice.
+D89 separately admits indexed scalar elements of a fixed-array leaf.
 
 Definite assignment retains the two declaration-order field identities. A
 write establishes that nested scalar leaf and no sibling; a read requires
@@ -5421,3 +5421,44 @@ implements the chain the tour already writes while retaining those boundaries.
 `negative/nested-struct-scalar-field-unassigned`;
 `negative/struct-with-a-struct-field`; the generated token and IR records; and
 `runtime/nested-struct-scalar-fields` on Linux x86-64.
+
+### D89 — A fixed-array element may be selected through one ordinary child
+
+**The tour said** that indexing takes what a selection named, explicitly
+including `a.b[i]` [0570] [1820], and D87 gives a depth-one child a neutral
+fixed-array field shape. D88 established the two-identity path to a scalar
+leaf but left that fixed-array leaf refused.
+
+**Chosen:** `parent.child.array[index]` is a scalar value and place when
+`array` is a fixed-array field in D86/D87's ordinary child. Its index has the
+same `usize` context, compile-time refusal and runtime bounds trap as every
+other fixed-array element [1880] [1950]. The root binding decides mutability.
+Neither `parent.child` nor `parent.child.array` becomes a general value or
+whole place: copying, clearing, filling, passing, returning and discarding
+those intermediate aggregates remain L0304.
+
+Definite assignment retains the parent and child identities together with
+D19's compiler-known element position. A write establishes only that element;
+a known read requires its own fact, and a computed read requires every element
+as D22 does. Assigning the whole parent `zeroed` establishes the nested array,
+and a branch merge preserves equivalent whole-parent, whole-array and sparse
+element representations rather than intersecting their encodings blindly.
+Module state remains initialized by D10.
+
+The existing element load and store carry the parent field as their containing
+field identity and the child fixed-array field as a second neutral identity.
+The verifier proves that the first is an `Aggregate_Field_Shape`, its bounded
+child run contains the second, and the selected child shape is an
+`Array_Field_Shape` with the instruction's scalar element type. After the
+bounds check, the backend places the parent, then the child field, then the
+scaled index against the selected target. Neither offset enters checked IR.
+
+**Why not flatten or admit the whole array:** flattening has D88's nominal and
+debug-provenance cost. Admitting the whole nested array would also decide
+contextual literals, fills and copies, while element access needs none of
+those operations. Two field identities reuse D48's compact element carrier
+without pretending that broader aggregate-value work is complete.
+
+**Pinned by** the lowering, verifier and backend public seams;
+`negative/nested-struct-array-element-unassigned`; the generated token and IR
+records; and `runtime/nested-struct-array-elements` on Linux x86-64.

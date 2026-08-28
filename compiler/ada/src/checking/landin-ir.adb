@@ -1273,6 +1273,7 @@ package body Landin.IR is
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
       Field  : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0) return Value_Id
    is
@@ -1282,6 +1283,7 @@ package body Landin.IR is
                      Site   => Site,
                      Named  => Datum,
                      Element_Field => Field,
+                     Nested_Part => Nested_Field,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1300,6 +1302,7 @@ package body Landin.IR is
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
       Field : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
    is
@@ -1308,6 +1311,7 @@ package body Landin.IR is
                      Site   => Site,
                      Named  => Datum,
                      Element_Field => Field,
+                     Nested_Part => Nested_Field,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1329,6 +1333,7 @@ package body Landin.IR is
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
       Field  : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0) return Value_Id
    is
@@ -1338,6 +1343,7 @@ package body Landin.IR is
                      Site   => Site,
                      Slot   => Slot,
                      Element_Field => Field,
+                     Nested_Part => Nested_Field,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1356,6 +1362,7 @@ package body Landin.IR is
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
       Field : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
    is
@@ -1364,6 +1371,7 @@ package body Landin.IR is
                      Site   => Site,
                      Slot   => Slot,
                      Element_Field => Field,
+                     Nested_Part => Nested_Field,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1377,14 +1385,70 @@ package body Landin.IR is
       pragma Assert (Where /= No_Value);
    end Emit_Store_Slot_Element;
 
+   function Slot_Element_Shape_Is_Valid
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+   is
+   begin
+      if not Holds (Of_Unit, Item, Value)
+        or else Op_Of (Of_Unit, Item, Value)
+                  not in Load_Element | Store_Element
+        or else not Reaches_A_Slot (Of_Unit, Item, Value)
+      then
+         return False;
+      end if;
+
+      declare
+         Cell : constant Slot_Id := Held (Of_Unit, Item, Value).Slot;
+         Field : constant Natural :=
+           Element_Field_Of (Of_Unit, Item, Value);
+         Nested : constant Natural :=
+           Nested_Field_Of (Of_Unit, Item, Value);
+      begin
+         if not Holds (Of_Unit, Item, Cell) then
+            return False;
+         end if;
+         if Field = 0 then
+            return Is_Array (Of_Unit, Item, Cell);
+         end if;
+         if not Is_Aggregate (Of_Unit, Item, Cell)
+           or else Field > Slot_Field_Count (Of_Unit, Item, Cell)
+         then
+            return False;
+         end if;
+         declare
+            Shape : constant Field_Shape :=
+              Nth_Slot_Field_Shape
+                (Of_Unit, Item, Cell, Positive (Field));
+         begin
+            if Nested = 0 then
+               return Shape.Kind = Array_Field_Shape;
+            end if;
+            return Shape.Kind = Aggregate_Field_Shape
+              and then Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
+              and then Nested <= Aggregate_Field_Count (Of_Unit, Shape)
+              and then Nth_Aggregate_Field
+                (Of_Unit, Shape, Positive (Nested)).Kind
+                  = Array_Field_Shape;
+         end;
+      end;
+   end Slot_Element_Shape_Is_Valid;
+
    function Slot_Element_Length
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Element_Total
      is (if Element_Field_Of (Of_Unit, Item, Value) = 0
          then Slot_Array_Length
                 (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
-         else Nth_Slot_Field_Shape
+         elsif Nested_Field_Of (Of_Unit, Item, Value) = 0
+         then Nth_Slot_Field_Shape
                 (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
-                 Positive (Element_Field_Of (Of_Unit, Item, Value))).Length);
+                 Positive (Element_Field_Of (Of_Unit, Item, Value))).Length
+         else Nth_Aggregate_Field
+                (Of_Unit,
+                 Nth_Slot_Field_Shape
+                   (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
+                    Positive (Element_Field_Of (Of_Unit, Item, Value))),
+                 Positive
+                   (Nested_Field_Of (Of_Unit, Item, Value))).Length);
 
    function Slot_Element_Type
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
@@ -1392,9 +1456,17 @@ package body Landin.IR is
      is (if Element_Field_Of (Of_Unit, Item, Value) = 0
          then Slot_Array_Element
                 (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
-         else Nth_Slot_Field_Shape
+         elsif Nested_Field_Of (Of_Unit, Item, Value) = 0
+         then Nth_Slot_Field_Shape
                 (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
-                 Positive (Element_Field_Of (Of_Unit, Item, Value))).Element);
+                 Positive (Element_Field_Of (Of_Unit, Item, Value))).Element
+         else Nth_Aggregate_Field
+                (Of_Unit,
+                 Nth_Slot_Field_Shape
+                   (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
+                    Positive (Element_Field_Of (Of_Unit, Item, Value))),
+                 Positive
+                   (Nested_Field_Of (Of_Unit, Item, Value))).Element);
 
    procedure Emit_Array_Copy
      (Into        : in out Unit;

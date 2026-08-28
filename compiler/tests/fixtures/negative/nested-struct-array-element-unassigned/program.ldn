@@ -1,0 +1,13 @@
+inner: type = struct
+    row: [2]i32
+end inner
+
+outer: type = struct
+    nested: inner
+end outer
+
+read: () -> (result: i32) =
+    mut local: outer
+    local.nested.row[0] = 1
+    result = local.nested.row[1]
+end read
