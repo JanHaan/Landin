@@ -1,0 +1,6 @@
+class: runtime
+summary: D60 module struct initializers copy a static image into distinct storage
+constructs: 0080, 0410, 0520, 0670, 0710, 0750, 1460, 1740, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

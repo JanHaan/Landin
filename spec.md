@@ -1296,6 +1296,10 @@ distinct storage initialized with the terminal image rather than aliasing
 its source. Nothing runs before the entry point [1460], so no module-level
 copy instruction exists.
 
+D60 later applies the same declaration-identity chain to an explicitly typed
+module ordinary struct. Its presently enabled terminal images are all zero,
+so no finite aggregate image is needed yet.
+
 Every other array initializer value remains refused: D51 later admits a
 directly selected fixed-array field for a local binding, D23 admits one
 contextual local array literal [0520], D24 admits its module counterpart,
@@ -3255,7 +3259,6 @@ declined.
 `negative/struct-array-field-whole-copy-not-on-every-path`;
 `negative/struct-array-field-whole-self-copy-unassigned`;
 `negative/immutable-struct-array-field-whole-copy`;
-`negative/struct-array-field-initializer-not-enabled`;
 `negative/struct-array-field-inferred-initializer-not-enabled`;
 `negative/inferred-struct-initializer-not-enabled`;
 `negative/struct-type-name-is-not-storage`;
@@ -3300,8 +3303,9 @@ field shapes and derive the module and frame addresses from target facts on
 both 64- and 32-bit descriptions.
 
 An inferred local binding remains refused in this slice and is admitted by
-D56 only when its value is a direct struct storage name. A module initializer,
-a non-name initializer,
+D56 only when its value is a direct struct storage name. A module initializer
+remains refused in this slice; D60 later admits its typed direct-name form. A
+non-name initializer,
 `zeroed` in this slice, a struct literal, an argument, return, discard, operand or bare whole
 read remains refused. The checker reports the existing L0304 once for an
 unsupported binding form; a binding it has already refused reads nothing for
@@ -3321,8 +3325,9 @@ value. Inference needs a separate rule for carrying nominal identity; a module
 initializer needs a static struct-image chain; `zeroed` needs its own
 per-field initialization rule; and a general value settles calls, returns and
 temporary representation. All were declined here; D56 later supplies the
-separate nominal-identity rule for local inference only, and D57 later supplies
-the typed local `zeroed` context.
+separate nominal-identity rule for local inference only, D57 later supplies
+the typed local `zeroed` context, and D60 later supplies the typed module
+static image chain.
 
 **Pinned by** the checker, lowering and backend public-seam cases;
 `positive/local-struct-initialized-from-name`;
@@ -3333,7 +3338,6 @@ the typed local `zeroed` context.
 `negative/local-struct-initializer-source-not-declared`;
 `negative/local-struct-initializer-source-type-mismatch`;
 `negative/struct-type-name-is-not-storage`;
-`negative/struct-array-field-initializer-not-enabled`;
 `negative/struct-array-field-inferred-initializer-not-enabled`;
 `negative/inferred-struct-initializer-not-enabled`; the recorded IR dump; and
 `runtime/local-struct-initializer-copies-storage` on Linux x86-64.
@@ -3379,7 +3383,8 @@ Module inference from a struct name, any non-name initializer, aggregate
 `zeroed`, a struct literal, call result, selected field, argument, return,
 discard, operand and bare whole read remain refused. Explicitly typed local
 initialization remains D55, contextual whole assignment remains D54, and
-module initialization still needs a separate static-image rule. Fields of
+typed module initialization remains refused in this slice until D60's
+static-image rule. Fields of
 struct type, fields of elements and nested arrays keep their existing
 boundaries.
 
@@ -3534,10 +3539,11 @@ datum's complete target-derived padded extent in zero-initialized storage,
 including every field and padding byte.
 
 Module state is complete under D10, so D16 gains no fact or flow rule. An
-inferred module `name := zeroed`, initialization from another struct name, a
-struct literal, call, argument, return, discard, operand, nested expression and
-general aggregate value remain refused. Fields of struct type, fields of
-elements and nested arrays keep their boundaries.
+inferred module `name := zeroed`, initialization from another struct name in
+this slice, a struct literal, call, argument, return, discard, operand, nested
+expression and general aggregate value remain refused. D60 later admits the
+typed direct-name static image chain. Fields of struct type, fields of elements
+and nested arrays keep their boundaries.
 
 **Why no new image:** the explicit spelling denotes exactly the image D10
 already requires. A runtime clear cannot run before [1460]; a finite byte image
@@ -3555,6 +3561,71 @@ declined.
 `positive/module-struct-zeroed-initializer`;
 `negative/module-struct-zeroed-initializer-nested-not-enabled`;
 `negative/inferred-zeroed-not-enabled`;
-`negative/struct-array-field-initializer-not-enabled`;
 `negative/struct-array-field-inferred-initializer-not-enabled`; the recorded IR
 dump; and `runtime/module-struct-zeroed-image-is-static` on Linux x86-64.
+
+### D60 — A typed module struct copies a static image from a storage name
+
+**The tour said** that a binding may write its type and initializer together
+[0040], that module declarations form one order-independent scope [1740], that
+ordinary structs have nominal identity [0710], and that nothing runs before
+the entry point [1460]. D21 gave a direct-name module array initializer a
+static image chain, while D55 supplied the corresponding runtime copy only for
+a local ordinary struct.
+
+**Chosen:** `[mut] name: T = source` is admitted at module scope when `T`
+resolves through aliases to a named ordinary struct with an enabled D44/D45
+layout and `source` directly names module storage of that same nominal type.
+The source must be a storage binding rather than a type declaration. An
+unresolved name keeps resolution's report, a type declaration keeps the
+existing L0304, and a different nominal body reports L0301 at the source,
+related to the binding. Mutability affects later writes rather than
+initialization [0080].
+
+The initializer is D21's declaration-identity static image chain applied to
+ordinary structs. It follows forward references and type aliases and must
+terminate at a module struct whose initializer is omitted under D10 or is
+D59's explicit `zeroed`. A chain that returns to a declaration is [1940]'s
+value worked out from itself and reports L0305 once. Every declaration in a
+valid chain owns distinct storage initialized with the terminal image rather
+than aliasing its source.
+
+Every terminal module struct image the language can currently construct is
+all bits zero. Lowering therefore records the ordinary aggregate datum, its
+compact field-shape run and operandless `Leave`, with no finite image and no
+runtime copy or clear. The backend reserves each datum's complete
+target-derived padded extent in zero-initialized storage on both 64- and
+32-bit descriptions. A future nonzero struct image must extend the
+target-neutral representation and copy that terminal image along the chain;
+D60 does not silently assume every future aggregate image is zero.
+
+Module state remains complete under D10, so definite assignment gains no fact.
+An initializer boundary that has already refused the written type or value is
+not read again for [1940], preserving its owning report without a cascade. An
+inferred module binding, a non-name initializer, struct literal, call, field
+selection, argument, return, discard, operand, nested expression and general
+aggregate value remain refused. D55/D56's local initializers and D57--D59's
+zero-image contexts are unchanged. Struct fields of struct type, fields of
+elements and nested arrays keep their boundaries.
+
+**Why a static copy:** aliasing would make a later write through one declaration
+change the other, contrary to D21 and D54's value semantics. A startup copy
+cannot run before [1460], and a new aggregate-image API has no nonzero producer
+to carry today. Following identities proves the existing zero image while
+keeping each symbol and target layout distinct.
+
+**The alternatives:** alias the source, emit runtime initialization, add a
+field or byte image now, admit inferred module initialization at the same time,
+or defer the direct-name form until struct literals. The first two contradict
+value and startup semantics; the third invents unused representation; the
+fourth needs its own nominal inference rule; and the last leaves arrays and
+structs asymmetric without implementation evidence. All were declined.
+
+**Pinned by** the checker, lowering and backend public-seam cases;
+`positive/module-struct-initialized-from-name`;
+`negative/module-struct-initial-image-cycle`;
+`negative/module-struct-initializer-nominal-mismatch`;
+`negative/struct-type-name-is-not-storage`;
+`negative/inferred-struct-initializer-not-enabled`;
+`negative/struct-array-field-inferred-initializer-not-enabled`; the recorded IR
+dump; and `runtime/module-struct-initializers-copy-images` on Linux x86-64.

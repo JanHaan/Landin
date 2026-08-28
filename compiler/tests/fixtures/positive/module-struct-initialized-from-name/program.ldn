@@ -1,0 +1,15 @@
+holder: type = struct
+    tag: u8
+    row: [2]usize
+    tail: u16
+end holder
+
+same: type = holder
+
+mut first: same = terminal
+second: holder = first
+terminal: holder
+
+public observe: () -> (value: usize) =
+    value = first.row[0] + second.row[1] + terminal.row[0]
+end observe
