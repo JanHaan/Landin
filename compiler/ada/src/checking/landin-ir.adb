@@ -680,6 +680,25 @@ package body Landin.IR is
       return Made;
    end Add_Aggregate_Parameter;
 
+   function Add_Array_Parameter
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Of_Type  : Landin.Types.Scalar_Name;
+      Length   : Element_Total;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+   is
+      Made : constant Slot_Id :=
+        Add_Array_Slot (Into, Item, Of_Type, Length, Declares, Site);
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Parameters, Natural (Into.Parameters.Length));
+      Into.Parameters.Append (Made);
+      Held.Parameters.Count := Held.Parameters.Count + 1;
+      Into.Items (Positive (Item)) := Held;
+      return Made;
+   end Add_Array_Parameter;
+
    function Parameter_Count (Of_Unit : Unit; Item : Item_Id) return Natural
      is (Element (Of_Unit, Item).Parameters.Count);
 

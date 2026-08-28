@@ -1119,6 +1119,28 @@ package Landin.IR is
                               Parameter_Count (Into, Item))
                            = Add_Aggregate_Parameter'Result;
 
+   --  D95 applies the same by-value transport to a complete fixed array.
+   function Add_Array_Parameter
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Of_Type  : Landin.Types.Scalar_Name;
+      Length   : Element_Total;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+     with Pre  => Holds (Into, Item)
+                  and then Kind_Of (Into, Item) = Routine
+                  and then Declares /= No_Declaration
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Parameter_Count (Into, Item)
+                    = Parameter_Count (Into, Item)'Old + 1
+                  and then Holds (Into, Item, Add_Array_Parameter'Result)
+                  and then Is_Array
+                    (Into, Item, Add_Array_Parameter'Result)
+                  and then Nth_Parameter
+                             (Into, Item,
+                              Parameter_Count (Into, Item))
+                           = Add_Array_Parameter'Result;
+
    function Parameter_Count (Of_Unit : Unit; Item : Item_Id) return Natural
      with Pre => Holds (Of_Unit, Item);
 

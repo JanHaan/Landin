@@ -1,0 +1,6 @@
+class: negative
+summary: passing a fixed array requires every element to be definitely assigned
+constructs: 0520, 1910, 1920
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64

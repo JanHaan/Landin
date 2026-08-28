@@ -904,6 +904,9 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) = Syn.Parameter
               and then not Aggregate_Bearing
               and then not Variant_Bearing;
+            Is_Array_Parameter : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node) = Syn.Parameter;
             Is_Zeroed_State : constant Boolean :=
               Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) = Syn.No_Node
@@ -1126,6 +1129,7 @@ package body Landin.Stages.Checking is
               and then not Is_Module_Literal_Init
               and then not Is_Module_Zeroed_Init
               and then not Is_Local_Zeroed_Init
+              and then not Is_Array_Parameter
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1644,7 +1648,7 @@ package body Landin.Stages.Checking is
                Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
-               if Wants = Ty.Aggregate
+               if Wants in Ty.Aggregate | Ty.Fixed_Array
                  and then Syn.Kind (Of_Tree, Argument) = Syn.Name_Reference
                then
                   declare
@@ -1672,7 +1676,36 @@ package body Landin.Stages.Checking is
                              (Their_Tree.all, Parameter),
                            Because => "this parameter",
                            Into    => Found);
-                     elsif Got /= Ty.Aggregate then
+                     elsif Got = Ty.Fixed_Array
+                       and then
+                         (Landin.Checking.Array_Length
+                            (Types.all, Of_Tree, Argument)
+                            /= Landin.Checking.Array_Length
+                                 (Types.all, Their_Tree.all,
+                                  Syn.Declared_Type
+                                    (Their_Tree.all, Parameter))
+                          or else Landin.Checking.Array_Element
+                            (Types.all, Of_Tree, Argument)
+                            /= Landin.Checking.Array_Element
+                                 (Types.all, Their_Tree.all,
+                                  Syn.Declared_Type
+                                    (Their_Tree.all, Parameter)))
+                     then
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Argument);
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Argument),
+                           Message => "this argument has a different array"
+                                      & " shape",
+                           Note    => "D17: a fixed array is its length and"
+                                      & " scalar element type",
+                           Related => Syn.Origin
+                             (Their_Tree.all, Parameter),
+                           Because => "this parameter",
+                           Into    => Found);
+                     elsif Got /= Wants then
                         Require
                           (Of_Tree, Argument, Wants,
                            Syn.Origin (Their_Tree.all, Parameter),
