@@ -1,0 +1,25 @@
+holder: type = struct
+    finite: [2]u16
+    finite_zero: [2]u16
+    repeated: [3]u8
+    hybrid: [3]u8
+    zero_repeat: [2]u8
+    omitted: [2]u8
+    copied: [2]u16
+end holder
+
+finite_copy: [2]u16 = state.finite
+finite_zero_copy := state.finite_zero
+repeated_copy := state.repeated
+hybrid_copy: [3]u8 = state.hybrid
+zero_copy := state.zero_repeat
+omitted_copy: [2]u8 = state.omitted
+roundtrip := state.copied
+downstream := hybrid_copy
+state: holder =
+    (finite: [11, 13], finite_zero: [0, 0], repeated: [of 7],
+     hybrid: [1, of 2], zero_repeat: [of 0], copied: source,
+     of zeroed)
+source: [2]u16 = [29, 31]
+aggregate_chain: holder = state
+through_aggregate_chain := aggregate_chain.hybrid

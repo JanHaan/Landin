@@ -2477,8 +2477,9 @@ package body Landin.Tests.Checking_Suite is
    end Array_Field_Copy_Uses_Whole_Field_Facts;
 
    --  D51 gives a selected fixed-array field D21's initializer context for
-   --  a local binding only.  Both written and inferred destinations carry
-   --  the field shape without making the selection a general value.
+   --  a local binding; D70 admits the same copied-image context at module
+   --  scope.  Written and inferred destinations carry the field shape
+   --  without making the selection a general value.
    procedure Array_Field_Initializers_Carry_Their_Source_Shape
      (Item : in out Landin.Testing.Context);
 
@@ -2499,9 +2500,9 @@ package body Landin.Tests.Checking_Suite is
          & "    row: [2]word" & LF
          & "end holder" & LF
          & "state: holder" & LF
+         & "module_typed: [2]word = state.row" & LF
+         & "module_inferred := state.row" & LF
          & "f: () -> none =" & LF
-         & "    module_typed: [2]word = state.row" & LF
-         & "    module_inferred := state.row" & LF
          & "    mut local: holder" & LF
          & "    local.row = zeroed" & LF
          & "    local_typed: [2]word = local.row" & LF
@@ -2515,7 +2516,7 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
-         "typed and inferred local bindings accept either field source");
+         "typed and inferred bindings accept either field source");
 
       declare
          Of_Tree : constant not null access constant Landin.Syntax.Tree :=
@@ -2531,7 +2532,8 @@ package body Landin.Tests.Checking_Suite is
                         (Landin.Resolution.Declaration_Count (Meanings.all))
          loop
             if Landin.Resolution.Sort_Of (Meanings.all, Id)
-                 = Landin.Resolution.Local_Binding
+                 in Landin.Resolution.Local_Binding
+                    | Landin.Resolution.Module_Binding
             then
                declare
                   Node : constant Landin.Syntax.Node_Id :=
@@ -2563,7 +2565,7 @@ package body Landin.Tests.Checking_Suite is
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Seen, 4, "four local field initializers were checked");
+        (Item, Seen, 4, "four contextual field initializers were checked");
    end Array_Field_Initializers_Carry_Their_Source_Shape;
 
    --  D18: an array may occupy every byte a target's `usize` can name, and

@@ -3159,6 +3159,89 @@ package body Landin.Stages.Lowering is
             end;
          end Set_Image_From_Struct_Literal;
 
+         procedure Set_Image_From_Struct_Field
+           (Id        : Res.Declaration_Id;
+            Of_Tree   : Syn.Tree;
+            Selection : Syn.Node_Id);
+
+         procedure Set_Image_From_Struct_Field
+           (Id        : Res.Declaration_Id;
+            Of_Tree   : Syn.Tree;
+            Selection : Syn.Node_Id)
+         is
+            From : constant Syn.Node_Id :=
+              Syn.Target_Of (Of_Tree, Selection);
+            Source_Id : constant Res.Declaration_Id :=
+              Res.Bound_To (Meanings.all, Of_Tree, From);
+            Field : constant Positive :=
+              Positive
+                (Landin.Checking.Field_Index
+                   (Types.all, Of_Tree, Selection));
+         begin
+            --  D70 resolves the containing aggregate first.  An absent
+            --  aggregate image is the complete zero image, so its field and
+            --  the destination array both remain absent loader-zeroed data.
+            Resolve_Image (Source_Id);
+            if not Made (Source_Id) then
+               return;
+            end if;
+
+            declare
+               Source_Item : constant IR.Item_Id :=
+                 IR.Item_For (Unit.all, Source_Id);
+               Image : constant IR.Aggregate_Field_Image :=
+                 IR.Field_Image_Of (Unit.all, Source_Item, Field);
+               Destination : constant IR.Item_Id :=
+                 IR.Item_For (Unit.all, Id);
+            begin
+               case Image.Form is
+                  when IR.Absent =>
+                     null;
+
+                  when IR.Finite =>
+                     if Image.Count = 0 then
+                        return;
+                     end if;
+
+                     declare
+                        Values : Ty.Folded_Array (1 .. Image.Count) :=
+                          [others => 0];
+                     begin
+                        for Position in Values'Range loop
+                           Values (Position) :=
+                             IR.Nth_Field_Element
+                               (Unit.all, Source_Item, Field,
+                                IR.Part_Position (Position));
+                        end loop;
+                        IR.Set_Array_Image
+                          (Unit.all, Destination, Values);
+                     end;
+                     Made (Id) := True;
+
+                  when IR.Repeated =>
+                     IR.Set_Repeated_Array_Image
+                       (Unit.all, Destination, Image.Value);
+                     Made (Id) := True;
+
+                  when IR.Hybrid =>
+                     declare
+                        Prefix : Ty.Folded_Array (1 .. Image.Count) :=
+                          [others => 0];
+                     begin
+                        for Position in Prefix'Range loop
+                           Prefix (Position) :=
+                             IR.Nth_Field_Element
+                               (Unit.all, Source_Item, Field,
+                                IR.Part_Position (Position));
+                        end loop;
+                        IR.Set_Hybrid_Array_Image
+                          (Unit.all, Destination, Prefix, Image.Value);
+                     end;
+                     Made (Id) := True;
+               end case;
+            end;
+         end Set_Image_From_Struct_Field;
+
          procedure Copy_Image_From
            (Destination : Res.Declaration_Id;
             Source_Id   : Res.Declaration_Id);
@@ -3299,6 +3382,9 @@ package body Landin.Stages.Lowering is
                     = Syn.Mixed_Array_Repetition
             then
                Set_Image_From_Mixed_Repetition (Id, Their_Tree.all, Value);
+            elsif Syn.Kind (Their_Tree.all, Value) = Syn.Member_Selection
+            then
+               Set_Image_From_Struct_Field (Id, Their_Tree.all, Value);
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Name_Reference
               and then Res.Verdict_Of
                          (Meanings.all, Their_Tree.all, Value) = Res.Bound

@@ -3078,9 +3078,10 @@ zeroes absent fields and padding; an all-zero finite literal remains written
 datums. IR/verifier/checker/lowering/backend seams, static-image refusals,
 generated records and a runtime chain-and-independence fixture provide
 evidence. D68 later supplies the repeated and hybrid producers, and D69 follows
-a direct module-array image; selected-field image copy, inferred literals,
-heterogeneous fills, construction and general aggregate values remain separate
-slices.
+a direct module-array image. D70 permits an ordinary module array to take a
+selected field; the corresponding struct-literal label remains D71's separate
+slice beside inferred literals, heterogeneous fills, construction and general
+aggregate values.
 
 D68 admits full and mixed-prefix repetition for a fixed-array label in D66's
 typed module struct literal. It gives D67's reserved `Repeated` and `Hybrid`
@@ -3094,8 +3095,9 @@ prefix or pattern; the backend emits target-width prefix directives and one
 chains copy the completed descriptor unchanged. IR/verifier/checker/lowering/
 backend seams, focused diagnostics, generated records and the runtime
 independence fixture provide evidence. D69 below admits direct array-image
-copy; selected-field copy, inferred literals, heterogeneous fills,
-construction and general aggregate values remain separate slices.
+copy. D70 admits selected-field copy into an ordinary module array; D71 keeps
+the label itself separate from inferred literals, heterogeneous fills,
+construction and general aggregate values.
 
 D69 admits a direct module fixed-array datum as a fixed-array label in D66's
 typed module struct literal when D17's length and element type agree. Image
@@ -3109,20 +3111,38 @@ and a type name, selected field or other source remains L0304. The checker and
 lowering seams, focused positive and negative fixtures, generated records and
 the runtime independence case provide evidence. No IR, verifier, backend,
 target, grammar, syntax or diagnostic representation changes. Selected-field
-image copy waits for the ordinary module-array initializer boundary; inferred
-literals, heterogeneous fills, construction and general aggregate values
-remain separate slices.
+image copy waits in this slice; D70 below supplies the ordinary module-array
+initializer boundary, and D71 keeps the label itself separate from inferred
+literals, heterogeneous fills, construction and general aggregate values.
+
+D70 admits typed and inferred module fixed arrays initialized from a directly
+selected fixed-array field of module ordinary struct storage. The written form
+requires D17's exact shape and the inferred form carries it; both copy the
+field's resolved absent, finite, repeated or hybrid image into distinct array
+storage. Validation and lowering resolve the containing struct first, so
+forward aggregate chains and D69-filled fields work, while the new
+array-to-struct edge and D69's struct-to-array edge may form a real image cycle.
+The existing declaration-state walk reports that cycle once from either
+declaration order. Existing array-image setters, verifier rules and backend
+emission consume the extracted field descriptor without an IR, verifier,
+backend, target, grammar, syntax or diagnostic representation change. Checker
+and lowering seams, shape/refused-source/cycle fixtures, generated records and
+a runtime independence case provide evidence. A selected field remains a
+contextual initializer rather than a general value; using one as a struct
+literal label waits for D71.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
-D33--D36/D38's repetitions, and D51's selected field for a local binding;
+D33--D36/D38's repetitions, and D51/D70's selected field for a local or module
+binding;
 assignments admit D20's direct storage name, D29/D30/D32/D37's literal,
 `zeroed` and repetitions, plus D49/D50/D52/D53's field-qualified forms. Bare
 whole-array reads, arguments, returns, discards and operands remain refused.
 Within a struct literal D65 admits those runtime array-field destinations and
 D67/D68 admit finite, zero, repeated and hybrid module field images, and D69
-copies those forms from a direct module array name. A selected array-field
-image source remains refused.
+copies those forms from a direct module array name. D70 copies a selected field
+into an ordinary module array; the selected-field label remains refused until
+D71.
 
 Inferred scalar initialization; count-less inferred and general-value full or
 mixed repetition [0560]; slices [0570]; and `lenof` operands other than D14's
@@ -3226,6 +3246,9 @@ fills, construction and every general aggregate value pinned.
 D69 migrated a direct module array image into a labelled fixed-array field,
 while keeping selected-field image copy, inference, heterogeneous fills,
 construction and every general aggregate value pinned.
+D70 migrated a selected fixed-array field into typed and inferred module array
+images, while keeping the selected-field label, every general array value,
+construction and aggregate inference pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

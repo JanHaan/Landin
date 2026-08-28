@@ -1984,6 +1984,84 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Array_Chain_Copies_The_Terminal_Image;
 
+   --  D70 resolves a module struct image before copying one selected
+   --  fixed-array field into a typed or inferred array datum.  Every D67/D68
+   --  descriptor form becomes the corresponding ordinary array image, and a
+   --  later D21 link treats that destination like any other array datum.
+   procedure A_Module_Array_Copies_A_Struct_Field_Image
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Array_Copies_A_Struct_Field_Image
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    finite: [2]u16" & LF
+         & "    repeated: [3]u8" & LF
+         & "    hybrid: [3]u8" & LF
+         & "    zero_repeat: [2]u8" & LF
+         & "    omitted: [2]u8" & LF
+         & "end holder" & LF
+         & "state: holder = (finite: [11, 13], repeated: [of 17],"
+         & " hybrid: [19, of 23], zero_repeat: [of 0], of zeroed)" & LF
+         & "finite_copy: [2]u16 = state.finite" & LF
+         & "repeated_copy := state.repeated" & LF
+         & "hybrid_copy: [3]u8 = state.hybrid" & LF
+         & "zero_copy := state.zero_repeat" & LF
+         & "omitted_copy: [2]u8 = state.omitted" & LF
+         & "downstream := hybrid_copy" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "typed and inferred selected-field images are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check
+           (Item,
+            IR.Has_Image (Unit, 2)
+            and then IR.Image_Length (Unit, 2) = 2
+            and then IR.Nth_Image (Unit, 2, 1) = 11
+            and then IR.Nth_Image (Unit, 2, 2) = 13,
+            "a finite field becomes a finite array image");
+         Landin.Testing.Check
+           (Item,
+            IR.Has_Image (Unit, 3)
+            and then IR.Is_Repeated_Image (Unit, 3)
+            and then IR.Image_Prefix_Length (Unit, 3) = 0
+            and then IR.Repeated_Image_Value (Unit, 3) = 17,
+            "a repeated field stays compact");
+         Landin.Testing.Check
+           (Item,
+            IR.Has_Image (Unit, 4)
+            and then IR.Is_Repeated_Image (Unit, 4)
+            and then IR.Image_Prefix_Length (Unit, 4) = 1
+            and then IR.Nth_Image (Unit, 4, 1) = 19
+            and then IR.Repeated_Image_Value (Unit, 4) = 23,
+            "a hybrid field preserves its prefix and suffix");
+         Landin.Testing.Check
+           (Item,
+            not IR.Has_Image (Unit, 5)
+            and then not IR.Has_Image (Unit, 6),
+            "zero-pattern and omitted fields stay absent");
+         Landin.Testing.Check
+           (Item,
+            IR.Has_Image (Unit, 7)
+            and then IR.Is_Repeated_Image (Unit, 7)
+            and then IR.Image_Prefix_Length (Unit, 7) = 1
+            and then IR.Nth_Image (Unit, 7, 1) = 19
+            and then IR.Repeated_Image_Value (Unit, 7) = 23,
+            "a downstream array chain copies the selected field image");
+      end;
+   end A_Module_Array_Copies_A_Struct_Field_Image;
+
    --  D66--D69 extend D60/D61's module struct image chain with scalar folds,
    --  compact finite, repeated and hybrid array-field segments, and a direct
    --  module-array source.  Every destination gets its own run; a zero
@@ -3651,6 +3729,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a module array chain copies the terminal image",
          A_Module_Array_Chain_Copies_The_Terminal_Image'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a module array copies a struct field image",
+         A_Module_Array_Copies_A_Struct_Field_Image'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "a module struct literal records and copies its image",
