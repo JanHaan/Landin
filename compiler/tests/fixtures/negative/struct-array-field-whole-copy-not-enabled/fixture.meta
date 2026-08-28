@@ -1,6 +1,0 @@
-class: negative
-summary: D46 admits two containing module datums but keeps their whole struct copy refused once
-constructs: 0410, 0520, 0670, 0710, 1740, 1810
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

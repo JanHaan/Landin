@@ -1,0 +1,31 @@
+word: type = usize
+row: type = [2]word
+
+holder: type = struct
+    tag: u8
+    values: row
+    tail: u16
+end holder
+
+same: type = holder
+
+mut saved: holder
+
+copy: (at: usize) -> (result: word) =
+    mut source: same
+    source.tag = 7
+    source.values[0] = 20
+    source.values[1] = 22
+    source.tail = 701
+
+    mut local: holder
+    local = source
+    saved = local
+
+    mut back: same
+    back = saved
+    back = back
+    _ = back.tag
+    _ = back.tail
+    result = back.values[at]
+end copy

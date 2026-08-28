@@ -1276,6 +1276,100 @@ package body Landin.Tests.Backend_Suite is
       Check_Local (Landin.Targets.Synthetic_32, "-20", "8", "stosl");
    end Array_Field_Repetition_Fills_Follow_Their_Target;
 
+   --  D54's whole struct copy delegates each fixed-array field to D50.
+   --  A wide module field therefore forms both addresses in registers, and
+   --  a local-to-local field copy follows the selected frame layout.
+   procedure Array_Bearing_Struct_Copy_Derives_Field_Addresses
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Bearing_Struct_Copy_Derives_Field_Addresses
+     (Item : in out Landin.Testing.Context)
+   is
+      Wide : constant String :=
+        "wide: type = struct" & LF
+        & "    prefix: [2147483648]u8" & LF
+        & "    row: [2]u8" & LF
+        & "    tail: u16" & LF
+        & "end wide" & LF
+        & "mut source: wide" & LF
+        & "mut destination: wide" & LF
+        & "copy: () -> none =" & LF
+        & "    destination = source" & LF
+        & "end copy" & LF;
+      Local : constant String :=
+        "holder: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    row: [2]usize" & LF
+        & "    tail: u16" & LF
+        & "end holder" & LF
+        & "copy: () -> none =" & LF
+        & "    mut source: holder" & LF
+        & "    source.tag = 1" & LF
+        & "    source.row = zeroed" & LF
+        & "    source.tail = 2" & LF
+        & "    mut destination: holder" & LF
+        & "    destination = source" & LF
+        & "end copy" & LF;
+
+      procedure Check_Local
+        (Facts       : Landin.Targets.Target_Facts;
+         Destination : String;
+         Source      : String;
+         Bytes       : String);
+
+      procedure Check_Local
+        (Facts       : Landin.Targets.Target_Facts;
+         Destination : String;
+         Source      : String;
+         Bytes       : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Local, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text, HT & "leaq " & Destination & "(%rbp), %rdi")
+               and then Contains
+                 (Text, HT & "leaq " & Source & "(%rbp), %rsi")
+               and then Contains
+                 (Text, HT & "movabsq $" & Bytes & ", %rcx")
+               and then Contains (Text, HT & "rep movsb"),
+               "the local array field copy follows target frame layout");
+         end;
+      end Check_Local;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower (Work, Wide, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "leaq destination(%rip), %rdi")
+            and then Contains (Text, HT & "leaq source(%rip), %rsi")
+            and then Occurrences
+              (Text, HT & "movabsq $2147483648, %rdx") >= 2
+            and then Contains (Text, HT & "addq %rdx, %rdi")
+            and then Contains (Text, HT & "addq %rdx, %rsi")
+            and then Contains (Text, HT & "movabsq $2, %rcx")
+            and then Contains (Text, HT & "rep movsb"),
+            "the wide module array field forms both complete addresses");
+      end;
+
+      Check_Local (Landin.Targets.Linux_X86_64, "-56", "-24", "16");
+      Check_Local (Landin.Targets.Synthetic_32, "-28", "-12", "8");
+   end Array_Bearing_Struct_Copy_Derives_Field_Addresses;
+
    --  D49 clears the same far field from its register-formed module address;
    --  the byte count is the field extent, not the containing datum extent.
    procedure A_Wide_Array_Field_Clear_Uses_Registers
@@ -3470,6 +3564,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "array field repetition fills follow their target",
          Array_Field_Repetition_Fills_Follow_Their_Target'Access);
+      Landin.Testing.Register
+        (Into, "backend", "array-bearing struct copy derives field addresses",
+         Array_Bearing_Struct_Copy_Derives_Field_Addresses'Access);
       Landin.Testing.Register
         (Into, "backend", "a wide array field clear uses registers",
          A_Wide_Array_Field_Clear_Uses_Registers'Access);

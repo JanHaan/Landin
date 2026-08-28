@@ -1,0 +1,6 @@
+class: negative
+summary: D54 keeps inferred module and local array-bearing struct initializers outside whole copy
+constructs: 0410, 0520, 0670, 0710, 0750, 1740, 1810
+program: program.ldn
+codes: L0304, L0304
+targets: linux-x86-64, macos-arm64

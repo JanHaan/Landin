@@ -253,22 +253,6 @@ package body Landin.Checking is
       Fits := True;
    end Lay_Out;
 
-   function Has_Only_Scalar_Fields
-     (Of_Table : Table; Id : Declaration_Id) return Boolean
-   is
-      Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
-   begin
-      for Field in 1 .. Layout.Count loop
-         if Of_Table.Field_Shapes (Layout.First + Field - 1).Kind
-              /= Scalar_Field
-         then
-            return False;
-         end if;
-      end loop;
-      return True;
-   end Has_Only_Scalar_Fields;
-
    function Field_Offset
      (Of_Table : Table;
       Id       : Declaration_Id;
