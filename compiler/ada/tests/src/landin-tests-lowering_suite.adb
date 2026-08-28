@@ -789,9 +789,10 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Named_Return_Zeroed_Uses_The_Ordinary_Store;
 
-   --  D42 reuses the ordinary subobject store paths.  The selected scalar
-   --  type chooses false or zero; a computed destination index is evaluated
-   --  once and carried to Store_Element before the contextual RHS is formed.
+   --  D42 reuses the ordinary subobject store paths.  D62 reaches the same
+   --  Store_Element through a D48 array field and carries its positive field
+   --  identity.  The selected scalar type chooses false or zero; a computed
+   --  destination index is evaluated once before the contextual RHS is formed.
    procedure Scalar_Subobject_Zeroed_Uses_Ordinary_Stores
      (Item : in out Landin.Testing.Context);
 
@@ -808,12 +809,21 @@ package body Landin.Tests.Lowering_Suite is
          & "flags: type = struct" & LF
          & "    ready: truth" & LF
          & "end flags" & LF
+         & "holder: type = struct" & LF
+         & "    flags: [1]truth" & LF
+         & "    words: [2]u32" & LF
+         & "end holder" & LF
          & "mut state: flags" & LF
          & "mut row: [2]u32" & LF
+         & "mut packet: holder" & LF
          & "set: (at: usize) -> none =" & LF
          & "    state.ready = zeroed" & LF
          & "    row[at] = zeroed" & LF
-         & "end set" & LF,
+         & "end set" & LF
+         & "set_field: () -> none =" & LF
+         & "    packet.flags[0] = zeroed" & LF
+         & "    packet.words[1] = zeroed" & LF
+         & "end set_field" & LF,
          Ran);
 
       Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
@@ -823,8 +833,11 @@ package body Landin.Tests.Lowering_Suite is
 
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
-         Set_Routine : constant IR.Item_Id := 3;
+         Set_Routine : constant IR.Item_Id := 4;
+         Field_Routine : constant IR.Item_Id := 5;
          Field_Store, Element_Store : IR.Value_Id := IR.No_Value;
+         Bool_Field_Element, Integer_Field_Element : IR.Value_Id :=
+           IR.No_Value;
          First_Index_Load : IR.Value_Id := IR.No_Value;
          Index_Loads : Natural := 0;
       begin
@@ -843,6 +856,21 @@ package body Landin.Tests.Lowering_Suite is
                   if First_Index_Load = IR.No_Value then
                      First_Index_Load := Value;
                   end if;
+               end if;
+            end;
+         end loop;
+
+         for V in 1 .. IR.Value_Count (Unit, Field_Routine) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (V);
+            begin
+               if IR.Op_Of (Unit, Field_Routine, Value) = IR.Store_Element
+               then
+                  case IR.Element_Field_Of (Unit, Field_Routine, Value) is
+                     when 1 => Bool_Field_Element := Value;
+                     when 2 => Integer_Field_Element := Value;
+                     when others => null;
+                  end case;
                end if;
             end;
          end loop;
@@ -868,6 +896,30 @@ package body Landin.Tests.Lowering_Suite is
                         IR.Nth_Operand
                           (Unit, Set_Routine, Element_Store, 2)) = 0,
             "typed integer zero feeds the existing Store_Element path");
+         Landin.Testing.Check
+           (Item,
+            Bool_Field_Element /= IR.No_Value
+            and then IR.Op_Of
+              (Unit, Field_Routine,
+               IR.Nth_Operand
+                 (Unit, Field_Routine, Bool_Field_Element, 2)) = IR.Truth
+            and then not IR.Truth_Of
+              (Unit, Field_Routine,
+               IR.Nth_Operand
+                 (Unit, Field_Routine, Bool_Field_Element, 2)),
+            "typed false reaches Store_Element through array field one");
+         Landin.Testing.Check
+           (Item,
+            Integer_Field_Element /= IR.No_Value
+            and then IR.Op_Of
+              (Unit, Field_Routine,
+               IR.Nth_Operand
+                 (Unit, Field_Routine, Integer_Field_Element, 2)) = IR.Number
+            and then IR.Number_Of
+              (Unit, Field_Routine,
+               IR.Nth_Operand
+                 (Unit, Field_Routine, Integer_Field_Element, 2)) = 0,
+            "typed zero reaches Store_Element through array field two");
          Landin.Testing.Check
            (Item, Index_Loads = 2,
             "the destination index is evaluated once and carried once");
