@@ -2,7 +2,7 @@
 """The faces the pages are set in, and the one place they are declared.
 
 Two families set the pages, each as the subset webfont package its source
-delivers: `Nunito Sans` for prose and `MonoLisaText` for code.  Every
+delivers: `Nunito Sans` for prose and `MonoLisaCode` for code.  Every
 rendering of them goes through here -- the `@font-face` block a page
 carries, the stacks its `--ui` and `--mono` hold, and the list of files
 the site build copies beside the pages -- so a family can be replaced in
@@ -61,7 +61,7 @@ FAMILIES = (
          css="nunito-sans/nunito-sans.css", licensed=False,
          fallback=('-apple-system', 'BlinkMacSystemFont', '"Segoe UI"',
                    'Inter', 'Roboto', '"Helvetica Neue"', 'sans-serif')),
-    dict(role="mono", family="MonoLisaText",
+    dict(role="mono", family="MonoLisaCode",
          css="monolisa/monolisa.css", licensed=True,
          fallback=('ui-monospace', 'SFMono-Regular', '"SF Mono"', 'Menlo',
                    'Consolas', '"Liberation Mono"', 'monospace')),

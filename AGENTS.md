@@ -110,7 +110,7 @@ in the site renderer. Each family is the subset webfont package its source
 delivers, and `assets/fonts.py` is every rendering of them: the
 `@font-face` block a page carries, the `--ui` and `--mono` stacks, and the
 list of files copied beside the pages. `Nunito Sans` is under the OFL and
-vendored in `assets/fonts/`; `MonoLisaText` is under a foundry EULA that
+vendored in `assets/fonts/`; `MonoLisaCode` is under a foundry EULA that
 forbids passing the files on, so it lives in the private `landin-fonts`
 repository, found through `LANDIN_FONTS` or beside this one, and a host
 without it renders in the fallback stack while `scripts/site.sh --publish`

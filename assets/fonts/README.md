@@ -1,7 +1,7 @@
 # The faces
 
 Two webfont families, and one module that is every rendering of them.
-`Nunito Sans` sets the prose, `MonoLisaText` sets the code, and nothing
+`Nunito Sans` sets the prose, `MonoLisaCode` sets the code, and nothing
 outside [`../fonts.py`](../fonts.py) names either — the same arrangement
 as [the mark](../README.md) and
 [the highlighter](../../highlight/README.md), for the same reason.
@@ -62,7 +62,7 @@ for.
 The code face is the one place the ranges were chosen rather than taken:
 MonoLisa's customiser built it from the blocks the documents use and the
 few they plausibly will — Latin, general punctuation, arrows, operators,
-technical symbols and box drawing — with the `calt`, `liga`, `dlig` and
+technical symbols and block elements — with the `calt`, `liga`, `dlig` and
 `zero` features and no others. That is the foundry subsetting its own
 font, which its EULA permits where subsetting it here would not be.
 
