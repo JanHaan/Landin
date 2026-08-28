@@ -1,0 +1,46 @@
+holder: type = struct
+    finite: [2]u16
+    repeated: [3]u8
+    hybrid: [3]u8
+    zero_repeat: [2]u8
+    omitted: [2]u8
+end holder
+
+mut state: holder =
+    (finite: [11, 13], repeated: [of 7], hybrid: [1, of 2],
+     zero_repeat: [of 0], of zeroed)
+mut finite_copy: [2]u16 = state.finite
+mut repeated_copy := state.repeated
+mut hybrid_copy := state.hybrid
+mut zero_copy := state.zero_repeat
+mut omitted_copy := state.omitted
+copy_of_copy := hybrid_copy
+
+public main: () -> (code: i32) =
+    state.finite[0] = 99
+    state.repeated[1] = 99
+    state.hybrid[2] = 99
+    state.zero_repeat[0] = 1
+    state.omitted[0] = 1
+
+    finite_copy[1] = 77
+    repeated_copy[2] = 77
+    hybrid_copy[0] = 77
+    zero_copy[1] = 1
+    omitted_copy[1] = 1
+
+    if state.finite[1] == 13 and state.repeated[2] == 7
+      and state.hybrid[0] == 1 and state.hybrid[1] == 2
+      and state.zero_repeat[1] == 0 and state.omitted[1] == 0
+      and finite_copy[0] == 11 and finite_copy[1] == 77
+      and repeated_copy[0] == 7 and repeated_copy[2] == 77
+      and hybrid_copy[0] == 77 and hybrid_copy[1] == 2
+      and hybrid_copy[2] == 2 and zero_copy[0] == 0
+      and omitted_copy[0] == 0 and copy_of_copy[0] == 1
+      and copy_of_copy[1] == 2 and copy_of_copy[2] == 2
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

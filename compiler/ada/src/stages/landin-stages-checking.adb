@@ -558,8 +558,9 @@ package body Landin.Stages.Checking is
             --  whole-array storage name.  Resolution makes that module
             --  storage at module scope and an in-scope storage declaration
             --  inside a body.  D51 also admits a fixed-array field when the
-            --  destination binding is local; the field remains outside the
-            --  module static-image and general-value rules.  Every other
+            --  destination binding is local; D70 admits the same contextual
+            --  source for a module binding's static image.  The field remains
+            --  outside the general-value rules.  Every other
             --  value form (an array literal, a call, `zeroed`, or a slice) is
             --  deferred: none of them is a Name_Reference.  An inferred
             --  direct-name binding has no Written node and is admitted
@@ -581,12 +582,26 @@ package body Landin.Stages.Checking is
                         Syn.Value_Of (Of_Tree, Node)))
                       in Res.Module_Binding | Res.Local_Binding)
                  or else
-                   (Is_Local_Binding (Of_Tree, Node)
-                    and then Syn.Kind
+                   (Syn.Kind
                       (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                         = Syn.Member_Selection
-                    and then Admit_Array_Field
-                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))));
+                    and then Syn.Kind
+                      (Of_Tree,
+                       Syn.Target_Of
+                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
+                        = Syn.Name_Reference
+                    and then Res.Verdict_Of
+                      (Meanings.all, Of_Tree,
+                       Syn.Target_Of
+                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
+                        = Res.Bound
+                    and then Res.Sort_Of
+                      (Meanings.all,
+                       Res.Bound_To
+                         (Meanings.all, Of_Tree,
+                          Syn.Target_Of
+                            (Of_Tree, Syn.Value_Of (Of_Tree, Node))))
+                        in Res.Module_Binding | Res.Local_Binding));
             --  D55/D60: a written local or module struct type supplies the
             --  nominal context for one initializer copied directly from
             --  storage.  The module form copies a static image rather than
@@ -1460,7 +1475,7 @@ package body Landin.Stages.Checking is
                           = Res.Bound
                then
                   declare
-                     Held  : constant Ty.Type_Kind :=
+                     Held : constant Ty.Type_Kind :=
                        Selected_From (Of_Tree, From);
                   begin
                      if Held = Ty.Ill_Typed then
@@ -3257,8 +3272,13 @@ package body Landin.Stages.Checking is
                            --  Selected_From keeps that one direct name out
                            --  of the general-value refusal.
                            declare
+                              Admitted : constant Boolean :=
+                                Syn.Kind (Of_Tree, Value)
+                                  = Syn.Member_Selection
+                                and then Admit_Array_Field (Of_Tree, Value);
                               Got : constant Ty.Type_Kind :=
                                 (if Is_Direct_Binding_Name (Of_Tree, Value)
+                                      or else Admitted
                                  then Selected_From (Of_Tree, Value)
                                  else Synthesise (Of_Tree, Value));
                            begin
@@ -3680,6 +3700,7 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Value)
                        in Syn.Array_Literal | Syn.Array_Repetition
                           | Syn.Mixed_Array_Repetition
+                          | Syn.Member_Selection
               and then Landin.Checking.Type_Of
                          (Types.all, Of_Tree, Value) = Ty.Fixed_Array);
          --  D66 checks each scalar field inside a contextual module struct
@@ -4053,8 +4074,7 @@ package body Landin.Stages.Checking is
               and then Landin.Checking.Body_Of (Types.all, Named)
                          /= Res.No_Declaration;
             Direct_Field : constant Boolean :=
-              Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
-              and then Syn.Kind (Of_Tree.all, Value) = Syn.Member_Selection
+              Syn.Kind (Of_Tree.all, Value) = Syn.Member_Selection
               and then Admit_Array_Field (Of_Tree.all, Value);
             Direct_Source : constant Boolean :=
               Direct_Name or else Direct_Field or else Direct_Struct;
@@ -4235,6 +4255,51 @@ package body Landin.Stages.Checking is
                      end if;
                   end;
                end loop;
+
+               Image_States (Id) :=
+                 (if Reaches_Image then Valid else Invalid);
+               return Reaches_Image;
+            end;
+         end if;
+
+         if Syn.Kind (Of_Tree.all, Value) = Syn.Member_Selection then
+            --  D70 adds the reverse static-image edge: an array datum may
+            --  take one fixed-array field from a module struct.  Validation
+            --  runs before the statement walk, so perform the same silent
+            --  contextual admission here before following the containing
+            --  declaration.  The later binding check still owns any D17
+            --  disagreement.  A malformed or already refused edge is invalid
+            --  silently because its contextual owner reports later.
+            declare
+               From : constant Syn.Node_Id :=
+                 Syn.Target_Of (Of_Tree.all, Value);
+               Admitted : constant Boolean :=
+                 Admit_Array_Field (Of_Tree.all, Value);
+               Reaches_Image : Boolean := False;
+            begin
+               if Admitted
+                 and then Syn.Kind (Of_Tree.all, From) = Syn.Name_Reference
+                 and then Res.Verdict_Of
+                   (Meanings.all, Of_Tree.all, From) = Res.Bound
+                 and then Res.Sort_Of
+                   (Meanings.all,
+                    Res.Bound_To (Meanings.all, Of_Tree.all, From))
+                      = Res.Module_Binding
+                 and then Landin.Checking.Type_Of
+                   (Types.all, Id) = Ty.Fixed_Array
+                 and then Landin.Checking.Type_Of
+                   (Types.all, Of_Tree.all, Value) = Ty.Fixed_Array
+                 and then Landin.Checking.Array_Length
+                   (Types.all, Of_Tree.all, Value)
+                     = Landin.Checking.Array_Length (Types.all, Id)
+                 and then Landin.Checking.Array_Element
+                   (Types.all, Of_Tree.all, Value)
+                     = Landin.Checking.Array_Element (Types.all, Id)
+               then
+                  Reaches_Image :=
+                    Validate_Module_Image
+                      (Res.Bound_To (Meanings.all, Of_Tree.all, From));
+               end if;
 
                Image_States (Id) :=
                  (if Reaches_Image then Valid else Invalid);

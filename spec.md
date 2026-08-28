@@ -1308,12 +1308,17 @@ distinct storage initialized with the terminal image rather than aliasing
 its source. Nothing runs before the entry point [1460], so no module-level
 copy instruction exists.
 
+D70 later permits the same module image chain to pass through one directly
+selected fixed-array field.  The selection remains a contextual initializer
+link rather than a general array value.
+
 D60/D61 later apply the same declaration-identity chain to explicitly typed
 and inferred module ordinary structs. Their presently enabled terminal images
 are all zero, so no finite aggregate image is needed yet.
 
 Every other array initializer value remains refused: D51 later admits a
-directly selected fixed-array field for a local binding, D23 admits one
+directly selected fixed-array field for a local binding and D70 its module
+counterpart, D23 admits one
 contextual local array literal [0520], D24 admits its module counterpart,
 while an inferred literal, `zeroed` [0540], repetition [0560], a slice
 [0570], a call, and every other indexed or selected subexpression are each
@@ -3010,9 +3015,9 @@ initialized by the copy and, like every local declared with a value, needs no
 later definite-assignment tracking. A refused contextual value owns its report;
 [1940] does not add a static-module-value report after that node is ill typed.
 
-This remains an initializer context rather than a general array value. A
-selected field is still refused as either a typed or inferred module
-initializer, argument, return, discard, operand or bare read. It is not a
+This remains an initializer context rather than a general array value. D70
+later admits the same selected field as a typed or inferred module initializer;
+it remains refused as an argument, return, discard, operand or bare read. It is not a
 literal or repetition destination at this boundary; D52 later admits the
 literal destination alone. Whole copies of the containing struct keep D46's
 refusal here and are admitted later by D54; fields of elements,
@@ -3034,16 +3039,17 @@ general value position or a new IR operation.
 **The alternatives:** admit only the explicitly typed form, admit a module
 initializer from a field, make the field a general value, add a separate
 initializer opcode, or emit one store per element. The first makes D21's two
-spellings needlessly asymmetric; the second needs a new static-image rule for
-subobjects; the third broadens unrelated expression positions; the last two
-duplicate or cannot represent the compact D18 operation. All were declined.
+spellings needlessly asymmetric; the second needed a static-image rule for
+subobjects and was later chosen by D70; the third broadens unrelated expression
+positions; the last two duplicate or cannot represent the compact D18
+operation. The remaining alternatives were declined.
 
 **Pinned by** the checker, lowering and backend public-seam cases;
 `positive/local-array-initialized-from-field`;
 `negative/struct-array-field-initializer-source-unassigned`;
 `negative/struct-array-field-initializer-not-on-every-path`;
 `negative/struct-array-field-initializer-shape-mismatch`;
-`negative/module-array-initializer-from-field-not-enabled`; the recorded IR
+`positive/module-array-from-struct-field`; the recorded IR
 dump; and `runtime/local-array-initializers-from-fields` on Linux x86-64.
 
 ### D52 — An array literal may be assigned to a fixed-array field
@@ -4152,8 +4158,9 @@ startup routine. The first and third add recursive image and cycle questions;
 the second leaves a needless asymmetry with `of zeroed`; and the last two
 violate target neutrality or [1460]. The complete compact carrier with only
 finite and absent producers was chosen. D68 later supplies repetition, and
-D69 follows a direct module-array image; selected-field image copy still waits
-for its own evidence.
+D69 follows a direct module-array image. D70 then permits an ordinary module
+array image to take a selected field; the selected-field label itself waits
+for D71's separate evidence.
 
 **Pinned by** the IR, verifier, checker, lowering and backend public-seam cases;
 `positive/module-struct-literal-array-image`;
@@ -4216,7 +4223,7 @@ A direct module array storage name or selected array field remains L0304 as a
 labelled module image in this slice. D69 later follows the former through
 another datum's finite, repeated, hybrid or absent image; the latter retains
 the standing refusal of a selected field as an ordinary module array
-initializer.
+initializer until D70 supplies that rule. D71 may then reconsider the label.
 Inferred literals, heterogeneous `of expression`, all-`of`, construction and
 general aggregate values remain refused. No grammar, syntax node, diagnostic
 code, runtime instruction, target fact or layout rule changes.
@@ -4270,8 +4277,9 @@ source name and relates it to the field label. An unresolved or already refused
 source keeps its existing owner without a second report; a source array-image
 cycle keeps D21's single L0305. A type declaration, selected field or other
 value remains L0304. In particular, `other.row` is not admitted here because
-an ordinary module array initializer still refuses a selected field; that
-boundary must move for arrays before a struct label may bypass it.
+an ordinary module array initializer still refuses a selected field in this
+slice. D70 moves that boundary for arrays; D71 separately decides whether a
+struct label may reuse it.
 
 Image resolution visits the named array before gathering the struct image, so
 a forward finite, repeated or hybrid source cannot be mistaken for absent.
@@ -4301,3 +4309,67 @@ declined.
 `negative/array-type-name-is-not-storage`; the generated token and IR records;
 and `runtime/module-struct-literal-array-image-copy-is-independent` on Linux
 x86-64.
+
+### D70 — A module array takes a selected field's static image
+
+**The tour said** that a binding may name or infer its type [0040], [0050],
+that a fixed array's value is its element sequence [0520], and that nothing
+runs before the entry point [1460]. D21 follows module array images through
+direct storage names, D51 copies a selected fixed-array field into a fresh
+local array, and D67/D68 carry every canonical array image beside a struct
+field. None decided whether the same field could supply a module array image.
+
+**Chosen:** `[mut] name: [N]T = s.f` and `[mut] name := s.f` are admitted at
+module scope when `s` directly names a module binding of an ordinary struct
+with a layout and `f` is one of its fixed-array fields. The explicit form
+requires `[N]T` to have the field's exact D17 length and element type; a
+disagreement reports L0301 at the selection and relates it to the binding. The
+inferred form takes that identity exactly. This is D51's contextual source at
+module scope, not a general value: the root need not be mutable, and the
+selection remains refused as an argument, return, discard, operand or bare
+read.
+
+The destination receives a copy of the field's resolved static image in
+distinct storage. A D67 finite field becomes D24's finite array run, a D68
+nonzero repetition stays compact, a hybrid keeps its finite prefix and suffix
+pattern, and an absent field leaves the destination's image absent. Thus an
+all-zero finite or zero-suffix hybrid remains written while an omitted,
+`zeroed` or zero-repetition field remains loader-zeroed. A later write to the
+struct field or destination array changes only that storage.
+
+Image validation and lowering resolve the containing struct before reading its
+field descriptor. The struct may be declared later, may itself follow a
+D60/D61 aggregate image chain, and may have received the field through D69.
+D69's struct-to-array edge and this array-to-struct edge may form a real image
+cycle: `a: [N]T = s.f; s: S = (f: a)`. The existing per-declaration
+`Visiting` state reports [1940]'s L0305 once at whichever declaration is first
+found revisited and marks the rest invalid silently. An already refused
+containing image likewise keeps its existing owner without a second report.
+
+Lowering maps D67's existing `Absent`, `Finite`, `Repeated` and `Hybrid`
+descriptor forms to the existing array-image setters. It reads a descriptor
+only after the containing aggregate has a written image, reads prefix elements
+only for the finite and hybrid forms, and lets every downstream D21 array link
+copy the resulting ordinary array item. The existing verifier rechecks the
+array image on the selected target, and the backend emits it with the array
+element's target width. No IR, verifier, backend, target, grammar, syntax or
+diagnostic representation changes.
+
+**Why typed and inferred together:** D21 and D51 already give those spellings
+one rule, and inference can carry the selected field's complete D17 identity
+without inventing a nominal or general value. Admitting only the typed form
+would add no safety or representation boundary. Delaying the whole rule would
+leave D69's reverse dependency artificially one-way. Admitting `other.row` as
+a label inside a struct literal is a second producer and validator edge; D71
+keeps that decision and its evidence separate. All other widenings were
+declined.
+
+**Pinned by** the checker and lowering public-seam cases;
+`positive/module-array-from-struct-field`;
+`negative/module-array-from-struct-field-shape-mismatch`;
+`negative/module-array-from-struct-field-cycle-array-first`;
+`negative/module-array-from-struct-field-cycle-struct-first`;
+`negative/module-array-from-struct-field-source-refused`;
+`negative/module-struct-literal-array-image-forms-not-enabled`; the generated
+token and IR records; and
+`runtime/module-array-from-struct-field-is-independent` on Linux x86-64.
