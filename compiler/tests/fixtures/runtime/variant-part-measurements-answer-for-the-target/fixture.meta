@@ -1,0 +1,6 @@
+class: runtime
+summary: D74 variant-part measurements replay the Linux x86-64 tag and maximum payload layout
+constructs: 0160, 0370, 0520, 0670, 0680, 0690, 0750, 1700, 1795, 1800, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

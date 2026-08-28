@@ -408,10 +408,10 @@ package body Landin.Tests.Parser_Suite is
    --  Contextual ordinary-struct variant-part refusal
    ------------------------------------------------------------------
 
-   procedure Variant_Parts_Are_Refused_Once
+   procedure Variant_Parts_Are_Parsed
      (Item : in out Landin.Testing.Context);
 
-   procedure Variant_Parts_Are_Refused_Once
+   procedure Variant_Parts_Are_Parsed
      (Item : in out Landin.Testing.Context)
    is
       procedure Check_Program
@@ -430,7 +430,7 @@ package body Landin.Tests.Parser_Suite is
          Landin.Testing.Check (Item, Nodes > 0, Because & ": a tree exists");
          Landin.Testing.Check_Equal
            (Item, Unbounded.To_String (Codes), Expected,
-            Because & ": the variant part owns one report");
+            Because & ": the variant part has the expected reports");
       end Check_Program;
    begin
       Check_Program
@@ -443,7 +443,7 @@ package body Landin.Tests.Parser_Suite is
          & "  ready: bool" & ASCII.LF
          & "end figure" & ASCII.LF
          & "after: u8" & ASCII.LF,
-         "L0010", "payload cases and a following common field");
+         "", "payload cases and a following common field");
 
       Check_Program
         ("node: type = struct" & ASCII.LF
@@ -452,14 +452,14 @@ package body Landin.Tests.Parser_Suite is
          & "    branch: (first: u32, count: u32)" & ASCII.LF
          & "  end kind" & ASCII.LF
          & "end node" & ASCII.LF,
-         "L0010", "a bare case before a payload case");
+         "", "a bare case before a payload case");
 
       Check_Program
         ("empty: type = struct" & ASCII.LF
          & "  kind: variant" & ASCII.LF
          & "  end kind" & ASCII.LF
          & "end empty" & ASCII.LF,
-         "L0010", "an empty variant part");
+         "L0101", "an empty variant part");
 
       Check_Program
         ("single: type = struct" & ASCII.LF
@@ -467,16 +467,16 @@ package body Landin.Tests.Parser_Suite is
          & "    circle: (radius: i32)" & ASCII.LF
          & "  end kind" & ASCII.LF
          & "end single" & ASCII.LF,
-         "L0010", "a single payload case before its closer");
+         "", "a single payload case before its closer");
 
       Check_Program
-        ("broken: type = struct" & ASCII.LF
+         ("broken: type = struct" & ASCII.LF
          & "  kind: variant" & ASCII.LF
-         & "    leaf |" & ASCII.LF
+         & "    leaf" & ASCII.LF
          & "  end kinds" & ASCII.LF
          & "end broken" & ASCII.LF
          & "after: u8 =",
-         "L0010, L0102", "a misspelled part closer preserves later input");
+         "L0109, L0102", "a misspelled part closer preserves later input");
 
       Check_Program
         ("variant: type = u8" & ASCII.LF
@@ -496,7 +496,7 @@ package body Landin.Tests.Parser_Suite is
          & "  next: (x: i32)" & ASCII.LF
          & "end separate" & ASCII.LF,
          "L0010", "a following inline struct keeps its own refusal");
-   end Variant_Parts_Are_Refused_Once;
+   end Variant_Parts_Are_Parsed;
 
    ------------------------------------------------------------------
    --  Recovery, on input nothing derives
@@ -756,8 +756,8 @@ package body Landin.Tests.Parser_Suite is
         (Into, "parser", "parses struct literals and names refusals once",
          Struct_Literal_Shapes_Are_Refused_Once'Access);
       Landin.Testing.Register
-        (Into, "parser", "names contextual variant parts once",
-         Variant_Parts_Are_Refused_Once'Access);
+        (Into, "parser", "parses contextual variant parts",
+         Variant_Parts_Are_Parsed'Access);
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
          Survives_Every_Truncation'Access);

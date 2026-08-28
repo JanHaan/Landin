@@ -225,12 +225,50 @@ package body Landin.IR.Dump is
                         if Part.Kind = Scalar_Field_Shape then
                            Unbounded.Append
                              (Fields, Landin.Types.Spelling (Part.Element));
-                        else
+                        elsif Part.Kind = Array_Field_Shape then
                            Unbounded.Append
                              (Fields,
                               "[" & Trimmed
                                 (Element_Total'Image (Part.Length))
                               & "]" & Landin.Types.Spelling (Part.Element));
+                        else
+                           Unbounded.Append
+                             (Fields,
+                              "variant "
+                              & Landin.Types.Spelling (Part.Element)
+                              & " cases"
+                              & Trimmed (Natural'Image (Part.Cases)));
+                           for Which in 1 .. Part.Cases loop
+                              Unbounded.Append (Fields, " (");
+                              for Payload in 1 .. Variant_Case_Field_Count
+                                (Of_Unit, Part, Which)
+                              loop
+                                 if Payload > 1 then
+                                    Unbounded.Append (Fields, ",");
+                                 end if;
+                                 declare
+                                    Leaf : constant Field_Shape :=
+                                      Nth_Variant_Case_Field
+                                        (Of_Unit, Part, Which, Payload);
+                                 begin
+                                    if Leaf.Kind = Scalar_Field_Shape then
+                                       Unbounded.Append
+                                         (Fields,
+                                          Landin.Types.Spelling
+                                            (Leaf.Element));
+                                    else
+                                       Unbounded.Append
+                                         (Fields,
+                                          "[" & Trimmed
+                                            (Element_Total'Image
+                                               (Leaf.Length))
+                                          & "]" & Landin.Types.Spelling
+                                            (Leaf.Element));
+                                    end if;
+                                 end;
+                              end loop;
+                              Unbounded.Append (Fields, ")");
+                           end loop;
                         end if;
                      end;
                   end loop;

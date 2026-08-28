@@ -2068,14 +2068,16 @@ package body Landin.Tests.Backend_Suite is
         (Unit, Routine, Slot,
          (Kind    => IR.Array_Field_Shape,
           Element => Landin.Types.U64,
-          Length  => 0));
+          Length  => 0,
+          others  => <>));
       Other := IR.Add_Aggregate_Slot
         (Unit, Routine, IR.No_Declaration, Site);
       IR.Add_Slot_Field
         (Unit, Routine, Other,
          (Kind    => IR.Array_Field_Shape,
           Element => Landin.Types.U64,
-          Length  => 0));
+          Length  => 0,
+          others  => <>));
       Landin.Backend.Aggregate_Extent
         (Unit, Routine, Slot, Landin.Targets.Linux_X86_64,
          Size, Alignment);
@@ -3221,7 +3223,18 @@ package body Landin.Tests.Backend_Suite is
         & "end nested" & LF
         & "nested_alias: type = nested" & LF
         & "nested_size: usize = sizeof nested_alias" & LF
-        & "nested_align: usize = alignof nested" & LF;
+        & "nested_align: usize = alignof nested" & LF
+        & "tagged: type = struct" & LF
+        & "    prefix: u8" & LF
+        & "    kind: variant" & LF
+        & "        no_payload |" & LF
+        & "        wide_payload: (word: usize, byte: u8) |" & LF
+        & "        array_payload: (row: [3]u16)" & LF
+        & "    end kind" & LF
+        & "    tail: u16" & LF
+        & "end tagged" & LF
+        & "variant_size: usize = sizeof tagged" & LF
+        & "variant_align: usize = alignof tagged" & LF;
 
       Native : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -3292,6 +3305,18 @@ package body Landin.Tests.Backend_Suite is
               and then Contains
                 (Thin, "nested_align:" & LF & HT & ".long 4" & LF),
             "an array field contributes its target element alignment");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, "variant_size:" & LF & HT & ".quad 40" & LF)
+              and then Contains
+                (Thin, "variant_size:" & LF & HT & ".long 20" & LF),
+            "a variant reserves its target's maximum padded payload");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, "variant_align:" & LF & HT & ".quad 8" & LF)
+              and then Contains
+                (Thin, "variant_align:" & LF & HT & ".long 4" & LF),
+            "a variant inherits the maximum target payload alignment");
       end;
    end A_Measurement_Follows_The_Target;
 

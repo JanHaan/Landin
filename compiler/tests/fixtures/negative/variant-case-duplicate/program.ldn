@@ -1,0 +1,13 @@
+first: type = struct
+    kind: variant
+        leaf |
+        leaf
+    end kind
+end first
+
+branch: u8
+second: type = struct
+    kind: variant
+        branch
+    end kind
+end second

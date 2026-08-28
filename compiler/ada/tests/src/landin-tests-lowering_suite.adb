@@ -1040,7 +1040,8 @@ package body Landin.Tests.Lowering_Suite is
                IR.Nth_Field_Shape (Unit, Datum, 2)
                  = (Kind    => IR.Array_Field_Shape,
                     Element => Landin.Types.Usize,
-                    Length  => 2),
+                    Length  => 2,
+                    others  => <>),
                "the array field keeps its shape without a target");
             Landin.Testing.Check
               (Item, IR.Nth_Field (Unit, Datum, 3) = Landin.Types.Bool,
@@ -1112,7 +1113,8 @@ package body Landin.Tests.Lowering_Suite is
             IR.Nth_Slot_Field_Shape (Unit, 1, Slot, 2)
               = (Kind    => IR.Array_Field_Shape,
                  Element => Landin.Types.Usize,
-                 Length  => 2),
+                 Length  => 2,
+                 others  => <>),
             "the array field remains one target-neutral shape");
          Landin.Testing.Check
            (Item, IR.Nth_Slot_Field (Unit, 1, Slot, 3) = Landin.Types.U16,
@@ -3288,6 +3290,76 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Struct_Measurement_Carries_A_Compact_Array_Field;
 
+   --  D74 carries the unfolded tag and each case's compact payload shapes
+   --  only on aggregate measurements.  Datum and slot field runs remain the
+   --  scalar/array carrier until D75 admits variant storage.
+   procedure A_Struct_Measurement_Carries_Variant_Cases
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Measurement_Carries_Variant_Cases
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "choice: type = struct" & LF
+         & "    prefix: u8" & LF
+         & "    kind: variant" & LF
+         & "        leaf |" & LF
+         & "        wide: (word: usize, byte: u8) |" & LF
+         & "        row: (values: [3]u16)" & LF
+         & "    end kind" & LF
+         & "    tail: u16" & LF
+         & "end choice" & LF
+         & "size: usize = sizeof choice" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a variant-bearing declaration can be measured");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Shape : constant IR.Field_Shape :=
+           IR.Nth_Measurement_Field (Unit, 1, 1, 2);
+         Wide_First : constant IR.Field_Shape :=
+           IR.Nth_Variant_Case_Field (Unit, Shape, 2, 1);
+         Wide_Second : constant IR.Field_Shape :=
+           IR.Nth_Variant_Case_Field (Unit, Shape, 2, 2);
+         Array_Only : constant IR.Field_Shape :=
+           IR.Nth_Variant_Case_Field (Unit, Shape, 3, 1);
+      begin
+         Landin.Testing.Check
+           (Item,
+            IR.Is_Aggregate_Measurement (Unit, 1, 1)
+              and then IR.Measurement_Field_Count (Unit, 1, 1) = 3
+              and then Shape.Kind = IR.Variant_Field_Shape
+              and then Shape.Element = Landin.Types.U8
+              and then Shape.Cases = 3
+              and then IR.Variant_Case_Field_Count (Unit, Shape, 1) = 0
+              and then IR.Variant_Case_Field_Count (Unit, Shape, 2) = 2
+              and then IR.Variant_Case_Field_Count (Unit, Shape, 3) = 1,
+            "the measurement carries one tag and three case runs");
+         Landin.Testing.Check
+           (Item,
+            Wide_First.Kind = IR.Scalar_Field_Shape
+              and then Wide_First.Element = Landin.Types.Usize
+              and then Wide_Second.Kind = IR.Scalar_Field_Shape
+              and then Wide_Second.Element = Landin.Types.U8
+              and then Array_Only.Kind = IR.Array_Field_Shape
+              and then Array_Only.Element = Landin.Types.U16
+              and then Array_Only.Length = 3,
+            "payload leaves retain declaration order and compact shapes");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the measurement-only variant carrier");
+      end;
+   end A_Struct_Measurement_Carries_Variant_Cases;
+
    ------------------------------------------------------------------
    --  An internal array shape the source does not pin
    ------------------------------------------------------------------
@@ -3859,6 +3931,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a struct measurement keeps an array compact",
          A_Struct_Measurement_Carries_A_Compact_Array_Field'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a struct measurement carries variant case runs",
+         A_Struct_Measurement_Carries_Variant_Cases'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "an internal empty array has identity measurements",

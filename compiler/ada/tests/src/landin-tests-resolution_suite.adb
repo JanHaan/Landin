@@ -21,6 +21,11 @@ package body Landin.Tests.Resolution_Suite is
 
    use type Landin.Resolution.Scope_Id;
    use type Landin.Resolution.Scope_Sort;
+   use type Landin.Resolution.Declaration_Sort;
+   use type Landin.Resolution.Verdict;
+   use type Landin.Resolution.Declaration_Id;
+   use type Landin.Source.Source_Id;
+   use type Landin.Syntax.Node_Id;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
@@ -180,6 +185,84 @@ package body Landin.Tests.Resolution_Suite is
       end;
    end A_Node_That_Opens_Nothing_Says_So;
 
+   procedure Variant_Cases_Are_Module_Visible_Identities
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Cases_Are_Module_Visible_Identities
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Id    : Landin.Source.Source_Id;
+   begin
+      Id := Landin.Stages.Add_Source
+        (Work, "cases.ldn",
+         "picked := leaf" & LF
+         & "choice: type = struct" & LF
+         & "    kind: variant" & LF
+         & "        leaf |" & LF
+         & "        number: (value: u8)" & LF
+         & "    end kind" & LF
+         & "end choice" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 2, "the resolver ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a case may be named before its containing declaration");
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Id);
+         Use_Node : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Value_Of
+             (Of_Tree.all, Landin.Syntax.Nth_Declaration (Of_Tree.all, 1));
+         Body_Node : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all, Landin.Syntax.Nth_Declaration (Of_Tree.all, 2));
+         Part : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Field (Of_Tree.all, Body_Node, 1);
+         Case_Node : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Case (Of_Tree.all, Part, 1);
+         Means : Landin.Resolution.Declaration_Id :=
+           Landin.Resolution.No_Declaration;
+      begin
+         for Decl in Landin.Resolution.Declaration_Id'(1)
+                       .. Landin.Resolution.Declaration_Id
+                            (Landin.Resolution.Declaration_Count
+                               (Meanings.all))
+         loop
+            if Landin.Resolution.Source_Of (Meanings.all, Decl) = Id
+              and then Landin.Resolution.Node_Of (Meanings.all, Decl)
+                         = Case_Node
+            then
+               Means := Decl;
+            end if;
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            Means /= Landin.Resolution.No_Declaration
+              and then Landin.Resolution.Sort_Of (Meanings.all, Means)
+                         = Landin.Resolution.Case_Name,
+            "the case owns a Case_Name declaration identity");
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Verdict_Of
+              (Meanings.all, Of_Tree.all, Use_Node) = Landin.Resolution.Bound
+              and then Landin.Resolution.Bound_To
+                (Meanings.all, Of_Tree.all, Use_Node) = Means,
+            "a forward use binds to that exact case identity");
+      end;
+   end Variant_Cases_Are_Module_Visible_Identities;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -188,6 +271,9 @@ package body Landin.Tests.Resolution_Suite is
       Landin.Testing.Register
         (Into, "resolution", "a node that opens nothing says so",
          A_Node_That_Opens_Nothing_Says_So'Access);
+      Landin.Testing.Register
+        (Into, "resolution", "variant cases are module visible identities",
+         Variant_Cases_Are_Module_Visible_Identities'Access);
    end Register;
 
 end Landin.Tests.Resolution_Suite;

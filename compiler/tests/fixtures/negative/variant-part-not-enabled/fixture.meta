@@ -1,6 +1,0 @@
-class: negative
-summary: D73 names each contextual ordinary-struct variant part once and recovers through its own closer
-constructs: 0680, 0690, 1700, 1795, 1830
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0010, L0010

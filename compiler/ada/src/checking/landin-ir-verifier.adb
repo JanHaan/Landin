@@ -1430,13 +1430,86 @@ package body Landin.IR.Verifier is
                                          Nth_Measurement_Field
                                            (Of_Unit, Id, V, Field);
                                     begin
-                                       if Part.Kind
-                                            = Scalar_Field_Shape
+                                       if Part.Kind = Scalar_Field_Shape
                                          and then Part.Length /= 1
                                        then
                                           return
                                             (Field_Shape_Malformed,
                                              Id, Block, V);
+                                       end if;
+
+                                       if Part.Kind
+                                            in Scalar_Field_Shape
+                                               | Array_Field_Shape
+                                         and then (Part.Cases /= 0
+                                                   or else
+                                                     Part.Payloads_First /= 0)
+                                       then
+                                          return
+                                            (Field_Shape_Malformed,
+                                             Id, Block, V);
+                                       end if;
+
+                                       if Part.Kind = Variant_Field_Shape
+                                       then
+                                          if Part.Length /= 1
+                                            or else Part.Element not in
+                                              Landin.Types.U8
+                                                | Landin.Types.U16
+                                                | Landin.Types.U32
+                                            or else Part.Cases = 0
+                                            or else Part.Payloads_First = 0
+                                            or else Part.Payloads_First
+                                              > Measurement_Case_Run_Count
+                                                  (Of_Unit)
+                                            or else Part.Cases
+                                              > Measurement_Case_Run_Count
+                                                  (Of_Unit)
+                                                    - Part.Payloads_First + 1
+                                          then
+                                             return
+                                               (Field_Shape_Malformed,
+                                                Id, Block, V);
+                                          end if;
+
+                                          for Which in 1 .. Part.Cases loop
+                                             if not Variant_Case_Run_Is_Valid
+                                               (Of_Unit, Part, Which)
+                                             then
+                                                return
+                                                  (Field_Shape_Malformed,
+                                                   Id, Block, V);
+                                             end if;
+
+                                             for Payload in 1 ..
+                                               Variant_Case_Field_Count
+                                                 (Of_Unit, Part, Which)
+                                             loop
+                                                declare
+                                                   Leaf : constant
+                                                     Field_Shape :=
+                                                       Nth_Variant_Case_Field
+                                                         (Of_Unit, Part,
+                                                          Which, Payload);
+                                                begin
+                                                   if Leaf.Kind =
+                                                        Variant_Field_Shape
+                                                     or else Leaf.Cases /= 0
+                                                     or else
+                                                       Leaf.Payloads_First /= 0
+                                                     or else
+                                                       (Leaf.Kind =
+                                                          Scalar_Field_Shape
+                                                        and then
+                                                          Leaf.Length /= 1)
+                                                   then
+                                                      return
+                                                        (Field_Shape_Malformed,
+                                                         Id, Block, V);
+                                                   end if;
+                                                end;
+                                             end loop;
+                                          end loop;
                                        end if;
                                     end;
                                  end loop;
