@@ -1,0 +1,13 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        pair: (value: u8)
+    end kind
+end choice
+
+f: (x: i32) -> none =
+    match x
+        leaf: _ = 1
+        pair: _ = 2
+    end match
+end f

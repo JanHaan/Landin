@@ -207,6 +207,12 @@ package body Landin.Stages.Lowering is
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id);
 
+      procedure Lower_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id);
+
       procedure Leave_With
         (Result : IR.Slot_Id; Site : Landin.Provenance.Origin);
 
@@ -1173,6 +1179,117 @@ package body Landin.Stages.Lowering is
          --  executes.
          Open (Merge);
       end Lower_If;
+
+      ------------------------------------------------------------
+      --  D77: an exhaustive unfolded-variant tag match
+      ------------------------------------------------------------
+
+      procedure Lower_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id)
+      is
+         Site : constant Landin.Provenance.Origin :=
+           Site_Of (Of_Tree, Node);
+         Subject : constant Syn.Node_Id :=
+           Syn.Match_Subject (Of_Tree, Node);
+         Named : constant Syn.Node_Id :=
+           Syn.Target_Of (Of_Tree, Subject);
+         Means : constant Res.Declaration_Id :=
+           Res.Bound_To (Meanings.all, Of_Tree, Named);
+         Wrote : constant Res.Declaration_Id :=
+           Landin.Checking.Body_Of (Types.all, Of_Tree, Named);
+         Field : constant Positive := Positive
+           (Landin.Checking.Field_Index (Types.all, Of_Tree, Subject));
+         Shape : constant Landin.Checking.Field_Shape :=
+           Landin.Checking.Field_Shape_Of (Types.all, Wrote, Field);
+         Tag_Type : constant Ty.Integer_Name :=
+           Ty.Integer_Name (Shape.Element);
+         Source : constant IR.Storage :=
+           (if Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
+            then (Kind => IR.Module_Datum,
+                  Datum => IR.Item_For (Unit.all, Means))
+            else (Kind => IR.Frame_Slot,
+                  Slot => Slot_For (Of_Tree, Named, Means)));
+         Saved_Tag : constant IR.Slot_Id :=
+           IR.Add_Slot
+             (Unit.all, Filling, Shape.Element, Res.No_Declaration,
+              Site_Of (Of_Tree, Subject));
+         Merge : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
+      begin
+         pragma Assert (Shape.Kind = Landin.Checking.Variant_Field);
+
+         --  The selected storage is read exactly once.  A scalar slot is
+         --  the IR's block-crossing carrier for the cascade of comparisons.
+         declare
+            Loaded : constant IR.Value_Id :=
+              IR.Emit_Variant_Tag_Load
+                (Unit.all, Filling, Source, Field, Shape.Element, Site);
+         begin
+            IR.Emit_Store
+              (Unit.all, Filling, Saved_Tag, Loaded, Site);
+         end;
+
+         for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+            declare
+               Arm : constant Syn.Node_Id :=
+                 Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+               Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Arm);
+               Inside : constant Res.Scope_Id :=
+                 Res.Scope_At (Meanings.all, Of_Tree, Runs);
+               Taken : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Runs, Inside);
+            begin
+               if Position < Syn.Match_Arm_Count (Of_Tree, Node) then
+                  declare
+                     Next : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Tag : constant IR.Value_Id :=
+                       IR.Emit_Load
+                         (Unit.all, Filling, Saved_Tag, Site);
+                     Wanted : constant IR.Value_Id :=
+                       IR.Emit_Number
+                         (Unit.all, Filling, Tag_Type,
+                          Ty.Magnitude
+                            (Landin.Checking.Field_Index
+                               (Types.all, Of_Tree,
+                                Syn.Match_Pattern (Of_Tree, Arm)) - 1),
+                          Negated => False,
+                          Site    => Site);
+                     Test : constant IR.Value_Id :=
+                       IR.Emit_Binary
+                         (Unit.all, Filling, IR.Equal_To,
+                          Tag, Wanted, Ty.Bool, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling, Test, Taken, Next, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Taken);
+                     Lower_Statements (Of_Tree, Runs, Inside, Result);
+                     if Current /= IR.No_Block then
+                        Close_With_Jump (Merge, Site);
+                     end if;
+
+                     Open (Next);
+                  end;
+               else
+                  --  Exhaustiveness makes the final arm the only remaining
+                  --  tag; it still gets its own lexical block.
+                  Close_With_Jump (Taken, Site);
+                  Open (Taken);
+                  Lower_Statements (Of_Tree, Runs, Inside, Result);
+                  if Current /= IR.No_Block then
+                     Close_With_Jump (Merge, Site);
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         Open (Merge);
+      end Lower_Match;
 
       ------------------------------------------------------------
       --  [1810]: statements
@@ -2185,6 +2302,9 @@ package body Landin.Stages.Lowering is
 
                   when Syn.If_Statement =>
                      Lower_If (Of_Tree, Stmt, Scope, Result);
+
+                  when Syn.Match_Statement =>
+                     Lower_Match (Of_Tree, Stmt, Scope, Result);
 
                   when others =>
                      raise Landin.Compiler_Defect with

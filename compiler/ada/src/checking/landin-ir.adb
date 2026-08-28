@@ -1358,6 +1358,25 @@ package body Landin.IR is
       pragma Assert (Where /= No_Value);
    end Emit_Variant_Select;
 
+   function Emit_Variant_Tag_Load
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Source : Storage;
+      Field  : Positive;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+   is
+   begin
+      return Append
+        (Into, Item,
+         Instruction'(Op            => Load_Variant_Tag,
+                      Result        => Result,
+                      Site          => Site,
+                      Source        => Source,
+                      Element_Field => Field,
+                      others        => <>));
+   end Emit_Variant_Tag_Load;
+
    procedure Emit_Variant_Field_Store
      (Into          : in out Unit;
       Item          : Item_Id;

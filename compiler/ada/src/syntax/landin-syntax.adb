@@ -17,6 +17,7 @@ package body Landin.Syntax is
             when Discard                  => 1,
             when Return_Statement         => 1,
             when If_Statement             => 1,
+            when Match_Statement          => 1,
             when Call                     => 1,
             when Error_Expression         => 0,
             when Name_Reference           => 0,
@@ -46,7 +47,7 @@ package body Landin.Syntax is
             when Variant_Part
                | Variant_Case             => 0,
             when Parameter | Named_Return => 1,
-            when If_Arm                   => 2,
+            when If_Arm | Match_Arm       => 2,
             when Block                    => 0);
 
    function Element (Of_Tree : Tree; Id : Node_Id) return Node
@@ -175,6 +176,19 @@ package body Landin.Syntax is
    function Nth_Arm (Of_Tree : Tree; Id : Node_Id; Index : Positive)
      return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
+
+   function Match_Subject (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Match_Arm_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Match_Arm
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
+
+   function Match_Pattern (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
 
    function Statement_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      is (Run_Length (Of_Tree, Id));

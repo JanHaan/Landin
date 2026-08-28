@@ -255,6 +255,14 @@ package body Landin.IR.Dump is
                         (First_Part_Of (Of_Unit, Item, Value)))
                  & Operands (Item, Value);
 
+            when Load_Variant_Tag =>
+               return Lead & " from "
+                 & Endpoint (Source_Of (Of_Unit, Item, Value))
+                 & " field "
+                 & Trimmed
+                     (Natural'Image
+                        (Element_Field_Of (Of_Unit, Item, Value)));
+
             when Select_Variant =>
                return Lead & " destination "
                  & Endpoint (Destination_Of (Of_Unit, Item, Value))

@@ -1,0 +1,26 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        pair: (value: u8) |
+        row: (values: [2]u16)
+    end kind
+end choice
+
+mut state: choice
+
+match_variants: () -> none =
+    mut local: choice
+    mut answer: u8
+    local.kind = pair(value: 7)
+    match local.kind
+        leaf: answer = 1
+        pair: answer = 2
+        row: answer = 3
+    end match
+    _ = answer
+    match state.kind
+        leaf: _ = 1
+        pair: _ = 2
+        row: _ = 3
+    end match
+end match_variants

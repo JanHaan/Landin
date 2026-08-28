@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 101 with evidence, 97 with neither.
+#  198 constructs, 102 with evidence, 96 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -134,8 +134,8 @@
 1180   tour        refused-by-name                    Labels use the ordinary name form
 1190   tour        refused-by-name                    break carries a value with 'with'
 1200   tour        -                                  Because entries are registered where control reaches
-1210   tour        refused refused-by-name            Pattern matching
-1220   tour        -                                  A pattern binding carries a parameter convention
+1210   tour        accepted emitted executed refused  Pattern matching
+1220   tour        refused refused-by-name            A pattern binding carries a parameter convention
 1230   tour        -                                  A concept names a bundle of requirements on a type
 1240   tour        -                                  A conformance registers one type against one concept
 1250   tour        -                                  A conformance for a parameterised type binds its variables

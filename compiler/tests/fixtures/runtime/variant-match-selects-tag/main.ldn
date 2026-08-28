@@ -1,0 +1,24 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u8) |
+        row: (values: [2]u16)
+    end kind
+end choice
+
+mut state: choice
+
+public main: () -> (code: i32) =
+    mut local: choice = (kind: pair(first: 20, second: 22))
+    match local.kind
+        leaf: code = 1
+        pair: code = 42
+        row: code = 2
+    end match
+    state.kind = row(values: zeroed)
+    match state.kind
+        leaf: code = 3
+        pair: code = 4
+        row: _ = code
+    end match
+end main

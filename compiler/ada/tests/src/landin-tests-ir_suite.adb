@@ -657,7 +657,7 @@ package body Landin.Tests.IR_Suite is
          Routine : Landin.IR.Item_Id;
          Slot : Landin.IR.Slot_Id;
          Block : Landin.IR.Block_Id;
-         Value, Selected, Store : Landin.IR.Value_Id;
+         Value, Loaded, Selected, Store : Landin.IR.Value_Id;
       begin
          Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
          Routine := Landin.IR.Add_Item
@@ -681,16 +681,33 @@ package body Landin.Tests.IR_Suite is
          Block := Landin.IR.Add_Block
            (Unit, Routine, Landin.Resolution.Program_Scope, Site);
          Landin.IR.Enter (Unit, Routine, Block);
+         Loaded := Landin.IR.Emit_Variant_Tag_Load
+           (Unit, Routine, (Kind => Landin.IR.Frame_Slot, Slot => Slot),
+            1, Landin.Types.U8, Site);
          Landin.IR.Emit_Variant_Select
            (Unit, Routine, (Kind => Landin.IR.Frame_Slot, Slot => Slot),
             1, 2, Site);
-         Selected := Landin.IR.Nth_Value (Unit, Routine, Block, 1);
+         Selected := Landin.IR.Nth_Value (Unit, Routine, Block, 2);
          Value := Landin.IR.Emit_Number
            (Unit, Routine, Landin.Types.U16, 7, False, Site);
          Landin.IR.Emit_Variant_Field_Store
            (Unit, Routine, (Kind => Landin.IR.Frame_Slot, Slot => Slot),
             1, 2, 1, Value, Site);
-         Store := Landin.IR.Nth_Value (Unit, Routine, Block, 3);
+         Store := Landin.IR.Nth_Value (Unit, Routine, Block, 4);
+
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Loaded)
+              = Landin.IR.Load_Variant_Tag
+              and then not Landin.IR.Defines_Nothing
+                (Landin.IR.Load_Variant_Tag)
+              and then Landin.IR.Source_Of
+                (Unit, Routine, Loaded).Slot = Slot
+              and then Landin.IR.Element_Field_Of
+                (Unit, Routine, Loaded) = 1
+              and then Landin.IR.Result_Of
+                (Unit, Routine, Loaded) = Landin.Types.U8,
+            "a tag load carries source storage, field and scalar type");
 
          Landin.Testing.Check
            (Item,
@@ -730,11 +747,13 @@ package body Landin.Tests.IR_Suite is
             Landin.Testing.Check
               (Item,
                Ada.Strings.Fixed.Index
+                 (Text, "LOAD_VARIANT_TAG u8 from slot 1 field 1") /= 0
+               and then Ada.Strings.Fixed.Index
                  (Text, "SELECT_VARIANT destination slot 1 field 1 case 2")
                    /= 0
                and then Ada.Strings.Fixed.Index
                  (Text, "STORE_VARIANT_FIELD destination slot 1 field 1"
-                        & " case 2 payload field 1 <- 2") /= 0,
+                        & " case 2 payload field 1 <- 3") /= 0,
                "the dump spells only target-neutral identities");
          end;
       end;

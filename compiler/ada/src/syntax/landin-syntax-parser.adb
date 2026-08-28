@@ -65,7 +65,7 @@ package body Landin.Syntax.Parser is
 
    type Refused_Word is
      (Word_None,
-      Word_Loop, Word_While, Word_For, Word_Match, Word_Defer,
+      Word_Loop, Word_While, Word_For, Word_Defer,
       Word_Undo, Word_Try, Word_Fail, Word_Break, Word_Continue,
       Word_Distinct);
 
@@ -76,7 +76,6 @@ package body Landin.Syntax.Parser is
             when Word_Loop     => "loop",
             when Word_While    => "while",
             when Word_For      => "for",
-            when Word_Match    => "match",
             when Word_Defer    => "defer",
             when Word_Undo     => "undo",
             when Word_Try      => "try",
@@ -90,7 +89,6 @@ package body Landin.Syntax.Parser is
             when Word_Loop     => Syn.Loop_Statement,
             when Word_While    => Syn.While_Statement,
             when Word_For      => Syn.For_Statement,
-            when Word_Match    => Syn.Match_Statement,
             when Word_Defer    => Syn.Defer_Statement,
             when Word_Undo     => Syn.Undo_Statement,
             when Word_Try      => Syn.Try_Expression,
@@ -190,6 +188,9 @@ package body Landin.Syntax.Parser is
 
             Variant_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "variant");
+
+            Match_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "match");
 
             Scalar_Id : constant array (Scalar_Name)
               of Landin.Source.Names.Name_Id :=
@@ -310,6 +311,7 @@ package body Landin.Syntax.Parser is
               (Context : Frame; Seed : Node_Id := No_Node) return Node_Id;
             function Parse_Statement (Context : Frame) return Node_Id;
             function Parse_If (Context : Frame) return Node_Id;
+            function Parse_Match (Context : Frame) return Node_Id;
             function Parse_Expression
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id;
             function Parse_Unary return Node_Id;
@@ -1887,6 +1889,7 @@ package body Landin.Syntax.Parser is
                   --  body [1800] offers instead of a block.
                   if Peek = Tok.Identifier
                     and then Word_At_Hand = Word_None
+                    and then Named_Here /= Match_Id
                     and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
                     and then After_Selectors /= Tok.Equal
                   then
@@ -2251,6 +2254,10 @@ package body Landin.Syntax.Parser is
                        (False, Landin.Source.Empty_Span);
 
                   when Tok.Identifier =>
+                     if Named_Here = Match_Id then
+                        return Parse_Match (Context);
+                     end if;
+
                      declare
                         Word : constant Refused_Word := Word_At_Hand;
                      begin
@@ -2445,6 +2452,134 @@ package body Landin.Syntax.Parser is
                      Children => Head & To_List (Arms));
                end;
             end Parse_If;
+
+            --  match ::= "match" expression match_arm+ "end" "match"
+            --  match_arm ::= identifier ":" statement              D77
+            --
+            --  One statement per arm is the first executable boundary and
+            --  is deliberately independent of indentation.  An `if` may be
+            --  that statement when an arm needs a statement block.  D78
+            --  adds the parenthesized payload-binding list.
+            function Parse_Match (Context : Frame) return Node_Id is
+               At_Match : constant Landin.Source.Span := Here;
+               Subject  : Node_Id;
+               Arms     : Slot_Vectors.Vector;
+            begin
+               if Too_Deep (At_Match) then
+                  Advance;
+                  Resync_Statement;
+                  return Add
+                    (Error_Statement, At_Match,
+                     Join (At_Match, After_Previous));
+               end if;
+
+               Depth := Depth + 1;
+               Advance;
+               Subject := Parse_Expression;
+
+               while not (Peek = Tok.Kw_End
+                           and then Ahead (1) = Tok.Identifier
+                           and then Named_Ahead (1) = Match_Id)
+                 and then Peek /= Tok.End_Of_Input
+               loop
+                  if Peek /= Tok.Identifier then
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => Here,
+                        Message => "a match arm begins with a case name",
+                        Note    => "D77: match expression case `:`"
+                                   & " statement `end match`");
+                     Resync_Statement;
+                     exit;
+                  end if;
+
+                  declare
+                     At_Case : constant Landin.Source.Span := Here;
+                     Named   : constant Landin.Source.Names.Name_Id :=
+                       Named_Here;
+                     Pattern, Runs, Statement : Node_Id;
+                     Kept : Boolean;
+                  begin
+                     Advance;
+                     Pattern := Add
+                       (Of_Kind  => Name_Reference,
+                        At_Token => At_Case,
+                        Named    => Named);
+
+                     if Peek = Tok.Left_Paren then
+                        Refuse
+                          (Item    => Syn.Match_Payload_Binding,
+                           Where   => Here,
+                           Message => "variant payload bindings are not"
+                                      & " enabled yet");
+                        Advance;
+                        Resync_Parentheses;
+                     end if;
+
+                     Kept := Expect
+                       (Wanted  => Tok.Colon,
+                        Message => "a match arm puts `:` after its case",
+                        Note    => "D77: case `:` statement",
+                        Related => At_Case,
+                        Because => "this case");
+                     pragma Unreferenced (Kept);
+
+                     Statement := Parse_Statement (Context);
+                     Runs := Add
+                       (Of_Kind  => Block,
+                        At_Token => At_Case,
+                        Extent   => Join (At_Case, After_Previous),
+                        Children => [Statement]);
+                     Arms.Append
+                       (Add (Of_Kind  => Match_Arm,
+                             At_Token => At_Case,
+                             Extent   => Join (At_Case, After_Previous),
+                             Children => [Pattern, Runs]));
+                  end;
+               end loop;
+
+               Depth := Depth - 1;
+               if Peek = Tok.Kw_End
+                 and then Ahead (1) = Tok.Identifier
+                 and then Named_Ahead (1) = Match_Id
+               then
+                  Advance;
+                  Advance;
+               else
+                  Complain
+                    (Item    => Syn.Unclosed_Construct,
+                     Where   => After_Previous,
+                     Message => "this match is never closed",
+                     Note    => "D77: a match closes with `end match`",
+                     Related => At_Match,
+                     Because => "opened here",
+                     Gate    => False);
+               end if;
+
+               if Arms.Is_Empty then
+                  Complain
+                    (Item    => Syn.Name_Expected,
+                     Where   => At_Match,
+                     Message => "a match needs at least one case arm",
+                     Note    => "[1210]: a missing case is a compile error");
+                  Arms.Append
+                    (Add (Of_Kind  => Match_Arm,
+                          At_Token => At_Match,
+                          Children =>
+                            [Add (Error_Expression, At_Match),
+                             Add (Block, At_Match)]));
+               end if;
+
+               declare
+                  Head : constant Slot_List (1 .. 1) := [Subject];
+               begin
+                  return Add
+                    (Of_Kind  => Match_Statement,
+                     At_Token => At_Match,
+                     Extent   => Join (At_Match, After_Previous),
+                     Children => Head & To_List (Arms));
+               end;
+            end Parse_Match;
 
             ------------------------------------------------------------
             --  Expressions                                      [1820]
