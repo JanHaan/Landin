@@ -1367,6 +1367,15 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
 
+   --  D88's field inside Field_Of's depth-one ordinary child.  Zero keeps
+   --  the direct D16 field operation; a positive identity is declaration
+   --  order inside the child and never a target offset.
+   function Nested_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Load_Field | Store_Field;
+
    --  D48's containing aggregate field for an element operation, D49's
    --  destination field for a clear, D50's destination field for a copy,
    --  and D53's destination field for a fill.  D84 lets that field contain
@@ -1709,7 +1718,8 @@ package Landin.IR is
       Datum  : Item_Id;
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Nested_Field : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Datum)
                   and then Landin.Provenance.Is_Known (Site),
@@ -1722,7 +1732,8 @@ package Landin.IR is
       Slot   : Slot_Id;
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Nested_Field : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Slot)
                   and then Landin.Provenance.Is_Known (Site),
@@ -1735,7 +1746,8 @@ package Landin.IR is
       Slot  : Slot_Id;
       Field : Part_Position;
       Value : Value_Id;
-      Site  : Landin.Provenance.Origin)
+      Site  : Landin.Provenance.Origin;
+      Nested_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Slot)
                  and then Holds (Into, Item, Value)
@@ -1753,7 +1765,8 @@ package Landin.IR is
       Datum : Item_Id;
       Field : Part_Position;
       Value : Value_Id;
-      Site  : Landin.Provenance.Origin)
+      Site  : Landin.Provenance.Origin;
+      Nested_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Datum)
                  and then Holds (Into, Item, Value)
@@ -2062,6 +2075,7 @@ private
       Alternative : Block_Id                  := No_Block;
       Number      : Landin.Types.Magnitude    := 0;
       Part        : Part_Position              := 1;
+      Nested_Part : Natural                    := 0;
       Element_Field : Natural                  := 0;
       Variant_Case  : Natural                  := 0;
       Variant_Payload_Field : Natural           := 0;

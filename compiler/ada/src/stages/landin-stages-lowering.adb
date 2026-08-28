@@ -1180,12 +1180,24 @@ package body Landin.Stages.Lowering is
                declare
                   From : constant Syn.Node_Id :=
                     Syn.Target_Of (Of_Tree, Node);
+                  Nested : constant Boolean :=
+                    Syn.Kind (Of_Tree, From) = Syn.Member_Selection;
+                  Named : constant Syn.Node_Id :=
+                    (if Nested
+                     then Syn.Target_Of (Of_Tree, From)
+                     else From);
                   Means : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, From);
+                    Res.Bound_To (Meanings.all, Of_Tree, Named);
                   Which : constant IR.Part_Position :=
                     IR.Part_Position
                       (Landin.Checking.Field_Index
-                         (Types.all, Of_Tree, Node));
+                         (Types.all, Of_Tree,
+                          (if Nested then From else Node)));
+                  Child : constant Natural :=
+                    (if Nested
+                     then Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, Node)
+                     else 0);
                begin
                   if Res.Sort_Of (Meanings.all, Means)
                      = Res.Module_Binding
@@ -1193,13 +1205,15 @@ package body Landin.Stages.Lowering is
                      return IR.Emit_Load_Field
                               (Unit.all, Filling,
                                IR.Item_For (Unit.all, Means), Which,
-                               Scalar_At (Of_Tree, Node), Site);
+                               Scalar_At (Of_Tree, Node), Site,
+                               Nested_Field => Child);
                   end if;
 
                   return IR.Emit_Load_Slot_Field
                            (Unit.all, Filling,
-                            Slot_For (Of_Tree, From, Means), Which,
-                            Scalar_At (Of_Tree, Node), Site);
+                            Slot_For (Of_Tree, Named, Means), Which,
+                            Scalar_At (Of_Tree, Node), Site,
+                            Nested_Field => Child);
                end;
 
             when Syn.Name_Reference =>
@@ -2093,12 +2107,17 @@ package body Landin.Stages.Lowering is
                     (if Syn.Kind (Of_Tree, Place) = Syn.Element_Index
                      then Syn.Target_Of (Of_Tree, Place)
                      else Place);
-                  Named : constant Syn.Node_Id :=
+                  Named_Once : constant Syn.Node_Id :=
                     (if Syn.Kind (Of_Tree, Selected) = Syn.Member_Selection
                      then Syn.Target_Of (Of_Tree, Selected)
                      elsif Syn.Kind (Of_Tree, Place) = Syn.Member_Selection
                      then Syn.Target_Of (Of_Tree, Place)
                      else Selected);
+                  Named : constant Syn.Node_Id :=
+                    (if Syn.Kind (Of_Tree, Named_Once)
+                          = Syn.Member_Selection
+                     then Syn.Target_Of (Of_Tree, Named_Once)
+                     else Named_Once);
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
@@ -2184,10 +2203,20 @@ package body Landin.Stages.Lowering is
 
                   if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection then
                      declare
+                        From : constant Syn.Node_Id :=
+                          Syn.Target_Of (Of_Tree, Place);
+                        Nested : constant Boolean :=
+                          Syn.Kind (Of_Tree, From) = Syn.Member_Selection;
                         Which : constant IR.Part_Position :=
                           IR.Part_Position
                             (Landin.Checking.Field_Index
-                               (Types.all, Of_Tree, Place));
+                               (Types.all, Of_Tree,
+                                (if Nested then From else Place)));
+                        Child : constant Natural :=
+                          (if Nested
+                           then Landin.Checking.Field_Index
+                                  (Types.all, Of_Tree, Place)
+                           else 0);
                      begin
                         if Res.Sort_Of (Meanings.all, Means)
                            = Res.Module_Binding
@@ -2195,12 +2224,12 @@ package body Landin.Stages.Lowering is
                            IR.Emit_Store_Field
                              (Unit.all, Filling,
                               IR.Item_For (Unit.all, Means), Which,
-                              Value, Site);
+                              Value, Site, Nested_Field => Child);
                         else
                            IR.Emit_Store_Slot_Field
                              (Unit.all, Filling,
                               Slot_For (Of_Tree, Named, Means), Which,
-                              Value, Site);
+                              Value, Site, Nested_Field => Child);
                         end if;
                      end;
 

@@ -1783,6 +1783,52 @@ package body Landin.Stages.Checking is
       function Selected_From
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind is
       begin
+         --  D88 admits a depth-one ordinary child only as the base of a
+         --  further field selection.  Synthesise still refuses the child as
+         --  a general aggregate value; this path-bearing question records
+         --  both declaration-order identities and the child's nominal body.
+         if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection then
+            declare
+               From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
+               Held : constant Ty.Type_Kind := Selected_From (Of_Tree, From);
+            begin
+               if Held = Ty.Aggregate then
+                  declare
+                     Wrote : constant Res.Declaration_Id :=
+                       Landin.Checking.Body_Of (Types.all, Of_Tree, From);
+                     Which : constant Natural :=
+                       (if Wrote = Res.No_Declaration then 0
+                        else Field_At (Wrote, Syn.Name (Of_Tree, Node)));
+                  begin
+                     if Which > 0
+                       and then Landin.Checking.Has_Layout (Types.all, Wrote)
+                       and then Landin.Checking.Field_Kind_Of
+                                  (Types.all, Wrote, Which)
+                                = Landin.Checking.Aggregate_Field
+                     then
+                        declare
+                           Child : constant Res.Declaration_Id :=
+                             Landin.Checking.Field_Shape_Of
+                               (Types.all, Wrote, Which).Aggregate_Body;
+                        begin
+                           if Landin.Checking.Type_Of
+                                (Types.all, Of_Tree, Node) = Ty.Undecided
+                           then
+                              Landin.Checking.Note
+                                (Types.all, Of_Tree, Node, Ty.Aggregate);
+                              Landin.Checking.Note_Field
+                                (Types.all, Of_Tree, Node, Which);
+                              Landin.Checking.Note_Body
+                                (Types.all, Of_Tree, Node, Child);
+                           end if;
+                           return Ty.Aggregate;
+                        end;
+                     end if;
+                  end;
+               end if;
+            end;
+         end if;
+
          if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
            and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
          then
@@ -2634,10 +2680,10 @@ package body Landin.Stages.Checking is
                         return Kept (Ty.Ill_Typed);
                      end if;
 
-                     --  D87 allocates and clears the containing cell, but a
-                     --  nested ordinary field still needs a path-bearing
-                     --  value/place representation.  Keep it away from the
-                     --  scalar Field_Type accessor until that next slice.
+                     --  D88 admits scalar leaves only through a further
+                     --  selection.  The intermediate ordinary child remains
+                     --  no general value or whole place, so keep this direct
+                     --  occurrence away from the scalar accessor.
                      if Landin.Checking.Field_Kind_Of
                           (Types.all, Wrote, Which)
                           = Landin.Checking.Aggregate_Field

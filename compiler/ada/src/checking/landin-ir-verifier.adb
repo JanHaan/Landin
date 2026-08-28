@@ -213,6 +213,13 @@ package body Landin.IR.Verifier is
          Shape         : out Field_Shape;
          Leaf          : out Field_Shape) return Fault_Kind;
 
+      function Scalar_Field_Of
+        (Item    : Item_Id;
+         Place   : Storage;
+         Field   : Part_Position;
+         Nested  : Natural;
+         Element : out Landin.Types.Scalar_Name) return Fault_Kind;
+
       function Shape_Of
         (Item    : Item_Id;
          Place   : Storage;
@@ -221,6 +228,93 @@ package body Landin.IR.Verifier is
          Length  : out Element_Total;
          Which   : Natural := 0;
          Payload_Field : Natural := 0) return Fault_Kind;
+
+      function Scalar_Field_Of
+        (Item    : Item_Id;
+         Place   : Storage;
+         Field   : Part_Position;
+         Nested  : Natural;
+         Element : out Landin.Types.Scalar_Name) return Fault_Kind
+      is
+         Shape : Field_Shape;
+      begin
+         Element := Landin.Types.Bool;
+
+         case Place.Kind is
+            when Module_Datum =>
+               if not Holds (Of_Unit, Place.Datum)
+                 or else Kind_Of (Of_Unit, Place.Datum) /= Datum
+               then
+                  return Named_Item_Is_Not_A_Datum;
+               end if;
+               if Result_Of (Of_Unit, Place.Datum)
+                    not in Landin.Types.Aggregate | Landin.Types.Fixed_Array
+                 or else Element_Total (Field)
+                           > Part_Count (Of_Unit, Place.Datum)
+               then
+                  return Field_Out_Of_Range;
+               end if;
+               if Nested = 0 then
+                  if not Part_Is_Scalar (Of_Unit, Place.Datum, Field) then
+                     return Field_Is_Not_A_Scalar;
+                  end if;
+                  Element := Nth_Part (Of_Unit, Place.Datum, Field);
+                  return Nothing_Wrong;
+               end if;
+               if Result_Of (Of_Unit, Place.Datum)
+                    /= Landin.Types.Aggregate
+               then
+                  return Field_Is_Not_A_Scalar;
+               end if;
+               Shape := Nth_Field_Shape
+                 (Of_Unit, Place.Datum, Positive (Field));
+
+            when Frame_Slot =>
+               if not Holds (Of_Unit, Item, Place.Slot) then
+                  return Slot_Out_Of_Range;
+               end if;
+               if (not Is_Aggregate (Of_Unit, Item, Place.Slot)
+                   and then not Is_Array (Of_Unit, Item, Place.Slot))
+                 or else Element_Total (Field)
+                           > Slot_Part_Count (Of_Unit, Item, Place.Slot)
+               then
+                  return Field_Out_Of_Range;
+               end if;
+               if Nested = 0 then
+                  if not Slot_Part_Is_Scalar
+                    (Of_Unit, Item, Place.Slot, Field)
+                  then
+                     return Field_Is_Not_A_Scalar;
+                  end if;
+                  Element := Nth_Slot_Part
+                    (Of_Unit, Item, Place.Slot, Field);
+                  return Nothing_Wrong;
+               end if;
+               if not Is_Aggregate (Of_Unit, Item, Place.Slot) then
+                  return Field_Is_Not_A_Scalar;
+               end if;
+               Shape := Nth_Slot_Field_Shape
+                 (Of_Unit, Item, Place.Slot, Positive (Field));
+         end case;
+
+         if Shape.Kind /= Aggregate_Field_Shape
+           or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
+           or else Nested > Aggregate_Field_Count (Of_Unit, Shape)
+         then
+            return Field_Is_Not_A_Scalar;
+         end if;
+
+         declare
+            Leaf : constant Field_Shape :=
+              Nth_Aggregate_Field (Of_Unit, Shape, Positive (Nested));
+         begin
+            if Leaf.Kind /= Scalar_Field_Shape then
+               return Field_Is_Not_A_Scalar;
+            end if;
+            Element := Leaf.Element;
+            return Nothing_Wrong;
+         end;
+      end Scalar_Field_Of;
 
       function Shape_Of
         (Item    : Item_Id;
@@ -1260,27 +1354,33 @@ package body Landin.IR.Verifier is
                                                Value => V);
                                     end if;
 
-                                    if not Slot_Part_Is_Scalar
-                                      (Of_Unit, Id, Cell,
-                                       Field_Of (Of_Unit, Id, V))
-                                    then
-                                       return
-                                         (Kind => Field_Is_Not_A_Scalar,
-                                          Item => Id, Block => Block,
-                                          Value => V);
-                                    end if;
-
-                                    if Op = Load_Field
-                                      and then Result_Of (Of_Unit, Id, V)
-                                               /= Nth_Slot_Part
-                                                    (Of_Unit, Id, Cell,
-                                                     Field_Of
-                                                       (Of_Unit, Id, V))
-                                    then
-                                       return (Kind => Result_Disagrees,
-                                               Item => Id, Block => Block,
-                                               Value => V);
-                                    end if;
+                                    declare
+                                       Element : Landin.Types.Scalar_Name;
+                                       Bad : constant Fault_Kind :=
+                                         Scalar_Field_Of
+                                           (Id,
+                                            (Kind => Frame_Slot,
+                                             Slot => Cell),
+                                            Field_Of (Of_Unit, Id, V),
+                                            Nested_Field_Of
+                                              (Of_Unit, Id, V),
+                                            Element);
+                                    begin
+                                       if Bad /= Nothing_Wrong then
+                                          return
+                                            (Kind => Bad, Item => Id,
+                                             Block => Block, Value => V);
+                                       end if;
+                                       if Op = Load_Field
+                                         and then Result_Of (Of_Unit, Id, V)
+                                                    /= Element
+                                       then
+                                          return
+                                            (Kind => Result_Disagrees,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    end;
                                  end;
                               else
                                  declare
@@ -1314,27 +1414,33 @@ package body Landin.IR.Verifier is
                                          Value => V);
                                     end if;
 
-                                    if not Part_Is_Scalar
-                                      (Of_Unit, D,
-                                       Field_Of (Of_Unit, Id, V))
-                                    then
-                                       return
-                                         (Kind => Field_Is_Not_A_Scalar,
-                                          Item => Id, Block => Block,
-                                          Value => V);
-                                    end if;
-
-                                    if Op = Load_Field
-                                      and then Result_Of (Of_Unit, Id, V)
-                                               /= Nth_Part
-                                                    (Of_Unit, D,
-                                                     Field_Of (Of_Unit, Id, V))
-                                    then
-                                       return
-                                         (Kind => Result_Disagrees,
-                                          Item => Id, Block => Block,
-                                          Value => V);
-                                    end if;
+                                    declare
+                                       Element : Landin.Types.Scalar_Name;
+                                       Bad : constant Fault_Kind :=
+                                         Scalar_Field_Of
+                                           (Id,
+                                            (Kind => Module_Datum,
+                                             Datum => D),
+                                            Field_Of (Of_Unit, Id, V),
+                                            Nested_Field_Of
+                                              (Of_Unit, Id, V),
+                                            Element);
+                                    begin
+                                       if Bad /= Nothing_Wrong then
+                                          return
+                                            (Kind => Bad, Item => Id,
+                                             Block => Block, Value => V);
+                                       end if;
+                                       if Op = Load_Field
+                                         and then Result_Of (Of_Unit, Id, V)
+                                                    /= Element
+                                       then
+                                          return
+                                            (Kind => Result_Disagrees,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    end;
                                  end;
                               end if;
 
@@ -1959,18 +2065,26 @@ package body Landin.IR.Verifier is
 
                            when Store_Field =>
                               declare
-                                 Wants : constant Landin.Types.Scalar_Name
-                                   :=
-                                     (if Reaches_A_Slot (Of_Unit, Id, V)
-                                      then Nth_Slot_Part
-                                             (Of_Unit, Id,
-                                              Slot_Of (Of_Unit, Id, V),
-                                              Field_Of (Of_Unit, Id, V))
-                                      else Nth_Part
-                                             (Of_Unit,
-                                              Datum_Of (Of_Unit, Id, V),
-                                              Field_Of (Of_Unit, Id, V)));
+                                 Place : constant Storage :=
+                                   (if Reaches_A_Slot (Of_Unit, Id, V)
+                                    then (Kind => Frame_Slot,
+                                          Slot => Slot_Of
+                                            (Of_Unit, Id, V))
+                                    else (Kind => Module_Datum,
+                                          Datum => Datum_Of
+                                            (Of_Unit, Id, V)));
+                                 Wants : Landin.Types.Scalar_Name;
+                                 Bad : constant Fault_Kind :=
+                                   Scalar_Field_Of
+                                     (Id, Place,
+                                      Field_Of (Of_Unit, Id, V),
+                                      Nested_Field_Of (Of_Unit, Id, V),
+                                      Wants);
                               begin
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
                                  if Wants
                                     /= Result_Of
                                          (Of_Unit, Id,
