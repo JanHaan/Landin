@@ -1,0 +1,17 @@
+holder: type = struct
+    tag: u8
+    row: [2]usize
+    tail: u16
+end holder
+
+same: type = holder
+state: holder = zeroed
+mut aliased: same = zeroed
+
+read: (at: usize) -> (result: usize) =
+    _ = state.tag
+    _ = state.tail
+    _ = aliased.tag
+    _ = aliased.tail
+    result = state.row[at] + aliased.row[at]
+end read

@@ -1,0 +1,6 @@
+class: negative
+summary: D59 keeps zeroed nested in a general module struct initializer refused
+constructs: 0410, 0540, 0670, 0710, 0750, 1740
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

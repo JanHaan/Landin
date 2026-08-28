@@ -1,6 +1,6 @@
 holder: type = struct
     tag: u8
-    row: [2]usize
+    row: [2]u32
 end holder
 
-state: holder = zeroed
+state: holder = zeroed + 1

@@ -1,0 +1,31 @@
+holder: type = struct
+    tag: u8
+    row: [2]u32
+    tail: u16
+end holder
+
+same: type = holder
+state: holder = zeroed
+mut writable: same = zeroed
+
+public main: () -> (code: i32) =
+    if state.tag == 0 and state.row[0] == 0 and state.row[1] == 0
+        and state.tail == 0 and writable.tag == 0
+        and writable.row[0] == 0 and writable.row[1] == 0
+        and writable.tail == 0
+    then
+        writable.tag = 7
+        writable.row[1] = 42
+        writable.tail = 701
+        if state.row[1] == 0 and writable.tag == 7
+            and writable.row[0] == 0 and writable.row[1] == 42
+            and writable.tail == 701
+        then
+            code = 42
+        else
+            code = 2
+        end if
+    else
+        code = 1
+    end if
+end main
