@@ -1,0 +1,10 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+origin: point = point(x: 0, y: 0)
+
+f: () -> none =
+    _ = point(x: 1, y: 2)
+end f

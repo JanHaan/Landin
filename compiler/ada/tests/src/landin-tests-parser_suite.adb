@@ -329,6 +329,82 @@ package body Landin.Tests.Parser_Suite is
    end Mixed_Repetition_Preserves_Contextual_Of;
 
    ------------------------------------------------------------------
+   --  Named ordinary-struct refusals
+   ------------------------------------------------------------------
+
+   procedure Struct_Literal_Shapes_Are_Refused_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure Struct_Literal_Shapes_Are_Refused_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Program
+        (Text : String; Expected : String; Because : String);
+
+      procedure Check_Program
+        (Text : String; Expected : String; Because : String)
+      is
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse (Text, Codes, Total, Nodes, Held);
+         Landin.Testing.Check (Item, Held, Because & ": the tree is sound");
+         Landin.Testing.Check (Item, Nodes > 0, Because & ": a tree exists");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Codes), Expected,
+            Because & ": the intended refusal owns the report");
+      end Check_Program;
+   begin
+      Check_Program
+        ("point: type = struct" & ASCII.LF
+         & "  x: i32" & ASCII.LF
+         & "  y: i32" & ASCII.LF
+         & "end point" & ASCII.LF
+         & "origin: point = (x: 1, y: (2))" & ASCII.LF,
+         "L0010", "a nested field image");
+
+      Check_Program
+        ("point: type = struct" & ASCII.LF
+         & "  x: i32" & ASCII.LF
+         & "end point" & ASCII.LF
+         & "origin: point = (x: 1",
+         "L0010", "a truncated field image");
+
+      Check_Program
+        ("point: type = struct" & ASCII.LF
+         & "  x: i32" & ASCII.LF
+         & "end point" & ASCII.LF
+         & "origin: point = point(x: 1)" & ASCII.LF,
+         "L0010", "call-shaped construction");
+
+      Check_Program
+        ("point: type = struct" & ASCII.LF
+         & "  x: i32" & ASCII.LF
+         & "end point" & ASCII.LF
+         & "first: point = (x: 1)[0]" & ASCII.LF
+         & "second: point = point(x: 1)[0]" & ASCII.LF,
+         "L0010, L0010", "indexes after refused field images");
+
+      Check_Program
+        ("point: type = struct" & ASCII.LF
+         & "  x: i32" & ASCII.LF
+         & "end point" & ASCII.LF
+         & "origin: point = point(x: 1) +",
+         "L0010, L0102", "an error following a refused construction");
+
+      Check_Program
+        ("add: (x: i32, y: i32) -> (sum: i32) =" & ASCII.LF
+         & "  sum = x + y" & ASCII.LF
+         & "end add" & ASCII.LF
+         & "f: (of: i32) -> (r: i32) =" & ASCII.LF
+         & "  r = add((of), (of + 1)) + (of - 1)" & ASCII.LF
+         & "end f" & ASCII.LF,
+         "", "ordinary parentheses, calls and a binding named `of`");
+   end Struct_Literal_Shapes_Are_Refused_Once;
+
+   ------------------------------------------------------------------
    --  Recovery, on input nothing derives
    ------------------------------------------------------------------
 
@@ -582,6 +658,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "preserves contextual of in mixed repetition",
          Mixed_Repetition_Preserves_Contextual_Of'Access);
+      Landin.Testing.Register
+        (Into, "parser", "names struct literal and construction once",
+         Struct_Literal_Shapes_Are_Refused_Once'Access);
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
          Survives_Every_Truncation'Access);
