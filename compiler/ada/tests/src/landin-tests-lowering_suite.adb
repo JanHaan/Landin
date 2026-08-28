@@ -36,6 +36,7 @@ package body Landin.Tests.Lowering_Suite is
 
    use type IR.Field_Shape;
    use type IR.Field_Shape_Kind;
+   use type IR.Field_Image_Form;
 
    use type IR.Block_Id;
    use type IR.Element_Total;
@@ -1983,9 +1984,9 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Array_Chain_Copies_The_Terminal_Image;
 
-   --  D66 extends D60/D61's module struct image chain with a nonzero
-   --  terminal.  Every destination gets its own declaration-order folded
-   --  run; an omitted or whole-zero terminal keeps the absent image.
+   --  D66/D67 extend D60/D61's module struct image chain with scalar folds
+   --  and a compact finite array-field segment.  Every destination gets its
+   --  own run; an omitted or whole-zero terminal keeps the absent image.
    procedure A_Module_Struct_Literal_Records_And_Copies_Its_Image
      (Item : in out Landin.Testing.Context);
 
@@ -2003,7 +2004,7 @@ package body Landin.Tests.Lowering_Suite is
          & "    count: usize" & LF
          & "    row: [2]u16" & LF
          & "end holder" & LF
-         & "mut origin: holder = (count: 7, tag: 5, of zeroed)" & LF
+         & "mut origin: holder = (count: 7, row: [11, 13], tag: 5)" & LF
          & "copy: holder = origin" & LF
          & "inferred := copy" & LF
          & "blank: holder = zeroed" & LF,
@@ -2024,11 +2025,17 @@ package body Landin.Tests.Lowering_Suite is
                "each nonzero struct destination owns an image");
             Landin.Testing.Check
               (Item,
-               IR.Image_Length (Unit, Datum) = 3
+               IR.Image_Length (Unit, Datum) = 5
                and then IR.Nth_Field_Image (Unit, Datum, 1) = 5
                and then IR.Nth_Field_Image (Unit, Datum, 2) = 7
                and then IR.Nth_Field_Image (Unit, Datum, 3) = 0,
                "the chain carries scalar folds and the array placeholder");
+            Landin.Testing.Check
+              (Item,
+               IR.Field_Image_Of (Unit, Datum, 3).Form = IR.Finite
+               and then IR.Nth_Field_Element (Unit, Datum, 3, 1) = 11
+               and then IR.Nth_Field_Element (Unit, Datum, 3, 2) = 13,
+               "the chain copies the finite array-field image");
          end loop;
 
          Landin.Testing.Check

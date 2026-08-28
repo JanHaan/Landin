@@ -102,6 +102,17 @@ package body Landin.IR.Verifier is
             when Aggregate_Image_On_Array_Field =>
                "an aggregate datum's first image form carries a nonzero"
                & " value for a fixed-array field",
+            when Aggregate_Field_Image_Length_Disagrees =>
+               "an aggregate datum's field-image run disagrees with its"
+               & " declared fields",
+            when Aggregate_Field_Image_Value_Does_Not_Fit =>
+               "an aggregate datum's array-field image carries a value the"
+               & " element type cannot hold on this target",
+            when Aggregate_Field_Image_On_Scalar_Field =>
+               "an aggregate datum carries an array image on a scalar field",
+            when Aggregate_Field_Image_Form_Not_Carried =>
+               "an aggregate datum carries an array-field image form this"
+               & " IR slice has not enabled",
             when Callee_Is_Not_A_Routine =>
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
@@ -156,6 +167,11 @@ package body Landin.IR.Verifier is
      (Of_Unit    : Unit;
       Facts      : Landin.Targets.Target_Facts;
       Check_Image : Boolean) return Fault is
+
+      Field_Length_Fault : constant Fault_Kind :=
+        Aggregate_Field_Image_Length_Disagrees;
+      Field_Value_Fault : constant Fault_Kind :=
+        Aggregate_Field_Image_Value_Does_Not_Fit;
 
       function Shape_Of
         (Item    : Item_Id;
@@ -384,6 +400,51 @@ package body Landin.IR.Verifier is
          end loop;
       end;
 
+      --  D67's one descriptor per aggregate field is filled in the same
+      --  image-resolution order as the folded runs above.  Hold this separate
+      --  vector to the same complete, non-overlapping partition before any
+      --  Field_Image_Of accessor is used.
+      declare
+         Total : constant Natural :=
+           Natural (Of_Unit.Aggregate_Images.Length);
+         Seen  : array (1 .. Positive'Max (1, Total))
+                   of Item_Id := [others => No_Item];
+      begin
+         for Which in 1 .. Item_Count (Of_Unit) loop
+            declare
+               Held : constant Item_Record := Of_Unit.Items (Which);
+            begin
+               if Held.Aggregate_Images.Count /= 0 then
+                  if Held.Aggregate_Images.First > Total
+                    or else Held.Aggregate_Images.Count
+                              > Total - Held.Aggregate_Images.First
+                  then
+                     return (Kind => Item_Runs_Overlap,
+                             Item => Item_Id (Which), others => <>);
+                  end if;
+
+                  for Position in
+                    Held.Aggregate_Images.First + 1
+                    .. Held.Aggregate_Images.First
+                         + Held.Aggregate_Images.Count
+                  loop
+                     if Seen (Position) /= No_Item then
+                        return (Kind => Item_Runs_Overlap,
+                                Item => Item_Id (Which), others => <>);
+                     end if;
+                     Seen (Position) := Item_Id (Which);
+                  end loop;
+               end if;
+            end;
+         end loop;
+
+         for Position in 1 .. Total loop
+            if Seen (Position) = No_Item then
+               return (Kind => Item_Runs_Overlap, others => <>);
+            end if;
+         end loop;
+      end;
+
       --  The operand vector, which is the fifth run and the one a call
       --  extends after the fact.
       declare
@@ -533,16 +594,15 @@ package body Landin.IR.Verifier is
                end;
             end if;
 
-            --  D66: a written aggregate image is one folded entry for each
-            --  declaration-order field.  Scalar values are checked at the
-            --  target's own width.  A fixed-array field has only the absent
-            --  zero image in this first carrier, so its placeholder must be
-            --  zero.  Length is checked before any image accessor so release
-            --  builds are protected without relying on contracts.
+            --  D66/D67: the flat image starts with one folded entry for each
+            --  declaration-order field, followed by D67's finite array-field
+            --  segments.  The descriptor count and every offset/form/length
+            --  are checked before Nth_Field_Element, so release builds never
+            --  rely on an accessor contract for malformed input.
             if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
               and then Has_Image (Of_Unit, Id)
               and then Image_Length (Of_Unit, Id)
-                       /= Element_Total (Field_Count (Of_Unit, Id))
+                       < Element_Total (Field_Count (Of_Unit, Id))
             then
                return (Kind => Aggregate_Image_Length_Disagrees,
                        Item => Id, others => <>);
@@ -551,41 +611,154 @@ package body Landin.IR.Verifier is
             if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
               and then Has_Image (Of_Unit, Id)
               and then Image_Length (Of_Unit, Id)
-                       = Element_Total (Field_Count (Of_Unit, Id))
+                       >= Element_Total (Field_Count (Of_Unit, Id))
+              and then Aggregate_Field_Image_Count (Of_Unit, Id)
+                       /= Field_Count (Of_Unit, Id)
             then
-               for Field in 1 .. Field_Count (Of_Unit, Id) loop
-                  declare
-                     Shape : constant Field_Shape :=
-                       Nth_Field_Shape (Of_Unit, Id, Field);
-                     Held : constant Landin.Types.Folded :=
-                       Nth_Field_Image (Of_Unit, Id, Field);
-                     Fits : Boolean := True;
-                  begin
-                     if Shape.Kind = Array_Field_Shape then
-                        if Held /= 0 then
+               return (Kind => Aggregate_Field_Image_Length_Disagrees,
+                       Item => Id, others => <>);
+            end if;
+
+            if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
+              and then Has_Image (Of_Unit, Id)
+              and then Image_Length (Of_Unit, Id)
+                       >= Element_Total (Field_Count (Of_Unit, Id))
+              and then Aggregate_Field_Image_Count (Of_Unit, Id)
+                       = Field_Count (Of_Unit, Id)
+            then
+               declare
+                  Expected : Natural := 0;
+                  Elements : constant Natural :=
+                    Natural
+                      (Image_Length (Of_Unit, Id)
+                       - Element_Total (Field_Count (Of_Unit, Id)));
+               begin
+                  for Field in 1 .. Field_Count (Of_Unit, Id) loop
+                     declare
+                        Shape : constant Field_Shape :=
+                          Nth_Field_Shape (Of_Unit, Id, Field);
+                        Held : constant Landin.Types.Folded :=
+                          Nth_Field_Image (Of_Unit, Id, Field);
+                        Image : constant Aggregate_Field_Image :=
+                          Field_Image_Of (Of_Unit, Id, Field);
+                        Fits : Boolean := True;
+                     begin
+                        if Image.Offset /= Expected
+                          or else Image.Count > Elements - Expected
+                        then
                            return
-                             (Kind => Aggregate_Image_On_Array_Field,
+                             (Kind => Aggregate_Field_Image_Length_Disagrees,
                               Item => Id, others => <>);
-                        end if;
-                     elsif Check_Image then
-                        if Shape.Element = Landin.Types.Bool then
-                           Fits := Held in 0 .. 1;
-                        else
-                           Fits :=
-                             Landin.Types.Holds
-                               (Held,
-                                Landin.Types.Integer_Name (Shape.Element),
-                                Facts);
                         end if;
 
-                        if not Fits then
-                           return
-                             (Kind => Aggregate_Image_Value_Does_Not_Fit,
-                              Item => Id, others => <>);
+                        if Shape.Kind = Scalar_Field_Shape then
+                           if Image.Form /= Absent or else Image.Count /= 0
+                           then
+                              return
+                                (Kind =>
+                                   Aggregate_Field_Image_On_Scalar_Field,
+                                 Item => Id, others => <>);
+                           elsif Check_Image then
+                              if Shape.Element = Landin.Types.Bool then
+                                 Fits := Held in 0 .. 1;
+                              else
+                                 Fits :=
+                                   Landin.Types.Holds
+                                     (Held,
+                                      Landin.Types.Integer_Name
+                                        (Shape.Element),
+                                      Facts);
+                              end if;
+
+                              if not Fits then
+                                 return
+                                   (Kind =>
+                                      Aggregate_Image_Value_Does_Not_Fit,
+                                    Item => Id, others => <>);
+                              end if;
+                           end if;
+                        else
+                           if Held /= 0 then
+                              return
+                                (Kind => Aggregate_Image_On_Array_Field,
+                                 Item => Id, others => <>);
+                           end if;
+
+                           case Image.Form is
+                              when Absent =>
+                                 if Image.Count /= 0 then
+                                    return
+                                      (Kind => Field_Length_Fault,
+                                       Item => Id, others => <>);
+                                 end if;
+                              when Finite =>
+                                 if Element_Total (Image.Count)
+                                      /= Shape.Length
+                                 then
+                                    return
+                                      (Kind => Field_Length_Fault,
+                                       Item => Id, others => <>);
+                                 end if;
+                              when Repeated | Hybrid =>
+                                 return
+                                   (Kind =>
+                                      Aggregate_Field_Image_Form_Not_Carried,
+                                    Item => Id, others => <>);
+                           end case;
                         end if;
-                     end if;
-                  end;
-               end loop;
+
+                        Expected := Expected + Image.Count;
+                     end;
+                  end loop;
+
+                  if Expected /= Elements then
+                     return
+                       (Kind => Aggregate_Field_Image_Length_Disagrees,
+                        Item => Id, others => <>);
+                  end if;
+
+                  if Check_Image then
+                     for Field in 1 .. Field_Count (Of_Unit, Id) loop
+                        declare
+                           Shape : constant Field_Shape :=
+                             Nth_Field_Shape (Of_Unit, Id, Field);
+                           Image : constant Aggregate_Field_Image :=
+                             Field_Image_Of (Of_Unit, Id, Field);
+                        begin
+                           if Shape.Kind = Array_Field_Shape
+                             and then Image.Form = Finite
+                           then
+                              for Position in 1 .. Image.Count loop
+                                 declare
+                                    Held : constant Landin.Types.Folded :=
+                                      Nth_Field_Element
+                                        (Of_Unit, Id, Field,
+                                         Part_Position (Position));
+                                    Fits : Boolean;
+                                 begin
+                                    if Shape.Element = Landin.Types.Bool then
+                                       Fits := Held in 0 .. 1;
+                                    else
+                                       Fits :=
+                                         Landin.Types.Holds
+                                           (Held,
+                                            Landin.Types.Integer_Name
+                                              (Shape.Element),
+                                            Facts);
+                                    end if;
+
+                                    if not Fits then
+                                       return
+                                         (Kind => Field_Value_Fault,
+                                          Item => Id, others => <>);
+                                    end if;
+                                 end;
+                              end loop;
+                           end if;
+                        end;
+                     end loop;
+                  end if;
+               end;
             end if;
 
             --  [1550]: block 1 is where an item starts, and every other

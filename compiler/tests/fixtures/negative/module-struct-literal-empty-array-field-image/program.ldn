@@ -1,0 +1,5 @@
+holder: type = struct
+    row: [0]u8
+end holder
+
+state: holder = (row: [1])

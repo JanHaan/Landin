@@ -29,6 +29,7 @@ with Landin.Types;
 package body Landin.Tests.IR_Suite is
 
    use type Landin.IR.Element_Total;
+   use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Item_Id;
    use type Landin.IR.Opcode;
    use type Landin.IR.Part_Position;
@@ -795,7 +796,15 @@ package body Landin.Tests.IR_Suite is
              Length  => 2));
          Landin.IR.Add_Field (Unit, Datum, Landin.Types.I32);
          Landin.IR.Set_Aggregate_Image
-           (Unit, Datum, Landin.Types.Folded_Array'(5, 0, -3));
+           (Unit, Datum,
+            Landin.Types.Folded_Array'(5, 0, -3),
+            Landin.IR.Aggregate_Field_Image_Array'
+              (1 => (others => <>),
+               2 => (Form => Landin.IR.Finite,
+                     Offset => 0, Count => 2, Value => 0),
+               3 => (Form => Landin.IR.Absent,
+                     Offset => 2, Count => 0, Value => 0)),
+            Landin.Types.Folded_Array'(11, 13));
          Block := Landin.IR.Add_Block
            (Unit, Datum, Landin.Resolution.Program_Scope, Site);
          Landin.IR.Enter (Unit, Datum, Block);
@@ -805,8 +814,8 @@ package body Landin.Tests.IR_Suite is
          Landin.Testing.Check
            (Item,
             Landin.IR.Has_Image (Unit, Datum)
-            and then Landin.IR.Image_Length (Unit, Datum) = 3,
-            "an aggregate image has one entry per field");
+            and then Landin.IR.Image_Length (Unit, Datum) = 5,
+            "an aggregate image has flat fields and compact elements");
          Landin.Testing.Check
            (Item,
             Landin.IR.Nth_Field_Image (Unit, Datum, 1) = 5
@@ -815,12 +824,27 @@ package body Landin.Tests.IR_Suite is
             "field folds keep declaration order and the array placeholder");
          Landin.Testing.Check
            (Item,
+            Landin.IR.Field_Image_Of (Unit, Datum, 2).Form
+              = Landin.IR.Finite
+            and then Landin.IR.Nth_Field_Element (Unit, Datum, 2, 1) = 11
+            and then Landin.IR.Nth_Field_Element (Unit, Datum, 2, 2) = 13,
+            "a finite array-field image keeps its source-order folds");
+         Landin.Testing.Check
+           (Item,
             Ada.Strings.Fixed.Index
               (Landin.IR.Dump.Text
                  (Unit, Landin.Stages.Meanings (Work).all,
                   Landin.Stages.Identities (Work).all),
                "  image 5 0 -3") /= 0,
-            "the dump prints folds rather than target bytes");
+            "the dump prints flat folds rather than target bytes");
+         Landin.Testing.Check
+           (Item,
+            Ada.Strings.Fixed.Index
+              (Landin.IR.Dump.Text
+                 (Unit, Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all),
+               "  field 2 image 11 13") /= 0,
+            "the dump prints a finite field segment separately");
          Landin.Testing.Check
            (Item,
             Landin.IR.Verifier.Check (Unit).Kind

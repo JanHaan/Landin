@@ -523,13 +523,31 @@ package Landin.IR is
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
 
-   --  D66: a nonzero module struct image is one target-neutral folded value
-   --  per declaration-order field.  Scalar entries are the values a backend
-   --  writes at its own widths; an array field carries zero in this first
-   --  slice and the backend reserves that field's target-derived extent.
-   --  Padding is never represented here: it belongs to target layout and is
-   --  emitted as zero by the backend.  D67 may extend an array-field entry
-   --  with D24/D34/D38's compact forms without turning this into target bytes.
+   type Field_Image_Form is (Absent, Finite, Repeated, Hybrid);
+
+   --  D67: the target-neutral image carried beside one aggregate field.
+   --  Offset and Count select a finite run concatenated after D66's one flat
+   --  fold per field.  Absent is the field's zero image; Finite is enabled by
+   --  D67.  Repeated and Hybrid reserve D34/D38's compact shapes for D68 and
+   --  are rejected by the verifier until that decision supplies them.
+   type Aggregate_Field_Image is record
+      Form   : Field_Image_Form     := Absent;
+      Offset : Natural              := 0;
+      Count  : Natural              := 0;
+      Value  : Landin.Types.Folded  := 0;
+   end record;
+
+   type Aggregate_Field_Image_Array is
+     array (Positive range <>) of Aggregate_Field_Image;
+
+   function Field_Image_Element_Count
+     (Fields : Aggregate_Field_Image_Array) return Element_Total;
+
+   --  D66: a nonzero module struct image starts with one target-neutral
+   --  folded value per declaration-order field.  Scalar entries are the
+   --  values a backend writes at its own widths; an array field keeps zero as
+   --  that flat placeholder.  Padding is never represented here: it belongs
+   --  to target layout and is emitted as zero by the backend.
    procedure Set_Aggregate_Image
      (Into   : in out Unit;
       Item   : Item_Id;
@@ -543,6 +561,70 @@ package Landin.IR is
           Post => Has_Image (Into, Item)
                   and then Image_Length (Into, Item)
                            = Element_Total (Fields'Length);
+
+   --  D67's complete aggregate image: the flat D66 run, one descriptor per
+   --  field, and the concatenated finite array elements in field order.  The
+   --  offsets are relative to Elements, never target bytes.
+   procedure Set_Aggregate_Image
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Fields  : Landin.Types.Folded_Array;
+      Arrays  : Aggregate_Field_Image_Array;
+      Elements : Landin.Types.Folded_Array)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item)
+                           = Landin.Types.Aggregate
+                  and then not Has_Image (Into, Item)
+                  and then Fields'Length = Field_Count (Into, Item)
+                  and then Arrays'Length = Field_Count (Into, Item)
+                  and then Fields'Length > 0
+                  and then Field_Image_Element_Count (Arrays)
+                           = Element_Total (Elements'Length),
+          Post => Has_Image (Into, Item)
+                  and then Image_Length (Into, Item)
+                           = Element_Total
+                               (Fields'Length + Elements'Length);
+
+   function Aggregate_Field_Image_Count
+     (Of_Unit : Unit; Item : Item_Id) return Natural
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Aggregate
+                 and then Has_Image (Of_Unit, Item);
+
+   function Field_Image_Of
+     (Of_Unit : Unit; Item : Item_Id; Field : Positive)
+      return Aggregate_Field_Image
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Aggregate
+                 and then Has_Image (Of_Unit, Item)
+                 and then Field <= Aggregate_Field_Image_Count
+                                      (Of_Unit, Item);
+
+   function Nth_Field_Element
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Field   : Positive;
+      Position : Part_Position) return Landin.Types.Folded
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Aggregate
+                 and then Has_Image (Of_Unit, Item)
+                 and then Field <= Aggregate_Field_Image_Count
+                                      (Of_Unit, Item)
+                 and then Field_Image_Of (Of_Unit, Item, Field).Form
+                          in Finite | Hybrid
+                 and then Element_Total (Position)
+                          <= Element_Total
+                               (Field_Image_Of
+                                  (Of_Unit, Item, Field).Count)
+                 and then Element_Total (Field_Count (Of_Unit, Item))
+                            + Element_Total
+                                (Field_Image_Of
+                                   (Of_Unit, Item, Field).Offset)
+                            + Element_Total (Position)
+                          <= Image_Length (Of_Unit, Item);
 
    function Nth_Field_Image
      (Of_Unit : Unit; Item : Item_Id; Field : Positive)
@@ -1717,6 +1799,7 @@ private
       --  D34 instead stores one value and marks it repeated; neither an
       --  absent zero image nor a repetition allocates a target-sized run.
       Image       : Run;
+      Aggregate_Images : Run;
       Has_Image   : Boolean                   := False;
       Repeated_Image : Boolean                := False;
       Open        : Block_Id                  := No_Block;
@@ -1752,6 +1835,10 @@ private
       Element_Type => Landin.Types.Folded,
       "="          => Landin.Types."=");
 
+   package Aggregate_Field_Image_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Aggregate_Field_Image);
+
    type Unit is tagged limited record
       Ready      : Boolean := False;
       Items      : Item_Vectors.Vector;
@@ -1767,6 +1854,7 @@ private
       --  D24: one folded scalar per array-datum position, laid end to end
       --  across items so a datum with no image contributes no bytes here.
       Images      : Image_Vectors.Vector;
+      Aggregate_Images : Aggregate_Field_Image_Vectors.Vector;
    end record;
 
 end Landin.IR;

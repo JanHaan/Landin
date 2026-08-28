@@ -1210,6 +1210,39 @@ package body Landin.Tests.Verifier_Suite is
          IR.Add_Field
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.Usize,
+             Length  => 1));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Finite,
+                     Offset => 0, Count => 1, Value => 0)),
+            Landin.Types.Folded_Array'(1 => 2 ** 32));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Synthetic_32),
+            V.Aggregate_Field_Image_Value_Does_Not_Fit,
+            "a finite usize fold follows the 32-bit target");
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Nothing_Wrong,
+            "the same finite usize fold fits the 64-bit target");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U8,
              Length  => 2));
          IR.Set_Aggregate_Image
@@ -1245,6 +1278,118 @@ package body Landin.Tests.Verifier_Suite is
            (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
             V.Nothing_Wrong,
             "the same target-neutral fold fits the 64-bit target");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U8,
+             Length  => 2));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Finite,
+                     Offset => 0, Count => 1, Value => 0)),
+            Landin.Types.Folded_Array'(1 => 1));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Field_Image_Length_Disagrees,
+            "a finite field image must fill its declared array");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U8,
+             Length  => 1));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Finite,
+                     Offset => 0, Count => 1, Value => 0)),
+            Landin.Types.Folded_Array'(1 => 300));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Field_Image_Value_Does_Not_Fit,
+            "a finite field fold follows its selected target element type");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field (Unit, Datum, Landin.Types.U8);
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 1),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Finite,
+                     Offset => 0, Count => 1, Value => 0)),
+            Landin.Types.Folded_Array'(1 => 1));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Field_Image_On_Scalar_Field,
+            "a scalar field cannot carry an array image descriptor");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U8,
+             Length  => 2));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Repeated,
+                     Offset => 0, Count => 0, Value => 1)),
+            Landin.Types.Folded_Array'(1 .. 0 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Field_Image_Form_Not_Carried,
+            "repetition stays reserved until D68 supplies its rule");
       end;
    end Malformed_Aggregate_Images_Are_Rejected;
 

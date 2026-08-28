@@ -1,0 +1,10 @@
+answer: () -> (result: u16) =
+    result = 42
+end answer
+
+holder: type = struct
+    tag: u8
+    row: [2]u16
+end holder
+
+state: holder = (tag: 1, row: [answer(), 7])

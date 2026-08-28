@@ -1,0 +1,16 @@
+holder: type = struct
+    tag: u8
+    row: [2]u16
+    flags: [2]bool
+    tail: usize
+end holder
+
+same: type = holder
+seed: u16 = 10
+mut origin: holder =
+    (flags: [true, false], tail: 7, row: [seed + 1, 13], tag: 5)
+copy: holder = origin
+inferred := copy
+aliased: same = inferred
+blank: holder =
+    (row: zeroed, tag: 0, flags: zeroed, tail: 0)
