@@ -118,6 +118,9 @@ package Landin.Diagnostics.Syntactic is
       --  last: a field of an element is [0670]'s struct inside [0520]'s
       --  array, which is the element the layout cannot hold yet.
       Selection_From_An_Index,
+      --  D73 recognizes [0680]'s contextual `name: variant` block as one
+      --  construct while its declaration and layout remain disabled.
+      Variant_Part,
       --  D64 parses [0710]'s nonempty labelled form and D72 its call-shaped
       --  construction.  [0720]'s all-`of` spelling remains outside [1810]'s
       --  enabled expression grammar.
@@ -152,6 +155,7 @@ package Landin.Diagnostics.Syntactic is
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
             when Selection_From_An_Index => "[0520]",
+            when Variant_Part            => "[0680]",
             when Struct_All_Of         => "[0720]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
@@ -204,6 +208,7 @@ private
                | Array_Repetition
                | Indexing
                | Selection_From_An_Index
+               | Variant_Part
                | Struct_All_Of         => "R2.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter       => "R2.40",

@@ -188,6 +188,9 @@ package body Landin.Syntax.Parser is
             Of_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "of");
 
+            Variant_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "variant");
+
             Scalar_Id : constant array (Scalar_Name)
               of Landin.Source.Names.Name_Id :=
                 [for S in Scalar_Name =>
@@ -1320,6 +1323,65 @@ package body Landin.Syntax.Parser is
             is
                Opened : constant Landin.Source.Span := Here;
                Fields : Slot_Vectors.Vector;
+               Had_Field : Boolean := False;
+
+               function Payload_Case_Begins_Part
+                 (Part_Name : Landin.Source.Names.Name_Id) return Boolean;
+
+               --  A separately refused inline struct field may follow a
+               --  perfectly ordinary field whose type is named `variant`.
+               --  Looking through the first payload's parentheses to its
+               --  `|` or matching closer keeps that second mistake with
+               --  [0670], rather than misnaming the first field as [0680].
+               function Payload_Case_Begins_Part
+                 (Part_Name : Landin.Source.Names.Name_Id) return Boolean
+               is
+                  Scan    : Tok.Token_Index := Index + 3;
+                  Nesting : Natural := 0;
+               begin
+                  if Ahead (1) /= Tok.Identifier
+                    or else Ahead (2) /= Tok.Colon
+                    or else Ahead (3) /= Tok.Left_Paren
+                  then
+                     return False;
+                  end if;
+
+                  while Scan <= Last loop
+                     case Tok.Kind (From, Scan) is
+                        when Tok.Left_Paren =>
+                           Nesting := Nesting + 1;
+
+                        when Tok.Right_Paren =>
+                           if Nesting = 0 then
+                              return False;
+                           end if;
+
+                           Nesting := Nesting - 1;
+                           if Nesting = 0 then
+                              return
+                                (Scan + 1 <= Last
+                                 and then
+                                   (Tok.Kind (From, Scan + 1) = Tok.Bar
+                                    or else
+                                      (Scan + 2 <= Last
+                                       and then Tok.Kind (From, Scan + 1)
+                                                    = Tok.Kw_End
+                                       and then Tok.Kind (From, Scan + 2)
+                                                    = Tok.Identifier
+                                       and then Tok.Name
+                                         (Tok.Token_At (From, Scan + 2))
+                                                    = Part_Name)));
+                           end if;
+
+                        when others =>
+                           null;
+                     end case;
+
+                     Scan := Scan + 1;
+                  end loop;
+
+                  return False;
+               end Payload_Case_Begins_Part;
             begin
                Advance;
 
@@ -1329,6 +1391,7 @@ package body Landin.Syntax.Parser is
                      At_Field    : constant Landin.Source.Span :=
                        Parse_Declared_Name (Field_Named);
                      Of_Type     : Node_Id := No_Node;
+                     Is_Variant_Part : Boolean := False;
                   begin
                      if Expect
                           (Wanted  => Tok.Colon,
@@ -1339,25 +1402,67 @@ package body Landin.Syntax.Parser is
                            Related => At_Field,
                            Because => "the field named here")
                      then
-                        Of_Type := Parse_Type (False, At_Field);
+                        --  [0680] writes `variant` contextually after the
+                        --  part name.  It remains an ordinary user type
+                        --  everywhere else, including before another
+                        --  ordinary field, so the first case has to prove
+                        --  the shape rather than the word alone.
+                        Is_Variant_Part :=
+                          Peek = Tok.Identifier
+                          and then Named_Here = Variant_Id
+                          and then
+                            (Payload_Case_Begins_Part (Field_Named)
+                             or else
+                               (Ahead (1) = Tok.Identifier
+                                and then Ahead (2) = Tok.Bar)
+                             or else
+                               (Ahead (1) = Tok.Identifier
+                                and then Ahead (2) = Tok.Kw_End
+                                and then Ahead (3) = Tok.Identifier
+                                and then Named_Ahead (3) = Field_Named)
+                             or else
+                               (Ahead (1) = Tok.Kw_End
+                                and then Ahead (2) = Tok.Identifier
+                                and then Named_Ahead (2) = Field_Named));
 
-                        if Type_Refused then
-                           Resync_Declaration;
-                           exit;
+                        if Is_Variant_Part then
+                           Had_Field := True;
+                           Refuse
+                             (Item    => Syn.Variant_Part,
+                              Where   => At_Field,
+                              Message => "a variant part is not enabled yet");
+
+                           if not Skip_Past_Closer (Field_Named) then
+                              --  Preserve later declarations when the
+                              --  inner closer is missing or misspelled:
+                              --  the ordinary struct recovery below can
+                              --  still find its own `end name`.
+                              exit;
+                           end if;
+                        else
+                           Of_Type := Parse_Type (False, At_Field);
+
+                           if Type_Refused then
+                              Resync_Declaration;
+                              exit;
+                           end if;
                         end if;
                      end if;
 
-                     Fields.Append
-                       (Add
-                          (Of_Kind  => Field,
-                           At_Token => At_Field,
-                           Extent   => Join (At_Field, After_Previous),
-                           Children => [1 => Of_Type],
-                           Named    => Field_Named));
+                     if not Is_Variant_Part then
+                        Fields.Append
+                          (Add
+                             (Of_Kind  => Field,
+                              At_Token => At_Field,
+                              Extent   => Join (At_Field, After_Previous),
+                              Children => [1 => Of_Type],
+                              Named    => Field_Named));
+                        Had_Field := True;
+                     end if;
                   end;
                end loop;
 
-               if Natural (Fields.Length) = 0 then
+               if not Had_Field then
                   Complain
                     (Item    => Syn.Type_Expected,
                      Where   => Here,
