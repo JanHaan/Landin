@@ -1293,6 +1293,28 @@ package body Landin.IR is
       pragma Assert (Where /= No_Value);
    end Emit_Array_Copy;
 
+   procedure Emit_Variant_Copy
+     (Into        : in out Unit;
+      Item        : Item_Id;
+      Source      : Storage;
+      Destination : Storage;
+      Field       : Positive;
+      Site        : Landin.Provenance.Origin)
+   is
+      Where : constant Value_Id :=
+        Append
+          (Into, Item,
+           Instruction'(Op            => Copy_Variant,
+                        Site          => Site,
+                        Source        => Source,
+                        Source_Field  => Field,
+                        Destination   => Destination,
+                        Element_Field => Field,
+                        others        => <>));
+   begin
+      pragma Assert (Where /= No_Value);
+   end Emit_Variant_Copy;
+
    procedure Emit_Array_Clear
      (Into        : in out Unit;
       Item        : Item_Id;

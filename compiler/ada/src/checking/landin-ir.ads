@@ -205,6 +205,10 @@ package Landin.IR is
       --  field identities never carry one entry per part, so each operation
       --  remains compact for D18's target-sized extent.
       Copy_Array,
+      --  D80 copies one complete unfolded variant part between aggregate
+      --  storage places.  Field identities are target-neutral; the backend
+      --  derives the padded part extent.
+      Copy_Variant,
       Clear_Array,
       Fill_Array,
       --  D77 reads the source-order tag of an unfolded variant field.  D78
@@ -276,7 +280,7 @@ package Landin.IR is
    --  instruction's own Result answers that and an opcode cannot.
    function Defines_Nothing (Of_Code : Opcode) return Boolean
      is (Of_Code in Store | Store_Datum | Store_Field | Store_Element
-                    | Copy_Array | Clear_Array | Fill_Array
+                    | Copy_Array | Copy_Variant | Clear_Array | Fill_Array
                     | Select_Variant | Store_Variant_Field
                     | Terminator_Kind);
 
@@ -1210,7 +1214,7 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Copy_Array | Load_Variant_Tag
+                          in Copy_Array | Copy_Variant | Load_Variant_Tag
                              | Load_Variant_Field;
 
    --  D50's containing aggregate field for the source of an array copy.
@@ -1219,13 +1223,15 @@ package Landin.IR is
    function Source_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Copy_Array | Copy_Variant;
 
    function Destination_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Copy_Array | Clear_Array | Fill_Array
+                          in Copy_Array | Copy_Variant
+                             | Clear_Array | Fill_Array
                              | Select_Variant | Store_Variant_Field;
 
    --  D76's source-order case and, for a scalar payload write, the
@@ -1274,7 +1280,8 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Element | Store_Element
-                             | Copy_Array | Clear_Array | Fill_Array
+                             | Copy_Array | Copy_Variant
+                             | Clear_Array | Fill_Array
                              | Load_Variant_Tag
                              | Load_Variant_Field
                              | Select_Variant | Store_Variant_Field;
@@ -1710,6 +1717,16 @@ package Landin.IR is
       Site       : Landin.Provenance.Origin;
       Source_Field : Natural := 0;
       Destination_Field : Natural := 0)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   procedure Emit_Variant_Copy
+     (Into        : in out Unit;
+      Item        : Item_Id;
+      Source      : Storage;
+      Destination : Storage;
+      Field       : Positive;
+      Site        : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
 

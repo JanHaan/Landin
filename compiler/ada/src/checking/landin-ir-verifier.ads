@@ -95,6 +95,7 @@ package Landin.IR.Verifier is
       Array_Fill_Value_Disagrees,
       Array_Fill_First_Out_Of_Range,
       Variant_Operation_Inside_A_Datum,
+      Variant_Copy_Shapes_Disagree,
       Variant_Field_Out_Of_Range,
       Variant_Field_Is_Not_A_Variant,
       Variant_Case_Out_Of_Range,

@@ -1,0 +1,33 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u16) |
+        row: (values: [2]u32)
+    end kind
+    ready: bool
+end choice
+
+mut state: choice = zeroed
+
+copy: () -> none =
+    mut source: choice = (
+        prefix: 1,
+        kind: pair(first: 2, second: 3),
+        ready: true
+    )
+    mut typed: choice = source
+    mut inferred := typed
+    mut target: choice
+    target = inferred
+    state = target
+    mut back: choice = state
+    state = state
+    match target.kind
+        leaf: _ = 1
+        pair(first, second): if first == 2 and second == 3 then
+            _ = target.prefix
+        end if
+        row: _ = 3
+    end match
+end copy

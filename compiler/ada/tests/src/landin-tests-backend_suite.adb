@@ -3238,6 +3238,8 @@ package body Landin.Tests.Backend_Suite is
         & "variant_align: usize = alignof tagged" & LF
         & "clear_variant: () -> none =" & LF
         & "    mut local: tagged = zeroed" & LF
+        & "    mut copied: tagged = local" & LF
+        & "    variant_state = copied" & LF
         & "    variant_state = zeroed" & LF
         & "    variant_state.kind = wide_payload(word: 7, byte: 9)" & LF
         & "    local.kind = array_payload(row: zeroed)" & LF
@@ -3350,13 +3352,18 @@ package body Landin.Tests.Backend_Suite is
             "module and local zero images clear one target-derived extent");
          Landin.Testing.Check
            (Item,
-            Occurrences (Wide, HT & "movabsq $24, %rcx") = 2
-              and then Occurrences (Thin, HT & "movabsq $12, %rcx") = 2
+            Occurrences (Wide, HT & "movabsq $24, %rcx") = 4
+              and then Occurrences (Thin, HT & "movabsq $12, %rcx") = 4
               and then Contains (Wide, HT & "movb $1, (%rcx)" & LF)
               and then Contains (Wide, HT & "movb $2, (%rcx)" & LF)
               and then Contains (Thin, HT & "movb $1, (%rcx)" & LF)
               and then Contains (Thin, HT & "movb $2, (%rcx)" & LF),
-            "case selection clears one part and writes its zero-based tag");
+            "selection and copy use the target-derived variant extent");
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Wide, HT & "rep movsb") = 2
+              and then Occurrences (Thin, HT & "rep movsb") = 2,
+            "each whole copy moves one complete padded variant part");
          Landin.Testing.Check
            (Item,
             Occurrences (Wide, HT & "movb (%rcx), %al") = 2

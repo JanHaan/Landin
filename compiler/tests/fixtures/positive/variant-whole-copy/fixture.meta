@@ -1,0 +1,5 @@
+class: positive
+summary: D80 copies complete variant-bearing structs between module and local storage
+constructs: 0050, 0080, 0410, 0670, 0680, 0690, 0700, 0710, 0750, 1210, 1220, 1740, 1790, 1795, 1810, 1900
+program: program.ldn
+targets: linux-x86-64, macos-arm64

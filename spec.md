@@ -4706,9 +4706,10 @@ fact, and D78 may expose the selected case's scalar payload through arm-local
 aliases. A
 selection of the part itself is one L0304 `Variant_Value` when read. D76
 admits the directly selected mutable part as one contextual case destination;
-D79 admits inferred local construction. Whole copy, inferred module
-construction, arguments, returns and every general aggregate value remain
-refused. Parameters and named returns
+D79 admits inferred local construction, and D80 admits a contextual whole
+copy between runtime storage places. Static module copy chains, inferred
+module construction, arguments, returns and every general aggregate value
+remain refused. Parameters and named returns
 retain R2.30's `Struct_ABI` owner. D77 owns tag matching and D78 scalar payload
 bindings.
 
@@ -4763,9 +4764,10 @@ a directly named mutable module or local struct in the same way. A directly
 selected variant part of such a mutable root may also be assigned either
 form. The case identity must belong to that exact part. A case from another
 part is L0301 at the value; an immutable root keeps L0303 first and alone.
-Module static struct images, inferred module construction, whole
-variant-bearing copy and every general value position remain L0304
-`Variant_Value` boundaries.
+Module static struct images, inferred module construction and every general
+value position remain L0304 `Variant_Value` boundaries. D80 later admits a
+whole variant-bearing copy whose source and destination are direct runtime
+storage places.
 
 A bare case is legal only when its payload is empty. A labelled case
 construction gives each payload field at most once, using D64's L0308/L0309/
@@ -4799,13 +4801,14 @@ for the selected target before storing at the scalar width.
 **Why contextual construction first:** it exercises every case identity and
 payload offset without an aggregate temporary, a static nonzero variant image
 or an ABI rule. A field-wise clear was declined because it would leave union
-padding outside the selected value's zero image; copying a whole
-variant-bearing struct would need a source tag and selected-payload rule;
-admitting array payload literals or repetitions would add D52/D53's write
-sequence inside the case and is a later extension. D77 adds tag matching;
-D78 adds scalar payload binding while retaining that fixed-array boundary.
-D79 also lets a call-shaped case construction infer a fresh local binding;
-module inference still waits for a nonzero static variant image.
+padding outside the selected value's zero image. Whole copying waited until
+D80 fixed the source and destination as storage identities and copied the
+complete padded part. Admitting array payload literals or repetitions would
+add D52/D53's write sequence inside the case and is a later extension. D77
+adds tag matching; D78 adds scalar payload binding while retaining that
+fixed-array boundary. D79 also lets a call-shaped case construction infer a
+fresh local binding; module inference still waits for a nonzero static
+variant image.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-case-construction`;
@@ -4958,3 +4961,54 @@ accidental asymmetry.
 `negative/variant-case-construction-contexts-not-enabled`; the generated token
 and IR records; and
 `runtime/variant-case-construction-runs-in-source-order` on Linux x86-64.
+
+### D80 — A whole variant-bearing struct copies between runtime storage
+
+**The tour said** that [0520] assigns values and [0710] makes an ordinary
+struct nominal. D54 copied a scalar/array-bearing struct field by field, while
+D75 supplied storage for the unfolded variant part and D76 supplied its first
+nonzero values. Keeping D54's copy refusal after both sides had complete
+storage was therefore a representation boundary rather than a language rule.
+
+**Chosen:** a whole assignment between directly named mutable module or local
+storage of the same variant-bearing struct is admitted. An explicitly typed or
+inferred local initializer may likewise copy a direct module or local source
+name. The source and destination must share [0710]'s declaration identity;
+same-shaped declarations remain L0301. Module initializers remain static-image
+rules and are not widened by this runtime slice. A tracked local source must be
+complete on every arriving path, including its established variant part; the
+destination receives the complete whole-struct fact. An exact self-copy is
+legal and changes nothing.
+
+Common scalar fields retain D54's scalar load/store pair and common fixed-array
+fields retain its `Copy_Array`. Each unfolded variant part is one
+`Copy_Variant` carrying source storage, destination storage and their shared
+declaration-order field identity. It carries no tag, case, payload offset,
+target extent or bytes. The verifier proves both endpoints are variant fields,
+proves their complete case and payload shapes before reading them, and requires
+the tag, case count, payload kinds, scalar types and array lengths to agree.
+These are explicit release-build checks.
+
+The backend replays D74's tag-first maximum-payload layout for the selected
+target, forms both field addresses and copies the complete padded part with one
+forward byte run. Distinct aggregate roots do not overlap; a self-copy names
+the identical range, which the forward run preserves. Copying the padded part
+rather than only the selected payload preserves [0540]'s complete image and
+does not need to inspect the source tag. Scalar and fixed-array fields remain
+separate operations in declaration order, exactly as D54 specified.
+
+**Why a compact part copy:** selecting the active case and copying only its
+payload would branch on runtime state, leave inactive bytes or padding behind,
+and make the copy sequence depend on the tag. Copying the whole struct as one
+opaque byte operation would duplicate D54's established scalar/array paths and
+erase their verifier types. One compact operation for the only union-shaped
+field keeps the IR target-neutral and the existing field semantics visible.
+Static nonzero variant images, inferred module construction, general aggregate
+values, arguments and returns remain separate decisions; the last two retain
+R2.30's ABI owner.
+
+**Pinned by** the IR, lowering, verifier and backend public seams;
+`positive/variant-whole-copy`;
+`negative/variant-whole-copy-source-unassigned`;
+`negative/variant-value-not-enabled`; the generated token and IR records; and
+`runtime/variant-whole-copy-is-distinct` on Linux x86-64.

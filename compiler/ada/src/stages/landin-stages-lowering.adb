@@ -1486,8 +1486,12 @@ package body Landin.Stages.Lowering is
                            Destination_Field => Field);
 
                      when Landin.Checking.Variant_Field =>
-                        raise Landin.Compiler_Defect with
-                          "variant-bearing storage reached struct copy";
+                        IR.Emit_Variant_Copy
+                          (Unit.all, Filling,
+                           Source      => Source,
+                           Destination => Destination,
+                           Field       => Field,
+                           Site        => Site);
                   end case;
                end Copy_Field;
 

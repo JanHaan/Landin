@@ -1,0 +1,6 @@
+class: runtime
+summary: D80 copies the selected tag and padded payload into distinct storage
+constructs: 0050, 0080, 0410, 0670, 0680, 0690, 0700, 0710, 0750, 1210, 1220, 1740, 1790, 1795, 1810, 1900
+program: main.ldn
+status: 42
+targets: linux-x86-64
