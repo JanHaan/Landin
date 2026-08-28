@@ -1,0 +1,8 @@
+consume: (value: [2]i32) -> none =
+end consume
+
+bad: () -> none =
+    mut value: [2]i32
+    value[0] = 1
+    consume(value)
+end bad

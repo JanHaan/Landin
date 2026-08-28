@@ -667,7 +667,9 @@ package body Landin.Stages.Lowering is
                Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
-               if Type_At (Of_Tree, Argument) = Ty.Aggregate then
+               if Type_At (Of_Tree, Argument)
+                    in Ty.Aggregate | Ty.Fixed_Array
+               then
                   Given (Which) :=
                     IR.Emit_Storage_Address
                       (Unit.all, Filling, Storage_For (Of_Tree, Argument),
@@ -681,7 +683,8 @@ package body Landin.Stages.Lowering is
                   Saved (Which) :=
                     IR.Add_Slot
                       (Unit.all, Filling,
-                       (if Type_At (Of_Tree, Argument) = Ty.Aggregate
+                       (if Type_At (Of_Tree, Argument)
+                              in Ty.Aggregate | Ty.Fixed_Array
                         then Ty.Usize else Scalar_At (Of_Tree, Argument)),
                        Res.No_Declaration, Site_Of (Of_Tree, Argument));
                   IR.Emit_Store
@@ -2946,6 +2949,14 @@ package body Landin.Stages.Lowering is
                      Add_Stored_Field
                        (Id, Field, Slot => Slots (Positive (Id)));
                   end loop;
+               elsif Held = Ty.Fixed_Array then
+                  Slots (Positive (Id)) :=
+                    IR.Add_Array_Parameter
+                      (Unit.all, Filling,
+                       Landin.Checking.Array_Element (Types.all, Id),
+                       IR.Element_Total
+                         (Landin.Checking.Array_Length (Types.all, Id)),
+                       Id, Site_Of (Of_Tree, Param));
                elsif Held in Ty.Scalar_Name then
                   Slots (Positive (Id)) :=
                     IR.Add_Parameter

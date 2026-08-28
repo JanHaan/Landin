@@ -1874,6 +1874,11 @@ copies the target-derived padded extent into its own shaped parameter slot
 before running. Nested and variant-bearing structs, construction arguments and
 all aggregate returns remain deferred.
 
+The ninth increment applies that one-position transport and defensive callee
+copy to direct fixed-array storage names. Length and scalar element identity
+stay on the parameter slot; literals, nested fields and other array expressions
+remain contextual rather than becoming general argument values.
+
 Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
