@@ -227,7 +227,8 @@ package body Landin.IR.Verifier is
          Element : out Landin.Types.Scalar_Name;
          Length  : out Element_Total;
          Which   : Natural := 0;
-         Payload_Field : Natural := 0) return Fault_Kind;
+         Payload_Field : Natural := 0;
+         Nested  : Natural := 0) return Fault_Kind;
 
       function Scalar_Field_Of
         (Item    : Item_Id;
@@ -323,11 +324,71 @@ package body Landin.IR.Verifier is
          Element : out Landin.Types.Scalar_Name;
          Length  : out Element_Total;
          Which   : Natural := 0;
-         Payload_Field : Natural := 0) return Fault_Kind
+         Payload_Field : Natural := 0;
+         Nested  : Natural := 0) return Fault_Kind
       is
       begin
          Element := Landin.Types.Bool;
          Length := 0;
+
+         if Nested /= 0 then
+            if Field = 0 or else Which /= 0 or else Payload_Field /= 0 then
+               return Element_Field_Is_Not_An_Array;
+            end if;
+            declare
+               Shape : Field_Shape;
+            begin
+               case Place.Kind is
+                  when Module_Datum =>
+                     if not Holds (Of_Unit, Place.Datum)
+                       or else Kind_Of (Of_Unit, Place.Datum) /= Datum
+                     then
+                        return Named_Item_Is_Not_A_Datum;
+                     end if;
+                     if Result_Of (Of_Unit, Place.Datum)
+                          /= Landin.Types.Aggregate
+                       or else Field > Field_Count (Of_Unit, Place.Datum)
+                     then
+                        return Element_Field_Out_Of_Range;
+                     end if;
+                     Shape := Nth_Field_Shape
+                       (Of_Unit, Place.Datum, Positive (Field));
+
+                  when Frame_Slot =>
+                     if not Holds (Of_Unit, Item, Place.Slot) then
+                        return Slot_Out_Of_Range;
+                     end if;
+                     if not Is_Aggregate (Of_Unit, Item, Place.Slot)
+                       or else Field >
+                         Slot_Field_Count (Of_Unit, Item, Place.Slot)
+                     then
+                        return Element_Field_Out_Of_Range;
+                     end if;
+                     Shape := Nth_Slot_Field_Shape
+                       (Of_Unit, Item, Place.Slot, Positive (Field));
+               end case;
+
+               if Shape.Kind /= Aggregate_Field_Shape
+                 or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
+                 or else Nested > Aggregate_Field_Count (Of_Unit, Shape)
+               then
+                  return Element_Field_Is_Not_An_Array;
+               end if;
+
+               declare
+                  Leaf : constant Field_Shape :=
+                    Nth_Aggregate_Field
+                      (Of_Unit, Shape, Positive (Nested));
+               begin
+                  if Leaf.Kind /= Array_Field_Shape then
+                     return Element_Field_Is_Not_An_Array;
+                  end if;
+                  Element := Leaf.Element;
+                  Length := Leaf.Length;
+                  return Nothing_Wrong;
+               end;
+            end;
+         end if;
 
          if Which /= 0 or else Payload_Field /= 0 then
             declare
@@ -1462,10 +1523,13 @@ package body Landin.IR.Verifier is
                                       Element, Length,
                                       Variant_Case_Of (Of_Unit, Id, V),
                                       Variant_Payload_Field_Of
+                                        (Of_Unit, Id, V),
+                                      Nested => Nested_Field_Of
                                         (Of_Unit, Id, V));
                               begin
                                  --  Preserve D22's public fault for field
-                                 --  zero while D84 routes nested array leaves
+                                 --  zero while D84's variant payload and
+                                 --  D89's ordinary child route array leaves
                                  --  through the same release-safe shape walk.
                                  if Bad = Array_Storage_Is_Not_An_Array
                                    and then Element_Field_Of
@@ -2028,6 +2092,8 @@ package body Landin.IR.Verifier is
                                       Element, Length,
                                       Variant_Case_Of (Of_Unit, Id, V),
                                       Variant_Payload_Field_Of
+                                        (Of_Unit, Id, V),
+                                      Nested => Nested_Field_Of
                                         (Of_Unit, Id, V));
                               begin
                                  if Bad /= Nothing_Wrong then

@@ -1082,14 +1082,34 @@ package body Landin.Stages.Lowering is
                declare
                   From : constant Syn.Node_Id :=
                     Syn.Target_Of (Of_Tree, Node);
-                  Nested : constant Boolean :=
+                  Selected_Array : constant Boolean :=
                     Syn.Kind (Of_Tree, From) = Syn.Member_Selection;
+                  Depth_One : constant Boolean :=
+                    Selected_Array
+                    and then Syn.Kind
+                      (Of_Tree, Syn.Target_Of (Of_Tree, From))
+                        = Syn.Member_Selection;
+                  Middle : constant Syn.Node_Id :=
+                    (if Depth_One then Syn.Target_Of (Of_Tree, From)
+                     else Syn.No_Node);
                   Named : constant Syn.Node_Id :=
-                    (if Nested then Syn.Target_Of (Of_Tree, From) else From);
+                    (if Depth_One
+                     then Syn.Target_Of (Of_Tree, Middle)
+                     elsif Selected_Array
+                     then Syn.Target_Of (Of_Tree, From)
+                     else From);
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                   Field : constant Natural :=
-                    (if Nested
+                    (if Depth_One
+                     then Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, Middle)
+                     elsif Selected_Array
+                     then Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, From)
+                     else 0);
+                  Child : constant Natural :=
+                    (if Depth_One
                      then Landin.Checking.Field_Index
                             (Types.all, Of_Tree, From)
                      else 0);
@@ -1134,7 +1154,7 @@ package body Landin.Stages.Lowering is
                      = Res.Local_Binding
                   then
                      if Is_Constant_Index (Of_Tree, Node)
-                       and then not Nested
+                       and then not Selected_Array
                      then
                         return IR.Emit_Load_Slot_Field
                                  (Unit.all, Filling,
@@ -1150,10 +1170,11 @@ package body Landin.Stages.Lowering is
                                  (Of_Tree, Syn.Index_Of (Of_Tree, Node),
                                   Scope),
                                Scalar_At (Of_Tree, Node), Site,
-                               Field => Field);
+                               Field => Field, Nested_Field => Child);
                   end if;
 
-                  if Is_Constant_Index (Of_Tree, Node) and then not Nested
+                  if Is_Constant_Index (Of_Tree, Node)
+                    and then not Selected_Array
                   then
                      return IR.Emit_Load_Field
                               (Unit.all, Filling,
@@ -1168,7 +1189,7 @@ package body Landin.Stages.Lowering is
                             Lower_Expression
                               (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope),
                             Scalar_At (Of_Tree, Node), Site,
-                            Field => Field);
+                            Field => Field, Nested_Field => Child);
                end;
 
             when Syn.Member_Selection =>
@@ -2030,22 +2051,41 @@ package body Landin.Stages.Lowering is
                   return IR.Value_Id
                is
                   From : Syn.Node_Id;
+                  Middle : Syn.Node_Id;
                   Named : Syn.Node_Id;
                   Means : Res.Declaration_Id;
                   Field : Natural;
+                  Child : Natural;
                begin
                   if Index = IR.No_Value then
                      return Lower_Expression (Of_Tree, Place, Scope);
                   end if;
 
                   From := Syn.Target_Of (Of_Tree, Place);
-                  Named :=
+                  Middle :=
                     (if Syn.Kind (Of_Tree, From) = Syn.Member_Selection
+                       and then Syn.Kind
+                         (Of_Tree, Syn.Target_Of (Of_Tree, From))
+                           = Syn.Member_Selection
+                     then Syn.Target_Of (Of_Tree, From)
+                     else Syn.No_Node);
+                  Named :=
+                    (if Middle /= Syn.No_Node
+                     then Syn.Target_Of (Of_Tree, Middle)
+                     elsif Syn.Kind (Of_Tree, From) = Syn.Member_Selection
                      then Syn.Target_Of (Of_Tree, From)
                      else From);
                   Means := Res.Bound_To (Meanings.all, Of_Tree, Named);
                   Field :=
-                    (if Syn.Kind (Of_Tree, From) = Syn.Member_Selection
+                    (if Middle /= Syn.No_Node
+                     then Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, Middle)
+                     elsif Syn.Kind (Of_Tree, From) = Syn.Member_Selection
+                     then Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, From)
+                     else 0);
+                  Child :=
+                    (if Middle /= Syn.No_Node
                      then Landin.Checking.Field_Index
                             (Types.all, Of_Tree, From)
                      else 0);
@@ -2087,13 +2127,13 @@ package body Landin.Stages.Lowering is
                               (Unit.all, Filling,
                                Slot_For (Of_Tree, Named, Means),
                                Index, Scalar_At (Of_Tree, Place), Site,
-                               Field => Field);
+                               Field => Field, Nested_Field => Child);
                   end if;
 
                   return IR.Emit_Load_Element
                            (Unit.all, Filling, IR.Item_For (Unit.all, Means),
                             Index, Scalar_At (Of_Tree, Place), Site,
-                            Field => Field);
+                            Field => Field, Nested_Field => Child);
                end Read_Place;
 
                procedure Write
@@ -2164,9 +2204,23 @@ package body Landin.Stages.Lowering is
 
                   if Syn.Kind (Of_Tree, Place) = Syn.Element_Index then
                      declare
+                        Nested : constant Boolean :=
+                          Syn.Kind (Of_Tree, Selected) = Syn.Member_Selection
+                          and then Syn.Kind
+                            (Of_Tree, Syn.Target_Of (Of_Tree, Selected))
+                              = Syn.Member_Selection;
                         Field : constant Natural :=
-                          (if Syn.Kind (Of_Tree, Selected)
-                                = Syn.Member_Selection
+                          (if Nested
+                           then Landin.Checking.Field_Index
+                                  (Types.all, Of_Tree,
+                                   Syn.Target_Of (Of_Tree, Selected))
+                           elsif Syn.Kind (Of_Tree, Selected)
+                                   = Syn.Member_Selection
+                           then Landin.Checking.Field_Index
+                                  (Types.all, Of_Tree, Selected)
+                           else 0);
+                        Child : constant Natural :=
+                          (if Nested
                            then Landin.Checking.Field_Index
                                   (Types.all, Of_Tree, Selected)
                            else 0);
@@ -2184,7 +2238,8 @@ package body Landin.Stages.Lowering is
                               IR.Emit_Store_Slot_Element
                                 (Unit.all, Filling,
                                  Slot_For (Of_Tree, Named, Means),
-                                 Index, Value, Site, Field => Field);
+                                 Index, Value, Site, Field => Field,
+                                 Nested_Field => Child);
                            end if;
                         elsif Index = IR.No_Value then
                            IR.Emit_Store_Field
@@ -2195,7 +2250,8 @@ package body Landin.Stages.Lowering is
                            IR.Emit_Store_Element
                              (Unit.all, Filling,
                               IR.Item_For (Unit.all, Means),
-                              Index, Value, Site, Field => Field);
+                              Index, Value, Site, Field => Field,
+                              Nested_Field => Child);
                         end if;
                      end;
                      return;

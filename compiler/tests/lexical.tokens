@@ -14775,6 +14775,67 @@ file negative/nested-scalar-zeroed-not-enabled/program.ldn tokens 37
   124 125 1
   126 129 end
   130 131 f
+file negative/nested-struct-array-element-unassigned/program.ldn tokens 60
+  0 5 inner
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 28 row
+  28 29 :
+  30 31 [
+  31 32 2
+  32 33 ]
+  33 36 i32
+  37 40 end
+  41 46 inner
+  48 53 outer
+  53 54 :
+  55 59 type
+  60 61 =
+  62 68 struct
+  73 79 nested
+  79 80 :
+  81 86 inner
+  87 90 end
+  91 96 outer
+  98 102 read
+  102 103 :
+  104 105 (
+  105 106 )
+  107 109 ->
+  110 111 (
+  111 117 result
+  117 118 :
+  119 122 i32
+  122 123 )
+  124 125 =
+  130 133 mut
+  134 139 local
+  139 140 :
+  141 146 outer
+  151 156 local
+  156 157 .
+  157 163 nested
+  163 164 .
+  164 167 row
+  167 168 [
+  168 169 0
+  169 170 ]
+  171 172 =
+  173 174 1
+  179 185 result
+  186 187 =
+  188 193 local
+  193 194 .
+  194 200 nested
+  200 201 .
+  201 204 row
+  204 205 [
+  205 206 1
+  206 207 ]
+  208 211 end
+  212 216 read
 file negative/nested-struct-construction-not-enabled/program.ldn tokens 66
   0 5 inner
   5 6 :

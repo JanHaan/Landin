@@ -1,0 +1,41 @@
+inner: type = struct
+    lead: u8
+    word: usize
+    row: [3]i32
+end inner
+
+outer: type = struct
+    prefix: u16
+    nested: inner
+    tail: u8
+end outer
+
+mut global: outer = zeroed
+
+answer: () -> (result: i32) =
+    mut local: outer
+    index: usize = 1
+    global.nested.row[index] = 11
+    local.nested.row[0] = 5
+    local.nested.row[1] = 7
+    local.nested.row[2] = 13
+    result = global.nested.row[index] + local.nested.row[0]
+           + local.nested.row[1] + local.nested.row[2]
+end answer
+
+merged: (whole: bool) -> (result: i32) =
+    mut local: outer
+    index: usize = 1
+    if whole then
+        local = zeroed
+    else
+        local.nested.row[0] = 0
+        local.nested.row[1] = 0
+        local.nested.row[2] = 0
+    end if
+    result = local.nested.row[index]
+end merged
+
+public main: () -> (code: i32) =
+    code = answer() + merged(true) + merged(false)
+end main
