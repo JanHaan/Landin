@@ -98,6 +98,13 @@ tasks:
           echo "landin: ${GIT_REF:-no ref} is not main; not publishing"
           exit 0
       fi
+      #  The build image trusts no host, so git.sr.ht's key is pinned
+      #  here rather than accepted on first use: it is the one published
+      #  at https://man.sr.ht/git.sr.ht/#ssh-host-keys, and a mismatch is
+      #  a failed clone, not a question nobody is there to answer.
+      mkdir -p ~/.ssh
+      echo 'git.sr.ht ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMZvRd4EtM7R+IHVMWmDkVU3VLQTSwQDSAvW0t2Tkj60' \
+        >> ~/.ssh/known_hosts
       #  Beside the repository, which is where assets/fonts.py looks.
       git clone --depth 1 git@git.sr.ht:~sinnfrei/landin-fonts ../landin-fonts
       ./scripts/site.sh --publish
