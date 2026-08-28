@@ -1,0 +1,13 @@
+holder: type = struct
+    row: [3]u8
+end holder
+
+mut state: holder
+
+full: () -> none =
+    state.row = [of false]
+end full
+
+mixed: () -> none =
+    state.row = [1, of false]
+end mixed

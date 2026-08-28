@@ -1402,13 +1402,16 @@ package body Landin.Stages.Lowering is
                            Destination : constant IR.Storage :=
                              Storage_For (Of_Tree, Named);
                         begin
-                           --  D49/D50/D52 are the checker paths that type a
-                           --  whole array-field selection.  Repetition and
-                           --  fill lowering remain field-zero-only.
+                           --  D49--D53 are the checker paths that type a whole
+                           --  array-field selection.  Each admitted spelling
+                           --  below either carries the field on its compact
+                           --  operation or uses D48's element identity.
                            pragma Assert
                              (Field = 0
                               or else Syn.Kind (Of_Tree, Value)
                                         in Syn.Array_Literal
+                                           | Syn.Array_Repetition
+                                           | Syn.Mixed_Array_Repetition
                                            | Syn.Zeroed_Literal
                                            | Syn.Name_Reference
                                            | Syn.Member_Selection);
@@ -1493,18 +1496,43 @@ package body Landin.Stages.Lowering is
                                     Part : constant IR.Part_Position :=
                                       IR.Part_Position (Position);
                                  begin
-                                    case Destination.Kind is
-                                       when IR.Module_Datum =>
-                                          IR.Emit_Store_Field
-                                            (Unit.all, Filling,
-                                             Destination.Datum, Part,
-                                             Element, Site);
-                                       when IR.Frame_Slot =>
-                                          IR.Emit_Store_Slot_Field
-                                            (Unit.all, Filling,
-                                             Destination.Slot, Part,
-                                             Element, Site);
-                                    end case;
+                                    if Field = 0 then
+                                       case Destination.Kind is
+                                          when IR.Module_Datum =>
+                                             IR.Emit_Store_Field
+                                               (Unit.all, Filling,
+                                                Destination.Datum, Part,
+                                                Element, Site);
+                                          when IR.Frame_Slot =>
+                                             IR.Emit_Store_Slot_Field
+                                               (Unit.all, Filling,
+                                                Destination.Slot, Part,
+                                                Element, Site);
+                                       end case;
+                                    else
+                                       declare
+                                          Index : constant IR.Value_Id :=
+                                            IR.Emit_Number
+                                              (Unit.all, Filling, Ty.Usize,
+                                               Ty.Magnitude (Position - 1),
+                                               False, Site);
+                                       begin
+                                          case Destination.Kind is
+                                             when IR.Module_Datum =>
+                                                IR.Emit_Store_Element
+                                                  (Unit.all, Filling,
+                                                   Destination.Datum, Index,
+                                                   Element, Site,
+                                                   Field => Field);
+                                             when IR.Frame_Slot =>
+                                                IR.Emit_Store_Slot_Element
+                                                  (Unit.all, Filling,
+                                                   Destination.Slot, Index,
+                                                   Element, Site,
+                                                   Field => Field);
+                                          end case;
+                                       end;
+                                    end if;
                                  end;
                               end loop;
 
@@ -1516,7 +1544,7 @@ package body Landin.Stages.Lowering is
                                    (Of_Tree,
                                     Syn.Repeated_Element (Of_Tree, Value),
                                     Scope),
-                                 Site);
+                                 Site, Field => Field);
                            elsif Syn.Kind (Of_Tree, Value)
                                    = Syn.Array_Repetition
                            then
@@ -1526,7 +1554,7 @@ package body Landin.Stages.Lowering is
                                    (Of_Tree,
                                     Syn.Repeated_Element (Of_Tree, Value),
                                     Scope),
-                                 Site);
+                                 Site, Field => Field);
                            elsif Syn.Kind (Of_Tree, Value)
                                    = Syn.Zeroed_Literal
                            then

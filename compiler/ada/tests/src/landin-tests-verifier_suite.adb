@@ -195,8 +195,13 @@ package body Landin.Tests.Verifier_Suite is
       Array_Clear_Inside_A_Datum,
       Array_Fill_Destination_Is_Scalar,
       Array_Fill_Slot_Is_Not_Owned,
+      Array_Fill_Datum_Field_Is_Out_Of_Range,
+      Array_Fill_Datum_Field_Is_Not_An_Array,
+      Array_Fill_Slot_Field_Is_Out_Of_Range,
+      Array_Fill_Slot_Field_Is_Not_An_Array,
       Array_Fill_Value_Has_The_Wrong_Type,
       Array_Fill_First_Is_Outside_Array,
+      Array_Fill_Field_First_Is_Outside_Array,
       Array_Fill_Inside_A_Datum,
       Condition_Is_A_Number,
       Call_Missing_An_Argument,
@@ -266,6 +271,7 @@ package body Landin.Tests.Verifier_Suite is
              Length  => 2));
       elsif Harm in Slot_Field_Operation_Names_An_Array
                     | Slot_Field_Store_Names_An_Array
+                    | Array_Fill_Field_First_Is_Outside_Array
       then
          IR.Add_Slot_Field
            (Unit, A, T,
@@ -714,6 +720,32 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Array_Fill_Datum_Field_Is_Out_Of_Range
+            | Array_Fill_Datum_Field_Is_Not_An_Array =>
+            N := IR.Emit_Number
+              (Unit, A, Landin.Types.U32, 1, False, Site);
+            IR.Emit_Array_Fill
+              (Unit, A, (Kind => IR.Module_Datum, Datum => G), 1, N, Site,
+               Field =>
+                 (if Harm = Array_Fill_Datum_Field_Is_Out_Of_Range
+                  then 2 else 1));
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Fill_Slot_Field_Is_Out_Of_Range
+            | Array_Fill_Slot_Field_Is_Not_An_Array =>
+            N := IR.Emit_Number
+              (Unit, A, Landin.Types.U32, 1, False, Site);
+            IR.Emit_Array_Fill
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => T), 1, N, Site,
+               Field =>
+                 (if Harm = Array_Fill_Slot_Field_Is_Out_Of_Range
+                  then 2 else 1));
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Array_Fill_Value_Has_The_Wrong_Type =>
             N := IR.Emit_Truth (Unit, A, True, Site);
             IR.Emit_Array_Fill
@@ -729,6 +761,16 @@ package body Landin.Tests.Verifier_Suite is
               (Unit, A, (Kind => IR.Frame_Slot, Slot => Q),
                IR.Part_Position (4_294_967_296),
                N, Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Fill_Field_First_Is_Outside_Array =>
+            N := IR.Emit_Number
+              (Unit, A, Landin.Types.U32, 1, False, Site);
+            IR.Emit_Array_Fill
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => T), 3, N, Site,
+               Field => 1);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -884,9 +926,19 @@ package body Landin.Tests.Verifier_Suite is
          (Array_Fill_Destination_Is_Scalar,
           V.Array_Storage_Is_Not_An_Array),
          (Array_Fill_Slot_Is_Not_Owned, V.Slot_Out_Of_Range),
+         (Array_Fill_Datum_Field_Is_Out_Of_Range,
+          V.Element_Field_Out_Of_Range),
+         (Array_Fill_Datum_Field_Is_Not_An_Array,
+          V.Element_Field_Is_Not_An_Array),
+         (Array_Fill_Slot_Field_Is_Out_Of_Range,
+          V.Element_Field_Out_Of_Range),
+         (Array_Fill_Slot_Field_Is_Not_An_Array,
+          V.Element_Field_Is_Not_An_Array),
          (Array_Fill_Value_Has_The_Wrong_Type,
           V.Array_Fill_Value_Disagrees),
          (Array_Fill_First_Is_Outside_Array,
+          V.Array_Fill_First_Out_Of_Range),
+         (Array_Fill_Field_First_Is_Outside_Array,
           V.Array_Fill_First_Out_Of_Range),
          (Array_Fill_Inside_A_Datum, V.Array_Fill_Inside_A_Datum),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),

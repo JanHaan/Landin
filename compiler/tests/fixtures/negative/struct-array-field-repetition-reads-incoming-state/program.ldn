@@ -1,0 +1,13 @@
+holder: type = struct
+    row: [3]u8
+end holder
+
+full: () -> none =
+    mut local: holder
+    local.row = [of local.row[0]]
+end full
+
+mixed: () -> none =
+    mut local: holder
+    local.row = [1, of local.row[0]]
+end mixed

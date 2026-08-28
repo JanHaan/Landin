@@ -1759,6 +1759,106 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 2, "both contextual field literals were checked");
    end Array_Field_Literals_Carry_Their_Destination_Shape;
 
+   --  D53 gives D32's full repetition and D37's mixed repetition the
+   --  selected field's complete context.  The field identity stays a
+   --  declaration-order position rather than becoming a target offset.
+   procedure Array_Field_Repetitions_Carry_Their_Destination_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Repetitions_Carry_Their_Destination_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "array-field-repetitions.ldn",
+         "word: type = u32" & LF
+         & "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [4]word" & LF
+         & "end holder" & LF
+         & "mut state: holder" & LF
+         & "f: (at: usize) -> (result: word) =" & LF
+         & "    state.row = [4 of 10]" & LF
+         & "    state.row = [11, 12, of 13]" & LF
+         & "    mut local: holder" & LF
+         & "    local.row = [of 20]" & LF
+         & "    local.row = [21, 22, of 23]" & LF
+         & "    result = state.row[at] + local.row[at]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "module and local array fields accept both repetition forms");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Assignment
+            then
+               declare
+                  Target : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Target_Of (Of_Tree.all, Node);
+                  Value : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Value_Of (Of_Tree.all, Node);
+               begin
+                  if Landin.Syntax.Kind (Of_Tree.all, Target)
+                       = Landin.Syntax.Member_Selection
+                    and then Landin.Syntax.Kind (Of_Tree.all, Value)
+                               in Landin.Syntax.Array_Repetition
+                                | Landin.Syntax.Mixed_Array_Repetition
+                  then
+                     Seen := Seen + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Target)
+                            = Landin.Types.Fixed_Array
+                        and then Landin.Checking.Array_Length
+                          (Types.all, Of_Tree.all, Target) = 4
+                        and then Landin.Checking.Array_Element
+                          (Types.all, Of_Tree.all, Target) = Landin.Types.U32
+                        and then Landin.Checking.Field_Index
+                          (Types.all, Of_Tree.all, Target) = 2,
+                        "the selected destination carries field two's shape");
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Value)
+                            = Landin.Types.Fixed_Array
+                        and then Landin.Checking.Array_Length
+                          (Types.all, Of_Tree.all, Value) = 4
+                        and then Landin.Checking.Array_Element
+                          (Types.all, Of_Tree.all, Value) = Landin.Types.U32,
+                        "the repetition receives the selected field's shape");
+                  end if;
+               end;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 4, "all contextual field repetitions were checked");
+   end Array_Field_Repetitions_Carry_Their_Destination_Shape;
+
    --  D50: a fixed-array field may supply or receive D20's complete copy.
    --  The source read uses the field-qualified whole-array fact established
    --  by D49 or an earlier copy, rather than D16's scalar-field bit.
@@ -2122,6 +2222,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array field literals carry destination shape",
          Array_Field_Literals_Carry_Their_Destination_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "array field repetitions carry destination shape",
+         Array_Field_Repetitions_Carry_Their_Destination_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "array field copy uses whole field facts",
          Array_Field_Copy_Uses_Whole_Field_Facts'Access);

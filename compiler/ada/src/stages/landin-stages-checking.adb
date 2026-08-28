@@ -2723,12 +2723,14 @@ package body Landin.Stages.Checking is
             when Syn.Assignment =>
                --  D49 supplies the fixed-array shape for a complete `zeroed`
                --  assignment.  D50 additionally recognizes a direct array
-               --  name or a selection as copy syntax, and D52 recognizes
-               --  D29's literal syntax.  The source selection is not typed
-               --  until Check_Place accepts the destination, so destination
-               --  diagnostics remain first and alone.
+               --  name or a selection as copy syntax, D52 recognizes D29's
+               --  literal syntax, and D53 recognizes D32/D37 repetition.
+               --  The source selection is not typed until Check_Place accepts
+               --  the destination, so destination diagnostics remain first
+               --  and alone.
                if Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                     in Syn.Zeroed_Literal | Syn.Array_Literal
+                       | Syn.Array_Repetition | Syn.Mixed_Array_Repetition
                  or else Is_Direct_Array_Name
                    (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                  or else Syn.Kind

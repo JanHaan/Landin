@@ -2418,6 +2418,103 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Array_Field_Literals_Become_Field_Qualified_Element_Stores;
 
+   --  D53 keeps the direct-array D32/D37 lowering unchanged.  A selected
+   --  field qualifies D37's prefix stores and the one compact suffix fill
+   --  with the same declaration-order field identity D48 introduced.
+   procedure Array_Field_Repetitions_Become_Qualified_Fills
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Repetitions_Become_Qualified_Fills
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [4]u32" & LF
+         & "end holder" & LF
+         & "mut state: holder" & LF
+         & "f: () -> none =" & LF
+         & "    state.row = [4 of 10]" & LF
+         & "    state.row = [11, 12, of 13]" & LF
+         & "    mut local: holder" & LF
+         & "    local.row = [of 20]" & LF
+         & "    local.row = [21, 22, of 23]" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "module and local field repetitions lower");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Full_Fills, Suffix_Fills : Natural := 0;
+         Module_Fills, Local_Fills : Natural := 0;
+         Module_Prefixes, Local_Prefixes : Natural := 0;
+      begin
+         for I in 1 .. IR.Item_Count (Unit) loop
+            declare
+               Owner : constant IR.Item_Id := IR.Item_Id (I);
+            begin
+               for V in 1 .. IR.Value_Count (Unit, Owner) loop
+                  declare
+                     Value : constant IR.Value_Id := IR.Value_Id (V);
+                     Op : constant IR.Opcode :=
+                       IR.Op_Of (Unit, Owner, Value);
+                  begin
+                     if Op = IR.Fill_Array
+                       and then IR.Element_Field_Of
+                                  (Unit, Owner, Value) = 2
+                     then
+                        if IR.First_Part_Of (Unit, Owner, Value) = 1 then
+                           Full_Fills := Full_Fills + 1;
+                        elsif IR.First_Part_Of (Unit, Owner, Value) = 3 then
+                           Suffix_Fills := Suffix_Fills + 1;
+                        end if;
+                        if IR.Destination_Of (Unit, Owner, Value).Kind
+                             = IR.Frame_Slot
+                        then
+                           Local_Fills := Local_Fills + 1;
+                        else
+                           Module_Fills := Module_Fills + 1;
+                        end if;
+                     elsif Op = IR.Store_Element
+                       and then IR.Element_Field_Of
+                                  (Unit, Owner, Value) = 2
+                     then
+                        if IR.Reaches_A_Slot (Unit, Owner, Value) then
+                           Local_Prefixes := Local_Prefixes + 1;
+                        else
+                           Module_Prefixes := Module_Prefixes + 1;
+                        end if;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            Full_Fills = 2 and then Suffix_Fills = 2
+            and then Module_Fills = 2 and then Local_Fills = 2,
+            "each storage class has one full and one suffix fill");
+         Landin.Testing.Check
+           (Item, Module_Prefixes = 2 and then Local_Prefixes = 2,
+            "each mixed prefix uses two field-qualified element stores");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the field-qualified repetition operations verify");
+      end;
+   end Array_Field_Repetitions_Become_Qualified_Fills;
+
    ------------------------------------------------------------------
    --  A named aggregate measurement
    ------------------------------------------------------------------
@@ -2891,6 +2988,9 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "array field literals become field-qualified element stores",
          Array_Field_Literals_Become_Field_Qualified_Element_Stores'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "array field repetitions become qualified fills",
+         Array_Field_Repetitions_Become_Qualified_Fills'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "a struct measurement carries its scalar fields",

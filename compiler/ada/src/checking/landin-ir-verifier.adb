@@ -866,7 +866,7 @@ package body Landin.IR.Verifier is
                                    Shape_Of
                                      (Id,
                                       Destination_Of (Of_Unit, Id, V),
-                                      0,
+                                      Element_Field_Of (Of_Unit, Id, V),
                                       Element, Length);
                               begin
                                  if Bad /= Nothing_Wrong then

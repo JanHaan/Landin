@@ -1100,13 +1100,15 @@ package body Landin.IR is
       Destination : Storage;
       First       : Part_Position;
       Value       : Value_Id;
-      Site        : Landin.Provenance.Origin)
+      Site        : Landin.Provenance.Origin;
+      Field       : Natural := 0)
    is
       Made : Instruction :=
         Instruction'(Op          => Fill_Array,
                      Site        => Site,
                      Destination => Destination,
                      Part        => First,
+                     Element_Field => Field,
                      others      => <>);
       Where : Value_Id;
    begin
