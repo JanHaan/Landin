@@ -15,7 +15,6 @@ package body Landin.Stages.Lowering is
    package Res renames Landin.Resolution;
    package Ty  renames Landin.Types;
    package IR  renames Landin.IR;
-   package Check renames Landin.Checking;
 
    use type IR.Block_Id;
    use type IR.Element_Total;
@@ -172,6 +171,15 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Id      : Res.Declaration_Id) return IR.Slot_Id;
 
+      --  D75 uses D74's one variant carrier for both storage classes.
+      --  Exactly one destination identity is supplied; payload leaves remain
+      --  scalar or fixed-array shapes, and all offsets stay target-owned.
+      procedure Add_Stored_Field
+        (Wrote : Res.Declaration_Id;
+         Field : Positive;
+         Datum : IR.Item_Id := IR.No_Item;
+         Slot  : IR.Slot_Id := IR.No_Slot);
+
       function Lower_Expression
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -312,6 +320,119 @@ package body Landin.Stages.Lowering is
          return IR.Part_Position (Value + 1);
       end Constant_Index;
 
+      procedure Add_Stored_Field
+        (Wrote : Res.Declaration_Id;
+         Field : Positive;
+         Datum : IR.Item_Id := IR.No_Item;
+         Slot  : IR.Slot_Id := IR.No_Slot)
+      is
+         procedure Add (Shape : IR.Field_Shape);
+
+         procedure Add (Shape : IR.Field_Shape) is
+         begin
+            if Datum /= IR.No_Item then
+               IR.Add_Field (Unit.all, Datum, Shape);
+            else
+               IR.Add_Slot_Field (Unit.all, Filling, Slot, Shape);
+            end if;
+         end Add;
+      begin
+         pragma Assert ((Datum = IR.No_Item) /= (Slot = IR.No_Slot));
+
+         case Landin.Checking.Field_Kind_Of (Types.all, Wrote, Field) is
+            when Landin.Checking.Scalar_Field =>
+               Add
+                 ((Kind    => IR.Scalar_Field_Shape,
+                   Element => Landin.Checking.Field_Type
+                     (Types.all, Wrote, Field),
+                   Length  => 1,
+                   others  => <>));
+
+            when Landin.Checking.Fixed_Array_Field =>
+               Add
+                 ((Kind    => IR.Array_Field_Shape,
+                   Element => Landin.Checking.Field_Array_Element
+                     (Types.all, Wrote, Field),
+                   Length  => IR.Element_Total
+                     (Landin.Checking.Field_Array_Length
+                        (Types.all, Wrote, Field)),
+                   others  => <>));
+
+            when Landin.Checking.Variant_Field =>
+               declare
+                  Source : constant Landin.Checking.Field_Shape :=
+                    Landin.Checking.Field_Shape_Of
+                      (Types.all, Wrote, Field);
+                  Total : Natural := 0;
+               begin
+                  for Which in 1 .. Source.Cases loop
+                     Total := Total
+                       + Landin.Checking.Variant_Case_Field_Count
+                           (Types.all, Wrote, Field, Which);
+                  end loop;
+
+                  declare
+                     Cases : IR.Case_Run_Array (1 .. Source.Cases) :=
+                       [others => (others => 0)];
+                     Payloads : IR.Field_Shape_Array (1 .. Total) :=
+                       [others => (others => <>)];
+                     Next : Natural := 1;
+                  begin
+                     for Which in 1 .. Source.Cases loop
+                        declare
+                           Count : constant Natural :=
+                             Landin.Checking.Variant_Case_Field_Count
+                               (Types.all, Wrote, Field, Which);
+                        begin
+                           Cases (Which) :=
+                             (First => (if Count = 0 then 0 else Next),
+                              Count => Count);
+                           for Position in 1 .. Count loop
+                              declare
+                                 Part : constant Landin.Checking.Field_Shape :=
+                                   Landin.Checking.Nth_Variant_Case_Field
+                                     (Types.all, Wrote, Field, Which,
+                                      Position);
+                              begin
+                                 Payloads (Next) :=
+                                   (Kind =>
+                                      (if Part.Kind =
+                                            Landin.Checking.Scalar_Field
+                                       then IR.Scalar_Field_Shape
+                                       else IR.Array_Field_Shape),
+                                    Element => Part.Element,
+                                    Length  => IR.Element_Total (Part.Length),
+                                    others  => <>);
+                                 Next := Next + 1;
+                              end;
+                           end loop;
+                        end;
+                     end loop;
+
+                     if Datum /= IR.No_Item then
+                        IR.Add_Field
+                          (Unit.all, Datum,
+                           (Kind           => IR.Variant_Field_Shape,
+                            Element        => Source.Element,
+                            Length         => 1,
+                            Cases          => Source.Cases,
+                            Payloads_First => 1),
+                           Cases, Payloads);
+                     else
+                        IR.Add_Slot_Field
+                          (Unit.all, Filling, Slot,
+                           (Kind           => IR.Variant_Field_Shape,
+                            Element        => Source.Element,
+                            Length         => 1,
+                            Cases          => Source.Cases,
+                            Payloads_First => 1),
+                           Cases, Payloads);
+                     end if;
+                  end;
+               end;
+         end case;
+      end Add_Stored_Field;
+
       --  A declaration's slot, made the first time it is wanted.  A local
       --  [1810], a parameter and the named return [1840] all become one;
       --  a module binding does not, and Lower_Expression sends those to
@@ -353,29 +474,8 @@ package body Landin.Stages.Lowering is
             for Field in
               1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
             loop
-               if Landin.Checking.Field_Kind_Of
-                    (Types.all, Id, Field) = Landin.Checking.Scalar_Field
-               then
-                  IR.Add_Slot_Field
-                    (Unit.all, Filling, Slots (Positive (Id)),
-                     Landin.Checking.Field_Type (Types.all, Id, Field));
-               elsif Landin.Checking.Field_Kind_Of
-                 (Types.all, Id, Field)
-                   = Landin.Checking.Fixed_Array_Field
-               then
-                  IR.Add_Slot_Field
-                    (Unit.all, Filling, Slots (Positive (Id)),
-                     (Kind    => IR.Array_Field_Shape,
-                      Element => Landin.Checking.Field_Array_Element
-                        (Types.all, Id, Field),
-                      Length  => IR.Element_Total
-                        (Landin.Checking.Field_Array_Length
-                           (Types.all, Id, Field)),
-                      others => <>));
-               else
-                  raise Landin.Compiler_Defect with
-                    "variant-bearing storage reached slot allocation";
-               end if;
+               Add_Stored_Field
+                 (Id, Field, Slot => Slots (Positive (Id)));
             end loop;
 
             return Slots (Positive (Id));
@@ -578,8 +678,8 @@ package body Landin.Stages.Lowering is
             --  target-dependent answer is not.  D17 decomposes a fixed array
             --  into operations the IR already has; D44/D45 carry an ordinary
             --  struct as its declaration-order scalar or compact fixed-array
-            --  field run; D74 also carries measurement-only variant case
-            --  payload runs.  A nonempty array has its element's alignment;
+            --  field run; D74/D75 also carry shared variant case payload
+            --  runs.  A nonempty array has its element's alignment;
             --  the internal empty shape has size zero and alignment one.
             when Syn.Size_Of | Syn.Align_Of =>
                declare
@@ -2238,32 +2338,8 @@ package body Landin.Stages.Lowering is
                                 1 .. Landin.Checking.Layout_Field_Count
                                        (Types.all, Id)
                               loop
-                                 if Landin.Checking.Field_Kind_Of
-                                      (Types.all, Id, Field)
-                                      = Landin.Checking.Scalar_Field
-                                 then
-                                    IR.Add_Field
-                                      (Unit.all, Made,
-                                       Landin.Checking.Field_Type
-                                         (Types.all, Id, Field));
-                                 elsif Landin.Checking.Field_Kind_Of
-                                   (Types.all, Id, Field)
-                                     = Landin.Checking.Fixed_Array_Field
-                                 then
-                                    IR.Add_Field
-                                      (Unit.all, Made,
-                                       (Kind    => IR.Array_Field_Shape,
-                                        Element => Check.Field_Array_Element
-                                          (Types.all, Id, Field),
-                                        Length => IR.Element_Total
-                                          (Check.Field_Array_Length
-                                             (Types.all, Id, Field)),
-                                        others => <>));
-                                 else
-                                    raise Landin.Compiler_Defect with
-                                      "variant-bearing storage reached"
-                                      & " datum allocation";
-                                 end if;
+                                 Add_Stored_Field
+                                   (Id, Field, Datum => Made);
                               end loop;
                            end if;
                         end;

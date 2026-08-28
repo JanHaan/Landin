@@ -3290,9 +3290,8 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Struct_Measurement_Carries_A_Compact_Array_Field;
 
-   --  D74 carries the unfolded tag and each case's compact payload shapes
-   --  only on aggregate measurements.  Datum and slot field runs remain the
-   --  scalar/array carrier until D75 admits variant storage.
+   --  D74 first carries the unfolded tag and each case's compact payload
+   --  shapes on aggregate measurements; D75 reuses that carrier for storage.
    procedure A_Struct_Measurement_Carries_Variant_Cases
      (Item : in out Landin.Testing.Context);
 
@@ -3356,9 +3355,98 @@ package body Landin.Tests.Lowering_Suite is
             "payload leaves retain declaration order and compact shapes");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
-            "the verifier accepts the measurement-only variant carrier");
+            "the verifier accepts the shared variant carrier");
       end;
    end A_Struct_Measurement_Carries_Variant_Cases;
+
+   --  D75 gives D74's target-neutral carrier to both module and frame
+   --  storage.  The zero image remains one whole-storage clear, not one
+   --  instruction per tag, payload field, or padding byte.
+   procedure Variant_Storage_Carries_Cases_And_One_Clear
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Storage_Carries_Cases_And_One_Clear
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "choice: type = struct" & LF
+         & "    prefix: u8" & LF
+         & "    kind: variant" & LF
+         & "        leaf |" & LF
+         & "        wide: (word: usize, byte: u8) |" & LF
+         & "        row: (values: [3]u16)" & LF
+         & "    end kind" & LF
+         & "    tail: u16" & LF
+         & "end choice" & LF
+         & "mut state: choice" & LF
+         & "clear: () -> none =" & LF
+         & "    mut local: choice = zeroed" & LF
+         & "    state = zeroed" & LF
+         & "end clear" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "variant-bearing module and local storage are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Datum_Shape : constant IR.Field_Shape :=
+           IR.Nth_Field_Shape (Unit, 1, 2);
+         Slot_Shape : constant IR.Field_Shape :=
+           IR.Nth_Slot_Field_Shape (Unit, 2, 1, 2);
+         Clears : Natural := 0;
+         Datum_Clear, Slot_Clear : Boolean := False;
+      begin
+         Landin.Testing.Check
+           (Item,
+            Datum_Shape.Kind = IR.Variant_Field_Shape
+              and then Datum_Shape.Cases = 3
+              and then IR.Variant_Case_Field_Count
+                (Unit, Datum_Shape, 1) = 0
+              and then IR.Variant_Case_Field_Count
+                (Unit, Datum_Shape, 2) = 2
+              and then IR.Variant_Case_Field_Count
+                (Unit, Datum_Shape, 3) = 1,
+            "the datum carries every compact case payload");
+         Landin.Testing.Check
+           (Item,
+            Slot_Shape.Kind = IR.Variant_Field_Shape
+              and then Slot_Shape.Cases = 3
+              and then IR.Nth_Variant_Case_Field
+                (Unit, Slot_Shape, 3, 1).Kind = IR.Array_Field_Shape
+              and then IR.Nth_Variant_Case_Field
+                (Unit, Slot_Shape, 3, 1).Length = 3,
+            "the frame slot carries the same variant shape");
+
+         for Value in 1 .. IR.Value_Count (Unit, 2) loop
+            if IR.Op_Of (Unit, 2, IR.Value_Id (Value)) = IR.Clear_Array then
+               Clears := Clears + 1;
+               declare
+                  Destination : constant IR.Storage :=
+                    IR.Destination_Of (Unit, 2, IR.Value_Id (Value));
+               begin
+                  case Destination.Kind is
+                     when IR.Frame_Slot => Slot_Clear := True;
+                     when IR.Module_Datum => Datum_Clear := True;
+                  end case;
+               end;
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, Clears = 2 and then Slot_Clear and then Datum_Clear,
+            "each explicit zero image is one whole-storage clear");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts both runtime variant carriers");
+      end;
+   end Variant_Storage_Carries_Cases_And_One_Clear;
 
    ------------------------------------------------------------------
    --  An internal array shape the source does not pin
@@ -3935,6 +4023,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a struct measurement carries variant case runs",
          A_Struct_Measurement_Carries_Variant_Cases'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "variant storage carries cases and one clear",
+         Variant_Storage_Carries_Cases_And_One_Clear'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "an internal empty array has identity measurements",

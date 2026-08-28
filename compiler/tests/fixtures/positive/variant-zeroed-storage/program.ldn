@@ -1,0 +1,27 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        wide: (word: usize, byte: u8) |
+        row: (values: [3]u16)
+    end kind
+    tail: u16
+end choice
+
+same: type = choice
+
+state: choice
+mut reset: same = zeroed
+
+use_storage: () -> none =
+    mut local: choice
+    mut initialized: same = zeroed
+    local = zeroed
+    reset = zeroed
+    _ = state.prefix
+    _ = state.tail
+    _ = local.prefix
+    _ = local.tail
+    _ = initialized.prefix
+    _ = initialized.tail
+end use_storage

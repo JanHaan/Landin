@@ -438,7 +438,8 @@ package Landin.IR is
    ------------------------------------------------------------------
 
    --  [0750]: an aggregate datum's fields, in the order they were written.
-   --  D46 permits a scalar or a compact fixed-scalar-array shape.  Shapes
+   --  D46 permits scalar and compact fixed-scalar-array shapes; D75 adds
+   --  the unfolded variant shape already used by D74's measurements.  Shapes
    --  and not offsets are carried, for the reason
    --  Measure_Size carries a type rather than an answer: an offset needs
    --  a target and this package has none.  Whoever holds a description
@@ -469,6 +470,23 @@ package Landin.IR is
                     = Field_Count (Into, Item)'Old + 1
                   and then Nth_Field_Shape
                     (Into, Item, Field_Count (Into, Item)) = Shape;
+
+   --  D75 carries a variant field's target-neutral case payloads beside
+   --  runtime storage as well as beside D74's measurements.  The top-level
+   --  shape names the supplied case run; neither contains target offsets.
+   procedure Add_Field
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Shape   : Field_Shape;
+      Cases   : Case_Run_Array;
+      Payloads : Field_Shape_Array)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item) = Landin.Types.Aggregate
+                  and then Shape.Kind = Variant_Field_Shape
+                  and then Shape.Cases = Cases'Length
+                  and then Shape.Payloads_First = 1,
+          Post => Field_Count (Into, Item)
+                    = Field_Count (Into, Item)'Old + 1;
 
    function Nth_Field_Shape
      (Of_Unit : Unit; Item : Item_Id; Index : Positive)
@@ -909,6 +927,22 @@ package Landin.IR is
                     (Into, Item, Slot,
                      Slot_Field_Count (Into, Item, Slot)) = Shape;
 
+   procedure Add_Slot_Field
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Slot     : Slot_Id;
+      Shape    : Field_Shape;
+      Cases    : Case_Run_Array;
+      Payloads : Field_Shape_Array)
+     with Pre  => Holds (Into, Item)
+                  and then Holds (Into, Item, Slot)
+                  and then Is_Aggregate (Into, Item, Slot)
+                  and then Shape.Kind = Variant_Field_Shape
+                  and then Shape.Cases = Cases'Length
+                  and then Shape.Payloads_First = 1,
+          Post => Slot_Field_Count (Into, Item, Slot)
+                    = Slot_Field_Count (Into, Item, Slot)'Old + 1;
+
    function Nth_Slot_Field_Shape
      (Of_Unit : Unit;
       Item    : Item_Id;
@@ -1330,9 +1364,9 @@ package Landin.IR is
                  and then Field
                           <= Measurement_Field_Count (Of_Unit, Item, Value);
 
-   function Measurement_Case_Run_Count (Of_Unit : Unit) return Natural;
+   function Variant_Case_Run_Count (Of_Unit : Unit) return Natural;
 
-   function Measurement_Field_Shape_Count (Of_Unit : Unit) return Natural;
+   function Variant_Field_Shape_Count (Of_Unit : Unit) return Natural;
 
    function Variant_Case_Run_Is_Valid
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
@@ -1342,9 +1376,9 @@ package Landin.IR is
                  and then Which <= Shape.Cases
                  and then Shape.Payloads_First > 0
                  and then Shape.Payloads_First
-                            <= Measurement_Case_Run_Count (Of_Unit)
+                            <= Variant_Case_Run_Count (Of_Unit)
                  and then Shape.Cases
-                            <= Measurement_Case_Run_Count (Of_Unit)
+                            <= Variant_Case_Run_Count (Of_Unit)
                                  - Shape.Payloads_First + 1;
 
    function Variant_Case_Field_Count
@@ -1355,9 +1389,9 @@ package Landin.IR is
                  and then Which <= Shape.Cases
                  and then Shape.Payloads_First > 0
                  and then Shape.Payloads_First
-                            <= Measurement_Case_Run_Count (Of_Unit)
+                            <= Variant_Case_Run_Count (Of_Unit)
                  and then Shape.Cases
-                            <= Measurement_Case_Run_Count (Of_Unit)
+                            <= Variant_Case_Run_Count (Of_Unit)
                                  - Shape.Payloads_First + 1;
 
    function Nth_Variant_Case_Field
@@ -1370,9 +1404,9 @@ package Landin.IR is
                  and then Which <= Shape.Cases
                  and then Shape.Payloads_First > 0
                  and then Shape.Payloads_First
-                            <= Measurement_Case_Run_Count (Of_Unit)
+                            <= Variant_Case_Run_Count (Of_Unit)
                  and then Shape.Cases
-                            <= Measurement_Case_Run_Count (Of_Unit)
+                            <= Variant_Case_Run_Count (Of_Unit)
                                  - Shape.Payloads_First + 1
                  and then Variant_Case_Run_Is_Valid
                    (Of_Unit, Shape, Which)
@@ -1918,7 +1952,8 @@ private
       Fields     : Field_Shape_Vectors.Vector;
       Slot_Fields : Field_Shape_Vectors.Vector;
       Measurement_Fields : Field_Shape_Vectors.Vector;
-      Measurement_Cases : Case_Run_Vectors.Vector;
+      Variant_Fields : Field_Shape_Vectors.Vector;
+      Variant_Cases : Case_Run_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
       --  D24: one folded scalar per array-datum position, laid end to end
       --  across items so a datum with no image contributes no bytes here.

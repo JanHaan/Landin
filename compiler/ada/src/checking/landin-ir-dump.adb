@@ -60,6 +60,56 @@ package body Landin.IR.Dump is
         is (if Holds (Of_Unit, Id)
             then Named (Declares (Of_Unit, Id)) else "-");
 
+      --  D74/D75 use one target-neutral shape spelling for measurement,
+      --  datum and slot runs.  Variant payloads are depth-one leaves, so
+      --  their case runs can be rendered without inventing target offsets.
+      function Shape_Text (Shape : Field_Shape) return String;
+
+      function Shape_Text (Shape : Field_Shape) return String is
+         Result : Unbounded.Unbounded_String;
+      begin
+         case Shape.Kind is
+            when Scalar_Field_Shape =>
+               return Landin.Types.Spelling (Shape.Element);
+            when Array_Field_Shape =>
+               return "[" & Trimmed (Element_Total'Image (Shape.Length))
+                 & "]" & Landin.Types.Spelling (Shape.Element);
+            when Variant_Field_Shape =>
+               Unbounded.Append
+                 (Result,
+                  "variant " & Landin.Types.Spelling (Shape.Element)
+                  & " cases" & Trimmed (Natural'Image (Shape.Cases)));
+               for Which in 1 .. Shape.Cases loop
+                  Unbounded.Append (Result, " (");
+                  for Payload in 1 .. Variant_Case_Field_Count
+                    (Of_Unit, Shape, Which)
+                  loop
+                     if Payload > 1 then
+                        Unbounded.Append (Result, ",");
+                     end if;
+                     declare
+                        Leaf : constant Field_Shape :=
+                          Nth_Variant_Case_Field
+                            (Of_Unit, Shape, Which, Payload);
+                     begin
+                        if Leaf.Kind = Scalar_Field_Shape then
+                           Unbounded.Append
+                             (Result, Landin.Types.Spelling (Leaf.Element));
+                        else
+                           Unbounded.Append
+                             (Result,
+                              "[" & Trimmed
+                                (Element_Total'Image (Leaf.Length))
+                              & "]" & Landin.Types.Spelling (Leaf.Element));
+                        end if;
+                     end;
+                  end loop;
+                  Unbounded.Append (Result, ")");
+               end loop;
+               return Unbounded.To_String (Result);
+         end case;
+      end Shape_Text;
+
       --  Every operand of every opcode, in one run, whatever the opcode.
       function Operands (Item : Item_Id; Value : Value_Id) return String;
 
@@ -221,55 +271,8 @@ package body Landin.IR.Dump is
                           Nth_Measurement_Field
                             (Of_Unit, Item, Value, Field);
                      begin
-                        Unbounded.Append (Fields, " ");
-                        if Part.Kind = Scalar_Field_Shape then
-                           Unbounded.Append
-                             (Fields, Landin.Types.Spelling (Part.Element));
-                        elsif Part.Kind = Array_Field_Shape then
-                           Unbounded.Append
-                             (Fields,
-                              "[" & Trimmed
-                                (Element_Total'Image (Part.Length))
-                              & "]" & Landin.Types.Spelling (Part.Element));
-                        else
-                           Unbounded.Append
-                             (Fields,
-                              "variant "
-                              & Landin.Types.Spelling (Part.Element)
-                              & " cases"
-                              & Trimmed (Natural'Image (Part.Cases)));
-                           for Which in 1 .. Part.Cases loop
-                              Unbounded.Append (Fields, " (");
-                              for Payload in 1 .. Variant_Case_Field_Count
-                                (Of_Unit, Part, Which)
-                              loop
-                                 if Payload > 1 then
-                                    Unbounded.Append (Fields, ",");
-                                 end if;
-                                 declare
-                                    Leaf : constant Field_Shape :=
-                                      Nth_Variant_Case_Field
-                                        (Of_Unit, Part, Which, Payload);
-                                 begin
-                                    if Leaf.Kind = Scalar_Field_Shape then
-                                       Unbounded.Append
-                                         (Fields,
-                                          Landin.Types.Spelling
-                                            (Leaf.Element));
-                                    else
-                                       Unbounded.Append
-                                         (Fields,
-                                          "[" & Trimmed
-                                            (Element_Total'Image
-                                               (Leaf.Length))
-                                          & "]" & Landin.Types.Spelling
-                                            (Leaf.Element));
-                                    end if;
-                                 end;
-                              end loop;
-                              Unbounded.Append (Fields, ")");
-                           end loop;
-                        end if;
+                        Unbounded.Append
+                          (Fields, " " & Shape_Text (Part));
                      end;
                   end loop;
                   return Lead & " fields" & Unbounded.To_String (Fields);
@@ -399,11 +402,7 @@ package body Landin.IR.Dump is
                begin
                   Put
                     ("  field " & Trimmed (Natural'Image (F)) & " "
-                     & (if Shape.Kind = Scalar_Field_Shape
-                        then Landin.Types.Spelling (Shape.Element)
-                        else "[" & Trimmed
-                          (Element_Total'Image (Shape.Length)) & "]"
-                          & Landin.Types.Spelling (Shape.Element)));
+                     & Shape_Text (Shape));
                end;
             end loop;
 
@@ -502,16 +501,8 @@ package body Landin.IR.Dump is
                              Nth_Slot_Field_Shape
                                (Of_Unit, Id, Slot, Field);
                         begin
-                           Unbounded.Append (Fields, " ");
-                           if Shape.Kind = Array_Field_Shape then
-                              Unbounded.Append
-                                (Fields,
-                                 "[" & Trimmed
-                                   (Element_Total'Image (Shape.Length))
-                                 & "]");
-                           end if;
                            Unbounded.Append
-                             (Fields, Landin.Types.Spelling (Shape.Element));
+                             (Fields, " " & Shape_Text (Shape));
                         end;
                      end loop;
                   end if;
