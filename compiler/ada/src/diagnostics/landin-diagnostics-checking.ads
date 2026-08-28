@@ -107,8 +107,9 @@ package Landin.Diagnostics.Checking is
       --  value; R2.30 separately owns carrying one through the ABI.
       Struct_Value,
       Struct_ABI,
-      --  D74 lays out and measures [0680]'s declaration but deliberately
-      --  carries no variant-bearing storage or value until D75.
+      --  D74 lays out and measures [0680]'s declaration, D75 gives it
+      --  storage and a zero image, and D76 admits contextual case writes;
+      --  a general variant value remains refused.
       Variant_Value,
       --  [0520] declares one; a value of one waits, as a struct's did,
       --  and so does an element the kernel cannot lay out end to end.

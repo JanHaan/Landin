@@ -116,7 +116,7 @@ the all-bits-zero image of a directly supplied initializer, assignment or
 field-label context. D27--D30 establish fixed-array contexts, D39--D43 scalar
 contexts, D49 and D57--D59 whole array-field and ordinary-struct contexts,
 D62 the depth-one indexed field place, D64--D67 labelled struct fields and
-static images, and D75 variant-bearing struct storage. It remains refused
+static images, and D75/D76 variant-bearing struct storage and case payloads. It remains refused
 where no enabled construct supplies that context. Floats
 [0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
@@ -4641,13 +4641,12 @@ in a datum or slot; D75 reuses it there without changing the layout.
 
 A binding, parameter, named return, initializer, assignment, `zeroed`, copy,
 literal or construction that would create storage or a value of a
-variant-bearing struct is one L0304. Parameters and returns retain R2.30's
-`Struct_ABI` owner; other sites use D74's `Variant_Value` refusal at [0680]. A
-case name used as a value or construction callee has the same owner. An
-inferred D72 construction meets that storage boundary while resolving its
-nominal body, before the binding can settle or lowering can allocate it.
-Matching and case construction remain refused. D75 supplies storage and the
-zero image before any of those forms migrate.
+variant-bearing struct was one L0304 at this boundary. Parameters and returns
+retain R2.30's `Struct_ABI` owner; other sites use D74's `Variant_Value`
+refusal at [0680]. A case name used as a general value or construction callee
+has the same owner. D75 supplies storage and the zero image, and D76 then
+admits contextual case construction without creating a general variant
+value. Matching remains refused.
 
 **Why unfolded, tag-first layout now:** it gives both described targets one
 deterministic hexdump-compatible answer, preserves [0540]'s later opportunity
@@ -4698,12 +4697,11 @@ Common scalar and fixed-array fields retain their existing field rules. A
 whole successful zero write establishes D16's scalar and D48's whole-array
 facts for those common fields; the variant part has no separately readable
 definite-assignment fact because its tag and payload are not exposed yet. A
-selection of the part itself is one L0304 `Variant_Value`, whether used as a
-value or a place. Case names, labelled literals, nominal construction, whole
-copy, inferred initialization, arguments, returns and every other aggregate
-value remain refused. Parameters and named returns retain R2.30's
-`Struct_ABI` owner. D76 owns case construction, D77 matching and D78 payload
-bindings.
+selection of the part itself is one L0304 `Variant_Value` when read. D76
+admits the directly selected mutable part as one contextual case destination;
+whole copy, inferred variant-bearing construction, arguments, returns and
+every general aggregate value remain refused. Parameters and named returns
+retain R2.30's `Struct_ABI` owner. D77 owns matching and D78 payload bindings.
 
 The IR uses the same target-neutral `Variant_Field_Shape` for measurement,
 datum and aggregate-slot field runs. One unit-wide case-run and payload-shape
@@ -4740,3 +4738,69 @@ target-neutral carrier. All were declined.
 `negative/variant-value-not-enabled`;
 `negative/variant-part-selection-not-enabled`; the generated token and IR
 records; and `runtime/variant-zeroed-storage-is-distinct` on Linux x86-64.
+
+### D76 — A variant case is constructed into contextual storage
+
+**The tour said** that [0690]'s bare case carries no payload and [0700]'s
+labelled construction supplies a payload by name. D74 fixed the case order
+and payload shapes, while D75 supplied storage and made tag zero select the
+first case; neither said how a later case is written.
+
+**Chosen:** a case is written only where a destination supplies one D74
+variant part. A typed local labelled literal or nominal construction may name
+a variant field with a bare payload-free case or with `case(field: value,
+...)`; a complete labelled literal or nominal construction may be assigned to
+a directly named mutable module or local struct in the same way. A directly
+selected variant part of such a mutable root may also be assigned either
+form. The case identity must belong to that exact part. A case from another
+part is L0301 at the value; an immutable root keeps L0303 first and alone.
+Module static struct images, inferred variant-bearing construction, whole
+variant-bearing copy and every general value position remain L0304
+`Variant_Value` boundaries.
+
+A bare case is legal only when its payload is empty. A labelled case
+construction gives each payload field at most once, using D64's L0308/L0309/
+L0310 ownership for unknown, duplicate and missing labels. Scalar payload
+fields accept their ordinary expression or contextual `zeroed`. A fixed-array
+payload field accepts only `zeroed` in this slice; selecting the case already
+clears that array's complete storage. A trailing `of zeroed` supplies every
+omitted payload field, while any other fill is L0304. Aggregate payloads stay
+D74's depth-one refusal.
+
+The destination case is selected before any payload expression is evaluated.
+Selection clears the variant part's complete padded target extent, writes the
+case's zero-based source-order tag, and thereby gives omitted and fixed-array
+payload fields their zero image. Labelled scalar expressions are then
+evaluated exactly once in written order and stored immediately, so a later
+expression observes every earlier program write. A refused destination reads
+none of them. D16 records no separately readable variant fact yet: D77's
+match is the first consumer of the tag and D78 owns payload bindings.
+
+The IR adds two destination-only operations. `Select_Variant` carries a
+storage identity, top-level field identity and one-based case identity;
+`Store_Variant_Field` additionally carries a one-based scalar payload-field
+identity and one scalar operand. None carries a target offset. The verifier
+checks storage, aggregate field, variant shape, case run, payload field kind
+and operand type in that order with explicit release-build code, and refuses
+either operation inside a datum initializer. The backend replays D74's layout:
+selection clears the target-derived part extent and writes `case - 1` with the
+shape's tag width; a payload store derives the part, payload and field offsets
+for the selected target before storing at the scalar width.
+
+**Why contextual construction first:** it exercises every case identity and
+payload offset without an aggregate temporary, a static nonzero variant image
+or an ABI rule. A field-wise clear was declined because it would leave union
+padding outside the selected value's zero image; copying a whole
+variant-bearing struct would need a source tag and selected-payload rule;
+admitting array payload literals or repetitions would add D52/D53's write
+sequence inside the case and is a later extension. Matching and payload
+binding remain D77 and D78.
+
+**Pinned by** the IR, lowering, verifier and backend public seams;
+`positive/variant-case-construction`;
+`negative/immutable-variant-case-assignment`;
+`negative/variant-case-does-not-belong`;
+`negative/variant-case-payload-disagrees`;
+`negative/variant-case-construction-contexts-not-enabled`;
+`negative/variant-value-not-enabled`; the generated token and IR records; and
+`runtime/variant-case-construction-runs-in-source-order` on Linux x86-64.

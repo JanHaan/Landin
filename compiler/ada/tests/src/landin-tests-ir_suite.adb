@@ -641,6 +641,105 @@ package body Landin.Tests.IR_Suite is
       end;
    end An_Array_Copy_Carries_Two_Compact_Places;
 
+   procedure Variant_Operations_Carry_Compact_Identities
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Operations_Carry_Compact_Identities
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+      declare
+         Unit : Landin.IR.Unit;
+         Routine : Landin.IR.Item_Id;
+         Slot : Landin.IR.Slot_Id;
+         Block : Landin.IR.Block_Id;
+         Value, Selected, Store : Landin.IR.Value_Id;
+      begin
+         Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Routine := Landin.IR.Add_Item
+           (Unit, Landin.IR.Routine, 1, Landin.Types.U32, Site);
+         Slot := Landin.IR.Add_Aggregate_Slot
+           (Unit, Routine, Landin.IR.No_Declaration, Site);
+         Landin.IR.Add_Slot_Field
+           (Unit, Routine, Slot,
+            (Kind           => Landin.IR.Variant_Field_Shape,
+             Element        => Landin.Types.U8,
+             Length         => 1,
+             Cases          => 2,
+             Payloads_First => 1),
+            Cases => [(First => 0, Count => 0),
+                      (First => 1, Count => 1)],
+            Payloads =>
+              [(Kind    => Landin.IR.Scalar_Field_Shape,
+                Element => Landin.Types.U16,
+                Length  => 1,
+                others  => <>)]);
+         Block := Landin.IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         Landin.IR.Enter (Unit, Routine, Block);
+         Landin.IR.Emit_Variant_Select
+           (Unit, Routine, (Kind => Landin.IR.Frame_Slot, Slot => Slot),
+            1, 2, Site);
+         Selected := Landin.IR.Nth_Value (Unit, Routine, Block, 1);
+         Value := Landin.IR.Emit_Number
+           (Unit, Routine, Landin.Types.U16, 7, False, Site);
+         Landin.IR.Emit_Variant_Field_Store
+           (Unit, Routine, (Kind => Landin.IR.Frame_Slot, Slot => Slot),
+            1, 2, 1, Value, Site);
+         Store := Landin.IR.Nth_Value (Unit, Routine, Block, 3);
+
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Selected)
+              = Landin.IR.Select_Variant
+              and then Landin.IR.Defines_Nothing (Landin.IR.Select_Variant)
+              and then Landin.IR.Operand_Count
+                (Unit, Routine, Selected) = 0
+              and then Landin.IR.Destination_Of
+                (Unit, Routine, Selected).Slot = Slot
+              and then Landin.IR.Element_Field_Of
+                (Unit, Routine, Selected) = 1
+              and then Landin.IR.Variant_Case_Of
+                (Unit, Routine, Selected) = 2,
+            "case selection carries storage, field and case identities");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Store)
+              = Landin.IR.Store_Variant_Field
+              and then Landin.IR.Defines_Nothing
+                (Landin.IR.Store_Variant_Field)
+              and then Landin.IR.Variant_Case_Of
+                (Unit, Routine, Store) = 2
+              and then Landin.IR.Variant_Payload_Field_Of
+                (Unit, Routine, Store) = 1
+              and then Landin.IR.Operand_Count
+                (Unit, Routine, Store) = 1
+              and then Landin.IR.Nth_Operand
+                (Unit, Routine, Store, 1) = Value,
+            "a scalar payload store carries one value and no offsets");
+
+         declare
+            Text : constant String := Landin.IR.Dump.Text
+              (Unit, Landin.Stages.Meanings (Work).all,
+               Landin.Stages.Identities (Work).all);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Ada.Strings.Fixed.Index
+                 (Text, "SELECT_VARIANT destination slot 1 field 1 case 2")
+                   /= 0
+               and then Ada.Strings.Fixed.Index
+                 (Text, "STORE_VARIANT_FIELD destination slot 1 field 1"
+                        & " case 2 payload field 1 <- 2") /= 0,
+               "the dump spells only target-neutral identities");
+         end;
+      end;
+   end Variant_Operations_Carry_Compact_Identities;
+
    --  D24: an array datum records its source-order image as one Folded
    --  value per position without allocating a run for an omitted-image
    --  datum, and the verifier holds the length to the array's length.
@@ -1006,6 +1105,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "an array copy carries two compact places",
          An_Array_Copy_Carries_Two_Compact_Places'Access);
+      Landin.Testing.Register
+        (Into, "ir", "variant operations carry compact identities",
+         Variant_Operations_Carry_Compact_Identities'Access);
       Landin.Testing.Register
         (Into, "ir", "an array datum image is compact",
          An_Array_Datum_Image_Is_Compact'Access);

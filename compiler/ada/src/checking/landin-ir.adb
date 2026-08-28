@@ -799,6 +799,14 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      is (Held (Of_Unit, Item, Value).Destination);
 
+   function Variant_Case_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     is (Held (Of_Unit, Item, Value).Variant_Case);
+
+   function Variant_Payload_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     is (Held (Of_Unit, Item, Value).Variant_Payload_Field);
+
    function Callee_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Item_Id
      is (Held (Of_Unit, Item, Value).Named);
@@ -1328,6 +1336,54 @@ package body Landin.IR is
       Where := Append (Into, Item, Made);
       pragma Assert (Where /= No_Value);
    end Emit_Array_Fill;
+
+   procedure Emit_Variant_Select
+     (Into        : in out Unit;
+      Item        : Item_Id;
+      Destination : Storage;
+      Field       : Positive;
+      Which       : Positive;
+      Site        : Landin.Provenance.Origin)
+   is
+      Where : constant Value_Id :=
+        Append
+          (Into, Item,
+           Instruction'(Op            => Select_Variant,
+                        Site          => Site,
+                        Destination   => Destination,
+                        Element_Field => Field,
+                        Variant_Case  => Which,
+                        others        => <>));
+   begin
+      pragma Assert (Where /= No_Value);
+   end Emit_Variant_Select;
+
+   procedure Emit_Variant_Field_Store
+     (Into          : in out Unit;
+      Item          : Item_Id;
+      Destination   : Storage;
+      Field         : Positive;
+      Which         : Positive;
+      Payload_Field : Positive;
+      Value         : Value_Id;
+      Site          : Landin.Provenance.Origin)
+   is
+      Made : Instruction :=
+        Instruction'(Op                    => Store_Variant_Field,
+                     Site                  => Site,
+                     Destination           => Destination,
+                     Element_Field         => Field,
+                     Variant_Case          => Which,
+                     Variant_Payload_Field => Payload_Field,
+                     others                => <>);
+      Where : Value_Id;
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Value);
+      Where := Append (Into, Item, Made);
+      pragma Assert (Where /= No_Value);
+   end Emit_Variant_Field_Store;
 
    procedure Emit_Store_Datum
      (Into  : in out Unit;

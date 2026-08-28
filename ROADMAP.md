@@ -3178,8 +3178,13 @@ typed `zeroed` initialization and whole assignment. Module storage stays one
 padded absent image in `.bss`; runtime zeroing is one D57/D58 whole-storage
 clear over the same target-derived extent. Parser, resolution, lowering,
 verifier and target seams, focused positive/negative fixtures, generated
-records and Linux runtime cases provide evidence. D76--D78 own construction,
-matching and payload bindings.
+records and Linux runtime cases provide evidence. D76 adds contextual bare and
+labelled case construction for typed local literals, whole assignments and a
+directly selected mutable variant part. Selection clears one padded part and
+writes its source-order tag before scalar payload fields are evaluated once in
+written order; IR, verifier and backend seams plus focused diagnostics and a
+Linux runtime case provide evidence. D77/D78 own matching and payload
+bindings.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3196,7 +3201,8 @@ selected field. D70 also copies a selected field into an ordinary module array.
 Inferred scalar initialization; count-less inferred and general-value full or
 mixed repetition [0560]; slices [0570]; and `lenof` operands other than D14's
 direct name and D31's literal remain refused. `zeroed` remains contextual: its
-enabled sites are D27/D28/D30, D39--D43, D49, D57--D59, D62, D64--D67 and D75;
+enabled sites are D27/D28/D30, D39--D43, D49, D57--D59, D62, D64--D67 and
+D75/D76;
 named-return subobjects, deeper nested places and every general value use stay
 outside those rules.
 
@@ -3205,7 +3211,8 @@ direct-name copies; D57 and D59 typed local and module zero images; D60/D61
 typed and inferred module image chains; D64/D65 typed local labelled literals
 and whole assignments; D66--D71 typed module labelled images; and D72 nominal
 construction in typed or inferred local/module initializers and whole
-assignments. General whole values, bare inferred struct literals,
+assignments. D76 adds contextual variant-case writes inside those typed local
+literal and assignment destinations. General whole values, bare inferred struct literals,
 heterogeneous or all-field fills, positional conversion and construction in a
 general expression remain refused. Parameters and returns of any struct type
 require R2.30's aggregate ABI. An array field may otherwise be reached
@@ -3216,11 +3223,12 @@ extension of the contextual forms above.
 
 Variant declarations and target-dependent measurements are enabled by D74;
 D75 adds module and local storage plus typed initialization and whole
-assignment with the complete zero image. Whole copies, labelled literals,
-inferred initialization, case construction, direct variant-part access,
+assignment with the complete zero image. D76 admits contextual case
+construction in typed local labelled literals and whole assignments, plus
+assignment to a directly selected mutable variant part. Whole copies, static
+case images, inferred variant-bearing construction, reads of the part,
 matching and payload bindings remain refused. Parameters and returns retain
-R2.30's aggregate ABI owner. D76--D78 own construction, matching and payload
-bindings respectively.
+R2.30's aggregate ABI owner. D77/D78 own matching and payload bindings.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed

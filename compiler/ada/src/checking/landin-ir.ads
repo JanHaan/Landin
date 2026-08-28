@@ -207,6 +207,12 @@ package Landin.IR is
       Copy_Array,
       Clear_Array,
       Fill_Array,
+      --  D76 selects one source-order case of an unfolded variant field,
+      --  then writes any labelled scalar leaves of that case.  Both carry
+      --  source identities only: the backend derives the tag and payload
+      --  offsets from the aggregate's target-neutral shape.
+      Select_Variant,
+      Store_Variant_Field,
       --  [0370]'s measurements.  The type they ask about is carried, not
       --  the answer: a size needs a width and a width needs a target, so
       --  the answer belongs to whoever has one.  This is the same seam
@@ -268,6 +274,7 @@ package Landin.IR is
    function Defines_Nothing (Of_Code : Opcode) return Boolean
      is (Of_Code in Store | Store_Datum | Store_Field | Store_Element
                     | Copy_Array | Clear_Array | Fill_Array
+                    | Select_Variant | Store_Variant_Field
                     | Terminator_Kind);
 
    ------------------------------------------------------------------
@@ -1213,7 +1220,23 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Copy_Array | Clear_Array | Fill_Array;
+                          in Copy_Array | Clear_Array | Fill_Array
+                             | Select_Variant | Store_Variant_Field;
+
+   --  D76's source-order case and, for a scalar payload write, the
+   --  declaration-order field inside that case.  Neither is a target
+   --  offset; a selected bare case has no payload field at all.
+   function Variant_Case_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Select_Variant | Store_Variant_Field;
+
+   function Variant_Payload_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          = Store_Variant_Field;
 
    --  The one-based first destination part of a compact array fill.  Full
    --  fills carry 1; D36 suffix fills carry the first part after the prefix.
@@ -1244,7 +1267,8 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Element | Store_Element
-                             | Copy_Array | Clear_Array | Fill_Array;
+                             | Copy_Array | Clear_Array | Fill_Array
+                             | Select_Variant | Store_Variant_Field;
 
    --  Which array a slot-reaching element operation names.  Only
    --  meaningful when Reaches_A_Slot is true; a computed module-array
@@ -1701,6 +1725,29 @@ package Landin.IR is
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
 
+   procedure Emit_Variant_Select
+     (Into       : in out Unit;
+      Item       : Item_Id;
+      Destination : Storage;
+      Field      : Positive;
+      Which      : Positive;
+      Site       : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   procedure Emit_Variant_Field_Store
+     (Into         : in out Unit;
+      Item         : Item_Id;
+      Destination  : Storage;
+      Field        : Positive;
+      Which        : Positive;
+      Payload_Field : Positive;
+      Value        : Value_Id;
+      Site         : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Value)
+                 and then Landin.Provenance.Is_Known (Site);
+
    --  Result is stated by the caller and not derived from the operand,
    --  so a mutation can make it disagree and the verifier can say so.
    function Emit_Unary
@@ -1838,6 +1885,8 @@ private
       Number      : Landin.Types.Magnitude    := 0;
       Part        : Part_Position              := 1;
       Element_Field : Natural                  := 0;
+      Variant_Case  : Natural                  := 0;
+      Variant_Payload_Field : Natural           := 0;
       Measured    : Landin.Types.Scalar_Name  := Landin.Types.Bool;
       First_Measurement_Field : Natural        := 0;
       Measurement_Field_Total : Natural        := 0;
