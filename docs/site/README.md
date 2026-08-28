@@ -20,7 +20,7 @@ turns the classes it emits into spans and links the citations in comments.
 
 The faces are not chosen here. They come from
 [`assets/fonts.py`](../../assets/fonts/README.md), which is every rendering
-of the two families — `Nunito Sans` for prose, vendored, and `MonoLisaText`
+of the two families — `Nunito Sans` for prose, vendored, and `MonoLisaCode`
 for code, from a private checkout its licence requires — so `--ui` and
 `--mono` cannot name a face the site does not ship beside the pages. The
 `@font-face` rules are read out of each family's own stylesheet rather
