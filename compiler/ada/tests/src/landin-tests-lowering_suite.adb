@@ -50,6 +50,7 @@ package body Landin.Tests.Lowering_Suite is
    use type IR.Value_Id;
    use type Landin.IR.Verifier.Fault_Kind;
    use type Landin.Source.Source_Id;
+   use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
 
@@ -1982,6 +1983,62 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Array_Chain_Copies_The_Terminal_Image;
 
+   --  D66 extends D60/D61's module struct image chain with a nonzero
+   --  terminal.  Every destination gets its own declaration-order folded
+   --  run; an omitted or whole-zero terminal keeps the absent image.
+   procedure A_Module_Struct_Literal_Records_And_Copies_Its_Image
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Struct_Literal_Records_And_Copies_Its_Image
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    count: usize" & LF
+         & "    row: [2]u16" & LF
+         & "end holder" & LF
+         & "mut origin: holder = (count: 7, tag: 5, of zeroed)" & LF
+         & "copy: holder = origin" & LF
+         & "inferred := copy" & LF
+         & "blank: holder = zeroed" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the aggregate image chain is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         for Datum in IR.Item_Id range 1 .. 3 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Result_Of (Unit, Datum) = Landin.Types.Aggregate
+               and then IR.Has_Image (Unit, Datum),
+               "each nonzero struct destination owns an image");
+            Landin.Testing.Check
+              (Item,
+               IR.Image_Length (Unit, Datum) = 3
+               and then IR.Nth_Field_Image (Unit, Datum, 1) = 5
+               and then IR.Nth_Field_Image (Unit, Datum, 2) = 7
+               and then IR.Nth_Field_Image (Unit, Datum, 3) = 0,
+               "the chain carries scalar folds and the array placeholder");
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            IR.Result_Of (Unit, 4) = Landin.Types.Aggregate
+            and then not IR.Has_Image (Unit, 4),
+            "the whole-zero aggregate still has no written image");
+      end;
+   end A_Module_Struct_Literal_Records_And_Copies_Its_Image;
+
    --  D34: a repetition folds one scalar and carries that one pattern through
    --  direct-name chains, regardless of the target-sized declared extent.  A
    --  zero pattern remains the absent image used for loader-zeroed storage.
@@ -3543,6 +3600,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a module array chain copies the terminal image",
          A_Module_Array_Chain_Copies_The_Terminal_Image'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a module struct literal records and copies its image",
+         A_Module_Struct_Literal_Records_And_Copies_Its_Image'Access);
       Landin.Testing.Register
         (Into, "lowering", "module repetition images stay compact",
          Module_Repetition_Images_Stay_Compact'Access);

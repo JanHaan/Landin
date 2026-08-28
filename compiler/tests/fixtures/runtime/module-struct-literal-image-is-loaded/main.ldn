@@ -1,0 +1,39 @@
+holder: type = struct
+    tag: u8
+    count: usize
+    debt: i32
+    ready: bool
+    row: [2]u16
+end holder
+
+seed: usize = 6
+mut origin: holder =
+    (ready: true, debt: -3, tag: 5, count: seed + 1, of zeroed)
+copy: holder = origin
+mut inferred := copy
+typed_from_inferred: holder = inferred
+
+public main: () -> (code: i32) =
+    origin.tag = 9
+    origin.count = 10
+    origin.debt = 11
+    origin.ready = false
+    origin.row[0] = 12
+    inferred.tag = 13
+    inferred.count = 14
+    inferred.debt = 15
+    inferred.ready = false
+    inferred.row[0] = 16
+
+    if copy.tag == 5 and copy.count == 7 and copy.debt == -3
+      and copy.ready and copy.row[0] == 0 and copy.row[1] == 0
+      and typed_from_inferred.tag == 5 and typed_from_inferred.count == 7
+      and typed_from_inferred.debt == -3 and typed_from_inferred.ready
+      and typed_from_inferred.row[0] == 0
+      and typed_from_inferred.row[1] == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

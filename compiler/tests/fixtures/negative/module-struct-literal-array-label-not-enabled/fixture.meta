@@ -1,0 +1,6 @@
+class: negative
+summary: D66 keeps a labelled fixed-array field outside the first aggregate image carrier
+constructs: 0520, 0670, 0710, 0720, 0750, 1810, 1940
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

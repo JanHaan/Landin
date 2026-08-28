@@ -1,0 +1,19 @@
+holder: type = struct
+    tag: u8
+    count: usize
+    debt: i32
+    ready: bool
+    row: [2]u16
+end holder
+
+same: type = holder
+seed: usize = 6
+flag: bool = true
+mut origin: holder =
+    (ready: flag, debt: -3, tag: 5, count: seed + 1, of zeroed)
+copy: holder = origin
+inferred := copy
+typed_from_inferred: holder = inferred
+aliased: same = origin
+blank: holder =
+    (tag: zeroed, count: 0, debt: 0, ready: false, of zeroed)

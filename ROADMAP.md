@@ -2932,16 +2932,17 @@ initialized from a direct module storage name of the same nominal type. Like
 D21's array rule, the static image chain follows declaration identities across
 aliases and forward references, owns distinct storage at every declaration and
 must terminate rather than returning to itself; the latter reports [1940]'s
-existing L0305 once. Every terminal image currently constructible is D10/D59's
-all-zero image, so lowering emits the same compact field-shaped aggregate datum
-with no instruction or finite image, and the backend reserves each target-
-derived padded extent separately in `.bss` on 64- and 32-bit descriptions. A
+existing L0305 once. At this slice every terminal image was D10/D59's all-zero
+image, so lowering emitted the same compact field-shaped aggregate datum with
+no instruction or finite image, and the backend reserved each target-derived
+padded extent separately in `.bss` on 64- and 32-bit descriptions. D66 later
+adds a declaration-order folded image and copies it through the same chain. A
 refused written initializer is not reread for [1940], preserving its owning
 report. Checker/lowering/backend seams, forward/alias/nominal/cycle/type-name
 fixtures, recorded dumps and a runtime storage-independence fixture provide
-evidence. Inferred module initialization, non-name and nonzero struct images,
-nested expressions and general aggregate values remain separate slices; D61
-below admits the inferred direct-name form.
+evidence. Inferred module initialization, non-name images, nested expressions
+and general aggregate values remain separate slices; D61 below admits the
+inferred direct-name form and D66 the scalar-labelled nonzero terminal.
 
 D61 admits a mutable or immutable inferred module ordinary struct from a
 direct module storage name. The checker reuses D56's nominal-body transfer
@@ -2949,13 +2950,14 @@ before settling the destination and D60's declaration-identity static image
 chain afterward. Forward names and aliases therefore preserve one nominal
 body; an all-inferred cycle reports [1940]'s L0305 once during settling, while
 a mixed typed/inferred cycle settles its bodies and reports once in the image
-validator. Every declaration owns a distinct compact aggregate datum with no
-instruction or finite image, and each backend reserves its target-derived
-padded extent separately in `.bss`. Checker/lowering/backend seams, typed and
+validator. At this slice every declaration owned a distinct compact aggregate
+datum with no instruction or finite image, and each backend reserved its
+target-derived padded extent separately in `.bss`; D66 later carries a written
+terminal image through the same chain. Checker/lowering/backend seams, typed and
 inferred forward chains, pure and mixed cycle ownership, type-name and non-name
 refusals, recorded dumps and a runtime independence fixture provide evidence.
-Non-name and nonzero static images, nested expressions and general aggregate
-values remain separate slices.
+Non-name images, nested expressions and general aggregate values remain
+separate slices; D66 later admits the scalar-labelled nonzero terminal.
 
 D62 admits `zeroed` as the complete right-hand side of assignment to a scalar
 element reached through a D48 fixed-array field on directly named mutable module
@@ -3003,7 +3005,8 @@ order, then the fill runs in declaration order; successful assignment records
 the existing complete aggregate definite-assignment facts. Parser, checker and
 lowering seams, focused diagnostics, positive/runtime fixtures and regenerated
 catalogue, construct, token and IR records provide evidence. No new IR,
-verifier, backend, layout or static-image invariant is introduced.
+verifier, backend, layout or static-image invariant is introduced. D66 later
+admits the scalar-labelled subset as a module static image.
 
 D65 makes each D64 label the contextual destination of the field it names. A
 scalar label accepts D42's typed `zeroed`; a fixed-array label accepts D52's
@@ -3017,9 +3020,28 @@ source-assignment, immutable-root and nested-value fixtures plus checker and
 lowering seams and regenerated token/IR records provide evidence. General
 `of expression` remains refused because one node cannot carry several field
 types without conversion or re-evaluation; inferred literals wait for
-construction, module literals wait for D60's nonzero image carrier, and the
-all-fill synonym and general aggregate values remain refused. No grammar,
+construction, module literals remain outside D65, and the all-fill synonym and
+general aggregate values remain refused. D66 later supplies D60's nonzero
+image carrier for scalar labels; labelled array images remain separate. No grammar,
 syntax, diagnostic, IR, verifier, backend, target or layout invariant changes.
+
+D66 admits an explicitly typed mutable or immutable module ordinary struct
+initialized by D64's nonempty labelled literal when every named field is
+scalar and known under [1940]. D64's label, duplicate, missing and `of zeroed`
+rules remain; an explicitly named array field is L0304 and waits for a compact
+per-field image extension. IR records one target-neutral folded entry per
+declaration-order field, using zero for unnamed scalar fields and for the
+absent image of every array field; verifier checks hold the run to the field
+count, array placeholders to zero and scalar folds to the selected target.
+The backend derives offsets, widths and padded extent from the existing field
+shapes, writes scalar directives and zeroes array fields and every padding gap
+in `.data`. Even an all-zero labelled literal is a written image, while omitted
+and whole-`zeroed` initializers stay absent `.bss` images. D60/D61 chains copy
+the folded terminal into distinct datums. IR/verifier/checker/lowering/backend
+seams, focused static-image refusals, regenerated records and a runtime
+distinct-storage fixture provide evidence. Inferred literals, labelled array
+images, heterogeneous fills, construction and general aggregate values remain
+separate slices.
 
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
@@ -3060,10 +3082,12 @@ than D55/D56's explicitly typed or inferred local direct-storage-name forms,
 D57's explicitly typed local zero image, D59's explicitly typed module zero
 image, D60's explicitly typed module direct-storage-name image chain and D61's
 inferred module direct-storage-name image chain, and D64/D65's explicitly typed
-local labelled literal and contextual field values,
+local labelled literal and contextual field values, plus D66's explicitly
+typed module scalar-labelled static image,
 general whole values,
-module and inferred struct literals, general or all-field fills and call-shaped
-construction beyond D64/D65's contextual literal,
+inferred struct literals, labelled module array-field images, general or
+all-field fills and call-shaped construction beyond D64--D66's contextual
+literal,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
 its array field beyond D48's indexed
@@ -3142,6 +3166,10 @@ spelling, module images, inference and every general aggregate value pinned.
 D65 migrated scalar `zeroed` and D49--D53's fixed-array forms into each written
 label while keeping heterogeneous fills, module images, inference, construction
 and every general aggregate value pinned.
+D66 migrated the scalar-labelled typed module struct literal into a
+target-neutral static field image while keeping inferred literals, labelled
+array-field images, heterogeneous fills, construction and every general
+aggregate value pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

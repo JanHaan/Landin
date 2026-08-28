@@ -159,7 +159,7 @@
 1430   tour        -                                  Alias, for collisions
 1440   tour        -                                  Pull selected names into scope, by name
 1450   tour        -                                  Imports are per file, so every file reads on its own
-1460   tour        accepted emitted executed          Values at module level must be known at compile time
+1460   tour        accepted emitted executed refused  Values at module level must be known at compile time
 1470   tour        -                                  A package is a named collection of modules with a version
 1480   tour        -                                  The roots are the project
 1490   tour        -                                  'fixed' marks what is known at compile time

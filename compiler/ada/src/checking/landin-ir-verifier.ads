@@ -96,6 +96,9 @@ package Landin.IR.Verifier is
       Array_Fill_First_Out_Of_Range,
       Array_Image_Length_Disagrees,
       Array_Image_Value_Does_Not_Fit,
+      Aggregate_Image_Length_Disagrees,
+      Aggregate_Image_Value_Does_Not_Fit,
+      Aggregate_Image_On_Array_Field,
       --  Calls [1920].
       Callee_Is_Not_A_Routine,
       Call_Inside_A_Datum,
