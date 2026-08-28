@@ -4,12 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-Landin is a language specification whose bootstrap implementation has a complete frontend and nothing behind it. `refine` scans and parses every `.ldn` file it is given, resolves every name in them as one module, checks every type and every definite assignment, reports what none of the four could read, lowers every function it accepted into a target-neutral IR, and produces nothing when a file is a program; nothing is emitted or executed, and there is no backend or standard library yet. Under `compiler/ada/` are the R0 chassis — an Ada 2022 GPRbuild project, the `refine` executable, source and diagnostic foundations, host adapters, target facts, stage seams, and a repository-owned test harness — the scanner, the parser, the syntax table, the name resolver, the type checker, the diagnostic catalogue, and the IR with the lowering that fills it, plus shared fixtures under `compiler/tests/`. The four prototype files remain specification stress tests written as code sketches; they contain omissions such as `...` and are not standalone programs.
+Landin is a language specification with a working Ada bootstrap compiler. R0
+and R1 are complete and R2.20 is active. `refine` scans and parses every
+`.ldn` file it is given, resolves the files as one module, checks every type
+and definite assignment, lowers accepted functions into verified
+target-neutral IR, emits Linux x86-64 assembly, and can invoke a
+triplet-selected toolchain to assemble and link a hosted executable. Runtime
+fixtures execute those binaries on the native Linux x86-64 gate. There is no
+native macOS arm64 or Cortex-M backend and no standard library yet. Under
+`compiler/ada/` are the Ada 2022 GPRbuild projects, the `refine` executable,
+source and diagnostic foundations, host adapters, target facts, stage seams,
+the scanner, parser, syntax table, name resolver, type checker, verified IR,
+Linux x86-64 backend, toolchain adapter and repository-owned test harness;
+shared fixtures live under `compiler/tests/`. The four prototype files remain
+specification stress tests written as code sketches; they contain omissions
+such as `...` and are not standalone programs.
 
 ## Commands
 
 ```sh
-# Run every available mechanical check over the specification, roadmap, and prototypes
+# Run every available mechanical check over the live documents and fixtures
 python3 check.py
 
 # Check one specification/prototype file (the narrowest supported test scope)
@@ -38,7 +52,7 @@ python3 check.py prototype-2-parser.md
 nix develop
 ```
 
-Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and from R1.80 onwards — when `refine` starts emitting instructions — it is the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches https://www.701.dev by being pushed, not by anyone running `scripts/site.sh --publish`.
+Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and since R1.80 — when `refine` began emitting executable instructions — it has been the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches https://www.701.dev by being pushed, not by anyone running `scripts/site.sh --publish`.
 
 A push also submits `.builds/nix.yml`, which checks the `nix develop` shell and is not a gate: it carries no authority, and it skips itself unless the push touched a file that shell is made of. Both manifests are submitted because builds.sr.ht looks for `.build.yml` and `.builds/*.yml` alike. Adding a third would need a reason — four manifests per push is the limit, beyond which builds.sr.ht chooses at random.
 
@@ -63,7 +77,7 @@ Use the repository documents in this order:
 
 A negative fixture's `codes:` is an ordered list, and it also says which stage refused the fixture: `check.py` reads which codes the frontend raises out of the two packages that raise them and requires the grammar to derive a program that only a later stage refused. Do not read a stage off a code's number — the catalogue's header forbids it, and `L0010` is raised by both the scanner and the parser.
 
-Four tables in the compiler are transcriptions of the grammar rather than paraphrases of it, and `check.py` compares each with its source. `Landin.Tokens`' reserved words must be the tour's own `keyword` production. `Landin.Syntax.Precedence` must have [1820]'s levels in [1820]'s order, with the same operators at each, the same fold, the same prefix set and first sets that agree with the grammar's own. And the parser's refusal tables — the words [1760] does not reserve, so only the parser can meet them, and the eleven scalar type names — must spell words the tour writes, cite paragraphs that exist, and name roadmap items that exist. And `Landin.Types` spells the eleven scalar names a second time, because it is the package that maps each onto a machine width; both it and the parser are held to the tour's own `type` rule and to each other. Add a level, an operator, a refused construct or a type in one place and the check says which other place disagrees.
+Four tables in the compiler are transcriptions of the grammar rather than paraphrases of it, and `check.py` compares each with its source. `Landin.Tokens`' reserved words must be the tour's own `keyword` production. `Landin.Syntax.Precedence` must have [1820]'s levels in [1820]'s order, with the same operators at each, the same fold, the same prefix set and first sets that agree with the grammar's own. The parser's refusal tables cover the words [1760] does not reserve, so only the parser can meet them; the checker's refused-type table covers scalar type names the grammar admits but the kernel has deferred. Both tables must spell words the tour writes, cite paragraphs that exist, and name roadmap items that exist. `Landin.Types` spells the eleven enabled scalar names separately because it maps each onto a machine width. Add a level, an operator, a refused construct or a type in one place and the check says which other place disagrees.
 
 The five documents are Markdown, and the form carries invariants rather than
 being a style. A construct is `### [NNNN] Title` at column 0 and nothing else
@@ -129,7 +143,13 @@ Compiler stages are Ada packages behind tested seams so a future self-hosting ro
 
 `core/*` is reserved for the future standard library. `landin/compiler`, `landin/assembler`, and `landin/linker` are reserved toolchain modules. Package acquisition and arrangement of package roots belong to a separate companion tool rather than the compiler, and a program may contain only one version of a package name.
 
-Implementation begins immediately rather than waiting for every unresolved foundation. `ROADMAP.md` assigns each question to the first vertical slice that needs it. R0 establishes the bootstrap chassis, R1 builds the executable language kernel and first Linux x86-64 path, and R2 settles the semantic and representation core from executable cases. R3, a complete derived parser program with useful diagnostics, evidence-table dispatch, and `any` but without specialization, is the first major compiler milestone.
+Implementation proceeds without waiting for every unresolved foundation.
+`ROADMAP.md` assigns each question to the first vertical slice that needs it.
+R0 established the bootstrap chassis, R1 built the executable language kernel
+and first Linux x86-64 path, and R2 is settling the semantic and representation
+core from executable cases. R3, a complete derived parser program with useful
+diagnostics, evidence-table dispatch, and `any` but without specialization, is
+the first major compiler milestone.
 
 The roadmap ends at a feature-complete pre-v1 compiler/toolchain slice. Production claims, release versioning, package acquisition, competitive optimization, and self-hosting remain outside it. Do not change any version or release designation without explicit user approval, and do not assume SemVer.
 

@@ -69,10 +69,12 @@ package body Landin.Driver is
    function Identity return String is
      ("refine - the Landin bootstrap compiler" & LF
       & "no release version is assigned" & LF
-      & "language frontend: scanner, parser, names, types" & LF
+      & "language frontend: scanner, parser, names, types, definite assignment"
+      & LF
       & "target-neutral IR: lowered and verified" & LF
-      & "backend: linux-x86-64, straight-line kernel only" & LF
-      & "toolchain: found by GNU triplet, assembles and links" & LF
+      & "backend: linux-x86-64 assembly" & LF
+      & "executable output: assembled and linked by a"
+      & " GNU-triplet-selected toolchain" & LF
       & "targets described: linux-x86-64, synthetic-32" & LF);
 
    function Usage return String is

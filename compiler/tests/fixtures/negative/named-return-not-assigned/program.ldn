@@ -1,0 +1,6 @@
+returns_early: () -> (result: u32) =
+    return
+end returns_early
+
+falls_through: () -> (result: u32) =
+end falls_through

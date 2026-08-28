@@ -103,8 +103,10 @@ code — `L0010` is raised by the scanner and by the parser both.
 
 `codes` is an ordered list and not a set. Two refused constructs in one file
 are two reports, and a regression that doubles a count is invisible to a set,
-so `float-literal-not-enabled` names `L0010, L0010` — once for the type and
-once for the literal. `check.py` holds every name in it to the catalogue, and
+so a fixture that contains two refused uses names its code twice in source
+order. `float-literal-not-enabled` now names one `L0010`: its one literal is
+the construct the frontend refuses. `check.py` holds every name in `codes` to
+the catalogue, and
 refuses a negative fixture with a program that names none; the parser suite
 scans and parses the program and holds the report to the exact sequence.
 
@@ -126,6 +128,11 @@ believing 114 lines of it were code. `check.py` holds every id to a paragraph
 `tour.md` or `spec.md` actually defines, and the harness holds it to being
 four digits — the two halves of the question, asked by the side that can
 answer each.
+
+The decision register's `Pinned by` paragraphs are different: those paths are
+the current evidence they promise a reader, so `check.py` holds every named
+fixture directory to existing. Historical prose may still name a retired
+fixture when the retirement is the point; a live evidence list may not.
 
 Name a construct when the fixture's *passing* would change if that construct
 were implemented wrong, and not when the construct merely appears in the
@@ -180,7 +187,7 @@ everywhere.
 | unit | a note of what an implementation-side case covers; the case itself lives in `compiler/ada/tests` |
 | negative, end-to-end | executed: `refine` is run with `args`, and its bytes and exit status are compared with `expect` and `status` |
 | runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` — or, with `traps: yes`, it is held to having ended without returning one |
-| positive | executed: the program is scanned and parsed with nothing reported, the grammar must derive it, and `refine` is asked to emit assembly for it |
+| positive | executed: the grammar must derive the program, `refine` must accept it through checking, lowering and verification, and the Linux x86-64 backend must emit assembly for it |
 | ABI, debugger | reserved; no fixture yet. They arrive with the work that produces an ABI and debug information |
 
 A class with no fixtures is the normal state early in the roadmap, and an
@@ -233,17 +240,17 @@ assembly is what pins it.
 
 ## The grammar corpus
 
-A `.ldn` file under `positive/` must be derivable from the grammar in
-`tour.md`; one under `negative/` must not. `check.py` enforces both on every
-full run, and it enforces that every construct in the grammar section is
-named by at least one fixture, so a production nothing pins is a reported
-fault rather than a quiet one.
+A `.ldn` file under `positive/` must be derivable from the enabled grammar in
+`spec.md`. A negative program a later stage refuses must derive too; one whose
+first diagnostic comes from the scanner or parser must not. `check.py`
+enforces those stage-sensitive verdicts on every full run, and it enforces
+that every construct in the grammar section is named by at least one fixture,
+so a production nothing pins is a reported fault rather than a quiet one.
 
-That is what makes the corpus useful before a compiler exists: the
-specification and its examples check each other. When R1.40's parser
-arrives, it has to agree with the same corpus, and a disagreement between
-the parser and the grammar is a defect in one of them rather than a matter
-of opinion.
+The corpus made the specification and its examples check each other before a
+compiler existed. R1.40's parser now has to agree with the same corpus, and a
+disagreement between the parser and the grammar is a defect in one of them
+rather than a matter of opinion.
 
 Two rounds of reading the grammar by hand found sixty-eight defects between
 them and still missed that a lone `_` parsed as a name. The corpus found
@@ -298,8 +305,9 @@ thing it demanded.
 `compiler/tests/lowering.ir` is generated: `./scripts/test.sh --record`
 writes it by lowering every positive fixture and rendering the Unit with
 `Landin.IR.Dump`. `compiler/tests/layout.targets` is written by the same
-command, and records what `Landin.Targets` says a value of each scalar type
-measures on each described target. Both are recorded artefacts `check.py`
+command, and records what `Landin.Targets` says scalar and aggregate shapes
+measure, align to and offset their fields by on each described target. Both are
+recorded artefacts `check.py`
 does not touch, and that difference matters enough to state.
 `check.py` generates the other two because it owns their sources — its own
 tokeniser, and the catalogue's Ada text. It owns nothing here: producing

@@ -2881,8 +2881,9 @@ package body Landin.Syntax.Parser is
                --  [0700]'s call-shaped named construction begins like a
                --  call but its first `name:` argument cannot derive from
                --  [1810].  Keep it outside the enabled grammar and recover
-               --  as one refused construct until the literal slice owns a
-               --  node for those field names.
+               --  as one refused construct.  D64 owns labelled literal
+               --  fields, but [1810] still has no named-argument construction
+               --  whose callee supplies their nominal type.
                if Peek = Tok.Identifier and then Ahead (1) = Tok.Colon then
                   Refuse
                     (Item    => Syn.Construction,
