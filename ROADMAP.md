@@ -228,6 +228,12 @@ Exit evidence: the harness discovers each fixture class, rejects duplicate or
 malformed metadata, and proves deterministic ordering without a third-party
 test framework.
 
+R2.20 profiling added exact suite, case and fixture selectors to the same
+harness. A selected run identifies itself as `FILTERED`, exercises the real
+fixture path, and cannot be mistaken for gate evidence; the no-argument run
+remains the complete deterministic suite. Recording and then running may share
+one build, but remain two binary modes so a case never writes a golden.
+
 ### R0.40 — Establish source and diagnostic foundations
 Status: complete
 Depends on: R0.10
@@ -286,6 +292,13 @@ container image builds the chassis and runs the suite with a transcript
 byte-identical to the macOS one, and `.build.yml` runs the same commands on
 x86-64 hardware at builds.sr.ht, from clean, in debug and release. Hosting
 was selected here: git.sr.ht for the repository, builds.sr.ht for the gate.
+
+R2.20 profiling found that container startup was below one second while clean
+builds and whole-corpus execution dominated the development loop. The local
+loop therefore keeps one-shot containers, avoids building twice in its
+default command, and has checksum-based developer wrappers for minimum
+recompilation and focused harness runs. Canonical debug and release commands
+still clean on a changed source manifest and still run the whole suite.
 
 ### R0 gate
 

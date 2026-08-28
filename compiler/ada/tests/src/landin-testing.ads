@@ -66,6 +66,18 @@ package Landin.Testing is
       Transcript  : out Ada.Strings.Unbounded.Unbounded_String;
       Result      : out Summary);
 
+   --  A focused run is developer feedback, not the repository gate.  Empty
+   --  filters mean every value at that level; a case filter therefore needs
+   --  the suite that owns it.  The transcript says FILTERED so it cannot be
+   --  quoted as though the complete inventory ran.
+   procedure Run
+     (In_Registry : Registry;
+      Suite_Filter : String;
+      Case_Filter  : String;
+      Transcript   : out Ada.Strings.Unbounded.Unbounded_String;
+      Result       : out Summary)
+     with Pre => Case_Filter = "" or else Suite_Filter /= "";
+
 private
 
    package Unbounded renames Ada.Strings.Unbounded;

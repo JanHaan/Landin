@@ -39,6 +39,28 @@ Fixture classes, and the directory each uses:
 | debugger | `debugger` | what a debugger must be able to show |
 | end-to-end | `end-to-end` | the toolchain from source to result |
 
+## Focused developer runs
+
+The harness can select one suite, one case, or one recorded fixture by exact
+name. The developer wrapper combines that with checksum-based minimum
+recompilation:
+
+```sh
+./scripts/dev-test.sh --suite='fixture execution'
+./scripts/dev-test.sh --case='harness/filters select exact cases'
+./scripts/dev-test.sh --fixture=positive/variant-match-exhaustive
+./scripts/dev-test.sh --fixture=negative/variant-match-duplicate
+./scripts/dev-test.sh --fixture=runtime/variant-match-selects-tag
+```
+
+A fixture selector accepts `positive`, `negative`, `runtime`, or any other
+discovered class whose fixture has a recorded `expect`. It invokes the real
+scanner-through-backend path appropriate to that class, including assembling,
+linking and executing a runtime fixture. Every selected transcript begins with
+`FILTERED`, and an unknown selection fails: focused feedback cannot look like
+the complete suite by accident. Run `./scripts/test.sh` with no selector for
+the complete local gate.
+
 ## Complete programs to try
 
 The runtime fixtures include small, complete programs rather than only
@@ -330,7 +352,9 @@ binary, chosen only by an argument a human typed: there is no environment
 variable, nothing writes the file when it is missing, and nothing rewrites
 it when it does not match. A golden that repairs itself on a mismatch
 records the defect instead of reporting it. The loop is closed by hand —
-record, then run the suite again with no argument.
+record, then run the suite again with no argument — or by
+`./scripts/test.sh --record-and-run`, whose shell wrapper makes both explicit
+binary invocations after one build.
 
 What the file is for is narrow, and `landin-ir-dump.ads` says it: it proves
 the lowering has not changed its mind. That the corpus derives from the

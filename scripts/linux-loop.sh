@@ -38,7 +38,9 @@ then
 fi
 
 if [ "$#" -eq 0 ]; then
-    set -- sh -c './scripts/build.sh && ./scripts/test.sh'
+    #  test.sh owns the build.  Calling build.sh here as well used to run the
+    #  toolchain probe, manifest and two no-op GPRbuilds twice on every loop.
+    set -- ./scripts/test.sh
 fi
 
 #  Release needs the memory, and the default does not have it.  A release

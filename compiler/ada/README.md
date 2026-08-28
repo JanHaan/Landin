@@ -216,3 +216,8 @@ See `TOOLCHAIN.md`. From the repository root:
 ./scripts/build.sh
 ./scripts/test.sh
 ```
+
+`scripts/dev-build.sh` uses GPRbuild checksum recompilation for the edit loop,
+and `scripts/dev-test.sh` accepts an exact `--suite`, `--case`, or `--fixture`
+selector. Filtered runs identify themselves and do not replace the complete
+no-argument suite.
