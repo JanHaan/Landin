@@ -4524,3 +4524,56 @@ work this slice deliberately does not have. All were declined.
 `negative/struct-literal-without-layout`;
 the generated construct, token and IR records; and
 `runtime/struct-construction-order` on Linux x86-64.
+
+### D73 — A contextual variant part is refused once as a whole
+
+**The tour said** that an ordinary struct may contain one contextual
+`name: variant` part [0680], whose cases may be bare atoms or carry labelled
+payload fields [0690]. The enabled grammar [1795] still describes only an
+ordinary `field ::= identifier ":" type`, so the old parser read `variant` as
+a user type and then reported unrelated errors on the first case and the two
+closers.
+
+**Chosen:** while reading an ordinary struct body, the parser recognizes the
+shape of [0680]'s contextual part, reports one L0010 at the part name, and
+skips through that part's own `end name` closer. Parsing then resumes in the
+containing struct, so a common field following the refused part and the outer
+`end struct-name` remain independently readable. Payload and bare cases, and
+an empty part written directly as `end name`, have the same single owner. A
+refused part counts as the field-like content that caused the declaration to
+be refused, so the recovery does not add the ordinary empty-struct report.
+If the part's closer is absent or misspelled, recovery falls back to the
+containing struct's closer rather than discarding later declarations.
+
+`variant` remains an ordinary identifier rather than a reserved word. The
+lookahead therefore requires the following tokens to have a case or the
+part's matching closer shape; `kind: variant` followed by another ordinary
+field continues to mean that `kind` has the user-declared type named
+`variant`. The grammar remains unchanged and the negative fixture remains
+underivable, as every parser-owned refusal requires.
+
+No variant node, name scope, case identity, layout, value, image, IR operation,
+verifier rule or backend representation is introduced. Later slices must use
+executable evidence to decide duplicate cases, payload type checking, empty
+and single-case legality, tag width and position, payload-union alignment and
+padding, the zero image, construction and matching, and whether any spare bit
+may fold the tag. Until then the whole part is absent from the syntax tree and
+the containing type is rejected by its one owning report.
+
+**Why refuse before representing:** accepting a declaration without a layout
+would create a legal but unusable type whose later consumers either fail
+silently or invent a diagnostic at every use. Defining layout immediately
+would instead decide tag and payload representation from measurement alone,
+before any value can prove it. Naming the complete omitted construct gives
+the parser stable recovery evidence without committing either mistake.
+
+**The alternatives:** accept declaration-only variants, implement declaration
+and layout together, reserve `variant`, or postpone all variant evidence. The
+first has no owning report for the missing layout; the second crosses every
+representation layer in one unmeasured step; the third breaks the tour's
+contextual spelling and user types of that name; and the last leaves R2.20's
+variant work with only accidental cascades. All were declined.
+
+**Pinned by** the parser public-seam case;
+`negative/variant-part-not-enabled`; the generated construct matrix and token
+record; and the corpus truncation sweep.

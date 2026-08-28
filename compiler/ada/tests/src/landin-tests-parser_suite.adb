@@ -405,6 +405,100 @@ package body Landin.Tests.Parser_Suite is
    end Struct_Literal_Shapes_Are_Refused_Once;
 
    ------------------------------------------------------------------
+   --  Contextual ordinary-struct variant-part refusal
+   ------------------------------------------------------------------
+
+   procedure Variant_Parts_Are_Refused_Once
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Parts_Are_Refused_Once
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Program
+        (Text : String; Expected : String; Because : String);
+
+      procedure Check_Program
+        (Text : String; Expected : String; Because : String)
+      is
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse (Text, Codes, Total, Nodes, Held);
+         Landin.Testing.Check (Item, Held, Because & ": the tree is sound");
+         Landin.Testing.Check (Item, Nodes > 0, Because & ": a tree exists");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Codes), Expected,
+            Because & ": the variant part owns one report");
+      end Check_Program;
+   begin
+      Check_Program
+        ("figure: type = struct" & ASCII.LF
+         & "  label: u8" & ASCII.LF
+         & "  kind: variant" & ASCII.LF
+         & "    circle: (radius: i32) |" & ASCII.LF
+         & "    rectangle: (width: i32, height: i32)" & ASCII.LF
+         & "  end kind" & ASCII.LF
+         & "  ready: bool" & ASCII.LF
+         & "end figure" & ASCII.LF
+         & "after: u8" & ASCII.LF,
+         "L0010", "payload cases and a following common field");
+
+      Check_Program
+        ("node: type = struct" & ASCII.LF
+         & "  kind: variant" & ASCII.LF
+         & "    leaf |" & ASCII.LF
+         & "    branch: (first: u32, count: u32)" & ASCII.LF
+         & "  end kind" & ASCII.LF
+         & "end node" & ASCII.LF,
+         "L0010", "a bare case before a payload case");
+
+      Check_Program
+        ("empty: type = struct" & ASCII.LF
+         & "  kind: variant" & ASCII.LF
+         & "  end kind" & ASCII.LF
+         & "end empty" & ASCII.LF,
+         "L0010", "an empty variant part");
+
+      Check_Program
+        ("single: type = struct" & ASCII.LF
+         & "  kind: variant" & ASCII.LF
+         & "    circle: (radius: i32)" & ASCII.LF
+         & "  end kind" & ASCII.LF
+         & "end single" & ASCII.LF,
+         "L0010", "a single payload case before its closer");
+
+      Check_Program
+        ("broken: type = struct" & ASCII.LF
+         & "  kind: variant" & ASCII.LF
+         & "    leaf |" & ASCII.LF
+         & "  end kinds" & ASCII.LF
+         & "end broken" & ASCII.LF
+         & "after: u8 =",
+         "L0010, L0102", "a misspelled part closer preserves later input");
+
+      Check_Program
+        ("variant: type = u8" & ASCII.LF
+         & "holder: type = struct" & ASCII.LF
+         & "  kind: variant" & ASCII.LF
+         & "  next: u8" & ASCII.LF
+         & "end holder" & ASCII.LF
+         & "only: type = struct" & ASCII.LF
+         & "  kind: variant" & ASCII.LF
+         & "end only" & ASCII.LF,
+         "", "`variant` remains an ordinary contextual type name");
+
+      Check_Program
+        ("variant: type = u8" & ASCII.LF
+         & "separate: type = struct" & ASCII.LF
+         & "  kind: variant" & ASCII.LF
+         & "  next: (x: i32)" & ASCII.LF
+         & "end separate" & ASCII.LF,
+         "L0010", "a following inline struct keeps its own refusal");
+   end Variant_Parts_Are_Refused_Once;
+
+   ------------------------------------------------------------------
    --  Recovery, on input nothing derives
    ------------------------------------------------------------------
 
@@ -661,6 +755,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "parses struct literals and names refusals once",
          Struct_Literal_Shapes_Are_Refused_Once'Access);
+      Landin.Testing.Register
+        (Into, "parser", "names contextual variant parts once",
+         Variant_Parts_Are_Refused_Once'Access);
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
          Survives_Every_Truncation'Access);

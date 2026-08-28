@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 98 with evidence, 100 with neither.
+#  198 constructs, 101 with evidence, 97 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -81,8 +81,8 @@
 0650   tour        refused refused-by-name            Distinct type
 0660   tour        -                                  Range subtype: checked at assignment and conversion
 0670   tour        accepted emitted executed refused refused-by-name Struct, block form and inline form
-0680   tour        -                                  Struct with a variant part
-0690   tour        -                                  A case with no payload is written bare
+0680   tour        refused refused-by-name            Struct with a variant part
+0690   tour        refused                            A case with no payload is written bare
 0700   tour        accepted emitted executed refused  Construction and conversion use the same form
 0710   tour        accepted emitted executed refused  A struct literal is untyped
 0720   tour        accepted emitted executed refused refused-by-name 'of' fills every field the literal did not name
@@ -183,7 +183,7 @@
 1670   tour        -                                  A failed check calls a fixed, never-returning symbol
 1680   tour        -                                  Require a capability, do not track an effect
 1690   tour        -                                  One mechanism, two readings, is better than two mechanisms
-1700   tour        -                                  Atoms are the same idea wherever they appear
+1700   tour        refused                            Atoms are the same idea wherever they appear
 1710   tour        -                                  How a new feature earns its place
 1720   tour        -                                  What the language claims, at this version, plainly
 1730   tour        -                                  Check once, then carry the proof
