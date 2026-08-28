@@ -1,0 +1,6 @@
+class: negative
+summary: D75 stores the variant part but leaves its tag and payload inaccessible until construction and matching
+constructs: 0420, 0680, 1790, 1795, 1820
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0304, L0304

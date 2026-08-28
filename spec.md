@@ -115,9 +115,9 @@ and the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it
 the all-bits-zero image of a directly supplied initializer, assignment or
 field-label context. D27--D30 establish fixed-array contexts, D39--D43 scalar
 contexts, D49 and D57--D59 whole array-field and ordinary-struct contexts,
-D62 the depth-one indexed field place, and D64--D67 labelled struct fields and
-static images. It remains refused where no enabled construct supplies that
-context. Floats
+D62 the depth-one indexed field place, D64--D67 labelled struct fields and
+static images, and D75 variant-bearing struct storage. It remains refused
+where no enabled construct supplies that context. Floats
 [0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
 not enabled yet.
@@ -4634,12 +4634,10 @@ later consumers add no cascade.
 
 `sizeof` and `alignof` are executable evidence for this rule. Lowering copies
 the same neutral tag, case runs and payload shapes into the IR's aggregate
-*measurement* run. The verifier checks the tag, nonempty and in-range case
-runs, and scalar/fixed-array-only payloads before any payload accessor. The
-backend replays the layout rule against its target facts. Runtime datum and
-slot field runs deliberately remain scalar/fixed-array-only: D74 creates no
-variant storage, image, clear, copy or field operation, and the backend's
-ordinary aggregate emitters cannot receive this measurement-only shape.
+measurement run. The verifier checks the tag, nonempty and in-range case runs,
+and scalar/fixed-array-only payloads before any payload accessor. The backend
+replays the layout rule against its target facts. D74 does not put that carrier
+in a datum or slot; D75 reuses it there without changing the layout.
 
 A binding, parameter, named return, initializer, assignment, `zeroed`, copy,
 literal or construction that would create storage or a value of a
@@ -4648,8 +4646,8 @@ variant-bearing struct is one L0304. Parameters and returns retain R2.30's
 case name used as a value or construction callee has the same owner. An
 inferred D72 construction meets that storage boundary while resolving its
 nominal body, before the binding can settle or lowering can allocate it.
-Matching and case construction remain refused. D75 must decide the zero image
-and storage before any of those forms can migrate.
+Matching and case construction remain refused. D75 supplies storage and the
+zero image before any of those forms migrate.
 
 **Why unfolded, tag-first layout now:** it gives both described targets one
 deterministic hexdump-compatible answer, preserves [0540]'s later opportunity
@@ -4676,3 +4674,69 @@ public seams; `positive/variant-part-measured`;
 `negative/variant-abi-not-enabled`; the generated construct, token, IR and
 target-layout records; the backend seam against both target descriptions; and
 `runtime/variant-part-measurements-answer-for-the-target` on Linux x86-64.
+
+### D75 — A variant-bearing struct has storage and one zero image
+
+**The tour said** that [0540]'s `zeroed` writes the all-bits-zero image of a
+type and that [0740]'s variant value contains one tag and one selected payload.
+D74 fixed their unfolded layout but deliberately created no datum or frame
+cell, and did not say which tag the zero image selects.
+
+**Chosen:** a named ordinary struct with a D74 variant part may be declared as
+module or local storage. A declaration-only module binding has D10's static
+zero image; a declaration-only local binding is one uninitialized aggregate
+frame cell. An explicitly typed module or local initializer may be `zeroed`,
+and a directly named mutable module or local place may be assigned `zeroed`.
+These are the only new value contexts. The tag value zero selects the first
+case in source order. Every payload leaf D74 admits is a scalar or fixed array
+of scalars and therefore has [0540]'s zero image, so zeroing the tag, maximum
+payload extent, common fields and every padding byte is one valid complete
+image. A future payload leaf without a zero image must make this contextual
+form fail rather than change what zero means.
+
+Common scalar and fixed-array fields retain their existing field rules. A
+whole successful zero write establishes D16's scalar and D48's whole-array
+facts for those common fields; the variant part has no separately readable
+definite-assignment fact because its tag and payload are not exposed yet. A
+selection of the part itself is one L0304 `Variant_Value`, whether used as a
+value or a place. Case names, labelled literals, nominal construction, whole
+copy, inferred initialization, arguments, returns and every other aggregate
+value remain refused. Parameters and named returns retain R2.30's
+`Struct_ABI` owner. D76 owns case construction, D77 matching and D78 payload
+bindings.
+
+The IR uses the same target-neutral `Variant_Field_Shape` for measurement,
+datum and aggregate-slot field runs. One unit-wide case-run and payload-shape
+carrier lets each top-level shape name its source-order cases without storing
+an offset, width or padding byte. The verifier proves the tag kind, case-run
+bounds and depth-one scalar/fixed-array payload leaves before any accessor for
+all three storage classes. A variant-bearing aggregate may have no written
+static image in this slice: omitted and explicit module zero images are the
+same absent image, while a malformed written image is refused before the
+backend can interpret it.
+
+Lowering emits no variant instruction. Module storage is one ordinary
+aggregate datum; local storage is one aggregate slot. Explicit local zero
+initialization and whole zero assignment reuse D57/D58's operandless,
+field-zero `Clear_Array`, which clears the complete padded aggregate extent.
+The x86-64 backend derives that extent by replaying D74's tag-first maximum-
+payload layout against the selected target. Module zero storage is reserved as
+one distinct padded object in `.bss`; no startup instruction exists. The same
+recursive extent routine serves measurement, datum placement, frame layout and
+whole clear, so their answers cannot diverge between 32- and 64-bit target
+facts.
+
+**Why only storage and zero now:** the all-zero image needs no payload
+expression, no tag operation and no aggregate temporary, so it exercises the
+runtime carrier and target layout without prejudging how a case is formed or
+examined. Field-wise stores were declined because they leave padding outside
+[0540]'s complete image; a new clear opcode duplicates D57's whole-storage
+operation; admitting copy or construction would cross D76's case-selection
+rule; and keeping the variant as opaque target bytes would abandon D74's
+target-neutral carrier. All were declined.
+
+**Pinned by** the lowering, verifier and backend public seams;
+`positive/variant-zeroed-storage`;
+`negative/variant-value-not-enabled`;
+`negative/variant-part-selection-not-enabled`; the generated token and IR
+records; and `runtime/variant-zeroed-storage-is-distinct` on Linux x86-64.

@@ -116,6 +116,19 @@ package body Landin.Tests.Verifier_Suite is
              Element => Landin.Types.U16,
              Length  => 2,
              others => <>));
+         IR.Add_Field
+           (Unit, G,
+            (Kind           => IR.Variant_Field_Shape,
+             Element        => Landin.Types.U8,
+             Length         => 1,
+             Cases          => 2,
+             Payloads_First => 1),
+            Cases => [(First => 0, Count => 0),
+                      (First => 1, Count => 1)],
+            Payloads => [(Kind    => IR.Scalar_Field_Shape,
+                          Element => Landin.Types.U32,
+                          Length  => 1,
+                          others  => <>)]);
          S := IR.Add_Slot (Unit, A, Landin.Types.U32, 2, Site);
          Q := IR.Add_Array_Slot
            (Unit, A, Landin.Types.U16, 2 ** 32 - 1,
@@ -132,6 +145,19 @@ package body Landin.Tests.Verifier_Suite is
              Element => Landin.Types.U16,
              Length  => 2,
              others => <>));
+         IR.Add_Slot_Field
+           (Unit, A, T,
+            (Kind           => IR.Variant_Field_Shape,
+             Element        => Landin.Types.U8,
+             Length         => 1,
+             Cases          => 2,
+             Payloads_First => 1),
+            Cases => [(First => 0, Count => 0),
+                      (First => 1, Count => 1)],
+            Payloads => [(Kind    => IR.Array_Field_Shape,
+                          Element => Landin.Types.U16,
+                          Length  => 3,
+                          others  => <>)]);
          IR.Set_Result_Slot (Unit, A, S);
          B := IR.Add_Block (Unit, A, Landin.Resolution.Program_Scope,
                             Site);
@@ -181,6 +207,8 @@ package body Landin.Tests.Verifier_Suite is
       Scalar_Measurement_Length_Is_Not_One,
       Variant_Measurement_Tag_Is_Signed,
       Variant_Measurement_Case_Run_Overflows,
+      Variant_Datum_Tag_Is_Signed,
+      Variant_Slot_Case_Run_Overflows,
       Aggregate_Scalar_Length_Is_Not_One,
       Slot_Scalar_Length_Is_Not_One,
       Operands_Of_Two_Types,
@@ -271,7 +299,15 @@ package body Landin.Tests.Verifier_Suite is
       end if;
       D := IR.Add_Item (Unit, IR.Datum, 3, Landin.Types.U32, Site);
       G := IR.Add_Item (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
-      if Harm = Aggregate_Scalar_Length_Is_Not_One then
+      if Harm = Variant_Datum_Tag_Is_Signed then
+         IR.Add_Field
+           (Unit, G,
+            (Kind           => IR.Variant_Field_Shape,
+             Element        => Landin.Types.I8,
+             Length         => 1,
+             Cases          => 1,
+             Payloads_First => 1));
+      elsif Harm = Aggregate_Scalar_Length_Is_Not_One then
          IR.Add_Field
            (Unit, G,
             (Kind    => IR.Scalar_Field_Shape,
@@ -308,7 +344,15 @@ package body Landin.Tests.Verifier_Suite is
          IR.No_Declaration, Site);
       T := IR.Add_Aggregate_Slot
         (Unit, A, IR.No_Declaration, Site);
-      if Harm = Slot_Scalar_Length_Is_Not_One then
+      if Harm = Variant_Slot_Case_Run_Overflows then
+         IR.Add_Slot_Field
+           (Unit, A, T,
+            (Kind           => IR.Variant_Field_Shape,
+             Element        => Landin.Types.U8,
+             Length         => 1,
+             Cases          => Natural'Last,
+             Payloads_First => 1));
+      elsif Harm = Slot_Scalar_Length_Is_Not_One then
          IR.Add_Slot_Field
            (Unit, A, T,
             (Kind    => IR.Scalar_Field_Shape,
@@ -435,12 +479,14 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
-         when Aggregate_Scalar_Length_Is_Not_One =>
+         when Aggregate_Scalar_Length_Is_Not_One
+            | Variant_Datum_Tag_Is_Signed =>
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
-         when Slot_Scalar_Length_Is_Not_One =>
+         when Slot_Scalar_Length_Is_Not_One
+            | Variant_Slot_Case_Run_Overflows =>
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -955,6 +1001,10 @@ package body Landin.Tests.Verifier_Suite is
           V.Field_Shape_Malformed),
          (Variant_Measurement_Case_Run_Overflows,
           V.Field_Shape_Malformed),
+         (Variant_Datum_Tag_Is_Signed,
+          V.Field_Shape_Malformed),
+         (Variant_Slot_Case_Run_Overflows,
+          V.Field_Shape_Malformed),
          (Aggregate_Scalar_Length_Is_Not_One,
           V.Field_Shape_Malformed),
          (Slot_Scalar_Length_Is_Not_One,
@@ -1299,6 +1349,35 @@ package body Landin.Tests.Verifier_Suite is
            (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
             V.Aggregate_Image_On_Array_Field,
             "a nonzero array-field placeholder is refused");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind           => IR.Variant_Field_Shape,
+             Element        => Landin.Types.U8,
+             Length         => 1,
+             Cases          => 1,
+             Payloads_First => 1),
+            Cases => [(First => 0, Count => 0)],
+            Payloads => IR.No_Field_Shapes);
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Image_On_Variant_Field,
+            "a variant field cannot carry a written aggregate image yet");
       end;
 
       declare

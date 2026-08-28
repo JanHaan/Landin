@@ -99,6 +99,7 @@ package Landin.IR.Verifier is
       Aggregate_Image_Length_Disagrees,
       Aggregate_Image_Value_Does_Not_Fit,
       Aggregate_Image_On_Array_Field,
+      Aggregate_Image_On_Variant_Field,
       Aggregate_Field_Image_Length_Disagrees,
       Aggregate_Field_Image_Value_Does_Not_Fit,
       Aggregate_Field_Image_On_Scalar_Field,

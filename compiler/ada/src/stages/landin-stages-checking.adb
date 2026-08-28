@@ -1048,6 +1048,8 @@ package body Landin.Stages.Checking is
             if Held = Ty.Aggregate
               and then Variant_Bearing
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
+              and then not Is_Zeroed_State
+              and then not Is_Struct_Zeroed_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1058,8 +1060,8 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
-                     Message => "storage or a value of a variant-bearing"
-                                & " struct is not enabled yet",
+                     Message => "this value of a variant-bearing struct is"
+                                & " not enabled yet",
                      Refused =>
                        (if Syn.Kind (Of_Tree, Node)
                               in Syn.Parameter | Syn.Named_Return
@@ -2474,6 +2476,27 @@ package body Landin.Stages.Checking is
                            Message => "a fixed-array field is not an enabled"
                                       & " value or nested place yet",
                            Refused => Bad.Array_Value,
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+
+                     --  D75 carries the complete variant part in storage and
+                     --  clears it as one zero image.  Its tag and payload are
+                     --  not scalar fields: D76/D77 own construction and
+                     --  matching, so a direct selection remains one refused
+                     --  value/place instead of reaching Field_Type's scalar
+                     --  precondition.
+                     if Landin.Checking.Field_Kind_Of
+                          (Types.all, Wrote, Which)
+                          = Landin.Checking.Variant_Field
+                     then
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "a variant part cannot be selected as"
+                                      & " a value or place yet",
+                           Refused => Bad.Variant_Value,
                            Into    => Found);
                         return Kept (Ty.Ill_Typed);
                      end if;

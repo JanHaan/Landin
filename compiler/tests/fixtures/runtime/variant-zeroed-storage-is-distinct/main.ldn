@@ -1,0 +1,42 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        wide: (word: usize, byte: u8) |
+        row: (values: [3]u16)
+    end kind
+    tail: u16
+end choice
+
+mut state: choice
+fixed: choice = zeroed
+
+public main: () -> (code: i32) =
+    mut local: choice
+    mut initialized: choice = zeroed
+    state.prefix = 7
+    state.tail = 9
+    local.prefix = 11
+    local.tail = 13
+    initialized.prefix = 17
+    initialized.tail = 19
+    state = zeroed
+    local = zeroed
+    initialized = zeroed
+    state.prefix = 1
+    local.tail = 2
+    initialized.prefix = 3
+    if state.prefix == 1
+        and state.tail == 0
+        and local.prefix == 0
+        and local.tail == 2
+        and initialized.prefix == 3
+        and initialized.tail == 0
+        and fixed.prefix == 0
+        and fixed.tail == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

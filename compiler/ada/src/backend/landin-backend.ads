@@ -104,14 +104,15 @@ package Landin.Backend is
    --  D45 measurement, D46 module storage and D47 frame storage replay this
    --  same leaf.
    procedure Field_Extent
-     (Shape     : Landin.IR.Field_Shape;
+     (Of_Unit   : Landin.IR.Unit;
+      Shape     : Landin.IR.Field_Shape;
       Facts     : Landin.Targets.Target_Facts;
       Size      : out Landin.Targets.Byte_Count;
       Alignment : out Landin.Targets.Byte_Alignment);
 
    --  Answer one target-neutral measurement instruction.  Aggregate
    --  measurements carry declaration-order scalar or compact fixed-array
-   --  fields and D74's measurement-only variant case runs; this
+   --  fields and D74/D75's shared variant case runs; this
    --  target-owning seam derives their padded placement with Landin.Targets.
    procedure Measurement_Extent
      (Of_Unit   : Landin.IR.Unit;

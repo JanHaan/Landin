@@ -174,6 +174,32 @@ package body Landin.IR is
       Into.Items (Positive (Item)) := Held;
    end Add_Field;
 
+   procedure Add_Field
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Shape    : Field_Shape;
+      Cases    : Case_Run_Array;
+      Payloads : Field_Shape_Array)
+   is
+      Stored : Field_Shape := Shape;
+      Payload_Base : constant Natural :=
+        Natural (Into.Variant_Fields.Length);
+      Case_Base : constant Natural := Natural (Into.Variant_Cases.Length);
+   begin
+      for Payload of Payloads loop
+         Into.Variant_Fields.Append (Payload);
+      end loop;
+      for Run of Cases loop
+         Into.Variant_Cases.Append
+           (Case_Run'
+              (First =>
+                 (if Run.Count = 0 then 0 else Payload_Base + Run.First),
+               Count => Run.Count));
+      end loop;
+      Stored.Payloads_First := Case_Base + Shape.Payloads_First;
+      Add_Field (Into, Item, Stored);
+   end Add_Field;
+
    function Add_Slot
      (Into     : in out Unit;
       Item     : Item_Id;
@@ -517,6 +543,33 @@ package body Landin.IR is
       Into.Slots (Where) := Held;
    end Add_Slot_Field;
 
+   procedure Add_Slot_Field
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Slot     : Slot_Id;
+      Shape    : Field_Shape;
+      Cases    : Case_Run_Array;
+      Payloads : Field_Shape_Array)
+   is
+      Stored : Field_Shape := Shape;
+      Payload_Base : constant Natural :=
+        Natural (Into.Variant_Fields.Length);
+      Case_Base : constant Natural := Natural (Into.Variant_Cases.Length);
+   begin
+      for Payload of Payloads loop
+         Into.Variant_Fields.Append (Payload);
+      end loop;
+      for Run of Cases loop
+         Into.Variant_Cases.Append
+           (Case_Run'
+              (First =>
+                 (if Run.Count = 0 then 0 else Payload_Base + Run.First),
+               Count => Run.Count));
+      end loop;
+      Stored.Payloads_First := Case_Base + Shape.Payloads_First;
+      Add_Slot_Field (Into, Item, Slot, Stored);
+   end Add_Slot_Field;
+
    function Nth_Slot_Field_Shape
      (Of_Unit : Unit;
       Item    : Item_Id;
@@ -781,33 +834,33 @@ package body Landin.IR is
       return Of_Unit.Measurement_Fields (First + Field);
    end Nth_Measurement_Field;
 
-   function Measurement_Case_Run_Count (Of_Unit : Unit) return Natural
-     is (Natural (Of_Unit.Measurement_Cases.Length));
+   function Variant_Case_Run_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Variant_Cases.Length));
 
-   function Measurement_Field_Shape_Count (Of_Unit : Unit) return Natural
-     is (Natural (Of_Unit.Measurement_Fields.Length));
+   function Variant_Field_Shape_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Variant_Fields.Length));
 
    function Variant_Case_Run_Is_Valid
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
       return Boolean
    is
-      Run : constant Case_Run := Of_Unit.Measurement_Cases
+      Run : constant Case_Run := Of_Unit.Variant_Cases
         (Shape.Payloads_First + Which - 1);
    begin
       return (if Run.Count = 0
               then Run.First = 0
               else Run.First > 0
                    and then Run.First
-                              <= Measurement_Field_Shape_Count (Of_Unit)
+                              <= Variant_Field_Shape_Count (Of_Unit)
                    and then Run.Count
-                              <= Measurement_Field_Shape_Count (Of_Unit)
+                              <= Variant_Field_Shape_Count (Of_Unit)
                                    - Run.First + 1);
    end Variant_Case_Run_Is_Valid;
 
    function Variant_Case_Field_Count
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
       return Natural
-     is (Of_Unit.Measurement_Cases
+     is (Of_Unit.Variant_Cases
            (Shape.Payloads_First + Which - 1).Count);
 
    function Nth_Variant_Case_Field
@@ -816,10 +869,10 @@ package body Landin.IR is
       Which   : Positive;
       Field   : Positive) return Field_Shape
    is
-      Run : constant Case_Run := Of_Unit.Measurement_Cases
+      Run : constant Case_Run := Of_Unit.Variant_Cases
         (Shape.Payloads_First + Which - 1);
    begin
-      return Of_Unit.Measurement_Fields (Run.First + Field - 1);
+      return Of_Unit.Variant_Fields (Run.First + Field - 1);
    end Nth_Variant_Case_Field;
 
    function Number_Of
@@ -912,16 +965,16 @@ package body Landin.IR is
       Payloads : Field_Shape_Array := No_Field_Shapes) return Value_Id
    is
       Payload_Base : constant Natural :=
-        Natural (Into.Measurement_Fields.Length);
+        Natural (Into.Variant_Fields.Length);
       Case_Base : constant Natural :=
-        Natural (Into.Measurement_Cases.Length);
+        Natural (Into.Variant_Cases.Length);
    begin
       for Payload of Payloads loop
-         Into.Measurement_Fields.Append (Payload);
+         Into.Variant_Fields.Append (Payload);
       end loop;
 
       for Run of Cases loop
-         Into.Measurement_Cases.Append
+         Into.Variant_Cases.Append
            (Case_Run'
               (First =>
                  (if Run.Count = 0 then 0 else Payload_Base + Run.First),
