@@ -197,7 +197,7 @@
 1800   spec        accepted emitted executed refused  A function is a value with a body, and its returns are named
 1810   spec        accepted emitted executed refused  Statements do one thing each, and only exits carry 'when'
 1820   spec        accepted emitted executed refused  Precedence, tightest first, and comparison does not chain
-1830   spec        accepted emitted refused           What is not enabled is refused, and named
+1830   spec        accepted emitted executed refused  What is not enabled is refused, and named
 1840   spec        accepted emitted executed refused  The kernel's scopes, outermost first
 1850   spec        refused                            One scope gives one name to one thing
 1860   spec        refused                            A name that names nothing is refused

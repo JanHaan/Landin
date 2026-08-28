@@ -196,7 +196,10 @@ package body Landin.IR is
                  (if Run.Count = 0 then 0 else Payload_Base + Run.First),
                Count => Run.Count));
       end loop;
-      Stored.Payloads_First := Case_Base + Shape.Payloads_First;
+      Stored.Payloads_First :=
+        (if Shape.Kind = Variant_Field_Shape
+         then Case_Base + Shape.Payloads_First
+         else Payload_Base + Shape.Payloads_First);
       Add_Field (Into, Item, Stored);
    end Add_Field;
 
@@ -617,7 +620,10 @@ package body Landin.IR is
                  (if Run.Count = 0 then 0 else Payload_Base + Run.First),
                Count => Run.Count));
       end loop;
-      Stored.Payloads_First := Case_Base + Shape.Payloads_First;
+      Stored.Payloads_First :=
+        (if Shape.Kind = Variant_Field_Shape
+         then Case_Base + Shape.Payloads_First
+         else Payload_Base + Shape.Payloads_First);
       Add_Slot_Field (Into, Item, Slot, Stored);
    end Add_Slot_Field;
 

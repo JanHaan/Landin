@@ -1,5 +1,5 @@
 class: negative
-summary: D86 keeps nested-struct storage refused once, and reading another field adds no cascade
+summary: D87 keeps a nested ordinary field outside the general aggregate-value rules
 constructs: 0670, 0750, 1830
 program: program.ldn
 codes: L0304

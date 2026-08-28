@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository state
 
-Landin is a language specification with a working Ada bootstrap compiler. R0
-and R1 are complete and R2.20 is active. `refine` scans and parses every
+Landin is a language specification with a working Ada bootstrap compiler. R0,
+R1 and R2.20 are complete and R2.30 is active. `refine` scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
 target-neutral IR, emits Linux x86-64 assembly, and can invoke a

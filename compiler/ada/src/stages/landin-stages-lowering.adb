@@ -380,8 +380,55 @@ package body Landin.Stages.Lowering is
                    others  => <>));
 
             when Landin.Checking.Aggregate_Field =>
-               raise Landin.Compiler_Defect with
-                 "nested aggregate storage reached lowering";
+               declare
+                  Source : constant Landin.Checking.Field_Shape :=
+                    Landin.Checking.Field_Shape_Of
+                      (Types.all, Wrote, Field);
+                  Child : constant Res.Declaration_Id :=
+                    Source.Aggregate_Body;
+                  Count : constant Natural :=
+                    Landin.Checking.Layout_Field_Count
+                      (Types.all, Child);
+                  Payloads : IR.Field_Shape_Array (1 .. Count) :=
+                    [others => (others => <>)];
+               begin
+                  for Position in 1 .. Count loop
+                     declare
+                        Part : constant Landin.Checking.Field_Shape :=
+                          Landin.Checking.Field_Shape_Of
+                            (Types.all, Child, Position);
+                     begin
+                        Payloads (Position) :=
+                          (Kind =>
+                             (if Part.Kind = Landin.Checking.Scalar_Field
+                              then IR.Scalar_Field_Shape
+                              else IR.Array_Field_Shape),
+                           Element => Part.Element,
+                           Length  => IR.Element_Total (Part.Length),
+                           others  => <>);
+                     end;
+                  end loop;
+
+                  if Datum /= IR.No_Item then
+                     IR.Add_Field
+                       (Unit.all, Datum,
+                        (Kind           => IR.Aggregate_Field_Shape,
+                         Element        => Ty.Bool,
+                         Length         => 1,
+                         Cases          => Count,
+                         Payloads_First => 1),
+                        IR.No_Case_Runs, Payloads);
+                  else
+                     IR.Add_Slot_Field
+                       (Unit.all, Filling, Slot,
+                        (Kind           => IR.Aggregate_Field_Shape,
+                         Element        => Ty.Bool,
+                         Length         => 1,
+                         Cases          => Count,
+                         Payloads_First => 1),
+                        IR.No_Case_Runs, Payloads);
+                  end if;
+               end;
 
             when Landin.Checking.Variant_Field =>
                declare
