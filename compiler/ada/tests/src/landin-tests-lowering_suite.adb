@@ -932,8 +932,9 @@ package body Landin.Tests.Lowering_Suite is
    ------------------------------------------------------------------
 
    --  [0670]'s state carries each field's compact target-neutral shape and
-   --  no value at all: D10 and D59's explicit spelling share the same zero
-   --  image, and where each field sits needs a target this stage lacks.
+   --  no value at all: D10, D59's explicit spelling and D60's direct-name
+   --  image chain share the same zero image, and where each field sits needs
+   --  a target this stage lacks.  Every declaration remains a distinct datum.
    procedure A_Struct_State_Carries_Its_Fields
      (Item : in out Landin.Testing.Context);
 
@@ -951,7 +952,8 @@ package body Landin.Tests.Lowering_Suite is
          & "    words: [2]usize" & LF
          & "    ready: bool" & LF
          & "end counters" & LF
-         & "mut state: counters = zeroed" & LF,
+         & "mut state: counters = zeroed" & LF
+         & "copy: counters = state" & LF,
          Ran);
 
       Landin.Testing.Check
@@ -961,39 +963,44 @@ package body Landin.Tests.Lowering_Suite is
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
       begin
          Landin.Testing.Check_Equal
-           (Item, IR.Item_Count (Unit), 1, "the type declares no item");
-         Landin.Testing.Check
-           (Item, IR.Kind_Of (Unit, 1) = IR.Datum,
-            "module state is a datum");
-         Landin.Testing.Check
-           (Item, IR.Result_Of (Unit, 1) = Landin.Types.Aggregate,
-            "and its type is the aggregate it was declared with");
+           (Item, IR.Item_Count (Unit), 2,
+            "the two bindings own distinct datums");
 
-         Landin.Testing.Check_Equal
-           (Item, IR.Field_Count (Unit, 1), 3, "all fields are carried");
-         Landin.Testing.Check
-           (Item, IR.Nth_Field (Unit, 1, 1) = Landin.Types.U32,
-            "the first field keeps its type");
-         Landin.Testing.Check
-           (Item,
-            IR.Nth_Field_Shape (Unit, 1, 2)
-              = (Kind    => IR.Array_Field_Shape,
-                 Element => Landin.Types.Usize,
-                 Length  => 2),
-            "the array field keeps its element and length without a target");
-         Landin.Testing.Check
-           (Item, IR.Nth_Field (Unit, 1, 3) = Landin.Types.Bool,
-            "and the last scalar keeps its type and order");
+         for Datum in IR.Item_Id'(1) .. IR.Item_Id'(2) loop
+            Landin.Testing.Check
+              (Item, IR.Kind_Of (Unit, Datum) = IR.Datum,
+               "each module binding is a datum");
+            Landin.Testing.Check
+              (Item, IR.Result_Of (Unit, Datum) = Landin.Types.Aggregate,
+               "each datum keeps the declared aggregate type");
+            Landin.Testing.Check_Equal
+              (Item, IR.Field_Count (Unit, Datum), 3,
+               "all fields are carried");
+            Landin.Testing.Check
+              (Item, IR.Nth_Field (Unit, Datum, 1) = Landin.Types.U32,
+               "the first field keeps its type");
+            Landin.Testing.Check
+              (Item,
+               IR.Nth_Field_Shape (Unit, Datum, 2)
+                 = (Kind    => IR.Array_Field_Shape,
+                    Element => Landin.Types.Usize,
+                    Length  => 2),
+               "the array field keeps its shape without a target");
+            Landin.Testing.Check
+              (Item, IR.Nth_Field (Unit, Datum, 3) = Landin.Types.Bool,
+               "the last scalar keeps its type and order");
+            Landin.Testing.Check_Equal
+              (Item, IR.Value_Count (Unit, Datum), 1,
+               "each datum has a leave and nothing else");
+            Landin.Testing.Check
+              (Item, IR.Op_Of (Unit, Datum, 1) = IR.Leave,
+               "the sole value is the leave");
+            Landin.Testing.Check_Equal
+              (Item, IR.Operand_Count (Unit, Datum, 1), 0,
+               "static struct images record no runtime-producing value");
+         end loop;
 
-         Landin.Testing.Check_Equal
-           (Item, IR.Value_Count (Unit, 1), 1, "a leave and nothing else");
-         Landin.Testing.Check
-           (Item, IR.Op_Of (Unit, 1, 1) = IR.Leave, "which is the leave");
-         Landin.Testing.Check_Equal
-           (Item, IR.Operand_Count (Unit, 1, 1), 0,
-            "and explicit zeroed records no runtime-producing value");
-
-         Check_Terminators (Item, Unit, "one struct state");
+         Check_Terminators (Item, Unit, "two struct states");
       end;
    end A_Struct_State_Carries_Its_Fields;
 

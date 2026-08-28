@@ -1,0 +1,6 @@
+holder: type = struct
+    tag: u8
+end holder
+
+mut first: holder = second
+mut second: holder = first
