@@ -1,0 +1,51 @@
+holder: type = struct
+    finite: [2]u16
+    repeated: [3]u8
+    hybrid: [3]u8
+    zero_repeat: [2]u8
+    omitted: [2]u8
+end holder
+
+mut finite_source: [2]u16 = [11, 13]
+mut repeated_source: [3]u8 = [of 7]
+mut hybrid_source: [3]u8 = [1, of 2]
+mut zero_source: [2]u8 = [of 0]
+mut omitted_source: [2]u8
+mut state: holder =
+    (finite: finite_source, repeated: repeated_source,
+     hybrid: hybrid_source, zero_repeat: zero_source,
+     omitted: omitted_source)
+copy: holder = state
+inferred := copy
+
+public main: () -> (code: i32) =
+    finite_source[0] = 99
+    repeated_source[0] = 99
+    hybrid_source[0] = 99
+    zero_source[1] = 5
+    omitted_source[1] = 5
+
+    state.finite[1] = 77
+    state.repeated[1] = 77
+    state.hybrid[2] = 77
+    state.zero_repeat[0] = 1
+    state.omitted[0] = 1
+
+    if state.finite[0] == 11 and state.finite[1] == 77
+      and state.repeated[0] == 7 and state.repeated[1] == 77
+      and state.hybrid[0] == 1 and state.hybrid[1] == 2
+      and state.hybrid[2] == 77 and state.zero_repeat[1] == 0
+      and state.omitted[1] == 0
+      and copy.finite[0] == 11 and copy.finite[1] == 13
+      and copy.repeated[0] == 7 and copy.repeated[2] == 7
+      and copy.hybrid[0] == 1 and copy.hybrid[2] == 2
+      and copy.zero_repeat[0] == 0 and copy.omitted[0] == 0
+      and inferred.finite[1] == 13 and inferred.repeated[1] == 7
+      and inferred.hybrid[2] == 2 and inferred.zero_repeat[1] == 0
+      and inferred.omitted[1] == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

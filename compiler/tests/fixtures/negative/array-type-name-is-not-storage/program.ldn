@@ -1,6 +1,10 @@
 words: type = [2]u32
+holder: type = struct
+    row: [2]u32
+end holder
 
 mut destination: [2]u32
+bad_image: holder = (row: words)
 
 copy: () -> none =
     typed: [2]u32 = words
