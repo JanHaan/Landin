@@ -3241,9 +3241,11 @@ by focused fixtures, public seams and generated records. D82 fills the reserved
 fixed-array payload descriptors with D67/D68's finite, repeated and hybrid
 static forms. The verifier/backend carrier is unchanged; focused shape, fold,
 range and storage-read diagnostics plus public seams, generated records and a
-Linux runtime case pin the image. Direct array-image name copies, runtime
-fixed-array payload writes and fixed-array match aliases remain separate
-decisions.
+Linux runtime case pin the image. D83 copies every compact form from a direct
+module array or directly selected module array field, reusing D69--D71's image
+graph and D81's payload carrier without changing the verifier or backend.
+Runtime fixed-array payload writes and fixed-array match aliases remain
+separate decisions.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3291,9 +3293,10 @@ arm-local `in`/`inout` aliases. D79 admits inferred local case construction.
 D80 admits runtime whole copies and local direct-name initializers. D81 adds
 static selected-case images, inferred module construction and module image
 chains. D82 adds finite and repeated fixed-array payloads to those static
-images. General reads of the part, direct array-image payload copies, runtime
-fixed-array payload construction and fixed-array payload bindings remain
-refused. Parameters and returns retain R2.30's aggregate ABI owner.
+images. D83 copies those static payload images from direct or selected module
+array storage. General reads of the part, runtime fixed-array payload
+construction and fixed-array payload bindings remain refused. Parameters and
+returns retain R2.30's aggregate ABI owner.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3415,6 +3418,9 @@ pinned.
 D82 migrated finite, repeated and hybrid fixed-array payloads into that static
 selected-case carrier, while keeping direct image-name sources, runtime array
 payload writes, match aliases and general aggregate values pinned.
+D83 migrated direct module array and selected array-field image sources into
+that static payload carrier, while keeping runtime array payload writes, match
+aliases and general aggregate values pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

@@ -3434,6 +3434,57 @@ package body Landin.Stages.Lowering is
             Image        : out IR.Aggregate_Field_Image;
             Elements     : in out Ty.Folded_Array);
 
+         function Array_Image_Element_Count
+           (Source_Item : IR.Item_Id) return Natural;
+
+         procedure Copy_Array_Descriptor
+           (Source_Item : IR.Item_Id;
+            Cursor      : in out Natural;
+            Image       : out IR.Aggregate_Field_Image;
+            Elements    : in out Ty.Folded_Array);
+
+         function Array_Image_Element_Count
+           (Source_Item : IR.Item_Id) return Natural
+         is
+         begin
+            return
+              (if IR.Is_Repeated_Image (Unit.all, Source_Item)
+               then Natural
+                 (IR.Image_Prefix_Length (Unit.all, Source_Item))
+               else Natural (IR.Image_Length (Unit.all, Source_Item)));
+         end Array_Image_Element_Count;
+
+         procedure Copy_Array_Descriptor
+           (Source_Item : IR.Item_Id;
+            Cursor      : in out Natural;
+            Image       : out IR.Aggregate_Field_Image;
+            Elements    : in out Ty.Folded_Array)
+         is
+         begin
+            Image := (others => <>);
+            Image.Offset := Cursor;
+
+            if IR.Is_Repeated_Image (Unit.all, Source_Item) then
+               Image.Count := Natural
+                 (IR.Image_Prefix_Length (Unit.all, Source_Item));
+               Image.Form :=
+                 (if Image.Count = 0 then IR.Repeated else IR.Hybrid);
+               Image.Value :=
+                 IR.Repeated_Image_Value (Unit.all, Source_Item);
+            else
+               Image.Count := Natural
+                 (IR.Image_Length (Unit.all, Source_Item));
+               Image.Form := IR.Finite;
+            end if;
+
+            for Position in 1 .. Image.Count loop
+               Elements (Cursor + Position) :=
+                 IR.Nth_Image
+                   (Unit.all, Source_Item, IR.Part_Position (Position));
+            end loop;
+            Cursor := Cursor + Image.Count;
+         end Copy_Array_Descriptor;
+
          procedure Copy_Field_Descriptor
            (Source_Item  : IR.Item_Id;
             Source_Field : Positive;
@@ -3541,6 +3592,50 @@ package body Landin.Stages.Lowering is
                                     Element_Count := Element_Count
                                       + Syn.Element_Count
                                           (Of_Tree, Given);
+                                 elsif Leaf.Kind = IR.Array_Field_Shape
+                                   and then Syn.Kind (Of_Tree, Given)
+                                     = Syn.Name_Reference
+                                 then
+                                    declare
+                                       Source_Id : constant
+                                         Res.Declaration_Id :=
+                                           Res.Bound_To
+                                             (Meanings.all, Of_Tree, Given);
+                                    begin
+                                       Resolve_Image (Source_Id);
+                                       if Made (Source_Id) then
+                                          Element_Count := Element_Count
+                                            + Array_Image_Element_Count
+                                                (IR.Item_For
+                                                   (Unit.all, Source_Id));
+                                       end if;
+                                    end;
+                                 elsif Leaf.Kind = IR.Array_Field_Shape
+                                   and then Syn.Kind (Of_Tree, Given)
+                                     = Syn.Member_Selection
+                                 then
+                                    declare
+                                       From : constant Syn.Node_Id :=
+                                         Syn.Target_Of (Of_Tree, Given);
+                                       Source_Id : constant
+                                         Res.Declaration_Id :=
+                                           Res.Bound_To
+                                             (Meanings.all, Of_Tree, From);
+                                    begin
+                                       Resolve_Image (Source_Id);
+                                       if Made (Source_Id) then
+                                          Element_Count := Element_Count
+                                            + IR.Field_Image_Of
+                                                (Unit.all,
+                                                 IR.Item_For
+                                                   (Unit.all, Source_Id),
+                                                 Positive
+                                                   (Landin.Checking
+                                                      .Field_Index
+                                                      (Types.all, Of_Tree,
+                                                       Given))).Count;
+                                       end if;
+                                    end;
                                  end if;
                               end;
                            end loop;
@@ -3832,11 +3927,60 @@ package body Landin.Stages.Lowering is
                                                 end if;
                                              end;
                                           elsif Syn.Kind (Of_Tree, Given)
+                                                  = Syn.Name_Reference
+                                          then
+                                             declare
+                                                Source_Id : constant
+                                                  Res.Declaration_Id :=
+                                                    Res.Bound_To
+                                                      (Meanings.all,
+                                                       Of_Tree, Given);
+                                             begin
+                                                Resolve_Image (Source_Id);
+                                                if Made (Source_Id) then
+                                                   Copy_Array_Descriptor
+                                                     (IR.Item_For
+                                                        (Unit.all,
+                                                         Source_Id),
+                                                      Cursor, Image,
+                                                      Elements);
+                                                end if;
+                                             end;
+                                          elsif Syn.Kind (Of_Tree, Given)
+                                                  = Syn.Member_Selection
+                                          then
+                                             declare
+                                                From : constant Syn.Node_Id :=
+                                                  Syn.Target_Of
+                                                    (Of_Tree, Given);
+                                                Source_Id : constant
+                                                  Res.Declaration_Id :=
+                                                    Res.Bound_To
+                                                      (Meanings.all,
+                                                       Of_Tree, From);
+                                             begin
+                                                Resolve_Image (Source_Id);
+                                                if Made (Source_Id) then
+                                                   Copy_Field_Descriptor
+                                                     (IR.Item_For
+                                                        (Unit.all,
+                                                         Source_Id),
+                                                      Positive
+                                                        (Landin.Checking
+                                                           .Field_Index
+                                                           (Types.all,
+                                                            Of_Tree,
+                                                            Given)),
+                                                      Cursor, Image,
+                                                      Elements);
+                                                end if;
+                                             end;
+                                          elsif Syn.Kind (Of_Tree, Given)
                                                   /= Syn.Zeroed_Literal
                                           then
                                              raise Landin.Compiler_Defect
                                                with "a module variant array"
-                                               & " payload outside D82"
+                                               & " payload outside D83"
                                                & " reached lowering";
                                           end if;
                                        end;
@@ -3939,56 +4083,9 @@ package body Landin.Stages.Lowering is
                            begin
                               Resolve_Image (Source_Id);
                               if Made (Source_Id) then
-                                 declare
-                                    Source_Item : constant IR.Item_Id :=
-                                      IR.Item_For (Unit.all, Source_Id);
-                                 begin
-                                    if IR.Is_Repeated_Image
-                                      (Unit.all, Source_Item)
-                                    then
-                                       declare
-                                          Prefix : constant Natural :=
-                                            Natural
-                                              (IR.Image_Prefix_Length
-                                                 (Unit.all, Source_Item));
-                                       begin
-                                          Images (Which).Form :=
-                                            (if Prefix = 0
-                                             then IR.Repeated
-                                             else IR.Hybrid);
-                                          Images (Which).Count := Prefix;
-                                          Images (Which).Value :=
-                                            IR.Repeated_Image_Value
-                                              (Unit.all, Source_Item);
-                                          for Position in 1 .. Prefix loop
-                                             Elements (Cursor + Position) :=
-                                               IR.Nth_Image
-                                                 (Unit.all, Source_Item,
-                                                  IR.Part_Position
-                                                    (Position));
-                                          end loop;
-                                          Cursor := Cursor + Prefix;
-                                       end;
-                                    else
-                                       declare
-                                          Length : constant Natural :=
-                                            Natural
-                                              (IR.Image_Length
-                                                 (Unit.all, Source_Item));
-                                       begin
-                                          Images (Which).Form := IR.Finite;
-                                          Images (Which).Count := Length;
-                                          for Position in 1 .. Length loop
-                                             Elements (Cursor + Position) :=
-                                               IR.Nth_Image
-                                                 (Unit.all, Source_Item,
-                                                  IR.Part_Position
-                                                    (Position));
-                                          end loop;
-                                          Cursor := Cursor + Length;
-                                       end;
-                                    end if;
-                                 end;
+                                 Copy_Array_Descriptor
+                                   (IR.Item_For (Unit.all, Source_Id),
+                                    Cursor, Images (Which), Elements);
                               end if;
                            end;
                         elsif Syn.Kind (Of_Tree, Value)
