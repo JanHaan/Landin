@@ -3580,15 +3580,18 @@ package body Landin.Tests.Lowering_Suite is
          & "    kind: variant" & LF
          & "        leaf |" & LF
          & "        pair: (first: u8, second: u16) |" & LF
-         & "        row: (values: [2]u32)" & LF
+         & "        row: (finite: [2]u32, repeated: [2]u32,"
+         & " copied: [2]u32)" & LF
          & "    end kind" & LF
          & "end choice" & LF
          & "mut state: choice" & LF
          & "construct: () -> none =" & LF
+         & "    mut words: [2]u32 = [7, 8]" & LF
          & "    mut local: choice = (prefix: 1, kind: leaf)" & LF
          & "    mut inferred := choice(prefix: 4,"
          & " kind: pair(first: 5, second: 6))" & LF
-         & "    local.kind = row(values: zeroed)" & LF
+         & "    local.kind = row(finite: [9, 10],"
+         & " repeated: [2 of 11], copied: words)" & LF
          & "    state.kind = pair(first: 2, second: 3)" & LF
          & "    match local.kind" & LF
          & "        leaf: _ = 1" & LF
@@ -3614,8 +3617,10 @@ package body Landin.Tests.Lowering_Suite is
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
          Selects, Stores, Tag_Loads, Payload_Loads : Natural := 0;
+         Array_Stores, Array_Fills, Array_Copies : Natural := 0;
          Slot_Row, Slot_Pair, Datum_Pair, Wide_Payload : Boolean := False;
          Slot_Tag, Datum_Tag : Boolean := False;
+         Nested_Store, Nested_Fill, Nested_Copy : Boolean := False;
       begin
          for Value in 1 .. IR.Value_Count (Unit, 2) loop
             declare
@@ -3680,6 +3685,32 @@ package body Landin.Tests.Lowering_Suite is
                      and then IR.Variant_Payload_Field_Of
                        (Unit, 2, Id) in 1 | 2,
                      "payload aliases carry their selected source");
+               elsif Op = IR.Store_Element then
+                  Array_Stores := Array_Stores + 1;
+                  Nested_Store := Nested_Store or else
+                    (IR.Reaches_A_Slot (Unit, 2, Id)
+                     and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
+                     and then IR.Variant_Payload_Field_Of
+                       (Unit, 2, Id) = 1);
+               elsif Op = IR.Fill_Array then
+                  Array_Fills := Array_Fills + 1;
+                  Nested_Fill := Nested_Fill or else
+                    (IR.Destination_Of (Unit, 2, Id).Kind = IR.Frame_Slot
+                     and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
+                     and then IR.Variant_Payload_Field_Of
+                       (Unit, 2, Id) = 2);
+               elsif Op = IR.Copy_Array then
+                  Array_Copies := Array_Copies + 1;
+                  Nested_Copy := Nested_Copy or else
+                    (IR.Destination_Of (Unit, 2, Id).Kind = IR.Frame_Slot
+                     and then IR.Source_Of (Unit, 2, Id).Kind = IR.Frame_Slot
+                     and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
+                     and then IR.Variant_Payload_Field_Of
+                       (Unit, 2, Id) = 3
+                     and then IR.Source_Field_Of (Unit, 2, Id) = 0);
                end if;
             end;
          end loop;
@@ -3698,6 +3729,12 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Testing.Check
            (Item, Tag_Loads = 2 and then Slot_Tag and then Datum_Tag,
             "each match loads its source storage and field exactly once");
+         Landin.Testing.Check
+           (Item,
+            Array_Stores = 2 and then Array_Fills = 1
+              and then Array_Copies = 1 and then Nested_Store
+              and then Nested_Fill and then Nested_Copy,
+            "array writes carry top field, case and payload identities");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts lowered variant operations");

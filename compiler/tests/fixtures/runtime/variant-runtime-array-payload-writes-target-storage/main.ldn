@@ -1,0 +1,79 @@
+packet: type = struct
+    prefix: u8
+    kind: variant
+        empty |
+        arrays: (values: [3]usize)
+    end kind
+    tail: u8
+end packet
+
+holder: type = struct
+    row: [3]usize
+end holder
+
+module_values: [3]usize = [11, 13, 17]
+module_holder: holder = (row: [19, 23, 29])
+mut state: packet
+mut calls: u8 = 0
+
+next: () -> (value: usize) =
+    inc calls
+    value = 31
+end next
+
+public main: () -> (code: i32) =
+    mut local_values: [3]usize = [37, 41, 43]
+    mut local_holder: holder = (row: [47, 53, 59])
+    mut local: packet = packet(
+        prefix: 1,
+        kind: arrays(values: [3 of next()]),
+        tail: 2,
+        of zeroed
+    )
+    mut good: bool = false
+    match local.kind
+        empty: good = false
+        arrays: good = calls == 1 and local.prefix == 1 and local.tail == 2
+    end match
+
+    state.kind = arrays(values: local_values)
+    match state.kind
+        empty: good = false
+        arrays: good = good and state.prefix == 0 and state.tail == 0
+    end match
+
+    local.kind = arrays(values: local_holder.row)
+    match local.kind
+        empty: good = false
+        arrays: good = good and local.prefix == 1 and local.tail == 2
+    end match
+
+    state.kind = arrays(values: [61, 67, 71])
+    match state.kind
+        empty: good = false
+        arrays: good = good and state.prefix == 0 and state.tail == 0
+    end match
+
+    local.kind = arrays(values: [73, of 79])
+    match local.kind
+        empty: good = false
+        arrays: good = good and local.prefix == 1 and local.tail == 2
+    end match
+
+    state.kind = arrays(values: module_values)
+    local.kind = arrays(values: module_holder.row)
+    match state.kind
+        empty: good = false
+        arrays: good = good and state.prefix == 0 and state.tail == 0
+    end match
+    match local.kind
+        empty: good = false
+        arrays: good = good and local.prefix == 1 and local.tail == 2
+    end match
+
+    if good then
+        code = 42
+    else
+        code = 1
+    end if
+end main

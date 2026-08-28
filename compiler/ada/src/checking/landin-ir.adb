@@ -1236,13 +1236,17 @@ package body Landin.IR is
       Index : Value_Id;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
-      Field : Natural := 0)
+      Field : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0)
    is
       Made : Instruction :=
         Instruction'(Op     => Store_Element,
                      Site   => Site,
                      Named  => Datum,
                      Element_Field => Field,
+                     Variant_Case => Variant_Case,
+                     Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
       Where : Value_Id;
    begin
@@ -1284,13 +1288,17 @@ package body Landin.IR is
       Index : Value_Id;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
-      Field : Natural := 0)
+      Field : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0)
    is
       Made : Instruction :=
         Instruction'(Op     => Store_Element,
                      Site   => Site,
                      Slot   => Slot,
                      Element_Field => Field,
+                     Variant_Case => Variant_Case,
+                     Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
       Where : Value_Id;
    begin
@@ -1328,7 +1336,9 @@ package body Landin.IR is
       Destination : Storage;
       Site        : Landin.Provenance.Origin;
       Source_Field : Natural := 0;
-      Destination_Field : Natural := 0)
+      Destination_Field : Natural := 0;
+      Destination_Variant_Case : Natural := 0;
+      Destination_Variant_Payload_Field : Natural := 0)
    is
       Where : constant Value_Id :=
         Append
@@ -1339,6 +1349,9 @@ package body Landin.IR is
                         Source_Field => Source_Field,
                         Destination => Destination,
                         Element_Field => Destination_Field,
+                        Variant_Case => Destination_Variant_Case,
+                        Variant_Payload_Field =>
+                          Destination_Variant_Payload_Field,
                         others      => <>));
    begin
       pragma Assert (Where /= No_Value);
@@ -1392,7 +1405,9 @@ package body Landin.IR is
       First       : Part_Position;
       Value       : Value_Id;
       Site        : Landin.Provenance.Origin;
-      Field       : Natural := 0)
+      Field       : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0)
    is
       Made : Instruction :=
         Instruction'(Op          => Fill_Array,
@@ -1400,6 +1415,8 @@ package body Landin.IR is
                      Destination => Destination,
                      Part        => First,
                      Element_Field => Field,
+                     Variant_Case => Variant_Case,
+                     Variant_Payload_Field => Variant_Payload_Field,
                      others      => <>);
       Where : Value_Id;
    begin

@@ -1,0 +1,4 @@
+class: positive
+summary: D84 writes every contextual fixed-array form into a selected runtime variant case
+constructs: 0080, 0410, 0520, 0540, 0670, 0680, 0690, 0710, 0720, 0750, 1740, 1790, 1795, 1810, 1900
+program: program.ldn

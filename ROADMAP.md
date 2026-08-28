@@ -3244,8 +3244,9 @@ range and storage-read diagnostics plus public seams, generated records and a
 Linux runtime case pin the image. D83 copies every compact form from a direct
 module array or directly selected module array field, reusing D69--D71's image
 graph and D81's payload carrier without changing the verifier or backend.
-Runtime fixed-array payload writes and fixed-array match aliases remain
-separate decisions.
+D84 admits runtime fixed-array payload writes with the established array
+literal, repetition and copy operations. Fixed-array match aliases remain a
+separate decision.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3294,9 +3295,11 @@ D80 admits runtime whole copies and local direct-name initializers. D81 adds
 static selected-case images, inferred module construction and module image
 chains. D82 adds finite and repeated fixed-array payloads to those static
 images. D83 copies those static payload images from direct or selected module
-array storage. General reads of the part, runtime fixed-array payload
-construction and fixed-array payload bindings remain refused. Parameters and
-returns retain R2.30's aggregate ABI owner.
+array storage. D84 writes runtime fixed-array payloads from finite literals,
+full or mixed repetitions, `zeroed`, direct array storage and directly selected
+ordinary array fields. General reads of the part and fixed-array payload
+bindings remain refused. Parameters and returns retain R2.30's aggregate ABI
+owner.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3421,6 +3424,9 @@ payload writes, match aliases and general aggregate values pinned.
 D83 migrated direct module array and selected array-field image sources into
 that static payload carrier, while keeping runtime array payload writes, match
 aliases and general aggregate values pinned.
+D84 migrated runtime fixed-array payload literals, repetitions, clears and
+copies onto field/case/payload-qualified array operations, while keeping match
+aliases and general array or aggregate values pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

@@ -1,0 +1,13 @@
+packet: type = struct
+    kind: variant
+        arrays: (row: [2]u8)
+    end kind
+end packet
+
+state: packet
+
+bad: () -> none =
+    local: packet
+    state.kind = arrays(row: [local.kind == local.kind, of 1])
+    local.kind = arrays(row: [state.kind == state.kind, of 1])
+end bad
