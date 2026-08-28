@@ -1403,7 +1403,9 @@ package body Landin.Stages.Lowering is
                procedure Write_Array_Value
                  (Value       : Syn.Node_Id;
                   Destination : IR.Storage;
-                  Field       : Natural);
+                  Field       : Natural;
+                  Variant_Case : Natural := 0;
+                  Variant_Payload_Field : Natural := 0);
 
                procedure Write_Variant_Value
                  (Value       : Syn.Node_Id;
@@ -1498,7 +1500,9 @@ package body Landin.Stages.Lowering is
                procedure Write_Array_Value
                  (Value       : Syn.Node_Id;
                   Destination : IR.Storage;
-                  Field       : Natural)
+                  Field       : Natural;
+                  Variant_Case : Natural := 0;
+                  Variant_Payload_Field : Natural := 0)
                is
                   procedure Store_Element
                     (Position : Positive; Element : IR.Value_Id);
@@ -1531,11 +1535,17 @@ package body Landin.Stages.Lowering is
                               when IR.Module_Datum =>
                                  IR.Emit_Store_Element
                                    (Unit.all, Filling, Destination.Datum,
-                                    Index, Element, Site, Field => Field);
+                                    Index, Element, Site, Field => Field,
+                                    Variant_Case => Variant_Case,
+                                    Variant_Payload_Field =>
+                                      Variant_Payload_Field);
                               when IR.Frame_Slot =>
                                  IR.Emit_Store_Slot_Element
                                    (Unit.all, Filling, Destination.Slot,
-                                    Index, Element, Site, Field => Field);
+                                    Index, Element, Site, Field => Field,
+                                    Variant_Case => Variant_Case,
+                                    Variant_Payload_Field =>
+                                      Variant_Payload_Field);
                            end case;
                         end;
                      end if;
@@ -1545,6 +1555,13 @@ package body Landin.Stages.Lowering is
                   --  uses the same field-qualified operation family.  Field
                   --  zero is complete array storage; a positive field is the
                   --  array member of an aggregate datum or slot.
+                  pragma Assert
+                    ((Variant_Case = 0
+                      and then Variant_Payload_Field = 0)
+                     or else
+                       (Field > 0
+                        and then Variant_Case > 0
+                        and then Variant_Payload_Field > 0));
                   pragma Assert
                     (Field = 0
                      or else Syn.Kind (Of_Tree, Value)
@@ -1593,7 +1610,9 @@ package body Landin.Stages.Lowering is
                         Lower_Expression
                           (Of_Tree,
                            Syn.Repeated_Element (Of_Tree, Value), Scope),
-                        Site, Field => Field);
+                        Site, Field => Field,
+                        Variant_Case => Variant_Case,
+                        Variant_Payload_Field => Variant_Payload_Field);
                   elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition
                   then
                      IR.Emit_Array_Fill
@@ -1601,10 +1620,15 @@ package body Landin.Stages.Lowering is
                         Lower_Expression
                           (Of_Tree,
                            Syn.Repeated_Element (Of_Tree, Value), Scope),
-                        Site, Field => Field);
+                        Site, Field => Field,
+                        Variant_Case => Variant_Case,
+                        Variant_Payload_Field => Variant_Payload_Field);
                   elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
-                     IR.Emit_Array_Clear
-                       (Unit.all, Filling, Destination, Site, Field => Field);
+                     if Variant_Payload_Field = 0 then
+                        IR.Emit_Array_Clear
+                          (Unit.all, Filling, Destination, Site,
+                           Field => Field);
+                     end if;
                   else
                      --  D20/D50: a whole array source is storage, optionally
                      --  qualified by its containing aggregate field.
@@ -1627,7 +1651,10 @@ package body Landin.Stages.Lowering is
                            Destination => Destination,
                            Site => Site,
                            Source_Field => Source_Field,
-                           Destination_Field => Field);
+                           Destination_Field => Field,
+                           Destination_Variant_Case => Variant_Case,
+                           Destination_Variant_Payload_Field =>
+                             Variant_Payload_Field);
                      end;
                   end if;
                end Write_Array_Value;
@@ -1678,13 +1705,13 @@ package body Landin.Stages.Lowering is
                                  Site);
 
                            when Landin.Checking.Fixed_Array_Field =>
-                              --  D76 admits only `zeroed` here.  The select
-                              --  already cleared this leaf and its padding.
-                              pragma Assert
-                                (Syn.Kind
-                                   (Of_Tree,
-                                    Syn.Value_Of (Of_Tree, Label))
-                                   = Syn.Zeroed_Literal);
+                              --  D84 writes the same contextual array forms
+                              --  as an ordinary field.  A zero payload is a
+                              --  no-op because selecting the case cleared the
+                              --  complete padded part before any label ran.
+                              Write_Array_Value
+                                (Syn.Value_Of (Of_Tree, Label), Destination,
+                                 Field, Which, Payload_Field);
 
                            when Landin.Checking.Variant_Field =>
                               raise Landin.Compiler_Defect with

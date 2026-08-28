@@ -3377,6 +3377,80 @@ package body Landin.Tests.Backend_Suite is
          "one source emits one text");
    end The_Same_Source_Emits_The_Same_Bytes;
 
+   --  D84 keeps the nested payload address target-neutral.  One source
+   --  therefore derives both the element scale and the tag/payload padding
+   --  again for each target description.
+   procedure Variant_Array_Payload_Writes_Follow_The_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Array_Payload_Writes_Follow_The_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "tagged: type = struct" & LF
+        & "    prefix: u8" & LF
+        & "    kind: variant" & LF
+        & "        empty |" & LF
+        & "        arrays: (row: [3]usize)" & LF
+        & "    end kind" & LF
+        & "    tail: u8" & LF
+        & "end tagged" & LF
+        & "holder: type = struct" & LF
+        & "    row: [3]usize" & LF
+        & "end holder" & LF
+        & "source: [3]usize = [11, 13, 17]" & LF
+        & "selected: holder = (row: [19, 23, 29])" & LF
+        & "mut state: tagged" & LF
+        & "write: () -> none =" & LF
+        & "    mut local: tagged = zeroed" & LF
+        & "    state.kind = arrays(row: [31, 37, 41])" & LF
+        & "    local.kind = arrays(row: [3 of 43])" & LF
+        & "    state.kind = arrays(row: source)" & LF
+        & "    local.kind = arrays(row: selected.row)" & LF
+        & "end write" & LF;
+      Native : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Narrow : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Synthetic_32);
+      Ran : Natural;
+   begin
+      Lower (Native, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Lower (Narrow, Source, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "and four again");
+
+      declare
+         Wide : constant String := Emitted (Native);
+         Thin : constant String :=
+           Landin.Backend.X86_64.Text
+             (Landin.Stages.Code (Narrow).all,
+              Landin.Stages.Meanings (Narrow).all,
+              Landin.Stages.Identities (Narrow).all,
+              Landin.Targets.Synthetic_32);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, HT & "imulq $8, %rax, %rax")
+              and then Contains (Thin, HT & "imulq $4, %rax, %rax"),
+            "nested element stores use the target usize scale");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, HT & "rep stosq")
+              and then Contains (Thin, HT & "rep stosl"),
+            "nested repetition uses the target element directive");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, HT & "movabsq $24, %rcx")
+              and then Contains (Thin, HT & "movabsq $12, %rcx"),
+            "nested array copies derive the target byte extent");
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Wide, HT & "movabsq $8, %rdx") > 0
+              and then Occurrences (Thin, HT & "movabsq $4, %rdx") > 0,
+            "variant payload bases replay target tag and payload padding");
+      end;
+   end Variant_Array_Payload_Writes_Follow_The_Target;
+
    --  D14: a measurement is answered from the target description and
    --  nowhere else, which is the whole reason `Landin.IR` carries the type
    --  asked about rather than the answer.  One source, two descriptions,
@@ -4159,6 +4233,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a measurement follows the target",
          A_Measurement_Follows_The_Target'Access);
+      Landin.Testing.Register
+        (Into, "backend", "variant array payload writes follow the target",
+         Variant_Array_Payload_Writes_Follow_The_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "the same source emits the same bytes",
          The_Same_Source_Emits_The_Same_Bytes'Access);

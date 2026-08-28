@@ -3767,6 +3767,116 @@ item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1
   image 1 1 8 4 40 8 32 8
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/variant-runtime-array-payload/program.ldn
+unit items 4
+item 1 DATUM module_values result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u8
+  image 11 13 17
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM module_holder result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]u16
+  image 0
+  field 1 image 19 23
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 variant u8 cases2 () ([3]u8,[3]u16,[3]u8,[2]bool,[3]u8,[2]u16)
+  field 3 u8
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 ROUTINE write result none params 0 slots 3 blocks 1 values 86
+  slot 1 local_values elements 3 of u8
+  slot 2 local_holder aggregate fields [2]u16
+  slot 3 local aggregate fields u8 variant u8 cases2 () ([3]u8,[3]u16,[3]u8,[2]bool,[3]u8,[2]u16) u8
+  block 1 scope 3 BLOCK length 86
+    1 NUMBER u8 29
+    2 STORE_FIELD <- 1
+    3 NUMBER u8 31
+    4 STORE_FIELD <- 3
+    5 NUMBER u8 37
+    6 STORE_FIELD <- 5
+    7 NUMBER u16 41
+    8 NUMBER usize 0
+    9 STORE_ELEMENT slot 2 field 1 <- 8 7
+    10 NUMBER u16 43
+    11 NUMBER usize 1
+    12 STORE_ELEMENT slot 2 field 1 <- 11 10
+    13 NUMBER u8 5
+    14 STORE_FIELD <- 13
+    15 SELECT_VARIANT destination slot 3 field 2 case 2
+    16 NUMBER u8 1
+    17 NUMBER usize 0
+    18 STORE_ELEMENT slot 3 field 2 case 2 payload field 1 <- 17 16
+    19 NUMBER u8 2
+    20 NUMBER usize 1
+    21 STORE_ELEMENT slot 3 field 2 case 2 payload field 1 <- 20 19
+    22 NUMBER u8 3
+    23 NUMBER usize 2
+    24 STORE_ELEMENT slot 3 field 2 case 2 payload field 1 <- 23 22
+    25 NUMBER u16 7
+    26 FILL_ARRAY destination slot 3 field 2 case 2 payload field 2 first 1 <- 25
+    27 NUMBER u8 9
+    28 NUMBER usize 0
+    29 STORE_ELEMENT slot 3 field 2 case 2 payload field 3 <- 28 27
+    30 NUMBER u8 10
+    31 FILL_ARRAY destination slot 3 field 2 case 2 payload field 3 first 2 <- 30
+    32 COPY_ARRAY from datum 1 module_values to slot 3 field 2 case 2 payload field 5
+    33 COPY_ARRAY from datum 2 module_holder field 1 to slot 3 field 2 case 2 payload field 6
+    34 NUMBER u8 47
+    35 STORE_FIELD <- 34
+    36 SELECT_VARIANT destination slot 3 field 2 case 2
+    37 NUMBER u8 3
+    38 NUMBER usize 0
+    39 STORE_ELEMENT slot 3 field 2 case 2 payload field 1 <- 38 37
+    40 NUMBER u8 2
+    41 NUMBER usize 1
+    42 STORE_ELEMENT slot 3 field 2 case 2 payload field 1 <- 41 40
+    43 NUMBER u8 1
+    44 NUMBER usize 2
+    45 STORE_ELEMENT slot 3 field 2 case 2 payload field 1 <- 44 43
+    46 NUMBER u16 8
+    47 FILL_ARRAY destination slot 3 field 2 case 2 payload field 2 first 1 <- 46
+    48 NUMBER u8 12
+    49 NUMBER usize 0
+    50 STORE_ELEMENT slot 3 field 2 case 2 payload field 3 <- 49 48
+    51 NUMBER u8 14
+    52 FILL_ARRAY destination slot 3 field 2 case 2 payload field 3 first 2 <- 51
+    53 TRUTH bool true
+    54 NUMBER usize 0
+    55 STORE_ELEMENT slot 3 field 2 case 2 payload field 4 <- 54 53
+    56 TRUTH bool false
+    57 NUMBER usize 1
+    58 STORE_ELEMENT slot 3 field 2 case 2 payload field 4 <- 57 56
+    59 COPY_ARRAY from slot 1 to slot 3 field 2 case 2 payload field 5
+    60 COPY_ARRAY from slot 2 field 1 to slot 3 field 2 case 2 payload field 6
+    61 NUMBER u8 53
+    62 STORE_FIELD <- 61
+    63 SELECT_VARIANT destination datum 3 state field 2 case 2
+    64 NUMBER u8 15
+    65 NUMBER usize 0
+    66 STORE_ELEMENT datum 3 state field 2 case 2 payload field 1 <- 65 64
+    67 NUMBER u8 16
+    68 NUMBER usize 1
+    69 STORE_ELEMENT datum 3 state field 2 case 2 payload field 1 <- 68 67
+    70 NUMBER u8 17
+    71 NUMBER usize 2
+    72 STORE_ELEMENT datum 3 state field 2 case 2 payload field 1 <- 71 70
+    73 NUMBER u16 18
+    74 FILL_ARRAY destination datum 3 state field 2 case 2 payload field 2 first 1 <- 73
+    75 NUMBER u8 20
+    76 NUMBER usize 0
+    77 STORE_ELEMENT datum 3 state field 2 case 2 payload field 3 <- 76 75
+    78 NUMBER u8 21
+    79 FILL_ARRAY destination datum 3 state field 2 case 2 payload field 3 first 2 <- 78
+    80 COPY_ARRAY from datum 1 module_values to datum 3 state field 2 case 2 payload field 5
+    81 COPY_ARRAY from datum 2 module_holder field 1 to datum 3 state field 2 case 2 payload field 6
+    82 NUMBER u8 59
+    83 STORE_FIELD <- 82
+    84 LOAD_FIELD u8
+    85 LOAD_FIELD u8
+    86 LEAVE
 file positive/variant-whole-copy/program.ldn
 unit items 2
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1

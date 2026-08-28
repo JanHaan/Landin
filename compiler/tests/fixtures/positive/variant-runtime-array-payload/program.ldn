@@ -1,0 +1,62 @@
+packet: type = struct
+    prefix: u8
+    kind: variant
+        empty |
+        arrays: (
+            finite: [3]u8,
+            repeated: [3]u16,
+            hybrid: [3]u8,
+            blank: [2]bool,
+            copied: [3]u8,
+            selected: [2]u16
+        )
+    end kind
+    tail: u8
+end packet
+
+holder: type = struct
+    row: [2]u16
+end holder
+
+module_values: [3]u8 = [11, 13, 17]
+module_holder: holder = (row: [19, 23])
+mut state: packet
+
+write: () -> none =
+    mut local_values: [3]u8 = [29, 31, 37]
+    mut local_holder: holder = (row: [41, 43])
+    mut local: packet = packet(
+        prefix: 5,
+        kind: arrays(
+            finite: [1, 2, 3],
+            repeated: [3 of 7],
+            hybrid: [9, of 10],
+            blank: zeroed,
+            copied: module_values,
+            selected: module_holder.row
+        ),
+        tail: 47
+    )
+    local.kind = arrays(
+        finite: [3, 2, 1],
+        repeated: [3 of 8],
+        hybrid: [12, of 14],
+        blank: [true, false],
+        copied: local_values,
+        selected: local_holder.row
+    )
+    state = packet(
+        prefix: 53,
+        kind: arrays(
+            finite: [15, 16, 17],
+            repeated: [3 of 18],
+            hybrid: [20, of 21],
+            blank: zeroed,
+            copied: module_values,
+            selected: module_holder.row
+        ),
+        tail: 59
+    )
+    _ = local.prefix
+    _ = local.tail
+end write

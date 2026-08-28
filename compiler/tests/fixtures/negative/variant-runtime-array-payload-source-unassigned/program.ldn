@@ -1,0 +1,10 @@
+packet: type = struct
+    kind: variant
+        arrays: (row: [2]u8)
+    end kind
+end packet
+
+bad: () -> none =
+    local: [2]u8
+    state: packet = packet(kind: arrays(row: local), of zeroed)
+end bad
