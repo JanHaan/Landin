@@ -879,7 +879,14 @@ package body Landin.Stages.Checking.Flow is
                Nested_Base
                  (Of_Tree, Node, Nested_Id, Parent, Child);
                if Nested_Id /= Res.No_Declaration then
-                  if not Nested_Sets.Contains
+                  if Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, Node) = Ty.Fixed_Array
+                  then
+                     Require_Array
+                       (Of_Tree, Node, Nested_Id, State,
+                        Field => Nested_Array_Path (Parent, Child),
+                        Whole_As => Whole_As);
+                  elsif not Nested_Sets.Contains
                     (State.Nested, (Nested_Id, Parent, Child))
                   then
                      Require_Assigned
@@ -1142,8 +1149,17 @@ package body Landin.Stages.Checking.Flow is
                     (Of_Tree, Node, Nested_Id, Parent, Child);
                   if Nested_Id /= Res.No_Declaration then
                      if Is_Tracked (Nested_Id) then
-                        Nested_Sets.Include
-                          (State.Nested, (Nested_Id, Parent, Child));
+                        if Landin.Checking.Type_Of
+                             (Types.all, Of_Tree, Node) = Ty.Fixed_Array
+                        then
+                           Array_Sets.Include
+                             (State.Whole_Arrays,
+                              (Nested_Id,
+                               Nested_Array_Path (Parent, Child)));
+                        else
+                           Nested_Sets.Include
+                             (State.Nested, (Nested_Id, Parent, Child));
+                        end if;
                      end if;
                      return;
                   end if;

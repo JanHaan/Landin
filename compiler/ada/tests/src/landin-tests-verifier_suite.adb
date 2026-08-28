@@ -254,6 +254,7 @@ package body Landin.Tests.Verifier_Suite is
       Array_Copy_Elements_Disagree,
       Array_Copy_Source_Field_Is_Out_Of_Range,
       Array_Copy_Source_Field_Is_Not_An_Array,
+      Nested_Array_Copy_Source_Beyond_The_Child,
       Array_Copy_Destination_Field_Is_Out_Of_Range,
       Array_Copy_Destination_Field_Is_Not_An_Array,
       Array_Copy_Field_Shape_Disagrees,
@@ -320,6 +321,7 @@ package body Landin.Tests.Verifier_Suite is
              Payloads_First => 1));
       elsif Harm in Nested_Field_Beyond_The_Child
                     | Nested_Element_Beyond_The_Child
+                    | Nested_Array_Copy_Source_Beyond_The_Child
       then
          IR.Add_Field
            (Unit, G,
@@ -811,6 +813,15 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Nested_Array_Copy_Source_Beyond_The_Child =>
+            IR.Emit_Array_Copy
+              (Unit, A, (Kind => IR.Module_Datum, Datum => G),
+               (Kind => IR.Frame_Slot, Slot => Q), Site,
+               Source_Field => 1, Source_Nested_Field => 2);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Array_Copy_Destination_Field_Is_Out_Of_Range
             | Array_Copy_Destination_Field_Is_Not_An_Array =>
             IR.Emit_Array_Copy
@@ -1125,6 +1136,8 @@ package body Landin.Tests.Verifier_Suite is
          (Array_Copy_Source_Field_Is_Out_Of_Range,
           V.Element_Field_Out_Of_Range),
          (Array_Copy_Source_Field_Is_Not_An_Array,
+          V.Element_Field_Is_Not_An_Array),
+         (Nested_Array_Copy_Source_Beyond_The_Child,
           V.Element_Field_Is_Not_An_Array),
          (Array_Copy_Destination_Field_Is_Out_Of_Range,
           V.Element_Field_Out_Of_Range),

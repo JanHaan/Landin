@@ -1,0 +1,14 @@
+inner: type = struct
+    row: [2]i32
+end inner
+
+outer: type = struct
+    nested: inner
+end outer
+
+mut state: outer = zeroed
+
+copy: () -> none =
+    mut local: outer
+    state.nested.row = local.nested.row
+end copy

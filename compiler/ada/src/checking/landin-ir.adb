@@ -856,6 +856,10 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      is (Held (Of_Unit, Item, Value).Source_Field);
 
+   function Source_Nested_Field_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     is (Held (Of_Unit, Item, Value).Source_Nested_Part);
+
    function Destination_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      is (Held (Of_Unit, Item, Value).Destination);
@@ -1475,7 +1479,9 @@ package body Landin.IR is
       Destination : Storage;
       Site        : Landin.Provenance.Origin;
       Source_Field : Natural := 0;
+      Source_Nested_Field : Natural := 0;
       Destination_Field : Natural := 0;
+      Destination_Nested_Field : Natural := 0;
       Destination_Variant_Case : Natural := 0;
       Destination_Variant_Payload_Field : Natural := 0)
    is
@@ -1486,8 +1492,10 @@ package body Landin.IR is
                         Site        => Site,
                         Source      => Source,
                         Source_Field => Source_Field,
+                        Source_Nested_Part => Source_Nested_Field,
                         Destination => Destination,
                         Element_Field => Destination_Field,
+                        Nested_Part => Destination_Nested_Field,
                         Variant_Case => Destination_Variant_Case,
                         Variant_Payload_Field =>
                           Destination_Variant_Payload_Field,
@@ -1523,7 +1531,8 @@ package body Landin.IR is
       Item        : Item_Id;
       Destination : Storage;
       Site        : Landin.Provenance.Origin;
-      Field       : Natural := 0)
+      Field       : Natural := 0;
+      Nested_Field : Natural := 0)
    is
       Where : constant Value_Id :=
         Append
@@ -1532,6 +1541,7 @@ package body Landin.IR is
                         Site        => Site,
                         Destination => Destination,
                         Element_Field => Field,
+                        Nested_Part => Nested_Field,
                         others      => <>));
    begin
       pragma Assert (Where /= No_Value);
@@ -1545,6 +1555,7 @@ package body Landin.IR is
       Value       : Value_Id;
       Site        : Landin.Provenance.Origin;
       Field       : Natural := 0;
+      Nested_Field : Natural := 0;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
    is
@@ -1554,6 +1565,7 @@ package body Landin.IR is
                      Destination => Destination,
                      Part        => First,
                      Element_Field => Field,
+                     Nested_Part => Nested_Field,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others      => <>);
