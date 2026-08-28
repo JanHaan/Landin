@@ -2208,9 +2208,9 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 2, "both module struct zero images were checked");
    end Module_Struct_Zeroed_Keeps_Its_Nominal_Body;
 
-   --  D60 follows a direct module-storage name across forward declarations
-   --  and aliases while retaining [0710]'s one nominal body.  The source
-   --  name is contextual here, not a general aggregate value.
+   --  D60/D61 follow a direct module-storage name across forward declarations
+   --  and aliases while retaining [0710]'s one nominal body in typed and
+   --  inferred destinations.  The source name remains contextual here.
    procedure Module_Struct_Image_Chains_Keep_Their_Nominal_Body
      (Item : in out Landin.Testing.Context);
 
@@ -2233,6 +2233,8 @@ package body Landin.Tests.Checking_Suite is
          & "same: type = holder" & LF
          & "mut first: same = later" & LF
          & "second: holder = first" & LF
+         & "mut inferred := later" & LF
+         & "typed_from_inferred: holder = inferred" & LF
          & "later: holder = zeroed" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -2289,7 +2291,7 @@ package body Landin.Tests.Checking_Suite is
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Seen, 2, "the two direct-name links were checked");
+        (Item, Seen, 4, "the four direct-name links were checked");
    end Module_Struct_Image_Chains_Keep_Their_Nominal_Body;
 
    --  D56 infers the same nominal body from a direct struct storage name.

@@ -1,0 +1,6 @@
+class: negative
+summary: D61 keeps non-name expressions outside inferred module struct initialization
+constructs: 0050, 0540, 1740
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

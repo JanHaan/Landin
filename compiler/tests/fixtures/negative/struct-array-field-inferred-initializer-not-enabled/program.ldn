@@ -1,6 +1,0 @@
-holder: type = struct
-    row: [2]u32
-end holder
-
-state: holder
-inferred := state

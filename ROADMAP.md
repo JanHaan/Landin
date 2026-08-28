@@ -2940,7 +2940,22 @@ refused written initializer is not reread for [1940], preserving its owning
 report. Checker/lowering/backend seams, forward/alias/nominal/cycle/type-name
 fixtures, recorded dumps and a runtime storage-independence fixture provide
 evidence. Inferred module initialization, non-name and nonzero struct images,
-nested expressions and general aggregate values remain separate slices.
+nested expressions and general aggregate values remain separate slices; D61
+below admits the inferred direct-name form.
+
+D61 admits a mutable or immutable inferred module ordinary struct from a
+direct module storage name. The checker reuses D56's nominal-body transfer
+before settling the destination and D60's declaration-identity static image
+chain afterward. Forward names and aliases therefore preserve one nominal
+body; an all-inferred cycle reports [1940]'s L0305 once during settling, while
+a mixed typed/inferred cycle settles its bodies and reports once in the image
+validator. Every declaration owns a distinct compact aggregate datum with no
+instruction or finite image, and each backend reserves its target-derived
+padded extent separately in `.bss`. Checker/lowering/backend seams, typed and
+inferred forward chains, pure and mixed cycle ownership, type-name and non-name
+refusals, recorded dumps and a runtime independence fixture provide evidence.
+Non-name and nonzero static images, nested expressions and general aggregate
+values remain separate slices.
 
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
@@ -2954,7 +2969,8 @@ Public checker, lowering and backend seams, module/local/alias/self-shadow and
 runtime independence positives, source-completeness negatives, recorded dumps
 and explicit type-name refusals provide evidence. Module inference, non-name
 initializers, aggregate `zeroed`, static struct images, calls, returns and
-general aggregate values remain separate slices.
+general aggregate values remain separate slices in D56; D61 later admits the
+direct-name module form by reusing D60's static image chain.
 
 What is still refused: array initializers other than D21's direct storage name
 and D51's selected field for a local binding,
@@ -2976,8 +2992,9 @@ count-less inferred and general-value full repetition [0560]; slices
 operands
 other than D14's direct name and D31's literal; and struct initialization other
 than D55/D56's explicitly typed or inferred local direct-storage-name forms,
-D57's explicitly typed local zero image and D59's explicitly typed module zero
-image, and D60's explicitly typed module direct-storage-name image chain,
+D57's explicitly typed local zero image, D59's explicitly typed module zero
+image, D60's explicitly typed module direct-storage-name image chain and D61's
+inferred module direct-storage-name image chain,
 general whole values,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
@@ -3042,6 +3059,9 @@ inference, module copies, nested expressions and general values pinned.
 D60 migrated the explicitly typed module direct-storage-name struct image
 chain while keeping inference, non-name and nonzero static images, nested
 expressions and general values pinned.
+D61 migrated the inferred module direct-storage-name struct image chain while
+keeping non-name and nonzero static images, nested expressions and general
+values pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

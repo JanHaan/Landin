@@ -2601,8 +2601,7 @@ package body Landin.Stages.Checking is
                                      (Types.all, Of_Tree, Value)
                                    = Ty.Fixed_Array;
                         Inferred_Struct : constant Boolean :=
-                          Is_Local_Binding (Of_Tree, Node)
-                          and then Is_Direct_Binding_Name (Of_Tree, Value)
+                          Is_Direct_Binding_Name (Of_Tree, Value)
                           and then Landin.Checking.Type_Of
                             (Types.all, Of_Tree, Value) = Ty.Aggregate;
                      begin
@@ -3517,11 +3516,11 @@ package body Landin.Stages.Checking is
 
          declare
             --  D21 infers D17's shape from a direct storage name for a local
-            --  or module binding.  D56 admits an aggregate source for a local
-            --  only after carrying its nominal body identity.  Settling an
+            --  or module binding.  D56/D61 admit an aggregate source only
+            --  after carrying its nominal body identity.  Settling an
             --  untouched source is intentional for a forward module name;
-            --  the Underway guard preserves a cycle's single report.  A type
-            --  declaration is a name but owns no runtime storage.
+            --  the Underway guard preserves an inferred cycle's single
+            --  report.  A type declaration is a name but owns no storage.
             Named_Storage : constant Boolean :=
               Res.Sort_Of (Meanings.all, Id)
                 in Res.Local_Binding | Res.Module_Binding
@@ -3545,8 +3544,7 @@ package body Landin.Stages.Checking is
             Direct_Name : constant Boolean :=
               Named_Storage and then Named_Type = Ty.Fixed_Array;
             Direct_Struct : constant Boolean :=
-              Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
-              and then Named_Storage
+              Named_Storage
               and then Named_Type = Ty.Aggregate
               and then Landin.Checking.Body_Of (Types.all, Named)
                          /= Res.No_Declaration;
@@ -3579,9 +3577,10 @@ package body Landin.Stages.Checking is
                end if;
 
                if Got = Ty.Aggregate and then Direct_Struct then
-                  --  D56: an inferred aggregate has no written type node from
-                  --  which Declared_As can copy [0710]'s identity.  Carry the
-                  --  source body's declaration before settling the new local.
+                  --  D56/D61: an inferred aggregate has no written type node
+                  --  from which Declared_As can copy [0710]'s identity.  Carry
+                  --  the source body's declaration before settling the new
+                  --  local or module binding.
                   Landin.Checking.Note_Body
                     (Types.all, Id,
                      Landin.Checking.Body_Of
