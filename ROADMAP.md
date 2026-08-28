@@ -3190,8 +3190,14 @@ arm definite-assignment facts intersect, and payload bytes remain untouched.
 One target-neutral `Load_Variant_Tag` is carried through a scalar slot into the
 existing comparison/branch IR, while the verifier and backend derive the tag
 type and address from D74's shape. Parser, IR, lowering, verifier and backend
-seams, focused diagnostics and a Linux runtime case provide evidence. D78 owns
-payload bindings.
+seams, focused diagnostics and a Linux runtime case provide evidence. D78 adds
+positional scalar payload aliases to those arms: plain names are immutable,
+`inout` names update the matched storage directly, and each sibling arm owns
+its scope. One target-neutral payload load joins D76's existing payload store;
+the verifier and backend derive the scalar leaf and target offset from D74's
+shape. Parser, IR, lowering and verifier seams, resolution/checking fixtures,
+focused diagnostics and a Linux backend/runtime case provide evidence.
+Fixed-array payload aliases remain a separate decision.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3234,10 +3240,11 @@ D75 adds module and local storage plus typed initialization and whole
 assignment with the complete zero image. D76 admits contextual case
 construction in typed local labelled literals and whole assignments, plus
 assignment to a directly selected mutable variant part. D77 admits exhaustive
-tag-only matching of that selected part. Whole copies, static case images,
-inferred variant-bearing construction, general reads of the part and payload
-bindings remain refused. Parameters and returns retain R2.30's aggregate ABI
-owner. D78 owns payload bindings.
+matching of that selected part, and D78 binds scalar payload fields as
+arm-local `in`/`inout` aliases. Whole copies, static case images, inferred
+variant-bearing construction, general reads of the part and fixed-array
+payload bindings remain refused. Parameters and returns retain R2.30's
+aggregate ABI owner.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed

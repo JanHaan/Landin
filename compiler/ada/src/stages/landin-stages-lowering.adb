@@ -107,6 +107,21 @@ package body Landin.Stages.Lowering is
 
       Slots : Slot_Map := No_Slots;
 
+      --  D78's arm bindings are aliases into the selected payload, not
+      --  copied frame locals.  The declaration identity is arm-local; the
+      --  source storage and three source-order identities remain target
+      --  neutral until the backend derives an offset.
+      type Payload_Alias is record
+         Active        : Boolean := False;
+         Source        : IR.Storage;
+         Field         : Natural := 0;
+         Which         : Natural := 0;
+         Payload_Field : Natural := 0;
+      end record;
+
+      type Alias_Map is array (Declared) of Payload_Alias;
+      Aliases : Alias_Map := [others => (others => <>)];
+
       --  The item being filled, and the block instructions go into.
       --  Current is No_Block when the flow has been terminated and
       --  nothing further is reachable.  One block at a time: Enter allows
@@ -1054,6 +1069,25 @@ package body Landin.Stages.Lowering is
                     Res.Bound_To (Meanings.all, Of_Tree, Node);
                begin
                   if Res.Sort_Of (Meanings.all, Means)
+                       = Res.Pattern_Binding
+                  then
+                     declare
+                        Alias : Payload_Alias renames
+                          Aliases (Declared (Means));
+                     begin
+                        if not Alias.Active then
+                           raise Landin.Compiler_Defect with
+                             "an inactive match binding reached lowering";
+                        end if;
+                        return IR.Emit_Variant_Field_Load
+                          (Unit.all, Filling, Alias.Source,
+                           Positive (Alias.Field), Positive (Alias.Which),
+                           Positive (Alias.Payload_Field),
+                           Scalar_At (Of_Tree, Node), Site);
+                     end;
+                  end if;
+
+                  if Res.Sort_Of (Meanings.all, Means)
                      = Res.Module_Binding
                   then
                      return IR.Emit_Load_Datum
@@ -1217,6 +1251,31 @@ package body Landin.Stages.Lowering is
              (Unit.all, Filling, Shape.Element, Res.No_Declaration,
               Site_Of (Of_Tree, Subject));
          Merge : constant IR.Block_Id := Fresh (Of_Tree, Node, Scope);
+
+         procedure Bind (Arm : Syn.Node_Id);
+
+         procedure Bind (Arm : Syn.Node_Id) is
+            Which : constant Positive := Positive
+              (Landin.Checking.Field_Index
+                 (Types.all, Of_Tree, Syn.Match_Pattern (Of_Tree, Arm)));
+         begin
+            for Payload in 1 .. Syn.Match_Binding_Count (Of_Tree, Arm)
+            loop
+               declare
+                  Binding : constant Syn.Node_Id :=
+                    Syn.Nth_Match_Binding (Of_Tree, Arm, Payload);
+                  Id : constant Res.Declaration_Id :=
+                    Declaration_At (Syn.Source_Of (Of_Tree), Binding);
+               begin
+                  Aliases (Declared (Id)) :=
+                    (Active        => True,
+                     Source        => Source,
+                     Field         => Field,
+                     Which         => Which,
+                     Payload_Field => Payload);
+               end;
+            end loop;
+         end Bind;
       begin
          pragma Assert (Shape.Kind = Landin.Checking.Variant_Field);
 
@@ -1268,6 +1327,7 @@ package body Landin.Stages.Lowering is
                      Current := IR.No_Block;
 
                      Open (Taken);
+                     Bind (Arm);
                      Lower_Statements (Of_Tree, Runs, Inside, Result);
                      if Current /= IR.No_Block then
                         Close_With_Jump (Merge, Site);
@@ -1280,6 +1340,7 @@ package body Landin.Stages.Lowering is
                   --  tag; it still gets its own lexical block.
                   Close_With_Jump (Taken, Site);
                   Open (Taken);
+                  Bind (Arm);
                   Lower_Statements (Of_Tree, Runs, Inside, Result);
                   if Current /= IR.No_Block then
                      Close_With_Jump (Merge, Site);
@@ -1814,6 +1875,25 @@ package body Landin.Stages.Lowering is
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
+                  if Res.Sort_Of (Meanings.all, Means)
+                       = Res.Pattern_Binding
+                  then
+                     declare
+                        Alias : Payload_Alias renames
+                          Aliases (Declared (Means));
+                     begin
+                        if not Alias.Active then
+                           raise Landin.Compiler_Defect with
+                             "an inactive match binding reached lowering";
+                        end if;
+                        IR.Emit_Variant_Field_Store
+                          (Unit.all, Filling, Alias.Source,
+                           Positive (Alias.Field), Positive (Alias.Which),
+                           Positive (Alias.Payload_Field), Value, Site);
+                        return;
+                     end;
+                  end if;
+
                   if Syn.Kind (Of_Tree, Place) = Syn.Element_Index then
                      declare
                         Field : constant Natural :=

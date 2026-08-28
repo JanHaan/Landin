@@ -2705,6 +2705,8 @@ package body Landin.Stages.Checking is
                   when Res.Module_Function => False,
                   --  [1795] names a type, and a type is not a place.
                   when Res.Module_Type | Res.Case_Name => False,
+                  when Res.Pattern_Binding =>
+                     Syn.Is_Mutable (Their_Tree.all, Their_Node),
                   when Res.Module_Binding | Res.Local_Binding =>
                      Syn.Is_Mutable (Their_Tree.all, Their_Node));
 
@@ -3861,6 +3863,44 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind)
       is
          Subject : constant Syn.Node_Id := Syn.Match_Subject (Of_Tree, Node);
+
+         function Binding_Id (Binding : Syn.Node_Id)
+           return Res.Declaration_Id;
+
+         procedure Refuse_Bindings (Arm : Syn.Node_Id);
+
+         function Binding_Id (Binding : Syn.Node_Id)
+           return Res.Declaration_Id
+         is
+         begin
+            for Id in Res.Declaration_Id'(1)
+                      .. Res.Declaration_Id
+                           (Res.Declaration_Count (Meanings.all))
+            loop
+               if Res.Source_Of (Meanings.all, Id) = Syn.Source_Of (Of_Tree)
+                 and then Res.Node_Of (Meanings.all, Id) = Binding
+               then
+                  return Id;
+               end if;
+            end loop;
+            raise Landin.Compiler_Defect with
+              "a match binding the resolver never recorded";
+         end Binding_Id;
+
+         procedure Refuse_Bindings (Arm : Syn.Node_Id) is
+         begin
+            for Position in 1 .. Syn.Match_Binding_Count (Of_Tree, Arm)
+            loop
+               declare
+                  Binding : constant Syn.Node_Id :=
+                    Syn.Nth_Match_Binding (Of_Tree, Arm, Position);
+                  Id : constant Res.Declaration_Id := Binding_Id (Binding);
+               begin
+                  Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Binding);
+               end;
+            end loop;
+         end Refuse_Bindings;
       begin
          if not Admit_Variant_Field (Of_Tree, Subject) then
             declare
@@ -3945,6 +3985,7 @@ package body Landin.Stages.Checking is
                         Into    => Found);
                      Landin.Checking.Refuse
                        (Types.all, Of_Tree, Pattern);
+                     Refuse_Bindings (Arm);
                   elsif First (Which) /= Syn.No_Node then
                      Bad.Report
                        (Item    => Bad.Variant_Case_Named_Twice,
@@ -3958,12 +3999,78 @@ package body Landin.Stages.Checking is
                         Into    => Found);
                      Landin.Checking.Refuse
                        (Types.all, Of_Tree, Pattern);
+                     Refuse_Bindings (Arm);
                   else
                      First (Which) := Pattern;
                      Landin.Checking.Note
                        (Types.all, Of_Tree, Pattern, Ty.Not_Typed);
                      Landin.Checking.Note_Field
                        (Types.all, Of_Tree, Pattern, Which);
+
+                     declare
+                        Expected : constant Natural :=
+                          Landin.Checking.Variant_Case_Field_Count
+                            (Types.all, Wrote, Field, Which);
+                        Given : constant Natural :=
+                          Syn.Match_Binding_Count (Of_Tree, Arm);
+                     begin
+                        if Given /= 0 and then Given /= Expected then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Pattern),
+                              Message => "this arm binds"
+                                         & Natural'Image (Given)
+                                         & " payload fields, but the case"
+                                         & " has" & Natural'Image (Expected),
+                              Note    => "D78: parenthesized payload names"
+                                         & " are positional and complete",
+                              Related => Syn.Origin (Of_Tree, Subject),
+                              Because => "the matched variant part",
+                              Into    => Found);
+                           Refuse_Bindings (Arm);
+                        elsif Given /= 0 then
+                           for Payload in 1 .. Given loop
+                              declare
+                                 Binding : constant Syn.Node_Id :=
+                                   Syn.Nth_Match_Binding
+                                     (Of_Tree, Arm, Payload);
+                                 Id : constant Res.Declaration_Id :=
+                                   Binding_Id (Binding);
+                                 Shape : constant
+                                   Landin.Checking.Field_Shape :=
+                                     Landin.Checking.Nth_Variant_Case_Field
+                                       (Types.all, Wrote, Field, Which,
+                                        Payload);
+                              begin
+                                 if Shape.Kind =
+                                      Landin.Checking.Scalar_Field
+                                 then
+                                    Landin.Checking.Settle
+                                      (Types.all, Id, Shape.Element);
+                                    Landin.Checking.Note
+                                      (Types.all, Of_Tree, Binding,
+                                       Shape.Element);
+                                 else
+                                    Bad.Report
+                                      (Item    => Bad.Unsupported_Use,
+                                       Source  => Syn.Source_Of (Of_Tree),
+                                       Where   => Syn.Where
+                                                    (Of_Tree, Binding),
+                                       Message => "a fixed-array payload"
+                                                  & " binding is not"
+                                                  & " enabled yet",
+                                       Refused => Bad.Array_Value,
+                                       Into    => Found);
+                                    Landin.Checking.Settle
+                                      (Types.all, Id, Ty.Ill_Typed);
+                                    Landin.Checking.Refuse
+                                      (Types.all, Of_Tree, Binding);
+                                 end if;
+                              end;
+                           end loop;
+                        end if;
+                     end;
                   end if;
 
                   Check_Block
@@ -7387,9 +7494,10 @@ package body Landin.Stages.Checking is
                                 Which) = Landin.Checking.Variant_Field
                            then
                               --  D77 reads the selected tag as one whole
-                              --  variant-part fact.  D78 will refine payload
-                              --  facts without changing this established-case
-                              --  bit.
+                              --  variant-part fact.  D78's arm-local aliases
+                              --  are available only after that case has been
+                              --  selected, so they need no separate incoming
+                              --  payload facts.
                               State.Fields
                                 (Positive (Id), Which) := True;
                            else
@@ -7686,6 +7794,10 @@ package body Landin.Stages.Checking is
                --  Declared_As or Infer: both are paths for declarations that
                --  carry storage.
                Landin.Checking.Settle (Types.all, Id, Ty.Not_Typed);
+            elsif Res.Sort_Of (Meanings.all, Id) = Res.Pattern_Binding then
+               --  D78 settles each positional payload alias only after its
+               --  arm has been paired with a case.
+               null;
             else
                declare
                   Written : constant Ty.Type_Kind := Declared_As (Id);
@@ -7705,6 +7817,7 @@ package body Landin.Stages.Checking is
       loop
          if Landin.Checking.State_Of (Types.all, Id)
             = Landin.Checking.Untouched
+           and then Res.Sort_Of (Meanings.all, Id) /= Res.Pattern_Binding
          then
             Infer (Id);
          end if;

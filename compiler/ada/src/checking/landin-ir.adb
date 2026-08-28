@@ -1377,6 +1377,29 @@ package body Landin.IR is
                       others        => <>));
    end Emit_Variant_Tag_Load;
 
+   function Emit_Variant_Field_Load
+     (Into          : in out Unit;
+      Item          : Item_Id;
+      Source        : Storage;
+      Field         : Positive;
+      Which         : Positive;
+      Payload_Field : Positive;
+      Result        : Landin.Types.Scalar_Name;
+      Site          : Landin.Provenance.Origin) return Value_Id
+   is
+   begin
+      return Append
+        (Into, Item,
+         Instruction'(Op                    => Load_Variant_Field,
+                      Result                => Result,
+                      Site                  => Site,
+                      Source                => Source,
+                      Element_Field         => Field,
+                      Variant_Case          => Which,
+                      Variant_Payload_Field => Payload_Field,
+                      others                => <>));
+   end Emit_Variant_Field_Load;
+
    procedure Emit_Variant_Field_Store
      (Into          : in out Unit;
       Item          : Item_Id;

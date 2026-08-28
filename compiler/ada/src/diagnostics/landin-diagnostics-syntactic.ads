@@ -107,7 +107,6 @@ package Landin.Diagnostics.Syntactic is
       Wide_Integer_Type,
       Distinct_Type,
       Break_Statement,
-      Match_Payload_Binding,
       Type_Parameter,
       --  Bracketed constructs whose spelling the parser alone can tell
       --  from [1790]'s array type and [0520]'s array literal.
@@ -146,7 +145,6 @@ package Landin.Diagnostics.Syntactic is
             when Wide_Integer_Type    => "[0150]",
             when Distinct_Type        => "[0650]",
             when Break_Statement      => "[1190]",
-            when Match_Payload_Binding => "[1220]",
             when Type_Parameter       => "[1290]",
             when Slice_Type           => "[0570]",
             when Array_Repetition     => "[0560]",
@@ -203,7 +201,6 @@ private
                | Array_Repetition
                | Indexing
                | Selection_From_An_Index
-               | Match_Payload_Binding
                | Struct_All_Of         => "R2.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter       => "R2.40",

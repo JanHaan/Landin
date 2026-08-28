@@ -1,0 +1,6 @@
+class: negative
+summary: D78 keeps each payload binding inside its own match arm
+constructs: 0680, 0690, 1210, 1220, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0201
