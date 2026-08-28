@@ -3019,14 +3019,88 @@ package body Landin.Stages.Checking is
                     (Types.all, Of_Tree, Given,
                      Shape.Length, Shape.Element);
 
+               when Syn.Name_Reference =>
+                  declare
+                     Is_Module_Storage : constant Boolean :=
+                       Res.Verdict_Of (Meanings.all, Of_Tree, Given)
+                         = Res.Bound
+                       and then Res.Sort_Of
+                         (Meanings.all,
+                          Res.Bound_To (Meanings.all, Of_Tree, Given))
+                           = Res.Module_Binding;
+                     Got : constant Ty.Type_Kind :=
+                       (if Is_Module_Storage
+                        then Selected_From (Of_Tree, Given)
+                        else Synthesise (Of_Tree, Given));
+                  begin
+                     if Got = Ty.Ill_Typed then
+                        null;
+                     elsif Is_Module_Storage
+                       and then
+                         (Got /= Ty.Fixed_Array
+                          or else Landin.Checking.Array_Length
+                            (Types.all, Of_Tree, Given) /= Shape.Length
+                          or else Landin.Checking.Array_Element
+                            (Types.all, Of_Tree, Given) /= Shape.Element)
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Given),
+                           Message => "this is not a module array of the"
+                                      & " variant payload's type",
+                           Note    => "D17: an array's length and element"
+                                      & " type are its identity",
+                           Related => Syn.Origin (Of_Tree, Label),
+                           Because => "the payload field named here",
+                           Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Given);
+                     end if;
+                  end;
+
+               when Syn.Member_Selection =>
+                  declare
+                     Is_Module_Storage : constant Boolean :=
+                       Is_Direct_Module_Field (Of_Tree, Given);
+                     Admitted : constant Boolean :=
+                       Is_Module_Storage
+                       and then Admit_Array_Field (Of_Tree, Given);
+                     Got : constant Ty.Type_Kind :=
+                       (if Admitted
+                        then Selected_From (Of_Tree, Given)
+                        else Synthesise (Of_Tree, Given));
+                  begin
+                     if Got = Ty.Ill_Typed then
+                        null;
+                     elsif Is_Module_Storage
+                       and then not Is_Module_Array_Field
+                         (Of_Tree, Given, Shape.Length, Shape.Element)
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Given),
+                           Message => "this is not an array field of the"
+                                      & " variant payload's type",
+                           Note    => "D17: an array's length and element"
+                                      & " type are its identity",
+                           Related => Syn.Origin (Of_Tree, Label),
+                           Because => "the payload field named here",
+                           Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Given);
+                     end if;
+                  end;
+
                when others =>
                   Bad.Report
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Given),
                      Message => "a module fixed-array case payload takes a"
-                                & " finite literal, repetition or `zeroed`"
-                                & " in this slice",
+                                & " literal, repetition, `zeroed` or a"
+                                & " module array or array-field name",
                      Refused => Bad.Array_Value,
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Given);
@@ -5566,6 +5640,204 @@ package body Landin.Stages.Checking is
                                   (Res.Bound_To
                                      (Meanings.all, Of_Tree.all, Source))
                                 and then Reaches_Image;
+                           else
+                              Reaches_Image := False;
+                           end if;
+                        end;
+                     elsif Which /= 0
+                       and then Landin.Checking.Field_Kind_Of
+                         (Types.all, Wrote, Which)
+                           = Landin.Checking.Variant_Field
+                       and then Syn.Kind (Of_Tree.all, Image_Value)
+                                  = Syn.Struct_Literal
+                       and then Landin.Checking.Type_Of
+                         (Types.all, Of_Tree.all, Image_Value)
+                           /= Ty.Ill_Typed
+                     then
+                        declare
+                           Body_Tree : constant not null access constant
+                             Syn.Tree :=
+                               Tree_For
+                                 (Res.Source_Of (Meanings.all, Wrote));
+                           Body_Node : constant Syn.Node_Id :=
+                             Syn.Declared_Type
+                               (Body_Tree.all,
+                                Res.Node_Of (Meanings.all, Wrote));
+                           Part : constant Syn.Node_Id :=
+                             Syn.Nth_Field
+                               (Body_Tree.all, Body_Node,
+                                Positive (Which));
+                           Nominal : constant Syn.Node_Id :=
+                             Syn.Constructed_Type
+                               (Of_Tree.all, Image_Value);
+                           Means : constant Res.Declaration_Id :=
+                             (if Nominal /= Syn.No_Node
+                                and then Res.Verdict_Of
+                                  (Meanings.all, Of_Tree.all, Nominal)
+                                    = Res.Bound
+                              then Res.Bound_To
+                                (Meanings.all, Of_Tree.all, Nominal)
+                              else Res.No_Declaration);
+                           Selected : Natural := 0;
+                        begin
+                           if Means /= Res.No_Declaration
+                             and then Res.Sort_Of (Meanings.all, Means)
+                               = Res.Case_Name
+                           then
+                              for Candidate in
+                                1 .. Syn.Case_Count (Body_Tree.all, Part)
+                              loop
+                                 if Res.Source_Of (Meanings.all, Means)
+                                      = Syn.Source_Of (Body_Tree.all)
+                                   and then Res.Node_Of (Meanings.all, Means)
+                                     = Syn.Nth_Case
+                                         (Body_Tree.all, Part, Candidate)
+                                 then
+                                    Selected := Candidate;
+                                    exit;
+                                 end if;
+                              end loop;
+                           end if;
+
+                           if Selected /= 0 then
+                              declare
+                                 Case_Node : constant Syn.Node_Id :=
+                                   Syn.Nth_Case
+                                     (Body_Tree.all, Part, Selected);
+                              begin
+                                 for Payload_Position in
+                                   1 .. Syn.Field_Value_Count
+                                          (Of_Tree.all, Image_Value)
+                                 loop
+                                    declare
+                                       Label : constant Syn.Node_Id :=
+                                         Syn.Nth_Field_Value
+                                           (Of_Tree.all, Image_Value,
+                                            Payload_Position);
+                                       Payload : Natural := 0;
+                                       Given : constant Syn.Node_Id :=
+                                         Syn.Value_Of (Of_Tree.all, Label);
+                                    begin
+                                       for Candidate in
+                                         1 .. Syn.Payload_Field_Count
+                                                (Body_Tree.all, Case_Node)
+                                       loop
+                                          if Syn.Name (Of_Tree.all, Label)
+                                            = Syn.Name
+                                                (Body_Tree.all,
+                                                 Syn.Nth_Payload_Field
+                                                   (Body_Tree.all,
+                                                    Case_Node, Candidate))
+                                          then
+                                             Payload := Candidate;
+                                             exit;
+                                          end if;
+                                       end loop;
+
+                                       if Payload = 0 then
+                                          Reaches_Image := False;
+                                       else
+                                          declare
+                                             Shape : constant
+                                               Landin.Checking.Field_Shape :=
+                                                 Landin.Checking
+                                                   .Nth_Variant_Case_Field
+                                                   (Types.all, Wrote,
+                                                    Positive (Which),
+                                                    Positive (Selected),
+                                                    Positive (Payload));
+                                          begin
+                                             if Shape.Kind =
+                                                  Landin.Checking
+                                                    .Fixed_Array_Field
+                                               and then Syn.Kind
+                                                 (Of_Tree.all, Given)
+                                                   = Syn.Name_Reference
+                                               and then Res.Verdict_Of
+                                                 (Meanings.all, Of_Tree.all,
+                                                  Given) = Res.Bound
+                                             then
+                                                declare
+                                                   Source_Id : constant
+                                                     Res.Declaration_Id :=
+                                                       Res.Bound_To
+                                                         (Meanings.all,
+                                                          Of_Tree.all,
+                                                          Given);
+                                                   Edge_Is_Valid : constant
+                                                     Boolean :=
+                                                       Res.Sort_Of
+                                                         (Meanings.all,
+                                                          Source_Id)
+                                                           = Res.Module_Binding
+                                                       and then
+                                                         Landin.Checking
+                                                           .Type_Of
+                                                           (Types.all,
+                                                            Source_Id)
+                                                           = Ty.Fixed_Array
+                                                       and then
+                                                         Landin.Checking
+                                                           .Array_Length
+                                                           (Types.all,
+                                                            Source_Id)
+                                                           = Shape.Length
+                                                       and then
+                                                         Landin.Checking
+                                                           .Array_Element
+                                                           (Types.all,
+                                                            Source_Id)
+                                                           = Shape.Element;
+                                                begin
+                                                   if Edge_Is_Valid then
+                                                      Reaches_Image :=
+                                                        Validate_Module_Image
+                                                          (Source_Id)
+                                                        and then
+                                                          Reaches_Image;
+                                                   else
+                                                      Reaches_Image := False;
+                                                   end if;
+                                                end;
+                                             elsif Shape.Kind =
+                                                     Landin.Checking
+                                                       .Fixed_Array_Field
+                                               and then Syn.Kind
+                                                 (Of_Tree.all, Given)
+                                                   = Syn.Member_Selection
+                                             then
+                                                declare
+                                                   Source : constant
+                                                     Syn.Node_Id :=
+                                                       Syn.Target_Of
+                                                         (Of_Tree.all,
+                                                          Given);
+                                                   Edge_Is_Valid : constant
+                                                     Boolean :=
+                                                       Is_Module_Array_Field
+                                                         (Of_Tree.all, Given,
+                                                          Shape.Length,
+                                                          Shape.Element);
+                                                begin
+                                                   if Edge_Is_Valid then
+                                                      Reaches_Image :=
+                                                        Validate_Module_Image
+                                                          (Res.Bound_To
+                                                             (Meanings.all,
+                                                              Of_Tree.all,
+                                                              Source))
+                                                        and then
+                                                          Reaches_Image;
+                                                   else
+                                                      Reaches_Image := False;
+                                                   end if;
+                                                end;
+                                             end if;
+                                          end;
+                                       end if;
+                                    end;
+                                 end loop;
+                              end;
                            else
                               Reaches_Image := False;
                            end if;

@@ -1,0 +1,14 @@
+packet: type = struct
+    kind: variant
+        arrays: (values: [2]u8)
+    end kind
+end packet
+
+holder: type = struct
+    row: [2]u8
+end holder
+
+bad_source: [2]u8 = [1, true]
+bad_fields: holder = (row: [1, true])
+direct: packet = packet(kind: arrays(values: bad_source))
+selected: packet = packet(kind: arrays(values: bad_fields.row))

@@ -1,0 +1,16 @@
+packet: type = struct
+    kind: variant
+        arrays: (first: [2]u8, second: [2]u16)
+    end kind
+end packet
+
+holder: type = struct
+    short: [1]u8
+    wrong: [2]u8
+end holder
+
+short: [1]u8
+wrong: [2]u16
+fields: holder
+bad_length: packet = packet(kind: arrays(first: short, second: fields.short))
+bad_element: packet = packet(kind: arrays(first: wrong, second: fields.wrong))
