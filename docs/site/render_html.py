@@ -715,33 +715,18 @@ JS = """
   function filter(){
     var here=scope(), chosen=pick(here), units=chosen.list;
     var secs=[].slice.call(here.querySelectorAll('main section'));
-    var shelves=[].slice.call(here.querySelectorAll('details.shelf'));
     var q=find.value.trim().toLowerCase();
     if(!q){
       units.forEach(function(u){ u.classList.remove('hide'); });
       secs.forEach(function(s){ s.classList.remove('hide'); });
-      shelves.forEach(function(s){
-        if(s.dataset.filterOpen!==undefined){
-          s.open=s.dataset.filterOpen==='true'; delete s.dataset.filterOpen;
-        }
-      });
       syncNav();
       count.textContent=''; return;
     }
-    shelves.forEach(function(s){
-      if(s.dataset.filterOpen===undefined) s.dataset.filterOpen=String(s.open);
-    });
     var hits=0;
     units.forEach(function(u){
       if(!u.dataset.text) u.dataset.text=(u.textContent||'').toLowerCase();
       var ok=u.dataset.text.indexOf(q)>=0 || (u.id||'').indexOf(q)===0;
       u.classList.toggle('hide',!ok); if(ok) hits++;
-    });
-    /* A shelf opens for a result it would otherwise conceal, then returns
-       to the state the reader left it in when the query is cleared. */
-    shelves.forEach(function(s){
-      s.open=!!s.querySelector('.card:not(.hide)')
-             || s.dataset.filterOpen==='true';
     });
     /*  A section that held units and now shows none goes too -- unless the
         sections are themselves what is being filtered. */
@@ -1009,15 +994,35 @@ GUIDE_CSS = """
   color:var(--panel); background:var(--accent); border-color:var(--accent);
 }
 .hero-actions a:hover{border-color:var(--accent-soft); box-shadow:var(--sh)}
-.hero details.status{
-  max-width:44rem; margin-top:1rem; padding:.65rem .8rem;
+.hero .status{
+  max-width:52rem; margin-top:1.8rem; padding:1rem 1.1rem 1.15rem;
   border-left:2px solid var(--accent-soft); background:var(--panel-2);
   color:var(--ink-soft); font-size:.93rem;
 }
-.hero details.status summary{cursor:pointer; color:var(--ink); font-weight:600}
-.hero details.status p{margin:.5rem 0 0; color:var(--ink-soft); font-size:1em}
-section.landing{padding-top:2.6rem}
-figure.shown{margin:0 0 1.1rem}
+.hero .status p{margin:0 0 .65rem; color:var(--ink-soft); font-size:1em}
+.hero .status p.brief{color:var(--ink); font-weight:600}
+.hero .status p:last-of-type{margin-bottom:0}
+.roadmap-track{
+  display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:1.35rem;
+  margin-top:1.25rem; padding-top:1.2rem; border-top:1px solid var(--rule);
+}
+.roadmap-label{
+  display:block; margin-bottom:.55rem; color:var(--ink-faint);
+  font-size:.66rem; font-weight:700; letter-spacing:.11em;
+  text-transform:uppercase;
+}
+.roadmap-item{
+  display:block; margin:.45rem 0 0; padding-left:.65rem;
+  border-left:2px solid var(--rule); color:var(--ink-soft);
+  text-decoration:none; line-height:1.35;
+}
+.roadmap-item:first-of-type{margin-top:0}
+.roadmap-item strong{color:var(--ink); font-size:.75rem}
+.roadmap-item span{display:block; margin-top:.08rem; font-size:.78rem}
+.roadmap-item:hover{border-color:var(--accent-soft)}
+.roadmap-now .roadmap-item{border-color:var(--accent); color:var(--ink)}
+section.landing{padding-top:4.25rem}
+figure.shown{margin:0 0 1.7rem}
 figure.shown figcaption{
   display:flex; align-items:baseline; gap:.6rem; margin:0 0 .4rem;
   color:var(--ink-soft); font-size:.9rem;
@@ -1028,21 +1033,16 @@ figure.shown figcaption .tag{
   padding:.05rem .3rem;
 }
 figure.shown figcaption .tag:hover{border-color:var(--accent-soft)}
-section.landing p.more{color:var(--ink-soft); font-size:.93rem; max-width:44rem}
-.routes{display:grid; gap:1rem; margin:0 0 1rem;
+section.landing p.more{
+  margin-top:1.5rem; color:var(--ink-soft); font-size:.93rem; max-width:44rem;
+}
+.routes{display:grid; gap:1.35rem; margin:0;
   grid-template-columns:repeat(auto-fit,minmax(17rem,1fr))}
 .route{border-left:2px solid var(--accent-soft)}
 .route strong{color:var(--accent); text-wrap:balance}
-details.shelf > summary{
-  width:max-content; max-width:100%; cursor:pointer; color:var(--accent);
-  font-weight:600; text-decoration:underline;
-  text-decoration-color:color-mix(in srgb, var(--accent) 35%, transparent);
-  text-underline-offset:2px;
-}
-details.shelf[open] > summary{margin-bottom:1rem}
-details.shelf .cards{margin-top:0}
 @media (max-width:35rem){
   figure.shown .listing pre{white-space:pre-wrap; overflow-wrap:anywhere}
+  .roadmap-track{grid-template-columns:1fr; gap:1.1rem}
 }
 """
 
@@ -1472,14 +1472,17 @@ Licensed under <a href="{REPO}/tree/main/item/LICENSE-MIT">MIT</a> or
 
 
 #  The front page introduces the language rather than listing the files,
-#  so it needs three things out of the sources: what the tour opens by
-#  saying, what the README says the state of the work is, and a few
-#  constructs to show.  None of it is written here -- a second copy of
-#  the pitch is a copy that goes stale.
+#  so it needs four things out of the sources: what the tour opens by
+#  saying, what the README says the state of the work is, the roadmap items
+#  surrounding active work, and a few constructs to show.  None of it is
+#  written here -- a second copy is a copy that goes stale.
 
 LANDING_IDS = ["0040", "0870", "0940"]
 
 FENCE_OPEN = re.compile(r"^```landin\s*$")
+ROADMAP_ITEM = re.compile(
+    r"^### (R\d+\.\d+) — (.+)\n"
+    r"Status: (planned|active|blocked|complete)$", re.M)
 
 
 def tour_intro(text):
@@ -1510,7 +1513,7 @@ def readme_status(text):
 
 
 def status_parts(text):
-    """The short truth shown before the README's fuller status is opened."""
+    """The lead and supporting sentences in the README's status."""
     prefix = f"Status: {VERSION_LINE}."
     if not text.startswith(prefix):
         raise SystemExit("render_html: README.md's status does not begin with "
@@ -1525,6 +1528,21 @@ def status_parts(text):
         return f"{prefix} {remainder}", ""
     raise SystemExit("render_html: status_parts cannot find a complete "
                      f"compiler-status sentence after {prefix!r} in README.md")
+
+
+def roadmap_progress(text, recent_count=3):
+    """The completed, active and next items around current roadmap work."""
+    items = [dict(key=m.group(1), title=m.group(2), status=m.group(3))
+             for m in ROADMAP_ITEM.finditer(text)]
+    active = [i for i, item in enumerate(items) if item["status"] == "active"]
+    if len(active) != 1:
+        raise SystemExit("render_html: ROADMAP.md must have exactly one active "
+                         "item for the front page")
+    at = active[0]
+    completed = [item for item in items[:at]
+                 if item["status"] == "complete"][-recent_count:]
+    following = items[at + 1] if at + 1 < len(items) else None
+    return dict(recent=completed, current=items[at], following=following)
 
 
 def landing_samples(text, ids=LANDING_IDS):
@@ -1635,7 +1653,7 @@ def tab_title(title, nav):
     return f"{t} — Landin"
 
 
-def index_page(docs, counts, intro, status, samples, symbols):
+def index_page(docs, counts, intro, status, progress, samples, symbols):
     """The front door: what the language is, what it looks like, where to go.
 
     The contents remain, at the bottom, because a reader who came back for
@@ -1701,10 +1719,9 @@ def index_page(docs, counts, intro, status, samples, symbols):
                 f'</strong><span>{esc(d["blurb"])}</span>'
                 f'<em>{esc(n)}</em></a>')
     body.append('<section class="landing" id="every-document">'
-                '<h2>every document</h2><details class="shelf">'
-                '<summary>browse every document</summary>'
+                '<h2>every document</h2>'
                 f'<div class="cards">{chr(10).join(cards)}</div>'
-                '</details></section>')
+                '</section>')
 
     hero = "".join(f"<p>{esc(t)}</p>" for t in intro)
     hero += ('<div class="hero-actions">'
@@ -1712,11 +1729,32 @@ def index_page(docs, counts, intro, status, samples, symbols):
              '<a href="spec.html">browse the specification</a></div>')
     if status:
         brief, detail = status_parts(status)
-        hero += ('<details class="status"><summary>'
-                 f'{prose_html(brief, lambda ref: None)}</summary>')
+        hero += ('<aside class="status" aria-label="Project status">'
+                 f'<p class="brief">{prose_html(brief, lambda ref: None)}</p>')
         if detail:
             hero += f'<p>{prose_html(detail, lambda ref: None)}</p>'
-        hero += '</details>'
+        if progress:
+            def progress_item(item):
+                heading = f'{item["key"]} — {item["title"]}'
+                return (f'<a class="roadmap-item" '
+                        f'href="roadmap.html#{slug(heading)}">'
+                        f'<strong>{esc(item["key"])}</strong>'
+                        f'<span>{esc(item["title"])}</span></a>')
+
+            recent = "".join(progress_item(item)
+                             for item in progress["recent"])
+            current = progress_item(progress["current"])
+            following = (progress_item(progress["following"])
+                         if progress["following"] else "")
+            hero += ('<div class="roadmap-track">'
+                     '<div><span class="roadmap-label">recently completed</span>'
+                     f'{recent}</div>'
+                     '<div class="roadmap-now">'
+                     '<span class="roadmap-label">in progress</span>'
+                     f'{current}</div>'
+                     '<div><span class="roadmap-label">up next</span>'
+                     f'{following}</div></div>')
+        hero += '</aside>'
 
     nav = nav_html(docs, "index.html", [
         ("what-it-looks-like", "what it looks like", 0),
@@ -1858,11 +1896,11 @@ def verify_front(out: Path, pieces, docs):
     """The front page holds no document of its own, so it is checked
     against the pieces it was built from.
 
-    It was the one page with no check at all: the pitch, the status line
-    and the three samples are lifted out of tour.md and README.md, and any
-    of the three readers could quietly return nothing -- a renamed status
-    line, a moved rule, a construct that lost its fence -- leaving a blank
-    section that no word count would notice.
+    It was the one page with no check at all: the pitch, the status line,
+    the roadmap window and the three samples are lifted out of their source
+    documents, and any reader could quietly return nothing -- a renamed
+    status line, a moved rule, a construct that lost its fence -- leaving a
+    blank section that no word count would notice.
     """
     from collections import Counter
     got = Counter(WORD.findall(html.unescape(
@@ -1878,8 +1916,7 @@ def verify_front(out: Path, pieces, docs):
         for what, word in short:
             print(f"    {what}: {word!r} is missing")
     else:
-        print(f"  {out.name}: the pitch, the status and "
-              f"{len(pieces) - 2} samples are on the page")
+        print(f"  {out.name}: all {len(pieces)} source pieces are on the page")
 
     want_shelf = Counter(d["out"] for d in docs)
     got_shelf = Counter(page_shape(out).shelf)
@@ -2031,6 +2068,7 @@ def main(argv):
         tour_text = (source / "tour.md").read_text()
         intro = tour_intro(tour_text)[:2]
         status = readme_status((source / "README.md").read_text())
+        progress = roadmap_progress((source / "ROADMAP.md").read_text())
         samples = landing_samples(tour_text)
 
         #  Each reader must have found something.  Failing loudly here is
@@ -2050,12 +2088,17 @@ def main(argv):
                                "landin fence")
 
         (SITE / "index.html").write_text(
-            index_page(DOCS + GUIDES, counts, intro, status, samples,
+            index_page(DOCS + GUIDES, counts, intro, status, progress, samples,
                        guide_symbols))
         print(f"{SITE.name}/index.html")
         for name in write_resources(DOCS + GUIDES):
             print(f"{SITE.name}/{name}")
         front = ([("the pitch", " ".join(intro)), ("the status", status)]
+                 + [(f'roadmap {item["key"]}', item["title"])
+                    for item in (progress["recent"]
+                                 + [progress["current"]]
+                                 + ([progress["following"]]
+                                    if progress["following"] else []))]
                  + [(f"sample [{cid}]", "\n".join(code))
                     for cid, _, code in samples])
 
