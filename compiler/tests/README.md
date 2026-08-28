@@ -306,8 +306,9 @@ thing it demanded.
 writes it by lowering every positive fixture and rendering the Unit with
 `Landin.IR.Dump`. `compiler/tests/layout.targets` is written by the same
 command, and records what `Landin.Targets` says scalar and aggregate shapes
-measure, align to and offset their fields by on each described target. Both are
-recorded artefacts `check.py`
+measure, align to and offset their fields by on each described target. Its D74
+rows also work the tag-first variant part and one containing aggregate on each
+description. Both are recorded artefacts `check.py`
 does not touch, and that difference matters enough to state.
 `check.py` generates the other two because it owns their sources — its own
 tokeniser, and the catalogue's Ada text. It owns nothing here: producing

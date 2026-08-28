@@ -416,7 +416,8 @@ package body Landin.Tests.IR_Suite is
            (Unit, Datum,
             (Kind    => Landin.IR.Array_Field_Shape,
              Element => Landin.Types.U32,
-             Length  => 4));
+             Length  => 4,
+             others  => <>));
          Routine := Landin.IR.Add_Item
                       (Unit, Landin.IR.Routine, 2, Landin.Types.U32, Site);
          Block := Landin.IR.Add_Block
@@ -793,18 +794,21 @@ package body Landin.Tests.IR_Suite is
            (Unit, Datum,
             (Kind    => Landin.IR.Array_Field_Shape,
              Element => Landin.Types.U16,
-             Length  => 2));
+             Length  => 2,
+             others  => <>));
          Landin.IR.Add_Field (Unit, Datum, Landin.Types.I32);
          Landin.IR.Add_Field
            (Unit, Datum,
             (Kind    => Landin.IR.Array_Field_Shape,
              Element => Landin.Types.U8,
-             Length  => 3));
+             Length  => 3,
+             others  => <>));
          Landin.IR.Add_Field
            (Unit, Datum,
             (Kind    => Landin.IR.Array_Field_Shape,
              Element => Landin.Types.U16,
-             Length  => 4));
+             Length  => 4,
+             others  => <>));
          Landin.IR.Set_Aggregate_Image
            (Unit, Datum,
             Landin.Types.Folded_Array'(5, 0, -3, 0, 0),

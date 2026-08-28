@@ -1328,6 +1328,10 @@ package body Landin.Syntax.Parser is
                function Payload_Case_Begins_Part
                  (Part_Name : Landin.Source.Names.Name_Id) return Boolean;
 
+               function Parse_Variant_Part
+                 (Part_Name : Landin.Source.Names.Name_Id;
+                  At_Part   : Landin.Source.Span) return Node_Id;
+
                --  A separately refused inline struct field may follow a
                --  perfectly ordinary field whose type is named `variant`.
                --  Looking through the first payload's parentheses to its
@@ -1382,6 +1386,181 @@ package body Landin.Syntax.Parser is
 
                   return False;
                end Payload_Case_Begins_Part;
+
+               --  variant_part ::= identifier ":" "variant"
+               --                   variant_case ("|" variant_case)*
+               --                   "end" identifier              [0680]
+               --  variant_case ::= identifier
+               --                   ("(" field ("," field)* ")")?
+               function Parse_Variant_Part
+                 (Part_Name : Landin.Source.Names.Name_Id;
+                  At_Part   : Landin.Source.Span) return Node_Id
+               is
+                  Cases : Slot_Vectors.Vector;
+                  Last_At : Landin.Source.Span := At_Part;
+               begin
+                  --  The contextual word was the lookahead's proof.
+                  Advance;
+
+                  if Peek = Tok.Kw_End then
+                     Complain
+                       (Item    => Syn.Type_Expected,
+                        Where   => Here,
+                        Message => "a variant needs at least one case",
+                        Note    => "[0680]: a variant part is one or more"
+                                   & " named cases",
+                        Related => At_Part,
+                        Because => "the variant part named here");
+                  end if;
+
+                  while Peek = Tok.Identifier loop
+                     declare
+                        Case_Name : Landin.Source.Names.Name_Id;
+                        At_Case   : constant Landin.Source.Span :=
+                          Parse_Declared_Name (Case_Name);
+                        Payload   : Slot_Vectors.Vector;
+                     begin
+                        Last_At := At_Case;
+
+                        if Peek = Tok.Colon then
+                           Advance;
+                           if Expect
+                                (Wanted  => Tok.Left_Paren,
+                                 Message => "a variant payload opens with"
+                                            & " `(`",
+                                 Note    => "[0680]: a payload is a"
+                                            & " parenthesized field list",
+                                 Related => At_Case,
+                                 Because => "the case named here")
+                           then
+                              if Peek = Tok.Right_Paren then
+                                 Complain
+                                   (Item    => Syn.Type_Expected,
+                                    Where   => Here,
+                                    Message => "a payload needs at least"
+                                               & " one field",
+                                    Note    => "[0690]: a case with no"
+                                               & " payload is written bare",
+                                    Related => At_Case,
+                                    Because => "the case named here");
+                              end if;
+
+                              while Peek = Tok.Identifier loop
+                                 declare
+                                    Field_Name : Landin.Source.Names.Name_Id;
+                                    At_Field : constant Landin.Source.Span :=
+                                      Parse_Declared_Name (Field_Name);
+                                    Of_Type : Node_Id := No_Node;
+                                 begin
+                                    if Expect
+                                         (Wanted  => Tok.Colon,
+                                          Message => "a payload field names"
+                                                     & " its type after `:`",
+                                          Note    => "[0680]: a payload is"
+                                                     & " a field list",
+                                          Related => At_Field,
+                                          Because => "the field named here")
+                                    then
+                                       Of_Type := Parse_Type
+                                         (False, At_Field);
+                                    else
+                                       Of_Type := Add
+                                         (Error_Type, After_Previous);
+                                    end if;
+
+                                    Payload.Append
+                                      (Add
+                                         (Of_Kind  => Field,
+                                          At_Token => At_Field,
+                                          Extent   => Join
+                                            (At_Field, After_Previous),
+                                          Children => [1 => Of_Type],
+                                          Named    => Field_Name));
+                                 end;
+
+                                 exit when Peek /= Tok.Comma;
+                                 Advance;
+                              end loop;
+
+                              if not Expect
+                                  (Wanted  => Tok.Right_Paren,
+                                   Message => "a variant payload is closed"
+                                              & " with `)`",
+                                   Note    => "[0680]: `(` opens a payload"
+                                              & " and `)` closes it",
+                                   Related => At_Case,
+                                   Because => "the case named here")
+                              then
+                                 Resync (List_Anchor);
+                                 if Peek = Tok.Right_Paren then
+                                    Advance;
+                                 end if;
+                              end if;
+                           end if;
+                        end if;
+
+                        Cases.Append
+                          (Add
+                             (Of_Kind  => Variant_Case,
+                              At_Token => At_Case,
+                              Extent   => Join (At_Case, After_Previous),
+                              Children => To_List (Payload),
+                              Named    => Case_Name));
+                     end;
+
+                     exit when Peek /= Tok.Bar;
+                     Advance;
+                     if Peek /= Tok.Identifier then
+                        Complain
+                          (Item    => Syn.Name_Expected,
+                           Where   => (if Peek = Tok.End_Of_Input
+                                       then After_Previous else Here),
+                           Message => "a case name belongs after `|`",
+                           Note    => "[0680]: `|` separates named cases");
+                        exit;
+                     end if;
+                  end loop;
+
+                  if Expect
+                       (Wanted  => Tok.Kw_End,
+                        Message => "a variant part ends with `end` and its"
+                                   & " name",
+                        Note    => "[0680]: `end name` closes the part",
+                        Related => At_Part,
+                        Because => "the variant part opened here")
+                  then
+                     if Peek = Tok.Identifier then
+                        if Named_Here /= Part_Name then
+                           Complain
+                             (Item    => Syn.End_Name_Mismatch,
+                              Where   => Here,
+                              Message => "this name does not close the"
+                                         & " variant part",
+                              Note    => "[0680]: `end` repeats the part's"
+                                         & " name",
+                              Related => At_Part,
+                              Because => "the variant part named here");
+                        end if;
+                        Last_At := Here;
+                        Advance;
+                     else
+                        Complain
+                          (Item    => Syn.Name_Expected,
+                           Where   => (if Peek = Tok.End_Of_Input
+                                       then After_Previous else Here),
+                           Message => "the variant part's name belongs"
+                                      & " after `end`",
+                           Note    => "[0680]: `end name` closes the part");
+                     end if;
+                  end if;
+
+                  return Add
+                    (Of_Kind  => Variant_Part,
+                     At_Token => At_Part,
+                     Extent   => Join (At_Part, Last_At),
+                     Children => To_List (Cases),
+                     Named    => Part_Name);
+               end Parse_Variant_Part;
             begin
                Advance;
 
@@ -1418,27 +1597,16 @@ package body Landin.Syntax.Parser is
                              or else
                                (Ahead (1) = Tok.Identifier
                                 and then Ahead (2) = Tok.Kw_End
-                                and then Ahead (3) = Tok.Identifier
-                                and then Named_Ahead (3) = Field_Named)
+                                and then Ahead (3) = Tok.Identifier)
                              or else
                                (Ahead (1) = Tok.Kw_End
                                 and then Ahead (2) = Tok.Identifier
                                 and then Named_Ahead (2) = Field_Named));
 
                         if Is_Variant_Part then
+                           Fields.Append
+                             (Parse_Variant_Part (Field_Named, At_Field));
                            Had_Field := True;
-                           Refuse
-                             (Item    => Syn.Variant_Part,
-                              Where   => At_Field,
-                              Message => "a variant part is not enabled yet");
-
-                           if not Skip_Past_Closer (Field_Named) then
-                              --  Preserve later declarations when the
-                              --  inner closer is missing or misspelled:
-                              --  the ordinary struct recovery below can
-                              --  still find its own `end name`.
-                              exit;
-                           end if;
                         else
                            Of_Type := Parse_Type (False, At_Field);
 

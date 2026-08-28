@@ -3162,18 +3162,20 @@ literals and every general-value use remain refused. Parser, checker and
 lowering seams, focused positive/negative fixtures, regenerated records and a
 runtime source-order/module-image case provide evidence.
 
-D73 gives [0680]'s contextual ordinary-struct variant part one parser-owned
-L0010 and recovers through its matching `end field` closer. The enabled grammar
-and syntax tree remain unchanged, and `variant` remains an ordinary identifier:
-only a following case or matching closer shape distinguishes the part from a
-field whose user-declared type happens to be named `variant`. Payload, bare and
-empty parts share the one owner, and parsing resumes at common fields and the
-containing struct closer; a missing inner closer falls back to that outer
-closer rather than swallowing later declarations. Parser seams, a focused negative fixture, the
-construct matrix, token record and truncation sweep provide evidence. Variant
-nodes, case scope and identity, target-neutral tag/payload layout, zero images,
-construction and matching remain later R2.20 slices rather than being inferred
-from a declaration with no executable value.
+D73 gave [0680]'s contextual ordinary-struct variant part one parser-owned
+L0010 and recovery through its matching `end field` closer, while `variant`
+remained an ordinary identifier. D74 migrates that boundary into the enabled
+grammar and syntax tree: cases are module-visible declaration identities;
+scalar/fixed-array payloads and an unfolded source-order tag have one
+target-neutral layout; and `sizeof`/`alignof` replay it on both target
+descriptions. The tag is first and uses `u8`, `u16` or `u32` according to case
+count; each payload uses D44/D45 layout and the part reserves the maximum padded
+payload at their maximum alignment. A measurement-only IR carrier transports
+the tag and per-case shape runs through the verifier and backend without
+admitting a variant datum or slot. Parser, resolution, lowering, verifier and
+target seams, focused positive/negative fixtures, generated records and a
+Linux runtime measurement provide evidence. D75 owns storage and the zero
+image; construction and matching remain later R2.20 slices.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3208,11 +3210,12 @@ endpoints, D51's local initializer source, and D52/D53's literal or repetition
 destination. Each remaining boundary is its own slice rather than an implicit
 extension of the contextual forms above.
 
-Variant parts remain refused as a whole after D73's named parser boundary.
-Their declarations, case scopes and identities, tag width and position,
-payload layout and padding, zero image, construction and matching are not yet
-enabled; the next variant slices must establish them from measured executable
-fixtures rather than from host representation.
+Variant declarations and target-dependent measurements are enabled by D74.
+Storage or a value of a variant-bearing struct remains refused: no datum, frame
+slot, zero image, copy, literal, assignment, case construction or match exists
+yet. Parameters and returns retain R2.30's aggregate ABI owner. D75 must first
+establish storage and the zero image from the unfolded tag/payload layout;
+D76--D78 then own construction, matching and payload bindings.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3311,6 +3314,10 @@ D73 replaced the accidental cascade for [0680]'s contextual variant part with
 one parser-owned refusal and recovery through its own closer, while keeping
 variant declarations, layout, values, construction and matching outside the
 enabled grammar and representation.
+D74 migrated that refusal into declaration syntax, module-visible case
+identities and a measured tag-first unfolded layout, while keeping every
+variant storage and value form, construction and matching pinned for the next
+variant slices.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

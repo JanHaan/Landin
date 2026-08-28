@@ -43,6 +43,8 @@ package body Landin.Syntax is
             --  one slot is its type.
             when Struct_Body              => 0,
             when Field                    => 1,
+            when Variant_Part
+               | Variant_Case             => 0,
             when Parameter | Named_Return => 1,
             when If_Arm                   => 2,
             when Block                    => 0);
@@ -191,6 +193,21 @@ package body Landin.Syntax is
      is (Run_Length (Of_Tree, Id));
 
    function Nth_Field
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
+
+   function Case_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Case
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
+
+   function Payload_Field_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Payload_Field
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
 

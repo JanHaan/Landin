@@ -1,0 +1,6 @@
+class: negative
+summary: D74 variant cases share the module declaration namespace
+constructs: 0680, 0690, 1700, 1850
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0200, L0200

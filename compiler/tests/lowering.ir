@@ -3236,6 +3236,13 @@ item 1 ROUTINE f result i32 params 1 slots 4 blocks 1 values 12
     10 STORE slot 2 <- 9
     11 LOAD i32 slot 2
     12 LEAVE <- 11
+file positive/variant-part-measured/program.ldn
+unit items 1
+item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1
+  elements 8 of usize
+  image 1 1 8 4 40 8 32 8
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/wrapping-operators/program.ldn
 unit items 1
 item 1 ROUTINE f result u8 params 1 slots 3 blocks 1 values 8

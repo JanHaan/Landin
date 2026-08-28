@@ -31,6 +31,11 @@ package body Landin.Backend is
          return;
       end if;
 
+      if Shape.Kind = Landin.IR.Variant_Field_Shape then
+         raise Landin.Compiler_Defect with
+           "a measurement-only variant shape reached runtime storage";
+      end if;
+
       if Landin.Targets.Byte_Count (Shape.Length)
         > Landin.Targets.Byte_Count'Last / Bytes
       then
@@ -56,6 +61,85 @@ package body Landin.Backend is
       Size      : out Landin.Targets.Byte_Count;
       Alignment : out Landin.Targets.Byte_Alignment)
    is
+      procedure Measurement_Field_Extent
+        (Shape     : Landin.IR.Field_Shape;
+         Size      : out Landin.Targets.Byte_Count;
+         Alignment : out Landin.Targets.Byte_Alignment);
+
+      procedure Measurement_Field_Extent
+        (Shape     : Landin.IR.Field_Shape;
+         Size      : out Landin.Targets.Byte_Count;
+         Alignment : out Landin.Targets.Byte_Alignment)
+      is
+      begin
+         if Shape.Kind /= Landin.IR.Variant_Field_Shape then
+            Field_Extent (Shape, Facts, Size, Alignment);
+            return;
+         end if;
+
+         declare
+            Payload_Size : Landin.Targets.Byte_Count := 0;
+            Payload_Alignment : Landin.Targets.Byte_Alignment := 1;
+            Tag_Size : constant Landin.Targets.Scalar_Size :=
+              Size_Of (Shape.Element, Facts);
+            Variant_Placement : Landin.Targets.Placement :=
+              Landin.Targets.Empty_Placement;
+            Ignored : Landin.Targets.Byte_Count;
+         begin
+            for Which in 1 .. Shape.Cases loop
+               declare
+                  Payload_Placement : Landin.Targets.Placement :=
+                    Landin.Targets.Empty_Placement;
+                  Count : constant Natural :=
+                    Landin.IR.Variant_Case_Field_Count
+                      (Of_Unit, Shape, Which);
+               begin
+                  for Field in 1 .. Count loop
+                     declare
+                        Part_Size : Landin.Targets.Byte_Count;
+                        Part_Alignment : Landin.Targets.Byte_Alignment;
+                     begin
+                        Measurement_Field_Extent
+                          (Landin.IR.Nth_Variant_Case_Field
+                             (Of_Unit, Shape, Which, Field),
+                           Part_Size, Part_Alignment);
+                        if not Landin.Targets.Can_Place
+                          (Payload_Placement, Part_Size, Part_Alignment,
+                           Landin.Targets.Maximum_Object_Size (Facts))
+                        then
+                           raise Landin.Compiler_Defect with
+                             "a variant payload measurement overflows";
+                        end if;
+                        Landin.Targets.Place
+                          (Payload_Placement, Part_Size, Part_Alignment,
+                           Ignored);
+                     end;
+                  end loop;
+
+                  Payload_Size := Landin.Targets.Byte_Count'Max
+                    (Payload_Size,
+                     Landin.Targets.Size_Of (Payload_Placement));
+                  Payload_Alignment := Landin.Targets.Byte_Alignment'Max
+                    (Payload_Alignment,
+                     Landin.Targets.Alignment_Of (Payload_Placement));
+               end;
+            end loop;
+
+            Landin.Targets.Place
+              (Variant_Placement, Tag_Size, Facts, Ignored);
+            if not Landin.Targets.Can_Place
+              (Variant_Placement, Payload_Size, Payload_Alignment,
+               Landin.Targets.Maximum_Object_Size (Facts))
+            then
+               raise Landin.Compiler_Defect with
+                 "a variant measurement overflows";
+            end if;
+            Landin.Targets.Place
+              (Variant_Placement, Payload_Size, Payload_Alignment, Ignored);
+            Size := Landin.Targets.Size_Of (Variant_Placement);
+            Alignment := Landin.Targets.Alignment_Of (Variant_Placement);
+         end;
+      end Measurement_Field_Extent;
    begin
       if Landin.IR.Is_Aggregate_Measurement (Of_Unit, Item, Value) then
          declare
@@ -73,8 +157,8 @@ package body Landin.Backend is
                   Part_Size : Landin.Targets.Byte_Count;
                   Part_Alignment : Landin.Targets.Byte_Alignment;
                begin
-                  Field_Extent
-                    (Part, Facts, Part_Size, Part_Alignment);
+                  Measurement_Field_Extent
+                    (Part, Part_Size, Part_Alignment);
                   Landin.Targets.Place
                     (Placed, Part_Size, Part_Alignment, Ignored);
                end;

@@ -107,6 +107,9 @@ package Landin.Diagnostics.Checking is
       --  value; R2.30 separately owns carrying one through the ABI.
       Struct_Value,
       Struct_ABI,
+      --  D74 lays out and measures [0680]'s declaration but deliberately
+      --  carries no variant-bearing storage or value until D75.
+      Variant_Value,
       --  [0520] declares one; a value of one waits, as a struct's did,
       --  and so does an element the kernel cannot lay out end to end.
       Array_Value,
@@ -125,6 +128,7 @@ package Landin.Diagnostics.Checking is
             when Text_Type          => "[0600]",
             when Struct_Value
                | Struct_ABI         => "[0670]",
+            when Variant_Value      => "[0680]",
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
             when Zeroed_Value       => "[0540]")
@@ -187,6 +191,7 @@ private
                | Text_Type         => "R4.10",
             when Struct_ABI         => "R2.30",
             when Struct_Value
+               | Variant_Value
                | Array_Value
                | Array_Element
                | Zeroed_Value      => "R2.20");

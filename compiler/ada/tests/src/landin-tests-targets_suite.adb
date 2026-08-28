@@ -324,6 +324,7 @@ package body Landin.Tests.Targets_Suite is
          --  reordered fields would make the two lines agree.
          declare
             procedure Row (Label : String; Sizes : Size_List);
+            procedure Variant_Row;
 
             procedure Row (Label : String; Sizes : Size_List) is
                Made  : Placement := Empty_Placement;
@@ -344,6 +345,69 @@ package body Landin.Tests.Targets_Suite is
                   & Trimmed (Byte_Alignment'Image (Alignment_Of (Made)))
                   & LF);
             end Row;
+
+            procedure Variant_Row is
+               Wide_Payload  : Placement := Empty_Placement;
+               Array_Payload : Placement := Empty_Placement;
+               Part          : Placement := Empty_Placement;
+               Container     : Placement := Empty_Placement;
+               Payload_Size  : Byte_Count;
+               Payload_Align : Byte_Alignment;
+               Tag_At        : Byte_Count;
+               Payload_At    : Byte_Count;
+               Prefix_At     : Byte_Count;
+               Part_At       : Byte_Count;
+               Tail_At       : Byte_Count;
+               Ignored       : Byte_Count;
+            begin
+               --  D74's worked payload set: a bare case, one case holding
+               --  `(usize, u8)`, and one holding `[3]u16`.  Each payload is
+               --  independently padded before the maximum is chosen.
+               Place (Wide_Payload, Pointer_Size (Facts), Facts, Ignored);
+               Place (Wide_Payload, Byte_1, Facts, Ignored);
+               for Position in 1 .. 3 loop
+                  Place (Array_Payload, Byte_2, Facts, Ignored);
+               end loop;
+
+               Payload_Size := Byte_Count'Max
+                 (Size_Of (Wide_Payload), Size_Of (Array_Payload));
+               Payload_Align := Byte_Alignment'Max
+                 (Alignment_Of (Wide_Payload),
+                  Alignment_Of (Array_Payload));
+
+               Place (Part, Byte_1, Facts, Tag_At);
+               Place (Part, Payload_Size, Payload_Align, Payload_At);
+
+               Place (Container, Byte_1, Facts, Prefix_At);
+               Place
+                 (Container, Size_Of (Part), Alignment_Of (Part), Part_At);
+               Place (Container, Byte_2, Facts, Tail_At);
+
+               Unbounded.Append
+                 (Text,
+                  LF & "  variant                       offsets     size"
+                  & "   align" & LF
+                  & "  " & Padded ("u8 | usize u8 | [3]u16", 30)
+                  & Padded
+                      (Trimmed (Byte_Count'Image (Tag_At)) & " "
+                       & Trimmed (Byte_Count'Image (Payload_At)) & " ",
+                       12)
+                  & Padded
+                      (Trimmed (Byte_Count'Image (Size_Of (Part))), 7)
+                  & Trimmed
+                      (Byte_Alignment'Image (Alignment_Of (Part))) & LF
+                  & "  " & Padded ("u8 variant u16", 30)
+                  & Padded
+                      (Trimmed (Byte_Count'Image (Prefix_At)) & " "
+                       & Trimmed (Byte_Count'Image (Part_At)) & " "
+                       & Trimmed (Byte_Count'Image (Tail_At)) & " ",
+                       12)
+                  & Padded
+                      (Trimmed (Byte_Count'Image (Size_Of (Container))), 7)
+                  & Trimmed
+                      (Byte_Alignment'Image (Alignment_Of (Container)))
+                  & LF);
+            end Variant_Row;
          begin
             Unbounded.Append
               (Text, LF & "  aggregate       offsets     size   align"
@@ -352,6 +416,7 @@ package body Landin.Tests.Targets_Suite is
             Row ("u8 u8 u32", [Byte_1, Byte_1, Byte_4]);
             Row ("u8 usize", [Byte_1, Pointer_Size (Facts)]);
             Row ("u64 u8", [Byte_8, Byte_1]);
+            Variant_Row;
          end;
       end Describe;
    begin

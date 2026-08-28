@@ -1,0 +1,4 @@
+empty: type = struct
+    kind: variant
+    end kind
+end empty

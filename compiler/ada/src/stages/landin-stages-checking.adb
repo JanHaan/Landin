@@ -217,53 +217,162 @@ package body Landin.Stages.Checking is
          --  binding without a value and nothing else visits one.
          if Syn.Kind (Of_Tree, Written) = Syn.Struct_Body then
             declare
+               function Total_Cases return Natural;
+               function Total_Payload_Fields return Natural;
+
+               function Total_Cases return Natural is
+                  Total : Natural := 0;
+               begin
+                  for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop
+                     declare
+                        Member : constant Syn.Node_Id :=
+                          Syn.Nth_Field (Of_Tree, Written, Index);
+                     begin
+                        if Syn.Kind (Of_Tree, Member) = Syn.Variant_Part then
+                           Total := Total + Syn.Case_Count
+                             (Of_Tree, Member);
+                        end if;
+                     end;
+                  end loop;
+                  return Total;
+               end Total_Cases;
+
+               function Total_Payload_Fields return Natural is
+                  Total : Natural := 0;
+               begin
+                  for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop
+                     declare
+                        Member : constant Syn.Node_Id :=
+                          Syn.Nth_Field (Of_Tree, Written, Index);
+                     begin
+                        if Syn.Kind (Of_Tree, Member) = Syn.Variant_Part then
+                           for Which in 1 .. Syn.Case_Count
+                             (Of_Tree, Member)
+                           loop
+                              Total := Total + Syn.Payload_Field_Count
+                                (Of_Tree,
+                                 Syn.Nth_Case (Of_Tree, Member, Which));
+                           end loop;
+                        end if;
+                     end;
+                  end loop;
+                  return Total;
+               end Total_Payload_Fields;
+
                Fields : Landin.Checking.Field_Shape_Array
                  (1 .. Syn.Field_Count (Of_Tree, Written)) :=
                    [others => (Kind    => Landin.Checking.Scalar_Field,
                                Element => Ty.U8,
-                               Length  => 1)];
+                               Length  => 1,
+                               others  => <>)];
+               Cases : Landin.Checking.Case_Run_Array
+                 (1 .. Total_Cases) := [others => (others => 0)];
+               Payloads : Landin.Checking.Field_Shape_Array
+                 (1 .. Total_Payload_Fields) :=
+                   [others => (Kind    => Landin.Checking.Scalar_Field,
+                               Element => Ty.U8,
+                               Length  => 1,
+                               others  => <>)];
                Can_Lay_Out : Boolean := True;
+               Next_Case : Natural := 1;
+               Next_Payload : Natural := 1;
+
+               procedure Check_Leaf
+                 (Each : Syn.Node_Id;
+                  Into : out Landin.Checking.Field_Shape);
+
+               procedure Check_Leaf
+                 (Each : Syn.Node_Id;
+                  Into : out Landin.Checking.Field_Shape)
+               is
+                  Held : constant Ty.Type_Kind :=
+                    Type_At (Of_Tree, Syn.Declared_Type (Of_Tree, Each));
+               begin
+                  Into := (Kind    => Landin.Checking.Scalar_Field,
+                           Element => Ty.U8,
+                           Length  => 1,
+                           others  => <>);
+                  if Held in Ty.Scalar_Name then
+                     Into :=
+                       (Kind    => Landin.Checking.Scalar_Field,
+                        Element => Ty.Scalar_Name (Held),
+                        Length  => 1,
+                        others  => <>);
+                  elsif Held = Ty.Fixed_Array then
+                     Into :=
+                       (Kind    => Landin.Checking.Fixed_Array_Field,
+                        Element => Landin.Checking.Array_Element
+                                     (Types.all, Of_Tree,
+                                      Syn.Declared_Type (Of_Tree, Each)),
+                        Length  => Landin.Checking.Array_Length
+                                     (Types.all, Of_Tree,
+                                      Syn.Declared_Type (Of_Tree, Each)),
+                        others  => <>);
+                  else
+                     Can_Lay_Out := False;
+                  end if;
+
+                  if Held = Ty.Aggregate then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Each),
+                        Message => "a field of a struct type is not"
+                                   & " enabled yet",
+                        Refused => Bad.Struct_Value,
+                        Into    => Found);
+                  end if;
+               end Check_Leaf;
             begin
                for Index in 1 .. Syn.Field_Count (Of_Tree, Written) loop
                   declare
                      Each : constant Syn.Node_Id :=
                        Syn.Nth_Field (Of_Tree, Written, Index);
-                     Held : constant Ty.Type_Kind :=
-                       Type_At (Of_Tree, Syn.Declared_Type (Of_Tree, Each));
                   begin
-                     if Held in Ty.Scalar_Name then
-                        Fields (Index) :=
-                          (Kind    => Landin.Checking.Scalar_Field,
-                           Element => Ty.Scalar_Name (Held),
-                           Length  => 1);
-                     elsif Held = Ty.Fixed_Array then
-                        Fields (Index) :=
-                          (Kind    => Landin.Checking.Fixed_Array_Field,
-                           Element => Landin.Checking.Array_Element
-                                        (Types.all, Of_Tree,
-                                         Syn.Declared_Type
-                                           (Of_Tree, Each)),
-                           Length  => Landin.Checking.Array_Length
-                                        (Types.all, Of_Tree,
-                                         Syn.Declared_Type
-                                           (Of_Tree, Each)));
+                     if Syn.Kind (Of_Tree, Each) = Syn.Field then
+                        Check_Leaf (Each, Fields (Index));
                      else
-                        Can_Lay_Out := False;
-                     end if;
+                        declare
+                           Count : constant Natural :=
+                             Syn.Case_Count (Of_Tree, Each);
+                           Tag : constant Ty.Scalar_Name :=
+                             (if Count <= 2 ** 8 then Ty.U8
+                              elsif Count <= 2 ** 16 then Ty.U16
+                              else Ty.U32);
+                        begin
+                           Fields (Index) :=
+                             (Kind           => Landin.Checking.Variant_Field,
+                              Element        => Tag,
+                              Length         => 1,
+                              Cases          => Count,
+                              Payloads_First => Next_Case);
 
-                     --  Every field the kernel cannot lay out is named,
-                     --  and not only the struct one: a field it accepted
-                     --  silently would leave the struct with no layout
-                     --  and the first value of it reaching a defect.
-                     if Held = Ty.Aggregate then
-                        Bad.Report
-                          (Item    => Bad.Unsupported_Use,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Each),
-                           Message => "a field of a struct type is not"
-                                      & " enabled yet",
-                           Refused => Bad.Struct_Value,
-                           Into    => Found);
+                           for Which in 1 .. Count loop
+                              declare
+                                 Variant : constant Syn.Node_Id :=
+                                   Syn.Nth_Case
+                                     (Of_Tree, Each, Which);
+                                 Payload_Count : constant Natural :=
+                                   Syn.Payload_Field_Count
+                                     (Of_Tree, Variant);
+                              begin
+                                 Cases (Next_Case) :=
+                                   (First =>
+                                      (if Payload_Count = 0
+                                       then 0 else Next_Payload),
+                                    Count => Payload_Count);
+                                 Next_Case := Next_Case + 1;
+
+                                 for Position in 1 .. Payload_Count loop
+                                    Check_Leaf
+                                      (Syn.Nth_Payload_Field
+                                         (Of_Tree, Variant, Position),
+                                       Payloads (Next_Payload));
+                                    Next_Payload := Next_Payload + 1;
+                                 end loop;
+                              end;
+                           end loop;
+                        end;
                      end if;
                   end;
                end loop;
@@ -278,7 +387,8 @@ package body Landin.Stages.Checking is
                      Fits : Boolean;
                   begin
                      Landin.Checking.Lay_Out
-                       (Types.all, For_Declaration, Fields, Facts, Fits);
+                       (Types.all, For_Declaration, Fields, Facts, Fits,
+                        Cases => Cases, Payloads => Payloads);
 
                      if not Fits then
                         Bad.Report
@@ -536,6 +646,26 @@ package body Landin.Stages.Checking is
            and then Res.Sort_Of
              (Meanings.all,
               Res.Bound_To (Meanings.all, Of_Tree, Nominal))
+                = Res.Case_Name
+         then
+            Bad.Report
+              (Item    => Bad.Unsupported_Use,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Nominal),
+               Message => "a variant case cannot be constructed until"
+                          & " variant values are enabled",
+               Refused => Bad.Variant_Value,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
+            return Res.No_Declaration;
+         end if;
+
+         if Syn.Kind (Of_Tree, Nominal) = Syn.Type_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Nominal)
+                      = Res.Bound
+           and then Res.Sort_Of
+             (Meanings.all,
+              Res.Bound_To (Meanings.all, Of_Tree, Nominal))
                 /= Res.Module_Type
          then
             Bad.Report
@@ -557,8 +687,34 @@ package body Landin.Stages.Checking is
             Held : constant Ty.Type_Kind := Type_At (Of_Tree, Nominal);
          begin
             if Held = Ty.Aggregate then
-               return Landin.Checking.Body_Of
-                 (Types.all, Of_Tree, Nominal);
+               declare
+                  Wrote : constant Res.Declaration_Id :=
+                    Landin.Checking.Body_Of (Types.all, Of_Tree, Nominal);
+               begin
+                  --  D74 permits the declaration and its measurement but
+                  --  not a datum or frame cell.  The typed declaration path
+                  --  owns the same boundary in Declared_As_Node; inferred
+                  --  D72 construction reaches it here instead.
+                  if Wrote /= Res.No_Declaration
+                    and then Landin.Checking.Has_Layout (Types.all, Wrote)
+                    and then Landin.Checking.Has_Variant_Part
+                      (Types.all, Wrote)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Literal),
+                        Message => "construction cannot create storage for"
+                                   & " a variant-bearing struct yet",
+                        Refused => Bad.Variant_Value,
+                        Into    => Found);
+                     Landin.Checking.Refuse
+                       (Types.all, Of_Tree, Literal);
+                     return Res.No_Declaration;
+                  end if;
+
+                  return Wrote;
+               end;
             elsif Held = Ty.Ill_Typed then
                --  Type_At either reported the missing/refused type or
                --  inherited its earlier owner.  Mark the enclosing value so
@@ -651,6 +807,17 @@ package body Landin.Stages.Checking is
          declare
             Held : constant Ty.Type_Kind :=
               Type_At (Of_Tree, Written, For_Declaration);
+            Struct_Body_Id : constant Res.Declaration_Id :=
+              (if Held = Ty.Aggregate
+               then Landin.Checking.Body_Of
+                 (Types.all, Of_Tree, Written)
+               else Res.No_Declaration);
+            Variant_Bearing : constant Boolean :=
+              Struct_Body_Id /= Res.No_Declaration
+              and then Landin.Checking.Has_Layout
+                (Types.all, Struct_Body_Id)
+              and then Landin.Checking.Has_Variant_Part
+                (Types.all, Struct_Body_Id);
             --  D46 admits [1740]'s declaration-only module state once D45
             --  laid out all of its scalar and fixed-array fields: D10 makes
             --  the entire datum zero without forming an aggregate value.
@@ -875,6 +1042,31 @@ package body Landin.Stages.Checking is
                      Into    => Found);
                end if;
 
+               return Ty.Ill_Typed;
+            end if;
+
+            if Held = Ty.Aggregate
+              and then Variant_Bearing
+              and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
+            then
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                  = Ty.Undecided
+               then
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Written, Ty.Ill_Typed);
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message => "storage or a value of a variant-bearing"
+                                & " struct is not enabled yet",
+                     Refused =>
+                       (if Syn.Kind (Of_Tree, Node)
+                              in Syn.Parameter | Syn.Named_Return
+                        then Bad.Struct_ABI
+                        else Bad.Variant_Value),
+                     Into    => Found);
+               end if;
                return Ty.Ill_Typed;
             end if;
 
@@ -2032,55 +2224,73 @@ package body Landin.Stages.Checking is
                declare
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Node);
-                  Held  : constant Ty.Type_Kind := Settled_Type (Means);
                begin
-                  --  [1920]: a function's name anywhere but in front of a
-                  --  `(` is a function value [1000], which [1790]'s type
-                  --  rule does not spell.
-                  if Held = Ty.Not_Typed then
+                  if Res.Sort_Of (Meanings.all, Means) = Res.Case_Name then
                      Bad.Report
                        (Item    => Bad.Unsupported_Use,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Node),
-                        Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
-                                   & "` names a function, and a function"
-                                   & " used as a value is not enabled yet",
-                        Refused => Bad.Function_Value,
+                        Message => "a variant case used as a value is not"
+                                   & " enabled yet",
+                        Refused => Bad.Variant_Value,
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;
 
-                  --  [1740]'s state of [0670]'s type is storage a program
-                  --  may declare and not yet reach: reading the whole of
-                  --  one is a value, and carrying one waits for the rest
-                  --  of R2.20 exactly as a binding of one does.
-                  if Held = Ty.Aggregate then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Node),
-                        Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
-                                   & "` names a struct, and a value of one"
-                                   & " is not enabled yet",
-                        Refused => Bad.Struct_Value,
-                        Into    => Found);
-                     return Kept (Ty.Ill_Typed);
-                  end if;
+                  declare
+                     Held : constant Ty.Type_Kind := Settled_Type (Means);
+                  begin
+                     --  [1920]: a function's name anywhere but in front of a
+                     --  `(` is a function value [1000], which [1790]'s type
+                     --  rule does not spell.
+                     if Held = Ty.Not_Typed then
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "`"
+                                      & Spelled (Syn.Name (Of_Tree, Node))
+                                      & "` names a function, and a function"
+                                      & " used as a value is not enabled yet",
+                           Refused => Bad.Function_Value,
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
 
-                  if Held = Ty.Fixed_Array then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Node),
-                        Message => "`" & Spelled (Syn.Name (Of_Tree, Node))
-                                   & "` names an array, and a value of one"
-                                   & " is not enabled yet",
-                        Refused => Bad.Array_Value,
-                        Into    => Found);
-                     return Kept (Ty.Ill_Typed);
-                  end if;
+                     --  [1740]'s state of [0670]'s type is storage a program
+                     --  may declare and not yet reach: reading the whole of
+                     --  one is a value, and carrying one waits for the rest
+                     --  of R2.20 exactly as a binding of one does.
+                     if Held = Ty.Aggregate then
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "`"
+                                      & Spelled (Syn.Name (Of_Tree, Node))
+                                      & "` names a struct, and a value of one"
+                                      & " is not enabled yet",
+                           Refused => Bad.Struct_Value,
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
 
-                  return Kept (Held);
+                     if Held = Ty.Fixed_Array then
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "`"
+                                      & Spelled (Syn.Name (Of_Tree, Node))
+                                      & "` names an array, and a value of one"
+                                      & " is not enabled yet",
+                           Refused => Bad.Array_Value,
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+
+                     return Kept (Held);
+                  end;
                end;
 
             when Syn.Element_Index =>
@@ -2415,7 +2625,7 @@ package body Landin.Stages.Checking is
                   when Res.Parameter       => False,
                   when Res.Module_Function => False,
                   --  [1795] names a type, and a type is not a place.
-                  when Res.Module_Type     => False,
+                  when Res.Module_Type | Res.Case_Name => False,
                   when Res.Module_Binding | Res.Local_Binding =>
                      Syn.Is_Mutable (Their_Tree.all, Their_Node));
 
@@ -2983,6 +3193,17 @@ package body Landin.Stages.Checking is
 
                      when Landin.Checking.Fixed_Array_Field =>
                         Check_Array_Field (Field, Value, Which);
+
+                     when Landin.Checking.Variant_Field =>
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Field),
+                           Message => "a variant part cannot be named by a"
+                                      & " struct literal yet",
+                           Refused => Bad.Variant_Value,
+                           Into    => Found);
+                        Failed := True;
                   end case;
 
                   Failed := Failed
@@ -6029,7 +6250,8 @@ package body Landin.Stages.Checking is
                        when Landin.Checking.Scalar_Field =>
                          not State.Fields (Positive (Id), Each),
                        when Landin.Checking.Fixed_Array_Field =>
-                         not Array_Is_Assigned (Id, Each, State))
+                         not Array_Is_Assigned (Id, Each, State),
+                       when Landin.Checking.Variant_Field => False)
                then
                   Require_Assigned
                     (At_Source, At_Span, Id, State,
@@ -6605,6 +6827,8 @@ package body Landin.Stages.Checking is
                                  when Landin.Checking.Fixed_Array_Field =>
                                     Array_Sets.Include
                                       (State.Whole_Arrays, (Id, Each));
+                                 when Landin.Checking.Variant_Field =>
+                                    null;
                               end case;
                            end if;
                         end loop;
@@ -6798,6 +7022,13 @@ package body Landin.Stages.Checking is
                begin
                   pragma Unreferenced (Written);
                end;
+            elsif Res.Sort_Of (Meanings.all, Id) = Res.Case_Name then
+               --  D74 gives a case a declaration identity so forward uses,
+               --  duplicates and module collisions have ordinary name
+               --  semantics.  It deliberately gives that identity no value
+               --  type until D75, so it must not enter Declared_As or Infer:
+               --  both are paths for declarations that carry storage.
+               Landin.Checking.Settle (Types.all, Id, Ty.Not_Typed);
             else
                declare
                   Written : constant Ty.Type_Kind := Declared_As (Id);

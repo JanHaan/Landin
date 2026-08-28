@@ -114,7 +114,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, G,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U16,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
          S := IR.Add_Slot (Unit, A, Landin.Types.U32, 2, Site);
          Q := IR.Add_Array_Slot
            (Unit, A, Landin.Types.U16, 2 ** 32 - 1,
@@ -129,7 +130,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, A, T,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U16,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
          IR.Set_Result_Slot (Unit, A, S);
          B := IR.Add_Block (Unit, A, Landin.Resolution.Program_Scope,
                             Site);
@@ -177,6 +179,8 @@ package body Landin.Tests.Verifier_Suite is
       Result_Of_The_Wrong_Type,
       Measurement_Result_Is_Not_Usize,
       Scalar_Measurement_Length_Is_Not_One,
+      Variant_Measurement_Tag_Is_Signed,
+      Variant_Measurement_Case_Run_Overflows,
       Aggregate_Scalar_Length_Is_Not_One,
       Slot_Scalar_Length_Is_Not_One,
       Operands_Of_Two_Types,
@@ -272,7 +276,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, G,
             (Kind    => IR.Scalar_Field_Shape,
              Element => Landin.Types.U32,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
       elsif Harm in Field_Operation_Names_An_Array
                     | Field_Store_Names_An_Array
                     | Array_Copy_Field_Shape_Disagrees
@@ -281,7 +286,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, G,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U32,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
       else
          IR.Add_Field (Unit, G, Landin.Types.U32);
       end if;
@@ -307,7 +313,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, A, T,
             (Kind    => IR.Scalar_Field_Shape,
              Element => Landin.Types.U32,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
       elsif Harm in Slot_Field_Operation_Names_An_Array
                     | Slot_Field_Store_Names_An_Array
                     | Array_Fill_Field_First_Is_Outside_Array
@@ -316,7 +323,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, A, T,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U32,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
       else
          IR.Add_Slot_Field (Unit, A, T, Landin.Types.U32);
       end if;
@@ -372,10 +380,12 @@ package body Landin.Tests.Verifier_Suite is
               (Unit, A, IR.Measure_Size,
                [(Kind    => IR.Scalar_Field_Shape,
                  Element => Landin.Types.U8,
-                 Length  => 1),
+                 Length  => 1,
+             others => <>),
                 (Kind    => IR.Scalar_Field_Shape,
                  Element => Landin.Types.U32,
-                 Length  => 1)],
+                 Length  => 1,
+             others => <>)],
                Landin.Types.U32, Site);
             pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
@@ -387,8 +397,39 @@ package body Landin.Tests.Verifier_Suite is
               (Unit, A, IR.Measure_Size,
                [(Kind    => IR.Scalar_Field_Shape,
                  Element => Landin.Types.U8,
-                 Length  => 2)],
+                 Length  => 2,
+             others => <>)],
                Landin.Types.Usize, Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Variant_Measurement_Tag_Is_Signed =>
+            N := IR.Emit_Aggregate_Measurement
+              (Unit, A, IR.Measure_Size,
+               [(Kind           => IR.Variant_Field_Shape,
+                 Element        => Landin.Types.I8,
+                 Length         => 1,
+                 Cases          => 1,
+                 Payloads_First => 1)],
+               Landin.Types.Usize, Site,
+               Cases => [(First => 0, Count => 0)]);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Variant_Measurement_Case_Run_Overflows =>
+            N := IR.Emit_Aggregate_Measurement
+              (Unit, A, IR.Measure_Size,
+               [(Kind           => IR.Variant_Field_Shape,
+                 Element        => Landin.Types.U8,
+                 Length         => 1,
+                 Cases          => Natural'Last,
+                 Payloads_First => 1)],
+               Landin.Types.Usize, Site,
+               Cases => [(First => 0, Count => 0)]);
             pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -910,6 +951,10 @@ package body Landin.Tests.Verifier_Suite is
          (Measurement_Result_Is_Not_Usize, V.Result_Disagrees),
          (Scalar_Measurement_Length_Is_Not_One,
           V.Field_Shape_Malformed),
+         (Variant_Measurement_Tag_Is_Signed,
+          V.Field_Shape_Malformed),
+         (Variant_Measurement_Case_Run_Overflows,
+          V.Field_Shape_Malformed),
          (Aggregate_Scalar_Length_Is_Not_One,
           V.Field_Shape_Malformed),
          (Slot_Scalar_Length_Is_Not_One,
@@ -1211,7 +1256,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.Usize,
-             Length  => 1));
+             Length  => 1,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
@@ -1244,7 +1290,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U8,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 1));
          Finish (Unit, Datum, Site);
@@ -1295,7 +1342,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U8,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
@@ -1324,7 +1372,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U8,
-             Length  => 1));
+             Length  => 1,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
@@ -1378,7 +1427,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U8,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
@@ -1407,7 +1457,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U8,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
@@ -1436,7 +1487,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.Usize,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
@@ -1469,7 +1521,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U8,
-             Length  => 1));
+             Length  => 1,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
@@ -1498,7 +1551,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.U8,
-             Length  => 1));
+             Length  => 1,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
@@ -1527,7 +1581,8 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum,
             (Kind    => IR.Array_Field_Shape,
              Element => Landin.Types.Bool,
-             Length  => 2));
+             Length  => 2,
+             others => <>));
          IR.Set_Aggregate_Image
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'

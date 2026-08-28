@@ -1,0 +1,5 @@
+class: positive
+summary: D74 lays out and measures tag-first unfolded variant parts without admitting storage
+constructs: 0370, 0520, 0670, 0680, 0690, 0750, 1700, 1795, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

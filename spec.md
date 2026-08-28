@@ -203,8 +203,12 @@ declaration per name per scope [1850] and a name that names
 nothing is refused [1860] both hold for it unchanged.
 ```landin-grammar
 type_declaration ::= identifier ":" "type" "=" (type | struct_body)
-struct_body      ::= "struct" field+ "end" identifier?
+struct_body      ::= "struct" member+ "end" identifier?
+member           ::= field | variant_part
 field            ::= identifier ":" type
+variant_part     ::= identifier ":" "variant" variant_case
+                   ("|" variant_case)* "end" identifier
+variant_case     ::= identifier (":" "(" field ("," field)* ")")?
 
 ```
 
@@ -4545,20 +4549,21 @@ be refused, so the recovery does not add the ordinary empty-struct report.
 If the part's closer is absent or misspelled, recovery falls back to the
 containing struct's closer rather than discarding later declarations.
 
-`variant` remains an ordinary identifier rather than a reserved word. The
+`variant` remains an ordinary identifier rather than a reserved word. In this
+slice the
 lookahead therefore requires the following tokens to have a case or the
 part's matching closer shape; `kind: variant` followed by another ordinary
 field continues to mean that `kind` has the user-declared type named
-`variant`. The grammar remains unchanged and the negative fixture remains
+`variant`. D73 left the grammar unchanged and its parser-owned fixture
 underivable, as every parser-owned refusal requires.
 
 No variant node, name scope, case identity, layout, value, image, IR operation,
-verifier rule or backend representation is introduced. Later slices must use
+verifier rule or backend representation was introduced by D73. Later slices use
 executable evidence to decide duplicate cases, payload type checking, empty
 and single-case legality, tag width and position, payload-union alignment and
 padding, the zero image, construction and matching, and whether any spare bit
-may fold the tag. Until then the whole part is absent from the syntax tree and
-the containing type is rejected by its one owning report.
+may fold the tag. Until D74, the whole part was absent from the syntax tree and
+the containing type was rejected by its one owning report.
 
 **Why refuse before representing:** accepting a declaration without a layout
 would create a legal but unusable type whose later consumers either fail
@@ -4574,6 +4579,100 @@ representation layer in one unmeasured step; the third breaks the tour's
 contextual spelling and user types of that name; and the last leaves R2.20's
 variant work with only accidental cascades. All were declined.
 
-**Pinned by** the parser public-seam case;
-`negative/variant-part-not-enabled`; the generated construct matrix and token
-record; and the corpus truncation sweep.
+**Pinned by** the parser public-seam recovery cases and the corpus truncation
+sweep. D74 migrates the parser refusal into enabled declaration syntax and
+replaces its former negative fixture with layout and boundary evidence.
+
+### D74 — A variant declaration has one unfolded measurable layout
+
+**The tour said** that an ordinary struct may contain a contextual variant
+part [0680], that each case is an atom and may carry a labelled payload
+[0690], and that the tag and the fields of one selected payload occupy the
+same value [0740]. It did not say where the tag sits, how wide it is, how
+payloads share storage, how their padding contributes to the containing
+struct, or whether a declaration may exist before values of it do.
+
+**Chosen:** [1795]'s enabled grammar includes a `variant_part` as one member of
+an ordinary struct body. The parser keeps one `Variant_Part` node containing
+its source-order `Variant_Case` run; each case keeps a source-order run of the
+same scalar or fixed-array `Field` nodes an ordinary struct already uses. A
+part needs at least one case. A single case and an all-bare part are legal.
+The contextual word `variant` remains an ordinary identifier everywhere the
+case/closer lookahead does not prove this production, and the name after the
+part's `end` must repeat the part name.
+
+Case names are declarations in the module scope. They may be used before the
+type that contains them, and resolution binds a use to their declaration
+identity. Two cases with the same name, cases in different variant parts with
+the same name, and a case colliding with an ordinary module declaration are
+therefore [1850]'s L0200, with the declaration encountered by the module's
+set-building pass as the deterministic owner. The part name and payload field
+names remain labels rather than declarations.
+
+The representation is target-neutral and unfolded. A part is one field of its
+containing struct. Its tag is first and uses the smallest enabled unsigned
+scalar that can enumerate every case: `u8` through 256 cases, `u16` through
+65,536, and `u32` beyond. Cases are numbered in source order; D74 does not yet
+expose those numbers as values. Each payload is laid out independently by
+D44/D45's ordinary source-order, natural-alignment rule. The payload begins at
+the tag extent rounded up to the greatest payload alignment; its reserved
+extent is the greatest padded payload size. The part's alignment is the
+greater of tag and payload alignment, and its padded size is the tag, the
+alignment gap, the maximum payload extent and ordinary tail padding. An
+all-bare part is therefore only its tag. The containing struct places that
+complete part exactly as it places one scalar or fixed-array field.
+
+The checking table carries this without offsets in the source-neutral shape:
+a `Variant_Field` names the tag, case count and a contiguous run of per-case
+payload slices; those slices contain only scalar or fixed-array shapes.
+Offsets, widths and padding are derived from the selected target facts. The
+top-level field-shape run and field-offset run have separate starts, because
+payload shapes share the shape vector but have no top-level offsets. An
+aggregate payload field remains the existing L0304 struct-of-struct boundary;
+if any payload leaf is refused, the containing declaration has no layout and
+later consumers add no cascade.
+
+`sizeof` and `alignof` are executable evidence for this rule. Lowering copies
+the same neutral tag, case runs and payload shapes into the IR's aggregate
+*measurement* run. The verifier checks the tag, nonempty and in-range case
+runs, and scalar/fixed-array-only payloads before any payload accessor. The
+backend replays the layout rule against its target facts. Runtime datum and
+slot field runs deliberately remain scalar/fixed-array-only: D74 creates no
+variant storage, image, clear, copy or field operation, and the backend's
+ordinary aggregate emitters cannot receive this measurement-only shape.
+
+A binding, parameter, named return, initializer, assignment, `zeroed`, copy,
+literal or construction that would create storage or a value of a
+variant-bearing struct is one L0304. Parameters and returns retain R2.30's
+`Struct_ABI` owner; other sites use D74's `Variant_Value` refusal at [0680]. A
+case name used as a value or construction callee has the same owner. An
+inferred D72 construction meets that storage boundary while resolving its
+nominal body, before the binding can settle or lowering can allocate it.
+Matching and case construction remain refused. D75 must decide the zero image
+and storage before any of those forms can migrate.
+
+**Why unfolded, tag-first layout now:** it gives both described targets one
+deterministic hexdump-compatible answer, preserves [0540]'s later opportunity
+for an all-zero image, and makes measurement evidence possible without
+pretending a variant value already exists. Spare-bit folding, tag-last
+placement, C-union layout and a target-sized tag were declined: each either
+hides the source-order identity, changes the zero image, or lets host/ABI
+policy choose a language layout. A future explicit layout policy may add a
+different representation without changing this default.
+
+**The alternatives:** keep the D73 refusal, accept declarations with no
+layout, enable storage and construction together, or choose a target byte
+blob. The first leaves the title feature without evidence; the second creates
+a legal type every consumer must refuse afresh; the third crosses layout,
+images and values in one slice; and the last violates the target-neutral IR
+boundary. All were declined.
+
+**Pinned by** the parser, resolution, lowering, verifier and target-layout
+public seams; `positive/variant-part-measured`;
+`negative/variant-part-empty`; `negative/variant-case-duplicate`;
+`negative/variant-payload-struct-field-not-enabled`;
+`negative/variant-value-not-enabled`;
+`negative/variant-case-value-not-enabled`;
+`negative/variant-abi-not-enabled`; the generated construct, token, IR and
+target-layout records; the backend seam against both target descriptions; and
+`runtime/variant-part-measurements-answer-for-the-target` on Linux x86-64.

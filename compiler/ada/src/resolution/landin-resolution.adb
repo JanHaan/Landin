@@ -164,6 +164,7 @@ package body Landin.Resolution is
             --  [1795]: a type declaration names a type, and the kernel
             --  has only the module scope to name one in.
             when Landin.Syntax.Type_Declaration     => Module_Type,
+            when Landin.Syntax.Variant_Case         => Case_Name,
             when Landin.Syntax.Parameter            => Parameter,
             when Landin.Syntax.Named_Return         => Named_Return,
             when Landin.Syntax.Binding              =>

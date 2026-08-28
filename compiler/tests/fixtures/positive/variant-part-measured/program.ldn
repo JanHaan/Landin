@@ -1,0 +1,37 @@
+bare_only: type = struct
+    kind: variant
+        leaf |
+        branch
+    end kind
+end bare_only
+
+single_payload: type = struct
+    kind: variant
+        value: (number: u32)
+    end kind
+end single_payload
+
+mixed: type = struct
+    prefix: u8
+    kind: variant
+        empty |
+        wide: (word: usize, byte: u8) |
+        array: (row: [3]u16)
+    end kind
+    tail: u16
+end mixed
+
+variant_first: type = struct
+    kind: variant
+        first_empty |
+        first_wide: (word: usize, byte: u8) |
+        first_array: (row: [3]u16)
+    end kind
+    tail: u8
+end variant_first
+
+measurements: [8]usize =
+    [sizeof bare_only, alignof bare_only,
+     sizeof single_payload, alignof single_payload,
+     sizeof mixed, alignof mixed,
+     sizeof variant_first, alignof variant_first]

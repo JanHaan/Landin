@@ -359,7 +359,10 @@ package body Landin.Stages.Lowering is
                   IR.Add_Slot_Field
                     (Unit.all, Filling, Slots (Positive (Id)),
                      Landin.Checking.Field_Type (Types.all, Id, Field));
-               else
+               elsif Landin.Checking.Field_Kind_Of
+                 (Types.all, Id, Field)
+                   = Landin.Checking.Fixed_Array_Field
+               then
                   IR.Add_Slot_Field
                     (Unit.all, Filling, Slots (Positive (Id)),
                      (Kind    => IR.Array_Field_Shape,
@@ -367,7 +370,11 @@ package body Landin.Stages.Lowering is
                         (Types.all, Id, Field),
                       Length  => IR.Element_Total
                         (Landin.Checking.Field_Array_Length
-                           (Types.all, Id, Field))));
+                           (Types.all, Id, Field)),
+                      others => <>));
+               else
+                  raise Landin.Compiler_Defect with
+                    "variant-bearing storage reached slot allocation";
                end if;
             end loop;
 
@@ -571,8 +578,9 @@ package body Landin.Stages.Lowering is
             --  target-dependent answer is not.  D17 decomposes a fixed array
             --  into operations the IR already has; D44/D45 carry an ordinary
             --  struct as its declaration-order scalar or compact fixed-array
-            --  field run.  A nonempty array has its element's alignment; the
-            --  internal empty shape has size zero and alignment one.
+            --  field run; D74 also carries measurement-only variant case
+            --  payload runs.  A nonempty array has its element's alignment;
+            --  the internal empty shape has size zero and alignment one.
             when Syn.Size_Of | Syn.Align_Of =>
                declare
                   Asked : constant Syn.Node_Id :=
@@ -587,37 +595,153 @@ package body Landin.Stages.Lowering is
                         Declared : constant Res.Declaration_Id :=
                           Landin.Checking.Body_Of
                             (Types.all, Of_Tree, Asked);
+                        function Total_Cases return Natural;
+                        function Total_Payload_Fields return Natural;
+
+                        function Total_Cases return Natural is
+                           Total : Natural := 0;
+                        begin
+                           for Field in 1 .. Landin.Checking.Layout_Field_Count
+                             (Types.all, Declared)
+                           loop
+                              if Landin.Checking.Field_Kind_Of
+                                (Types.all, Declared, Field)
+                                  = Landin.Checking.Variant_Field
+                              then
+                                 Total := Total
+                                   + Landin.Checking.Field_Shape_Of
+                                       (Types.all, Declared, Field).Cases;
+                              end if;
+                           end loop;
+                           return Total;
+                        end Total_Cases;
+
+                        function Total_Payload_Fields return Natural is
+                           Total : Natural := 0;
+                        begin
+                           for Field in 1 .. Landin.Checking.Layout_Field_Count
+                             (Types.all, Declared)
+                           loop
+                              if Landin.Checking.Field_Kind_Of
+                                (Types.all, Declared, Field)
+                                  = Landin.Checking.Variant_Field
+                              then
+                                 for Which in 1 ..
+                                   Landin.Checking.Field_Shape_Of
+                                     (Types.all, Declared, Field).Cases
+                                 loop
+                                    Total := Total +
+                                      Landin.Checking.Variant_Case_Field_Count
+                                        (Types.all, Declared, Field, Which);
+                                 end loop;
+                              end if;
+                           end loop;
+                           return Total;
+                        end Total_Payload_Fields;
+
                         Fields : IR.Field_Shape_Array
                           (1 .. Landin.Checking.Layout_Field_Count
                                   (Types.all, Declared));
+                        Cases : IR.Case_Run_Array (1 .. Total_Cases) :=
+                          [others => (others => 0)];
+                        Payloads : IR.Field_Shape_Array
+                          (1 .. Total_Payload_Fields) :=
+                            [others => (others => <>)];
+                        Next_Case : Natural := 1;
+                        Next_Payload : Natural := 1;
                      begin
                         for Field in Fields'Range loop
-                           if Landin.Checking.Field_Kind_Of
-                                (Types.all, Declared, Field)
-                                = Landin.Checking.Scalar_Field
-                           then
-                              Fields (Field) :=
-                                (Kind    => IR.Scalar_Field_Shape,
-                                 Element => Landin.Checking.Field_Type
-                                   (Types.all, Declared, Field),
-                                 Length  => 1);
-                           else
-                              Fields (Field) :=
-                                (Kind    => IR.Array_Field_Shape,
-                                 Element =>
-                                   Landin.Checking.Field_Array_Element
-                                     (Types.all, Declared, Field),
-                                 Length  => IR.Element_Total
-                                   (Landin.Checking.Field_Array_Length
-                                      (Types.all, Declared, Field)));
-                           end if;
+                           case Landin.Checking.Field_Kind_Of
+                             (Types.all, Declared, Field)
+                           is
+                              when Landin.Checking.Scalar_Field =>
+                                 Fields (Field) :=
+                                   (Kind    => IR.Scalar_Field_Shape,
+                                    Element => Landin.Checking.Field_Type
+                                      (Types.all, Declared, Field),
+                                    Length  => 1,
+                                    others  => <>);
+
+                              when Landin.Checking.Fixed_Array_Field =>
+                                 Fields (Field) :=
+                                   (Kind    => IR.Array_Field_Shape,
+                                    Element =>
+                                      Landin.Checking.Field_Array_Element
+                                        (Types.all, Declared, Field),
+                                    Length  => IR.Element_Total
+                                      (Landin.Checking.Field_Array_Length
+                                         (Types.all, Declared, Field)),
+                                    others  => <>);
+
+                              when Landin.Checking.Variant_Field =>
+                                 declare
+                                    Shape : constant
+                                      Landin.Checking.Field_Shape :=
+                                        Landin.Checking.Field_Shape_Of
+                                          (Types.all, Declared, Field);
+                                 begin
+                                    Fields (Field) :=
+                                      (Kind           =>
+                                         IR.Variant_Field_Shape,
+                                       Element        => Shape.Element,
+                                       Length         => 1,
+                                       Cases          => Shape.Cases,
+                                       Payloads_First => Next_Case);
+
+                                    for Which in 1 .. Shape.Cases loop
+                                       declare
+                                          Count : constant Natural :=
+                                            Landin.Checking
+                                              .Variant_Case_Field_Count
+                                                (Types.all, Declared,
+                                                 Field, Which);
+                                       begin
+                                          Cases (Next_Case) :=
+                                            (First =>
+                                               (if Count = 0
+                                                then 0 else Next_Payload),
+                                             Count => Count);
+                                          Next_Case := Next_Case + 1;
+
+                                          for Position in 1 .. Count loop
+                                             declare
+                                                Part : constant Landin.Checking
+                                                  .Field_Shape :=
+                                                    Landin.Checking
+                                                      .Nth_Variant_Case_Field
+                                                        (Types.all, Declared,
+                                                         Field, Which,
+                                                         Position);
+                                             begin
+                                                Payloads (Next_Payload) :=
+                                                  (Kind =>
+                                                     (if Part.Kind =
+                                                        Landin.Checking
+                                                          .Scalar_Field
+                                                      then IR
+                                                        .Scalar_Field_Shape
+                                                      else IR
+                                                        .Array_Field_Shape),
+                                                   Element => Part.Element,
+                                                   Length  => IR.Element_Total
+                                                     (Part.Length),
+                                                   others  => <>);
+                                                Next_Payload :=
+                                                  Next_Payload + 1;
+                                             end;
+                                          end loop;
+                                       end;
+                                    end loop;
+                                 end;
+                           end case;
                         end loop;
 
                         return IR.Emit_Aggregate_Measurement
                           (Unit.all, Filling,
                            (if Syn.Kind (Of_Tree, Node) = Syn.Size_Of
                             then IR.Measure_Size else IR.Measure_Align),
-                           Fields, Result, Site);
+                           Fields, Result, Site,
+                           Cases => Cases, Payloads => Payloads);
                      end;
                   elsif Held /= Ty.Fixed_Array then
                      return IR.Emit_Measurement
@@ -1076,6 +1200,10 @@ package body Landin.Stages.Lowering is
                            Site        => Site,
                            Source_Field => Field,
                            Destination_Field => Field);
+
+                     when Landin.Checking.Variant_Field =>
+                        raise Landin.Compiler_Defect with
+                          "variant-bearing storage reached struct copy";
                   end case;
                end Copy_Field;
 
@@ -1275,6 +1403,11 @@ package body Landin.Stages.Lowering is
                               --  destination D49--D53 lower on assignment.
                               Write_Array_Value
                                 (Value, Destination, Field);
+
+                           when Landin.Checking.Variant_Field =>
+                              raise Landin.Compiler_Defect with
+                                "a variant field reached struct literal"
+                                & " lowering";
                         end case;
                      end;
                   end loop;
@@ -1310,6 +1443,11 @@ package body Landin.Stages.Lowering is
                                  IR.Emit_Array_Clear
                                    (Unit.all, Filling, Destination, Site,
                                     Field => Field);
+
+                              when Landin.Checking.Variant_Field =>
+                                 raise Landin.Compiler_Defect with
+                                   "a variant field reached struct fill"
+                                   & " lowering";
                            end case;
                         end if;
                      end loop;
@@ -2108,7 +2246,10 @@ package body Landin.Stages.Lowering is
                                       (Unit.all, Made,
                                        Landin.Checking.Field_Type
                                          (Types.all, Id, Field));
-                                 else
+                                 elsif Landin.Checking.Field_Kind_Of
+                                   (Types.all, Id, Field)
+                                     = Landin.Checking.Fixed_Array_Field
+                                 then
                                     IR.Add_Field
                                       (Unit.all, Made,
                                        (Kind    => IR.Array_Field_Shape,
@@ -2116,7 +2257,12 @@ package body Landin.Stages.Lowering is
                                           (Types.all, Id, Field),
                                         Length => IR.Element_Total
                                           (Check.Field_Array_Length
-                                             (Types.all, Id, Field))));
+                                             (Types.all, Id, Field)),
+                                        others => <>));
+                                 else
+                                    raise Landin.Compiler_Defect with
+                                      "variant-bearing storage reached"
+                                      & " datum allocation";
                                  end if;
                               end loop;
                            end if;

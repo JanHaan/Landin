@@ -1,0 +1,6 @@
+class: negative
+summary: D74 requires at least one case in a variant part
+constructs: 0680, 1795, 1830
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0101

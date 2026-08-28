@@ -1,0 +1,43 @@
+bare_only: type = struct
+    kind: variant
+        leaf |
+        branch
+    end kind
+end bare_only
+
+single_payload: type = struct
+    kind: variant
+        value: (number: u32)
+    end kind
+end single_payload
+
+mixed: type = struct
+    prefix: u8
+    kind: variant
+        empty |
+        wide: (word: usize, byte: u8) |
+        array: (row: [3]u16)
+    end kind
+    tail: u16
+end mixed
+
+variant_first: type = struct
+    kind: variant
+        first_empty |
+        first_wide: (word: usize, byte: u8) |
+        first_array: (row: [3]u16)
+    end kind
+    tail: u8
+end variant_first
+
+public main: () -> (code: i32) =
+    if sizeof bare_only == 1 and alignof bare_only == 1
+        and sizeof single_payload == 8 and alignof single_payload == 4
+        and sizeof mixed == 40 and alignof mixed == 8
+        and sizeof variant_first == 32 and alignof variant_first == 8
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

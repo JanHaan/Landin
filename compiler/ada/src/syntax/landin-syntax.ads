@@ -190,6 +190,12 @@ package Landin.Syntax is
       --  because that position is the layout.
       Struct_Body,
       Field,
+      --  [0680]'s contextual variant member and one of its cases.  The
+      --  part's trailing run is Variant_Case in source order; a case's
+      --  trailing run is its labelled payload Fields.  Case names are
+      --  declarations, while the part and payload field names are labels.
+      Variant_Part,
+      Variant_Case,
       --  The parts that are none of the above.
       Parameter,
       Named_Return,
@@ -232,6 +238,7 @@ package Landin.Syntax is
      is (Of_Kind in Function_Declaration | Binding | Parameter
                     | Named_Return | Name_Reference | Type_Name
                     | Type_Declaration | Type_Reference | Field
+                    | Variant_Part | Variant_Case
                     | Member_Selection | Field_Value);
 
    ------------------------------------------------------------------
@@ -567,8 +574,10 @@ package Landin.Syntax is
 
    --  The type [0370] is asked about.  A type and not an expression, which
    --  is why it is not Operand_Of.
-   --  [0670]'s fields, in the order they were written, which [0750]
-   --  makes the order they are laid out in.
+   --  [0670]'s members, in the order they were written, which [0750]
+   --  makes the order they are laid out in.  Field_Count keeps its old
+   --  name because a variant part occupies one field position in the
+   --  containing layout.
    function Field_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Struct_Body;
@@ -578,7 +587,34 @@ package Landin.Syntax is
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) = Struct_Body
                   and then Index <= Field_Count (Of_Tree, Id),
-          Post => Contains (Of_Tree, Nth_Field'Result);
+          Post => Contains (Of_Tree, Nth_Field'Result)
+                  and then Kind (Of_Tree, Nth_Field'Result)
+                             in Field | Variant_Part;
+
+   function Case_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Variant_Part;
+
+   function Nth_Case
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Variant_Part
+                  and then Index <= Case_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Case'Result)
+                  and then Kind (Of_Tree, Nth_Case'Result) = Variant_Case;
+
+   function Payload_Field_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Variant_Case;
+
+   function Nth_Payload_Field
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Variant_Case
+                  and then Index <= Payload_Field_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Payload_Field'Result)
+                  and then Kind (Of_Tree, Nth_Payload_Field'Result) = Field;
 
    --  [0520]'s length, as the integer literal the program wrote, and the
    --  type of one element.  The length is a node and not a number here for
