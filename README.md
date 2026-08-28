@@ -13,13 +13,13 @@ One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
-**Status: specification 0.1.0. R0 and R1 are complete, and R2.20 is
+**Status: specification 0.1.0. R0, R1 and R2.20 are complete, and R2.30 is
 active. `refine` scans, parses, resolves names, checks types and definite
 assignment, lowers and verifies target-neutral IR, emits Linux x86-64
 assembly, and can assemble and link a hosted executable. Runtime fixtures run
 those binaries on the native x86-64 gate. The enabled kernel includes scalars,
-fixed arrays and depth-one ordinary structs; native macOS arm64, Cortex-M and
-the standard library remain future work.**
+fixed arrays, depth-one ordinary structs and unfolded variants; native macOS
+arm64, Cortex-M and the standard library remain future work.**
 
 ## What is here
 
@@ -139,8 +139,9 @@ Implementation proceeds in executable vertical slices rather than waiting for
 every design foundation to be settled in advance. R0's Ada 2022 bootstrap
 chassis and R1's executable language kernel are complete: the compiler builds
 and passes its suite on macOS arm64, in a pinned `linux/amd64` container, and
-on x86-64 hardware in CI, where its Linux binaries run. R2 is active; R2.20 is
-currently extending target-parametric aggregate semantics and representation.
+on x86-64 hardware in CI, where its Linux binaries run. R2 is active; R2.20's
+target-parametric aggregate and variant representation is complete, and R2.30
+owns functions, control-flow expressions, declared errors and the aggregate ABI.
 Language and architecture questions are resolved when the first vertical
 slice needs them.
 

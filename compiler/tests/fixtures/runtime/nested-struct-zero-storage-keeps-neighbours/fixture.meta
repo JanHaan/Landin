@@ -1,0 +1,6 @@
+class: runtime
+summary: D87 clears the padded nested extent without overwriting neighbouring frame storage
+constructs: 0160, 0520, 0540, 0670, 0750, 1795, 1830, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

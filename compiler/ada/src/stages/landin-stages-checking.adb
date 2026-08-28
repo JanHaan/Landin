@@ -1094,6 +1094,8 @@ package body Landin.Stages.Checking is
             if Held = Ty.Aggregate
               and then Aggregate_Bearing
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
+              and then not Is_Zeroed_State
+              and then not Is_Struct_Zeroed_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1104,8 +1106,8 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
-                     Message => "a value of a nested-struct type is not"
-                                & " enabled yet",
+                     Message => "a nonzero value of a nested-struct type is"
+                                & " not enabled yet",
                      Refused =>
                        (if Syn.Kind (Of_Tree, Node)
                               in Syn.Parameter | Syn.Named_Return
@@ -2644,6 +2646,25 @@ package body Landin.Stages.Checking is
                            Message => "a variant part cannot be selected as"
                                       & " a value or place yet",
                            Refused => Bad.Variant_Value,
+                           Into    => Found);
+                        return Kept (Ty.Ill_Typed);
+                     end if;
+
+                     --  D87 allocates and clears the containing cell, but a
+                     --  nested ordinary field still needs a path-bearing
+                     --  value/place representation.  Keep it away from the
+                     --  scalar Field_Type accessor until that next slice.
+                     if Landin.Checking.Field_Kind_Of
+                          (Types.all, Wrote, Which)
+                          = Landin.Checking.Aggregate_Field
+                     then
+                        Bad.Report
+                          (Item    => Bad.Unsupported_Use,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "a nested struct field is not an"
+                                      & " enabled value or place yet",
+                           Refused => Bad.Struct_Value,
                            Into    => Found);
                         return Kept (Ty.Ill_Typed);
                      end if;

@@ -2618,6 +2618,64 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "16");
    end A_Module_Struct_Clear_Follows_The_Target_Extent;
 
+   --  D87 recursively places D86's child run inside runtime storage.  The
+   --  clear count is the parent's complete padded extent on each target,
+   --  not the child's raw field-byte sum and not a host-derived constant.
+   procedure A_Nested_Struct_Clear_Follows_The_Target_Extent
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Nested_Struct_Clear_Follows_The_Target_Extent
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "inner: type = struct" & LF
+        & "    byte: u8" & LF
+        & "    word: usize" & LF
+        & "    row: [3]u16" & LF
+        & "end inner" & LF
+        & "outer: type = struct" & LF
+        & "    prefix: u16" & LF
+        & "    nested: inner" & LF
+        & "    tail: u8" & LF
+        & "end outer" & LF
+        & "mut state: outer" & LF
+        & "f: () -> none =" & LF
+        & "    state = zeroed" & LF
+        & "end f" & LF;
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Bytes : String);
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Bytes : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran  : Natural;
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+         declare
+            Text : constant String := Emitted (Work);
+            Clear : constant String :=
+              HT & "leaq state(%rip), %rdi" & LF
+              & HT & "xorl %eax, %eax" & LF
+              & HT & "movabsq $" & Bytes & ", %rcx" & LF
+              & HT & "cld" & LF
+              & HT & "rep stosb" & LF;
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, Clear),
+               "one recursively placed extent is cleared at the datum");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "40");
+      Check_Target (Landin.Targets.Synthetic_32, "24");
+   end A_Nested_Struct_Clear_Follows_The_Target_Extent;
+
    --  D32 repeats an element count rather than a byte count, and selects the
    --  repeated-store width from the target's scalar facts.  `usize` therefore
    --  uses qwords on Linux x86-64 and longwords under Synthetic_32 while the
@@ -4340,6 +4398,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a module struct clear follows target extent",
          A_Module_Struct_Clear_Follows_The_Target_Extent'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a nested struct clear follows target extent",
+         A_Nested_Struct_Clear_Follows_The_Target_Extent'Access);
       Landin.Testing.Register
         (Into, "backend", "an array fill follows the target element width",
          An_Array_Fill_Follows_The_Target_Element_Width'Access);

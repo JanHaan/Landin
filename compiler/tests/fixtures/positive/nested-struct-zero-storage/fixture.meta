@@ -1,0 +1,5 @@
+class: positive
+summary: D87 allocates depth-one nested ordinary storage and admits its complete zero image
+constructs: 0520, 0540, 0670, 0710, 0750, 1795, 1830
+program: program.ldn
+targets: linux-x86-64, macos-arm64

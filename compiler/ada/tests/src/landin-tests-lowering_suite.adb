@@ -3534,6 +3534,92 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Struct_Measurement_Carries_A_Nested_Field;
 
+   --  D87 gives D86's child run to both runtime storage kinds.  A complete
+   --  zero image remains one whole-storage clear; the child does not become
+   --  one flattened sequence of parent fields.
+   procedure Nested_Struct_Storage_Carries_A_Child_Run
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Struct_Storage_Carries_A_Child_Run
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "inner: type = struct" & LF
+         & "    byte: u8" & LF
+         & "    word: usize" & LF
+         & "    row: [3]u16" & LF
+         & "end inner" & LF
+         & "outer: type = struct" & LF
+         & "    prefix: u16" & LF
+         & "    nested: inner" & LF
+         & "    tail: u8" & LF
+         & "end outer" & LF
+         & "mut state: outer" & LF
+         & "clear: () -> none =" & LF
+         & "    mut local: outer = zeroed" & LF
+         & "    state = zeroed" & LF
+         & "end clear" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "nested module and local storage are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Datum_Shape : constant IR.Field_Shape :=
+           IR.Nth_Field_Shape (Unit, 1, 2);
+         Slot_Shape : constant IR.Field_Shape :=
+           IR.Nth_Slot_Field_Shape (Unit, 2, 1, 2);
+         Datum_Row : constant IR.Field_Shape :=
+           IR.Nth_Aggregate_Field (Unit, Datum_Shape, 3);
+         Slot_Word : constant IR.Field_Shape :=
+           IR.Nth_Aggregate_Field (Unit, Slot_Shape, 2);
+         Clears : Natural := 0;
+         Datum_Clear, Slot_Clear : Boolean := False;
+      begin
+         Landin.Testing.Check
+           (Item,
+            Datum_Shape.Kind = IR.Aggregate_Field_Shape
+              and then IR.Aggregate_Field_Count (Unit, Datum_Shape) = 3
+              and then Datum_Row.Kind = IR.Array_Field_Shape
+              and then Datum_Row.Element = Landin.Types.U16
+              and then Datum_Row.Length = 3,
+            "the datum retains the child's compact declaration-order run");
+         Landin.Testing.Check
+           (Item,
+            Slot_Shape.Kind = IR.Aggregate_Field_Shape
+              and then IR.Aggregate_Field_Count (Unit, Slot_Shape) = 3
+              and then Slot_Word.Kind = IR.Scalar_Field_Shape
+              and then Slot_Word.Element = Landin.Types.Usize,
+            "the frame slot carries the same target-neutral child run");
+
+         for Value in 1 .. IR.Value_Count (Unit, 2) loop
+            if IR.Op_Of (Unit, 2, IR.Value_Id (Value)) = IR.Clear_Array then
+               Clears := Clears + 1;
+               case IR.Destination_Of
+                 (Unit, 2, IR.Value_Id (Value)).Kind
+               is
+                  when IR.Frame_Slot => Slot_Clear := True;
+                  when IR.Module_Datum => Datum_Clear := True;
+               end case;
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, Clears = 2 and then Slot_Clear and then Datum_Clear,
+            "each explicit zero image is one whole-storage clear");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts nested datum and slot shapes");
+      end;
+   end Nested_Struct_Storage_Carries_A_Child_Run;
+
    --  D75 gives D74's target-neutral carrier to both module and frame
    --  storage.  The zero image remains one whole-storage clear, not one
    --  instruction per tag, payload field, or padding byte.
@@ -4506,6 +4592,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a struct measurement carries a nested field run",
          A_Struct_Measurement_Carries_A_Nested_Field'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "nested struct storage carries a child field run",
+         Nested_Struct_Storage_Carries_A_Child_Run'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "variant storage carries cases and one clear",

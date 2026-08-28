@@ -2,9 +2,8 @@ inner: type = struct
     q: u32
 end inner
 
---  D86 lays the nested field out for measurement, but no runtime cell of
---  that containing type exists yet.  Reading another field must not add a
---  second report after the declaration was refused.
+--  D87 gives the containing type zeroed runtime storage.  The nested field
+--  itself is still not a general aggregate value.
 outer: type = struct
     part: inner
     count: u32
@@ -12,6 +11,6 @@ end outer
 
 mut here: outer
 
-f: () -> (r: u32) =
-    r = here.count
+f: () -> none =
+    _ = here.part
 end f
