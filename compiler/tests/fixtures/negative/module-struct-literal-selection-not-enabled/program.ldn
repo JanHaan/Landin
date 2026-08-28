@@ -1,0 +1,6 @@
+holder: type = struct
+    tag: u8
+end holder
+
+source: holder = zeroed
+state: holder = (tag: source.tag)

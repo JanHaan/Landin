@@ -1675,6 +1675,70 @@ item 4 ROUTINE observe result usize params 0 slots 3 blocks 1 values 15
     13 STORE slot 1 <- 12
     14 LOAD usize slot 1
     15 LEAVE <- 14
+file positive/module-struct-literal-initializer/program.ldn
+unit items 8
+item 1 DATUM seed result usize params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER usize 6
+    2 LEAVE <- 1
+item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 TRUTH bool true
+    2 LEAVE <- 1
+item 3 DATUM origin result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 usize
+  field 3 i32
+  field 4 bool
+  field 5 [2]u16
+  image 5 7 -3 1 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM copy result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 usize
+  field 3 i32
+  field 4 bool
+  field 5 [2]u16
+  image 5 7 -3 1 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 DATUM inferred result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 usize
+  field 3 i32
+  field 4 bool
+  field 5 [2]u16
+  image 5 7 -3 1 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 6 DATUM typed_from_inferred result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 usize
+  field 3 i32
+  field 4 bool
+  field 5 [2]u16
+  image 5 7 -3 1 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 7 DATUM aliased result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 usize
+  field 3 i32
+  field 4 bool
+  field 5 [2]u16
+  image 5 7 -3 1 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 8 DATUM blank result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 usize
+  field 3 i32
+  field 4 bool
+  field 5 [2]u16
+  image 0 0 0 0 0
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/module-struct-zeroed-initializer/program.ldn
 unit items 3
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1

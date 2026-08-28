@@ -251,6 +251,28 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
      is (Element (Of_Unit, Item).Length);
 
+   procedure Set_Aggregate_Image
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Fields : Landin.Types.Folded_Array)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Image, Natural (Into.Images.Length));
+      for Field in Fields'Range loop
+         Into.Images.Append (Fields (Field));
+         Held.Image.Count := Held.Image.Count + 1;
+      end loop;
+      Held.Has_Image := True;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Aggregate_Image;
+
+   function Nth_Field_Image
+     (Of_Unit : Unit; Item : Item_Id; Field : Positive)
+      return Landin.Types.Folded
+     is (Of_Unit.Images
+           (Element (Of_Unit, Item).Image.First + Field));
+
    procedure Set_Array_Image
      (Into     : in out Unit;
       Item     : Item_Id;
@@ -321,7 +343,8 @@ package body Landin.IR is
 
    function Image_Length
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
-     is (if Is_Repeated_Image (Of_Unit, Item)
+     is (if Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
+              and then Is_Repeated_Image (Of_Unit, Item)
          then Array_Length (Of_Unit, Item)
          else Element_Total (Element (Of_Unit, Item).Image.Count));
 

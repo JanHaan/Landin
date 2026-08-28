@@ -764,6 +764,71 @@ package body Landin.Tests.IR_Suite is
       end;
    end An_Array_Datum_Image_Is_Compact;
 
+   --  D66: an aggregate image is one folded value per declaration-order
+   --  field.  Its run remains target-neutral: scalar widths and every byte
+   --  of array storage and padding are absent from the IR.
+   procedure An_Aggregate_Datum_Image_Is_Compact
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Aggregate_Datum_Image_Is_Compact
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+
+      declare
+         Unit : Landin.IR.Unit;
+         Datum : Landin.IR.Item_Id;
+         Block : Landin.IR.Block_Id;
+      begin
+         Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := Landin.IR.Add_Item
+           (Unit, Landin.IR.Datum, 1, Landin.Types.Aggregate, Site);
+         Landin.IR.Add_Field (Unit, Datum, Landin.Types.U8);
+         Landin.IR.Add_Field
+           (Unit, Datum,
+            (Kind    => Landin.IR.Array_Field_Shape,
+             Element => Landin.Types.U16,
+             Length  => 2));
+         Landin.IR.Add_Field (Unit, Datum, Landin.Types.I32);
+         Landin.IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(5, 0, -3));
+         Block := Landin.IR.Add_Block
+           (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+         Landin.IR.Enter (Unit, Datum, Block);
+         Landin.IR.Emit_Leave (Unit, Datum, Landin.IR.No_Value, Site);
+         Landin.IR.Leave_Block (Unit, Datum);
+
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Has_Image (Unit, Datum)
+            and then Landin.IR.Image_Length (Unit, Datum) = 3,
+            "an aggregate image has one entry per field");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Nth_Field_Image (Unit, Datum, 1) = 5
+            and then Landin.IR.Nth_Field_Image (Unit, Datum, 2) = 0
+            and then Landin.IR.Nth_Field_Image (Unit, Datum, 3) = -3,
+            "field folds keep declaration order and the array placeholder");
+         Landin.Testing.Check
+           (Item,
+            Ada.Strings.Fixed.Index
+              (Landin.IR.Dump.Text
+                 (Unit, Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all),
+               "  image 5 0 -3") /= 0,
+            "the dump prints folds rather than target bytes");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Verifier.Check (Unit).Kind
+              = Landin.IR.Verifier.Nothing_Wrong,
+            "the verifier accepts a canonical aggregate image");
+      end;
+   end An_Aggregate_Datum_Image_Is_Compact;
+
    ------------------------------------------------------------------
    --  D22: a slot-reaching element operation
    ------------------------------------------------------------------
@@ -876,6 +941,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "an array datum image is compact",
          An_Array_Datum_Image_Is_Compact'Access);
+      Landin.Testing.Register
+        (Into, "ir", "an aggregate datum image is compact",
+         An_Aggregate_Datum_Image_Is_Compact'Access);
       Landin.Testing.Register
         (Into, "ir", "a slot element reaches the frame",
          A_Slot_Element_Reaches_The_Frame'Access);

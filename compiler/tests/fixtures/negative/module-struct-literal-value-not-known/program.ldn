@@ -1,0 +1,9 @@
+holder: type = struct
+    tag: u8
+end holder
+
+make: () -> (value: u8) =
+    value = 1
+end make
+
+state: holder = (tag: make())

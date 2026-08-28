@@ -1143,6 +1143,111 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Malformed_Image_Values_Are_Rejected;
 
+   --  D66: aggregate image verification is explicit in release builds.
+   --  The run must match the field run, an array field carries only zero in
+   --  this first carrier, and scalar folds fit the selected target.
+   procedure Malformed_Aggregate_Images_Are_Rejected
+     (Item : in out Landin.Testing.Context);
+
+   procedure Malformed_Aggregate_Images_Are_Rejected
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Finish
+        (Unit : in out IR.Unit;
+         Datum : IR.Item_Id;
+         Site : Landin.Provenance.Origin);
+
+      procedure Finish
+        (Unit : in out IR.Unit;
+         Datum : IR.Item_Id;
+         Site : Landin.Provenance.Origin)
+      is
+         Block : constant IR.Block_Id :=
+           IR.Add_Block
+             (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+      begin
+         IR.Enter (Unit, Datum, Block);
+         IR.Emit_Leave (Unit, Datum, IR.No_Value, Site);
+         IR.Leave_Block (Unit, Datum);
+      end Finish;
+   begin
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field (Unit, Datum, Landin.Types.U8);
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 1));
+         --  The builder normally finishes the field run first; this legal
+         --  structural mutation makes a short image without corrupting the
+         --  shared image-vector partition.
+         IR.Add_Field (Unit, Datum, Landin.Types.U16);
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Image_Length_Disagrees,
+            "an aggregate image shorter than its field run is refused");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U8,
+             Length  => 2));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 1));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Image_On_Array_Field,
+            "a nonzero array-field placeholder is refused");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field (Unit, Datum, Landin.Types.Usize);
+         IR.Set_Aggregate_Image
+           (Unit, Datum,
+            Landin.Types.Folded_Array'(1 => 2 ** 32));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Synthetic_32),
+            V.Aggregate_Image_Value_Does_Not_Fit,
+            "a usize aggregate fold follows the 32-bit target");
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Nothing_Wrong,
+            "the same target-neutral fold fits the 64-bit target");
+      end;
+   end Malformed_Aggregate_Images_Are_Rejected;
+
    --  D24: an image run has to partition the shared vector alongside
    --  Slots, Blocks, Values and Fields.  Unlike those, images are filled
    --  in chain-resolution order rather than item order, so the partition
@@ -1293,6 +1398,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "malformed image values are rejected",
          Malformed_Image_Values_Are_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "malformed aggregate images are rejected",
+         Malformed_Aggregate_Images_Are_Rejected'Access);
       Landin.Testing.Register
         (Into, "verifier", "malformed image runs are rejected",
          Malformed_Image_Runs_Are_Rejected'Access);

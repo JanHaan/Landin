@@ -1,0 +1,5 @@
+holder: type = struct
+    tag: u8
+end holder
+
+mut over: holder = (tag: 200 + 100)

@@ -3591,20 +3591,18 @@ initialization [0080].
 
 The initializer is D21's declaration-identity static image chain applied to
 ordinary structs. It follows forward references and type aliases and must
-terminate at a module struct whose initializer is omitted under D10 or is
-D59's explicit `zeroed`. A chain that returns to a declaration is [1940]'s
-value worked out from itself and reports L0305 once. Every declaration in a
-valid chain owns distinct storage initialized with the terminal image rather
-than aliasing its source.
+terminate at a module struct whose initializer is omitted under D10, is D59's
+explicit `zeroed`, or later carries D66's written labelled image. A chain that
+returns to a declaration is [1940]'s value worked out from itself and reports
+L0305 once. Every declaration in a valid chain owns distinct storage
+initialized with the terminal image rather than aliasing its source.
 
-Every terminal module struct image the language can currently construct is
-all bits zero. Lowering therefore records the ordinary aggregate datum, its
-compact field-shape run and operandless `Leave`, with no finite image and no
-runtime copy or clear. The backend reserves each datum's complete
-target-derived padded extent in zero-initialized storage on both 64- and
-32-bit descriptions. A future nonzero struct image must extend the
-target-neutral representation and copy that terminal image along the chain;
-D60 does not silently assume every future aggregate image is zero.
+At this decision every constructible terminal image was all bits zero, so the
+first implementation recorded no finite aggregate image and reserved each
+target-derived padded extent separately in zero-initialized storage. D66 later
+adds the target-neutral declaration-order field run this rule required for a
+nonzero terminal and copies it along the same chain. Omitted and whole
+`zeroed` terminals retain the absent-image representation.
 
 Module state remains complete under D10, so definite assignment gains no fact.
 An initializer boundary that has already refused the written type or value is
@@ -3618,14 +3616,14 @@ nested arrays keep their boundaries.
 
 **Why a static copy:** aliasing would make a later write through one declaration
 change the other, contrary to D21 and D54's value semantics. A startup copy
-cannot run before [1460], and a new aggregate-image API has no nonzero producer
-to carry today. Following identities proves the existing zero image while
-keeping each symbol and target layout distinct.
+cannot run before [1460]. Following identities keeps each symbol and target
+layout distinct; D66 later supplies the first nonzero producer and carrier.
 
 **The alternatives:** alias the source, emit runtime initialization, add a
 field or byte image now, admit inferred module initialization at the same time,
 or defer the direct-name form until struct literals. The first two contradict
-value and startup semantics; the third invents unused representation; the
+value and startup semantics; the third would have invented unused
+representation at this slice; the
 fourth needs its own nominal inference rule; and the last leaves arrays and
 structs asymmetric without implementation evidence. All were declined here;
 D61 later supplies that inference rule without widening the other forms.
@@ -3733,7 +3731,8 @@ field as a whole. Lowering reuses D42's typed `Truth` or `Number` and D48's
 field-qualified `Store_Element`; the verifier and backend therefore gain no new
 operation, shape, ordering rule, address calculation or target invariant. A
 module root is runtime storage reached from a function body, not a module
-initial image, so D60's zero-only static-image boundary is unchanged.
+initial image, so D60's static-image boundary is unchanged; D66 later adding a
+written image does not turn this runtime store into initialization.
 
 **Why this place:** D48 already types and represents its element as an ordinary
 scalar place. Keeping `zeroed` refused there would make the literal depend on
@@ -3830,8 +3829,9 @@ A labelled literal is admitted only as (a) the initializer of an explicitly
 typed local binding whose written type resolves to an enabled named ordinary
 struct, or (b) the complete right-hand side of assignment to a directly named
 mutable module or local binding of such a type. The context supplies [0710]'s
-nominal body. Inferred bindings, module initializers, discards, operands,
-arguments, returns and every general aggregate-value position remain L0304.
+nominal body. Inferred bindings, discards, operands, arguments, returns and
+every general aggregate-value position remain L0304. Module initializers remain
+L0304 in this slice; D66 later admits their scalar-labelled static-image subset.
 The call-shaped construction `T(field: value)` and the all-fill spelling
 `(of zeroed)` remain parser-owned L0010 refusals.
 
@@ -3870,8 +3870,8 @@ valid label. Lowering emits an ordinary scalar field store immediately after
 each named expression, then typed scalar-zero stores and field-qualified array
 clears for the fill. It introduces no aggregate value, new IR operation,
 verifier rule, backend address form, target layout or static image. A module
-initializer remains refused because D60's representation is deliberately
-zero-only and a nonzero terminal image has no target-neutral carrier yet.
+initializer remains refused in this slice; D66 later supplies the
+target-neutral nonzero terminal image for the scalar-labelled subset.
 A body whose earlier field or extent refusal prevented layout silently refuses
 the contextual literal as well: the owning field or L0300 report is not
 followed by a layout query or a second diagnostic.
@@ -3899,7 +3899,7 @@ last needs the representation D60 explicitly deferred. All were declined.
 `negative/struct-literal-reads-incoming-state`;
 `negative/struct-literal-without-layout`;
 `negative/immutable-struct-literal-assignment`;
-`negative/module-struct-literal-initializer-not-enabled`;
+`negative/module-struct-literal-inferred-not-enabled`;
 `negative/struct-array-field-layout-overflow`;
 `negative/struct-literal-not-enabled`; the generated catalogue, construct,
 token and IR records; and `runtime/struct-literal-order-and-fill` on Linux
@@ -3948,7 +3948,9 @@ refused: the one expression node has one committed type, while omitted fields
 may be heterogeneous; converting it per field is not enabled, and evaluating
 it again per field would violate the once-only rule. Inferred literals still
 have no nominal body and wait for [0700]'s construction decision. Module
-literals still need D60's nonzero aggregate image carrier. The all-`of`
+literals remain outside this slice; D66 later supplies D60's nonzero aggregate
+image carrier for scalar labels, while array labels wait for a later image
+form. The all-`of`
 spelling remains D63's redundant parser refusal, and general aggregate values
 remain outside this slice.
 
@@ -3975,3 +3977,86 @@ representation; and the last duplicates whole `zeroed`. All were declined.
 `negative/immutable-struct-literal-assignment`;
 `negative/struct-literal-of-expression-not-enabled`; the generated token and
 IR records; and `runtime/struct-literal-array-field-order` on Linux x86-64.
+
+### D66 — A typed module struct literal is a static field image
+
+**The tour said** that a module binding may carry a value [0040], that an
+ordinary struct image names its fields [0710], that the remaining fields may be
+supplied by `of` [0720], and that nothing runs before the entry point [1460].
+D24 established target-neutral folded static images for arrays, D60/D61
+established declaration-identity module struct image chains, and D64/D65
+established the contextual labelled literal and its field rules at runtime.
+
+**Chosen:** `[mut] name: T = (field: value, ..., of zeroed)` is admitted at
+module scope when `T` resolves to an enabled named ordinary struct with a
+layout. The written type supplies the literal's nominal body. D64's freely
+ordered, unique labels, L0308 unknown-field owner, L0309 duplicate owner and
+L0310 missing-field owner apply unchanged. Each explicitly named field in this
+first static carrier must be scalar. A trailing `of zeroed` supplies zero or
+`false` to every unnamed scalar field and the absent zero image to every
+unnamed fixed-array field. A fixed-array field named explicitly is L0304 in
+this slice; its D65 literal, repetition, copy and clear images need a compact
+per-field image form and remain a later decision.
+
+Each scalar field expression must be known without execution under [1940]: a
+literal, contextual scalar `zeroed`, an enabled operator over known operands,
+or a module scalar name whose value is known. A call reports L0305. A selected
+field, index or nested array image reports its existing L0304 static-image
+refusal, including beneath an otherwise foldable operator. Integer folding
+keeps D24's overflow owners: a fold beyond the compiler's widest magnitude or
+beyond the field's selected-target type reports L0300. An inferred module
+binding still has no nominal body and keeps L0304; a general `of expression`,
+the all-`of` spelling, call-shaped construction and general aggregate value
+remain refused.
+
+The target-neutral aggregate image is one `Folded` entry per field in [0750]'s
+declaration order. A scalar entry is its folded value. An unnamed scalar entry
+is zero, and a fixed-array entry is the zero placeholder for its absent image.
+The representation contains no target byte, offset or padding. The verifier
+requires the image length to equal the field count, requires an array-field
+placeholder to be zero, and checks each scalar fold against the selected
+target before any backend accessor can consume it, including in builds without
+contract checks.
+
+The backend lays out the field-shape run with the same target placement used by
+D45. It writes scalar entries with that target's width, emits zero for every
+array field, gap and tail-padding byte, and gives the complete padded object a
+`.data` image. A labelled literal whose folds are all zero remains a written
+image, as D24 decided for arrays; only an omitted initializer or whole
+`zeroed` retains D10/D59's absent image and `.bss` storage. Nothing is copied or
+cleared at startup. D60/D61 chains that terminate at the literal copy its
+field-image run into each declaration's distinct datum, preserving forward
+references, aliases and cycle ownership. The literal is a terminal image, so a
+cycle can arise only in the declaration-name chain that precedes a terminal;
+D60/D61's single L0305 owner remains unchanged.
+
+Module state remains complete under D10 and no definite-assignment fact is
+added. The literal has no runtime evaluation order because its expressions are
+folded rather than executed. D64/D65's local initializer and whole-assignment
+rules remain immediate runtime writes and do not acquire this static-image
+semantics.
+
+**Why fields rather than bytes:** folds preserve the same source image across
+32- and 64-bit targets while target placement remains the only authority on
+widths, offsets and padding. A target-byte blob would make the neutral IR
+target-specific, and a startup routine would contradict [1460]. Restricting
+the first carrier to scalar labels proves the representation without expanding
+D24/D34/D38's finite, repeated and hybrid array forms inside every aggregate
+field.
+
+**The alternatives:** emit a target-byte blob, synthesize a startup clear or
+copy, store fields at runtime, keep module literals refused, or admit every
+D65 array-field form at once. The first three violate target neutrality or
+static initialization; the fourth leaves D60's deliberate carrier seam unused;
+and the last needs a compact nested image representation before its verifier
+and backend invariants can be stated. All were declined here.
+
+**Pinned by** the IR, verifier, checker, lowering and backend public-seam cases;
+`positive/module-struct-literal-initializer`;
+`negative/module-struct-literal-array-label-not-enabled`;
+`negative/module-struct-literal-inferred-not-enabled`;
+`negative/module-struct-literal-selection-not-enabled`;
+`negative/module-struct-literal-value-not-known`;
+`negative/module-struct-literal-field-out-of-range`;
+`negative/module-struct-literal-field-fold-overflow`; the generated token and
+IR records; and `runtime/module-struct-literal-image-is-loaded` on Linux x86-64.

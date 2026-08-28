@@ -148,9 +148,10 @@ package body Landin.Stages.Checking is
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean);
       procedure Check_Struct_Literal
-        (Of_Tree : Syn.Tree;
-         Literal : Syn.Node_Id;
-         Wrote   : Res.Declaration_Id);
+        (Of_Tree      : Syn.Tree;
+         Literal      : Syn.Node_Id;
+         Wrote        : Res.Declaration_Id;
+         Static_Image : Boolean);
       procedure Check_Mixed_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -619,13 +620,12 @@ package body Landin.Stages.Checking is
                        = Syn.Zeroed_Literal
               and then Landin.Checking.Body_Of
                 (Types.all, Of_Tree, Written) /= Res.No_Declaration;
-            --  D64: a written local struct type supplies the body for one
-            --  labelled literal.  Module images remain zero-only, and an
-            --  inferred literal still has no nominal identity to carry.
-            Is_Local_Struct_Literal_Init : constant Boolean :=
+            --  D64/D66: a written local or module struct type supplies the
+            --  body for one labelled literal.  The module form is a static
+            --  image; an inferred literal still has no nominal identity.
+            Is_Struct_Literal_Init : constant Boolean :=
               Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
-              and then Is_Local_Binding (Of_Tree, Node)
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Struct_Literal
@@ -749,7 +749,7 @@ package body Landin.Stages.Checking is
               and then not Is_Zeroed_State
               and then not Is_Direct_Struct_Init
               and then not Is_Struct_Zeroed_Init
-              and then not Is_Local_Struct_Literal_Init
+              and then not Is_Struct_Literal_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -2295,6 +2295,43 @@ package body Landin.Stages.Checking is
          end;
       end Check_Place;
 
+      --  D24/D66: a static image may fold scalar syntax but may not read a
+      --  selected runtime place or carry a nested array value.  Keep this
+      --  recursive refusal shared by array and struct image contexts so a
+      --  construct hidden under an operator has one owner and one report.
+      procedure Refuse_Static_Image_Subtree
+        (Of_Tree : Syn.Tree; Where : Syn.Node_Id; Context : String);
+
+      procedure Refuse_Static_Image_Subtree
+        (Of_Tree : Syn.Tree; Where : Syn.Node_Id; Context : String)
+      is
+         What : constant String :=
+           (case Syn.Kind (Of_Tree, Where) is
+               when Syn.Member_Selection => "a field selection",
+               when Syn.Element_Index    => "an array index",
+               when Syn.Array_Literal    => "a nested array literal",
+               when others               => "");
+      begin
+         if What /= "" then
+            Bad.Report
+              (Item    => Bad.Unsupported_Use,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Where),
+               Message => What & " is not enabled as " & Context,
+               Refused => Bad.Array_Value,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Where);
+            --  Stop walking a refused subtree so an operator above it does
+            --  not multiply the same report.
+            return;
+         end if;
+
+         for Slot in 1 .. Syn.Slot_Count (Of_Tree, Where) loop
+            Refuse_Static_Image_Subtree
+              (Of_Tree, Syn.Slot (Of_Tree, Where, Slot), Context);
+         end loop;
+      end Refuse_Static_Image_Subtree;
+
       procedure Check_Array_Literal
         (Of_Tree      : Syn.Tree;
          Context      : Syn.Node_Id;
@@ -2357,48 +2394,12 @@ package body Landin.Stages.Checking is
          --  subtree carries the refusal.  A runtime literal (D23/D29)
          --  accepts every well-typed expression and does not run this walk.
          if Static_Image then
-            declare
-               procedure Refuse_Excluded_Subtree (Where : Syn.Node_Id);
-
-               procedure Refuse_Excluded_Subtree (Where : Syn.Node_Id) is
-                  What : constant String :=
-                    (case Syn.Kind (Of_Tree, Where) is
-                        when Syn.Member_Selection => "a field selection",
-                        when Syn.Element_Index    => "an array index",
-                        when Syn.Array_Literal    =>
-                          "a nested array literal",
-                        when others               => "");
-               begin
-                  if What /= "" then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Where),
-                        Message => What & " is not enabled as a module"
-                                   & " array literal element",
-                        Refused => Bad.Array_Value,
-                        Into    => Found);
-                     Landin.Checking.Refuse
-                       (Types.all, Of_Tree, Where);
-                     --  Stop walking a subtree that has been refused,
-                     --  so the same field selection does not earn one
-                     --  report per operator above it.
-                     return;
-                  end if;
-
-                  for Slot in 1 .. Syn.Slot_Count (Of_Tree, Where) loop
-                     Refuse_Excluded_Subtree
-                       (Syn.Slot (Of_Tree, Where, Slot));
-                  end loop;
-               end Refuse_Excluded_Subtree;
-            begin
-               for Position in
-                 1 .. Syn.Element_Count (Of_Tree, Literal)
-               loop
-                  Refuse_Excluded_Subtree
-                    (Syn.Nth_Element (Of_Tree, Literal, Position));
-               end loop;
-            end;
+            for Position in 1 .. Syn.Element_Count (Of_Tree, Literal) loop
+               Refuse_Static_Image_Subtree
+                 (Of_Tree,
+                  Syn.Nth_Element (Of_Tree, Literal, Position),
+                  "a module array literal element");
+            end loop;
          end if;
       end Check_Array_Literal;
 
@@ -2408,9 +2409,10 @@ package body Landin.Stages.Checking is
       --  `of zeroed` covers every field not named explicitly, including an
       --  array field through D49's whole-field zero image.
       procedure Check_Struct_Literal
-        (Of_Tree : Syn.Tree;
-         Literal : Syn.Node_Id;
-         Wrote   : Res.Declaration_Id)
+        (Of_Tree      : Syn.Tree;
+         Literal      : Syn.Node_Id;
+         Wrote        : Res.Declaration_Id;
+         Static_Image : Boolean)
       is
          Count : constant Natural :=
            (if Landin.Checking.Has_Layout (Types.all, Wrote)
@@ -2419,6 +2421,24 @@ package body Landin.Stages.Checking is
          type Node_List is array (Natural range <>) of Syn.Node_Id;
          First : Node_List (1 .. Count) := [others => Syn.No_Node];
          Failed : Boolean := False;
+
+         function Subtree_Was_Refused (Node : Syn.Node_Id) return Boolean;
+
+         function Subtree_Was_Refused (Node : Syn.Node_Id) return Boolean is
+         begin
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                 = Ty.Ill_Typed
+            then
+               return True;
+            end if;
+
+            for Slot in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+               if Subtree_Was_Refused (Syn.Slot (Of_Tree, Node, Slot)) then
+                  return True;
+               end if;
+            end loop;
+            return False;
+         end Subtree_Was_Refused;
 
          procedure Check_Array_Field
            (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive);
@@ -2436,6 +2456,22 @@ package body Landin.Stages.Checking is
             --  D65 makes the label the same contextual destination as the
             --  selected field in D49--D53.  Each established array spelling
             --  keeps its own shape check and diagnostic owner.
+            if Static_Image then
+               --  D66's first nonzero aggregate carrier holds scalar folds;
+               --  a trailing `of zeroed` may still cover an array field.
+               --  D67 owns labelled literal/repetition/copy array images.
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Value),
+                  Message => "a named array field is not enabled in a"
+                             & " module struct image yet",
+                  Refused => Bad.Array_Value,
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+               return;
+            end if;
+
             case Syn.Kind (Of_Tree, Value) is
                when Syn.Array_Literal =>
                   Check_Array_Literal
@@ -2504,9 +2540,17 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
-         Landin.Checking.Note
-           (Types.all, Of_Tree, Literal, Ty.Aggregate);
-         Landin.Checking.Note_Body (Types.all, Of_Tree, Literal, Wrote);
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
+              = Ty.Ill_Typed
+         then
+            return;
+         elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
+                 = Ty.Undecided
+         then
+            Landin.Checking.Note
+              (Types.all, Of_Tree, Literal, Ty.Aggregate);
+            Landin.Checking.Note_Body (Types.all, Of_Tree, Literal, Wrote);
+         end if;
 
          for Position in 1 .. Syn.Field_Value_Count (Of_Tree, Literal) loop
             declare
@@ -2565,6 +2609,34 @@ package body Landin.Stages.Checking is
                                 (Of_Tree, Value, Held,
                                  Syn.Origin (Of_Tree, Field),
                                  "the struct field named here");
+                           end if;
+
+                           if Static_Image
+                             and then Landin.Checking.Type_Of
+                               (Types.all, Of_Tree, Value) /= Ty.Ill_Typed
+                           then
+                              Refuse_Static_Image_Subtree
+                                (Of_Tree, Value,
+                                 "a module struct literal field");
+
+                              if Subtree_Was_Refused (Value) then
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Value);
+                              elsif not Is_Known (Of_Tree, Value) then
+                                 Bad.Report
+                                   (Item    =>
+                                      Bad.Not_Known_At_Compile_Time,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "this struct field value has"
+                                               & " to be known when the"
+                                               & " module image is formed",
+                                    Note    => "[1940]: nothing runs before"
+                                               & " the entry point [1460]",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Value);
+                              end if;
                            end if;
                         end;
 
@@ -2935,7 +3007,9 @@ package body Landin.Stages.Checking is
                            Check_Struct_Literal
                              (Of_Tree, Value,
                               Landin.Checking.Body_Of
-                                (Types.all, Of_Tree, Written));
+                                (Types.all, Of_Tree, Written),
+                              Static_Image =>
+                                not Is_Local_Binding (Of_Tree, Node));
                         elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
                         then
                            --  D57: the written nominal type is the literal's
@@ -3165,7 +3239,8 @@ package body Landin.Stages.Checking is
                         Check_Struct_Literal
                           (Of_Tree, Value,
                            Landin.Checking.Body_Of
-                             (Types.all, Of_Tree, Place));
+                             (Types.all, Of_Tree, Place),
+                           Static_Image => False);
                      elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
                         --  D58: a direct mutable struct place supplies both
                         --  [0540]'s aggregate context and [0710]'s body.  The
@@ -3469,7 +3544,7 @@ package body Landin.Stages.Checking is
          Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree, Node);
          Written : constant Syn.Node_Id :=
            Syn.Declared_Type (Of_Tree, Node);
-         Binding_Array : constant Boolean :=
+         Contextual_Image : constant Boolean :=
            (Written /= Syn.No_Node
             and then Type_At (Of_Tree, Written) = Ty.Fixed_Array)
            or else
@@ -3479,6 +3554,14 @@ package body Landin.Stages.Checking is
                           | Syn.Mixed_Array_Repetition
               and then Landin.Checking.Type_Of
                          (Types.all, Of_Tree, Value) = Ty.Fixed_Array);
+         --  D66 checks each scalar field inside a contextual module struct
+         --  literal at the literal boundary.  Do not send its labelled run
+         --  through the generic subtree refusal a second time.
+         Module_Struct_Literal : constant Boolean :=
+           Written /= Syn.No_Node
+           and then Value /= Syn.No_Node
+           and then Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
+           and then Type_At (Of_Tree, Written) = Ty.Aggregate;
 
          procedure Refuse_Unreadable_Subtree (Where : Syn.Node_Id);
 
@@ -3542,8 +3625,18 @@ package body Landin.Stages.Checking is
          --  Scalar module values still follow [1940]: selecting storage is not
          --  a compile-time scalar image, even beneath an otherwise foldable
          --  operator.
-         if Value /= Syn.No_Node and then not Binding_Array then
+         if Value /= Syn.No_Node
+           and then not Contextual_Image
+           and then not Module_Struct_Literal
+         then
             Refuse_Unreadable_Subtree (Value);
+         end if;
+
+         --  D66's contextual literal walk owns per-field static exclusions
+         --  and unknown-value reports.  It runs in Check_Statement just
+         --  after this generic module boundary.
+         if Module_Struct_Literal then
+            return;
          end if;
 
          if Value = Syn.No_Node or else Is_Known (Of_Tree, Value) then
@@ -3938,7 +4031,8 @@ package body Landin.Stages.Checking is
          end if;
 
          if Syn.Kind (Of_Tree.all, Value)
-              in Syn.Array_Literal | Syn.Zeroed_Literal
+              in Syn.Array_Literal | Syn.Struct_Literal
+                 | Syn.Zeroed_Literal
          then
             Image_States (Id) := Valid;
             return True;
@@ -4671,10 +4765,10 @@ package body Landin.Stages.Checking is
          Known      : Boolean;
          Overflowed : Boolean;
 
-         procedure Check_Array_Element
+         procedure Check_Image_Scalar
            (Each : Syn.Node_Id; Element : Ty.Scalar_Name);
 
-         procedure Check_Array_Element
+         procedure Check_Image_Scalar
            (Each : Syn.Node_Id; Element : Ty.Scalar_Name)
          is
             Element_Held      : Ty.Folded;
@@ -4702,7 +4796,7 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Literal_Out_Of_Range,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Each),
-                     Message => "this element's fold overflows the widest"
+                     Message => "this image value's fold overflows the widest"
                                 & " value the compiler holds",
                      Note    => "[1940]: a module value has no moment in"
                                 & " which to trap, so a fold whose result"
@@ -4717,17 +4811,16 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Literal_Out_Of_Range,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Each),
-                     Message => "this element works out to "
+                     Message => "this image value works out to "
                                 & Written (Element_Held) & ", and no "
                                 & Shown (Element) & " holds it",
-                     Note    => "D24/D34/D35: every module array element"
-                                & " pattern has to fit the array's element"
-                                & " type",
+                     Note    => "D24/D34/D35/D66: every module image value"
+                                & " has to fit its contextual scalar type",
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Each);
                end if;
             end if;
-         end Check_Array_Element;
+         end Check_Image_Scalar;
       begin
          if Value = Syn.No_Node then
             return;
@@ -4758,24 +4851,69 @@ package body Landin.Stages.Checking is
             begin
                if Element in Ty.Integer_Name then
                   if Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition then
-                     Check_Array_Element
+                     Check_Image_Scalar
                        (Syn.Repeated_Element (Of_Tree, Value), Element);
                   else
                      for Position in
                        1 .. Syn.Element_Count (Of_Tree, Value)
                      loop
-                        Check_Array_Element
+                        Check_Image_Scalar
                           (Syn.Nth_Element (Of_Tree, Value, Position),
                            Element);
                      end loop;
                      if Syn.Kind (Of_Tree, Value)
                           = Syn.Mixed_Array_Repetition
                      then
-                        Check_Array_Element
+                        Check_Image_Scalar
                           (Syn.Repeated_Element (Of_Tree, Value), Element);
                      end if;
                   end if;
                end if;
+            end;
+            return;
+         end if;
+
+         --  D66 folds each written scalar field independently in the
+         --  labelled literal's nominal context.  Labels map to layout order
+         --  through Note_Field/Field_Index; array fields are either supplied
+         --  by the trailing zero fill or have already been refused.
+         if Wanted = Ty.Aggregate
+           and then Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
+           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+                    = Ty.Aggregate
+         then
+            declare
+               Wrote : constant Res.Declaration_Id :=
+                 Landin.Checking.Body_Of (Types.all, Of_Tree, Value);
+            begin
+               for Position in
+                 1 .. Syn.Field_Value_Count (Of_Tree, Value)
+               loop
+                  declare
+                     Field : constant Syn.Node_Id :=
+                       Syn.Nth_Field_Value (Of_Tree, Value, Position);
+                     Which : constant Positive :=
+                       Landin.Checking.Field_Index
+                         (Types.all, Of_Tree, Field);
+                     Image_Value : constant Syn.Node_Id :=
+                       Syn.Value_Of (Of_Tree, Field);
+                  begin
+                     if Landin.Checking.Field_Kind_Of
+                          (Types.all, Wrote, Which)
+                          = Landin.Checking.Scalar_Field
+                     then
+                        declare
+                           Element : constant Ty.Scalar_Name :=
+                             Landin.Checking.Field_Type
+                               (Types.all, Wrote, Which);
+                        begin
+                           if Element in Ty.Integer_Name then
+                              Check_Image_Scalar (Image_Value, Element);
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end loop;
             end;
             return;
          end if;
