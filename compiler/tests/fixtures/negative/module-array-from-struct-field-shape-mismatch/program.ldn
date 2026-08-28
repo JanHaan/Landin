@@ -1,0 +1,7 @@
+holder: type = struct
+    row: [2]u16
+end holder
+
+state: holder
+wrong_length: [1]u16 = state.row
+wrong_element: [2]u8 = state.row
