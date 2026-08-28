@@ -35,11 +35,8 @@ oauth: pages.sr.ht/PAGES:RW
 #  receives it, which is one more reason a mailed patch never publishes.
 #  It is not a `sources:` entry because those are cloned before any task
 #  runs, and a build without the key would fail there, in the gate.
-#
-#  TODO(jan): replace with the UUID of the builds.sr.ht ssh_key secret
-#  that holds a read-only deploy key for git.sr.ht/~sinnfrei/landin-fonts.
 secrets:
-  - 00000000-0000-0000-0000-000000000000
+  - 4b576d45-04c6-4a8e-a79b-a9f2f852d8e7
 
 environment:
   LANDIN_TOOLCHAINS: /home/build/toolchains
