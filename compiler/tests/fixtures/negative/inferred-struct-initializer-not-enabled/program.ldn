@@ -1,6 +1,0 @@
-point: type = struct
-    x: u32
-end point
-
-state: point
-module := state

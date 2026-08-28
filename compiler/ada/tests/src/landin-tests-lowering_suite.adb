@@ -932,9 +932,10 @@ package body Landin.Tests.Lowering_Suite is
    ------------------------------------------------------------------
 
    --  [0670]'s state carries each field's compact target-neutral shape and
-   --  no value at all: D10, D59's explicit spelling and D60's direct-name
-   --  image chain share the same zero image, and where each field sits needs
-   --  a target this stage lacks.  Every declaration remains a distinct datum.
+   --  no value at all: D10, D59's explicit spelling and D60/D61's typed and
+   --  inferred direct-name image chains share the same zero image, and where
+   --  each field sits needs a target this stage lacks.  Every declaration
+   --  remains a distinct datum.
    procedure A_Struct_State_Carries_Its_Fields
      (Item : in out Landin.Testing.Context);
 
@@ -953,7 +954,8 @@ package body Landin.Tests.Lowering_Suite is
          & "    ready: bool" & LF
          & "end counters" & LF
          & "mut state: counters = zeroed" & LF
-         & "copy: counters = state" & LF,
+         & "copy: counters = state" & LF
+         & "mut inferred := copy" & LF,
          Ran);
 
       Landin.Testing.Check
@@ -963,10 +965,10 @@ package body Landin.Tests.Lowering_Suite is
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
       begin
          Landin.Testing.Check_Equal
-           (Item, IR.Item_Count (Unit), 2,
-            "the two bindings own distinct datums");
+           (Item, IR.Item_Count (Unit), 3,
+            "the three bindings own distinct datums");
 
-         for Datum in IR.Item_Id'(1) .. IR.Item_Id'(2) loop
+         for Datum in IR.Item_Id'(1) .. IR.Item_Id'(3) loop
             Landin.Testing.Check
               (Item, IR.Kind_Of (Unit, Datum) = IR.Datum,
                "each module binding is a datum");
@@ -1000,7 +1002,7 @@ package body Landin.Tests.Lowering_Suite is
                "static struct images record no runtime-producing value");
          end loop;
 
-         Check_Terminators (Item, Unit, "two struct states");
+         Check_Terminators (Item, Unit, "three struct states");
       end;
    end A_Struct_State_Carries_Its_Fields;
 
