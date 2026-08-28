@@ -252,6 +252,36 @@ package body Landin.Stages.Resolution is
                         end;
                      end if;
 
+                  when Syn.Match_Statement =>
+                     --  D77: the subject is read in the surrounding scope.
+                     --  Each arm is a sibling scope, ready for D78's
+                     --  payload bindings without making one arm's locals
+                     --  visible in another.
+                     Resolve
+                       (Of_Tree, Syn.Match_Subject (Of_Tree, Item), Inside);
+
+                     for Arm in 1 .. Syn.Match_Arm_Count (Of_Tree, Item)
+                     loop
+                        declare
+                           This : constant Syn.Node_Id :=
+                             Syn.Nth_Match_Arm (Of_Tree, Item, Arm);
+                           Runs : constant Syn.Node_Id :=
+                             Syn.Body_Of (Of_Tree, This);
+                           Arm_Scope : constant
+                             Landin.Resolution.Scope_Id :=
+                               Landin.Resolution.Open_Scope
+                                 (Meanings.all,
+                                  Landin.Resolution.Block, Inside);
+                        begin
+                           Resolve
+                             (Of_Tree,
+                              Syn.Match_Pattern (Of_Tree, This), Inside);
+                           Landin.Resolution.Record_Scope
+                             (Meanings.all, Of_Tree, Runs, Arm_Scope);
+                           Walk_Block (Of_Tree, Runs, Arm_Scope);
+                        end;
+                     end loop;
+
                   when others =>
                      Resolve (Of_Tree, Item, Inside);
                end case;

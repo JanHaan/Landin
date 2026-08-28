@@ -207,10 +207,12 @@ package Landin.IR is
       Copy_Array,
       Clear_Array,
       Fill_Array,
-      --  D76 selects one source-order case of an unfolded variant field,
+      --  D77 reads the source-order tag of an unfolded variant field.
+      --  D76 selects one source-order case of one,
       --  then writes any labelled scalar leaves of that case.  Both carry
       --  source identities only: the backend derives the tag and payload
       --  offsets from the aggregate's target-neutral shape.
+      Load_Variant_Tag,
       Select_Variant,
       Store_Variant_Field,
       --  [0370]'s measurements.  The type they ask about is carried, not
@@ -1206,7 +1208,8 @@ package Landin.IR is
    function Source_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Copy_Array | Load_Variant_Tag;
 
    --  D50's containing aggregate field for the source of an array copy.
    --  Zero means the source storage is itself a fixed array; a positive
@@ -1268,6 +1271,7 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Element | Store_Element
                              | Copy_Array | Clear_Array | Fill_Array
+                             | Load_Variant_Tag
                              | Select_Variant | Store_Variant_Field;
 
    --  Which array a slot-reaching element operation names.  Only
@@ -1734,6 +1738,17 @@ package Landin.IR is
       Site       : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
+
+   function Emit_Variant_Tag_Load
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Source : Storage;
+      Field  : Positive;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+     with Pre => Is_Emitting (Into, Item)
+                 and then Landin.Provenance.Is_Known (Site),
+          Post => Holds (Into, Item, Emit_Variant_Tag_Load'Result);
 
    procedure Emit_Variant_Field_Store
      (Into         : in out Unit;

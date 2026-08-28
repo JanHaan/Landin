@@ -498,6 +498,49 @@ package body Landin.Tests.Parser_Suite is
          "L0010", "a following inline struct keeps its own refusal");
    end Variant_Parts_Are_Parsed;
 
+   procedure Match_Statements_Are_Parsed
+     (Item : in out Landin.Testing.Context);
+
+   procedure Match_Statements_Are_Parsed
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Program
+        (Text : String; Expected : String; Because : String);
+
+      procedure Check_Program
+        (Text : String; Expected : String; Because : String)
+      is
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse (Text, Codes, Total, Nodes, Held);
+         Landin.Testing.Check (Item, Held, Because & ": the tree is sound");
+         Landin.Testing.Check (Item, Nodes > 0, Because & ": a tree exists");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Codes), Expected,
+            Because & ": reports agree");
+      end Check_Program;
+   begin
+      Check_Program
+        ("f: (x: u8) -> none =" & ASCII.LF
+         & "  match x" & ASCII.LF
+         & "    leaf: _ = 1" & ASCII.LF
+         & "    pair: if true then _ = 2 end if" & ASCII.LF
+         & "  end match" & ASCII.LF
+         & "end f" & ASCII.LF,
+         "", "case arms each carry one statement");
+
+      Check_Program
+        ("f: (x: u8) -> none =" & ASCII.LF
+         & "  match x" & ASCII.LF
+         & "    pair(value): _ = value" & ASCII.LF
+         & "  end match" & ASCII.LF
+         & "end f" & ASCII.LF,
+         "L0010", "payload bindings retain D78's named refusal");
+   end Match_Statements_Are_Parsed;
+
    ------------------------------------------------------------------
    --  Recovery, on input nothing derives
    ------------------------------------------------------------------
@@ -758,6 +801,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "parses contextual variant parts",
          Variant_Parts_Are_Parsed'Access);
+      Landin.Testing.Register
+        (Into, "parser", "parses tag-only match statements",
+         Match_Statements_Are_Parsed'Access);
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
          Survives_Every_Truncation'Access);

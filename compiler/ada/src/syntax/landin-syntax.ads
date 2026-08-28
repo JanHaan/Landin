@@ -100,6 +100,7 @@ package Landin.Syntax is
       Discard,
       Return_Statement,
       If_Statement,
+      Match_Statement,
       --  A call is a statement as well as an expression [1810].
       Call,
       --  Expressions [1820].
@@ -200,6 +201,7 @@ package Landin.Syntax is
       Parameter,
       Named_Return,
       If_Arm,
+      Match_Arm,
       Block);
 
    --  The bands overlap where the grammar reuses a rule in two places, and
@@ -452,7 +454,7 @@ package Landin.Syntax is
    function Body_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id)
-                           in Function_Declaration | If_Arm,
+                           in Function_Declaration | If_Arm | Match_Arm,
           Post => Contains (Of_Tree, Body_Of'Result);
 
    --  `returns` [1800].  No_Node is `-> none`, and a function with no
@@ -488,6 +490,28 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = If_Statement
                   and then Index <= Arm_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Arm'Result);
+
+   function Match_Subject (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Match_Statement,
+          Post => Contains (Of_Tree, Match_Subject'Result);
+
+   function Match_Arm_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Match_Statement,
+          Post => Match_Arm_Count'Result >= 1;
+
+   function Nth_Match_Arm
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Match_Statement
+                  and then Index <= Match_Arm_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Match_Arm'Result);
+
+   function Match_Pattern (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Match_Arm,
+          Post => Contains (Of_Tree, Match_Pattern'Result);
 
    function Statement_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)

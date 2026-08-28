@@ -172,6 +172,8 @@ package body Landin.Stages.Checking is
          Value   : Syn.Node_Id;
          Wrote   : Res.Declaration_Id;
          Field   : Positive);
+      procedure Check_Match
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Mixed_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -3852,6 +3854,146 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Array_Repetition;
 
+      --  D77: matching is contextual to one directly selected variant
+      --  part.  Case identity comes from resolution, while declaration
+      --  order supplies the tag number shared with D76 and lowering.
+      procedure Check_Match
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind)
+      is
+         Subject : constant Syn.Node_Id := Syn.Match_Subject (Of_Tree, Node);
+      begin
+         if not Admit_Variant_Field (Of_Tree, Subject) then
+            declare
+               Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Subject);
+            begin
+               if Got /= Ty.Ill_Typed then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Subject),
+                     Message => "a match subject must directly select a"
+                                & " variant part",
+                     Refused => Bad.Variant_Value,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Subject);
+               end if;
+            end;
+            return;
+         end if;
+
+         declare
+            From : constant Syn.Node_Id :=
+              Syn.Target_Of (Of_Tree, Subject);
+            Wrote : constant Res.Declaration_Id :=
+              Landin.Checking.Body_Of (Types.all, Of_Tree, From);
+            Field : constant Positive := Positive
+              (Landin.Checking.Field_Index (Types.all, Of_Tree, Subject));
+            Body_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Wrote));
+            Body_Node : constant Syn.Node_Id :=
+              Syn.Declared_Type
+                (Body_Tree.all, Res.Node_Of (Meanings.all, Wrote));
+            Part : constant Syn.Node_Id :=
+              Syn.Nth_Field (Body_Tree.all, Body_Node, Field);
+            Count : constant Positive := Syn.Case_Count
+              (Body_Tree.all, Part);
+            type Node_List is array (Positive range <>) of Syn.Node_Id;
+            First : Node_List (1 .. Count) := [others => Syn.No_Node];
+         begin
+            for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+               declare
+                  Arm : constant Syn.Node_Id :=
+                    Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+                  Pattern : constant Syn.Node_Id :=
+                    Syn.Match_Pattern (Of_Tree, Arm);
+                  Means : Res.Declaration_Id := Res.No_Declaration;
+                  Which : Natural := 0;
+               begin
+                  if Res.Verdict_Of (Meanings.all, Of_Tree, Pattern)
+                       = Res.Bound
+                  then
+                     Means := Res.Bound_To (Meanings.all, Of_Tree, Pattern);
+                  end if;
+
+                  if Means /= Res.No_Declaration
+                    and then Res.Sort_Of (Meanings.all, Means) = Res.Case_Name
+                  then
+                     for Candidate in 1 .. Count loop
+                        if Res.Source_Of (Meanings.all, Means)
+                             = Syn.Source_Of (Body_Tree.all)
+                          and then Res.Node_Of (Meanings.all, Means)
+                             = Syn.Nth_Case
+                                 (Body_Tree.all, Part, Candidate)
+                        then
+                           Which := Candidate;
+                           exit;
+                        end if;
+                     end loop;
+                  end if;
+
+                  if Which = 0 then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Pattern),
+                        Message => "this case does not belong to the"
+                                   & " variant part matched here",
+                        Note    => "D77: every arm names one case of the"
+                                   & " selected variant part",
+                        Related => Syn.Origin (Of_Tree, Subject),
+                        Because => "the matched variant part",
+                        Into    => Found);
+                     Landin.Checking.Refuse
+                       (Types.all, Of_Tree, Pattern);
+                  elsif First (Which) /= Syn.No_Node then
+                     Bad.Report
+                       (Item    => Bad.Variant_Case_Named_Twice,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Pattern),
+                        Message => "this variant case is matched twice",
+                        Note    => "D77: an exhaustive match names each"
+                                   & " case exactly once",
+                        Related => Syn.Origin (Of_Tree, First (Which)),
+                        Because => "first matched here",
+                        Into    => Found);
+                     Landin.Checking.Refuse
+                       (Types.all, Of_Tree, Pattern);
+                  else
+                     First (Which) := Pattern;
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Pattern, Ty.Not_Typed);
+                     Landin.Checking.Note_Field
+                       (Types.all, Of_Tree, Pattern, Which);
+                  end if;
+
+                  Check_Block
+                    (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns);
+               end;
+            end loop;
+
+            for Which in First'Range loop
+               if First (Which) = Syn.No_Node then
+                  declare
+                     Missing : constant Syn.Node_Id :=
+                       Syn.Nth_Case (Body_Tree.all, Part, Which);
+                  begin
+                     Bad.Report
+                       (Item    => Bad.Variant_Case_Not_Matched,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Subject),
+                        Message => "this match has no arm for `"
+                                   & Spelled
+                                       (Syn.Name (Body_Tree.all, Missing))
+                                   & "`",
+                        Note    => "D77: matching a variant part is"
+                                   & " exhaustive",
+                        Into    => Found);
+                  end;
+               end if;
+            end loop;
+         end;
+      end Check_Match;
+
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind) is
       begin
@@ -4503,6 +4645,9 @@ package body Landin.Stages.Checking is
                   Check_Block
                     (Of_Tree, Syn.Else_Body (Of_Tree, Node), Returns);
                end if;
+
+            when Syn.Match_Statement =>
+               Check_Match (Of_Tree, Node, Returns);
 
             when Syn.Call =>
                --  [1920]: a call standing alone is a statement, and one
@@ -7241,11 +7386,12 @@ package body Landin.Stages.Checking is
                                 Landin.Checking.Body_Of (Types.all, Id),
                                 Which) = Landin.Checking.Variant_Field
                            then
-                              --  D76 establishes the selected case, but D77
-                              --  owns the fact required to read that tag or
-                              --  payload.  Do not misrecord the part as a
-                              --  scalar D16 field in the meantime.
-                              null;
+                              --  D77 reads the selected tag as one whole
+                              --  variant-part fact.  D78 will refine payload
+                              --  facts without changing this established-case
+                              --  bit.
+                              State.Fields
+                                (Positive (Id), Which) := True;
                            else
                               State.Fields (Positive (Id), Which) := True;
                            end if;
@@ -7299,7 +7445,8 @@ package body Landin.Stages.Checking is
                                     Array_Sets.Include
                                       (State.Whole_Arrays, (Id, Each));
                                  when Landin.Checking.Variant_Field =>
-                                    null;
+                                    State.Fields
+                                      (Positive (Id), Each) := True;
                               end case;
                            end if;
                         end loop;
@@ -7460,6 +7607,44 @@ package body Landin.Stages.Checking is
                            State := Merged;
                         end if;
 
+                        Exits := All_Exit;
+                     end;
+
+                  when Syn.Match_Statement =>
+                     declare
+                        Merged   : Assigned_Set := Nothing_Assigned;
+                        Any_Path : Boolean := False;
+                        All_Exit : Boolean := True;
+                     begin
+                        --  The tag is one incoming-state read.  Exhaustive
+                        --  checking means every runtime path then enters
+                        --  exactly one sibling arm.
+                        Read_Names
+                          (Of_Tree, Syn.Match_Subject (Of_Tree, Item), State);
+
+                        for Arm in
+                          1 .. Syn.Match_Arm_Count (Of_Tree, Item)
+                        loop
+                           declare
+                              This : constant Syn.Node_Id :=
+                                Syn.Nth_Match_Arm (Of_Tree, Item, Arm);
+                              Branch : Assigned_Set := State;
+                              Left   : Boolean;
+                           begin
+                              Flow_Block
+                                (Of_Tree, Syn.Body_Of (Of_Tree, This),
+                                 Result, Owner, Branch, Left);
+                              if not Left then
+                                 Merge (Merged, not Any_Path, Branch);
+                                 Any_Path := True;
+                                 All_Exit := False;
+                              end if;
+                           end;
+                        end loop;
+
+                        if Any_Path then
+                           State := Merged;
+                        end if;
                         Exits := All_Exit;
                      end;
 

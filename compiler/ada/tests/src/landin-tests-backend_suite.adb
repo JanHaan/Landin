@@ -3241,6 +3241,16 @@ package body Landin.Tests.Backend_Suite is
         & "    variant_state = zeroed" & LF
         & "    variant_state.kind = wide_payload(word: 7, byte: 9)" & LF
         & "    local.kind = array_payload(row: zeroed)" & LF
+        & "    match variant_state.kind" & LF
+        & "        no_payload: _ = 1" & LF
+        & "        wide_payload: _ = 2" & LF
+        & "        array_payload: _ = 3" & LF
+        & "    end match" & LF
+        & "    match local.kind" & LF
+        & "        no_payload: _ = 1" & LF
+        & "        wide_payload: _ = 2" & LF
+        & "        array_payload: _ = 3" & LF
+        & "    end match" & LF
         & "end clear_variant" & LF;
 
       Native : Landin.Stages.Compilation :=
@@ -3347,6 +3357,11 @@ package body Landin.Tests.Backend_Suite is
               and then Contains (Thin, HT & "movb $1, (%rcx)" & LF)
               and then Contains (Thin, HT & "movb $2, (%rcx)" & LF),
             "case selection clears one part and writes its zero-based tag");
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Wide, HT & "movb (%rcx), %al") = 2
+              and then Occurrences (Thin, HT & "movb (%rcx), %al") = 2,
+            "tag-only matches load the target-described u8 tag once");
          Landin.Testing.Check
            (Item,
             Contains (Wide, HT & "movabsq $8, %rdx" & LF)

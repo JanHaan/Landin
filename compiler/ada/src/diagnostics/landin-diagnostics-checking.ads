@@ -60,7 +60,9 @@ package Landin.Diagnostics.Checking is
       Cyclic_Type_Alias,
       Unresolved_Field,
       Field_Named_Twice,
-      Field_Not_Given);
+      Field_Not_Given,
+      Variant_Case_Named_Twice,
+      Variant_Case_Not_Matched);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -86,7 +88,11 @@ package Landin.Diagnostics.Checking is
             when Field_Named_Twice    =>
                Catalogue.Field_Named_Twice,
             when Field_Not_Given      =>
-               Catalogue.Field_Not_Given);
+               Catalogue.Field_Not_Given,
+            when Variant_Case_Named_Twice =>
+               Catalogue.Variant_Case_Named_Twice,
+            when Variant_Case_Not_Matched =>
+               Catalogue.Variant_Case_Not_Matched);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

@@ -813,6 +813,22 @@ package body Landin.Backend.X86_64 is
                      Emit ("rep stosb");
                   end;
 
+               when Landin.IR.Load_Variant_Tag =>
+                  declare
+                     Source : constant Landin.IR.Storage :=
+                       Landin.IR.Source_Of (Of_Unit, Item, Value);
+                     Field : constant Positive := Positive
+                       (Landin.IR.Element_Field_Of
+                          (Of_Unit, Item, Value));
+                     Shape : constant Landin.IR.Field_Shape :=
+                       Stored_Field_Shape (Source, Field);
+                     Held : constant Held_Size :=
+                       Size_Of (Shape.Element, Facts);
+                  begin
+                     Storage_Address (Source, Field, "%rcx");
+                     Carry (Held, "(%rcx)", Value_Cell (Value));
+                  end;
+
                when Landin.IR.Select_Variant =>
                   declare
                      Destination : constant Landin.IR.Storage :=
@@ -1789,6 +1805,7 @@ package body Landin.Backend.X86_64 is
                         | Landin.IR.Load_Element | Landin.IR.Store_Element
                         | Landin.IR.Copy_Array | Landin.IR.Clear_Array
                         | Landin.IR.Fill_Array
+                        | Landin.IR.Load_Variant_Tag
                         | Landin.IR.Select_Variant
                         | Landin.IR.Store_Variant_Field
                         | Landin.IR.Jump | Landin.IR.Branch =>

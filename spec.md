@@ -255,6 +255,9 @@ returning none has nothing to bind and [1020] wants a result
 discarded on purpose rather than by omission. A call whose result
 is dropped that way is the one place the kernel accepts an
 expression standing alone.
+A match is D77's exhaustive tag selection. Its subject is one directly
+selected variant part and each case arm carries one statement; D78 extends
+the arm with payload bindings without changing this statement production.
 A place is [1820]'s indexed selection, so a binding, a field of a struct, or
 an enabled array element is written
 and stepped exactly as the binding holding it is. What may be
@@ -262,7 +265,7 @@ written is [1900]'s and not this rule's: a field is writable when
 the binding it belongs to is.
 ```landin-grammar
 statement   ::= binding | assignment | increment | discard | call
-              | return | if
+              | return | if | match
 assignment  ::= place "=" expression
 increment   ::= ("inc" | "dec") place
 discard     ::= "_" "=" expression
@@ -271,6 +274,8 @@ if          ::= "if" expression "then" statement*
                 ("elsif" expression "then" statement*)*
                 ("else" statement*)?
                 "end" "if"
+match       ::= "match" expression match_arm+ "end" "match"
+match_arm  ::= identifier ":" statement
 place       ::= indexed
 
 ```
@@ -4644,9 +4649,9 @@ literal or construction that would create storage or a value of a
 variant-bearing struct was one L0304 at this boundary. Parameters and returns
 retain R2.30's `Struct_ABI` owner; other sites use D74's `Variant_Value`
 refusal at [0680]. A case name used as a general value or construction callee
-has the same owner. D75 supplies storage and the zero image, and D76 then
+has the same owner. D75 supplies storage and the zero image, D76 then
 admits contextual case construction without creating a general variant
-value. Matching remains refused.
+value, and D77 reads its tag through an exhaustive match.
 
 **Why unfolded, tag-first layout now:** it gives both described targets one
 deterministic hexdump-compatible answer, preserves [0540]'s later opportunity
@@ -4695,13 +4700,13 @@ form fail rather than change what zero means.
 
 Common scalar and fixed-array fields retain their existing field rules. A
 whole successful zero write establishes D16's scalar and D48's whole-array
-facts for those common fields; the variant part has no separately readable
-definite-assignment fact because its tag and payload are not exposed yet. A
+facts for those common fields; D77 gives the established variant part one tag
+fact without exposing its payload yet. A
 selection of the part itself is one L0304 `Variant_Value` when read. D76
 admits the directly selected mutable part as one contextual case destination;
 whole copy, inferred variant-bearing construction, arguments, returns and
 every general aggregate value remain refused. Parameters and named returns
-retain R2.30's `Struct_ABI` owner. D77 owns matching and D78 payload bindings.
+retain R2.30's `Struct_ABI` owner. D77 owns tag matching and D78 payload bindings.
 
 The IR uses the same target-neutral `Variant_Field_Shape` for measurement,
 datum and aggregate-slot field runs. One unit-wide case-run and payload-shape
@@ -4773,8 +4778,8 @@ case's zero-based source-order tag, and thereby gives omitted and fixed-array
 payload fields their zero image. Labelled scalar expressions are then
 evaluated exactly once in written order and stored immediately, so a later
 expression observes every earlier program write. A refused destination reads
-none of them. D16 records no separately readable variant fact yet: D77's
-match is the first consumer of the tag and D78 owns payload bindings.
+none of them. D16 records the complete selected part as assigned; D77 is the
+first consumer of that tag and D78 owns payload bindings.
 
 The IR adds two destination-only operations. `Select_Variant` carries a
 storage identity, top-level field identity and one-based case identity;
@@ -4793,8 +4798,8 @@ or an ABI rule. A field-wise clear was declined because it would leave union
 padding outside the selected value's zero image; copying a whole
 variant-bearing struct would need a source tag and selected-payload rule;
 admitting array payload literals or repetitions would add D52/D53's write
-sequence inside the case and is a later extension. Matching and payload
-binding remain D77 and D78.
+sequence inside the case and is a later extension. D77 adds tag matching;
+payload binding remains D78.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-case-construction`;
@@ -4804,3 +4809,56 @@ binding remain D77 and D78.
 `negative/variant-case-construction-contexts-not-enabled`;
 `negative/variant-value-not-enabled`; the generated token and IR records; and
 `runtime/variant-case-construction-runs-in-source-order` on Linux x86-64.
+
+### D77 — A match exhaustively selects one variant case by its tag
+
+**The tour said** that [1210] distinguishes every case of a variant and that
+missing cases are compile errors. D74 fixed the source-order case identity,
+D75 supplied the unfolded tag, and D76 made that tag executable by selecting
+cases; none supplied a way to examine it.
+
+**Chosen:** `match place.field` directly selects a D74 variant part from a
+named module or local ordinary-struct binding. Each arm is `case: statement`;
+the case must belong to that exact part, every case is named exactly once, and
+source order of arms is otherwise free. A duplicate is L0311, a missing case
+is L0312, and a case from another part is D76's L0301 identity mismatch. This
+first boundary gives each arm exactly one statement, with an `if` usable as
+that statement when a nested run is needed. D78 adds [1220]'s parenthesized
+payload bindings. Wildcards, scalar or nested subjects, payload bindings and
+general variant values remain refused.
+
+The subject is read once before any arm. Definite assignment therefore asks
+for the selected part's established-case fact on entry; D75's whole zero image
+and D76's contextual case write establish it. Each exhaustive arm receives
+the same incoming state, and facts after the match are their intersection. An
+uninitialized local part is L0302, and a fact written by only some arms is not
+available after the match. Payload bytes are neither read nor bound here.
+
+Lowering emits one `Load_Variant_Tag`, carrying source storage, top-level
+field identity and the tag's scalar type but no target offset. The tag is
+saved in one scalar frame slot, then compared with each source-order tag
+except the final exhaustive arm; control flows through sibling arm blocks and
+one merge. The verifier proves the storage and variant field before comparing
+the result type with the shape's tag type, in explicit release-build code.
+The backend replays D74's field placement, loads the tag at its described
+width, and uses the existing scalar comparisons and branches. No payload
+offset is computed.
+
+**Why tag-only and exhaustive first:** it closes the first read of D76's
+runtime state without yet introducing a payload reference, origin, lifetime,
+or aggregate temporary. A wildcard was declined because [1210] already makes
+missing cases a compile error; implicit source-order fallthrough was declined
+because case identity is nominal; reloading the aggregate at each comparison
+was declined because [0410] gives the subject one evaluation.
+
+**Pinned by** the parser, IR, lowering, verifier and backend public seams;
+`positive/variant-match-exhaustive`;
+`negative/match-scalar-not-enabled`;
+`negative/variant-match-duplicate`;
+`negative/variant-match-not-exhaustive`;
+`negative/variant-match-case-does-not-belong`;
+`negative/variant-match-unassigned`;
+`negative/variant-match-not-on-every-path`;
+`negative/variant-match-payload-bindings-not-enabled`; the generated token,
+diagnostic and IR records; and `runtime/variant-match-selects-tag` on Linux
+x86-64.
