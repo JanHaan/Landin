@@ -4706,8 +4706,9 @@ fact, and D78 may expose the selected case's scalar payload through arm-local
 aliases. A
 selection of the part itself is one L0304 `Variant_Value` when read. D76
 admits the directly selected mutable part as one contextual case destination;
-whole copy, inferred variant-bearing construction, arguments, returns and
-every general aggregate value remain refused. Parameters and named returns
+D79 admits inferred local construction. Whole copy, inferred module
+construction, arguments, returns and every general aggregate value remain
+refused. Parameters and named returns
 retain R2.30's `Struct_ABI` owner. D77 owns tag matching and D78 scalar payload
 bindings.
 
@@ -4762,7 +4763,7 @@ a directly named mutable module or local struct in the same way. A directly
 selected variant part of such a mutable root may also be assigned either
 form. The case identity must belong to that exact part. A case from another
 part is L0301 at the value; an immutable root keeps L0303 first and alone.
-Module static struct images, inferred variant-bearing construction, whole
+Module static struct images, inferred module construction, whole
 variant-bearing copy and every general value position remain L0304
 `Variant_Value` boundaries.
 
@@ -4803,6 +4804,8 @@ variant-bearing struct would need a source tag and selected-payload rule;
 admitting array payload literals or repetitions would add D52/D53's write
 sequence inside the case and is a later extension. D77 adds tag matching;
 D78 adds scalar payload binding while retaining that fixed-array boundary.
+D79 also lets a call-shaped case construction infer a fresh local binding;
+module inference still waits for a nonzero static variant image.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-case-construction`;
@@ -4913,3 +4916,45 @@ and checking fixture paths; `positive/variant-match-payload-bindings`;
 `negative/variant-match-binding-outside-arm`; the generated token, diagnostic
 and IR records; and `runtime/variant-match-payload-bindings-update-storage` on
 Linux x86-64.
+
+### D79 — A case construction may infer its fresh local storage
+
+**The tour said** that [0050] infers a binding from its initializer and that
+[0700]'s construction names the nominal type being constructed. D72 applied
+that rule to ordinary structs, while D76 kept a variant-bearing construction
+contextual to a written destination even after local aggregate slots and case
+selection existed.
+
+**Chosen:** `name := T(..., part: case(...), ...)` is admitted inside a
+function when `T` is a D74 variant-bearing ordinary struct. The construction's
+type name supplies [0710]'s body before inference settles the binding, and the
+fresh aggregate frame slot is its contextual destination. D76 then applies
+unchanged: common and payload values are evaluated once in written order, the
+selected part is cleared, its tag is written, and scalar payload fields are
+stored directly. The inferred local is distinct storage and may immediately be
+selected or matched under D77/D78.
+
+An inferred module binding remains refused. Unlike a fresh local slot, it has
+no runtime destination: [1460] requires a static image, and D75 currently
+carries only the absent all-zero variant image. Typed module case images and
+their inferred form therefore remain one later representation decision.
+Arguments, returns and general aggregate values remain outside this contextual
+rule and retain their existing owners.
+
+No syntax, IR, verifier or backend operation changes. Lowering already
+allocates an aggregate slot from the inferred declaration's carried body and
+D76 already writes a struct literal into that slot. The checker removes only
+the local half of its inference refusal; the module half remains explicit.
+
+**Why local inference before static images:** the nominal constructor already
+answers which type is inferred, and a fresh slot makes evaluation executable
+without an aggregate temporary. Treating the same spelling as a module image
+would require a nonzero target-neutral variant image, while refusing both
+scopes merely because one lacks that representation would preserve an
+accidental asymmetry.
+
+**Pinned by** the lowering public seam;
+`positive/variant-case-construction`;
+`negative/variant-case-construction-contexts-not-enabled`; the generated token
+and IR records; and
+`runtime/variant-case-construction-runs-in-source-order` on Linux x86-64.

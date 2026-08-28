@@ -4980,19 +4980,20 @@ package body Landin.Stages.Checking is
             begin
                if Wrote = Res.No_Declaration then
                   Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
-               elsif Landin.Checking.Has_Layout (Types.all, Wrote)
+               elsif Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
+                 and then Landin.Checking.Has_Layout (Types.all, Wrote)
                  and then Landin.Checking.Has_Variant_Part
                    (Types.all, Wrote)
                then
-                  --  D76 remains contextual to a written destination.
-                  --  Inference would otherwise turn a case construction
-                  --  into the general variant value D75 deliberately left
-                  --  closed.
+                  --  D79 gives an inferred local construction its fresh
+                  --  aggregate slot as the contextual destination.  A
+                  --  module binding still needs a nonzero static variant
+                  --  image, which this representation does not carry yet.
                   Bad.Report
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree.all),
                      Where   => Syn.Where (Of_Tree.all, Value),
-                     Message => "an inferred binding cannot take a"
+                     Message => "an inferred module binding cannot take a"
                                 & " variant-bearing construction yet",
                      Refused => Bad.Variant_Value,
                      Into    => Found);

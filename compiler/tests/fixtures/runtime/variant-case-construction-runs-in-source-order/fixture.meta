@@ -1,5 +1,5 @@
 class: runtime
-summary: D76 evaluates labelled scalar payloads once in source order and selects cases in distinct storage
+summary: D76 evaluates payloads once and D79 executes an inferred local variant construction
 constructs: 0080, 0190, 0410, 0540, 0670, 0680, 0690, 0710, 0720, 0750, 1740, 1790, 1795, 1810, 1900
 program: main.ldn
 status: 42
