@@ -281,8 +281,15 @@ body{
   font-size:16.5px; line-height:1.62;
   font-feature-settings:"kern" 1,"liga" 1;
 }
+/*  The code face was customised with four features and no others:
+    calt, liga and dlig draw `->`, `<>` and `:=` as one shape each,
+    and zero slashes the digit so `0` and `O` cannot be read for each
+    other in a fixture.  Named here because the body's own settings
+    would otherwise decide for the code, and the body is set in a
+    different family with different features.  */
 code,pre,.mono,.tag,.cite{
   font-family:var(--mono);
+  font-feature-settings:"kern" 1,"calt" 1,"liga" 1,"dlig" 1,"zero" 1;
 }
 code{
   font-size:.88em; padding:.05rem .28rem; color:var(--ink);
@@ -593,12 +600,20 @@ CSS = (CSS.replace("{UI_STACK}", fonts.stack("ui"))
           .replace("{MONO_STACK}", fonts.stack("mono")))
 
 #  The faces themselves are files beside the pages, not data: urls: the
-#  eighty subsets come to 965 KiB, and a page that carried even the four
-#  an English reader needs would be 140 KiB heavier for glyphs the next
-#  page would carry again.  The declarations are inlined, so a page still
-#  knows what it wants to be set in; `font-display:swap` is what makes a
-#  page whose faces did not arrive readable rather than blank.
+#  thirty subsets come to a megabyte, and a page that carried even the
+#  four an English reader needs would be 140 KiB heavier for glyphs the
+#  next page would carry again.  The declarations are inlined, so a page
+#  still knows what it wants to be set in; `font-display:swap` is what
+#  makes a page whose faces did not arrive readable rather than blank.
+#
+#  A host without the licensed code face renders without it -- the pages
+#  fall to the stack behind the family -- and says so once, here, rather
+#  than failing: the build that must not go out that way is the publish,
+#  and scripts/site.sh is what refuses it.
 FONT_CSS = fonts.css()
+for _family in fonts.missing():
+    print("render_html: %s is not available on this host; the pages "
+          "fall back to the stack behind it" % _family, file=sys.stderr)
 
 JS = """
 (function(){
@@ -1610,11 +1625,11 @@ def write_resources(docs):
     (SITE / "apple-touch-icon.png").write_bytes(
         landin_icon.card(180, 180, share=0.62))
 
-    #  The faces.  Which of the eighty a reader fetches is the browser's
+    #  The faces.  Which of the thirty a reader fetches is the browser's
     #  decision, from the `unicode-range` of each: an English page asks
-    #  for four of them, and a page that gained a Greek word would ask
-    #  for a fifth without the build being changed.  That is the reason
-    #  the subsets are shipped whole rather than merged into one file.
+    #  for four of them, and a page that gained an arrow would ask for a
+    #  fifth without the build being changed.  That is the reason the
+    #  subsets are shipped whole rather than merged into one file.
     fonts_dir = SITE / fonts.OUT_DIR
     fonts_dir.mkdir(exist_ok=True)
     for name, source in fonts.files():

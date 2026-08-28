@@ -34,6 +34,13 @@ if [ "${1:-}" = "--publish" ]; then
         echo "landin: hut is not installed; see docs/site/README.md" >&2
         exit 127
     fi
+    #  A render without the licensed code face is a render, and a page
+    #  published without it is the site quietly set in a fallback.  The
+    #  checkout it comes from is private; see assets/fonts/README.md.
+    if ! python3 "$LANDIN_ROOT/assets/fonts.py" --require; then
+        echo "landin: not publishing without every face; see assets/fonts/README.md" >&2
+        exit 1
+    fi
     hut pages publish -d "$Domain" "$Tarball"
     echo "published: https://$Domain"
     if [ -n "$Alias" ]; then
