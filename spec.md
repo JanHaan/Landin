@@ -116,7 +116,8 @@ the all-bits-zero image of a directly supplied initializer, assignment or
 field-label context. D27--D30 establish fixed-array contexts, D39--D43 scalar
 contexts, D49 and D57--D59 whole array-field and ordinary-struct contexts,
 D62 the depth-one indexed field place, D64--D67 labelled struct fields and
-static images, and D75/D76 variant-bearing struct storage and case payloads. It remains refused
+static images, D75/D76 variant-bearing struct storage and case payloads, and
+D87 depth-one nested ordinary storage. It remains refused
 where no enabled construct supplies that context. Floats
 [0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
@@ -167,8 +168,9 @@ The full form, the inferred form and the mutable form are [0040],
 it is read [0080]. The kernel's types are the eleven scalar names, fixed arrays,
 and what [1795] declares from them: aliases, named ordinary structs and D74's
 named variant-bearing structs. Enabled runtime leaves are scalar or fixed
-array; D86 additionally composes one named ordinary struct field for
-measurement while retaining its value boundary. The other TYPES YOU DECLARE
+array; D86/D87 additionally compose one named ordinary struct field for
+measurement and zeroable storage while retaining its nonzero-value boundary.
+The other TYPES YOU DECLARE
 remain deferred. A type position holds a declared name either way, since
 [1760] makes the eleven ordinary declared names the kernel
 predeclares; the grammar spells them out because they are the
@@ -1155,10 +1157,11 @@ mean anything.
 answer, and is stated here so nobody reads the gap as a question. The array
 is structural and the element is whatever it is: two `[4]point` are one type
 exactly when the two `point`s are, which is [0710] doing its own work inside
-this rule and not an exception to it. No implementation carries it yet —
-this kernel lays out an array of a scalar and refuses any other element by
-name — so the rule is written and the fixture that pins it arrives with the
-element.
+this rule and not an exception to it. No implementation carries it yet: this
+kernel lays out an array of a scalar and refuses any other element by name.
+R2.30's aggregate-value work owns the element carrier, operations and fixture;
+R2.20's completed layout evidence does not pretend a scalar-only array shape
+represents it.
 
 **Pinned by** `positive/array-type-is-declared`,
 `positive/array-types-alias-and-agree`,
@@ -5293,12 +5296,10 @@ identity. This slice is deliberately depth one and excludes a child with a
 variant part or another aggregate field; a struct inside a variant payload
 keeps its existing L0304 boundary.
 
-This is layout and measurement only. Declaring, initializing, constructing,
-copying, clearing, selecting or otherwise forming storage or a value of the
-containing nested-struct type remains one L0304 (or R2.30's `Struct_ABI` for a
-parameter or return). An inferred construction is refused from its nominal
-body before lowering, so the measurement carrier cannot leak into a datum or
-frame slot.
+This is layout and measurement only in D86. D87 below admits declaration
+storage and the complete zero image; every nonzero value form stays separate.
+An inferred construction is refused from its nominal body before lowering, so
+the measurement carrier cannot leak into a datum or frame slot before D87.
 
 The checking table carries the child declaration identity, never its bytes.
 Aggregate measurement IR carries an `Aggregate_Field_Shape` whose child is a
@@ -5317,7 +5318,50 @@ reconstruct it; carrying a target byte extent would make the IR target-specific.
 
 **Pinned by** the checking, lowering and verifier public seams;
 `positive/measurement-of-nested-struct-field`;
-`negative/struct-with-a-struct-field`;
 `negative/nested-struct-construction-not-enabled`; the generated layout, token
 and IR records; and
 `runtime/nested-struct-measurements-answer-for-the-target` on Linux x86-64.
+
+### D87 — A depth-one nested ordinary struct has storage and a zero image
+
+**The tour said** that a binding may hold a named struct [0670], that every
+field remains in written order at its natural alignment [0750], and that
+`zeroed` supplies the complete all-bits-zero image of its contextual type
+[0540]. D86 had already proved the child and parent extents on both target
+descriptions, but deliberately kept that carrier out of runtime storage.
+
+**Chosen:** a module or local binding may hold D86's depth-one nested ordinary
+struct when the child itself has only scalar and fixed-array fields. An omitted
+binding has the ordinary zero state. An explicitly typed binding may be
+initialized with `zeroed`, and a directly named mutable binding may be assigned
+`zeroed`. Each operation clears the complete padded parent extent, including
+the child's internal and tail padding, as one whole-storage operation. Module
+and local cells are distinct.
+
+This slice does not make the child selection a value or place. `s.child`,
+`s.child.field`, nonzero labelled literals, construction, inference, whole
+copy, static nonzero images, deeper nesting and aggregate variant payloads stay
+L0304; parameters and returns retain R2.30's aggregate-ABI owner. Those are
+value-path decisions, not hidden consequences of allocating a cell.
+
+Runtime datum and slot shapes reuse D86's target-neutral
+`Aggregate_Field_Shape`: the parent points at one bounded child run of scalar
+and compact fixed-array leaves. The verifier proves that run before access and
+still rejects a child containing another aggregate or variant. The backend
+recursively replays the run against the selected target for datum reservation,
+frame placement and whole clears. Thus the same source clears 40 bytes on
+Linux x86-64 and 24 on the synthetic 32-bit description without carrying an
+offset, width or padding byte in the IR.
+
+**Why zero storage first:** the complete zero image needs no nested path and no
+aggregate temporary, while a selected field or nonzero copy does. Flattening
+the child into parent fields would lose D86's nominal provenance; storing its
+target extent would make the IR target-specific. R2.30's aggregate-value and
+ABI work owns the remaining nonzero/general-value boundary.
+
+**Pinned by** the lowering, verifier and backend public seams;
+`positive/nested-struct-zero-storage`;
+`negative/struct-with-a-struct-field`;
+`negative/nested-struct-construction-not-enabled`; the generated token and IR
+records; and `runtime/nested-struct-zero-storage-keeps-neighbours` on Linux
+x86-64.

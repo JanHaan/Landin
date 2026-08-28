@@ -305,8 +305,9 @@ package Landin.IR is
    --  One target-neutral aggregate field shape.  D44 needs the scalar form,
    --  D45 adds the compact fixed-scalar-array form for measurement, D46
    --  uses that input for module storage, D74 adds the unfolded variant,
-   --  and D86 adds a measurement-only nested aggregate field run.  Item and
-   --  measurement runs remain separate APIs and vectors.
+   --  D86 adds a nested aggregate field run for measurement, and D87 carries
+   --  that run into runtime storage.  Item and measurement runs remain
+   --  separate APIs and vectors.
    type Field_Shape_Kind is
      (Scalar_Field_Shape, Array_Field_Shape, Aggregate_Field_Shape,
       Variant_Field_Shape);
@@ -489,8 +490,10 @@ package Landin.IR is
                     (Into, Item, Field_Count (Into, Item)) = Shape;
 
    --  D75 carries a variant field's target-neutral case payloads beside
-   --  runtime storage as well as beside D74's measurements.  The top-level
-   --  shape names the supplied case run; neither contains target offsets.
+   --  runtime storage as well as beside D74's measurements.  D87 carries
+   --  D86's depth-one ordinary-struct run through the same vectors.  The
+   --  top-level shape names the supplied run; neither contains target
+   --  offsets.
    procedure Add_Field
      (Into    : in out Unit;
       Item    : Item_Id;
@@ -499,9 +502,14 @@ package Landin.IR is
       Payloads : Field_Shape_Array)
      with Pre  => Holds (Into, Item)
                   and then Result_Of (Into, Item) = Landin.Types.Aggregate
-                  and then Shape.Kind = Variant_Field_Shape
-                  and then Shape.Cases = Cases'Length
-                  and then Shape.Payloads_First = 1,
+                  and then Shape.Kind in
+                    Variant_Field_Shape | Aggregate_Field_Shape
+                  and then Shape.Payloads_First = 1
+                  and then
+                    (if Shape.Kind = Variant_Field_Shape
+                     then Shape.Cases = Cases'Length
+                     else Cases'Length = 0
+                       and then Shape.Cases = Payloads'Length),
           Post => Field_Count (Into, Item)
                     = Field_Count (Into, Item)'Old + 1;
 
@@ -1032,9 +1040,14 @@ package Landin.IR is
      with Pre  => Holds (Into, Item)
                   and then Holds (Into, Item, Slot)
                   and then Is_Aggregate (Into, Item, Slot)
-                  and then Shape.Kind = Variant_Field_Shape
-                  and then Shape.Cases = Cases'Length
-                  and then Shape.Payloads_First = 1,
+                  and then Shape.Kind in
+                    Variant_Field_Shape | Aggregate_Field_Shape
+                  and then Shape.Payloads_First = 1
+                  and then
+                    (if Shape.Kind = Variant_Field_Shape
+                     then Shape.Cases = Cases'Length
+                     else Cases'Length = 0
+                       and then Shape.Cases = Payloads'Length),
           Post => Slot_Field_Count (Into, Item, Slot)
                     = Slot_Field_Count (Into, Item, Slot)'Old + 1;
 

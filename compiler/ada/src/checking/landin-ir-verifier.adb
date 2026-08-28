@@ -424,7 +424,7 @@ package body Landin.IR.Verifier is
          return Nothing_Wrong;
       end Variant_Shape_Of;
 
-      --  D74 introduced this carrier for measurements; D75 uses the same
+      --  D86 introduced this carrier for measurements; D87 uses the same
       --  target-neutral shape for datum and slot storage.  Prove every run
       --  and leaf before any accessor reads it, in every build mode.
       function Field_Shape_Is_Malformed
@@ -711,7 +711,9 @@ package body Landin.IR.Verifier is
                      Shape : constant Field_Shape :=
                        Nth_Field_Shape (Of_Unit, Id, Field);
                   begin
-                     if Field_Shape_Is_Malformed (Shape) then
+                     if Field_Shape_Is_Malformed
+                          (Shape, Aggregate_Allowed => True)
+                     then
                         return (Kind => Field_Shape_Malformed,
                                 Item => Id, others => <>);
                      end if;
@@ -729,7 +731,9 @@ package body Landin.IR.Verifier is
                           Nth_Slot_Field_Shape
                             (Of_Unit, Id, Slot_Id (Slot), Field);
                      begin
-                        if Field_Shape_Is_Malformed (Shape) then
+                        if Field_Shape_Is_Malformed
+                             (Shape, Aggregate_Allowed => True)
+                        then
                            return (Kind => Field_Shape_Malformed,
                                    Item => Id, others => <>);
                         end if;

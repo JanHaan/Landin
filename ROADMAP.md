@@ -1749,7 +1749,7 @@ raise a compiler defect, which R2.20 turns into a diagnosis when a program
 can first cause one.
 
 ### R2.20 — Implement aggregates, variants and complete value layout
-Status: active
+Status: complete
 Depends on: R2.10
 
 [1795] and D15 are the first slice: a program may declare a type, and one
@@ -3307,10 +3307,12 @@ or whole-array use. General reads of the variant part remain refused.
 Parameters and returns retain R2.30's aggregate ABI owner.
 
 D86 additionally measures a named scalar/array-only ordinary struct as one
-field of another ordinary struct on both described target shapes. It does not
-yet allocate or form a value of that containing type: nested storage, field
-selection, zero images, copies, literals and construction remain refused, as
-do deeper nesting and aggregate variant payloads.
+field of another ordinary struct on both described target shapes. D87 carries
+that same neutral child run into distinct module and frame storage and admits
+the complete contextual zero image through omitted state, typed initialization
+and whole assignment. Nested selection, nonzero copies, literals, construction,
+deeper nesting and aggregate variant payloads remain R2.30 aggregate-value
+work rather than implicit consequences of allocating the cell.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3442,8 +3444,9 @@ D85 migrated fixed-array payload bindings into arm-local indexed `in`/`inout`
 aliases, while keeping bare and whole-array uses and general array values
 pinned.
 D86 migrated a depth-one named ordinary struct field into target-parametric
-layout and measurement, while keeping nested storage, selection, images,
-construction and every nested value form pinned for the following slices.
+layout and measurement. D87 migrated declaration storage and the complete zero
+image onto that carrier while keeping selection, nonzero images, copies,
+construction and every general nested value form pinned for R2.30.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the
@@ -3507,6 +3510,20 @@ R6.40.
 
 Sources: legacy A3, which had no tracked citation.
 
+Completion audit: D17--D45 and D86 measure scalar, fixed-array, ordinary and
+depth-one nested ordinary layouts against both target descriptions; D74 pins
+the unfolded tag-first variant layout and payload alignment. D24/D34/D38,
+D46--D72 and D75--D84 carry static and runtime images, contextual construction,
+copy and inspection through verified target-neutral IR, while D77/D78/D85
+execute tag and payload inspection on Linux x86-64. `layout.targets`, the
+lowering/verifier/backend public seams and the runtime corpus provide the
+reproducible evidence. Declaration identities and neutral field/case runs stay
+in the IR; no target offset or padding byte replaces their provenance. D87
+closes the final storage-only hole found by the audit. General aggregate values,
+aggregate parameters/returns, deeper recursive composition and aggregate array
+elements are explicitly R2.30 aggregate-value/ABI work rather than missing
+R2.20 layout evidence.
+
 Exit evidence: deterministic target-parametric layouts cover scalars, fixed
 arrays, ordinary structs and the unfolded default variant representation;
 executable cases cover tag width and position, payload alignment, images,
@@ -3515,12 +3532,17 @@ target-neutral lowering so R4.60 can emit debugger information without
 reconstructing it.
 
 ### R2.30 — Implement functions, control flow and declared errors
-Status: planned
+Status: active
 Depends on: R2.20, R1.70, R1.80
 
 Implement full function values, named returns, control-flow expressions,
 traps, declared atom-set errors, `fail`, `try`, call-site `else`, `defer` and
-`undo`, together with Linux x86-64 internal calling/lowering rules.
+`undo`, together with Linux x86-64 internal calling/lowering rules. Aggregate
+values include the nonzero nested-ordinary forms R2.20 deliberately left
+contextual: nested field selection, construction and copy, deeper recursive
+composition, aggregate variant payloads and D17's fixed arrays whose element
+is an aggregate. They reuse R2.20's neutral shape provenance rather than
+reopening its target layout.
 
 Exit evidence: ABI tests cover ordinary and failing calls, aggregate values,
 indirect calls and every control-flow exit path.

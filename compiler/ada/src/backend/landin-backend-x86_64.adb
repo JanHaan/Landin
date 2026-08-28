@@ -294,6 +294,7 @@ package body Landin.Backend.X86_64 is
          for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
             if Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field).Kind
                  in Landin.IR.Array_Field_Shape
+                    | Landin.IR.Aggregate_Field_Shape
                     | Landin.IR.Variant_Field_Shape
             then
                return True;

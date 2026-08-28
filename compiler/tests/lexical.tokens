@@ -4204,6 +4204,103 @@ file positive/named-return-zeroed-assignment/program.ldn tokens 44
   170 176 return
   177 180 end
   181 188 boolean
+file positive/nested-struct-zero-storage/program.ldn tokens 96
+  0 5 inner
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 29 byte
+  29 30 :
+  31 33 u8
+  38 42 word
+  42 43 :
+  44 49 usize
+  54 57 row
+  57 58 :
+  59 60 [
+  60 61 3
+  61 62 ]
+  62 65 u16
+  66 69 end
+  70 75 inner
+  77 82 outer
+  82 83 :
+  84 88 type
+  89 90 =
+  91 97 struct
+  102 108 prefix
+  108 109 :
+  110 113 u16
+  118 124 nested
+  124 125 :
+  126 131 inner
+  136 140 tail
+  140 141 :
+  142 144 u8
+  145 148 end
+  149 154 outer
+  156 159 mut
+  160 167 omitted
+  167 168 :
+  169 174 outer
+  175 178 mut
+  179 187 explicit
+  187 188 :
+  189 194 outer
+  195 196 =
+  197 203 zeroed
+  205 213 exercise
+  213 214 :
+  215 216 (
+  216 217 )
+  218 220 ->
+  221 225 none
+  226 227 =
+  232 235 mut
+  236 241 local
+  241 242 :
+  243 248 outer
+  253 256 mut
+  257 268 initialized
+  268 269 :
+  270 275 outer
+  276 277 =
+  278 284 zeroed
+  290 297 omitted
+  298 299 =
+  300 306 zeroed
+  311 319 explicit
+  320 321 =
+  322 328 zeroed
+  333 338 local
+  339 340 =
+  341 347 zeroed
+  352 363 initialized
+  364 365 =
+  366 372 zeroed
+  378 385 omitted
+  385 386 .
+  386 392 prefix
+  393 394 =
+  395 396 1
+  401 409 explicit
+  409 410 .
+  410 414 tail
+  415 416 =
+  417 418 2
+  423 428 local
+  428 429 .
+  429 435 prefix
+  436 437 =
+  438 439 3
+  444 455 initialized
+  455 456 .
+  456 460 tail
+  461 462 =
+  463 464 4
+  465 468 end
+  469 477 exercise
 file positive/no-final-line-end/program.ldn tokens 5
   0 1 a
   1 2 :
@@ -17756,7 +17853,7 @@ file negative/struct-value-not-enabled/program.ldn tokens 35
   229 230 =
   231 234 end
   235 236 g
-file negative/struct-with-a-struct-field/program.ldn tokens 45
+file negative/struct-with-a-struct-field/program.ldn tokens 41
   0 5 inner
   5 6 :
   7 11 type
@@ -17767,41 +17864,37 @@ file negative/struct-with-a-struct-field/program.ldn tokens 45
   28 31 u32
   32 35 end
   36 41 inner
-  245 250 outer
-  250 251 :
-  252 256 type
-  257 258 =
-  259 265 struct
-  270 274 part
-  274 275 :
-  276 281 inner
-  286 291 count
-  291 292 :
-  293 296 u32
-  297 300 end
-  301 306 outer
-  308 311 mut
-  312 316 here
-  316 317 :
-  318 323 outer
-  325 326 f
-  326 327 :
-  328 329 (
-  329 330 )
-  331 333 ->
-  334 335 (
-  335 336 r
-  336 337 :
-  338 341 u32
-  341 342 )
-  343 344 =
-  349 350 r
-  351 352 =
-  353 357 here
-  357 358 .
-  358 363 count
-  364 367 end
-  368 369 f
+  170 175 outer
+  175 176 :
+  177 181 type
+  182 183 =
+  184 190 struct
+  195 199 part
+  199 200 :
+  201 206 inner
+  211 216 count
+  216 217 :
+  218 221 u32
+  222 225 end
+  226 231 outer
+  233 236 mut
+  237 241 here
+  241 242 :
+  243 248 outer
+  250 251 f
+  251 252 :
+  253 254 (
+  254 255 )
+  256 258 ->
+  259 263 none
+  264 265 =
+  270 271 _
+  272 273 =
+  274 278 here
+  278 279 .
+  279 283 part
+  284 287 end
+  288 289 f
 file negative/struct-with-an-array-field/program.ldn tokens 32
   80 86 holder
   86 87 :

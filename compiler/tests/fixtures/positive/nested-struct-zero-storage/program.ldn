@@ -1,0 +1,29 @@
+inner: type = struct
+    byte: u8
+    word: usize
+    row: [3]u16
+end inner
+
+outer: type = struct
+    prefix: u16
+    nested: inner
+    tail: u8
+end outer
+
+mut omitted: outer
+mut explicit: outer = zeroed
+
+exercise: () -> none =
+    mut local: outer
+    mut initialized: outer = zeroed
+
+    omitted = zeroed
+    explicit = zeroed
+    local = zeroed
+    initialized = zeroed
+
+    omitted.prefix = 1
+    explicit.tail = 2
+    local.prefix = 3
+    initialized.tail = 4
+end exercise
