@@ -18,9 +18,12 @@ answer: () -> (result: i32) =
     global.nested = inner(value: 5, row: [1, 2])
     local.nested = global.nested
     global.nested = template
+    child_copy: inner = global.nested
+    row_copy: [2]i32 = local.nested.row
     result = local.nested.value + local.nested.row[0]
            + local.nested.row[1] + global.nested.value
            + global.nested.row[0] + global.nested.row[1]
+           + child_copy.value + row_copy[0]
 end answer
 
 public main: () -> (code: i32) =

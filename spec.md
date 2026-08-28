@@ -5477,7 +5477,8 @@ It accepts an exact array literal, a full or mixed repetition, `zeroed`, or a
 storage copy from another direct or depth-one fixed-array place with the same
 length and scalar element type. The source is admitted only in that copy
 context. A nested leaf is not thereby a general expression value, parameter,
-return, discard, standalone local initializer or operand; those remain L0304.
+return, discard or operand; those remain L0304. D92 separately admits an
+explicitly typed local initializer from the nested storage path.
 Root-binding mutability and [0410]'s source evaluation order are unchanged.
 
 A successful assignment records the whole nested-array fact. A copy source
@@ -5513,9 +5514,10 @@ D88--D90 then proved every scalar and fixed-array leaf path independently.
 accepts `zeroed`, a matching labelled literal or nominal construction, and a
 storage copy from either a direct value of the child's nominal type or the
 same child path in another parent. The root binding decides mutability. The
-child remains no general expression value, local initializer, parameter,
-return, operand or discard; source selection is admitted only for the matching
-storage-copy context.
+child remains no general expression value, inferred or module initializer,
+parameter, return, operand or discard; source selection is admitted only for
+the matching storage-copy context. D92 separately admits an explicitly typed
+local initializer.
 
 A successful whole-child assignment establishes the parent-field fact, which
 already denotes every D88/D89 leaf. A whole-child copy source requires that
@@ -5540,3 +5542,35 @@ each operation also avoids flattening D86's boundary.
 **Pinned by** the lowering, verifier and backend public seams;
 `negative/nested-struct-child-copy-unassigned`; the generated token and IR
 records; and `runtime/nested-struct-child-values` on Linux x86-64.
+
+### D92 — A typed local may copy from a nested aggregate leaf
+
+**The tour said** that a local initializer may copy an array or ordinary struct
+from existing storage [0520] [0710]. D51/D55 implemented direct storage and a
+direct array field, while D90/D91 made depth-one array and ordinary-child paths
+contextual storage-copy sources.
+
+**Chosen:** an explicitly typed local fixed array may initialize from
+`parent.child.array`, and an explicitly typed local of the child's nominal
+ordinary type may initialize from `parent.child`. The written local type must
+match the source length/element or nominal body exactly. Both copies require
+the complete source to be definitely assigned. Inference and module
+initializers from either nested path remain L0304: inference would extend the
+source-only context into a value-producing rule, while a module initializer
+needs static image-edge decisions this runtime slice does not make.
+
+Lowering allocates the ordinary destination slot, then reuses D90/D91's
+independent source parent/child identities and a direct destination path. A
+child initializer visits declaration-order scalar and fixed-array leaves; an
+array initializer remains one compact copy. Verification and target replay are
+therefore unchanged from the corresponding assignment operations.
+
+**Why typed local only:** its declaration already supplies the identity and
+fresh destination storage, so no aggregate temporary or inference carrier is
+needed. Module image copying and inferred aggregate values have different
+lifetime and cycle evidence and are not consequences of naming a runtime
+source path.
+
+**Pinned by** the lowering and verifier public seams;
+`negative/nested-struct-child-initializer-unassigned`; the generated token and
+IR records; and `runtime/nested-struct-child-values` on Linux x86-64.

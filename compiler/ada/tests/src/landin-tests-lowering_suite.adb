@@ -3921,6 +3921,8 @@ package body Landin.Tests.Lowering_Suite is
          & "    right.nested = (value: 5, row: [1, 2])" & LF
          & "    left.nested = right.nested" & LF
          & "    right.nested = template" & LF
+         & "    child_copy: inner = left.nested" & LF
+         & "    row_copy: [2]i32 = right.nested.row" & LF
          & "end use" & LF,
          Ran);
 
@@ -3932,6 +3934,7 @@ package body Landin.Tests.Lowering_Suite is
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
          Clear, Scalar_Stores, Array_Stores, Array_Copies : Natural := 0;
+         Initializer_Copies : Natural := 0;
       begin
          for Position in 1 .. IR.Value_Count (Unit, 4) loop
             declare
@@ -3963,14 +3966,20 @@ package body Landin.Tests.Lowering_Suite is
                      and then IR.Source_Nested_Field_Of
                        (Unit, 4, Value) in 0 | 2,
                      "each array source keeps its own parent path");
+               elsif Op = IR.Copy_Array
+                 and then IR.Source_Nested_Field_Of
+                   (Unit, 4, Value) = 2
+               then
+                  Initializer_Copies := Initializer_Copies + 1;
                end if;
             end;
          end loop;
          Landin.Testing.Check
            (Item,
             Clear = 1 and then Scalar_Stores = 3
-              and then Array_Stores = 2 and then Array_Copies = 2,
-            "clear construction and both copies use child-qualified IR");
+              and then Array_Stores = 2 and then Array_Copies = 2
+              and then Initializer_Copies = 2,
+            "assignments and initializers keep child-qualified IR");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts contextual ordinary-child operations");

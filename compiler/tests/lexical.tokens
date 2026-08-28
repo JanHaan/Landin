@@ -14937,6 +14937,47 @@ file negative/nested-struct-child-copy-unassigned/program.ldn tokens 46
   206 212 nested
   213 216 end
   217 221 copy
+file negative/nested-struct-child-initializer-unassigned/program.ldn tokens 40
+  0 5 inner
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 30 value
+  30 31 :
+  32 35 i32
+  36 39 end
+  40 45 inner
+  47 52 outer
+  52 53 :
+  54 58 type
+  59 60 =
+  61 67 struct
+  72 78 nested
+  78 79 :
+  80 85 inner
+  86 89 end
+  90 95 outer
+  97 101 copy
+  101 102 :
+  103 104 (
+  104 105 )
+  106 108 ->
+  109 113 none
+  114 115 =
+  120 123 mut
+  124 130 source
+  130 131 :
+  132 137 outer
+  142 147 local
+  147 148 :
+  149 154 inner
+  155 156 =
+  157 163 source
+  163 164 .
+  164 170 nested
+  171 174 end
+  175 179 copy
 file negative/nested-struct-construction-not-enabled/program.ldn tokens 66
   0 5 inner
   5 6 :
