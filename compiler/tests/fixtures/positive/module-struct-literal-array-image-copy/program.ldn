@@ -1,0 +1,24 @@
+holder: type = struct
+    finite: [2]u16
+    finite_zero: [2]u16
+    repeated: [3]u8
+    hybrid: [3]u8
+    zero_repeat: [2]u8
+    omitted: [2]u8
+end holder
+
+same: type = holder
+state: holder =
+    (finite: finite_chain, finite_zero: finite_zero_source,
+     repeated: repeated_source, hybrid: hybrid_chain,
+     zero_repeat: zero_source, omitted: omitted_source)
+finite_chain: [2]u16 = finite_source
+finite_source: [2]u16 = [11, 13]
+finite_zero_source: [2]u16 = [0, 0]
+repeated_source: [3]u8 = [of 7]
+hybrid_chain: [3]u8 = hybrid_source
+hybrid_source: [3]u8 = [1, of 2]
+zero_source: [2]u8 = [of 0]
+omitted_source: [2]u8
+copy: same = state
+inferred := copy

@@ -1,0 +1,6 @@
+holder: type = struct
+    row: [2]u16
+end holder
+
+bad_source: [2]u16 = [1, true]
+state: holder = (row: bad_source)

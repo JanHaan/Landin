@@ -1,0 +1,10 @@
+holder: type = struct
+    row: [2]u16
+end holder
+
+short: [1]u16
+wrong_element: [2]u8
+scalar: u16 = 1
+wrong_length: holder = (row: short)
+wrong_type: holder = (row: wrong_element)
+not_an_array: holder = (row: scalar)

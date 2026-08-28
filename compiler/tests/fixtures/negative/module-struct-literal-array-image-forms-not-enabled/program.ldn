@@ -2,7 +2,5 @@ holder: type = struct
     row: [2]u16
 end holder
 
-source: [2]u16 = [7, 9]
 state: holder = (row: zeroed)
-copied: holder = (row: source)
 selected: holder = (row: state.row)
