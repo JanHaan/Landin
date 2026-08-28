@@ -932,8 +932,8 @@ package body Landin.Tests.Lowering_Suite is
    ------------------------------------------------------------------
 
    --  [0670]'s state carries each field's compact target-neutral shape and
-   --  no value at all: D10 zeroes the whole of it, and where each field sits
-   --  needs a target this stage deliberately does not have.
+   --  no value at all: D10 and D59's explicit spelling share the same zero
+   --  image, and where each field sits needs a target this stage lacks.
    procedure A_Struct_State_Carries_Its_Fields
      (Item : in out Landin.Testing.Context);
 
@@ -951,7 +951,7 @@ package body Landin.Tests.Lowering_Suite is
          & "    words: [2]usize" & LF
          & "    ready: bool" & LF
          & "end counters" & LF
-         & "mut state: counters" & LF,
+         & "mut state: counters = zeroed" & LF,
          Ran);
 
       Landin.Testing.Check
@@ -991,7 +991,7 @@ package body Landin.Tests.Lowering_Suite is
            (Item, IR.Op_Of (Unit, 1, 1) = IR.Leave, "which is the leave");
          Landin.Testing.Check_Equal
            (Item, IR.Operand_Count (Unit, 1, 1), 0,
-            "and it hands back no value");
+            "and explicit zeroed records no runtime-producing value");
 
          Check_Terminators (Item, Unit, "one struct state");
       end;

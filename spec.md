@@ -3431,11 +3431,12 @@ every byte, including padding, in one forward operation. No field enumeration,
 hidden zero object, target offset or new opcode is introduced.
 
 An invalid struct body already owns its field/layout report and never reaches
-lowering. An explicit module struct zero image, inferred `name := zeroed`,
+lowering. An explicit module struct zero image in this slice, inferred `name := zeroed`,
 whole assignment `name = zeroed` in this slice, arguments, returns, discards,
 operands, nested expressions and general aggregate values remain refused.
-D58 later supplies the whole-assignment context. Struct fields of struct type,
-fields of elements and nested arrays keep their boundaries.
+D58 later supplies the whole-assignment context and D59 the explicit module
+zero image. Struct fields of struct type, fields of elements and nested arrays
+keep their boundaries.
 
 **Why the padded whole:** field-wise scalar stores and array clears would leave
 padding unspecified, contradicting [0540]'s all-bits-zero image. Reusing the
@@ -3450,7 +3451,6 @@ image and place rules. All were declined.
 
 **Pinned by** the checker, lowering, verifier and backend public-seam cases;
 `positive/local-struct-zeroed-initializer`;
-`negative/module-struct-zeroed-initializer-not-enabled`;
 `negative/inferred-zeroed-not-enabled`;
 `negative/local-struct-initializer-non-name-not-enabled`; the recorded IR dump;
 and `runtime/local-struct-zeroed-reads-zero` on Linux x86-64.
@@ -3483,11 +3483,12 @@ derives the padded extent and base address from target facts; no source
 storage, field enumeration, aggregate temporary, target offset or new opcode
 is introduced.
 
-An inferred initializer `name := zeroed`, an explicit module initializer,
-arguments, returns, discards, operands, nested expressions and general
-aggregate values remain refused. A struct selection cannot currently name a
-struct-typed field, and fields of struct type, fields of elements and nested
-arrays keep their boundaries.
+An inferred initializer `name := zeroed`, an explicit module initializer in
+this slice, arguments, returns, discards, operands, nested expressions and
+general aggregate values remain refused. D59 later admits the explicitly typed
+module zero image. A struct selection cannot currently name a struct-typed
+field, and fields of struct type, fields of elements and nested arrays keep
+their boundaries.
 
 **Why both storage classes:** D30 and D49 already clear module and local
 storage with identical runtime semantics, D54 copies whole structs into both,
@@ -3506,6 +3507,54 @@ values this place rule does not need. All were declined.
 `negative/immutable-struct-zeroed-assignment`;
 `negative/struct-zeroed-assignment-not-on-every-path`;
 `negative/struct-zeroed-assignment-nested-not-enabled`;
-`negative/inferred-zeroed-not-enabled`;
-`negative/module-struct-zeroed-initializer-not-enabled`; the recorded IR dump;
+`negative/inferred-zeroed-not-enabled`; the recorded IR dump;
 and `runtime/struct-zeroed-assignment-clears-storage` on Linux x86-64.
+
+### D59 — A typed module struct has an explicit static zero image
+
+**The tour said** that `zeroed` is the complete all-bits-zero image of its
+contextual type [0540], that module declarations may carry values [1740], and
+that nothing runs before the entry point [1460]. D10 already gives a
+declaration-only module struct that same zero image, while D57 admitted the
+explicit spelling only for a local binding.
+
+**Chosen:** `[mut] name: T = zeroed` is admitted at module scope when `T`
+resolves through aliases to a named ordinary struct with an enabled D44/D45
+layout. The written type supplies the literal's aggregate kind and nominal
+[0710] body. Mutability does not affect initialization, so mutable and
+immutable declarations both accept it. Each declaration still owns distinct
+module storage.
+
+This is a static image, not executable initialization. Lowering records the
+same aggregate datum, field-shape run and operandless `Leave` as D10's omitted
+initializer. It records no finite per-byte or per-field image and emits no
+`Clear_Array`: such an instruction inside a datum would wrongly imply runtime
+execution and remains verifier-refused. The backend therefore reserves the
+datum's complete target-derived padded extent in zero-initialized storage,
+including every field and padding byte.
+
+Module state is complete under D10, so D16 gains no fact or flow rule. An
+inferred module `name := zeroed`, initialization from another struct name, a
+struct literal, call, argument, return, discard, operand, nested expression and
+general aggregate value remain refused. Fields of struct type, fields of
+elements and nested arrays keep their boundaries.
+
+**Why no new image:** the explicit spelling denotes exactly the image D10
+already requires. A runtime clear cannot run before [1460]; a finite byte image
+would make compiler work proportional to a D18-sized field; and field-wise
+images would either omit padding or duplicate target layout outside the
+backend. Leaving the image absent preserves the established `.bss` contract.
+
+**The alternatives:** emit a clear in the datum, record every zero byte, record
+one zero per field, or admit direct-name and inferred module struct images at
+the same time. The first is not static, the next two duplicate or misplace
+layout, and the last needs a separate static struct-image chain. All were
+declined.
+
+**Pinned by** the checker, lowering and backend public-seam cases;
+`positive/module-struct-zeroed-initializer`;
+`negative/module-struct-zeroed-initializer-nested-not-enabled`;
+`negative/inferred-zeroed-not-enabled`;
+`negative/struct-array-field-initializer-not-enabled`;
+`negative/struct-array-field-inferred-initializer-not-enabled`; the recorded IR
+dump; and `runtime/module-struct-zeroed-image-is-static` on Linux x86-64.

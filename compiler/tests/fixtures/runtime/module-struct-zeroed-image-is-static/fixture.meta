@@ -1,0 +1,6 @@
+class: runtime
+summary: D59 reserves distinct explicit module struct zero images and reads their fields as zero
+constructs: 0040, 0060, 0080, 0190, 0410, 0520, 0540, 0670, 0710, 0750, 1740, 1900
+program: main.ldn
+status: 42
+targets: linux-x86-64

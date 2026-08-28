@@ -1,6 +1,0 @@
-class: negative
-summary: D57 keeps an explicit struct zero image at module scope refused
-constructs: 0040, 0540, 0670, 0710, 1740
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

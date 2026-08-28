@@ -1583,6 +1583,39 @@ item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 TRUTH bool false
     2 LEAVE <- 1
+file positive/module-struct-zeroed-initializer/program.ldn
+unit items 3
+item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 [2]usize
+  field 3 u16
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM aliased result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 [2]usize
+  field 3 u16
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 ROUTINE read result usize params 1 slots 3 blocks 1 values 14
+  slot 1 at usize param 1
+  slot 2 result usize return
+  slot 3 - usize
+  block 1 scope 3 BLOCK length 14
+    1 LOAD_FIELD u8
+    2 LOAD_FIELD u16
+    3 LOAD_FIELD u8
+    4 LOAD_FIELD u16
+    5 LOAD usize slot 1
+    6 LOAD_ELEMENT usize datum 1 state field 2 <- 5
+    7 STORE slot 3 <- 6
+    8 LOAD usize slot 1
+    9 LOAD_ELEMENT usize datum 2 aliased field 2 <- 8
+    10 LOAD usize slot 3
+    11 ADD usize <- 10 9
+    12 STORE slot 2 <- 11
+    13 LOAD usize slot 2
+    14 LEAVE <- 13
 file positive/module-value-from-another/program.ldn
 unit items 2
 item 1 DATUM doubled result u32 params 0 slots 1 blocks 1 values 6
