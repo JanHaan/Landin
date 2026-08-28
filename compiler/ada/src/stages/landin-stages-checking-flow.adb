@@ -162,7 +162,9 @@ package body Landin.Stages.Checking.Flow is
       --  D16 makes a field of a struct local its own answer, so a row is
       --  the name at column zero and its fields at the columns after it.
       --  A scalar uses column zero alone; a struct never uses it, because
-      --  a value of one is not a thing this kernel can read.
+      --  a value of one is not a thing this kernel can read. D88's nested
+      --  leaves use the sparse parent/child set below rather than flattening
+      --  the nominal child into this top-level row.
       subtype Tracked is Positive range
         1 .. Positive'Max (1, Res.Declaration_Count (Meanings.all));
 
@@ -203,16 +205,37 @@ package body Landin.Stages.Checking.Flow is
       package Array_Sets is new Ada.Containers.Ordered_Sets
         (Element_Type => Array_Fact);
 
+      type Nested_Fact is record
+         Declaration : Res.Declaration_Id;
+         Parent_Field : Tracked_Field;
+         Child_Field  : Tracked_Field;
+      end record;
+
+      function "<" (Left, Right : Nested_Fact) return Boolean
+      is (Left.Declaration < Right.Declaration
+          or else
+            (Left.Declaration = Right.Declaration
+             and then
+               (Left.Parent_Field < Right.Parent_Field
+                or else
+                  (Left.Parent_Field = Right.Parent_Field
+                   and then Left.Child_Field < Right.Child_Field))));
+
+      package Nested_Sets is new Ada.Containers.Ordered_Sets
+        (Element_Type => Nested_Fact);
+
       type Assigned_Set is record
-         Fields      : Assigned_Fields := [others => [others => False]];
-         Elements    : Element_Sets.Set;
+         Fields       : Assigned_Fields := [others => [others => False]];
+         Elements     : Element_Sets.Set;
          Whole_Arrays : Array_Sets.Set;
+         Nested       : Nested_Sets.Set;
       end record;
 
       Nothing_Assigned : constant Assigned_Set :=
         (Fields       => [others => [others => False]],
          Elements     => Element_Sets.Empty_Set,
-         Whole_Arrays => Array_Sets.Empty_Set);
+         Whole_Arrays => Array_Sets.Empty_Set,
+         Nested       => Nested_Sets.Empty_Set);
 
       --  Which declarations [1910] is about.  A parameter arrives assigned
       --  and a module binding is [1940]'s, so what is left is a local
@@ -366,6 +389,57 @@ package body Landin.Stages.Checking.Flow is
             end;
          end if;
       end Array_Base;
+
+      procedure Nested_Base
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Id      : out Res.Declaration_Id;
+         Parent  : out Tracked_Field;
+         Child   : out Tracked_Field);
+
+      procedure Nested_Base
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Id      : out Res.Declaration_Id;
+         Parent  : out Tracked_Field;
+         Child   : out Tracked_Field)
+      is
+      begin
+         Id := Res.No_Declaration;
+         Parent := 0;
+         Child := 0;
+         if Syn.Kind (Of_Tree, Node) /= Syn.Member_Selection then
+            return;
+         end if;
+         declare
+            Middle : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
+         begin
+            if Syn.Kind (Of_Tree, Middle) /= Syn.Member_Selection then
+               return;
+            end if;
+            declare
+               Root : constant Syn.Node_Id :=
+                 Syn.Target_Of (Of_Tree, Middle);
+            begin
+               if Syn.Kind (Of_Tree, Root) = Syn.Name_Reference
+                 and then Res.Verdict_Of (Meanings.all, Of_Tree, Root)
+                          = Res.Bound
+                 and then Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, Middle)
+                          in 1 .. Widest_Struct
+                 and then Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, Node)
+                          in 1 .. Widest_Struct
+               then
+                  Id := Res.Bound_To (Meanings.all, Of_Tree, Root);
+                  Parent := Landin.Checking.Field_Index
+                    (Types.all, Of_Tree, Middle);
+                  Child := Landin.Checking.Field_Index
+                    (Types.all, Of_Tree, Node);
+               end if;
+            end;
+         end;
+      end Nested_Base;
 
       procedure Require_Assigned
         (At_Source : Landin.Source.Source_Id;
@@ -723,6 +797,27 @@ package body Landin.Stages.Checking.Flow is
             end if;
 
             declare
+               Nested_Id : Res.Declaration_Id;
+               Parent, Child : Tracked_Field;
+            begin
+               Nested_Base
+                 (Of_Tree, Node, Nested_Id, Parent, Child);
+               if Nested_Id /= Res.No_Declaration then
+                  if not Nested_Sets.Contains
+                    (State.Nested, (Nested_Id, Parent, Child))
+                  then
+                     Require_Assigned
+                       (Syn.Source_Of (Of_Tree), Syn.Where (Of_Tree, Node),
+                        Nested_Id, State,
+                        "this nested field is read here and no path that"
+                        & " arrives assigned it",
+                        Field => Parent);
+                  end if;
+                  return;
+               end if;
+            end;
+
+            declare
                From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
                Which : constant Natural :=
                  Landin.Checking.Field_Index (Types.all, Of_Tree, Node);
@@ -801,7 +896,9 @@ package body Landin.Stages.Checking.Flow is
                                     (Left.Elements, Branch.Elements),
                   Whole_Arrays => Array_Sets.Intersection
                                     (Left.Whole_Arrays,
-                                     Branch.Whole_Arrays));
+                                     Branch.Whole_Arrays),
+                  Nested       => Nested_Sets.Intersection
+                                    (Left.Nested, Branch.Nested));
             begin
                for Which in Tracked loop
                   for Part in Tracked_Field loop
@@ -837,6 +934,26 @@ package body Landin.Stages.Checking.Flow is
                            Element_Sets.Include (Merged.Elements, Fact);
                         end if;
                      end loop;
+                  end if;
+               end loop;
+
+               --  D88 gives assigning a whole ordinary child the meaning of
+               --  assigning each nested scalar leaf.  Preserve the leaf from
+               --  the other branch when the two representations meet.
+               for Fact of Branch.Nested loop
+                  if Is_Tracked (Fact.Declaration)
+                    and then Left.Fields
+                      (Positive (Fact.Declaration), Fact.Parent_Field)
+                  then
+                     Nested_Sets.Include (Merged.Nested, Fact);
+                  end if;
+               end loop;
+               for Fact of Left.Nested loop
+                  if Is_Tracked (Fact.Declaration)
+                    and then Branch.Fields
+                      (Positive (Fact.Declaration), Fact.Parent_Field)
+                  then
+                     Nested_Sets.Include (Merged.Nested, Fact);
                   end if;
                end loop;
 
@@ -896,6 +1013,21 @@ package body Landin.Stages.Checking.Flow is
                then
                   return;
                end if;
+
+               declare
+                  Nested_Id : Res.Declaration_Id;
+                  Parent, Child : Tracked_Field;
+               begin
+                  Nested_Base
+                    (Of_Tree, Node, Nested_Id, Parent, Child);
+                  if Nested_Id /= Res.No_Declaration then
+                     if Is_Tracked (Nested_Id) then
+                        Nested_Sets.Include
+                          (State.Nested, (Nested_Id, Parent, Child));
+                     end if;
+                     return;
+                  end if;
+               end;
 
                declare
                   From : constant Syn.Node_Id :=
@@ -986,7 +1118,8 @@ package body Landin.Stages.Checking.Flow is
                                     Array_Sets.Include
                                       (State.Whole_Arrays, (Id, Each));
                                  when Landin.Checking.Aggregate_Field =>
-                                    null;
+                                    State.Fields
+                                      (Positive (Id), Each) := True;
                                  when Landin.Checking.Variant_Field =>
                                     State.Fields
                                       (Positive (Id), Each) := True;

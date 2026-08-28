@@ -374,6 +374,9 @@ package body Landin.Backend.X86_64 is
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
             return Landin.IR.Field_Shape;
+         function Nested_Field_Offset
+           (Shape : Landin.IR.Field_Shape; Field : Positive)
+            return Landin.Targets.Byte_Count;
 
          function Array_Length_Of
            (Place         : Landin.IR.Storage;
@@ -549,6 +552,31 @@ package body Landin.Backend.X86_64 is
                when Landin.IR.Frame_Slot =>
                  Landin.IR.Nth_Slot_Field_Shape
                    (Of_Unit, Item, Place.Slot, Field));
+
+         function Nested_Field_Offset
+           (Shape : Landin.IR.Field_Shape; Field : Positive)
+            return Landin.Targets.Byte_Count
+         is
+            Placed : Landin.Targets.Placement :=
+              Landin.Targets.Empty_Placement;
+            At_Offset : Landin.Targets.Byte_Count := 0;
+         begin
+            for Which in 1 .. Field loop
+               declare
+                  Part : constant Landin.IR.Field_Shape :=
+                    Landin.IR.Nth_Aggregate_Field
+                      (Of_Unit, Shape, Which);
+                  Size : Landin.Targets.Byte_Count;
+                  Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  Landin.Backend.Field_Extent
+                    (Of_Unit, Part, Facts, Size, Alignment);
+                  Landin.Targets.Place
+                    (Placed, Size, Alignment, At_Offset);
+               end;
+            end loop;
+            return At_Offset;
+         end Nested_Field_Offset;
 
          --  A Value_Id restarts in each item, just as a Block_Id does.  The
          --  extra `V` keeps a continuation distinct from a block label.
@@ -1187,14 +1215,29 @@ package body Landin.Backend.X86_64 is
                           Landin.IR.Slot_Of (Of_Unit, Item, Value);
                         Which : constant Landin.IR.Part_Position :=
                           Landin.IR.Field_Of (Of_Unit, Item, Value);
-                        Held : constant Held_Size :=
-                          Size_Of
-                            (Landin.IR.Nth_Slot_Part
-                               (Of_Unit, Item, Slot, Which), Facts);
-                        Place : constant String :=
-                          Cell (Field_Offset
-                                  (Of_Unit, Item, Layout, Slot, Which,
-                                   Facts));
+                        Nested : constant Natural :=
+                          Landin.IR.Nested_Field_Of
+                            (Of_Unit, Item, Value);
+                        Kind : constant Landin.Types.Scalar_Name :=
+                          (if Nested = 0
+                           then Landin.IR.Nth_Slot_Part
+                                  (Of_Unit, Item, Slot, Which)
+                           else Landin.IR.Nth_Aggregate_Field
+                                  (Of_Unit,
+                                   Landin.IR.Nth_Slot_Field_Shape
+                                     (Of_Unit, Item, Slot, Positive (Which)),
+                                   Positive (Nested)).Element);
+                        Held : constant Held_Size := Size_Of (Kind, Facts);
+                        Top : constant Landin.Targets.Byte_Count :=
+                          Field_Offset
+                            (Of_Unit, Item, Layout, Slot, Which, Facts);
+                        At_Offset : constant Landin.Targets.Byte_Count :=
+                          (if Nested = 0 then Top
+                           else Top - Nested_Field_Offset
+                             (Landin.IR.Nth_Slot_Field_Shape
+                                (Of_Unit, Item, Slot, Positive (Which)),
+                              Positive (Nested)));
+                        Place : constant String := Cell (At_Offset);
                      begin
                         if Op = Landin.IR.Load_Field then
                            Carry (Held, Place, Value_Cell (Value));
@@ -1216,14 +1259,24 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Datum_Of (Of_Unit, Item, Value);
                      Which : constant Landin.IR.Part_Position :=
                        Landin.IR.Field_Of (Of_Unit, Item, Value);
+                     Nested : constant Natural :=
+                       Landin.IR.Nested_Field_Of (Of_Unit, Item, Value);
                      At_Offset : constant Landin.Targets.Byte_Count :=
-                       Field_Offset (Datum, Which);
-                     Held : constant Held_Size :=
-                       (if Op = Landin.IR.Load_Field
-                        then Size_Of_Value (Value)
-                        else Size_Of
-                               (Landin.IR.Nth_Part
-                                  (Of_Unit, Datum, Which), Facts));
+                       Field_Offset (Datum, Which)
+                       + (if Nested = 0 then 0
+                          else Nested_Field_Offset
+                            (Landin.IR.Nth_Field_Shape
+                               (Of_Unit, Datum, Positive (Which)),
+                             Positive (Nested)));
+                     Kind : constant Landin.Types.Scalar_Name :=
+                       (if Nested = 0
+                        then Landin.IR.Nth_Part (Of_Unit, Datum, Which)
+                        else Landin.IR.Nth_Aggregate_Field
+                               (Of_Unit,
+                                Landin.IR.Nth_Field_Shape
+                                  (Of_Unit, Datum, Positive (Which)),
+                                Positive (Nested)).Element);
+                     Held : constant Held_Size := Size_Of (Kind, Facts);
                   begin
                      --  A RIP-relative memory operand has a signed 32-bit
                      --  displacement, and its relocation is symbol plus

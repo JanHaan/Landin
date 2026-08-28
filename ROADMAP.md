@@ -1833,10 +1833,17 @@ completed increment retains the six-register scalar prefix and places every
 later scalar argument in an aligned run of eight-byte stack slots, copied into
 ordinary callee slots and reclaimed by the caller. Its runtime case crosses
 both a seventh and an eighth argument, and `L0503` is retired rather than
-reassigned. Aggregate arguments and returns remain in this item; R4.40 later
-supplies complete C ABI classification rather than owning this internal
-convention. Aggregate
-values include the nonzero nested-ordinary forms R2.20 deliberately left
+reassigned.
+
+The second increment opens D87's first nonzero path: a scalar leaf may be read
+or written through one depth-one ordinary child. Definite assignment keeps the
+parent and child identities, lowering and verified IR retain both without a
+target offset, and the backend recursively places them against the selected
+target. The intermediate child remains no general aggregate value.
+
+Aggregate arguments and returns remain in this item; R4.40 later supplies
+complete C ABI classification rather than owning this internal convention.
+Aggregate values include the other nonzero nested-ordinary forms R2.20 deliberately left
 contextual: nested field selection, construction and copy, deeper recursive
 composition, aggregate variant payloads and D17's fixed arrays whose element
 is an aggregate. They reuse R2.20's neutral shape provenance rather than
