@@ -1514,10 +1514,7 @@ package body Landin.Stages.Checking is
                     = Ty.Fixed_Array;
       end Is_Direct_Array_Name;
 
-      --  D41 is a direct-binding slice; D42 adds one ordinary scalar field or
-      --  fixed-array element selected immediately from that storage.  D43 adds
-      --  a direct named return, but not one of its subobjects.  Nested
-      --  subobjects remain separate contextual positions.
+      --  Whether this node directly names a binding that owns runtime storage.
       function Is_Direct_Binding_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
@@ -1533,6 +1530,11 @@ package body Landin.Stages.Checking is
                     in Res.Module_Binding | Res.Local_Binding;
       end Is_Direct_Binding_Name;
 
+      --  D41 is a direct-binding slice; D42 adds one ordinary scalar field or
+      --  fixed-array element selected immediately from that storage.  D62
+      --  adds the scalar element of a D48 fixed-array field.  D43 adds a
+      --  direct named return, but not one of its subobjects.  Every other
+      --  nested subobject remains a separate contextual position.
       function Is_Zeroed_Scalar_Place
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
@@ -1553,7 +1555,16 @@ package body Landin.Stages.Checking is
              (Syn.Kind (Of_Tree, Node)
                 in Syn.Member_Selection | Syn.Element_Index
               and then Is_Direct_Binding_Name
-                         (Of_Tree, Syn.Target_Of (Of_Tree, Node)));
+                         (Of_Tree, Syn.Target_Of (Of_Tree, Node)))
+           or else
+             (Syn.Kind (Of_Tree, Node) = Syn.Element_Index
+              and then Syn.Kind
+                (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                  = Syn.Member_Selection
+              and then Is_Direct_Binding_Name
+                (Of_Tree,
+                 Syn.Target_Of
+                   (Of_Tree, Syn.Target_Of (Of_Tree, Node))));
       end Is_Zeroed_Scalar_Place;
 
       function Synthesise
@@ -3024,11 +3035,11 @@ package body Landin.Stages.Checking is
                      return;
                   end if;
 
-                  --  D41--D43: a mutable scalar binding, an ordinary scalar
-                  --  subobject selected from one, or a direct named return
-                  --  supplies the contextual type for `zeroed`.  Check_Place
-                  --  has already resolved aliases and refused immutable or
-                  --  invalid destinations.
+                  --  D41--D43/D62: a mutable scalar binding, an admitted
+                  --  scalar subobject, or a direct named return supplies the
+                  --  contextual type for `zeroed`.  Check_Place has already
+                  --  resolved aliases and refused immutable or invalid
+                  --  destinations.
                   if Wants in Ty.Scalar_Name
                     and then Is_Zeroed_Scalar_Place (Of_Tree, Place)
                     and then Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal

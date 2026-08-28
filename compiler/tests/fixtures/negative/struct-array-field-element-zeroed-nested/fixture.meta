@@ -1,0 +1,6 @@
+class: negative
+summary: D62 keeps zeroed nested inside an array-field element value outside contextual assignment
+constructs: 0190, 0410, 0520, 0540, 0670, 0750, 1740, 1810, 1820, 1900
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

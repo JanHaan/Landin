@@ -1,0 +1,9 @@
+holder: type = struct
+    row: [2]u32
+end holder
+
+f: () -> (result: u32) =
+    mut local: holder
+    local.row[0] = zeroed
+    result = local.row[1]
+end f
