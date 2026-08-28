@@ -3594,6 +3594,82 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Variant_Case_Construction_Carries_Its_Identity;
 
+   --  D80 keeps whole variant-bearing copies contextual to storage.  Each
+   --  common scalar or array field retains its old operation, while the
+   --  complete unfolded variant part travels as one Copy_Variant identity.
+   procedure Variant_Whole_Copy_Carries_One_Compact_Part
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Whole_Copy_Carries_One_Compact_Part
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "choice: type = struct" & LF
+         & "    prefix: u8" & LF
+         & "    values: [2]u16" & LF
+         & "    kind: variant" & LF
+         & "        leaf |" & LF
+         & "        pair: (first: u8, second: u16)" & LF
+         & "    end kind" & LF
+         & "end choice" & LF
+         & "mut state: choice" & LF
+         & "copy: () -> none =" & LF
+         & "    mut source := choice(prefix: 1, values: zeroed,"
+         & " kind: pair(first: 2, second: 3))" & LF
+         & "    mut typed: choice = source" & LF
+         & "    mut inferred := source" & LF
+         & "    state = typed" & LF
+         & "    typed = inferred" & LF
+         & "end copy" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "typed, inferred and assigned whole copies are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Variant_Copies, Array_Copies : Natural := 0;
+      begin
+         for Value in 1 .. IR.Value_Count (Unit, 2) loop
+            declare
+               Id : constant IR.Value_Id := IR.Value_Id (Value);
+            begin
+               case IR.Op_Of (Unit, 2, Id) is
+                  when IR.Copy_Variant =>
+                     Variant_Copies := Variant_Copies + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        IR.Source_Field_Of (Unit, 2, Id) = 3
+                          and then IR.Element_Field_Of (Unit, 2, Id) = 3,
+                        "the complete variant part keeps its field identity");
+                  when IR.Copy_Array =>
+                     Array_Copies := Array_Copies + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        IR.Source_Field_Of (Unit, 2, Id) = 2
+                          and then IR.Element_Field_Of (Unit, 2, Id) = 2,
+                        "the common fixed array keeps D54's copy operation");
+                  when others =>
+                     null;
+               end case;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Variant_Copies = 4 and then Array_Copies = 4,
+            "each whole copy moves one array and one variant part");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts every lowered whole copy");
+      end;
+   end Variant_Whole_Copy_Carries_One_Compact_Part;
+
    ------------------------------------------------------------------
    --  An internal array shape the source does not pin
    ------------------------------------------------------------------
@@ -4177,6 +4253,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "variant case construction carries its identity",
          Variant_Case_Construction_Carries_Its_Identity'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "variant whole copy carries one compact part",
+         Variant_Whole_Copy_Carries_One_Compact_Part'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "an internal empty array has identity measurements",

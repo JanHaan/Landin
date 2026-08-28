@@ -1,0 +1,6 @@
+class: negative
+summary: D80 whole-copy reads require the source variant part to be assigned
+constructs: 0080, 0670, 0680, 0690, 0710, 0750, 1790, 1795, 1810, 1900, 1910
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0302

@@ -788,6 +788,36 @@ package body Landin.Backend.X86_64 is
                      Emit ("rep movsb");
                   end;
 
+               when Landin.IR.Copy_Variant =>
+                  --  D80 moves the complete padded unfolded part.  Both
+                  --  endpoints were proved to have the same neutral shape;
+                  --  offsets and extent are derived for this target here.
+                  declare
+                     Source : constant Landin.IR.Storage :=
+                       Landin.IR.Source_Of (Of_Unit, Item, Value);
+                     Destination : constant Landin.IR.Storage :=
+                       Landin.IR.Destination_Of (Of_Unit, Item, Value);
+                     Field : constant Positive := Positive
+                       (Landin.IR.Element_Field_Of
+                          (Of_Unit, Item, Value));
+                     Shape : constant Landin.IR.Field_Shape :=
+                       Stored_Field_Shape (Source, Field);
+                     Bytes : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Field_Extent
+                       (Of_Unit, Shape, Facts, Bytes, Alignment);
+                     Storage_Address (Destination, Field, "%rdi");
+                     Storage_Address (Source, Field, "%rsi");
+                     Emit
+                       ("movabsq $"
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image (Bytes))
+                        & ", %rcx");
+                     Emit ("cld");
+                     Emit ("rep movsb");
+                  end;
+
                when Landin.IR.Clear_Array =>
                   --  D28 clears complete array storage without making IR or
                   --  compiler work proportional to D18's extent.  D49 carries
@@ -1839,7 +1869,8 @@ package body Landin.Backend.X86_64 is
                      when Landin.IR.Call | Landin.IR.Store_Datum
                         | Landin.IR.Load_Field | Landin.IR.Store_Field
                         | Landin.IR.Load_Element | Landin.IR.Store_Element
-                        | Landin.IR.Copy_Array | Landin.IR.Clear_Array
+                        | Landin.IR.Copy_Array | Landin.IR.Copy_Variant
+                        | Landin.IR.Clear_Array
                         | Landin.IR.Fill_Array
                         | Landin.IR.Load_Variant_Tag
                         | Landin.IR.Load_Variant_Field

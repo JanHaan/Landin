@@ -1,0 +1,61 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u16) |
+        row: (values: [2]u32)
+    end kind
+    tail: u8
+end choice
+
+mut state: choice = zeroed
+
+public main: () -> (code: i32) =
+    mut source: choice = (
+        prefix: 7,
+        kind: pair(first: 11, second: 13),
+        tail: 17
+    )
+    mut typed: choice = source
+    mut inferred := typed
+    mut assigned: choice
+    assigned = inferred
+    state = assigned
+    mut back: choice = state
+    state = state
+
+    source.kind = leaf
+    typed.kind = leaf
+    state.kind = leaf
+    mut inferred_ok: bool = false
+    mut assigned_ok: bool = false
+    mut back_ok: bool = false
+    mut state_is_leaf: bool = false
+    match inferred.kind
+        leaf: inferred_ok = false
+        pair(first, second): inferred_ok = first == 11 and second == 13
+        row: inferred_ok = false
+    end match
+    match assigned.kind
+        leaf: assigned_ok = false
+        pair(first, second): assigned_ok = first == 11 and second == 13
+        row: assigned_ok = false
+    end match
+    match back.kind
+        leaf: back_ok = false
+        pair(first, second): back_ok = first == 11 and second == 13
+        row: back_ok = false
+    end match
+    match state.kind
+        leaf: state_is_leaf = true
+        pair: state_is_leaf = false
+        row: state_is_leaf = false
+    end match
+    if inferred_ok and assigned_ok and back_ok and state_is_leaf
+      and inferred.prefix == 7 and assigned.tail == 17 and back.prefix == 7
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

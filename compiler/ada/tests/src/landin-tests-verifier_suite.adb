@@ -1143,6 +1143,7 @@ package body Landin.Tests.Verifier_Suite is
          Payload_Value_Disagrees,
          Payload_Result_Disagrees,
          Tag_Result_Disagrees,
+         Copy_Shapes_Disagree,
          Operation_Inside_A_Datum);
 
       function Built
@@ -1156,7 +1157,7 @@ package body Landin.Tests.Verifier_Suite is
          Harm : Damage) return V.Fault
       is
          Routine, Datum : IR.Item_Id;
-         Result, Aggregate : IR.Slot_Id;
+         Result, Aggregate, Other : IR.Slot_Id;
          Block : IR.Block_Id;
          Value : IR.Value_Id;
       begin
@@ -1191,6 +1192,22 @@ package body Landin.Tests.Verifier_Suite is
                          others  => <>))]);
          end if;
          IR.Set_Result_Slot (Unit, Routine, Result);
+
+         if Harm = Copy_Shapes_Disagree then
+            Other := IR.Add_Aggregate_Slot
+              (Unit, Routine, IR.No_Declaration, Site);
+            IR.Add_Slot_Field
+              (Unit, Routine, Other,
+               (Kind           => IR.Variant_Field_Shape,
+                Element        => Landin.Types.U8,
+                Length         => 1,
+                Cases          => 1,
+                Payloads_First => 1),
+               Cases => [(First => 0, Count => 0)],
+               Payloads => IR.No_Field_Shapes);
+         else
+            Other := IR.No_Slot;
+         end if;
 
          Block := IR.Add_Block
            (Unit, Routine, Landin.Resolution.Program_Scope, Site);
@@ -1238,6 +1255,11 @@ package body Landin.Tests.Verifier_Suite is
                  (Unit, Routine,
                   (Kind => IR.Frame_Slot, Slot => Aggregate),
                   1, Landin.Types.U16, Site);
+            when Copy_Shapes_Disagree =>
+               IR.Emit_Variant_Copy
+                 (Unit, Routine,
+                  (Kind => IR.Frame_Slot, Slot => Aggregate),
+                  (Kind => IR.Frame_Slot, Slot => Other), 1, Site);
             when Operation_Inside_A_Datum =>
                null;
          end case;
@@ -1286,6 +1308,7 @@ package body Landin.Tests.Verifier_Suite is
          (Payload_Value_Disagrees, V.Variant_Payload_Value_Disagrees),
          (Payload_Result_Disagrees, V.Variant_Payload_Result_Disagrees),
          (Tag_Result_Disagrees, V.Variant_Tag_Result_Disagrees),
+         (Copy_Shapes_Disagree, V.Variant_Copy_Shapes_Disagree),
          (Operation_Inside_A_Datum, V.Variant_Operation_Inside_A_Datum)];
    begin
       for Each of Wanted loop
