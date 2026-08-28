@@ -1,0 +1,7 @@
+holder: type = struct
+    value: u32
+end holder
+
+copy: () -> none =
+    local: holder = nowhere
+end copy
