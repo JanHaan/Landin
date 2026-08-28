@@ -3041,8 +3041,8 @@ and whole-`zeroed` initializers stay absent `.bss` images. D60/D61 chains copy
 the folded terminal into distinct datums. IR/verifier/checker/lowering/backend
 seams, focused static-image refusals, regenerated records and a runtime
 distinct-storage fixture provide evidence. Inferred literals, labelled array
-images beyond D67's finite-or-zero form, heterogeneous fills, construction and
-general aggregate values remain separate slices.
+images beyond D68's finite, zero and repetition forms, heterogeneous fills,
+construction and general aggregate values remain separate slices.
 
 D67 admits a labelled fixed-array field in D66's explicitly typed module
 struct literal when its value is a nonempty finite array literal of exactly the
@@ -3052,15 +3052,30 @@ only the absent `zeroed` image. D66's flat declaration-order fold run and zero
 array placeholders stay intact beside a compact per-field descriptor run and
 concatenated finite element folds. The verifier proves descriptor counts,
 canonical offsets, field kinds, finite lengths and target fit before access,
-and reserves repeated and hybrid forms for a later producer. The backend emits
+and reserves repeated and hybrid forms for D68's producer. The backend emits
 finite elements with target-derived widths at D45's placed field offset and
 zeroes absent fields and padding; an all-zero finite literal remains written
 `.data`. D60/D61 image chains copy descriptors and elements into distinct
 datums. IR/verifier/checker/lowering/backend seams, static-image refusals,
 generated records and a runtime chain-and-independence fixture provide
-evidence. Repetition and direct-name or selected-field image copy, inferred
-literals, heterogeneous fills, construction and general aggregate values
-remain separate slices.
+evidence. D68 later supplies the repeated and hybrid producers; direct-name or
+selected-field image copy, inferred literals, heterogeneous fills,
+construction and general aggregate values remain separate slices.
+
+D68 admits full and mixed-prefix repetition for a fixed-array label in D66's
+typed module struct literal. It gives D67's reserved `Repeated` and `Hybrid`
+descriptors D34/D38's canonical meanings: a nonzero full pattern occupies no
+element run, a zero full pattern becomes `Absent`, and a hybrid carries its
+source-order prefix plus one suffix pattern. The checker reuses the existing
+count, element, static-subtree, known-value and fold owners. The verifier proves
+form-specific counts, offsets and selected-target fit before reading a compact
+prefix or pattern; the backend emits target-width prefix directives and one
+`.rept` suffix at D45's placed field offset, retaining all padding. D60/D61
+chains copy the completed descriptor unchanged. IR/verifier/checker/lowering/
+backend seams, focused diagnostics, generated records and the runtime
+independence fixture provide evidence. Direct or selected array-image copy,
+inferred literals, heterogeneous fills, construction and general aggregate
+values remain separate slices.
 
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
@@ -3102,12 +3117,11 @@ D57's explicitly typed local zero image, D59's explicitly typed module zero
 image, D60's explicitly typed module direct-storage-name image chain and D61's
 inferred module direct-storage-name image chain, and D64/D65's explicitly typed
 local labelled literal and contextual field values, plus D66's explicitly
-typed module scalar-labelled static image and D67's finite-or-zero labelled
-array-field image,
+typed module scalar-labelled static image, D67's finite-or-zero labelled
+array-field image and D68's labelled full or mixed repetition image,
 general whole values,
-inferred struct literals, labelled module array-field repetition or image-copy
-forms, general or all-field fills and call-shaped construction beyond
-D64--D67's contextual
+inferred struct literals, labelled module array-field image-copy forms, general
+or all-field fills and call-shaped construction beyond D64--D68's contextual
 literal,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
@@ -3195,6 +3209,9 @@ D67 migrated finite and `zeroed` labelled fixed-array fields into that
 target-neutral module struct image, while keeping repetition, image-copy,
 inference, heterogeneous fills, construction and every general aggregate
 value pinned.
+D68 migrated full and mixed repetition labels into D67's compact field-image
+carrier, while keeping direct or selected image-copy, inference, heterogeneous
+fills, construction and every general aggregate value pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

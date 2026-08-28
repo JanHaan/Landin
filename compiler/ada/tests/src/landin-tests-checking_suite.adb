@@ -2707,8 +2707,8 @@ package body Landin.Tests.Checking_Suite is
          True);
    end Struct_Array_Field_Storage_Classes_Are_Enabled;
 
-   --  D64/D66/D67 carry one nominal body on the contextual literal, record
-   --  each source label as a declaration-order field identity, and give a
+   --  D64/D66--D68 carry one nominal body on the contextual literal, record
+   --  each source label as a declaration-order field identity, and give each
    --  module array label its field's complete static shape.
    procedure Struct_Literals_Carry_Body_And_Field_Identities
      (Item : in out Landin.Testing.Context);
@@ -2730,16 +2730,19 @@ package body Landin.Tests.Checking_Suite is
          & "    row: [2]usize" & LF
          & "    ready: bool" & LF
          & "    tail: u16" & LF
+         & "    repeated: [2]u8" & LF
+         & "    mixed: [3]u16" & LF
          & "end holder" & LF
          & "image: holder = (ready: true, row: [8, 9], tail: 11,"
-         & " tag: 2)" & LF
+         & " tag: 2, repeated: [of 7], mixed: [17, of 19])" & LF
          & "mut state: holder" & LF
          & "f: () -> none =" & LF
          & "    local: holder = (ready: true, tail: 5, tag: 3,"
          & " of zeroed)" & LF
          & "    state = (tail: 7, tag: 4, ready: false, of zeroed)" & LF
          & "    contextual: holder = (row: [8, 9], ready: zeroed,"
-         & " tag: 6, tail: 10)" & LF
+         & " tag: 6, tail: 10, repeated: [2 of 7],"
+         & " mixed: [17, of 19])" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -2816,6 +2819,37 @@ package body Landin.Tests.Checking_Suite is
                           (Types.all, Of_Tree.all, Row)
                             = Landin.Types.Usize,
                         "the static array label carries field two's shape");
+                  end;
+                  declare
+                     Repeated : constant Landin.Syntax.Node_Id :=
+                       Landin.Syntax.Value_Of
+                         (Of_Tree.all,
+                          Landin.Syntax.Nth_Field_Value
+                            (Of_Tree.all, Node, 5));
+                     Mixed : constant Landin.Syntax.Node_Id :=
+                       Landin.Syntax.Value_Of
+                         (Of_Tree.all,
+                          Landin.Syntax.Nth_Field_Value
+                            (Of_Tree.all, Node, 6));
+                  begin
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Repeated)
+                            = Landin.Types.Fixed_Array
+                        and then Landin.Checking.Array_Length
+                          (Types.all, Of_Tree.all, Repeated) = 2
+                        and then Landin.Checking.Array_Element
+                          (Types.all, Of_Tree.all, Repeated) = Landin.Types.U8
+                        and then Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Mixed)
+                            = Landin.Types.Fixed_Array
+                        and then Landin.Checking.Array_Length
+                          (Types.all, Of_Tree.all, Mixed) = 3
+                        and then Landin.Checking.Array_Element
+                          (Types.all, Of_Tree.all, Mixed)
+                            = Landin.Types.U16,
+                        "static repetitions carry their field shapes");
                   end;
                elsif Seen = 4 then
                   declare

@@ -1984,9 +1984,9 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Array_Chain_Copies_The_Terminal_Image;
 
-   --  D66/D67 extend D60/D61's module struct image chain with scalar folds
-   --  and a compact finite array-field segment.  Every destination gets its
-   --  own run; an omitted or whole-zero terminal keeps the absent image.
+   --  D66--D68 extend D60/D61's module struct image chain with scalar folds
+   --  and compact finite, repeated and hybrid array-field segments.  Every
+   --  destination gets its own run; a zero repetition keeps an absent field.
    procedure A_Module_Struct_Literal_Records_And_Copies_Its_Image
      (Item : in out Landin.Testing.Context);
 
@@ -2003,8 +2003,13 @@ package body Landin.Tests.Lowering_Suite is
          & "    tag: u8" & LF
          & "    count: usize" & LF
          & "    row: [2]u16" & LF
+         & "    repeated: [2]u8" & LF
+         & "    zero_repeat: [2]u8" & LF
+         & "    mixed: [3]u16" & LF
          & "end holder" & LF
-         & "mut origin: holder = (count: 7, row: [11, 13], tag: 5)" & LF
+         & "mut origin: holder = (count: 7, row: [11, 13], tag: 5,"
+         & " repeated: [of 7], zero_repeat: [of 0],"
+         & " mixed: [17, of 0])" & LF
          & "copy: holder = origin" & LF
          & "inferred := copy" & LF
          & "blank: holder = zeroed" & LF,
@@ -2025,10 +2030,13 @@ package body Landin.Tests.Lowering_Suite is
                "each nonzero struct destination owns an image");
             Landin.Testing.Check
               (Item,
-               IR.Image_Length (Unit, Datum) = 5
+               IR.Image_Length (Unit, Datum) = 9
                and then IR.Nth_Field_Image (Unit, Datum, 1) = 5
                and then IR.Nth_Field_Image (Unit, Datum, 2) = 7
-               and then IR.Nth_Field_Image (Unit, Datum, 3) = 0,
+               and then IR.Nth_Field_Image (Unit, Datum, 3) = 0
+               and then IR.Nth_Field_Image (Unit, Datum, 4) = 0
+               and then IR.Nth_Field_Image (Unit, Datum, 5) = 0
+               and then IR.Nth_Field_Image (Unit, Datum, 6) = 0,
                "the chain carries scalar folds and the array placeholder");
             Landin.Testing.Check
               (Item,
@@ -2036,6 +2044,15 @@ package body Landin.Tests.Lowering_Suite is
                and then IR.Nth_Field_Element (Unit, Datum, 3, 1) = 11
                and then IR.Nth_Field_Element (Unit, Datum, 3, 2) = 13,
                "the chain copies the finite array-field image");
+            Landin.Testing.Check
+              (Item,
+               IR.Field_Image_Of (Unit, Datum, 4).Form = IR.Repeated
+               and then IR.Field_Image_Of (Unit, Datum, 4).Value = 7
+               and then IR.Field_Image_Of (Unit, Datum, 5).Form = IR.Absent
+               and then IR.Field_Image_Of (Unit, Datum, 6).Form = IR.Hybrid
+               and then IR.Nth_Field_Element (Unit, Datum, 6, 1) = 17
+               and then IR.Field_Image_Of (Unit, Datum, 6).Value = 0,
+               "the chain copies repetition and canonical zero patterns");
          end loop;
 
          Landin.Testing.Check

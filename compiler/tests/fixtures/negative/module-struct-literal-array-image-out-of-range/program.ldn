@@ -3,3 +3,6 @@ holder: type = struct
 end holder
 
 state: holder = (row: [200 + 100, 10])
+full: holder = (row: [of 200 + 100])
+mixed_prefix: holder = (row: [200 + 100, of 10])
+mixed_suffix: holder = (row: [10, of 200 + 100])

@@ -795,16 +795,30 @@ package body Landin.Tests.IR_Suite is
              Element => Landin.Types.U16,
              Length  => 2));
          Landin.IR.Add_Field (Unit, Datum, Landin.Types.I32);
+         Landin.IR.Add_Field
+           (Unit, Datum,
+            (Kind    => Landin.IR.Array_Field_Shape,
+             Element => Landin.Types.U8,
+             Length  => 3));
+         Landin.IR.Add_Field
+           (Unit, Datum,
+            (Kind    => Landin.IR.Array_Field_Shape,
+             Element => Landin.Types.U16,
+             Length  => 4));
          Landin.IR.Set_Aggregate_Image
            (Unit, Datum,
-            Landin.Types.Folded_Array'(5, 0, -3),
+            Landin.Types.Folded_Array'(5, 0, -3, 0, 0),
             Landin.IR.Aggregate_Field_Image_Array'
               (1 => (others => <>),
                2 => (Form => Landin.IR.Finite,
                      Offset => 0, Count => 2, Value => 0),
                3 => (Form => Landin.IR.Absent,
-                     Offset => 2, Count => 0, Value => 0)),
-            Landin.Types.Folded_Array'(11, 13));
+                     Offset => 2, Count => 0, Value => 0),
+               4 => (Form => Landin.IR.Repeated,
+                     Offset => 2, Count => 0, Value => 7),
+               5 => (Form => Landin.IR.Hybrid,
+                     Offset => 2, Count => 2, Value => 23)),
+            Landin.Types.Folded_Array'(11, 13, 17, 19));
          Block := Landin.IR.Add_Block
            (Unit, Datum, Landin.Resolution.Program_Scope, Site);
          Landin.IR.Enter (Unit, Datum, Block);
@@ -814,13 +828,15 @@ package body Landin.Tests.IR_Suite is
          Landin.Testing.Check
            (Item,
             Landin.IR.Has_Image (Unit, Datum)
-            and then Landin.IR.Image_Length (Unit, Datum) = 5,
+            and then Landin.IR.Image_Length (Unit, Datum) = 9,
             "an aggregate image has flat fields and compact elements");
          Landin.Testing.Check
            (Item,
             Landin.IR.Nth_Field_Image (Unit, Datum, 1) = 5
             and then Landin.IR.Nth_Field_Image (Unit, Datum, 2) = 0
-            and then Landin.IR.Nth_Field_Image (Unit, Datum, 3) = -3,
+            and then Landin.IR.Nth_Field_Image (Unit, Datum, 3) = -3
+            and then Landin.IR.Nth_Field_Image (Unit, Datum, 4) = 0
+            and then Landin.IR.Nth_Field_Image (Unit, Datum, 5) = 0,
             "field folds keep declaration order and the array placeholder");
          Landin.Testing.Check
            (Item,
@@ -831,11 +847,22 @@ package body Landin.Tests.IR_Suite is
             "a finite array-field image keeps its source-order folds");
          Landin.Testing.Check
            (Item,
+            Landin.IR.Field_Image_Of (Unit, Datum, 4).Form
+              = Landin.IR.Repeated
+            and then Landin.IR.Field_Image_Of (Unit, Datum, 4).Value = 7
+            and then Landin.IR.Field_Image_Of (Unit, Datum, 5).Form
+              = Landin.IR.Hybrid
+            and then Landin.IR.Nth_Field_Element (Unit, Datum, 5, 1) = 17
+            and then Landin.IR.Nth_Field_Element (Unit, Datum, 5, 2) = 19
+            and then Landin.IR.Field_Image_Of (Unit, Datum, 5).Value = 23,
+            "repeated and hybrid field images keep their compact patterns");
+         Landin.Testing.Check
+           (Item,
             Ada.Strings.Fixed.Index
               (Landin.IR.Dump.Text
                  (Unit, Landin.Stages.Meanings (Work).all,
                   Landin.Stages.Identities (Work).all),
-               "  image 5 0 -3") /= 0,
+               "  image 5 0 -3 0 0") /= 0,
             "the dump prints flat folds rather than target bytes");
          Landin.Testing.Check
            (Item,
@@ -845,6 +872,19 @@ package body Landin.Tests.IR_Suite is
                   Landin.Stages.Identities (Work).all),
                "  field 2 image 11 13") /= 0,
             "the dump prints a finite field segment separately");
+         Landin.Testing.Check
+           (Item,
+            Ada.Strings.Fixed.Index
+              (Landin.IR.Dump.Text
+                 (Unit, Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all),
+               "  field 4 image repeat 7") /= 0
+            and then Ada.Strings.Fixed.Index
+              (Landin.IR.Dump.Text
+                 (Unit, Landin.Stages.Meanings (Work).all,
+                  Landin.Stages.Identities (Work).all),
+               "  field 5 image 17 19 repeat 23") /= 0,
+            "the dump distinguishes repeated and hybrid field patterns");
          Landin.Testing.Check
            (Item,
             Landin.IR.Verifier.Check (Unit).Kind

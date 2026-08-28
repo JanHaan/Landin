@@ -4,6 +4,5 @@ end holder
 
 source: [2]u16 = [7, 9]
 state: holder = (row: zeroed)
-repeated: holder = (row: [2 of 1])
 copied: holder = (row: source)
 selected: holder = (row: state.row)

@@ -1,6 +1,6 @@
 class: negative
-summary: D67 keeps selections and indexes out of a finite array-field static image, including below an operator
+summary: D67/D68 keep storage reads out of finite and repetition field images
 constructs: 0290, 0520, 0670, 0710, 0750, 1740, 1810, 1940
 program: program.ldn
-codes: L0304, L0304, L0304
+codes: L0304, L0304, L0304, L0304, L0304, L0304
 targets: linux-x86-64, macos-arm64

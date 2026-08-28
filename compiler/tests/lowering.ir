@@ -1685,48 +1685,89 @@ item 2 DATUM origin result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]u16
   field 3 [2]bool
-  field 4 usize
-  image 5 0 0 7
+  field 4 [2]u16
+  field 5 [3]u16
+  field 6 [2]u8
+  field 7 [3]u8
+  field 8 [2]bool
+  field 9 usize
+  image 5 0 0 0 0 0 0 0 7
   field 2 image 11 13
   field 3 image 1 0
+  field 4 image repeat 17
+  field 5 image 19 repeat 23
+  field 7 image 0 repeat 0
+  field 8 image repeat 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 item 3 DATUM copy result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]u16
   field 3 [2]bool
-  field 4 usize
-  image 5 0 0 7
+  field 4 [2]u16
+  field 5 [3]u16
+  field 6 [2]u8
+  field 7 [3]u8
+  field 8 [2]bool
+  field 9 usize
+  image 5 0 0 0 0 0 0 0 7
   field 2 image 11 13
   field 3 image 1 0
+  field 4 image repeat 17
+  field 5 image 19 repeat 23
+  field 7 image 0 repeat 0
+  field 8 image repeat 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 item 4 DATUM inferred result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]u16
   field 3 [2]bool
-  field 4 usize
-  image 5 0 0 7
+  field 4 [2]u16
+  field 5 [3]u16
+  field 6 [2]u8
+  field 7 [3]u8
+  field 8 [2]bool
+  field 9 usize
+  image 5 0 0 0 0 0 0 0 7
   field 2 image 11 13
   field 3 image 1 0
+  field 4 image repeat 17
+  field 5 image 19 repeat 23
+  field 7 image 0 repeat 0
+  field 8 image repeat 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 item 5 DATUM aliased result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]u16
   field 3 [2]bool
-  field 4 usize
-  image 5 0 0 7
+  field 4 [2]u16
+  field 5 [3]u16
+  field 6 [2]u8
+  field 7 [3]u8
+  field 8 [2]bool
+  field 9 usize
+  image 5 0 0 0 0 0 0 0 7
   field 2 image 11 13
   field 3 image 1 0
+  field 4 image repeat 17
+  field 5 image 19 repeat 23
+  field 7 image 0 repeat 0
+  field 8 image repeat 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 item 6 DATUM blank result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]u16
   field 3 [2]bool
-  field 4 usize
-  image 0 0 0 0
+  field 4 [2]u16
+  field 5 [3]u16
+  field 6 [2]u8
+  field 7 [3]u8
+  field 8 [2]bool
+  field 9 usize
+  image 0 0 0 0 0 0 0 0 0
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-struct-literal-initializer/program.ldn

@@ -2426,6 +2426,10 @@ package body Landin.Stages.Checking is
 
          function Subtree_Was_Refused (Node : Syn.Node_Id) return Boolean is
          begin
+            if Node = Syn.No_Node then
+               return False;
+            end if;
+
             if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                  = Ty.Ill_Typed
             then
@@ -2452,12 +2456,32 @@ package body Landin.Stages.Checking is
             Element : constant Ty.Scalar_Name :=
               Landin.Checking.Field_Array_Element
                 (Types.all, Wrote, Which);
+
+            procedure Require_Known (Each : Syn.Node_Id);
+
+            procedure Require_Known (Each : Syn.Node_Id) is
+            begin
+               if not Subtree_Was_Refused (Each)
+                 and then not Is_Known (Of_Tree, Each)
+               then
+                  Bad.Report
+                    (Item    => Bad.Not_Known_At_Compile_Time,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Each),
+                     Message => "this array-field image value has to be"
+                                & " known when the module image is formed",
+                     Note    => "[1940]: nothing runs before the entry"
+                                & " point [1460]",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Each);
+               end if;
+            end Require_Known;
          begin
             --  D65 makes the label the same contextual destination as the
             --  selected field in D49--D53.  Each established array spelling
             --  keeps its own shape check and diagnostic owner.  D67 admits
-            --  the finite and zero static forms without opening image-copy
-            --  recursion or D34/D38's compact repetitions inside a field.
+            --  the finite and zero static forms; D68 adds D34/D38's compact
+            --  repetitions without opening image-copy recursion.
             if Static_Image then
                case Syn.Kind (Of_Tree, Value) is
                   when Syn.Array_Literal =>
@@ -2468,29 +2492,39 @@ package body Landin.Stages.Checking is
                      for Position in
                        1 .. Syn.Element_Count (Of_Tree, Value)
                      loop
-                        declare
-                           Each : constant Syn.Node_Id :=
-                             Syn.Nth_Element (Of_Tree, Value, Position);
-                        begin
-                           if not Subtree_Was_Refused (Each)
-                             and then not Is_Known (Of_Tree, Each)
-                           then
-                              Bad.Report
-                                (Item    =>
-                                   Bad.Not_Known_At_Compile_Time,
-                                 Source  => Syn.Source_Of (Of_Tree),
-                                 Where   => Syn.Where (Of_Tree, Each),
-                                 Message => "this array-field image element"
-                                            & " has to be known when the"
-                                            & " module image is formed",
-                                 Note    => "[1940]: nothing runs before"
-                                            & " the entry point [1460]",
-                                 Into    => Found);
-                              Landin.Checking.Refuse
-                                (Types.all, Of_Tree, Each);
-                           end if;
-                        end;
+                        Require_Known
+                          (Syn.Nth_Element (Of_Tree, Value, Position));
                      end loop;
+
+                     if Subtree_Was_Refused (Value) then
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Value);
+                     end if;
+
+                  when Syn.Array_Repetition =>
+                     Check_Array_Repetition
+                       (Of_Tree, Field, Value, Expected, Element,
+                        Static_Image => True);
+                     Require_Known
+                       (Syn.Repeated_Element (Of_Tree, Value));
+
+                     if Subtree_Was_Refused (Value) then
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Value);
+                     end if;
+
+                  when Syn.Mixed_Array_Repetition =>
+                     Check_Mixed_Array_Repetition
+                       (Of_Tree, Field, Value, Expected, Element,
+                        Static_Image => True);
+                     for Position in
+                       1 .. Syn.Element_Count (Of_Tree, Value)
+                     loop
+                        Require_Known
+                          (Syn.Nth_Element (Of_Tree, Value, Position));
+                     end loop;
+                     Require_Known
+                       (Syn.Repeated_Element (Of_Tree, Value));
 
                      if Subtree_Was_Refused (Value) then
                         Landin.Checking.Refuse
@@ -2509,8 +2543,8 @@ package body Landin.Stages.Checking is
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Value),
                         Message => "a module struct array field takes a"
-                                   & " finite literal or `zeroed` in this"
-                                   & " slice",
+                                   & " finite literal, repetition or"
+                                   & " `zeroed` in this slice",
                         Refused => Bad.Array_Value,
                         Into    => Found);
                      Landin.Checking.Refuse
@@ -4959,7 +4993,8 @@ package body Landin.Stages.Checking is
                            end if;
                         end;
                      elsif Syn.Kind (Of_Tree, Image_Value)
-                             = Syn.Array_Literal
+                             in Syn.Array_Literal | Syn.Array_Repetition
+                                | Syn.Mixed_Array_Repetition
                      then
                         declare
                            Element : constant Ty.Scalar_Name :=
@@ -4967,15 +5002,31 @@ package body Landin.Stages.Checking is
                                (Types.all, Wrote, Which);
                         begin
                            if Element in Ty.Integer_Name then
-                              for Each in
-                                1 .. Syn.Element_Count
-                                       (Of_Tree, Image_Value)
-                              loop
+                              if Syn.Kind (Of_Tree, Image_Value)
+                                   = Syn.Array_Repetition
+                              then
                                  Check_Image_Scalar
-                                   (Syn.Nth_Element
-                                      (Of_Tree, Image_Value, Each),
-                                    Element);
-                              end loop;
+                                   (Syn.Repeated_Element
+                                      (Of_Tree, Image_Value), Element);
+                              else
+                                 for Each in
+                                   1 .. Syn.Element_Count
+                                          (Of_Tree, Image_Value)
+                                 loop
+                                    Check_Image_Scalar
+                                      (Syn.Nth_Element
+                                         (Of_Tree, Image_Value, Each),
+                                       Element);
+                                 end loop;
+
+                                 if Syn.Kind (Of_Tree, Image_Value)
+                                      = Syn.Mixed_Array_Repetition
+                                 then
+                                    Check_Image_Scalar
+                                      (Syn.Repeated_Element
+                                         (Of_Tree, Image_Value), Element);
+                                 end if;
+                              end if;
                            end if;
                         end;
                      end if;

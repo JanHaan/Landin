@@ -528,8 +528,8 @@ package Landin.IR is
    --  D67: the target-neutral image carried beside one aggregate field.
    --  Offset and Count select a finite run concatenated after D66's one flat
    --  fold per field.  Absent is the field's zero image; Finite is enabled by
-   --  D67.  Repeated and Hybrid reserve D34/D38's compact shapes for D68 and
-   --  are rejected by the verifier until that decision supplies them.
+   --  D67.  D68 uses Repeated for one nonzero full pattern and Hybrid for a
+   --  finite prefix followed by one suffix pattern.
    type Aggregate_Field_Image is record
       Form   : Field_Image_Form     := Absent;
       Offset : Natural              := 0;
