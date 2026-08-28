@@ -1984,9 +1984,10 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Array_Chain_Copies_The_Terminal_Image;
 
-   --  D66--D68 extend D60/D61's module struct image chain with scalar folds
-   --  and compact finite, repeated and hybrid array-field segments.  Every
-   --  destination gets its own run; a zero repetition keeps an absent field.
+   --  D66--D69 extend D60/D61's module struct image chain with scalar folds,
+   --  compact finite, repeated and hybrid array-field segments, and a direct
+   --  module-array source.  Every destination gets its own run; a zero
+   --  repetition keeps an absent field.
    procedure A_Module_Struct_Literal_Records_And_Copies_Its_Image
      (Item : in out Landin.Testing.Context);
 
@@ -2006,10 +2007,20 @@ package body Landin.Tests.Lowering_Suite is
          & "    repeated: [2]u8" & LF
          & "    zero_repeat: [2]u8" & LF
          & "    mixed: [3]u16" & LF
+         & "    copied_finite: [2]u16" & LF
+         & "    copied_repeated: [2]u8" & LF
+         & "    copied_zero: [2]u8" & LF
+         & "    copied_hybrid: [3]u16" & LF
          & "end holder" & LF
+         & "finite_source: [2]u16 = [29, 31]" & LF
+         & "repeated_source: [2]u8 = [of 37]" & LF
+         & "zero_source: [2]u8 = [of 0]" & LF
+         & "hybrid_source: [3]u16 = [41, of 43]" & LF
          & "mut origin: holder = (count: 7, row: [11, 13], tag: 5,"
          & " repeated: [of 7], zero_repeat: [of 0],"
-         & " mixed: [17, of 0])" & LF
+         & " mixed: [17, of 0], copied_finite: finite_source,"
+         & " copied_repeated: repeated_source, copied_zero: zero_source,"
+         & " copied_hybrid: hybrid_source)" & LF
          & "copy: holder = origin" & LF
          & "inferred := copy" & LF
          & "blank: holder = zeroed" & LF,
@@ -2022,7 +2033,7 @@ package body Landin.Tests.Lowering_Suite is
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
       begin
-         for Datum in IR.Item_Id range 1 .. 3 loop
+         for Datum in IR.Item_Id range 5 .. 7 loop
             Landin.Testing.Check
               (Item,
                IR.Result_Of (Unit, Datum) = Landin.Types.Aggregate
@@ -2030,13 +2041,17 @@ package body Landin.Tests.Lowering_Suite is
                "each nonzero struct destination owns an image");
             Landin.Testing.Check
               (Item,
-               IR.Image_Length (Unit, Datum) = 9
+               IR.Image_Length (Unit, Datum) = 16
                and then IR.Nth_Field_Image (Unit, Datum, 1) = 5
                and then IR.Nth_Field_Image (Unit, Datum, 2) = 7
                and then IR.Nth_Field_Image (Unit, Datum, 3) = 0
                and then IR.Nth_Field_Image (Unit, Datum, 4) = 0
                and then IR.Nth_Field_Image (Unit, Datum, 5) = 0
-               and then IR.Nth_Field_Image (Unit, Datum, 6) = 0,
+               and then IR.Nth_Field_Image (Unit, Datum, 6) = 0
+               and then IR.Nth_Field_Image (Unit, Datum, 7) = 0
+               and then IR.Nth_Field_Image (Unit, Datum, 8) = 0
+               and then IR.Nth_Field_Image (Unit, Datum, 9) = 0
+               and then IR.Nth_Field_Image (Unit, Datum, 10) = 0,
                "the chain carries scalar folds and the array placeholder");
             Landin.Testing.Check
               (Item,
@@ -2053,12 +2068,24 @@ package body Landin.Tests.Lowering_Suite is
                and then IR.Nth_Field_Element (Unit, Datum, 6, 1) = 17
                and then IR.Field_Image_Of (Unit, Datum, 6).Value = 0,
                "the chain copies repetition and canonical zero patterns");
+            Landin.Testing.Check
+              (Item,
+               IR.Field_Image_Of (Unit, Datum, 7).Form = IR.Finite
+               and then IR.Nth_Field_Element (Unit, Datum, 7, 1) = 29
+               and then IR.Nth_Field_Element (Unit, Datum, 7, 2) = 31
+               and then IR.Field_Image_Of (Unit, Datum, 8).Form = IR.Repeated
+               and then IR.Field_Image_Of (Unit, Datum, 8).Value = 37
+               and then IR.Field_Image_Of (Unit, Datum, 9).Form = IR.Absent
+               and then IR.Field_Image_Of (Unit, Datum, 10).Form = IR.Hybrid
+               and then IR.Nth_Field_Element (Unit, Datum, 10, 1) = 41
+               and then IR.Field_Image_Of (Unit, Datum, 10).Value = 43,
+               "direct array labels copy every canonical image form");
          end loop;
 
          Landin.Testing.Check
            (Item,
-            IR.Result_Of (Unit, 4) = Landin.Types.Aggregate
-            and then not IR.Has_Image (Unit, 4),
+            IR.Result_Of (Unit, 8) = Landin.Types.Aggregate
+            and then not IR.Has_Image (Unit, 8),
             "the whole-zero aggregate still has no written image");
       end;
    end A_Module_Struct_Literal_Records_And_Copies_Its_Image;

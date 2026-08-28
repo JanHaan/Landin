@@ -1,0 +1,7 @@
+holder: type = struct
+    row: [2]u16
+end holder
+
+first: [2]u16 = second
+second: [2]u16 = first
+state: holder = (row: first)

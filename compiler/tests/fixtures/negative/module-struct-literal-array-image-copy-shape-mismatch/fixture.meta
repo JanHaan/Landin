@@ -1,0 +1,6 @@
+class: negative
+summary: D69 requires a direct module array image source to have the fixed-array field's exact D17 shape
+constructs: 0520, 0670, 0710, 0750, 1740, 1810
+program: program.ldn
+codes: L0301, L0301, L0301
+targets: linux-x86-64, macos-arm64

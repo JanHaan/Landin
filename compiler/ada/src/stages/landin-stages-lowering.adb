@@ -2896,6 +2896,11 @@ package body Landin.Stages.Lowering is
             Made (Id) := True;
          end Set_Image_From_Mixed_Repetition;
 
+         --  D69's struct-literal field may name an array datum declared
+         --  later, so its image must be resolved before the aggregate image
+         --  gathers that field's compact descriptor.
+         procedure Resolve_Image (Id : Res.Declaration_Id);
+
          procedure Set_Image_From_Struct_Literal
            (Id      : Res.Declaration_Id;
             Of_Tree : Syn.Tree;
@@ -2930,6 +2935,37 @@ package body Landin.Stages.Lowering is
                      Element_Count := Element_Count
                        + Syn.Element_Count
                            (Of_Tree, Syn.Value_Of (Of_Tree, Field));
+                  elsif Syn.Kind
+                    (Of_Tree, Syn.Value_Of (Of_Tree, Field))
+                      = Syn.Name_Reference
+                    and then IR.Nth_Field_Shape
+                      (Unit.all, Item, Which).Kind
+                        = IR.Array_Field_Shape
+                  then
+                     declare
+                        Value : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Field);
+                        Source_Id : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Of_Tree, Value);
+                     begin
+                        Resolve_Image (Source_Id);
+                        if Made (Source_Id) then
+                           declare
+                              Source_Item : constant IR.Item_Id :=
+                                IR.Item_For (Unit.all, Source_Id);
+                           begin
+                              Element_Count := Element_Count
+                                + (if IR.Is_Repeated_Image
+                                       (Unit.all, Source_Item)
+                                   then Natural
+                                     (IR.Image_Prefix_Length
+                                        (Unit.all, Source_Item))
+                                   else Natural
+                                     (IR.Image_Length
+                                        (Unit.all, Source_Item)));
+                           end;
+                        end if;
+                     end;
                   end if;
                end;
             end loop;
@@ -3045,11 +3081,73 @@ package body Landin.Stages.Lowering is
                               end if;
                            end;
                         elsif Syn.Kind (Of_Tree, Value)
+                                = Syn.Name_Reference
+                        then
+                           declare
+                              Source_Id : constant Res.Declaration_Id :=
+                                Res.Bound_To
+                                  (Meanings.all, Of_Tree, Value);
+                           begin
+                              Resolve_Image (Source_Id);
+                              if Made (Source_Id) then
+                                 declare
+                                    Source_Item : constant IR.Item_Id :=
+                                      IR.Item_For (Unit.all, Source_Id);
+                                 begin
+                                    if IR.Is_Repeated_Image
+                                      (Unit.all, Source_Item)
+                                    then
+                                       declare
+                                          Prefix : constant Natural :=
+                                            Natural
+                                              (IR.Image_Prefix_Length
+                                                 (Unit.all, Source_Item));
+                                       begin
+                                          Images (Which).Form :=
+                                            (if Prefix = 0
+                                             then IR.Repeated
+                                             else IR.Hybrid);
+                                          Images (Which).Count := Prefix;
+                                          Images (Which).Value :=
+                                            IR.Repeated_Image_Value
+                                              (Unit.all, Source_Item);
+                                          for Position in 1 .. Prefix loop
+                                             Elements (Cursor + Position) :=
+                                               IR.Nth_Image
+                                                 (Unit.all, Source_Item,
+                                                  IR.Part_Position
+                                                    (Position));
+                                          end loop;
+                                          Cursor := Cursor + Prefix;
+                                       end;
+                                    else
+                                       declare
+                                          Length : constant Natural :=
+                                            Natural
+                                              (IR.Image_Length
+                                                 (Unit.all, Source_Item));
+                                       begin
+                                          Images (Which).Form := IR.Finite;
+                                          Images (Which).Count := Length;
+                                          for Position in 1 .. Length loop
+                                             Elements (Cursor + Position) :=
+                                               IR.Nth_Image
+                                                 (Unit.all, Source_Item,
+                                                  IR.Part_Position
+                                                    (Position));
+                                          end loop;
+                                          Cursor := Cursor + Length;
+                                       end;
+                                    end if;
+                                 end;
+                              end if;
+                           end;
+                        elsif Syn.Kind (Of_Tree, Value)
                                 /= Syn.Zeroed_Literal
                         then
                            raise Landin.Compiler_Defect with
                              "a module struct array-field image outside"
-                             & " D68 reached lowering";
+                             & " D69 reached lowering";
                         end if;
                      end;
                   end if;
@@ -3161,8 +3259,6 @@ package body Landin.Stages.Lowering is
                Made (Destination) := True;
             end;
          end Copy_Image_From;
-
-         procedure Resolve_Image (Id : Res.Declaration_Id);
 
          procedure Resolve_Image (Id : Res.Declaration_Id)
          is

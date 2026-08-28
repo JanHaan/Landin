@@ -2707,7 +2707,7 @@ package body Landin.Tests.Checking_Suite is
          True);
    end Struct_Array_Field_Storage_Classes_Are_Enabled;
 
-   --  D64/D66--D68 carry one nominal body on the contextual literal, record
+   --  D64/D66--D69 carry one nominal body on the contextual literal, record
    --  each source label as a declaration-order field identity, and give each
    --  module array label its field's complete static shape.
    procedure Struct_Literals_Carry_Body_And_Field_Identities
@@ -2733,8 +2733,9 @@ package body Landin.Tests.Checking_Suite is
          & "    repeated: [2]u8" & LF
          & "    mixed: [3]u16" & LF
          & "end holder" & LF
-         & "image: holder = (ready: true, row: [8, 9], tail: 11,"
+         & "image: holder = (ready: true, row: row_source, tail: 11,"
          & " tag: 2, repeated: [of 7], mixed: [17, of 19])" & LF
+         & "row_source: [2]usize = [8, 9]" & LF
          & "mut state: holder" & LF
          & "f: () -> none =" & LF
          & "    local: holder = (ready: true, tail: 5, tag: 3,"
@@ -2818,7 +2819,8 @@ package body Landin.Tests.Checking_Suite is
                         and then Landin.Checking.Array_Element
                           (Types.all, Of_Tree.all, Row)
                             = Landin.Types.Usize,
-                        "the static array label carries field two's shape");
+                        "the direct static array label carries field two's"
+                        & " shape");
                   end;
                   declare
                      Repeated : constant Landin.Syntax.Node_Id :=
