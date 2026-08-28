@@ -1,0 +1,40 @@
+--  The current kernel has recursion and fixed arrays, but no loops or
+--  aggregate parameters yet.  This insertion sort therefore works recursively
+--  over module storage.  The array literal is its static initial image.
+mut values: [8]i32 = [9, -4, 7, 7, 0, -9, 42, 1]
+
+insert_at: (at: usize) -> none =
+    return when at == 0
+
+    previous: usize = at - 1
+    if values[previous] > values[at] then
+        saved: i32 = values[previous]
+        values[previous] = values[at]
+        values[at] = saved
+        insert_at(previous)
+    end if
+end insert_at
+
+insertion_sort_from: (at: usize) -> none =
+    return when at >= lenof values
+    insert_at(at)
+    insertion_sort_from(at + 1)
+end insertion_sort_from
+
+public main: () -> (code: i32) =
+    insertion_sort_from(1)
+
+    if values[0] == -9
+        and values[1] == -4
+        and values[2] == 0
+        and values[3] == 1
+        and values[4] == 7
+        and values[5] == 7
+        and values[6] == 9
+        and values[7] == 42
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

@@ -28,6 +28,7 @@ the standard library remain ahead.**
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
+| `examples.md` | complete programs the compiler emits and the Linux gate runs today: recursive Fibonacci and three sorting algorithms. |
 | `ROADMAP.md` | the sole durable authority for open work, implementation dependencies, phase gates, and dispositions. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
 | `check.py` | mechanical checks over the specification, roadmap, and prototypes. Run it after touching any of them. |
@@ -51,9 +52,10 @@ findings, including several that reversed a decision.
 ## Reading it online
 
 Every document here is published as a syntax-highlighted reading copy at
-**https://www.701.dev** — the specification, the four prototypes, the
-roadmap, and the implementation notes. Every `[NNNN]` citation links to the
-construct it names, and hovering one shows what it says.
+**https://www.701.dev** — the tour, the specification, the running examples,
+the four prototypes, the roadmap, and the implementation notes. Every
+`[NNNN]` citation links to the construct it names, and hovering one shows what
+it says.
 
 The repository the pages are generated from is at
 **https://git.sr.ht/~sinnfrei/landin**, and it is the only copy:

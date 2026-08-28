@@ -39,6 +39,38 @@ Fixture classes, and the directory each uses:
 | debugger | `debugger` | what a debugger must be able to show |
 | end-to-end | `end-to-end` | the toolchain from source to result |
 
+## Complete programs to try
+
+The runtime fixtures include small, complete programs rather than only
+single-construct probes.  Four of them are collected in `examples.md` and use
+only the kernel the compiler implements today:
+
+- [recursive Fibonacci](fixtures/runtime/recursive-fibonacci/main.ldn) calls
+  itself twice per recursive step;
+- [insertion sort](fixtures/runtime/insertion-sort/main.ldn) uses recursive
+  adjacent swaps;
+- [selection sort](fixtures/runtime/selection-sort/main.ldn) recursively finds
+  each remaining minimum;
+- [merge sort](fixtures/runtime/merge-sort/main.ldn) divides recursively and
+  merges through a second fixed array.
+
+The kernel does not have loops or aggregate parameters yet, so the examples
+deliberately use recursion and module-level arrays.  Their inputs use the
+static array literals the current R2.20 implementation already accepts.  On
+Linux x86-64, compile one from the repository root with:
+
+```sh
+refine --target=linux-x86-64 --emit=exe \
+  -o /tmp/landin-insertion-sort \
+  compiler/tests/fixtures/runtime/insertion-sort/main.ldn
+/tmp/landin-insertion-sort
+test $? -eq 42
+```
+
+Each program returns 42 when its result is the expected one.  They are runtime
+fixtures as well as examples, so the authoritative Linux gate compiles, runs
+and checks all four on every push.
+
 ## Metadata
 
 `fixture.meta` is `key: value` lines, with `#` comments and blank lines.

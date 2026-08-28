@@ -1,0 +1,64 @@
+--  Merge sort gives the recursive kernel a divide-and-conquer example.  Until
+--  aggregate parameters arrive, the input and work area are module storage.
+mut values: [8]i32 = [-12, 5, 0, 99, 5, 2, -3, 18]
+mut work: [8]i32
+
+copy_to_work: (at: usize, right: usize) -> none =
+    if at < right then
+        work[at] = values[at]
+        copy_to_work(at + 1, right)
+    end if
+end copy_to_work
+
+merge_from: (destination: usize, left_at: usize, middle: usize,
+             right_at: usize, right: usize) -> none =
+    return when destination >= right
+
+    if left_at < middle then
+        if right_at >= right then
+            values[destination] = work[left_at]
+            merge_from(destination + 1, left_at + 1, middle,
+                       right_at, right)
+        elsif work[left_at] <= work[right_at] then
+            values[destination] = work[left_at]
+            merge_from(destination + 1, left_at + 1, middle,
+                       right_at, right)
+        else
+            values[destination] = work[right_at]
+            merge_from(destination + 1, left_at, middle,
+                       right_at + 1, right)
+        end if
+    else
+        values[destination] = work[right_at]
+        merge_from(destination + 1, left_at, middle,
+                   right_at + 1, right)
+    end if
+end merge_from
+
+merge_sort_range: (left: usize, right: usize) -> none =
+    if right - left > 1 then
+        middle: usize = left + (right - left) / 2
+        merge_sort_range(left, middle)
+        merge_sort_range(middle, right)
+        copy_to_work(left, right)
+        merge_from(left, left, middle, middle, right)
+    end if
+end merge_sort_range
+
+public main: () -> (code: i32) =
+    merge_sort_range(0, lenof values)
+
+    if values[0] == -12
+        and values[1] == -3
+        and values[2] == 0
+        and values[3] == 2
+        and values[4] == 5
+        and values[5] == 5
+        and values[6] == 18
+        and values[7] == 99
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
