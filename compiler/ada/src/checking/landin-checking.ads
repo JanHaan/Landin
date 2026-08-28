@@ -233,15 +233,6 @@ package Landin.Checking is
                  and then Contains (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
-   --  A whole aggregate value is still lowered as a scalar field copy.  A
-   --  layout with an array field is valid for D45--D47's measurement and
-   --  storage, but its whole value waits for the separate copy slice.
-   function Has_Only_Scalar_Fields
-     (Of_Table : Table; Id : Declaration_Id) return Boolean
-     with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
-                 and then Has_Layout (Of_Table, Id);
-
    procedure Lay_Out
      (Into  : in out Table;
       Id    : Declaration_Id;

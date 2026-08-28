@@ -1,0 +1,6 @@
+class: negative
+summary: D54 self-copy cannot establish an unassigned array-bearing struct
+constructs: 0080, 0410, 0520, 0670, 0710, 0750, 1810, 1910
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64

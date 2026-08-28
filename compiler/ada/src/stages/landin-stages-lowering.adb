@@ -1023,43 +1023,61 @@ package body Landin.Stages.Lowering is
                is
                   Wrote : constant Res.Declaration_Id :=
                     Landin.Checking.Body_Of (Types.all, Of_Tree, Place);
-                  Held : constant Ty.Scalar_Name :=
-                    Landin.Checking.Field_Type (Types.all, Wrote, Field);
                   Source : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, From);
                   Target : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Place);
-                  Taken : IR.Value_Id;
                begin
-                  if Res.Sort_Of (Meanings.all, Source)
-                     = Res.Module_Binding
-                  then
-                     Taken :=
-                       IR.Emit_Load_Field
-                         (Unit.all, Filling,
-                          IR.Item_For (Unit.all, Source),
-                          IR.Part_Position (Field), Held, Site);
-                  else
-                     Taken :=
-                       IR.Emit_Load_Slot_Field
-                         (Unit.all, Filling,
-                          Slot_For (Of_Tree, From, Source),
-                          IR.Part_Position (Field), Held, Site);
-                  end if;
+                  case Landin.Checking.Field_Kind_Of
+                    (Types.all, Wrote, Field)
+                  is
+                     when Landin.Checking.Scalar_Field =>
+                        declare
+                           Held : constant Ty.Scalar_Name :=
+                             Landin.Checking.Field_Type
+                               (Types.all, Wrote, Field);
+                           Taken : IR.Value_Id;
+                        begin
+                           if Res.Sort_Of (Meanings.all, Source)
+                                = Res.Module_Binding
+                           then
+                              Taken :=
+                                IR.Emit_Load_Field
+                                  (Unit.all, Filling,
+                                   IR.Item_For (Unit.all, Source),
+                                   IR.Part_Position (Field), Held, Site);
+                           else
+                              Taken :=
+                                IR.Emit_Load_Slot_Field
+                                  (Unit.all, Filling,
+                                   Slot_For (Of_Tree, From, Source),
+                                   IR.Part_Position (Field), Held, Site);
+                           end if;
 
-                  if Res.Sort_Of (Meanings.all, Target)
-                     = Res.Module_Binding
-                  then
-                     IR.Emit_Store_Field
-                       (Unit.all, Filling,
-                        IR.Item_For (Unit.all, Target),
-                        IR.Part_Position (Field), Taken, Site);
-                  else
-                     IR.Emit_Store_Slot_Field
-                       (Unit.all, Filling,
-                        Slot_For (Of_Tree, Place, Target),
-                        IR.Part_Position (Field), Taken, Site);
-                  end if;
+                           if Res.Sort_Of (Meanings.all, Target)
+                                = Res.Module_Binding
+                           then
+                              IR.Emit_Store_Field
+                                (Unit.all, Filling,
+                                 IR.Item_For (Unit.all, Target),
+                                 IR.Part_Position (Field), Taken, Site);
+                           else
+                              IR.Emit_Store_Slot_Field
+                                (Unit.all, Filling,
+                                 Slot_For (Of_Tree, Place, Target),
+                                 IR.Part_Position (Field), Taken, Site);
+                           end if;
+                        end;
+
+                     when Landin.Checking.Fixed_Array_Field =>
+                        IR.Emit_Array_Copy
+                          (Unit.all, Filling,
+                           Source      => Storage_For (Of_Tree, From),
+                           Destination => Storage_For (Of_Tree, Place),
+                           Site        => Site,
+                           Source_Field => Field,
+                           Destination_Field => Field);
+                  end case;
                end Copy_Field;
 
                function Index_For (Place : Syn.Node_Id) return IR.Value_Id is
@@ -1353,11 +1371,10 @@ package body Landin.Stages.Lowering is
                      end;
 
                   when Syn.Assignment =>
-                     --  [0710]'s copy: the same fields at the same
-                     --  offsets on both sides, so it is a field read and
-                     --  a field write each, in [0750]'s order.  No
-                     --  opcode of its own, because there is nothing a
-                     --  whole-struct move would say that these do not.
+                     --  [0710]'s copy visits the same fields in [0750]'s
+                     --  order: a scalar is one field read and write, and
+                     --  D54 copies an array field with D50's compact
+                     --  operation.  No whole-struct opcode says more.
                      if Landin.Checking.Type_Of
                           (Types.all, Of_Tree,
                            Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate

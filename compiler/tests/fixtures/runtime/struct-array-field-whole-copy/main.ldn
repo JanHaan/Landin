@@ -1,0 +1,45 @@
+holder: type = struct
+    tag: u8
+    row: [3]usize
+    tail: u16
+end holder
+
+same: type = holder
+
+mut saved: holder
+mut mirror: same
+
+public main: () -> (code: i32) =
+    mut source: same
+    source.tag = 7
+    source.row[0] = 10
+    source.row[1] = 11
+    source.row[2] = 12
+    source.tail = 701
+
+    mut local: holder
+    local = source
+    saved = local
+    mirror = saved
+
+    local.tag = 8
+    local.row[1] = 99
+    local.tail = 702
+
+    mut back: same
+    back = saved
+    back = back
+
+    if source.tag == 7
+        and source.row[0] == 10 and source.row[1] == 11
+        and source.row[2] == 12 and source.tail == 701
+        and local.tag == 8 and local.row[1] == 99 and local.tail == 702
+        and saved.tag == 7 and saved.row[1] == 11 and saved.tail == 701
+        and mirror.row[0] == 10 and mirror.row[2] == 12
+        and back.tag == 7 and back.row[1] == 11 and back.tail == 701
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

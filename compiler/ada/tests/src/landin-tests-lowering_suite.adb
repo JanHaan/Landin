@@ -2515,6 +2515,110 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Array_Field_Repetitions_Become_Qualified_Fills;
 
+   --  D54 keeps scalar fields on their existing load/store pair and uses
+   --  one D50 Copy_Array for each fixed-array field.  The instruction run
+   --  remains declaration ordered and target-neutral for every endpoint.
+   procedure Array_Bearing_Struct_Copy_Uses_Compact_Field_Operations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Bearing_Struct_Copy_Uses_Compact_Field_Operations
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "    tail: u16" & LF
+         & "end holder" & LF
+         & "mut left: holder" & LF
+         & "mut right: holder" & LF
+         & "copy: () -> none =" & LF
+         & "    mut first: holder" & LF
+         & "    mut second: holder" & LF
+         & "    first = left" & LF
+         & "    second = first" & LF
+         & "    right = second" & LF
+         & "    left = right" & LF
+         & "end copy" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "all module and local whole-copy endpoint pairs lower");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := 3;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Value_Count (Unit, Routine), 21,
+            "four five-operation field runs precede the return");
+
+         for Copy in 0 .. 3 loop
+            declare
+               First : constant IR.Value_Id := IR.Value_Id (5 * Copy + 1);
+               Array_Copy : constant IR.Value_Id := First + 2;
+               Source : constant IR.Storage :=
+                 IR.Source_Of (Unit, Routine, Array_Copy);
+               Destination : constant IR.Storage :=
+                 IR.Destination_Of (Unit, Routine, Array_Copy);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  IR.Op_Of (Unit, Routine, First) = IR.Load_Field
+                  and then IR.Op_Of (Unit, Routine, First + 1)
+                             = IR.Store_Field
+                  and then IR.Op_Of (Unit, Routine, Array_Copy)
+                             = IR.Copy_Array
+                  and then IR.Source_Field_Of
+                             (Unit, Routine, Array_Copy) = 2
+                  and then IR.Element_Field_Of
+                             (Unit, Routine, Array_Copy) = 2
+                  and then IR.Op_Of (Unit, Routine, First + 3)
+                             = IR.Load_Field
+                  and then IR.Op_Of (Unit, Routine, First + 4)
+                             = IR.Store_Field,
+                  "each copy visits scalar, array and scalar fields in order");
+
+               case Copy is
+                  when 0 =>
+                     Landin.Testing.Check
+                       (Item, Source.Kind = IR.Module_Datum
+                              and then Destination.Kind = IR.Frame_Slot,
+                        "the first copy goes from module to frame");
+                  when 1 =>
+                     Landin.Testing.Check
+                       (Item, Source.Kind = IR.Frame_Slot
+                              and then Destination.Kind = IR.Frame_Slot,
+                        "the second copy stays within the frame");
+                  when 2 =>
+                     Landin.Testing.Check
+                       (Item, Source.Kind = IR.Frame_Slot
+                              and then Destination.Kind = IR.Module_Datum,
+                        "the third copy goes from frame to module");
+                  when 3 =>
+                     Landin.Testing.Check
+                       (Item, Source.Kind = IR.Module_Datum
+                              and then Destination.Kind = IR.Module_Datum,
+                        "the fourth copy stays in module storage");
+               end case;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the mixed scalar and compact array field runs verify");
+      end;
+   end Array_Bearing_Struct_Copy_Uses_Compact_Field_Operations;
+
    ------------------------------------------------------------------
    --  A named aggregate measurement
    ------------------------------------------------------------------
@@ -2991,6 +3095,10 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "array field repetitions become qualified fills",
          Array_Field_Repetitions_Become_Qualified_Fills'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "array-bearing struct copy uses compact field operations",
+         Array_Bearing_Struct_Copy_Uses_Compact_Field_Operations'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "a struct measurement carries its scalar fields",

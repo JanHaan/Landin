@@ -1,10 +1,9 @@
 holder: type = struct
     row: [2]u32
-    tail: u8
 end holder
 
 copy: () -> none =
-    mut left: holder
-    mut right: holder
-    right = left
+    mut source: holder
+    destination: holder
+    destination = source
 end copy

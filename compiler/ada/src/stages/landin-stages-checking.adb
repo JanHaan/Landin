@@ -2781,33 +2781,6 @@ package body Landin.Stages.Checking is
                   --  carry them anywhere.
                   if Wants = Ty.Aggregate then
                      declare
-                        Wrote : constant Res.Declaration_Id :=
-                          Landin.Checking.Body_Of
-                            (Types.all, Of_Tree, Place);
-                     begin
-                        if Wrote /= Res.No_Declaration
-                          and then Landin.Checking.Has_Layout
-                            (Types.all, Wrote)
-                          and then not
-                            Landin.Checking.Has_Only_Scalar_Fields
-                              (Types.all, Wrote)
-                        then
-                           Bad.Report
-                             (Item    => Bad.Unsupported_Use,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Value),
-                              Message => "a whole value of a struct with an"
-                                         & " aggregate field is not enabled"
-                                         & " yet",
-                              Refused => Bad.Struct_Value,
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Value);
-                           return;
-                        end if;
-                     end;
-
-                     declare
                         Got : constant Ty.Type_Kind :=
                           Selected_From (Of_Tree, Value);
                      begin
@@ -3417,13 +3390,24 @@ package body Landin.Stages.Checking is
             --  D21 infers D17's shape from a direct storage name for a local
             --  or module binding.  D51 adds a directly selected fixed-array
             --  field only for a local binding; module images and every other
-            --  expression form still follow Synthesise's refusal.
+            --  expression form still follow Synthesise's refusal.  Settling
+            --  an untouched source here is intentional for a forward array
+            --  name; the Underway guard preserves the cycle's single report,
+            --  and the Fixed_Array test keeps an aggregate name on its whole-
+            --  value refusal instead of settling a representationless value.
             Direct_Name : constant Boolean :=
               Res.Sort_Of (Meanings.all, Id)
                 in Res.Local_Binding | Res.Module_Binding
               and then Syn.Kind (Of_Tree.all, Value) = Syn.Name_Reference
               and then Res.Verdict_Of (Meanings.all, Of_Tree.all, Value)
-                       = Res.Bound;
+                       = Res.Bound
+              and then Landin.Checking.State_Of
+                (Types.all,
+                 Res.Bound_To (Meanings.all, Of_Tree.all, Value))
+                   /= Landin.Checking.Underway
+              and then Settled_Type
+                (Res.Bound_To (Meanings.all, Of_Tree.all, Value))
+                  = Ty.Fixed_Array;
             Direct_Field : constant Boolean :=
               Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
               and then Syn.Kind (Of_Tree.all, Value) = Syn.Member_Selection
@@ -4868,7 +4852,15 @@ package body Landin.Stages.Checking is
               1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
             loop
                if Each in 1 .. Widest_Struct
-                 and then not State.Fields (Positive (Id), Each)
+                 and then
+                   (case Landin.Checking.Field_Kind_Of
+                           (Types.all,
+                            Landin.Checking.Body_Of (Types.all, Id), Each)
+                    is
+                       when Landin.Checking.Scalar_Field =>
+                         not State.Fields (Positive (Id), Each),
+                       when Landin.Checking.Fixed_Array_Field =>
+                         not Array_Is_Assigned (Id, Each, State))
                then
                   Require_Assigned
                     (At_Source, At_Span, Id, State,
@@ -5424,16 +5416,27 @@ package body Landin.Stages.Checking is
                      end if;
 
                      --  A whole struct copied into a place assigns every
-                     --  field of it at once, which is the one way a
-                     --  struct becomes assigned other than a field at a
-                     --  time.
+                     --  scalar field and every complete array field.  The
+                     --  two facts stay in their D16 and D48 tables rather
+                     --  than making an array field look scalar.
                      if Landin.Checking.Has_Layout (Types.all, Id) then
                         for Each in
                           1 .. Landin.Checking.Layout_Field_Count
                                  (Types.all, Id)
                         loop
                            if Each in 1 .. Widest_Struct then
-                              State.Fields (Positive (Id), Each) := True;
+                              case Landin.Checking.Field_Kind_Of
+                                (Types.all,
+                                 Landin.Checking.Body_Of (Types.all, Id),
+                                 Each)
+                              is
+                                 when Landin.Checking.Scalar_Field =>
+                                    State.Fields
+                                      (Positive (Id), Each) := True;
+                                 when Landin.Checking.Fixed_Array_Field =>
+                                    Array_Sets.Include
+                                      (State.Whole_Arrays, (Id, Each));
+                              end case;
                            end if;
                         end loop;
                      end if;
@@ -5463,9 +5466,25 @@ package body Landin.Stages.Checking is
                      --  the form [0080] describes, which has none.  D21
                      --  cites itself when a whole-array source is not
                      --  assigned, because that is what the reader is doing.
-                     Read_Names (Of_Tree, Syn.Value_Of (Of_Tree, Item),
-                                 State,
-                                 Whole_As => Initializer_Source);
+                     --  A declaration settled Ill_Typed is the binding-side
+                     --  twin of an assignment's refused target below:
+                     --  Check_Statement already returned after its owning
+                     --  report, so the statement cannot execute and reads
+                     --  nothing for definite assignment.
+                     declare
+                        Id : constant Res.Declaration_Id :=
+                          Declaration_At
+                            (Syn.Source_Of (Of_Tree), Item);
+                     begin
+                        if Id = Res.No_Declaration
+                          or else Landin.Checking.Type_Of (Types.all, Id)
+                                    /= Ty.Ill_Typed
+                        then
+                           Read_Names
+                             (Of_Tree, Syn.Value_Of (Of_Tree, Item), State,
+                              Whole_As => Initializer_Source);
+                        end if;
+                     end;
 
                   when Syn.Assignment =>
                      --  A refused destination owns the assignment report.
