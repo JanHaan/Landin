@@ -336,8 +336,9 @@ package body Landin.Backend.X86_64 is
            is (Size_Of (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts));
 
          --  D49/D50/D53 ask three compact whole-array operations for the
-         --  same target-derived shape and base address.  Keep that replay in
-         --  one place: a field is an IR identity, never a byte offset.
+         --  same target-derived shape and base address.  D57 reuses the base
+         --  for the complete padded extent of aggregate storage.  Keep that
+         --  replay in one place: a field is an IR identity, never an offset.
          function Array_Length_Of
            (Place : Landin.IR.Storage; Field : Natural)
             return Landin.IR.Element_Total;
@@ -348,6 +349,9 @@ package body Landin.Backend.X86_64 is
            (Place : Landin.IR.Storage;
             Field : Natural;
             Register : String);
+         function Whole_Clear_Extent
+           (Place : Landin.IR.Storage; Field : Natural)
+            return Landin.Targets.Byte_Count;
 
          function Array_Length_Of
            (Place : Landin.IR.Storage; Field : Natural)
@@ -419,6 +423,52 @@ package body Landin.Backend.X86_64 is
                      & ", " & Register);
             end case;
          end Storage_Address;
+
+         function Whole_Clear_Extent
+           (Place : Landin.IR.Storage; Field : Natural)
+            return Landin.Targets.Byte_Count
+         is
+            Whole_Aggregate : constant Boolean :=
+              Field = 0
+              and then
+                (case Place.Kind is
+                    when Landin.IR.Module_Datum =>
+                      Landin.IR.Result_Of (Of_Unit, Place.Datum)
+                        = Landin.Types.Aggregate,
+                    when Landin.IR.Frame_Slot =>
+                      Landin.IR.Is_Aggregate
+                        (Of_Unit, Item, Place.Slot));
+         begin
+            if not Whole_Aggregate then
+               return
+                 Landin.Targets.Byte_Count
+                   (Array_Length_Of (Place, Field))
+                 * Landin.Targets.Byte_Count
+                     (Landin.Targets.Bytes
+                        (Size_Of (Array_Element_Of (Place, Field), Facts)));
+            end if;
+
+            case Place.Kind is
+               when Landin.IR.Module_Datum =>
+                  declare
+                     Placed : Landin.Targets.Placement;
+                     Ignored : Landin.Targets.Byte_Count;
+                  begin
+                     Place_Fields (Place.Datum, Placed, 0, Ignored);
+                     return Landin.Targets.Size_Of (Placed);
+                  end;
+
+               when Landin.IR.Frame_Slot =>
+                  declare
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Aggregate_Extent
+                       (Of_Unit, Item, Place.Slot, Facts, Size, Alignment);
+                     return Size;
+                  end;
+            end case;
+         end Whole_Clear_Extent;
 
          --  A Value_Id restarts in each item, just as a Block_Id does.  The
          --  extra `V` keeps a continuation distinct from a block label.
@@ -722,21 +772,16 @@ package body Landin.Backend.X86_64 is
                when Landin.IR.Clear_Array =>
                   --  D28 clears complete array storage without making IR or
                   --  compiler work proportional to D18's extent.  D49 carries
-                  --  a declaration-order field identity and derives its shape
-                  --  and target offset here.
+                  --  a declaration-order array-field identity.  D57 gives
+                  --  field zero of aggregate storage its complete padded
+                  --  extent, so [0540]'s all-bit image includes padding.
                   declare
                      Destination : constant Landin.IR.Storage :=
                        Landin.IR.Destination_Of (Of_Unit, Item, Value);
                      Field : constant Natural :=
                        Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
-                     Length : constant Landin.IR.Element_Total :=
-                       Array_Length_Of (Destination, Field);
-                     Element : constant Landin.Types.Scalar_Name :=
-                       Array_Element_Of (Destination, Field);
                      Bytes : constant Landin.Targets.Byte_Count :=
-                       Landin.Targets.Byte_Count (Length)
-                       * Landin.Targets.Byte_Count
-                           (Landin.Targets.Bytes (Size_Of (Element, Facts)));
+                       Whole_Clear_Extent (Destination, Field);
                   begin
                      Storage_Address (Destination, Field, "%rdi");
                      Emit ("xorl %eax, %eax");

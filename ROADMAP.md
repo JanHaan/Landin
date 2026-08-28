@@ -2890,6 +2890,17 @@ admitted by D56 below only from a direct storage name. All module struct
 initializers, non-name values, `zeroed`, struct literals, calls, returns and
 general aggregate values remain separate slices.
 
+D57 admits `zeroed` as the contextual initializer of an explicitly typed local
+ordinary struct. One existing `Clear_Array` instruction with field zero clears
+the fresh aggregate slot's complete padded extent; field-zero array and
+positive array-field meanings remain unchanged. The verifier admits array or
+aggregate whole storage explicitly, and the backend derives 64/32-bit padded
+extent and address from target facts, so padding is all bits zero as [0540]
+requires. Public checker/lowering/verifier/backend seams, contextual-boundary
+negatives, recorded dumps and a runtime field-read fixture provide evidence.
+Module images, inference, assignment and general aggregate values remain
+separate slices.
+
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
 nominal body declaration onto the new local before settling it as an aggregate;
@@ -2916,7 +2927,7 @@ contextual field clear, D50's contextual field copy endpoints and D52's
 contextual field literal and D53's contextual field repetition; general
 whole-array value positions; inferred scalar initialization, named-return
 subobject and nested-subobject scalar `zeroed` assignment, nested/general scalar and every
-other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49; inferred initialization,
+other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49/D57; inferred initialization,
 nested and general-value mixed-prefix
 repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
@@ -2978,6 +2989,8 @@ D56 migrated the inferred local direct-storage-name struct initializer while
 keeping module images, non-name initializers, calls, returns and every
 general-value boundary pinned; its audit also pinned that a type declaration
 name is not runtime storage in the D20/D21 and D54--D56 contextual copy paths.
+D57 migrated the explicitly typed local struct zero image while keeping module
+images, inference, assignment and every general-value boundary pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

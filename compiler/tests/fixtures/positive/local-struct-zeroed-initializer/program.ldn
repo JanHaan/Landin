@@ -1,0 +1,27 @@
+point: type = struct
+    x: u32
+    y: u16
+end point
+
+holder: type = struct
+    tag: u8
+    row: [2]usize
+    tail: u16
+end holder
+
+same: type = holder
+
+read: (at: usize) -> (result: usize) =
+    scalar: point = zeroed
+    mut local: holder = zeroed
+    aliased: same = zeroed
+
+    _ = scalar.x
+    _ = scalar.y
+    _ = local.tag
+    _ = local.tail
+    _ = aliased.row[at]
+
+    local.row[0] = 42
+    result = local.row[at]
+end read
