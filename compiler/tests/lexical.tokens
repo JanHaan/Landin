@@ -9101,6 +9101,48 @@ file negative/a-fold-deeper-than-any-limit/program.ldn tokens 495
   1502 1505 a69
   1506 1507 +
   1508 1509 1
+file negative/array-argument-unassigned/program.ldn tokens 41
+  0 7 consume
+  7 8 :
+  9 10 (
+  10 15 value
+  15 16 :
+  17 18 [
+  18 19 2
+  19 20 ]
+  20 23 i32
+  23 24 )
+  25 27 ->
+  28 32 none
+  33 34 =
+  35 38 end
+  39 46 consume
+  48 51 bad
+  51 52 :
+  53 54 (
+  54 55 )
+  56 58 ->
+  59 63 none
+  64 65 =
+  70 73 mut
+  74 79 value
+  79 80 :
+  81 82 [
+  82 83 2
+  83 84 ]
+  84 87 i32
+  92 97 value
+  97 98 [
+  98 99 0
+  99 100 ]
+  101 102 =
+  103 104 1
+  109 116 consume
+  116 117 (
+  117 122 value
+  122 123 )
+  124 127 end
+  128 131 bad
 file negative/array-copy-element-mismatch/program.ldn tokens 26
   0 1 f
   1 2 :

@@ -5636,3 +5636,34 @@ independent and leaves R4.40 to classify C aggregates separately.
 **Pinned by** the checker, lowering, malformed-IR verifier and backend public
 seams; `negative/struct-argument-unassigned`; the generated token and IR
 records; and `runtime/struct-arguments-cross-calls` on Linux x86-64.
+
+### D95 — A fixed array argument uses the same by-value transport
+
+**The tour said** that a fixed array's length is part of its type [0520] and an
+unmarked parameter is `in` [0900]. D94's internal carrier and callee copy did
+not depend on nominal fields, but the checker and IR parameter builder still
+admitted only its ordinary-struct case.
+
+**Chosen:** a parameter may have any enabled fixed-array type, and a call may
+supply a direct module or frame storage name with exactly the same scalar
+element and length. Every source element must be definitely assigned. An array
+literal, repetition, nested array field, returning call or other array
+expression remains refused as an argument.
+
+The array occupies one existing internal ABI position. The caller emits D94's
+unspellable target-neutral storage-address carrier. The callee preserves that
+carrier with the struct carriers, derives `length * target element size`, and
+copies those bytes into a fresh shaped array parameter slot before running.
+Register and stack positions therefore have one convention for scalar,
+ordinary-struct and fixed-array source parameters while their frame storage
+retains the distinct neutral shape each operation needs.
+
+**Why reuse the carrier:** passing every element separately would make D18's
+largest arrays impossible to represent compactly and would make argument
+position depend on the selected target. Passing an alias without copying would
+not implement `in` as a value. D94's one-position transport plus defensive copy
+avoids both changes without introducing a source pointer.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/array-argument-unassigned`; the generated token and IR records; and
+`runtime/array-arguments-cross-calls` on Linux x86-64.

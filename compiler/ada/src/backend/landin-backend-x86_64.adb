@@ -1758,7 +1758,9 @@ package body Landin.Backend.X86_64 is
                Slot : constant Landin.IR.Slot_Id :=
                  Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
             begin
-               if not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
+               if not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                 and then not Landin.IR.Is_Array (Of_Unit, Item, Slot)
+               then
                   declare
                      Held : constant Held_Size := Size_Of_Slot (Slot);
                   begin
@@ -1787,7 +1789,9 @@ package body Landin.Backend.X86_64 is
                Slot : constant Landin.IR.Slot_Id :=
                  Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
             begin
-               if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
+               if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                 or else Landin.IR.Is_Array (Of_Unit, Item, Slot)
+               then
                   if Index <= Register_Arguments then
                      Emit
                        ("pushq "
@@ -1813,13 +1817,32 @@ package body Landin.Backend.X86_64 is
                Slot : constant Landin.IR.Slot_Id :=
                  Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
             begin
-               if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
+               if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot)
+                 or else Landin.IR.Is_Array (Of_Unit, Item, Slot)
+               then
                   declare
                      Bytes : Landin.Targets.Byte_Count;
                      Alignment : Landin.Targets.Byte_Alignment;
                   begin
-                     Landin.Backend.Aggregate_Extent
-                       (Of_Unit, Item, Slot, Facts, Bytes, Alignment);
+                     if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
+                        Landin.Backend.Aggregate_Extent
+                          (Of_Unit, Item, Slot, Facts, Bytes, Alignment);
+                     else
+                        Bytes := Landin.Targets.Byte_Count
+                          (Landin.IR.Slot_Array_Length
+                             (Of_Unit, Item, Slot))
+                          * Landin.Targets.Byte_Count
+                              (Landin.Targets.Bytes
+                                 (Size_Of
+                                    (Landin.IR.Slot_Array_Element
+                                       (Of_Unit, Item, Slot), Facts)));
+                        Alignment := Landin.Targets.Byte_Alignment'Max
+                          (1, Landin.Targets.Byte_Alignment
+                                (Landin.Targets.Bytes
+                                   (Size_Of
+                                      (Landin.IR.Slot_Array_Element
+                                         (Of_Unit, Item, Slot), Facts))));
+                     end if;
                      Emit ("popq %rsi");
                      Storage_Address
                        ((Kind => Landin.IR.Frame_Slot, Slot => Slot),

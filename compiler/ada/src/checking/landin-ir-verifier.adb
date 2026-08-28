@@ -504,6 +504,19 @@ package body Landin.IR.Verifier is
               Holds (Of_Unit, Item, Place.Slot)
               and then Is_Aggregate (Of_Unit, Item, Place.Slot));
 
+      function Is_Whole_Array
+        (Item : Item_Id; Place : Storage) return Boolean
+      is
+        (case Place.Kind is
+            when Module_Datum =>
+              Holds (Of_Unit, Place.Datum)
+              and then Kind_Of (Of_Unit, Place.Datum) = Datum
+              and then Result_Of (Of_Unit, Place.Datum)
+                         = Landin.Types.Fixed_Array,
+            when Frame_Slot =>
+              Holds (Of_Unit, Item, Place.Slot)
+              and then Is_Array (Of_Unit, Item, Place.Slot));
+
       function Is_Whole_Aggregate_Field
         (Item : Item_Id; Place : Storage; Field : Natural) return Boolean
       is
@@ -1405,8 +1418,12 @@ package body Landin.IR.Verifier is
                         case Op is
                            when Storage_Address =>
                               if Is_Datum
-                                or else not Is_Whole_Aggregate
-                                  (Id, Destination_Of (Of_Unit, Id, V))
+                                or else
+                                  (not Is_Whole_Aggregate
+                                     (Id, Destination_Of (Of_Unit, Id, V))
+                                   and then not Is_Whole_Array
+                                     (Id, Destination_Of
+                                            (Of_Unit, Id, V)))
                               then
                                  return
                                    (Kind =>
@@ -2342,6 +2359,8 @@ package body Landin.IR.Verifier is
                                          Nth_Operand (Of_Unit, Id, V, P);
                                        Agrees : constant Boolean :=
                                          (if Is_Aggregate
+                                               (Of_Unit, C, Parameter)
+                                             or else Is_Array
                                                (Of_Unit, C, Parameter)
                                           then Result_Of
                                                  (Of_Unit, Id, Argument)
