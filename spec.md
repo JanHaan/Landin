@@ -5554,10 +5554,10 @@ contextual storage-copy sources.
 `parent.child.array`, and an explicitly typed local of the child's nominal
 ordinary type may initialize from `parent.child`. The written local type must
 match the source length/element or nominal body exactly. Both copies require
-the complete source to be definitely assigned. Inference and module
-initializers from either nested path remain L0304: inference would extend the
-source-only context into a value-producing rule, while a module initializer
-needs static image-edge decisions this runtime slice does not make.
+the complete source to be definitely assigned. Module initializers from either
+nested path remain L0304 because they need static image-edge decisions this
+runtime slice does not make. D93 separately admits inference for a local whose
+source carries the complete nested shape or nominal identity.
 
 Lowering allocates the ordinary destination slot, then reuses D90/D91's
 independent source parent/child identities and a direct destination path. A
@@ -5573,4 +5573,32 @@ source path.
 
 **Pinned by** the lowering and verifier public seams;
 `negative/nested-struct-child-initializer-unassigned`; the generated token and
+IR records; and `runtime/nested-struct-child-values` on Linux x86-64.
+
+### D93 — A local may infer its aggregate identity from nested storage
+
+**The tour said** that `:=` gives a local the type of its initializer [0080].
+D92 required an explicit local type even though a depth-one child already
+carries D71's nominal body and its fixed-array leaf carries D17's complete
+length and scalar element identity.
+
+**Chosen:** a local may infer an ordinary child value from `parent.child`, or
+a fixed-array value from `parent.child.array`. The source must be one of the
+contextual storage paths D90/D91 admitted and must be definitely assigned as a
+whole. The inferred child keeps its nominal body; the inferred array keeps its
+length and scalar element. Module inference from these paths remains L0304
+because static image edges and cycles are not runtime storage copies.
+
+Lowering is D92's typed-local copy after the checker has recorded the inferred
+identity: allocate a fresh aggregate or array slot, then visit child leaves or
+emit one compact array copy with the source parent/child identities. No general
+expression value or aggregate temporary is introduced.
+
+**Why inference is sound here:** the source path supplies exactly one complete
+identity before lowering, unlike a bare labelled literal. Restricting the rule
+to locals keeps it in runtime storage and does not silently extend module image
+graphs or the ABI.
+
+**Pinned by** the checker, lowering and verifier public seams;
+`negative/nested-struct-child-inference-unassigned`; the generated token and
 IR records; and `runtime/nested-struct-child-values` on Linux x86-64.

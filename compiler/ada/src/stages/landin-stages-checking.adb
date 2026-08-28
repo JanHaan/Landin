@@ -5624,14 +5624,29 @@ package body Landin.Stages.Checking is
                else Ty.Ill_Typed);
             Direct_Name : constant Boolean :=
               Named_Storage and then Named_Type = Ty.Fixed_Array;
-            Direct_Struct : constant Boolean :=
-              Named_Storage
-              and then Named_Type = Ty.Aggregate
-              and then Landin.Checking.Body_Of (Types.all, Named)
-                         /= Res.No_Declaration;
             Direct_Field : constant Boolean :=
               Syn.Kind (Of_Tree.all, Value) = Syn.Member_Selection
+              and then
+                (Syn.Kind
+                   (Of_Tree.all, Syn.Target_Of (Of_Tree.all, Value))
+                   = Syn.Name_Reference
+                 or else Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding)
               and then Admit_Array_Field (Of_Tree.all, Value);
+            Direct_Child : constant Boolean :=
+              not Direct_Field
+              and then Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
+              and then Syn.Kind (Of_Tree.all, Value)
+                         = Syn.Member_Selection
+              and then Syn.Kind
+                (Of_Tree.all, Syn.Target_Of (Of_Tree.all, Value))
+                  = Syn.Name_Reference
+              and then Selected_From (Of_Tree.all, Value) = Ty.Aggregate;
+            Direct_Struct : constant Boolean :=
+              (Named_Storage
+               and then Named_Type = Ty.Aggregate
+               and then Landin.Checking.Body_Of (Types.all, Named)
+                          /= Res.No_Declaration)
+              or else Direct_Child;
             Direct_Source : constant Boolean :=
               Direct_Name or else Direct_Field or else Direct_Struct;
             Got : constant Ty.Type_Kind :=
