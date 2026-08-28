@@ -1,0 +1,9 @@
+holder: type = struct
+    tag: u8
+    row: [2]usize
+end holder
+
+clear: () -> none =
+    mut local: holder
+    local = zeroed
+end clear

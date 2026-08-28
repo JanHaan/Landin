@@ -1061,6 +1061,35 @@ item 2 ROUTINE copy result usize params 1 slots 8 blocks 1 values 39
     37 STORE slot 2 <- 36
     38 LOAD usize slot 2
     39 LEAVE <- 38
+file positive/local-struct-zeroed-initializer/program.ldn
+unit items 1
+item 1 ROUTINE read result usize params 1 slots 6 blocks 1 values 19
+  slot 1 at usize param 1
+  slot 2 result usize return
+  slot 3 scalar aggregate fields u32 u16
+  slot 4 local aggregate fields u8 [2]usize u16
+  slot 5 aliased aggregate fields u8 [2]usize u16
+  slot 6 - usize
+  block 1 scope 3 BLOCK length 19
+    1 CLEAR_ARRAY destination slot 3
+    2 CLEAR_ARRAY destination slot 4
+    3 CLEAR_ARRAY destination slot 5
+    4 LOAD_FIELD u32
+    5 LOAD_FIELD u16
+    6 LOAD_FIELD u8
+    7 LOAD_FIELD u16
+    8 LOAD usize slot 1
+    9 LOAD_ELEMENT usize slot 5 field 2 <- 8
+    10 NUMBER usize 0
+    11 STORE slot 6 <- 10
+    12 NUMBER usize 42
+    13 LOAD usize slot 6
+    14 STORE_ELEMENT slot 4 field 2 <- 13 12
+    15 LOAD usize slot 1
+    16 LOAD_ELEMENT usize slot 4 field 2 <- 15
+    17 STORE slot 2 <- 16
+    18 LOAD usize slot 2
+    19 LEAVE <- 18
 file positive/measurement-of-a-type/program.ldn
 unit items 5
 item 1 DATUM width result usize params 0 slots 0 blocks 1 values 2

@@ -1700,7 +1700,9 @@ is derived from the target's width for `T`. The initialized local is assigned as
 a whole, so D22 permits a later compiler-known or computed index read.
 
 Lowering records one target-neutral `Clear_Array` instruction with no operands
-and no result. The Linux x86-64 backend forms the slot address, takes the target
+and no result. D57 later gives field zero of that destination-only operation a
+whole aggregate's padded extent as well; its array meaning is unchanged. The
+Linux x86-64 backend forms the slot address, takes the target
 byte extent, and emits one forward `rep stosb` clear. Compiler work and IR size
 therefore remain independent of the target-sized length D18 admits, and no
 array-valued temporary or hidden zero datum exists.
@@ -3300,7 +3302,7 @@ both 64- and 32-bit descriptions.
 An inferred local binding remains refused in this slice and is admitted by
 D56 only when its value is a direct struct storage name. A module initializer,
 a non-name initializer,
-`zeroed`, a struct literal, an argument, return, discard, operand or bare whole
+`zeroed` in this slice, a struct literal, an argument, return, discard, operand or bare whole
 read remains refused. The checker reports the existing L0304 once for an
 unsupported binding form; a binding it has already refused reads nothing for
 definite assignment under D16. Parameters and returns still need their own
@@ -3319,7 +3321,8 @@ value. Inference needs a separate rule for carrying nominal identity; a module
 initializer needs a static struct-image chain; `zeroed` needs its own
 per-field initialization rule; and a general value settles calls, returns and
 temporary representation. All were declined here; D56 later supplies the
-separate nominal-identity rule for local inference only.
+separate nominal-identity rule for local inference only, and D57 later supplies
+the typed local `zeroed` context.
 
 **Pinned by** the checker, lowering and backend public-seam cases;
 `positive/local-struct-initialized-from-name`;
@@ -3402,3 +3405,52 @@ asymmetric with D21. All were declined.
 `negative/inferred-struct-initializer-not-enabled`;
 `negative/struct-array-field-inferred-initializer-not-enabled`; the recorded IR
 dump; and `runtime/local-struct-inference-copies-storage` on Linux x86-64.
+
+### D57 — A typed local struct is initialized to its zero image
+
+**The tour said** that `zeroed` is the all-bits-zero image of its contextual
+type and writes that complete image as one value [0540], that a local binding
+may carry an initializer [1810], and that struct fields retain declaration
+order and target padding [0750]. D55 supplied only a directly named storage
+source for an explicitly typed local struct.
+
+**Chosen:** `[mut] name: T = zeroed` is admitted inside a body when `T`
+resolves through aliases to a named ordinary struct with an enabled D44/D45
+layout. Every enabled scalar and fixed-scalar-array field has a zero image, so
+the complete padded object extent has one. The written type supplies the
+literal's aggregate kind and nominal [0710] body. Both mutable and immutable
+bindings accept it, and the initialized local is untracked by D16.
+
+Lowering allocates the fresh aggregate slot and emits one operand-free
+`Clear_Array` naming field zero. At that identity the operation clears either
+whole fixed-array storage, as before, or D57's whole aggregate storage; a
+positive field remains an array field. The verifier explicitly admits only an
+array or aggregate at field zero before any shaped accessor. Each backend
+derives an aggregate's complete padded extent from target facts and clears
+every byte, including padding, in one forward operation. No field enumeration,
+hidden zero object, target offset or new opcode is introduced.
+
+An invalid struct body already owns its field/layout report and never reaches
+lowering. An explicit module struct zero image, inferred `name := zeroed`,
+whole assignment `name = zeroed`, arguments, returns, discards, operands,
+nested expressions and general aggregate values remain refused. Struct fields
+of struct type, fields of elements and nested arrays keep their boundaries.
+
+**Why the padded whole:** field-wise scalar stores and array clears would leave
+padding unspecified, contradicting [0540]'s all-bits-zero image. Reusing the
+destination-only clear keeps compiler work independent of D18-sized fields and
+keeps target layout in the backend.
+
+**The alternatives:** clear fields separately, add a second aggregate-clear
+opcode, synthesize a zero object, or admit module, inferred and assignment
+contexts together. The first misses padding; the next two duplicate an
+existing storage operation or invent storage; the last settles distinct static
+image and place rules. All were declined.
+
+**Pinned by** the checker, lowering, verifier and backend public-seam cases;
+`positive/local-struct-zeroed-initializer`;
+`negative/module-struct-zeroed-initializer-not-enabled`;
+`negative/struct-zeroed-assignment-not-enabled`;
+`negative/inferred-zeroed-not-enabled`;
+`negative/local-struct-initializer-non-name-not-enabled`; the recorded IR dump;
+and `runtime/local-struct-zeroed-reads-zero` on Linux x86-64.

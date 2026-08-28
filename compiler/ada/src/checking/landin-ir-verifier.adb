@@ -239,6 +239,23 @@ package body Landin.IR.Verifier is
          return Nothing_Wrong;
       end Shape_Of;
 
+      --  D57 gives field zero of Clear_Array one additional meaning: the
+      --  complete padded extent of aggregate storage.  This predicate is
+      --  deliberately safe on invented identities; a false answer falls
+      --  through Shape_Of, which owns the precise existing storage fault.
+      function Is_Whole_Aggregate
+        (Item : Item_Id; Place : Storage) return Boolean
+      is
+        (case Place.Kind is
+            when Module_Datum =>
+              Holds (Of_Unit, Place.Datum)
+              and then Kind_Of (Of_Unit, Place.Datum) = Datum
+              and then Result_Of (Of_Unit, Place.Datum)
+                         = Landin.Types.Aggregate,
+            when Frame_Slot =>
+              Holds (Of_Unit, Item, Place.Slot)
+              and then Is_Aggregate (Of_Unit, Item, Place.Slot));
+
    begin
       if not Is_Prepared (Of_Unit) then
          return (Kind => Unprepared_Unit, others => <>);
@@ -834,16 +851,27 @@ package body Landin.IR.Verifier is
                               end if;
 
                               declare
+                                 Destination : constant Storage :=
+                                   Destination_Of (Of_Unit, Id, V);
+                                 Field : constant Natural :=
+                                   Element_Field_Of (Of_Unit, Id, V);
                                  Element : Landin.Types.Scalar_Name;
                                  Length  : Element_Total;
-                                 Bad     : constant Fault_Kind :=
-                                   Shape_Of
-                                     (Id,
-                                      Destination_Of (Of_Unit, Id, V),
-                                      Element_Field_Of (Of_Unit, Id, V),
-                                      Element, Length);
-                                 pragma Unreferenced (Element, Length);
+                                 Bad     : Fault_Kind := Nothing_Wrong;
                               begin
+                                 if Field /= 0
+                                   or else not Is_Whole_Aggregate
+                                                 (Id, Destination)
+                                 then
+                                    --  Arrays and positive aggregate array
+                                    --  fields retain their exact D49 checks.
+                                    --  Invalid storage also comes here;
+                                    --  Shape_Of reports it before an accessor.
+                                    Bad := Shape_Of
+                                      (Id, Destination, Field,
+                                       Element, Length);
+                                 end if;
+
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);

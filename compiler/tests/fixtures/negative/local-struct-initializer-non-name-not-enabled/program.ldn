@@ -4,5 +4,5 @@ holder: type = struct
 end holder
 
 copy: () -> none =
-    local: holder = zeroed
+    local: holder = zeroed + 1
 end copy

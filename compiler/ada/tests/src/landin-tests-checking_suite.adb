@@ -1951,9 +1951,9 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 5, "every whole aggregate assignment was checked");
    end Array_Bearing_Struct_Copy_Uses_Each_Field_Fact;
 
-   --  D55 gives a directly named whole struct D54's copy context when it
-   --  initializes an explicitly typed local.  The binding and source keep
-   --  the same nominal body while D16 checks every source field.
+   --  D55 gives a directly named whole struct D54's copy context; D57 gives
+   --  `zeroed` the same written nominal context.  Each value node and binding
+   --  keep the one body later layout and selection use.
    procedure Local_Struct_Initializer_Keeps_Its_Nominal_Source
      (Item : in out Landin.Testing.Context);
 
@@ -1984,7 +1984,10 @@ package body Landin.Tests.Checking_Suite is
          & "    local: holder = source" & LF
          & "    aliased: same = local" & LF
          & "    snapshot: holder = state" & LF
-         & "    result = aliased.row[at] + snapshot.row[at]" & LF
+         & "    blank: holder = zeroed" & LF
+         & "    empty: same = zeroed" & LF
+         & "    result = aliased.row[at] + snapshot.row[at]"
+         & " + blank.row[at] + empty.row[at]" & LF
          & "end f" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
       Landin.Stages.Append (Order, Names'Access);
@@ -1994,7 +1997,7 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
       Landin.Testing.Check
         (Item, not Landin.Stages.Failed (Work),
-         "module and completed local sources initialize typed locals");
+         "storage names and zeroed initialize typed locals");
 
       declare
          Of_Tree : constant not null access constant Landin.Syntax.Tree :=
@@ -2030,7 +2033,7 @@ package body Landin.Tests.Checking_Suite is
                         and then Landin.Checking.Body_Of (Types.all, Id)
                           = Landin.Checking.Body_Of
                               (Types.all, Of_Tree.all, Value),
-                        "the local and its source share one struct body");
+                        "the initializer and local share one struct body");
                   end if;
                end;
             end if;
@@ -2038,8 +2041,8 @@ package body Landin.Tests.Checking_Suite is
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Seen, 3,
-         "three explicit local struct initializers were checked");
+        (Item, Seen, 5,
+         "five explicit local struct initializers were checked");
    end Local_Struct_Initializer_Keeps_Its_Nominal_Source;
 
    --  D56 infers the same nominal body from a direct struct storage name.

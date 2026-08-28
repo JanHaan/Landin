@@ -2645,6 +2645,7 @@ package body Landin.Tests.Lowering_Suite is
          & "copy: () -> none =" & LF
          & "    first: holder = source" & LF
          & "    second: holder = first" & LF
+         & "    empty: holder = zeroed" & LF
          & "end copy" & LF,
          Ran);
 
@@ -2658,11 +2659,11 @@ package body Landin.Tests.Lowering_Suite is
          Routine : constant IR.Item_Id := 2;
       begin
          Landin.Testing.Check_Equal
-           (Item, IR.Slot_Count (Unit, Routine), 2,
+           (Item, IR.Slot_Count (Unit, Routine), 3,
             "each initialized struct owns one aggregate slot");
          Landin.Testing.Check_Equal
-           (Item, IR.Value_Count (Unit, Routine), 11,
-            "two five-operation field copies precede the return");
+           (Item, IR.Value_Count (Unit, Routine), 12,
+            "two field copies and one whole clear precede the return");
 
          for Copy in 0 .. 1 loop
             declare
@@ -2701,6 +2702,15 @@ package body Landin.Tests.Lowering_Suite is
                   "the source feeds the initializer's own fresh slot");
             end;
          end loop;
+
+         Landin.Testing.Check
+           (Item,
+            IR.Op_Of (Unit, Routine, 11) = IR.Clear_Array
+            and then IR.Destination_Of (Unit, Routine, 11).Kind
+                       = IR.Frame_Slot
+            and then IR.Destination_Of (Unit, Routine, 11).Slot = 3
+            and then IR.Element_Field_Of (Unit, Routine, 11) = 0,
+            "zeroed is one whole clear of its fresh aggregate slot");
 
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,

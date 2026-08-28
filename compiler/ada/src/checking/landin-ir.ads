@@ -200,9 +200,10 @@ package Landin.IR is
       Store_Element,
       --  One whole [0520] array copied between two storage places or D50
       --  fields, cleared in one place or D49 field for [0540], or filled in
-      --  one place or D53 field for [0560].  Storage and field identities
-      --  never carry one entry per element, so each remains compact for
-      --  D18's target-sized extent.
+      --  one place or D53 field for [0560].  D57 also gives a field-zero
+      --  clear the complete padded extent of aggregate storage.  Storage and
+      --  field identities never carry one entry per part, so each operation
+      --  remains compact for D18's target-sized extent.
       Copy_Array,
       Clear_Array,
       Fill_Array,
@@ -1070,10 +1071,11 @@ package Landin.IR is
 
    --  D48's containing aggregate field for an element operation, D49's
    --  destination field for a clear, D50's destination field for a copy,
-   --  and D53's destination field for a fill.  Zero means the reached
-   --  storage is itself a fixed array; a positive value is [0750]'s
-   --  declaration-order field.  It is an identity, never a target byte
-   --  offset.
+   --  and D53's destination field for a fill.  Zero ordinarily means the
+   --  reached storage is itself a fixed array; for D57's Clear_Array it may
+   --  instead mean the whole padded aggregate storage.  A positive value is
+   --  [0750]'s declaration-order array field.  It is an identity, never a
+   --  target byte offset.
    function Element_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)

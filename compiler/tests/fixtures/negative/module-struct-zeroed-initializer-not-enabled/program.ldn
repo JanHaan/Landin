@@ -1,0 +1,6 @@
+holder: type = struct
+    tag: u8
+    row: [2]usize
+end holder
+
+state: holder = zeroed

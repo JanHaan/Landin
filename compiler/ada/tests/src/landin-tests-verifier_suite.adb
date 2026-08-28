@@ -101,7 +101,7 @@ package body Landin.Tests.Verifier_Suite is
            Landin.Stages.Meanings (Work);
          Unit : IR.Unit;
          A    : IR.Item_Id;
-         S, Q, R : IR.Slot_Id;
+         S, Q, R, T : IR.Slot_Id;
          B       : IR.Block_Id;
          N    : IR.Value_Id;
       begin
@@ -114,6 +114,14 @@ package body Landin.Tests.Verifier_Suite is
          R := IR.Add_Array_Slot
            (Unit, A, Landin.Types.U16, 2 ** 32 - 1,
             IR.No_Declaration, Site);
+         T := IR.Add_Aggregate_Slot
+           (Unit, A, IR.No_Declaration, Site);
+         IR.Add_Slot_Field (Unit, A, T, Landin.Types.U8);
+         IR.Add_Slot_Field
+           (Unit, A, T,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U16,
+             Length  => 2));
          IR.Set_Result_Slot (Unit, A, S);
          B := IR.Add_Block (Unit, A, Landin.Resolution.Program_Scope,
                             Site);
@@ -121,6 +129,10 @@ package body Landin.Tests.Verifier_Suite is
          IR.Emit_Array_Copy
            (Unit, A, (Kind => IR.Frame_Slot, Slot => Q),
             (Kind => IR.Frame_Slot, Slot => R), Site);
+         --  D57 gives field zero of the destination-only clear a second
+         --  sound shape: the complete padded extent of aggregate storage.
+         IR.Emit_Array_Clear
+           (Unit, A, (Kind => IR.Frame_Slot, Slot => T), Site);
          N := IR.Emit_Number (Unit, A, Landin.Types.U16, 7, False, Site);
          IR.Emit_Array_Fill
            (Unit, A, (Kind => IR.Frame_Slot, Slot => Q), 1, N, Site);
@@ -177,6 +189,7 @@ package body Landin.Tests.Verifier_Suite is
       Slot_Element_Load_Of_The_Wrong_Type,
       Slot_Element_Store_Of_The_Wrong_Type,
       Array_Copy_Endpoint_Is_Scalar,
+      Array_Copy_Aggregate_Is_Not_An_Array,
       Array_Copy_Lengths_Disagree,
       Array_Copy_Elements_Disagree,
       Array_Copy_Source_Field_Is_Out_Of_Range,
@@ -194,6 +207,7 @@ package body Landin.Tests.Verifier_Suite is
       Array_Clear_Slot_Field_Is_Not_An_Array,
       Array_Clear_Inside_A_Datum,
       Array_Fill_Destination_Is_Scalar,
+      Array_Fill_Aggregate_Is_Not_An_Array,
       Array_Fill_Slot_Is_Not_Owned,
       Array_Fill_Datum_Field_Is_Out_Of_Range,
       Array_Fill_Datum_Field_Is_Not_An_Array,
@@ -591,6 +605,14 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Array_Copy_Aggregate_Is_Not_An_Array =>
+            IR.Emit_Array_Copy
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => T),
+               (Kind => IR.Frame_Slot, Slot => Q), Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Array_Copy_Lengths_Disagree
             | Array_Copy_Elements_Disagree =>
             IR.Emit_Array_Copy
@@ -707,6 +729,15 @@ package body Landin.Tests.Verifier_Suite is
               (Unit, A, Landin.Types.U32, 1, False, Site);
             IR.Emit_Array_Fill
               (Unit, A, (Kind => IR.Frame_Slot, Slot => S), 1, N, Site);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Array_Fill_Aggregate_Is_Not_An_Array =>
+            N := IR.Emit_Number
+              (Unit, A, Landin.Types.U32, 1, False, Site);
+            IR.Emit_Array_Fill
+              (Unit, A, (Kind => IR.Frame_Slot, Slot => T), 1, N, Site);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -897,6 +928,8 @@ package body Landin.Tests.Verifier_Suite is
           V.Store_Datum_Disagrees),
          (Array_Copy_Endpoint_Is_Scalar,
           V.Array_Storage_Is_Not_An_Array),
+         (Array_Copy_Aggregate_Is_Not_An_Array,
+          V.Array_Storage_Is_Not_An_Array),
          (Array_Copy_Lengths_Disagree, V.Array_Copy_Shapes_Disagree),
          (Array_Copy_Elements_Disagree, V.Array_Copy_Shapes_Disagree),
          (Array_Copy_Source_Field_Is_Out_Of_Range,
@@ -924,6 +957,8 @@ package body Landin.Tests.Verifier_Suite is
           V.Element_Field_Is_Not_An_Array),
          (Array_Clear_Inside_A_Datum, V.Array_Clear_Inside_A_Datum),
          (Array_Fill_Destination_Is_Scalar,
+          V.Array_Storage_Is_Not_An_Array),
+         (Array_Fill_Aggregate_Is_Not_An_Array,
           V.Array_Storage_Is_Not_An_Array),
          (Array_Fill_Slot_Is_Not_Owned, V.Slot_Out_Of_Range),
          (Array_Fill_Datum_Field_Is_Out_Of_Range,
