@@ -1583,6 +1583,58 @@ item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 TRUTH bool false
     2 LEAVE <- 1
+file positive/module-struct-inferred-from-name/program.ldn
+unit items 5
+item 1 DATUM first result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 [2]usize
+  field 3 u16
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM second result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 [2]usize
+  field 3 u16
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM typed result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 [2]usize
+  field 3 u16
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM terminal result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 [2]usize
+  field 3 u16
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 ROUTINE observe result usize params 0 slots 4 blocks 1 values 20
+  slot 1 value usize return
+  slot 2 - usize
+  slot 3 - usize
+  slot 4 - usize
+  block 1 scope 3 BLOCK length 20
+    1 NUMBER usize 0
+    2 LOAD_ELEMENT usize datum 1 first field 2 <- 1
+    3 STORE slot 4 <- 2
+    4 NUMBER usize 1
+    5 LOAD_ELEMENT usize datum 2 second field 2 <- 4
+    6 LOAD usize slot 4
+    7 ADD usize <- 6 5
+    8 STORE slot 3 <- 7
+    9 NUMBER usize 0
+    10 LOAD_ELEMENT usize datum 3 typed field 2 <- 9
+    11 LOAD usize slot 3
+    12 ADD usize <- 11 10
+    13 STORE slot 2 <- 12
+    14 NUMBER usize 1
+    15 LOAD_ELEMENT usize datum 4 terminal field 2 <- 14
+    16 LOAD usize slot 2
+    17 ADD usize <- 16 15
+    18 STORE slot 1 <- 17
+    19 LOAD usize slot 1
+    20 LEAVE <- 19
 file positive/module-struct-initialized-from-name/program.ldn
 unit items 4
 item 1 DATUM first result struct params 0 slots 0 blocks 1 values 1

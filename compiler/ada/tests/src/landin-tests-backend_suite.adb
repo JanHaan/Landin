@@ -932,10 +932,10 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_State_Becomes_Zeroed_Data;
 
-   --  D59's explicit static zero image and D60's copied image against two
-   --  descriptions: an array field's element width and the aggregate's tail
-   --  padding follow the target rather than the host.  Each absent image
-   --  remains a distinct padded .bss object.
+   --  D59's explicit static zero image and D60/D61's typed and inferred copied
+   --  images against two descriptions: an array field's element width and the
+   --  aggregate's tail padding follow the target rather than the host.  Each
+   --  absent image remains a distinct padded .bss object.
    procedure A_Struct_State_Follows_Its_Target
      (Item : in out Landin.Testing.Context);
 
@@ -949,7 +949,8 @@ package body Landin.Tests.Backend_Suite is
         & "    ready: bool" & LF
         & "end machine" & LF
         & "mut state: machine = zeroed" & LF
-        & "copy: machine = state" & LF;
+        & "copy: machine = state" & LF
+        & "mut inferred := copy" & LF;
    begin
       declare
          Work : Landin.Stages.Compilation :=
@@ -972,6 +973,11 @@ package body Landin.Tests.Backend_Suite is
                Contains (Text, HT & ".align 4" & LF & "copy:" & LF
                                & HT & ".zero 16" & LF),
                "the copied image owns a second synthetic-width object");
+            Landin.Testing.Check
+              (Item,
+               Contains (Text, HT & ".align 4" & LF & "inferred:" & LF
+                               & HT & ".zero 16" & LF),
+               "the inferred image owns a synthetic-width object");
          end;
       end;
 
@@ -995,6 +1001,11 @@ package body Landin.Tests.Backend_Suite is
                Contains (Text, HT & ".align 8" & LF & "copy:" & LF
                                & HT & ".zero 32" & LF),
                "the copied image owns a second Linux-width object");
+            Landin.Testing.Check
+              (Item,
+               Contains (Text, HT & ".align 8" & LF & "inferred:" & LF
+                               & HT & ".zero 32" & LF),
+               "the inferred image owns a Linux-width object");
          end;
       end;
    end A_Struct_State_Follows_Its_Target;

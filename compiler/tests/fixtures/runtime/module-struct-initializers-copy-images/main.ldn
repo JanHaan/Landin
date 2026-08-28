@@ -9,6 +9,7 @@ same: type = holder
 mut first: same = terminal
 mut second: holder = first
 mut terminal: holder = zeroed
+mut inferred := second
 
 public main: () -> (code: i32) =
     terminal.tag = 7
@@ -23,12 +24,18 @@ public main: () -> (code: i32) =
     second.row[0] = 31
     second.tail = 37
 
+    inferred.tag = 41
+    inferred.row[1] = 43
+    inferred.tail = 47
+
     if terminal.tag == 7 and terminal.row[0] == 11
         and terminal.row[1] == 0 and terminal.tail == 13
         and first.tag == 17 and first.row[0] == 0
         and first.row[1] == 19 and first.tail == 23
         and second.tag == 29 and second.row[0] == 31
         and second.row[1] == 0 and second.tail == 37
+        and inferred.tag == 41 and inferred.row[0] == 0
+        and inferred.row[1] == 43 and inferred.tail == 47
     then
         code = 42
     else

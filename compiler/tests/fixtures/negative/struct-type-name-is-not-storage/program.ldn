@@ -3,6 +3,7 @@ holder: type = struct
 end holder
 
 module_copy: holder = holder
+module_inferred := holder
 
 mut destination: holder
 
