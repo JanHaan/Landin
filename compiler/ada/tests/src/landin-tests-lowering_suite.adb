@@ -3923,6 +3923,8 @@ package body Landin.Tests.Lowering_Suite is
          & "    right.nested = template" & LF
          & "    child_copy: inner = left.nested" & LF
          & "    row_copy: [2]i32 = right.nested.row" & LF
+         & "    inferred_child := left.nested" & LF
+         & "    inferred_row := right.nested.row" & LF
          & "end use" & LF,
          Ran);
 
@@ -3978,7 +3980,7 @@ package body Landin.Tests.Lowering_Suite is
            (Item,
             Clear = 1 and then Scalar_Stores = 3
               and then Array_Stores = 2 and then Array_Copies = 2
-              and then Initializer_Copies = 2,
+              and then Initializer_Copies = 4,
             "assignments and initializers keep child-qualified IR");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
