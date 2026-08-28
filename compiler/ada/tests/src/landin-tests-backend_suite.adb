@@ -910,6 +910,53 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Stack_Arguments_Cross_The_Call;
 
+   --  D94 preserves aggregate addresses before copying each argument into
+   --  its own target-laid-out callee slot.  Register and stack positions use
+   --  the same one-position internal convention.
+   procedure Struct_Arguments_Are_Copied_In_The_Callee
+     (Item : in out Landin.Testing.Context);
+
+   procedure Struct_Arguments_Are_Copied_In_The_Callee
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "pair: type = struct" & LF
+         & "    left: i32" & LF
+         & "    right: i32" & LF
+         & "end pair" & LF
+         & "take: (a: i32, first: pair, c: i32, d: i32, e: i32,"
+         & " f: i32, second: pair) -> (r: i32) =" & LF
+         & "    r = first.left + second.right" & LF
+         & "end take" & LF
+         & "use: () -> (r: i32) =" & LF
+         & "    mut first: pair = zeroed" & LF
+         & "    mut second: pair = zeroed" & LF
+         & "    r = take(1, first, 2, 3, 4, 5, second)" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "pushq %rsi" & LF)
+              and then Contains (Text, HT & "pushq 16(%rbp)" & LF),
+            "register and stack aggregate addresses are preserved");
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Text, HT & "popq %rsi" & LF) = 2
+              and then Occurrences (Text, HT & "rep movsb" & LF) = 2,
+            "each aggregate is copied into independent callee storage");
+      end;
+   end Struct_Arguments_Are_Copied_In_The_Callee;
+
    --  A datum's block describes a value and is not code [1940], so it
    --  becomes an initialized object in `.data` at its own alignment rather
    --  than instructions anything runs.
@@ -4737,6 +4784,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "stack arguments cross the call",
          Stack_Arguments_Cross_The_Call'Access);
+      Landin.Testing.Register
+        (Into, "backend", "struct arguments are copied in the callee",
+         Struct_Arguments_Are_Copied_In_The_Callee'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned shift left zeroes beyond the width",
          Unsigned_Shift_Left_Zeroes_Beyond_The_Width'Access);

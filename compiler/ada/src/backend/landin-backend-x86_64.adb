@@ -735,6 +735,13 @@ package body Landin.Backend.X86_64 is
                            then "1" else "0")
                         & ", " & Value_Cell (Value));
 
+               when Landin.IR.Storage_Address =>
+                  Storage_Address
+                    (Landin.IR.Destination_Of (Of_Unit, Item, Value),
+                     0, "%rax");
+                  Carry
+                    (Landin.Targets.Byte_8, "%rax", Value_Cell (Value));
+
                when Landin.IR.Load =>
                   declare
                      Slot : constant Landin.IR.Slot_Id :=
@@ -1741,32 +1748,90 @@ package body Landin.Backend.X86_64 is
                   & ", %rsp");
          end if;
 
-         --  A parameter is a slot the caller filled, so the prologue is
-         --  where the internal convention's registers and incoming stack
-         --  run become cells like any other.  The return address and saved
-         --  frame pointer occupy the first sixteen bytes above `%rbp`;
-         --  argument seven is therefore at 16(%rbp), followed by one
-         --  eight-byte slot per argument.
+         --  A scalar parameter is copied directly into its slot.  D94's
+         --  aggregate argument transports an address in the same position;
+         --  preserve every such address before any byte copy clobbers the
+         --  integer argument registers, then copy into the parameter's own
+         --  aggregate frame slot.  The copy is what keeps `in` by value.
          for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
             declare
                Slot : constant Landin.IR.Slot_Id :=
                  Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
-               Held : constant Held_Size := Size_Of_Slot (Slot);
             begin
-               if Index <= Register_Arguments then
-                  Emit ("mov" & Suffix (Held) & " "
-                        & Argument_Register (Index, Held) & ", "
-                        & Slot_Cell (Slot));
-               else
-                  Carry
-                    (Held,
-                     Trimmed
-                       (Landin.Targets.Byte_Count'Image
-                          (16 + Landin.Targets.Byte_Count
-                                  (Index - Register_Arguments - 1)
-                                * Stack_Argument_Bytes))
-                     & "(%rbp)",
-                     Slot_Cell (Slot));
+               if not Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
+                  declare
+                     Held : constant Held_Size := Size_Of_Slot (Slot);
+                  begin
+                     if Index <= Register_Arguments then
+                        Emit ("mov" & Suffix (Held) & " "
+                              & Argument_Register (Index, Held) & ", "
+                              & Slot_Cell (Slot));
+                     else
+                        Carry
+                          (Held,
+                           Trimmed
+                             (Landin.Targets.Byte_Count'Image
+                                (16 + Landin.Targets.Byte_Count
+                                        (Index - Register_Arguments - 1)
+                                      * Stack_Argument_Bytes))
+                           & "(%rbp)",
+                           Slot_Cell (Slot));
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+
+         for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
+            declare
+               Slot : constant Landin.IR.Slot_Id :=
+                 Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
+            begin
+               if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
+                  if Index <= Register_Arguments then
+                     Emit
+                       ("pushq "
+                        & Argument_Register (Index, Landin.Targets.Byte_8));
+                  else
+                     Emit
+                       ("pushq "
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image
+                               (16 + Landin.Targets.Byte_Count
+                                       (Index - Register_Arguments - 1)
+                                     * Stack_Argument_Bytes))
+                        & "(%rbp)");
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         for Index in reverse
+           1 .. Landin.IR.Parameter_Count (Of_Unit, Item)
+         loop
+            declare
+               Slot : constant Landin.IR.Slot_Id :=
+                 Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
+            begin
+               if Landin.IR.Is_Aggregate (Of_Unit, Item, Slot) then
+                  declare
+                     Bytes : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Aggregate_Extent
+                       (Of_Unit, Item, Slot, Facts, Bytes, Alignment);
+                     Emit ("popq %rsi");
+                     Storage_Address
+                       ((Kind => Landin.IR.Frame_Slot, Slot => Slot),
+                        0, "%rdi");
+                     Emit
+                       ("movabsq $"
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image (Bytes))
+                        & ", %rcx");
+                     Emit ("cld");
+                     Emit ("rep movsb");
+                  end;
                end if;
             end;
          end loop;
@@ -2073,7 +2138,8 @@ package body Landin.Backend.X86_64 is
                      when Landin.IR.Leave =>
                         Answer := Of_Value (Operand_Of (Value, 1));
 
-                     when Landin.IR.Call | Landin.IR.Store_Datum
+                     when Landin.IR.Call | Landin.IR.Storage_Address
+                        | Landin.IR.Store_Datum
                         | Landin.IR.Load_Field | Landin.IR.Store_Field
                         | Landin.IR.Load_Element | Landin.IR.Store_Element
                         | Landin.IR.Copy_Array | Landin.IR.Copy_Variant

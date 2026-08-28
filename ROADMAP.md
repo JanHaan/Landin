@@ -1867,7 +1867,14 @@ fixed-array shape from the complete nested storage source. It remains a direct
 copy into a fresh slot, not a general value; module inference, parameters,
 returns and discards remain deferred.
 
-Aggregate arguments and returns remain in this item; R4.40 later supplies
+The eighth increment admits a direct storage name as an argument for a flat
+ordinary struct with scalar or fixed-array fields. One source parameter takes
+one internal ABI position carrying an unspellable storage address; the callee
+copies the target-derived padded extent into its own shaped parameter slot
+before running. Nested and variant-bearing structs, construction arguments and
+all aggregate returns remain deferred.
+
+Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
 left contextual: whole nested field selection, construction and copy, deeper recursive

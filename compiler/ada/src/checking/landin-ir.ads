@@ -179,6 +179,10 @@ package Landin.IR is
       --  crosses a block boundary; see the header.
       Load,
       Store,
+      --  D94 transports one complete aggregate argument by an internal
+      --  address.  The callee copies from it before running, so this is an
+      --  ABI carrier and never a source-language pointer or alias.
+      Storage_Address,
       --  A module value [1940] read and written.  Written, because
       --  [1900] lets a mutable binding be a place and [1740] lets a
       --  module binding carry `mut`.
@@ -1093,6 +1097,28 @@ package Landin.IR is
                               Parameter_Count (Into, Item))
                            = Add_Parameter'Result;
 
+   --  D94's by-value aggregate parameter.  Its frame slot receives a copy
+   --  from the transported address before the first IR block executes.
+   function Add_Aggregate_Parameter
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+     with Pre  => Holds (Into, Item)
+                  and then Kind_Of (Into, Item) = Routine
+                  and then Declares /= No_Declaration
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Parameter_Count (Into, Item)
+                    = Parameter_Count (Into, Item)'Old + 1
+                  and then Holds
+                    (Into, Item, Add_Aggregate_Parameter'Result)
+                  and then Is_Aggregate
+                    (Into, Item, Add_Aggregate_Parameter'Result)
+                  and then Nth_Parameter
+                             (Into, Item,
+                              Parameter_Count (Into, Item))
+                           = Add_Aggregate_Parameter'Result;
+
    function Parameter_Count (Of_Unit : Unit; Item : Item_Id) return Natural
      with Pre => Holds (Of_Unit, Item);
 
@@ -1331,7 +1357,7 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Copy_Array | Copy_Variant
+                          in Storage_Address | Copy_Array | Copy_Variant
                              | Clear_Array | Fill_Array
                              | Select_Variant | Store_Variant_Field;
 
@@ -1915,6 +1941,24 @@ package Landin.IR is
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
+
+   --  D94's target-neutral aggregate argument carrier.  It identifies
+   --  complete storage; only the backend derives an address.  The result is
+   --  represented as usize internally but cannot be formed by Landin source.
+   function Emit_Storage_Address
+     (Into : in out Unit;
+      Item  : Item_Id;
+      Place : Storage;
+      Site  : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then (case Place.Kind is
+                               when Module_Datum => Holds (Into, Place.Datum),
+                               when Frame_Slot => Holds
+                                 (Into, Item, Place.Slot))
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Storage_Address'Result,
+                     Storage_Address);
 
    --  Result is stated by the caller and not derived from the operand,
    --  so a mutation can make it disagree and the verifier can say so.

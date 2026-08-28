@@ -1,0 +1,6 @@
+class: negative
+summary: an ordinary struct parameter is enabled, while R2.30 still owns returning one through the internal ABI
+constructs: 0670, 1795, 1830
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

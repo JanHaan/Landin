@@ -159,6 +159,8 @@ package body Landin.Stages.Checking is
          Wanted  : Ty.Scalar_Name);
       function Synthesise
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+      function Selected_From
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Admit_Array_Field
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Admit_Variant_Field
@@ -897,6 +899,11 @@ package body Landin.Stages.Checking is
             --  D16 still tracks and requires its scalar fields independently.
             --  A parameter, return or written value still needs a whole-value
             --  rule this slice does not have.
+            Is_Aggregate_Parameter : constant Boolean :=
+              Held = Ty.Aggregate
+              and then Syn.Kind (Of_Tree, Node) = Syn.Parameter
+              and then not Aggregate_Bearing
+              and then not Variant_Bearing;
             Is_Zeroed_State : constant Boolean :=
               Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) = Syn.No_Node
@@ -1213,6 +1220,7 @@ package body Landin.Stages.Checking is
               and then not Is_Direct_Struct_Init
               and then not Is_Struct_Zeroed_Init
               and then not Is_Struct_Literal_Init
+              and then not Is_Aggregate_Parameter
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1633,11 +1641,50 @@ package body Landin.Stages.Checking is
                  Syn.Nth_Parameter (Their_Tree.all, Their_Node, Which);
                Wants : constant Ty.Type_Kind :=
                  Declared_As_Node (Their_Tree.all, Parameter);
+               Argument : constant Syn.Node_Id :=
+                 Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
-               Require
-                 (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Which), Wants,
-                  Syn.Origin (Their_Tree.all, Parameter),
-                  "this parameter");
+               if Wants = Ty.Aggregate
+                 and then Syn.Kind (Of_Tree, Argument) = Syn.Name_Reference
+               then
+                  declare
+                     Got : constant Ty.Type_Kind :=
+                       Selected_From (Of_Tree, Argument);
+                     Expected : constant Res.Declaration_Id :=
+                       Landin.Checking.Body_Of
+                         (Types.all, Their_Tree.all,
+                          Syn.Declared_Type (Their_Tree.all, Parameter));
+                     Actual : constant Res.Declaration_Id :=
+                       Landin.Checking.Body_Of
+                         (Types.all, Of_Tree, Argument);
+                  begin
+                     if Got = Ty.Aggregate and then Actual /= Expected then
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Argument);
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Argument),
+                           Message => "this argument has a different struct"
+                                      & " type",
+                           Note    => "[0710]: ordinary structs are nominal",
+                           Related => Syn.Origin
+                             (Their_Tree.all, Parameter),
+                           Because => "this parameter",
+                           Into    => Found);
+                     elsif Got /= Ty.Aggregate then
+                        Require
+                          (Of_Tree, Argument, Wants,
+                           Syn.Origin (Their_Tree.all, Parameter),
+                           "this parameter");
+                     end if;
+                  end;
+               else
+                  Require
+                    (Of_Tree, Argument, Wants,
+                     Syn.Origin (Their_Tree.all, Parameter),
+                     "this parameter");
+               end if;
             end;
          end loop;
 
@@ -1783,9 +1830,6 @@ package body Landin.Stages.Checking is
       --  Separate from Synthesise because a bare aggregate name is a
       --  value this kernel refuses in an expression, while the same name
       --  is how a field is reached and how a whole struct is copied.
-      function Selected_From
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
-
       --  D48 first admits a fixed-array field in the one context that names
       --  one of its elements.  Keeping this separate from Selected_From
       --  leaves the field itself refused as a general value or place while

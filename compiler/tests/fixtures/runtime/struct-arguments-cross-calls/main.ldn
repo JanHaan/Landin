@@ -1,0 +1,21 @@
+pair: type = struct
+    left: i32
+    row: [2]i32
+    right: i32
+end pair
+
+inspect: (a: i32, first: pair, c: i32, d: i32, e: i32, f: i32, second: pair, h: i32) -> (result: i32) =
+    result = a + first.left + first.row[0] + first.row[1] + first.right + c + d + e + f + second.left + second.row[0] + second.row[1] + second.right + h
+end inspect
+
+public main: () -> (code: i32) =
+    mut first: pair
+    mut second: pair
+    first.left = 2
+    first.row = [10, 11]
+    first.right = 3
+    second.left = 7
+    second.row = [12, 13]
+    second.right = 8
+    code = inspect(1, first, 4, 5, 6, 0, second, 9)
+end main
