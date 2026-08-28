@@ -544,6 +544,22 @@ package body Landin.Backend.X86_64 is
                       Landin.IR.Is_Aggregate
                         (Of_Unit, Item, Place.Slot));
          begin
+            if Field > 0 and then Nested = 0
+              and then Stored_Field_Shape
+                (Place, Positive (Field)).Kind
+                  = Landin.IR.Aggregate_Field_Shape
+            then
+               declare
+                  Size : Landin.Targets.Byte_Count;
+                  Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  Landin.Backend.Field_Extent
+                    (Of_Unit, Stored_Field_Shape
+                       (Place, Positive (Field)), Facts, Size, Alignment);
+                  return Size;
+               end;
+            end if;
+
             if not Whole_Aggregate then
                return
                  Landin.Targets.Byte_Count

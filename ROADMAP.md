@@ -1849,7 +1849,13 @@ backend places both fields before adding the checked scaled index.
 The fourth increment gives that fixed-array leaf the contextual assignment
 forms direct array fields already have: literals, repetitions, `zeroed` and
 storage-to-storage copies. Compact IR operations keep an independent
-parent/child pair for each endpoint, and the leaf remains no general value,
+parent/child pair for each endpoint.
+
+The fifth increment makes the ordinary child itself a contextual assignment
+place for `zeroed`, matching labelled or nominal construction, and copies from
+direct or child storage of the same nominal type. Lowering clears its padded
+extent or visits its scalar and fixed-array leaves with independent endpoint
+identities. Neither the child nor its array leaf becomes a general value,
 parameter, return, discard or standalone initializer.
 
 Aggregate arguments and returns remain in this item; R4.40 later supplies

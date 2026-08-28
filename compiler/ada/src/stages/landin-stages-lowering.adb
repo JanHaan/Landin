@@ -1569,7 +1569,9 @@ package body Landin.Stages.Lowering is
                  (Wrote      : Res.Declaration_Id;
                   Source     : IR.Storage;
                   Destination : IR.Storage;
-                  Field   : Positive);
+                  Field   : Positive;
+                  Source_Parent : Natural := 0;
+                  Destination_Parent : Natural := 0);
 
                function Storage_For
                  (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
@@ -1591,7 +1593,8 @@ package body Landin.Stages.Lowering is
                procedure Write_Struct_Literal
                  (Literal     : Syn.Node_Id;
                   Wrote       : Res.Declaration_Id;
-                  Destination : IR.Storage);
+                  Destination : IR.Storage;
+                  Parent_Field : Natural := 0);
 
                function Storage_For
                  (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage
@@ -1615,7 +1618,9 @@ package body Landin.Stages.Lowering is
                  (Wrote      : Res.Declaration_Id;
                   Source     : IR.Storage;
                   Destination : IR.Storage;
-                  Field   : Positive)
+                  Field   : Positive;
+                  Source_Parent : Natural := 0;
+                  Destination_Parent : Natural := 0)
                is
                begin
                   case Landin.Checking.Field_Kind_Of
@@ -1633,23 +1638,47 @@ package body Landin.Stages.Lowering is
                                  Taken :=
                                    IR.Emit_Load_Field
                                      (Unit.all, Filling, Source.Datum,
-                                      IR.Part_Position (Field), Held, Site);
+                                      IR.Part_Position
+                                        (if Source_Parent = 0
+                                         then Field else Source_Parent),
+                                      Held, Site,
+                                      Nested_Field =>
+                                        (if Source_Parent = 0
+                                         then 0 else Field));
                               when IR.Frame_Slot =>
                                  Taken :=
                                    IR.Emit_Load_Slot_Field
                                      (Unit.all, Filling, Source.Slot,
-                                      IR.Part_Position (Field), Held, Site);
+                                      IR.Part_Position
+                                        (if Source_Parent = 0
+                                         then Field else Source_Parent),
+                                      Held, Site,
+                                      Nested_Field =>
+                                        (if Source_Parent = 0
+                                         then 0 else Field));
                            end case;
 
                            case Destination.Kind is
                               when IR.Module_Datum =>
                                  IR.Emit_Store_Field
                                    (Unit.all, Filling, Destination.Datum,
-                                    IR.Part_Position (Field), Taken, Site);
+                                    IR.Part_Position
+                                      (if Destination_Parent = 0
+                                       then Field else Destination_Parent),
+                                    Taken, Site,
+                                    Nested_Field =>
+                                      (if Destination_Parent = 0
+                                       then 0 else Field));
                               when IR.Frame_Slot =>
                                  IR.Emit_Store_Slot_Field
                                    (Unit.all, Filling, Destination.Slot,
-                                    IR.Part_Position (Field), Taken, Site);
+                                    IR.Part_Position
+                                      (if Destination_Parent = 0
+                                       then Field else Destination_Parent),
+                                    Taken, Site,
+                                    Nested_Field =>
+                                      (if Destination_Parent = 0
+                                       then 0 else Field));
                            end case;
                         end;
 
@@ -1659,8 +1688,16 @@ package body Landin.Stages.Lowering is
                            Source      => Source,
                            Destination => Destination,
                            Site        => Site,
-                           Source_Field => Field,
-                           Destination_Field => Field);
+                           Source_Field =>
+                             (if Source_Parent = 0
+                              then Field else Source_Parent),
+                           Source_Nested_Field =>
+                             (if Source_Parent = 0 then 0 else Field),
+                           Destination_Field =>
+                             (if Destination_Parent = 0
+                              then Field else Destination_Parent),
+                           Destination_Nested_Field =>
+                             (if Destination_Parent = 0 then 0 else Field));
 
                      when Landin.Checking.Aggregate_Field =>
                         raise Landin.Compiler_Defect with
@@ -1935,7 +1972,8 @@ package body Landin.Stages.Lowering is
                procedure Write_Struct_Literal
                  (Literal     : Syn.Node_Id;
                   Wrote       : Res.Declaration_Id;
-                  Destination : IR.Storage)
+                  Destination : IR.Storage;
+                  Parent_Field : Natural := 0)
                is
                   Count : constant Natural :=
                     Landin.Checking.Layout_Field_Count
@@ -1953,11 +1991,21 @@ package body Landin.Stages.Lowering is
                         when IR.Module_Datum =>
                            IR.Emit_Store_Field
                              (Unit.all, Filling, Destination.Datum,
-                              IR.Part_Position (Field), Value, Site);
+                              IR.Part_Position
+                                (if Parent_Field = 0
+                                 then Field else Parent_Field),
+                              Value, Site,
+                              Nested_Field =>
+                                (if Parent_Field = 0 then 0 else Field));
                         when IR.Frame_Slot =>
                            IR.Emit_Store_Slot_Field
                              (Unit.all, Filling, Destination.Slot,
-                              IR.Part_Position (Field), Value, Site);
+                              IR.Part_Position
+                                (if Parent_Field = 0
+                                 then Field else Parent_Field),
+                              Value, Site,
+                              Nested_Field =>
+                                (if Parent_Field = 0 then 0 else Field));
                      end case;
                   end Store_Scalar;
                begin
@@ -1990,7 +2038,11 @@ package body Landin.Stages.Lowering is
                               --  D65: the label is the same contextual array
                               --  destination D49--D53 lower on assignment.
                               Write_Array_Value
-                                (Value, Destination, Field);
+                                (Value, Destination,
+                                 (if Parent_Field = 0
+                                  then Field else Parent_Field),
+                                 Nested_Field =>
+                                   (if Parent_Field = 0 then 0 else Field));
 
                            when Landin.Checking.Aggregate_Field =>
                               raise Landin.Compiler_Defect with
@@ -2034,7 +2086,12 @@ package body Landin.Stages.Lowering is
                               when Landin.Checking.Fixed_Array_Field =>
                                  IR.Emit_Array_Clear
                                    (Unit.all, Filling, Destination, Site,
-                                    Field => Field);
+                                    Field =>
+                                      (if Parent_Field = 0
+                                       then Field else Parent_Field),
+                                    Nested_Field =>
+                                      (if Parent_Field = 0
+                                       then 0 else Field));
 
                               when Landin.Checking.Aggregate_Field =>
                                  raise Landin.Compiler_Defect with
@@ -2583,8 +2640,20 @@ package body Landin.Stages.Lowering is
                              Syn.Target_Of (Of_Tree, Stmt);
                            From : constant Syn.Node_Id :=
                              Syn.Value_Of (Of_Tree, Stmt);
+                           Child_Context : constant Boolean :=
+                             Syn.Kind (Of_Tree, Place)
+                               = Syn.Member_Selection;
+                           Named : constant Syn.Node_Id :=
+                             (if Child_Context
+                              then Syn.Target_Of (Of_Tree, Place)
+                              else Place);
+                           Parent_Field : constant Natural :=
+                             (if Child_Context
+                              then Landin.Checking.Field_Index
+                                (Types.all, Of_Tree, Place)
+                              else 0);
                            Destination : constant IR.Storage :=
-                             Storage_For (Of_Tree, Place);
+                             Storage_For (Of_Tree, Named);
                         begin
                            if Syn.Kind (Of_Tree, From) = Syn.Struct_Literal
                            then
@@ -2592,15 +2661,16 @@ package body Landin.Stages.Lowering is
                                 (From,
                                  Landin.Checking.Body_Of
                                    (Types.all, Of_Tree, Place),
-                                 Destination);
+                                 Destination,
+                                 Parent_Field => Parent_Field);
                            elsif Syn.Kind (Of_Tree, From) = Syn.Zeroed_Literal
                            then
-                              --  D58 reuses D57's field-zero whole aggregate
-                              --  clear for either datum or slot storage.  Test
-                              --  the syntax before asking Storage_For to bind
-                              --  a source that deliberately does not exist.
+                              --  D58 clears a direct aggregate and D91 clears
+                              --  one ordinary child. The field identity stays
+                              --  neutral until the backend places it.
                               IR.Emit_Array_Clear
-                                (Unit.all, Filling, Destination, Site);
+                                (Unit.all, Filling, Destination, Site,
+                                 Field => Parent_Field);
                            else
                               --  [0710]'s copy visits the same fields in
                               --  [0750]'s order: a scalar is one field read
@@ -2610,15 +2680,29 @@ package body Landin.Stages.Lowering is
                                  Wrote : constant Res.Declaration_Id :=
                                    Landin.Checking.Body_Of
                                      (Types.all, Of_Tree, Place);
+                                 Source_Child : constant Boolean :=
+                                   Syn.Kind (Of_Tree, From)
+                                     = Syn.Member_Selection;
+                                 Source_Named : constant Syn.Node_Id :=
+                                   (if Source_Child
+                                    then Syn.Target_Of (Of_Tree, From)
+                                    else From);
+                                 Source_Parent : constant Natural :=
+                                   (if Source_Child
+                                    then Landin.Checking.Field_Index
+                                      (Types.all, Of_Tree, From)
+                                    else 0);
                                  Source : constant IR.Storage :=
-                                   Storage_For (Of_Tree, From);
+                                   Storage_For (Of_Tree, Source_Named);
                               begin
                                  for Field in
                                    1 .. Landin.Checking.Layout_Field_Count
                                           (Types.all, Wrote)
                                  loop
                                     Copy_Field
-                                      (Wrote, Source, Destination, Field);
+                                      (Wrote, Source, Destination, Field,
+                                       Source_Parent => Source_Parent,
+                                       Destination_Parent => Parent_Field);
                                  end loop;
                               end;
                            end if;

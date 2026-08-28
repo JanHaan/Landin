@@ -484,9 +484,10 @@ package body Landin.IR.Verifier is
          return Nothing_Wrong;
       end Shape_Of;
 
-      --  D57 gives field zero of Clear_Array one additional meaning: the
-      --  complete padded extent of aggregate storage.  This predicate is
-      --  deliberately safe on invented identities; a false answer falls
+      --  D57 gives field zero of Clear_Array the complete padded aggregate;
+      --  D91 gives a positive aggregate-field identity its child extent.
+      --  These predicates are deliberately safe on invented identities; a
+      --  false answer falls
       --  through Shape_Of, which owns the precise existing storage fault.
       function Is_Whole_Aggregate
         (Item : Item_Id; Place : Storage) return Boolean
@@ -500,6 +501,30 @@ package body Landin.IR.Verifier is
             when Frame_Slot =>
               Holds (Of_Unit, Item, Place.Slot)
               and then Is_Aggregate (Of_Unit, Item, Place.Slot));
+
+      function Is_Whole_Aggregate_Field
+        (Item : Item_Id; Place : Storage; Field : Natural) return Boolean
+      is
+        (Field > 0
+         and then
+           (case Place.Kind is
+               when Module_Datum =>
+                 Holds (Of_Unit, Place.Datum)
+                 and then Kind_Of (Of_Unit, Place.Datum) = Datum
+                 and then Result_Of (Of_Unit, Place.Datum)
+                            = Landin.Types.Aggregate
+                 and then Field <= Field_Count (Of_Unit, Place.Datum)
+                 and then Nth_Field_Shape
+                   (Of_Unit, Place.Datum, Positive (Field)).Kind
+                     = Aggregate_Field_Shape,
+               when Frame_Slot =>
+                 Holds (Of_Unit, Item, Place.Slot)
+                 and then Is_Aggregate (Of_Unit, Item, Place.Slot)
+                 and then Field <=
+                   Slot_Field_Count (Of_Unit, Item, Place.Slot)
+                 and then Nth_Slot_Field_Shape
+                   (Of_Unit, Item, Place.Slot, Positive (Field)).Kind
+                     = Aggregate_Field_Shape));
 
       --  D76's two operations share one release-safe shape gate.  Storage,
       --  top-level field, variant kind, case run and optional payload field
@@ -1695,9 +1720,14 @@ package body Landin.IR.Verifier is
                                  Length  : Element_Total;
                                  Bad     : Fault_Kind := Nothing_Wrong;
                               begin
-                                 if Field /= 0
-                                   or else not Is_Whole_Aggregate
-                                                 (Id, Destination)
+                                 if not
+                                   ((Field = 0
+                                     and then Is_Whole_Aggregate
+                                       (Id, Destination))
+                                    or else
+                                      (Nested_Field_Of (Of_Unit, Id, V) = 0
+                                       and then Is_Whole_Aggregate_Field
+                                         (Id, Destination, Field)))
                                  then
                                     --  Arrays and positive aggregate array
                                     --  fields retain their exact D49 checks.

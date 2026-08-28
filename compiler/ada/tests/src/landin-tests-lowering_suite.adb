@@ -3890,6 +3890,93 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Nested_Array_Values_Carry_Both_Identities;
 
+   --  D91 uses D87's child shape as a contextual aggregate place.  Scalar
+   --  and array leaves retain the parent identity independently at each copy
+   --  endpoint; clearing the child remains one compact operation.
+   procedure Nested_Child_Values_Keep_Their_Parent
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Child_Values_Keep_Their_Parent
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "inner: type = struct" & LF
+         & "    value: i32" & LF
+         & "    row: [2]i32" & LF
+         & "end inner" & LF
+         & "outer: type = struct" & LF
+         & "    prefix: u16" & LF
+         & "    nested: inner" & LF
+         & "end outer" & LF
+         & "template: inner = (value: 7, row: [3, 4])" & LF
+         & "mut left: outer = zeroed" & LF
+         & "mut right: outer = zeroed" & LF
+         & "use: () -> none =" & LF
+         & "    left.nested = zeroed" & LF
+         & "    right.nested = (value: 5, row: [1, 2])" & LF
+         & "    left.nested = right.nested" & LF
+         & "    right.nested = template" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "nested child construction and copies are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Clear, Scalar_Stores, Array_Stores, Array_Copies : Natural := 0;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, 4) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+               Op : constant IR.Opcode := IR.Op_Of (Unit, 4, Value);
+            begin
+               if Op = IR.Clear_Array
+                 and then IR.Element_Field_Of (Unit, 4, Value) = 2
+               then
+                  Clear := Clear + 1;
+               elsif Op = IR.Store_Field
+                 and then IR.Field_Of (Unit, 4, Value) = 2
+                 and then IR.Nested_Field_Of (Unit, 4, Value) = 1
+               then
+                  Scalar_Stores := Scalar_Stores + 1;
+               elsif Op = IR.Store_Element
+                 and then IR.Element_Field_Of (Unit, 4, Value) = 2
+                 and then IR.Nested_Field_Of (Unit, 4, Value) = 2
+               then
+                  Array_Stores := Array_Stores + 1;
+               elsif Op = IR.Copy_Array
+                 and then IR.Element_Field_Of (Unit, 4, Value) = 2
+                 and then IR.Nested_Field_Of (Unit, 4, Value) = 2
+               then
+                  Array_Copies := Array_Copies + 1;
+                  Landin.Testing.Check
+                    (Item,
+                     IR.Source_Field_Of (Unit, 4, Value) = 2
+                     and then IR.Source_Nested_Field_Of
+                       (Unit, 4, Value) in 0 | 2,
+                     "each array source keeps its own parent path");
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item,
+            Clear = 1 and then Scalar_Stores = 3
+              and then Array_Stores = 2 and then Array_Copies = 2,
+            "clear construction and both copies use child-qualified IR");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts contextual ordinary-child operations");
+      end;
+   end Nested_Child_Values_Keep_Their_Parent;
+
    --  D75 gives D74's target-neutral carrier to both module and frame
    --  storage.  The zero image remains one whole-storage clear, not one
    --  instruction per tag, payload field, or padding byte.
@@ -4878,6 +4965,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "nested array values carry both identities",
          Nested_Array_Values_Carry_Both_Identities'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "nested child values keep their parent",
+         Nested_Child_Values_Keep_Their_Parent'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "variant storage carries cases and one clear",

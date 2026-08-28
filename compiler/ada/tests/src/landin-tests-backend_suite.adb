@@ -2731,6 +2731,64 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "24");
    end A_Nested_Struct_Clear_Follows_The_Target_Extent;
 
+   --  D91 clears one ordinary child at its own recursively derived target
+   --  extent, not the parent's extent and not the child's raw field sum.
+   procedure An_Ordinary_Child_Clear_Follows_The_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Ordinary_Child_Clear_Follows_The_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "inner: type = struct" & LF
+        & "    lead: u8" & LF
+        & "    word: usize" & LF
+        & "    row: [2]i32" & LF
+        & "end inner" & LF
+        & "outer: type = struct" & LF
+        & "    prefix: u16" & LF
+        & "    nested: inner" & LF
+        & "    tail: u8" & LF
+        & "end outer" & LF
+        & "mut state: outer = zeroed" & LF
+        & "f: () -> none =" & LF
+        & "    state.nested = zeroed" & LF
+        & "end f" & LF;
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Offset, Bytes : String);
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Offset, Bytes : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+            Clear : constant String :=
+              HT & "leaq state(%rip), %rdi" & LF
+              & HT & "movabsq $" & Offset & ", %rdx" & LF
+              & HT & "addq %rdx, %rdi" & LF
+              & HT & "xorl %eax, %eax" & LF
+              & HT & "movabsq $" & Bytes & ", %rcx" & LF
+              & HT & "cld" & LF
+              & HT & "rep stosb" & LF;
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, Clear),
+               "the clear uses the child offset and padded extent");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "8", "24");
+      Check_Target (Landin.Targets.Synthetic_32, "4", "16");
+   end An_Ordinary_Child_Clear_Follows_The_Target;
+
    --  D88 replays both neutral field identities only after a target is
    --  selected.  Pointer width changes the padding before both the child and
    --  its `usize` leaf, so the same source reaches a different byte offset.
@@ -4649,6 +4707,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a nested struct clear follows target extent",
          A_Nested_Struct_Clear_Follows_The_Target_Extent'Access);
+      Landin.Testing.Register
+        (Into, "backend", "an ordinary child clear follows the target",
+         An_Ordinary_Child_Clear_Follows_The_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "a nested scalar field follows the target",
          A_Nested_Scalar_Field_Follows_The_Target'Access);
