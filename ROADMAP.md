@@ -2898,8 +2898,20 @@ aggregate whole storage explicitly, and the backend derives 64/32-bit padded
 extent and address from target facts, so padding is all bits zero as [0540]
 requires. Public checker/lowering/verifier/backend seams, contextual-boundary
 negatives, recorded dumps and a runtime field-read fixture provide evidence.
-Module images, inference, assignment and general aggregate values remain
-separate slices.
+Module images, inference, assignment in this slice and general aggregate values
+remain separate; D58 below admits the whole-place assignment context.
+
+D58 admits `place = zeroed` when a direct mutable module or local place has an
+enabled named ordinary-struct layout. The place supplies the literal's nominal
+body, root mutability keeps L0303 first and alone, and the existing whole-write
+flow rule marks every scalar and fixed-array field complete for a tracked local.
+Lowering reuses D57's one field-zero `Clear_Array` for datum or slot storage;
+the verifier's whole-aggregate admission and the backend's target-derived
+padded extent now serve both storage classes, while copy and fill remain
+array-only. Public checker/lowering/verifier/backend seams, mutability and merge
+negatives, recorded dumps and a runtime re-clear fixture provide evidence.
+Module initial images, inference, nested expressions and general aggregate
+values remain separate slices.
 
 D56 admits a mutable or immutable inferred local ordinary-struct binding from
 a direct module or earlier local storage name. The checker carries the source's
@@ -2927,14 +2939,15 @@ contextual field clear, D50's contextual field copy endpoints and D52's
 contextual field literal and D53's contextual field repetition; general
 whole-array value positions; inferred scalar initialization, named-return
 subobject and nested-subobject scalar `zeroed` assignment, nested/general scalar and every
-other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49/D57; inferred initialization,
+other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49/D57/D58; inferred initialization,
 nested and general-value mixed-prefix
 repetition, plus
 count-less inferred and general-value full repetition [0560]; slices
 [0570]; `lenof`
 operands
 other than D14's direct name and D31's literal; and struct initialization other
-than D55/D56's explicitly typed or inferred local direct-storage-name forms,
+than D55/D56's explicitly typed or inferred local direct-storage-name forms
+and D57's explicitly typed local zero image,
 general whole values,
 parameters or returns of a struct with an aggregate field beyond D54's
 contextual whole copy, plus selection or whole-place use of
@@ -2991,6 +3004,9 @@ general-value boundary pinned; its audit also pinned that a type declaration
 name is not runtime storage in the D20/D21 and D54--D56 contextual copy paths.
 D57 migrated the explicitly typed local struct zero image while keeping module
 images, inference, assignment and every general-value boundary pinned.
+D58 migrated whole-struct zero assignment for mutable module and local storage
+while keeping static images, inference, nested expressions and general values
+pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

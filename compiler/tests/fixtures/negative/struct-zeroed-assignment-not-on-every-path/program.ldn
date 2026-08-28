@@ -1,0 +1,12 @@
+holder: type = struct
+    tag: u8
+    row: [2]u32
+end holder
+
+read: (choose: bool, at: usize) -> (result: u32) =
+    mut local: holder
+    if choose then
+        local = zeroed
+    end if
+    result = local.row[at]
+end read

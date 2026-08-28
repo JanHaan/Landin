@@ -1,6 +1,0 @@
-class: negative
-summary: D57 keeps whole-struct zeroed assignment refused
-constructs: 0040, 0080, 0410, 0540, 0670, 0710, 1810
-program: program.ldn
-codes: L0304
-targets: linux-x86-64, macos-arm64

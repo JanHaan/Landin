@@ -4443,6 +4443,96 @@ file positive/struct-type-is-declared/program.ldn tokens 39
   441 443 u8
   444 447 end
   448 452 span
+file positive/struct-zeroed-assignment/program.ldn tokens 89
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 tag
+  29 30 :
+  31 33 u8
+  38 41 row
+  41 42 :
+  43 44 [
+  44 45 2
+  45 46 ]
+  46 49 u32
+  54 58 tail
+  58 59 :
+  60 63 u16
+  64 67 end
+  68 74 holder
+  76 80 same
+  80 81 :
+  82 86 type
+  87 88 =
+  89 95 holder
+  96 99 mut
+  100 105 state
+  105 106 :
+  107 111 same
+  113 117 read
+  117 118 :
+  119 120 (
+  120 122 at
+  122 123 :
+  124 129 usize
+  129 130 )
+  131 133 ->
+  134 135 (
+  135 141 result
+  141 142 :
+  143 146 u32
+  146 147 )
+  148 149 =
+  154 157 mut
+  158 163 local
+  163 164 :
+  165 171 holder
+  176 181 state
+  182 183 =
+  184 190 zeroed
+  195 200 local
+  201 202 =
+  203 209 zeroed
+  215 216 _
+  217 218 =
+  219 224 state
+  224 225 .
+  225 228 tag
+  233 234 _
+  235 236 =
+  237 242 state
+  242 243 .
+  243 247 tail
+  252 253 _
+  254 255 =
+  256 261 local
+  261 262 .
+  262 265 tag
+  270 271 _
+  272 273 =
+  274 279 local
+  279 280 .
+  280 284 tail
+  289 295 result
+  296 297 =
+  298 303 state
+  303 304 .
+  304 307 row
+  307 308 [
+  308 310 at
+  310 311 ]
+  312 313 +
+  314 319 local
+  319 320 .
+  320 323 row
+  323 324 [
+  324 326 at
+  326 327 ]
+  328 331 end
+  332 336 read
 file positive/token-separation/program.ldn tokens 17
   0 1 f
   1 2 :
@@ -6387,6 +6477,44 @@ file negative/immutable-struct-field/program.ldn tokens 27
   210 211 1
   212 215 end
   216 217 f
+file negative/immutable-struct-zeroed-assignment/program.ldn tokens 37
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 tag
+  29 30 :
+  31 33 u8
+  38 41 row
+  41 42 :
+  43 44 [
+  44 45 2
+  45 46 ]
+  46 49 u32
+  50 53 end
+  54 60 holder
+  62 67 state
+  67 68 :
+  69 75 holder
+  77 82 clear
+  82 83 :
+  84 85 (
+  85 86 )
+  87 89 ->
+  90 94 none
+  95 96 =
+  101 106 local
+  106 107 :
+  108 114 holder
+  119 124 state
+  125 126 =
+  127 133 zeroed
+  138 143 local
+  144 145 =
+  146 152 zeroed
+  153 156 end
+  157 162 clear
 file negative/increment-unassigned-local-array-element/program.ldn tokens 21
   0 1 f
   1 2 :
@@ -11228,7 +11356,7 @@ file negative/struct-with-an-array-field/program.ldn tokens 32
   185 189 here
   190 193 end
   194 195 f
-file negative/struct-zeroed-assignment-not-enabled/program.ldn tokens 32
+file negative/struct-zeroed-assignment-nested-not-enabled/program.ldn tokens 34
   0 6 holder
   6 7 :
   8 12 type
@@ -11242,25 +11370,84 @@ file negative/struct-zeroed-assignment-not-enabled/program.ldn tokens 32
   43 44 [
   44 45 2
   45 46 ]
-  46 51 usize
-  52 55 end
-  56 62 holder
-  64 69 clear
-  69 70 :
-  71 72 (
-  72 73 )
-  74 76 ->
-  77 81 none
-  82 83 =
-  88 91 mut
-  92 97 local
-  97 98 :
-  99 105 holder
-  110 115 local
-  116 117 =
-  118 124 zeroed
-  125 128 end
-  129 134 clear
+  46 49 u32
+  50 53 end
+  54 60 holder
+  62 67 clear
+  67 68 :
+  69 70 (
+  70 71 )
+  72 74 ->
+  75 79 none
+  80 81 =
+  86 89 mut
+  90 95 local
+  95 96 :
+  97 103 holder
+  108 113 local
+  114 115 =
+  116 122 zeroed
+  123 124 +
+  125 126 1
+  127 130 end
+  131 136 clear
+file negative/struct-zeroed-assignment-not-on-every-path/program.ldn tokens 56
+  0 6 holder
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 29 tag
+  29 30 :
+  31 33 u8
+  38 41 row
+  41 42 :
+  43 44 [
+  44 45 2
+  45 46 ]
+  46 49 u32
+  50 53 end
+  54 60 holder
+  62 66 read
+  66 67 :
+  68 69 (
+  69 75 choose
+  75 76 :
+  77 81 bool
+  81 82 ,
+  83 85 at
+  85 86 :
+  87 92 usize
+  92 93 )
+  94 96 ->
+  97 98 (
+  98 104 result
+  104 105 :
+  106 109 u32
+  109 110 )
+  111 112 =
+  117 120 mut
+  121 126 local
+  126 127 :
+  128 134 holder
+  139 141 if
+  142 148 choose
+  149 153 then
+  162 167 local
+  168 169 =
+  170 176 zeroed
+  181 184 end
+  185 187 if
+  192 198 result
+  199 200 =
+  201 206 local
+  206 207 .
+  207 210 row
+  210 211 [
+  211 213 at
+  213 214 ]
+  215 218 end
+  219 223 read
 file negative/text-literal-not-enabled/program.ldn refused no rule spells '"'
 file negative/text-type-not-enabled/program.ldn tokens 5
   0 4 name
