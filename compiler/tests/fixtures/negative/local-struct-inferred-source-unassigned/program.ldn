@@ -1,0 +1,20 @@
+holder: type = struct
+    tag: u8
+    row: [2]u32
+    tail: u16
+end holder
+
+missing_scalar: () -> none =
+    mut source: holder
+    source.row = zeroed
+    source.tail = 3
+    destination := source
+end missing_scalar
+
+missing_array_element: () -> none =
+    mut source: holder
+    source.tag = 1
+    source.row[0] = 2
+    source.tail = 3
+    destination := source
+end missing_array_element

@@ -1429,6 +1429,65 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "-12", "4", "8");
    end Local_Struct_Initializer_Derives_Field_Addresses;
 
+   --  D56 reuses the same fresh-slot copy after inference carried the source
+   --  identity.  Target facts still derive both the frame displacement and
+   --  the module field address.
+   procedure Inferred_Local_Struct_Derives_Field_Addresses
+     (Item : in out Landin.Testing.Context);
+
+   procedure Inferred_Local_Struct_Derives_Field_Addresses
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "holder: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    row: [2]usize" & LF
+        & "    tail: u16" & LF
+        & "end holder" & LF
+        & "source: holder" & LF
+        & "copy: () -> none =" & LF
+        & "    local := source" & LF
+        & "end copy" & LF;
+
+      procedure Check_Target
+        (Facts        : Landin.Targets.Target_Facts;
+         Destination : String;
+         Field_Offset : String;
+         Bytes        : String);
+
+      procedure Check_Target
+        (Facts        : Landin.Targets.Target_Facts;
+         Destination : String;
+         Field_Offset : String;
+         Bytes        : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text, HT & "leaq " & Destination & "(%rbp), %rdi")
+               and then Contains (Text, HT & "leaq source(%rip), %rsi")
+               and then Contains
+                 (Text, HT & "movabsq $" & Field_Offset & ", %rdx")
+               and then Contains (Text, HT & "addq %rdx, %rsi")
+               and then Contains
+                 (Text, HT & "movabsq $" & Bytes & ", %rcx")
+               and then Contains (Text, HT & "rep movsb"),
+               "inferred local field addresses follow the target");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "-24", "8", "16");
+      Check_Target (Landin.Targets.Synthetic_32, "-12", "4", "8");
+   end Inferred_Local_Struct_Derives_Field_Addresses;
+
    --  D49 clears the same far field from its register-formed module address;
    --  the byte count is the field extent, not the containing datum extent.
    procedure A_Wide_Array_Field_Clear_Uses_Registers
@@ -3629,6 +3688,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "local struct initializer derives field addresses",
          Local_Struct_Initializer_Derives_Field_Addresses'Access);
+      Landin.Testing.Register
+        (Into, "backend", "inferred local struct derives field addresses",
+         Inferred_Local_Struct_Derives_Field_Addresses'Access);
       Landin.Testing.Register
         (Into, "backend", "a wide array field clear uses registers",
          A_Wide_Array_Field_Clear_Uses_Registers'Access);

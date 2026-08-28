@@ -1,0 +1,11 @@
+holder: type = struct
+    value: u32
+end holder
+
+mut destination: holder
+
+copy: () -> none =
+    typed: holder = holder
+    inferred := holder
+    destination = holder
+end copy

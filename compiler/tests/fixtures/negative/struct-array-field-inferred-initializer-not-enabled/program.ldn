@@ -4,8 +4,3 @@ end holder
 
 state: holder
 inferred := state
-
-local: () -> none =
-    source: holder
-    inferred_local := source
-end local
