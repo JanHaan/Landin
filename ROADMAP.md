@@ -1855,8 +1855,13 @@ The fifth increment makes the ordinary child itself a contextual assignment
 place for `zeroed`, matching labelled or nominal construction, and copies from
 direct or child storage of the same nominal type. Lowering clears its padded
 extent or visits its scalar and fixed-array leaves with independent endpoint
-identities. Neither the child nor its array leaf becomes a general value,
-parameter, return, discard or standalone initializer.
+identities.
+
+The sixth increment admits the nested child and fixed-array leaf as copy
+sources for explicitly typed local initializers. Their written destination
+type supplies the identity and fresh storage; inferred and module initializers
+remain deferred. Neither path becomes a general value, parameter, return or
+discard.
 
 Aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.

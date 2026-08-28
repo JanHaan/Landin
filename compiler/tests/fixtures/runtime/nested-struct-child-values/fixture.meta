@@ -2,5 +2,5 @@ class: runtime
 summary: one ordinary child accepts zeroed labelled construction and a copy from direct child storage
 constructs: 0420, 0540, 0670, 0710, 0750, 1810, 1820, 1970
 program: main.ldn
-status: 22
+status: 30
 targets: linux-x86-64

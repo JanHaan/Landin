@@ -959,7 +959,24 @@ package body Landin.Stages.Checking is
                          (Meanings.all, Of_Tree,
                           Syn.Target_Of
                             (Of_Tree, Syn.Value_Of (Of_Tree, Node))))
-                        in Res.Module_Binding | Res.Local_Binding));
+                        in Res.Module_Binding | Res.Local_Binding)
+                 or else
+                   (Is_Local_Binding (Of_Tree, Node)
+                    and then Syn.Kind
+                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                        = Syn.Member_Selection
+                    and then Syn.Kind
+                      (Of_Tree,
+                       Syn.Target_Of
+                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
+                        = Syn.Member_Selection
+                    and then Syn.Kind
+                      (Of_Tree,
+                       Syn.Target_Of
+                         (Of_Tree,
+                          Syn.Target_Of
+                            (Of_Tree, Syn.Value_Of (Of_Tree, Node))))
+                        = Syn.Name_Reference));
             --  D55/D60: a written local or module struct type supplies the
             --  nominal context for one initializer copied directly from
             --  storage.  The module form copies a static image rather than
@@ -970,16 +987,33 @@ package body Landin.Stages.Checking is
               Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
-              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                       = Syn.Name_Reference
-              and then Res.Verdict_Of
-                (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                  = Res.Bound
-              and then Res.Sort_Of
-                (Meanings.all,
-                 Res.Bound_To
-                   (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node)))
-                  in Res.Module_Binding | Res.Local_Binding
+              and then
+                ((Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                    = Syn.Name_Reference
+                  and then Res.Verdict_Of
+                    (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                      = Res.Bound
+                  and then Res.Sort_Of
+                    (Meanings.all,
+                     Res.Bound_To
+                       (Meanings.all, Of_Tree,
+                        Syn.Value_Of (Of_Tree, Node)))
+                      in Res.Module_Binding | Res.Local_Binding)
+                 or else
+                   (Is_Local_Binding (Of_Tree, Node)
+                    and then Syn.Kind
+                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                        = Syn.Member_Selection
+                    and then Syn.Kind
+                      (Of_Tree,
+                       Syn.Target_Of
+                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
+                        = Syn.Name_Reference
+                    and then Res.Verdict_Of
+                      (Meanings.all, Of_Tree,
+                       Syn.Target_Of
+                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
+                        = Res.Bound))
               and then Landin.Checking.Body_Of
                 (Types.all, Of_Tree, Written) /= Res.No_Declaration;
             --  D57/D59: the written local or module struct supplies [0540]'s
@@ -4610,6 +4644,8 @@ package body Landin.Stages.Checking is
                            declare
                               Got : constant Ty.Type_Kind :=
                                 (if Is_Direct_Binding_Name (Of_Tree, Value)
+                                      or else Syn.Kind (Of_Tree, Value)
+                                                = Syn.Member_Selection
                                  then Selected_From (Of_Tree, Value)
                                  else Synthesise (Of_Tree, Value));
                            begin

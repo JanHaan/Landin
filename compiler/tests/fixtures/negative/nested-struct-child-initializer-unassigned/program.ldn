@@ -1,0 +1,12 @@
+inner: type = struct
+    value: i32
+end inner
+
+outer: type = struct
+    nested: inner
+end outer
+
+copy: () -> none =
+    mut source: outer
+    local: inner = source.nested
+end copy
