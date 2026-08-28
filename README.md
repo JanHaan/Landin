@@ -13,11 +13,13 @@ One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
-**Status: specification 0.1.0. The compiler does not emit code yet. The
-bootstrap chassis is built and tested on three environments, and the frontend
-is complete: `refine` scans, parses, resolves every name, and checks every
-type and every definite assignment, says what it could not read, and says
-which work enables anything it refuses.**
+**Status: specification 0.1.0. The bootstrap compiler implements the executable
+kernel and produces native Linux x86-64 executables. `refine` scans and parses
+whole programs, resolves names, checks types and definite assignment, lowers
+accepted functions to verified target-neutral IR, and emits assembly or invokes
+the platform toolchain. R2.20 is extending that path with target-dependent
+structs and fixed arrays; aggregate construction, aggregate function ABIs, and
+the standard library remain ahead.**
 
 ## What is here
 
