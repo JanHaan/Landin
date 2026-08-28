@@ -1,0 +1,5 @@
+class: positive
+summary: D64 admits labelled struct literals in typed local initializers and marks every field after a tracked whole assignment
+constructs: 0080, 0190, 0520, 0670, 0710, 0720, 0750, 1810, 1900, 1910
+program: program.ldn
+targets: linux-x86-64, macos-arm64

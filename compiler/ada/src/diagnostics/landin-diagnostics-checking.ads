@@ -58,7 +58,9 @@ package Landin.Diagnostics.Checking is
       Not_Known_At_Compile_Time,
       Impossible_Operand,
       Cyclic_Type_Alias,
-      Unresolved_Field);
+      Unresolved_Field,
+      Field_Named_Twice,
+      Field_Not_Given);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -80,7 +82,11 @@ package Landin.Diagnostics.Checking is
             when Cyclic_Type_Alias    =>
                Catalogue.Cyclic_Type_Alias,
             when Unresolved_Field     =>
-               Catalogue.Unresolved_Field);
+               Catalogue.Unresolved_Field,
+            when Field_Named_Twice    =>
+               Catalogue.Field_Named_Twice,
+            when Field_Not_Given      =>
+               Catalogue.Field_Not_Given);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

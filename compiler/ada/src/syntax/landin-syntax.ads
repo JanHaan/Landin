@@ -125,6 +125,11 @@ package Landin.Syntax is
       --  D36's mixed-prefix repetition.  Its one fixed slot is the repeated
       --  expression; its trailing run is the nonempty literal prefix.
       Mixed_Array_Repetition,
+      --  [0710]'s contextual ordinary-struct image.  Its one fixed slot is
+      --  [0720]'s optional `of` expression; its trailing run is Field_Value
+      --  in written order.  A label is the Field_Value node's own name and
+      --  not a Name_Reference that resolution should bind.
+      Struct_Literal,
       Integer_Literal,
       True_Literal,
       False_Literal,
@@ -163,6 +168,10 @@ package Landin.Syntax is
       Greater_Or_Equal,
       Logical_And,
       Logical_Or,
+      --  One labelled value inside Struct_Literal.  This is syntax carried
+      --  by an expression rather than an expression on its own, so it sits
+      --  outside Expression_Kind while its one child remains ordinary.
+      Field_Value,
       --  Types [1790].  A name, not a closed set: see the header.
       Error_Type,
       Type_Name,
@@ -221,7 +230,7 @@ package Landin.Syntax is
      is (Of_Kind in Function_Declaration | Binding | Parameter
                     | Named_Return | Name_Reference | Type_Name
                     | Type_Declaration | Type_Reference | Field
-                    | Member_Selection);
+                    | Member_Selection | Field_Value);
 
    ------------------------------------------------------------------
    --  Trees
@@ -398,12 +407,13 @@ package Landin.Syntax is
                           in Binding | Parameter | Named_Return
                              | Type_Declaration | Field;
 
-   --  The value a binding is given, a place is assigned, or a discard
-   --  throws away.  No_Node for a binding declared without one [1790].
+   --  The value a binding is given, a place is assigned, a discard throws
+   --  away, or a labelled struct field supplies.  No_Node for a binding
+   --  declared without one [1790].
    function Value_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                          in Binding | Assignment | Discard;
+                          in Binding | Assignment | Discard | Field_Value;
 
    --  `place` [1810], the one an assignment writes or an increment steps,
    --  and what a selection [1820] selects from.
@@ -512,6 +522,24 @@ package Landin.Syntax is
                              in Array_Literal | Mixed_Array_Repetition
                   and then Index <= Element_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Element'Result);
+
+   --  [0710]'s written field run and [0720]'s optional trailing fill.
+   function Struct_Fill (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Struct_Literal;
+
+   function Field_Value_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Struct_Literal;
+
+   function Nth_Field_Value
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Struct_Literal
+                  and then Index <= Field_Value_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Field_Value'Result)
+                  and then Kind (Of_Tree, Nth_Field_Value'Result)
+                             = Field_Value;
 
    --  The explicit count in `[N of value]`, or No_Node for contextual
    --  `[of value]`, and the scalar expression evaluated once [0560].

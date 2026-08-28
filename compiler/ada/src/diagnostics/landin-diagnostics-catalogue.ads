@@ -90,6 +90,8 @@ package Landin.Diagnostics.Catalogue is
       Impossible_Operand,
       Cyclic_Type_Alias,
       Unresolved_Field,
+      Field_Named_Twice,
+      Field_Not_Given,
       --  The backend and its toolchain, assigned from R1.80 onwards.  None
       --  is about a frontend construct: two are the host failing to finish
       --  an accepted program, one is [1970]'s missing entry shape, and two
@@ -140,6 +142,8 @@ package Landin.Diagnostics.Catalogue is
             when Impossible_Operand        => "L0306",
             when Cyclic_Type_Alias         => "L0307",
             when Unresolved_Field          => "L0308",
+            when Field_Named_Twice         => "L0309",
+            when Field_Not_Given           => "L0310",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -161,7 +165,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Error,
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
-            when Literal_Out_Of_Range .. Unresolved_Field => Error,
+            when Literal_Out_Of_Range .. Field_Not_Given => Error,
             when No_Toolchain .. Frame_Not_Addressable => Error);
 
    function State (Of_Code : Code_Name) return Disposition
@@ -183,7 +187,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Live,
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
-            when Literal_Out_Of_Range .. Unresolved_Field => Live,
+            when Literal_Out_Of_Range .. Field_Not_Given => Live,
             when No_Toolchain .. Frame_Not_Addressable => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
@@ -260,6 +264,10 @@ package Landin.Diagnostics.Catalogue is
                "[1795]: a chain of aliases that reaches no type",
             when Unresolved_Field      =>
                "[0750]: a field a struct was not declared with",
+            when Field_Named_Twice     =>
+               "[0710]: a struct literal names a field at most once",
+            when Field_Not_Given       =>
+               "[0710]: every field is named or covered by `of`",
             when No_Toolchain          =>
                "[1550]: no assembler and linker for the target on this"
                & " host",
@@ -300,7 +308,7 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => True,
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
-            when Literal_Out_Of_Range .. Unresolved_Field => True,
+            when Literal_Out_Of_Range .. Field_Not_Given => True,
             --  None of the three is about a place in a file.  Two are
             --  the host failing to finish an accepted program, and the
             --  third is a declaration the module never made, which has
@@ -329,7 +337,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
             --  Every one of these points at something a program wrote.
-            when Literal_Out_Of_Range .. Unresolved_Field =>
+            when Literal_Out_Of_Range .. Field_Not_Given =>
                True,
             when No_Toolchain .. Frame_Not_Addressable => False);
 
@@ -366,6 +374,7 @@ package Landin.Diagnostics.Catalogue is
             when Type_Mismatch         => 1,
             when Immutable_Target      => 1,
             when Not_Definitely_Assigned => 1,
+            when Field_Named_Twice     => 1,
             when Literal_Out_Of_Range  => 0,
             when Unsupported_Use       => 0,
             when Not_Known_At_Compile_Time => 0,
@@ -397,6 +406,8 @@ package Landin.Diagnostics.Catalogue is
             when Impossible_Operand    => 1,
             when Cyclic_Type_Alias     => 1,
             when Unresolved_Field      => 1,
+            when Field_Named_Twice     => 1,
+            when Field_Not_Given       => 1,
             --  The one diagnostic here a user is stuck on rather than
             --  informed by, so it owes them the way out: which program
             --  was looked for, and how to name another.

@@ -1,0 +1,21 @@
+holder: type = struct
+    tag: u8
+    row: [2]usize
+    ready: bool
+    tail: u16
+end holder
+
+same: type = holder
+
+mut state: same
+
+read: (at: usize) -> (result: usize) =
+    mut local: holder = (ready: true, tail: 5, tag: 3, of zeroed)
+    mut assigned: holder
+    assigned = (tail: 9, tag: 8, ready: true, of zeroed)
+    state = (tail: 7, tag: 4, ready: false, of zeroed)
+    _ = assigned.tag
+    _ = assigned.ready
+    _ = assigned.tail
+    result = local.row[at] + assigned.row[at] + state.row[at]
+end read

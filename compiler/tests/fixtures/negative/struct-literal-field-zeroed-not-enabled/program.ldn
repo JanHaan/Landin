@@ -1,9 +1,7 @@
 point: type = struct
     x: i32
-    y: i32
 end point
 
 f: () -> none =
-    _ = (of zeroed)
-    _ = point(x: 1, y: 2)
+    local: point = (x: zeroed)
 end f

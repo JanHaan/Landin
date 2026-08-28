@@ -311,6 +311,7 @@ package body Landin.Syntax.Parser is
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id;
             function Parse_Unary return Node_Id;
             function Parse_Primary return Node_Id;
+            function Parse_Struct_Literal return Node_Id;
             function Parse_Call
               (Name_At : Landin.Source.Span;
                Named   : Landin.Source.Names.Name_Id) return Node_Id;
@@ -2587,23 +2588,23 @@ package body Landin.Syntax.Parser is
                end if;
 
                if Peek = Tok.Left_Paren then
-                  --  [0710]'s field image is not part of [1810]'s enabled
-                  --  grammar yet.  Name its unmistakable value-position
-                  --  shapes before `:` can become a cascade from the
-                  --  parenthesized-expression production.  `of` remains a
-                  --  contextual identifier, just as it does in [0560].
-                  if (Ahead (1) = Tok.Identifier
-                      and then
-                        (Ahead (2) = Tok.Colon
-                         or else
-                           (Named_Ahead (1) = Of_Id
-                            and then Pre.Begins_Expression (Ahead (2))
-                            and then not Pre.Is_Binary (Ahead (2)))))
+                  --  D64 replaces D63's labelled refusal with [0710]'s real
+                  --  field-value run.  The all-`of` form remains outside the
+                  --  grammar; `of` is contextual just as it is in [0560].
+                  if Ahead (1) = Tok.Identifier
+                    and then Ahead (2) = Tok.Colon
+                  then
+                     return Parse_Struct_Literal;
+                  elsif Ahead (1) = Tok.Identifier
+                    and then Named_Ahead (1) = Of_Id
+                    and then Pre.Begins_Expression (Ahead (2))
+                    and then not Pre.Is_Binary (Ahead (2))
                   then
                      Refuse
-                       (Item    => Syn.Struct_Literal,
+                       (Item    => Syn.Struct_All_Of,
                         Where   => At_Item,
-                        Message => "a struct literal is not enabled yet");
+                        Message => "an all-`of` struct literal is not"
+                                   & " enabled yet");
                      Advance;
                      Resync_Parentheses;
 
@@ -2734,6 +2735,123 @@ package body Landin.Syntax.Parser is
 
                return Add (Error_Expression, At_Item);
             end Parse_Primary;
+
+            --  struct_literal ::= "(" field_value ("," field_value)*
+            --                     ("," "of" expression)? ")"       [1810]
+            --  field_value ::= identifier ":" expression
+            function Parse_Struct_Literal return Node_Id is
+               At_Item : constant Landin.Source.Span := Here;
+               Fields  : Slot_Vectors.Vector;
+               Fill    : Node_Id := No_Node;
+               Failed  : Boolean := False;
+            begin
+               if Too_Deep (At_Item) then
+                  Advance;
+                  Resync_Parentheses;
+                  return Add
+                    (Error_Expression, At_Item,
+                     Join (At_Item, After_Previous));
+               end if;
+
+               Depth := Depth + 1;
+               Advance;
+
+               loop
+                  if Peek /= Tok.Identifier then
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => (if Peek = Tok.End_Of_Input
+                                    then After_Previous else Here),
+                        Message => "a struct literal field name belongs here",
+                        Note    => "[1810]: field_value ::= identifier `:`"
+                                   & " expression");
+                     Failed := True;
+                     exit;
+                  end if;
+
+                  declare
+                     At_Field : constant Landin.Source.Span := Here;
+                     Named    : constant Landin.Source.Names.Name_Id :=
+                       Named_Here;
+                     Value    : Node_Id;
+                  begin
+                     Advance;
+                     if not Expect
+                       (Wanted  => Tok.Colon,
+                        Message => "a struct literal field separates its"
+                                   & " name and value with `:`",
+                        Note    => "[1810]: field_value ::= identifier `:`"
+                                   & " expression",
+                        Related => At_Field,
+                        Because => "the field named here")
+                     then
+                        Failed := True;
+                        exit;
+                     end if;
+
+                     Value := Parse_Expression;
+                     Fields.Append
+                       (Add
+                          (Of_Kind  => Field_Value,
+                           At_Token => At_Field,
+                           Extent   => Join
+                             (At_Field, Extent_Of ([Value])),
+                           Children => [Value],
+                           Named    => Named));
+                  end;
+
+                  exit when Peek /= Tok.Comma;
+                  Advance;
+
+                  if Peek = Tok.Identifier
+                    and then Named_Here = Of_Id
+                    and then Ahead (1) /= Tok.Colon
+                    and then Pre.Begins_Expression (Ahead (1))
+                  then
+                     Advance;
+                     Fill := Parse_Expression;
+                     exit;
+                  end if;
+               end loop;
+
+               Depth := Depth - 1;
+               if not Expect
+                 (Wanted  => Tok.Right_Paren,
+                  Message => "a struct literal is closed with `)`",
+                  Note    => "[1810]: struct_literal keeps its fields"
+                             & " between parentheses",
+                  Related => At_Item,
+                  Because => "opened here")
+               then
+                  Failed := True;
+                  Resync (List_Anchor);
+
+                  if Peek = Tok.Right_Paren then
+                     Advance;
+                  end if;
+               end if;
+
+               if Failed then
+                  return Add
+                    (Error_Expression, At_Item,
+                     Join (At_Item, After_Previous));
+               end if;
+
+               declare
+                  Head : constant Slot_List (1 .. 1) := [Fill];
+                  Made : constant Node_Id :=
+                    Add
+                      (Of_Kind  => Struct_Literal,
+                       At_Token => At_Item,
+                       Extent   => Join (At_Item, After_Previous),
+                       Children => Head & To_List (Fields));
+               begin
+                  --  Indexing a real literal is now its own refused shape,
+                  --  rather than recovery from D63's literal refusal.
+                  Refuse_Any_Index;
+                  return Made;
+               end;
+            end Parse_Struct_Literal;
 
             --  call ::= identifier "(" arguments? ")"             [1820]
             --

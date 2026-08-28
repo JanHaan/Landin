@@ -1,0 +1,23 @@
+holder: type = struct
+    first: i32
+    row: [2]usize
+    second: i32
+    ready: bool
+end holder
+
+mut state: holder
+
+public main: () -> (code: i32) =
+    state = (first: 10, second: state.first + 1, of zeroed)
+    local: holder = (second: 20, first: state.second, of zeroed)
+
+    if state.first == 10 and state.second == 11
+      and state.row[0] == 0 and state.row[1] == 0 and not state.ready
+      and local.first == 11 and local.second == 20
+      and local.row[0] == 0 and local.row[1] == 0 and not local.ready
+    then
+        code = local.first + state.second + local.second
+    else
+        code = 1
+    end if
+end main

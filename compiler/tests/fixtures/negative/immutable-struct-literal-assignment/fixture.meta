@@ -1,0 +1,6 @@
+class: negative
+summary: D64 keeps root mutability first for a whole struct literal assignment
+constructs: 0080, 0670, 0710, 1810, 1900
+program: program.ldn
+codes: L0303
+targets: linux-x86-64, macos-arm64

@@ -3251,6 +3251,89 @@ package body Landin.Tests.Lowering_Suite is
          & " (regenerate with ./scripts/test.sh --record)");
    end The_Recorded_Corpus_Is_Current;
 
+   --  D64 commits labelled scalar fields in source order, then writes the
+   --  omitted fields in declaration order.  A fixed-array omission reuses
+   --  D49's field-qualified clear rather than expanding the array extent.
+   procedure A_Struct_Literal_Becomes_Ordered_Field_Writes
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Struct_Literal_Becomes_Ordered_Field_Writes
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    first: i32" & LF
+         & "    row: [2]usize" & LF
+         & "    second: i32" & LF
+         & "    ready: bool" & LF
+         & "end holder" & LF
+         & "mut state: holder" & LF
+         & "f: () -> none =" & LF
+         & "    state = (second: state.first + 1, first: 10,"
+         & " of zeroed)" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the contextual struct literal lowers");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : IR.Item_Id := IR.No_Item;
+         type Part_List is array (Positive range <>) of IR.Part_Position;
+         Parts : Part_List (1 .. 3) := [others => 1];
+         Stores : Natural := 0;
+         Clears : Natural := 0;
+      begin
+         for Which in 1 .. IR.Item_Count (Unit) loop
+            if IR.Kind_Of (Unit, IR.Item_Id (Which)) = IR.Routine then
+               Routine := IR.Item_Id (Which);
+            end if;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, Routine /= IR.No_Item, "the function is a routine");
+
+         if Routine /= IR.No_Item then
+            for V in 1 .. IR.Value_Count (Unit, Routine) loop
+               declare
+                  Value : constant IR.Value_Id := IR.Value_Id (V);
+                  Op : constant IR.Opcode := IR.Op_Of (Unit, Routine, Value);
+               begin
+                  if Op = IR.Store_Field then
+                     Stores := Stores + 1;
+                     if Stores <= Parts'Length then
+                        Parts (Stores) :=
+                          IR.Field_Of (Unit, Routine, Value);
+                     end if;
+                  elsif Op = IR.Clear_Array then
+                     Clears := Clears + 1;
+                     Landin.Testing.Check_Equal
+                       (Item, IR.Element_Field_Of (Unit, Routine, Value), 2,
+                        "the omitted array is cleared as field two");
+                  end if;
+               end;
+            end loop;
+         end if;
+
+         Landin.Testing.Check_Equal
+           (Item, Stores, 3, "two labelled and one filled scalar are stored");
+         Landin.Testing.Check
+           (Item, Parts = Part_List'(3, 1, 4),
+            "labelled stores keep source order before declaration-order fill");
+         Landin.Testing.Check_Equal
+           (Item, Clears, 1, "one compact array-field clear is emitted");
+         Check_Terminators (Item, Unit, "a struct literal");
+      end;
+   end A_Struct_Literal_Becomes_Ordered_Field_Writes;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -3396,6 +3479,9 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "an internal empty array has identity measurements",
          An_Internal_Empty_Array_Has_Identity_Measurements'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "a struct literal becomes ordered field writes",
+         A_Struct_Literal_Becomes_Ordered_Field_Writes'Access);
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);
