@@ -2179,6 +2179,65 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "12");
    end A_Module_Array_Clear_Follows_The_Target_Extent;
 
+   --  D58 reaches D57's whole aggregate clear through module storage.  The
+   --  byte count is the target's padded object extent, not the sum of its
+   --  field bytes, and the datum itself is the field-zero base address.
+   procedure A_Module_Struct_Clear_Follows_The_Target_Extent
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Struct_Clear_Follows_The_Target_Extent
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "holder: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    row: [2]usize" & LF
+        & "    tail: u16" & LF
+        & "end holder" & LF
+        & "mut state: holder" & LF
+        & "f: () -> none =" & LF
+        & "    state = zeroed" & LF
+        & "end f" & LF;
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Bytes : String);
+
+      procedure Check_Target
+        (Facts : Landin.Targets.Target_Facts;
+         Bytes : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran  : Natural;
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+         declare
+            Text : constant String := Emitted (Work);
+            Clear : constant String :=
+              HT & "leaq state(%rip), %rdi" & LF
+              & HT & "xorl %eax, %eax" & LF
+              & HT & "movabsq $" & Bytes & ", %rcx" & LF
+              & HT & "cld" & LF
+              & HT & "rep stosb" & LF;
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, Clear),
+               "one padded target extent is cleared at the module datum");
+            Landin.Testing.Check_Equal
+              (Item, Occurrences (Text, HT & "rep stosb" & LF), 1,
+               "the whole struct image is one string operation");
+            Landin.Testing.Check
+              (Item, not Contains (Text, HT & "rep movsb" & LF),
+               "zeroed assignment invents no aggregate source storage");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "32");
+      Check_Target (Landin.Targets.Synthetic_32, "16");
+   end A_Module_Struct_Clear_Follows_The_Target_Extent;
+
    --  D32 repeats an element count rather than a byte count, and selects the
    --  repeated-store width from the target's scalar facts.  `usize` therefore
    --  uses qwords on Linux x86-64 and longwords under Synthetic_32 while the
@@ -3736,6 +3795,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a module array clear follows the target extent",
          A_Module_Array_Clear_Follows_The_Target_Extent'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a module struct clear follows target extent",
+         A_Module_Struct_Clear_Follows_The_Target_Extent'Access);
       Landin.Testing.Register
         (Into, "backend", "an array fill follows the target element width",
          An_Array_Fill_Follows_The_Target_Element_Width'Access);

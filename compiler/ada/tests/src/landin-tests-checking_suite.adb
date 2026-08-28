@@ -1951,6 +1951,89 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 5, "every whole aggregate assignment was checked");
    end Array_Bearing_Struct_Copy_Uses_Each_Field_Fact;
 
+   --  D58 gives a whole mutable struct place D57's contextual zero image.
+   --  Both storage classes carry the destination's nominal body, and the
+   --  local clear supplies every D16/D48 field fact used by the later read.
+   procedure Struct_Assignment_Gives_Zeroed_Its_Body
+     (Item : in out Landin.Testing.Context);
+
+   procedure Struct_Assignment_Gives_Zeroed_Its_Body
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "struct-zeroed-assignment.ldn",
+         "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "    tail: u16" & LF
+         & "end holder" & LF
+         & "same: type = holder" & LF
+         & "mut state: same" & LF
+         & "f: (at: usize) -> (result: u32) =" & LF
+         & "    mut local: holder" & LF
+         & "    state = zeroed" & LF
+         & "    local = zeroed" & LF
+         & "    result = state.row[at] + local.row[at]" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "module and local struct places accept zeroed and become complete");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Assignment
+              and then Landin.Syntax.Kind
+                (Of_Tree.all, Landin.Syntax.Value_Of (Of_Tree.all, Node))
+                  = Landin.Syntax.Zeroed_Literal
+            then
+               declare
+                  Place : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Target_Of (Of_Tree.all, Node);
+                  Value : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Value_Of (Of_Tree.all, Node);
+               begin
+                  Seen := Seen + 1;
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Checking.Type_Of
+                       (Types.all, Of_Tree.all, Value)
+                         = Landin.Types.Aggregate
+                     and then Landin.Checking.Body_Of
+                       (Types.all, Of_Tree.all, Value)
+                         = Landin.Checking.Body_Of
+                           (Types.all, Of_Tree.all, Place),
+                     "zeroed carries its destination's nominal struct body");
+               end;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 2, "both whole struct zeroed assignments were checked");
+   end Struct_Assignment_Gives_Zeroed_Its_Body;
+
    --  D55 gives a directly named whole struct D54's copy context; D57 gives
    --  `zeroed` the same written nominal context.  Each value node and binding
    --  keep the one body later layout and selection use.
@@ -2510,6 +2593,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array-bearing struct copy uses each field fact",
          Array_Bearing_Struct_Copy_Uses_Each_Field_Fact'Access);
+      Landin.Testing.Register
+        (Into, "checking", "struct assignment gives zeroed its body",
+         Struct_Assignment_Gives_Zeroed_Its_Body'Access);
       Landin.Testing.Register
         (Into, "checking", "local struct initializer keeps nominal source",
          Local_Struct_Initializer_Keeps_Its_Nominal_Source'Access);

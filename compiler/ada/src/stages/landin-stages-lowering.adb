@@ -1408,21 +1408,38 @@ package body Landin.Stages.Lowering is
                              Syn.Target_Of (Of_Tree, Stmt);
                            From : constant Syn.Node_Id :=
                              Syn.Value_Of (Of_Tree, Stmt);
-                           Wrote : constant Res.Declaration_Id :=
-                             Landin.Checking.Body_Of
-                               (Types.all, Of_Tree, Place);
-                           Source : constant IR.Storage :=
-                             Storage_For (Of_Tree, From);
                            Destination : constant IR.Storage :=
                              Storage_For (Of_Tree, Place);
                         begin
-                           for Field in
-                             1 .. Landin.Checking.Layout_Field_Count
-                                    (Types.all, Wrote)
-                           loop
-                              Copy_Field
-                                (Wrote, Source, Destination, Field);
-                           end loop;
+                           if Syn.Kind (Of_Tree, From) = Syn.Zeroed_Literal
+                           then
+                              --  D58 reuses D57's field-zero whole aggregate
+                              --  clear for either datum or slot storage.  Test
+                              --  the syntax before asking Storage_For to bind
+                              --  a source that deliberately does not exist.
+                              IR.Emit_Array_Clear
+                                (Unit.all, Filling, Destination, Site);
+                           else
+                              --  [0710]'s copy visits the same fields in
+                              --  [0750]'s order: a scalar is one field read
+                              --  and write, and D54 copies an array field with
+                              --  D50's compact operation.
+                              declare
+                                 Wrote : constant Res.Declaration_Id :=
+                                   Landin.Checking.Body_Of
+                                     (Types.all, Of_Tree, Place);
+                                 Source : constant IR.Storage :=
+                                   Storage_For (Of_Tree, From);
+                              begin
+                                 for Field in
+                                   1 .. Landin.Checking.Layout_Field_Count
+                                          (Types.all, Wrote)
+                                 loop
+                                    Copy_Field
+                                      (Wrote, Source, Destination, Field);
+                                 end loop;
+                              end;
+                           end if;
                         end;
                      elsif Landin.Checking.Type_Of
                              (Types.all, Of_Tree,

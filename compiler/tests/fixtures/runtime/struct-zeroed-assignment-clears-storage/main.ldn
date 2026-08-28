@@ -1,0 +1,30 @@
+holder: type = struct
+    tag: u8
+    row: [3]u32
+    tail: u16
+end holder
+
+mut state: holder
+
+public main: () -> (code: i32) =
+    state.tag = 7
+    state.row = [8, 9, 10]
+    state.tail = 11
+
+    mut local: holder
+    local.tag = 12
+    local.row = [13, 14, 15]
+    local.tail = 16
+
+    state = zeroed
+    local = zeroed
+
+    if state.tag == 0 and state.row[0] == 0 and state.row[2] == 0
+        and state.tail == 0 and local.tag == 0 and local.row[0] == 0
+        and local.row[2] == 0 and local.tail == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

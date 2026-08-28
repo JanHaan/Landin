@@ -1,0 +1,12 @@
+holder: type = struct
+    tag: u8
+    row: [2]u32
+end holder
+
+state: holder
+
+clear: () -> none =
+    local: holder
+    state = zeroed
+    local = zeroed
+end clear

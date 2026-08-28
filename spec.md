@@ -3432,9 +3432,10 @@ hidden zero object, target offset or new opcode is introduced.
 
 An invalid struct body already owns its field/layout report and never reaches
 lowering. An explicit module struct zero image, inferred `name := zeroed`,
-whole assignment `name = zeroed`, arguments, returns, discards, operands,
-nested expressions and general aggregate values remain refused. Struct fields
-of struct type, fields of elements and nested arrays keep their boundaries.
+whole assignment `name = zeroed` in this slice, arguments, returns, discards,
+operands, nested expressions and general aggregate values remain refused.
+D58 later supplies the whole-assignment context. Struct fields of struct type,
+fields of elements and nested arrays keep their boundaries.
 
 **Why the padded whole:** field-wise scalar stores and array clears would leave
 padding unspecified, contradicting [0540]'s all-bits-zero image. Reusing the
@@ -3450,7 +3451,61 @@ image and place rules. All were declined.
 **Pinned by** the checker, lowering, verifier and backend public-seam cases;
 `positive/local-struct-zeroed-initializer`;
 `negative/module-struct-zeroed-initializer-not-enabled`;
-`negative/struct-zeroed-assignment-not-enabled`;
 `negative/inferred-zeroed-not-enabled`;
 `negative/local-struct-initializer-non-name-not-enabled`; the recorded IR dump;
 and `runtime/local-struct-zeroed-reads-zero` on Linux x86-64.
+
+### D58 — A struct place is assigned its zero image
+
+**The tour said** that assignment reaches its destination before evaluating
+its value [0410], that `zeroed` is the complete all-bits-zero image of its
+contextual type [0540], and that assignment requires a mutable place [1900].
+D30 supplied this context for whole arrays, D49 for an array field, and D57
+gave field zero of the compact clear operation a padded aggregate extent.
+
+**Chosen:** `place = zeroed` is admitted when `place` directly names mutable
+D46 module state or a mutable D47 local of a named ordinary struct with an
+enabled D44/D45 layout. The destination supplies the literal's aggregate kind
+and nominal [0710] body. Root mutability is checked first; an immutable root
+reports the existing L0303 alone. Type aliases preserve the same body.
+
+The destination is reached first and the literal evaluates nothing. On normal
+completion every scalar field, every fixed-array field and every padding byte
+in the complete target object extent is all bits zero. For a tracked local,
+D16 marks each scalar field assigned and D48--D54 mark each array field wholly
+assigned; branch merges intersect those facts as before. Module state remains
+untracked and complete under D10.
+
+Lowering emits D57's one operand-free field-zero `Clear_Array` naming the
+module datum or frame slot. The verifier admits the whole aggregate storage
+explicitly, while `Copy_Array` and `Fill_Array` remain array-only. Each backend
+derives the padded extent and base address from target facts; no source
+storage, field enumeration, aggregate temporary, target offset or new opcode
+is introduced.
+
+An inferred initializer `name := zeroed`, an explicit module initializer,
+arguments, returns, discards, operands, nested expressions and general
+aggregate values remain refused. A struct selection cannot currently name a
+struct-typed field, and fields of struct type, fields of elements and nested
+arrays keep their boundaries.
+
+**Why both storage classes:** D30 and D49 already clear module and local
+storage with identical runtime semantics, D54 copies whole structs into both,
+and D10 makes module definite assignment simpler rather than different.
+Restricting this rule to locals would create a new storage-class asymmetry with
+no representation or semantic cause.
+
+**The alternatives:** admit only locals, clear fields separately, add a new
+aggregate-clear opcode, or admit every aggregate-valued `zeroed` context at
+once. The first is asymmetric; the second misses padding; the third duplicates
+D57's operation; and the last settles static images and general aggregate
+values this place rule does not need. All were declined.
+
+**Pinned by** the checker, lowering, verifier and backend public-seam cases;
+`positive/struct-zeroed-assignment`;
+`negative/immutable-struct-zeroed-assignment`;
+`negative/struct-zeroed-assignment-not-on-every-path`;
+`negative/struct-zeroed-assignment-nested-not-enabled`;
+`negative/inferred-zeroed-not-enabled`;
+`negative/module-struct-zeroed-initializer-not-enabled`; the recorded IR dump;
+and `runtime/struct-zeroed-assignment-clears-storage` on Linux x86-64.

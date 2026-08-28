@@ -100,13 +100,21 @@ package body Landin.Tests.Verifier_Suite is
          Meanings : constant not null access Landin.Resolution.Table :=
            Landin.Stages.Meanings (Work);
          Unit : IR.Unit;
-         A    : IR.Item_Id;
+         A, G : IR.Item_Id;
          S, Q, R, T : IR.Slot_Id;
          B       : IR.Block_Id;
          N    : IR.Value_Id;
       begin
          IR.Prepare (Unit, Meanings.all);
          A := IR.Add_Item (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         G := IR.Add_Item
+           (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
+         IR.Add_Field (Unit, G, Landin.Types.U8);
+         IR.Add_Field
+           (Unit, G,
+            (Kind    => IR.Array_Field_Shape,
+             Element => Landin.Types.U16,
+             Length  => 2));
          S := IR.Add_Slot (Unit, A, Landin.Types.U32, 2, Site);
          Q := IR.Add_Array_Slot
            (Unit, A, Landin.Types.U16, 2 ** 32 - 1,
@@ -133,6 +141,9 @@ package body Landin.Tests.Verifier_Suite is
          --  sound shape: the complete padded extent of aggregate storage.
          IR.Emit_Array_Clear
            (Unit, A, (Kind => IR.Frame_Slot, Slot => T), Site);
+         --  D58 makes D57's other whole-aggregate storage class live.
+         IR.Emit_Array_Clear
+           (Unit, A, (Kind => IR.Module_Datum, Datum => G), Site);
          N := IR.Emit_Number (Unit, A, Landin.Types.U16, 7, False, Site);
          IR.Emit_Array_Fill
            (Unit, A, (Kind => IR.Frame_Slot, Slot => Q), 1, N, Site);
@@ -141,6 +152,12 @@ package body Landin.Tests.Verifier_Suite is
          N := IR.Emit_Load (Unit, A, S, Site);
          IR.Emit_Leave (Unit, A, N, Site);
          IR.Leave_Block (Unit, A);
+
+         B := IR.Add_Block
+           (Unit, G, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, G, B);
+         IR.Emit_Leave (Unit, G, IR.No_Value, Site);
+         IR.Leave_Block (Unit, G);
 
          Expect (Item, V.Check (Unit), V.Nothing_Wrong,
                  "a unit built by the book is accepted");
@@ -238,8 +255,16 @@ package body Landin.Tests.Verifier_Suite is
       A := IR.Add_Item (Unit, IR.Routine, 1, Landin.Types.U32, Site);
       --  E precedes the deliberately blockless helper datums so the
       --  datum-copy case reaches the instruction it is about first.
-      E := IR.Add_Item (Unit, IR.Datum, 6, Landin.Types.Fixed_Array, Site);
-      IR.Set_Array (Unit, E, Landin.Types.U32, 4);
+      E := IR.Add_Item
+        (Unit, IR.Datum, 6,
+         (if Harm = Array_Clear_Inside_A_Datum
+          then Landin.Types.Aggregate else Landin.Types.Fixed_Array),
+         Site);
+      if Harm = Array_Clear_Inside_A_Datum then
+         IR.Add_Field (Unit, E, Landin.Types.U32);
+      else
+         IR.Set_Array (Unit, E, Landin.Types.U32, 4);
+      end if;
       D := IR.Add_Item (Unit, IR.Datum, 3, Landin.Types.U32, Site);
       G := IR.Add_Item (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
       if Harm = Aggregate_Scalar_Length_Is_Not_One then

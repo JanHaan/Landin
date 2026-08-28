@@ -2883,43 +2883,53 @@ package body Landin.Stages.Checking is
                   Wants : constant Ty.Type_Kind :=
                     Selected_From (Of_Tree, Place);
                begin
-                  --  [0710]: a whole struct is copied into a place of the
-                  --  same type, and two are the same type exactly when one
-                  --  declaration wrote both.  A copy is the one expression
-                  --  position a struct may stand in, because the bytes go
-                  --  straight from one place to another and nothing has to
-                  --  carry them anywhere.
                   if Wants = Ty.Aggregate then
-                     declare
-                        Got : constant Ty.Type_Kind :=
-                          (if Is_Direct_Binding_Name (Of_Tree, Value)
-                           then Selected_From (Of_Tree, Value)
-                           else Synthesise (Of_Tree, Value));
-                     begin
-                        if Got = Ty.Ill_Typed then
-                           null;
-                        elsif Got /= Ty.Aggregate
-                          or else Landin.Checking.Body_Of
-                                    (Types.all, Of_Tree, Place)
-                                  /= Landin.Checking.Body_Of
-                                       (Types.all, Of_Tree, Value)
-                        then
-                           Bad.Report
-                             (Item    => Bad.Type_Mismatch,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Value),
-                              Message => "this is not a value of the"
-                                         & " struct type written here",
-                              Note    => "[0710]: two structs are one type"
-                                         & " when one declaration wrote"
-                                         & " both, and never otherwise",
-                              Related => Syn.Origin (Of_Tree, Place),
-                              Because => "the place written here",
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Value);
-                        end if;
-                     end;
+                     if Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
+                        --  D58: a direct mutable struct place supplies both
+                        --  [0540]'s aggregate context and [0710]'s body.  The
+                        --  literal has no source value and reads nothing.
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Value, Ty.Aggregate);
+                        Landin.Checking.Note_Body
+                          (Types.all, Of_Tree, Value,
+                           Landin.Checking.Body_Of
+                             (Types.all, Of_Tree, Place));
+                     else
+                        --  [0710]: a whole struct is copied into a place of
+                        --  the same type.  A copy is the one expression
+                        --  position a struct may stand in, because the bytes
+                        --  go straight between places without a value.
+                        declare
+                           Got : constant Ty.Type_Kind :=
+                             (if Is_Direct_Binding_Name (Of_Tree, Value)
+                              then Selected_From (Of_Tree, Value)
+                              else Synthesise (Of_Tree, Value));
+                        begin
+                           if Got = Ty.Ill_Typed then
+                              null;
+                           elsif Got /= Ty.Aggregate
+                             or else Landin.Checking.Body_Of
+                                       (Types.all, Of_Tree, Place)
+                                     /= Landin.Checking.Body_Of
+                                          (Types.all, Of_Tree, Value)
+                           then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Value),
+                                 Message => "this is not a value of the"
+                                            & " struct type written here",
+                                 Note    => "[0710]: two structs are one type"
+                                            & " when one declaration wrote"
+                                            & " both, and never otherwise",
+                                 Related => Syn.Origin (Of_Tree, Place),
+                                 Because => "the place written here",
+                                 Into    => Found);
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Value);
+                           end if;
+                        end;
+                     end if;
 
                      return;
                   end if;
