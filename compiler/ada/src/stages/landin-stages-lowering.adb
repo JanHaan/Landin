@@ -984,14 +984,13 @@ package body Landin.Stages.Lowering is
                   Value : IR.Value_Id;
                   Index : IR.Value_Id := IR.No_Value);
 
-               --  One field of [0710]'s copy, read from the place on the
-               --  right and written to the one on the left.  Each side is
-               --  a name of a struct, so each is either [1740]'s module
-               --  state or a cell in this frame.
+               --  One field of [0710]'s copy, read from storage on the right
+               --  and written to storage on the left.  D55 also supplies a
+               --  fresh destination slot that has no source-level place.
                procedure Copy_Field
-                 (Of_Tree : Syn.Tree;
-                  Place   : Syn.Node_Id;
-                  From    : Syn.Node_Id;
+                 (Wrote      : Res.Declaration_Id;
+                  Source     : IR.Storage;
+                  Destination : IR.Storage;
                   Field   : Positive);
 
                function Storage_For
@@ -1016,17 +1015,11 @@ package body Landin.Stages.Lowering is
                end Storage_For;
 
                procedure Copy_Field
-                 (Of_Tree : Syn.Tree;
-                  Place   : Syn.Node_Id;
-                  From    : Syn.Node_Id;
+                 (Wrote      : Res.Declaration_Id;
+                  Source     : IR.Storage;
+                  Destination : IR.Storage;
                   Field   : Positive)
                is
-                  Wrote : constant Res.Declaration_Id :=
-                    Landin.Checking.Body_Of (Types.all, Of_Tree, Place);
-                  Source : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, From);
-                  Target : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, Place);
                begin
                   case Landin.Checking.Field_Kind_Of
                     (Types.all, Wrote, Field)
@@ -1038,42 +1031,36 @@ package body Landin.Stages.Lowering is
                                (Types.all, Wrote, Field);
                            Taken : IR.Value_Id;
                         begin
-                           if Res.Sort_Of (Meanings.all, Source)
-                                = Res.Module_Binding
-                           then
-                              Taken :=
-                                IR.Emit_Load_Field
-                                  (Unit.all, Filling,
-                                   IR.Item_For (Unit.all, Source),
-                                   IR.Part_Position (Field), Held, Site);
-                           else
-                              Taken :=
-                                IR.Emit_Load_Slot_Field
-                                  (Unit.all, Filling,
-                                   Slot_For (Of_Tree, From, Source),
-                                   IR.Part_Position (Field), Held, Site);
-                           end if;
+                           case Source.Kind is
+                              when IR.Module_Datum =>
+                                 Taken :=
+                                   IR.Emit_Load_Field
+                                     (Unit.all, Filling, Source.Datum,
+                                      IR.Part_Position (Field), Held, Site);
+                              when IR.Frame_Slot =>
+                                 Taken :=
+                                   IR.Emit_Load_Slot_Field
+                                     (Unit.all, Filling, Source.Slot,
+                                      IR.Part_Position (Field), Held, Site);
+                           end case;
 
-                           if Res.Sort_Of (Meanings.all, Target)
-                                = Res.Module_Binding
-                           then
-                              IR.Emit_Store_Field
-                                (Unit.all, Filling,
-                                 IR.Item_For (Unit.all, Target),
-                                 IR.Part_Position (Field), Taken, Site);
-                           else
-                              IR.Emit_Store_Slot_Field
-                                (Unit.all, Filling,
-                                 Slot_For (Of_Tree, Place, Target),
-                                 IR.Part_Position (Field), Taken, Site);
-                           end if;
+                           case Destination.Kind is
+                              when IR.Module_Datum =>
+                                 IR.Emit_Store_Field
+                                   (Unit.all, Filling, Destination.Datum,
+                                    IR.Part_Position (Field), Taken, Site);
+                              when IR.Frame_Slot =>
+                                 IR.Emit_Store_Slot_Field
+                                   (Unit.all, Filling, Destination.Slot,
+                                    IR.Part_Position (Field), Taken, Site);
+                           end case;
                         end;
 
                      when Landin.Checking.Fixed_Array_Field =>
                         IR.Emit_Array_Copy
                           (Unit.all, Filling,
-                           Source      => Storage_For (Of_Tree, From),
-                           Destination => Storage_For (Of_Tree, Place),
+                           Source      => Source,
+                           Destination => Destination,
                            Site        => Site,
                            Source_Field => Field,
                            Destination_Field => Field);
@@ -1362,6 +1349,29 @@ package body Landin.Stages.Lowering is
                                     Source_Field => Source_Field);
                               end;
                            end if;
+                        elsif Landin.Checking.Type_Of (Types.all, Id)
+                                = Ty.Aggregate
+                        then
+                           --  D55: the destination slot is fresh and the
+                           --  direct source is existing storage.  Reuse
+                           --  D54's declaration-ordered scalar/array field
+                           --  copy without forming an aggregate value.
+                           declare
+                              Wrote : constant Res.Declaration_Id :=
+                                Landin.Checking.Body_Of (Types.all, Id);
+                              Source : constant IR.Storage :=
+                                Storage_For (Of_Tree, Value);
+                              Destination : constant IR.Storage :=
+                                (Kind => IR.Frame_Slot, Slot => Where);
+                           begin
+                              for Field in
+                                1 .. Landin.Checking.Layout_Field_Count
+                                       (Types.all, Wrote)
+                              loop
+                                 Copy_Field
+                                   (Wrote, Source, Destination, Field);
+                              end loop;
+                           end;
                         else
                            IR.Emit_Store
                              (Unit.all, Filling, Where,
@@ -1387,12 +1397,17 @@ package body Landin.Stages.Lowering is
                            Wrote : constant Res.Declaration_Id :=
                              Landin.Checking.Body_Of
                                (Types.all, Of_Tree, Place);
+                           Source : constant IR.Storage :=
+                             Storage_For (Of_Tree, From);
+                           Destination : constant IR.Storage :=
+                             Storage_For (Of_Tree, Place);
                         begin
                            for Field in
                              1 .. Landin.Checking.Layout_Field_Count
                                     (Types.all, Wrote)
                            loop
-                              Copy_Field (Of_Tree, Place, From, Field);
+                              Copy_Field
+                                (Wrote, Source, Destination, Field);
                            end loop;
                         end;
                      elsif Landin.Checking.Type_Of

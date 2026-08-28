@@ -1,0 +1,36 @@
+point: type = struct
+    x: u32
+    y: u32
+end point
+
+holder: type = struct
+    tag: u8
+    row: [2]usize
+    tail: u16
+end holder
+
+same: type = holder
+
+mut module_source: holder
+
+copy: (at: usize) -> (result: usize) =
+    mut scalar_source: point
+    scalar_source.x = 1
+    scalar_source.y = 2
+    mut scalar_copy: point = scalar_source
+
+    mut source: same
+    source.tag = 3
+    source.row = zeroed
+    source.tail = 4
+    mut local: holder = source
+    mut through_alias: same = local
+    mut module_source: same = module_source
+
+    _ = scalar_copy.x
+    _ = scalar_copy.y
+    _ = through_alias.tag
+    _ = through_alias.tail
+    _ = module_source.row[at]
+    result = local.row[at]
+end copy

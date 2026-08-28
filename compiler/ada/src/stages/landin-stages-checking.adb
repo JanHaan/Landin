@@ -572,6 +572,19 @@ package body Landin.Stages.Checking is
                         = Syn.Member_Selection
                     and then Admit_Array_Field
                       (Of_Tree, Syn.Value_Of (Of_Tree, Node))));
+            --  D55: a written local struct type supplies the nominal
+            --  context for one initializer copied directly from storage.
+            --  Like D21's array gate, syntax admits an unresolved name so
+            --  resolution keeps sole ownership of a name that names nothing.
+            Is_Direct_Struct_Init : constant Boolean :=
+              Held = Ty.Aggregate
+              and then Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Name_Reference
+              and then Landin.Checking.Body_Of
+                (Types.all, Of_Tree, Written) /= Res.No_Declaration;
             --  D23 admits a literal only where its written local array type
             --  supplies both the element context and the exact length.
             Is_Local_Literal_Init : constant Boolean :=
@@ -688,6 +701,7 @@ package body Landin.Stages.Checking is
             if Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
+              and then not Is_Direct_Struct_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -2598,6 +2612,41 @@ package body Landin.Stages.Checking is
                                     Into    => Found);
                               end if;
                            end;
+                        end if;
+                     end;
+                  elsif Wants = Ty.Aggregate then
+                     --  D55: the written local type gives a direct struct
+                     --  storage name its one contextual value position.  The
+                     --  identity remains [0710]'s body declaration, including
+                     --  through aliases on either side.
+                     declare
+                        Written : constant Syn.Node_Id :=
+                          Syn.Declared_Type (Of_Tree, Node);
+                        Got : constant Ty.Type_Kind :=
+                          Selected_From (Of_Tree, Value);
+                     begin
+                        if Got = Ty.Ill_Typed then
+                           null;
+                        elsif Got /= Ty.Aggregate
+                          or else Landin.Checking.Body_Of
+                            (Types.all, Of_Tree, Written)
+                              /= Landin.Checking.Body_Of
+                                (Types.all, Of_Tree, Value)
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this is not a value of the"
+                                         & " struct type written here",
+                              Note    => "[0710]: two structs are one type"
+                                         & " when one declaration wrote"
+                                         & " both, and never otherwise",
+                              Related => Syn.Origin (Of_Tree, Node),
+                              Because => "the type declared here",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
                         end if;
                      end;
                   elsif Wants = Ty.Fixed_Array then

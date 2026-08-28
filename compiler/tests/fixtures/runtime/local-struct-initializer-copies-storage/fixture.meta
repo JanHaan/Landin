@@ -1,0 +1,6 @@
+class: runtime
+summary: D55 local struct initializers copy independent scalar and fixed-array field storage
+constructs: 0040, 0080, 0110, 0190, 0410, 0520, 0670, 0710, 0750, 1740, 1810, 1900, 1910
+program: main.ldn
+status: 42
+targets: linux-x86-64
