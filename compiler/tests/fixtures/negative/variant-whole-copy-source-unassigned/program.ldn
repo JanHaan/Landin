@@ -1,0 +1,13 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u16)
+    end kind
+end choice
+
+copy: () -> none =
+    mut source: choice
+    mut target: choice
+    target = source
+end copy

@@ -655,9 +655,9 @@ package body Landin.Tests.IR_Suite is
       declare
          Unit : Landin.IR.Unit;
          Routine : Landin.IR.Item_Id;
-         Slot : Landin.IR.Slot_Id;
+         Slot, Copy_Slot : Landin.IR.Slot_Id;
          Block : Landin.IR.Block_Id;
-         Value, Loaded, Payload, Selected, Store : Landin.IR.Value_Id;
+         Value, Loaded, Payload, Selected, Store, Copy : Landin.IR.Value_Id;
       begin
          Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
          Routine := Landin.IR.Add_Item
@@ -666,6 +666,22 @@ package body Landin.Tests.IR_Suite is
            (Unit, Routine, Landin.IR.No_Declaration, Site);
          Landin.IR.Add_Slot_Field
            (Unit, Routine, Slot,
+            (Kind           => Landin.IR.Variant_Field_Shape,
+             Element        => Landin.Types.U8,
+             Length         => 1,
+             Cases          => 2,
+             Payloads_First => 1),
+            Cases => [(First => 0, Count => 0),
+                      (First => 1, Count => 1)],
+            Payloads =>
+              [(Kind    => Landin.IR.Scalar_Field_Shape,
+                Element => Landin.Types.U16,
+                Length  => 1,
+                others  => <>)]);
+         Copy_Slot := Landin.IR.Add_Aggregate_Slot
+           (Unit, Routine, Landin.IR.No_Declaration, Site);
+         Landin.IR.Add_Slot_Field
+           (Unit, Routine, Copy_Slot,
             (Kind           => Landin.IR.Variant_Field_Shape,
              Element        => Landin.Types.U8,
              Length         => 1,
@@ -697,6 +713,11 @@ package body Landin.Tests.IR_Suite is
            (Unit, Routine, (Kind => Landin.IR.Frame_Slot, Slot => Slot),
             1, 2, 1, Value, Site);
          Store := Landin.IR.Nth_Value (Unit, Routine, Block, 5);
+         Landin.IR.Emit_Variant_Copy
+           (Unit, Routine,
+            (Kind => Landin.IR.Frame_Slot, Slot => Slot),
+            (Kind => Landin.IR.Frame_Slot, Slot => Copy_Slot), 1, Site);
+         Copy := Landin.IR.Nth_Value (Unit, Routine, Block, 6);
 
          Landin.Testing.Check
            (Item,
@@ -759,6 +780,20 @@ package body Landin.Tests.IR_Suite is
               and then Landin.IR.Nth_Operand
                 (Unit, Routine, Store, 1) = Value,
             "a scalar payload store carries one value and no offsets");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Copy) = Landin.IR.Copy_Variant
+              and then Landin.IR.Defines_Nothing (Landin.IR.Copy_Variant)
+              and then Landin.IR.Operand_Count (Unit, Routine, Copy) = 0
+              and then Landin.IR.Source_Of
+                (Unit, Routine, Copy).Slot = Slot
+              and then Landin.IR.Source_Field_Of
+                (Unit, Routine, Copy) = 1
+              and then Landin.IR.Destination_Of
+                (Unit, Routine, Copy).Slot = Copy_Slot
+              and then Landin.IR.Element_Field_Of
+                (Unit, Routine, Copy) = 1,
+            "a variant copy carries two storage identities and one field");
 
          declare
             Text : constant String := Landin.IR.Dump.Text
@@ -777,7 +812,10 @@ package body Landin.Tests.IR_Suite is
                    /= 0
                and then Ada.Strings.Fixed.Index
                  (Text, "STORE_VARIANT_FIELD destination slot 1 field 1"
-                        & " case 2 payload field 1 <- 4") /= 0,
+                        & " case 2 payload field 1 <- 4") /= 0
+               and then Ada.Strings.Fixed.Index
+                 (Text, "COPY_VARIANT from slot 1 field 1 to slot 2"
+                        & " field 1") /= 0,
                "the dump spells only target-neutral identities");
          end;
       end;

@@ -91,6 +91,8 @@ package body Landin.IR.Verifier is
             when Variant_Operation_Inside_A_Datum =>
                "a datum contains a runtime variant operation, and [1940]"
                & " admits none",
+            when Variant_Copy_Shapes_Disagree =>
+               "a variant copy's source and destination shapes disagree",
             when Variant_Field_Out_Of_Range =>
                "a variant operation names a field the aggregate does not"
                & " have",
@@ -157,7 +159,7 @@ package body Landin.IR.Verifier is
             when Store_Field   => 1,
             when Load_Element  => 1,
             when Store_Element => 2,
-            when Copy_Array | Clear_Array => 0,
+            when Copy_Array | Copy_Variant | Clear_Array => 0,
             when Fill_Array    => 1,
             when Load_Variant_Tag | Load_Variant_Field
                | Select_Variant => 0,
@@ -1301,6 +1303,90 @@ package body Landin.IR.Verifier is
                                  then
                                     return
                                       (Kind => Array_Copy_Shapes_Disagree,
+                                       Item => Id, Block => Block, Value => V);
+                                 end if;
+                              end;
+
+                           when Copy_Variant =>
+                              if Is_Datum then
+                                 return
+                                   (Kind  => Variant_Operation_Inside_A_Datum,
+                                    Item  => Id,
+                                    Block => Block,
+                                    Value => V);
+                              end if;
+
+                              declare
+                                 Source_Shape, Destination_Shape, Leaf :
+                                   Field_Shape;
+                                 Bad : Fault_Kind;
+                                 Agree : Boolean := True;
+                              begin
+                                 Bad := Variant_Shape_Of
+                                   (Id, Source_Of (Of_Unit, Id, V),
+                                    Source_Field_Of (Of_Unit, Id, V),
+                                    0, 0, Source_Shape, Leaf);
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
+
+                                 Bad := Variant_Shape_Of
+                                   (Id, Destination_Of (Of_Unit, Id, V),
+                                    Element_Field_Of (Of_Unit, Id, V),
+                                    0, 0, Destination_Shape, Leaf);
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
+
+                                 Agree :=
+                                   Source_Shape.Element
+                                     = Destination_Shape.Element
+                                   and then Source_Shape.Cases
+                                     = Destination_Shape.Cases;
+                                 if Agree then
+                                    for Which in 1 .. Source_Shape.Cases loop
+                                       Agree :=
+                                         Variant_Case_Field_Count
+                                           (Of_Unit, Source_Shape, Which)
+                                         = Variant_Case_Field_Count
+                                           (Of_Unit, Destination_Shape,
+                                            Which);
+                                       exit when not Agree;
+                                       for Field in 1 ..
+                                         Variant_Case_Field_Count
+                                           (Of_Unit, Source_Shape, Which)
+                                       loop
+                                          declare
+                                             Source_Leaf : constant
+                                               Field_Shape :=
+                                                 Nth_Variant_Case_Field
+                                                   (Of_Unit, Source_Shape,
+                                                    Which, Field);
+                                             Destination_Leaf : constant
+                                               Field_Shape :=
+                                                 Nth_Variant_Case_Field
+                                                   (Of_Unit,
+                                                    Destination_Shape,
+                                                    Which, Field);
+                                          begin
+                                             Agree :=
+                                               Source_Leaf.Kind
+                                                 = Destination_Leaf.Kind
+                                               and then Source_Leaf.Element
+                                                 = Destination_Leaf.Element
+                                               and then Source_Leaf.Length
+                                                 = Destination_Leaf.Length;
+                                          end;
+                                          exit when not Agree;
+                                       end loop;
+                                    end loop;
+                                 end if;
+
+                                 if not Agree then
+                                    return
+                                      (Kind => Variant_Copy_Shapes_Disagree,
                                        Item => Id, Block => Block, Value => V);
                                  end if;
                               end;

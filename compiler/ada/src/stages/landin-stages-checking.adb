@@ -1043,7 +1043,8 @@ package body Landin.Stages.Checking is
               and then not Is_Struct_Zeroed_Init
               and then not
                 (Is_Local_Binding (Of_Tree, Node)
-                 and then Is_Struct_Literal_Init)
+                 and then
+                   (Is_Struct_Literal_Init or else Is_Direct_Struct_Init))
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -4526,57 +4527,37 @@ package body Landin.Stages.Checking is
                         --  the same type.  A copy is the one expression
                         --  position a struct may stand in, because the bytes
                         --  go straight between places without a value.
-                        if Landin.Checking.Has_Variant_Part
-                             (Types.all,
-                              Landin.Checking.Body_Of
-                                (Types.all, Of_Tree, Place))
-                        then
-                           --  D75/D76 provide no whole-variant copy: selecting
-                           --  a case is the only nonzero write, and it never
-                           --  reads another variant-bearing value.
-                           Bad.Report
-                             (Item    => Bad.Unsupported_Use,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Value),
-                              Message => "a variant-bearing struct cannot be"
-                                         & " copied as a whole yet",
-                              Refused => Bad.Variant_Value,
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Value);
-                        else
-                           declare
-                              Got : constant Ty.Type_Kind :=
-                                (if Is_Direct_Binding_Name (Of_Tree, Value)
-                                 then Selected_From (Of_Tree, Value)
-                                 else Synthesise (Of_Tree, Value));
-                           begin
-                              if Got = Ty.Ill_Typed then
-                                 null;
-                              elsif Got /= Ty.Aggregate
-                                or else Landin.Checking.Body_Of
-                                          (Types.all, Of_Tree, Place)
-                                        /= Landin.Checking.Body_Of
-                                             (Types.all, Of_Tree, Value)
-                              then
-                                 Bad.Report
-                                   (Item    => Bad.Type_Mismatch,
-                                    Source  => Syn.Source_Of (Of_Tree),
-                                    Where   => Syn.Where (Of_Tree, Value),
-                                    Message => "this is not a value of the"
-                                               & " struct type written here",
-                                    Note    => "[0710]: two structs are one"
-                                               & " type when one declaration"
-                                               & " wrote both, and never"
-                                               & " otherwise",
-                                    Related => Syn.Origin (Of_Tree, Place),
-                                    Because => "the place written here",
-                                    Into    => Found);
-                                 Landin.Checking.Refuse
-                                   (Types.all, Of_Tree, Value);
-                              end if;
-                           end;
-                        end if;
+                        declare
+                           Got : constant Ty.Type_Kind :=
+                             (if Is_Direct_Binding_Name (Of_Tree, Value)
+                              then Selected_From (Of_Tree, Value)
+                              else Synthesise (Of_Tree, Value));
+                        begin
+                           if Got = Ty.Ill_Typed then
+                              null;
+                           elsif Got /= Ty.Aggregate
+                             or else Landin.Checking.Body_Of
+                                       (Types.all, Of_Tree, Place)
+                                     /= Landin.Checking.Body_Of
+                                          (Types.all, Of_Tree, Value)
+                           then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Value),
+                                 Message => "this is not a value of the"
+                                            & " struct type written here",
+                                 Note    => "[0710]: two structs are one"
+                                            & " type when one declaration"
+                                            & " wrote both, and never"
+                                            & " otherwise",
+                                 Related => Syn.Origin (Of_Tree, Place),
+                                 Because => "the place written here",
+                                 Into    => Found);
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Value);
+                           end if;
+                        end;
                      end if;
 
                      return;

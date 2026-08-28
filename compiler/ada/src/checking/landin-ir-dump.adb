@@ -230,6 +230,20 @@ package body Landin.IR.Dump is
                           (Natural'Image
                              (Element_Field_Of (Of_Unit, Item, Value))));
 
+            when Copy_Variant =>
+               return Lead & " from "
+                 & Endpoint (Source_Of (Of_Unit, Item, Value))
+                 & " field "
+                 & Trimmed
+                     (Natural'Image
+                        (Source_Field_Of (Of_Unit, Item, Value)))
+                 & " to "
+                 & Endpoint (Destination_Of (Of_Unit, Item, Value))
+                 & " field "
+                 & Trimmed
+                     (Natural'Image
+                        (Element_Field_Of (Of_Unit, Item, Value)));
+
             when Clear_Array =>
                return Lead & " destination "
                  & Endpoint (Destination_Of (Of_Unit, Item, Value))

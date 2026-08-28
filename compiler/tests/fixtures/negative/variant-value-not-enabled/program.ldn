@@ -10,9 +10,3 @@ declared: choice
 literal_state: choice = (kind: leaf)
 copied: choice = declared
 inferred := choice(prefix: 1, of zeroed)
-
-copy_assignment: () -> none =
-    mut left: choice
-    mut right: choice
-    left = right
-end copy_assignment

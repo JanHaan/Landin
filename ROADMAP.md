@@ -3220,6 +3220,17 @@ positive and focused negative fixtures, generated records and the Linux
 runtime case provide evidence. Inferred module construction remains refused
 until a nonzero static variant image exists.
 
+D80 admits contextual whole copy of a variant-bearing struct between direct
+runtime storage places, including typed and inferred local direct-name
+initializers. Common scalar and fixed-array fields keep D54's operations; one
+target-neutral `Copy_Variant` carries the two storage identities and their
+shared field identity for the unfolded part. The verifier proves both complete
+variant shapes before access, and the backend copies the target-derived padded
+part as one byte run on both target descriptions. Definite-assignment,
+self-copy and distinct-storage behavior are pinned by focused fixtures, public
+seams, generated records and a Linux runtime case. Module initializers remain
+static-image rules.
+
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
 D33--D36/D38's repetitions, and D51/D70's selected field for a local or module
@@ -3263,9 +3274,10 @@ construction in typed local labelled literals and whole assignments, plus
 assignment to a directly selected mutable variant part. D77 admits exhaustive
 matching of that selected part, and D78 binds scalar payload fields as
 arm-local `in`/`inout` aliases. D79 admits inferred local case construction.
-Whole copies, static case images and inferred module case construction,
-general reads of the part and fixed-array payload bindings remain refused.
-Parameters and returns retain R2.30's aggregate ABI owner.
+D80 admits runtime whole copies and local direct-name initializers. Static case
+images and inferred module case construction, general reads of the part and
+fixed-array payload bindings remain refused. Parameters and returns retain
+R2.30's aggregate ABI owner.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3378,6 +3390,8 @@ D78 migrated positional scalar payload aliases while keeping fixed-array
 payload aliases pinned.
 D79 migrated inferred local case construction while keeping module inference
 with the static-image boundary.
+D80 migrated whole variant-bearing copies and local direct-name initializers
+while keeping module copies behind the nonzero static-image boundary.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the
