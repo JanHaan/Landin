@@ -2853,6 +2853,77 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "4", "8");
    end A_Nested_Array_Element_Follows_The_Target;
 
+   --  D90 replays both endpoint paths for compact fills, copies and clears.
+   --  Their extent remains the nested array's scalar bytes, never the
+   --  containing child or parent extent.
+   procedure Nested_Array_Values_Follow_The_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Array_Values_Follow_The_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "inner: type = struct" & LF
+        & "    lead: u8" & LF
+        & "    word: usize" & LF
+        & "    row: [3]i32" & LF
+        & "end inner" & LF
+        & "outer: type = struct" & LF
+        & "    prefix: u16" & LF
+        & "    nested: inner" & LF
+        & "end outer" & LF
+        & "mut left: outer = zeroed" & LF
+        & "mut right: outer = zeroed" & LF
+        & "f: () -> none =" & LF
+        & "    left.nested.row = [of 7]" & LF
+        & "    right.nested.row = left.nested.row" & LF
+        & "    left.nested.row = zeroed" & LF
+        & "end f" & LF;
+
+      procedure Check_Target
+        (Facts        : Landin.Targets.Target_Facts;
+         Parent, Leaf : String);
+
+      procedure Check_Target
+        (Facts        : Landin.Targets.Target_Facts;
+         Parent, Leaf : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+
+         function Address (Name, Register : String) return String
+         is (HT & "leaq " & Name & "(%rip), " & Register & LF
+             & HT & "movabsq $" & Parent & ", %rdx" & LF
+             & HT & "addq %rdx, " & Register & LF
+             & HT & "movabsq $" & Leaf & ", %rdx" & LF
+             & HT & "addq %rdx, " & Register & LF);
+      begin
+         Lower (Work, Source_Text, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Occurrences (Text, Address ("left", "%rdi")) = 2
+                 and then Occurrences
+                   (Text, Address ("right", "%rdi")) = 1
+                 and then Occurrences
+                   (Text, Address ("left", "%rsi")) = 1,
+               "fill copy and clear replay both target offsets");
+            Landin.Testing.Check
+              (Item,
+               Occurrences (Text, HT & "movabsq $12, %rcx" & LF) = 2
+                 and then Occurrences
+                   (Text, HT & "movabsq $3, %rcx" & LF) = 1,
+               "byte copies and element fills use the nested array extent");
+         end;
+      end Check_Target;
+   begin
+      Check_Target (Landin.Targets.Linux_X86_64, "8", "16");
+      Check_Target (Landin.Targets.Synthetic_32, "4", "8");
+   end Nested_Array_Values_Follow_The_Target;
+
    --  D32 repeats an element count rather than a byte count, and selects the
    --  repeated-store width from the target's scalar facts.  `usize` therefore
    --  uses qwords on Linux x86-64 and longwords under Synthetic_32 while the
@@ -4584,6 +4655,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a nested array element follows the target",
          A_Nested_Array_Element_Follows_The_Target'Access);
+      Landin.Testing.Register
+        (Into, "backend", "nested array values follow the target",
+         Nested_Array_Values_Follow_The_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "an array fill follows the target element width",
          An_Array_Fill_Follows_The_Target_Element_Width'Access);

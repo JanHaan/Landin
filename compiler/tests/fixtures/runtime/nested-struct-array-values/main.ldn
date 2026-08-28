@@ -1,0 +1,31 @@
+inner: type = struct
+    lead: u8
+    word: usize
+    row: [3]i32
+end inner
+
+outer: type = struct
+    prefix: u16
+    nested: inner
+    tail: u8
+end outer
+
+mut left: outer = zeroed
+mut right: outer = zeroed
+
+answer: () -> (result: i32) =
+    mut local: outer = zeroed
+    left.nested.row = [1, 2, 3]
+    right.nested.row = left.nested.row
+    local.nested.row = [of 4]
+    left.nested.row = local.nested.row
+    local.nested.row = [5, of 6]
+    local.nested.row = zeroed
+    result = right.nested.row[0] + right.nested.row[1]
+           + right.nested.row[2] + left.nested.row[0]
+           + left.nested.row[1] + left.nested.row[2]
+end answer
+
+public main: () -> (code: i32) =
+    code = answer()
+end main

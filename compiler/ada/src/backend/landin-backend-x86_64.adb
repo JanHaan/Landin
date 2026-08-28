@@ -372,7 +372,7 @@ package body Landin.Backend.X86_64 is
             Payload_Field : Natural := 0;
             Nested        : Natural := 0);
          function Whole_Clear_Extent
-           (Place : Landin.IR.Storage; Field : Natural)
+           (Place : Landin.IR.Storage; Field, Nested : Natural)
             return Landin.Targets.Byte_Count;
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
@@ -530,11 +530,11 @@ package body Landin.Backend.X86_64 is
          end Storage_Address;
 
          function Whole_Clear_Extent
-           (Place : Landin.IR.Storage; Field : Natural)
+           (Place : Landin.IR.Storage; Field, Nested : Natural)
             return Landin.Targets.Byte_Count
          is
             Whole_Aggregate : constant Boolean :=
-              Field = 0
+              Field = 0 and then Nested = 0
               and then
                 (case Place.Kind is
                     when Landin.IR.Module_Datum =>
@@ -547,10 +547,13 @@ package body Landin.Backend.X86_64 is
             if not Whole_Aggregate then
                return
                  Landin.Targets.Byte_Count
-                   (Array_Length_Of (Place, Field))
+                   (Array_Length_Of
+                      (Place, Field, Nested => Nested))
                  * Landin.Targets.Byte_Count
                      (Landin.Targets.Bytes
-                        (Size_Of (Array_Element_Of (Place, Field), Facts)));
+                        (Size_Of
+                           (Array_Element_Of
+                              (Place, Field, Nested => Nested), Facts)));
             end if;
 
             case Place.Kind is
@@ -885,10 +888,16 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Source_Of (Of_Unit, Item, Value);
                      Source_Field : constant Natural :=
                        Landin.IR.Source_Field_Of (Of_Unit, Item, Value);
+                     Source_Nested : constant Natural :=
+                       Landin.IR.Source_Nested_Field_Of
+                         (Of_Unit, Item, Value);
                      Destination : constant Landin.IR.Storage :=
                        Landin.IR.Destination_Of (Of_Unit, Item, Value);
                      Destination_Field : constant Natural :=
                        Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
+                     Destination_Nested : constant Natural :=
+                       Landin.IR.Nested_Field_Of
+                         (Of_Unit, Item, Value);
                      Destination_Case : constant Natural :=
                        Landin.IR.Variant_Case_Of (Of_Unit, Item, Value);
                      Destination_Payload_Field : constant Natural :=
@@ -897,17 +906,23 @@ package body Landin.Backend.X86_64 is
 
                      Bytes : constant Landin.Targets.Byte_Count :=
                        Landin.Targets.Byte_Count
-                         (Array_Length_Of (Source, Source_Field))
+                         (Array_Length_Of
+                            (Source, Source_Field, Nested => Source_Nested))
                        * Landin.Targets.Byte_Count
                            (Landin.Targets.Bytes
                               (Size_Of
-                                 (Array_Element_Of (Source, Source_Field),
+                                 (Array_Element_Of
+                                    (Source, Source_Field,
+                                     Nested => Source_Nested),
                                   Facts)));
                   begin
                      Storage_Address
                        (Destination, Destination_Field, "%rdi",
-                        Destination_Case, Destination_Payload_Field);
-                     Storage_Address (Source, Source_Field, "%rsi");
+                        Destination_Case, Destination_Payload_Field,
+                        Destination_Nested);
+                     Storage_Address
+                       (Source, Source_Field, "%rsi",
+                        Nested => Source_Nested);
                      Emit
                        ("movabsq $"
                         & Trimmed
@@ -958,10 +973,13 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Destination_Of (Of_Unit, Item, Value);
                      Field : constant Natural :=
                        Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
+                     Nested : constant Natural :=
+                       Landin.IR.Nested_Field_Of (Of_Unit, Item, Value);
                      Bytes : constant Landin.Targets.Byte_Count :=
-                       Whole_Clear_Extent (Destination, Field);
+                       Whole_Clear_Extent (Destination, Field, Nested);
                   begin
-                     Storage_Address (Destination, Field, "%rdi");
+                     Storage_Address
+                       (Destination, Field, "%rdi", Nested => Nested);
                      Emit ("xorl %eax, %eax");
                      Emit
                        ("movabsq $"
@@ -1108,6 +1126,8 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Destination_Of (Of_Unit, Item, Value);
                      Field : constant Natural :=
                        Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
+                     Nested : constant Natural :=
+                       Landin.IR.Nested_Field_Of (Of_Unit, Item, Value);
                      Which : constant Natural :=
                        Landin.IR.Variant_Case_Of (Of_Unit, Item, Value);
                      Payload_Field : constant Natural :=
@@ -1115,10 +1135,10 @@ package body Landin.Backend.X86_64 is
                          (Of_Unit, Item, Value);
                      Length : constant Landin.IR.Element_Total :=
                        Array_Length_Of
-                         (Destination, Field, Which, Payload_Field);
+                         (Destination, Field, Which, Payload_Field, Nested);
                      Element : constant Landin.Types.Scalar_Name :=
                        Array_Element_Of
-                         (Destination, Field, Which, Payload_Field);
+                         (Destination, Field, Which, Payload_Field, Nested);
                      Held : constant Held_Size := Size_Of (Element, Facts);
                      First : constant Landin.IR.Part_Position :=
                        Landin.IR.First_Part_Of (Of_Unit, Item, Value);
@@ -1131,7 +1151,8 @@ package body Landin.Backend.X86_64 is
                            (Landin.Targets.Bytes (Held));
                   begin
                      Storage_Address
-                       (Destination, Field, "%rdi", Which, Payload_Field);
+                       (Destination, Field, "%rdi", Which, Payload_Field,
+                        Nested);
                      if Offset /= 0 then
                         Emit
                           ("addq $"

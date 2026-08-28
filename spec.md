@@ -5434,8 +5434,9 @@ leaf but left that fixed-array leaf refused.
 same `usize` context, compile-time refusal and runtime bounds trap as every
 other fixed-array element [1880] [1950]. The root binding decides mutability.
 Neither `parent.child` nor `parent.child.array` becomes a general value or
-whole place: copying, clearing, filling, passing, returning and discarding
-those intermediate aggregates remain L0304.
+whole place in this slice. D90 separately admits the fixed-array leaf as a
+contextual assignment destination or storage-copy source; passing, returning
+and discarding it remain L0304.
 
 Definite assignment retains the parent and child identities together with
 D19's compiler-known element position. A write establishes only that element;
@@ -5462,3 +5463,40 @@ without pretending that broader aggregate-value work is complete.
 **Pinned by** the lowering, verifier and backend public seams;
 `negative/nested-struct-array-element-unassigned`; the generated token and IR
 records; and `runtime/nested-struct-array-elements` on Linux x86-64.
+
+### D90 — A nested fixed-array leaf has contextual assignment forms
+
+**The tour said** that an array value may be copied, filled and initialized
+[0520] [0540], while D49--D53 deliberately implement those forms directly in
+existing storage. D89 reached scalar elements through one ordinary child but
+did not give the fixed-array leaf a whole-value carrier.
+
+**Chosen:** a mutable `parent.child.array` is a contextual assignment place.
+It accepts an exact array literal, a full or mixed repetition, `zeroed`, or a
+storage copy from another direct or depth-one fixed-array place with the same
+length and scalar element type. The source is admitted only in that copy
+context. A nested leaf is not thereby a general expression value, parameter,
+return, discard, standalone local initializer or operand; those remain L0304.
+Root-binding mutability and [0410]'s source evaluation order are unchanged.
+
+A successful assignment records the whole nested-array fact. A copy source
+requires every element on every arriving path; whole-parent, whole nested
+array and complete sparse-element facts retain the equivalence D89 established
+at branch merges. Module state keeps D10's initialized rule.
+
+Element stores for literals retain D89's parent and child field identities.
+The compact fill and clear operations carry those same destination identities;
+a copy carries an independent pair for each endpoint. The verifier walks each
+bounded child run, checks an `Array_Field_Shape`, and requires source and
+destination length and element type to agree. The backend derives both nested
+offsets and only the leaf's scalar byte extent after target selection.
+
+**Why contextual assignment only:** these forms already lower directly into
+known storage and need no aggregate temporary. Extending the leaf to every
+expression or initializer position would decide a first-class aggregate value
+and ABI merely because a path can now name its bytes. Keeping independent
+endpoint identities also avoids flattening either nominal child.
+
+**Pinned by** the lowering, verifier and backend public seams;
+`negative/nested-struct-array-copy-unassigned`; the generated token and IR
+records; and `runtime/nested-struct-array-values` on Linux x86-64.
