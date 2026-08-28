@@ -105,6 +105,8 @@ package body Landin.IR.Verifier is
                "a variant payload store names a fixed-array field",
             when Variant_Payload_Value_Disagrees =>
                "a variant payload store's scalar disagrees with its field",
+            when Variant_Tag_Result_Disagrees =>
+               "a variant tag load's result disagrees with its tag type",
             when Array_Image_Length_Disagrees =>
                "an array datum's image does not have one value per element",
             when Array_Image_Value_Does_Not_Fit =>
@@ -155,7 +157,7 @@ package body Landin.IR.Verifier is
             when Store_Element => 2,
             when Copy_Array | Clear_Array => 0,
             when Fill_Array    => 1,
-            when Select_Variant => 0,
+            when Load_Variant_Tag | Select_Variant => 0,
             when Store_Variant_Field => 1,
             when Store         => 1,
             when Store_Datum   => 1,
@@ -366,6 +368,11 @@ package body Landin.IR.Verifier is
 
          if Shape.Kind /= Variant_Field_Shape then
             return Variant_Field_Is_Not_A_Variant;
+         end if;
+         --  D77's tag load needs the part shape but no case run.  Runtime
+         --  writes continue below with a positive source-order case.
+         if Which = 0 and then Payload_Field = 0 then
+            return Nothing_Wrong;
          end if;
          if Which = 0 or else Which > Shape.Cases then
             return Variant_Case_Out_Of_Range;
@@ -1332,7 +1339,8 @@ package body Landin.IR.Verifier is
                                  end if;
                               end;
 
-                           when Select_Variant | Store_Variant_Field =>
+                           when Load_Variant_Tag
+                              | Select_Variant | Store_Variant_Field =>
                               if Is_Datum then
                                  return
                                    (Kind  => Variant_Operation_Inside_A_Datum,
@@ -1346,9 +1354,14 @@ package body Landin.IR.Verifier is
                                  Bad : constant Fault_Kind :=
                                    Variant_Shape_Of
                                      (Id,
-                                      Destination_Of (Of_Unit, Id, V),
+                                      (if Op = Load_Variant_Tag
+                                       then Source_Of (Of_Unit, Id, V)
+                                       else Destination_Of
+                                         (Of_Unit, Id, V)),
                                       Element_Field_Of (Of_Unit, Id, V),
-                                      Variant_Case_Of (Of_Unit, Id, V),
+                                      (if Op = Load_Variant_Tag then 0
+                                       else Variant_Case_Of
+                                         (Of_Unit, Id, V)),
                                       (if Op = Store_Variant_Field
                                        then Variant_Payload_Field_Of
                                          (Of_Unit, Id, V)
@@ -1780,6 +1793,27 @@ package body Landin.IR.Verifier is
                                  then
                                     return
                                       (Kind => Variant_Payload_Value_Disagrees,
+                                       Item => Id, Block => Block, Value => V);
+                                 end if;
+                              end;
+
+                           when Load_Variant_Tag =>
+                              declare
+                                 Shape, Leaf : Field_Shape;
+                                 Bad : constant Fault_Kind :=
+                                   Variant_Shape_Of
+                                     (Id, Source_Of (Of_Unit, Id, V),
+                                      Element_Field_Of (Of_Unit, Id, V),
+                                      0, 0, Shape, Leaf);
+                              begin
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 elsif Result_Of (Of_Unit, Id, V)
+                                       /= Shape.Element
+                                 then
+                                    return
+                                      (Kind => Variant_Tag_Result_Disagrees,
                                        Item => Id, Block => Block, Value => V);
                                  end if;
                               end;

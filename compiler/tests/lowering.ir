@@ -3285,6 +3285,72 @@ item 2 ROUTINE construct result none params 0 slots 2 blocks 1 values 37
     35 LOAD_FIELD u8
     36 LOAD_FIELD bool
     37 LEAVE
+file positive/variant-match-exhaustive/program.ldn
+unit items 2
+item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 variant u8 cases3 () (u8) ([2]u16)
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 ROUTINE match_variants result none params 0 slots 4 blocks 13 values 42
+  slot 1 local aggregate fields variant u8 cases3 () (u8) ([2]u16)
+  slot 2 answer u8
+  slot 3 - u8
+  slot 4 - u8
+  block 1 scope 3 BLOCK length 9
+    1 SELECT_VARIANT destination slot 1 field 1 case 2
+    2 NUMBER u8 7
+    3 STORE_VARIANT_FIELD destination slot 1 field 1 case 2 payload field 1 <- 2
+    4 LOAD_VARIANT_TAG u8 from slot 1 field 1
+    5 STORE slot 3 <- 4
+    6 LOAD u8 slot 3
+    7 NUMBER u8 0
+    8 EQUAL_TO bool <- 6 7
+    9 BRANCH target 3 alternative 4 <- 8
+  block 2 scope 3 BLOCK length 7
+    24 LOAD u8 slot 2
+    25 LOAD_VARIANT_TAG u8 from datum 1 state field 1
+    26 STORE slot 4 <- 25
+    27 LOAD u8 slot 4
+    28 NUMBER u8 0
+    29 EQUAL_TO bool <- 27 28
+    30 BRANCH target 9 alternative 10 <- 29
+  block 3 scope 4 BLOCK length 3
+    10 NUMBER u8 1
+    11 STORE slot 2 <- 10
+    12 JUMP target 2
+  block 4 scope 3 BLOCK length 4
+    13 LOAD u8 slot 3
+    14 NUMBER u8 1
+    15 EQUAL_TO bool <- 13 14
+    16 BRANCH target 5 alternative 6 <- 15
+  block 5 scope 5 BLOCK length 3
+    17 NUMBER u8 2
+    18 STORE slot 2 <- 17
+    19 JUMP target 2
+  block 6 scope 3 BLOCK length 1
+    20 JUMP target 7
+  block 7 scope 6 BLOCK length 3
+    21 NUMBER u8 3
+    22 STORE slot 2 <- 21
+    23 JUMP target 2
+  block 8 scope 3 BLOCK length 1
+    42 LEAVE
+  block 9 scope 7 BLOCK length 2
+    31 NUMBER i32 1
+    32 JUMP target 8
+  block 10 scope 3 BLOCK length 4
+    33 LOAD u8 slot 4
+    34 NUMBER u8 1
+    35 EQUAL_TO bool <- 33 34
+    36 BRANCH target 11 alternative 12 <- 35
+  block 11 scope 8 BLOCK length 2
+    37 NUMBER i32 2
+    38 JUMP target 8
+  block 12 scope 3 BLOCK length 1
+    39 JUMP target 13
+  block 13 scope 9 BLOCK length 2
+    40 NUMBER i32 3
+    41 JUMP target 8
 file positive/variant-part-measured/program.ldn
 unit items 1
 item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1

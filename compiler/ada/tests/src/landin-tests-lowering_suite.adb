@@ -3478,6 +3478,16 @@ package body Landin.Tests.Lowering_Suite is
          & "    mut local: choice = (prefix: 1, kind: leaf)" & LF
          & "    local.kind = row(values: zeroed)" & LF
          & "    state.kind = pair(first: 2, second: 3)" & LF
+         & "    match local.kind" & LF
+         & "        leaf: _ = 1" & LF
+         & "        pair: _ = 2" & LF
+         & "        row: _ = 3" & LF
+         & "    end match" & LF
+         & "    match state.kind" & LF
+         & "        leaf: _ = 1" & LF
+         & "        pair: _ = 2" & LF
+         & "        row: _ = 3" & LF
+         & "    end match" & LF
          & "end construct" & LF,
          Ran);
 
@@ -3488,8 +3498,9 @@ package body Landin.Tests.Lowering_Suite is
 
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
-         Selects, Stores : Natural := 0;
+         Selects, Stores, Tag_Loads : Natural := 0;
          Slot_Row, Datum_Pair, Wide_Payload : Boolean := False;
+         Slot_Tag, Datum_Tag : Boolean := False;
       begin
          for Value in 1 .. IR.Value_Count (Unit, 2) loop
             declare
@@ -3522,6 +3533,24 @@ package body Landin.Tests.Lowering_Suite is
                      and then IR.Result_Of
                        (Unit, 2, IR.Nth_Operand (Unit, 2, Id, 1))
                          = Landin.Types.U16);
+               elsif Op = IR.Load_Variant_Tag then
+                  Tag_Loads := Tag_Loads + 1;
+                  declare
+                     Source : constant IR.Storage :=
+                       IR.Source_Of (Unit, 2, Id);
+                  begin
+                     Slot_Tag := Slot_Tag or else
+                       (Source.Kind = IR.Frame_Slot
+                        and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                        and then IR.Result_Of (Unit, 2, Id)
+                          = Landin.Types.U8);
+                     Datum_Tag := Datum_Tag or else
+                       (Source.Kind = IR.Module_Datum
+                        and then Source.Datum = 1
+                        and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                        and then IR.Result_Of (Unit, 2, Id)
+                          = Landin.Types.U8);
+                  end;
                end if;
             end;
          end loop;
@@ -3532,6 +3561,9 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Testing.Check
            (Item, Slot_Row and then Datum_Pair and then Wide_Payload,
             "storage, part, case, payload and scalar type all survive");
+         Landin.Testing.Check
+           (Item, Tag_Loads = 2 and then Slot_Tag and then Datum_Tag,
+            "each match loads its source storage and field exactly once");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts lowered variant operations");

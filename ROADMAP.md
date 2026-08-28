@@ -3183,8 +3183,15 @@ labelled case construction for typed local literals, whole assignments and a
 directly selected mutable variant part. Selection clears one padded part and
 writes its source-order tag before scalar payload fields are evaluated once in
 written order; IR, verifier and backend seams plus focused diagnostics and a
-Linux runtime case provide evidence. D77/D78 own matching and payload
-bindings.
+Linux runtime case provide evidence. D77 adds exhaustive tag-only matching on
+a directly selected module or local variant part. Every source-order case is
+named exactly once (L0311 duplicate, L0312 missing); the subject is read once,
+arm definite-assignment facts intersect, and payload bytes remain untouched.
+One target-neutral `Load_Variant_Tag` is carried through a scalar slot into the
+existing comparison/branch IR, while the verifier and backend derive the tag
+type and address from D74's shape. Parser, IR, lowering, verifier and backend
+seams, focused diagnostics and a Linux runtime case provide evidence. D78 owns
+payload bindings.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3212,7 +3219,8 @@ typed and inferred module image chains; D64/D65 typed local labelled literals
 and whole assignments; D66--D71 typed module labelled images; and D72 nominal
 construction in typed or inferred local/module initializers and whole
 assignments. D76 adds contextual variant-case writes inside those typed local
-literal and assignment destinations. General whole values, bare inferred struct literals,
+literal and assignment destinations, and D77 exhaustively matches the tag of
+a directly selected variant part. General whole values, bare inferred struct literals,
 heterogeneous or all-field fills, positional conversion and construction in a
 general expression remain refused. Parameters and returns of any struct type
 require R2.30's aggregate ABI. An array field may otherwise be reached
@@ -3225,10 +3233,11 @@ Variant declarations and target-dependent measurements are enabled by D74;
 D75 adds module and local storage plus typed initialization and whole
 assignment with the complete zero image. D76 admits contextual case
 construction in typed local labelled literals and whole assignments, plus
-assignment to a directly selected mutable variant part. Whole copies, static
-case images, inferred variant-bearing construction, reads of the part,
-matching and payload bindings remain refused. Parameters and returns retain
-R2.30's aggregate ABI owner. D77/D78 own matching and payload bindings.
+assignment to a directly selected mutable variant part. D77 admits exhaustive
+tag-only matching of that selected part. Whole copies, static case images,
+inferred variant-bearing construction, general reads of the part and payload
+bindings remain refused. Parameters and returns retain R2.30's aggregate ABI
+owner. D78 owns payload bindings.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed

@@ -101,6 +101,7 @@ package Landin.IR.Verifier is
       Variant_Payload_Field_Out_Of_Range,
       Variant_Payload_Field_Is_Not_A_Scalar,
       Variant_Payload_Value_Disagrees,
+      Variant_Tag_Result_Disagrees,
       Array_Image_Length_Disagrees,
       Array_Image_Value_Does_Not_Fit,
       Aggregate_Image_Length_Disagrees,
