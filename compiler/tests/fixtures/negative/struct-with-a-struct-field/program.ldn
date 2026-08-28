@@ -2,9 +2,9 @@ inner: type = struct
     q: u32
 end inner
 
---  A field of a struct type waits for the rest of R2.20, and this hole is
---  older than the arrays: a struct refused for its field has no layout,
---  and reading a field that is fine used to ask it for one anyway.
+--  D86 lays the nested field out for measurement, but no runtime cell of
+--  that containing type exists yet.  Reading another field must not add a
+--  second report after the declaration was refused.
 outer: type = struct
     part: inner
     count: u32

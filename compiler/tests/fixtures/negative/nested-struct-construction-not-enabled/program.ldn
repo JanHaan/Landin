@@ -1,0 +1,14 @@
+inner: type = struct
+    value: u32
+end inner
+
+outer: type = struct
+    nested: inner
+    tail: u8
+end outer
+
+module_value := outer(nested: inner(value: 1), tail: 2)
+
+f: () -> none =
+    local_value := outer(nested: inner(value: 3), tail: 4)
+end f

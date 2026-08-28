@@ -61,7 +61,12 @@ package body Landin.Tests.Checking_Suite is
      & "    tag: u8" & LF
      & "    words: [2]usize" & LF
      & "    tail: u16" & LF
-     & "end nested" & LF;
+     & "end nested" & LF
+     & "outer: type = struct" & LF
+     & "    prefix: u16" & LF
+     & "    child: nested" & LF
+     & "    tail: u8" & LF
+     & "end outer" & LF;
 
    procedure Declarations_Give_Structs_Their_Identity
      (Item : in out Landin.Testing.Context);
@@ -203,7 +208,8 @@ package body Landin.Tests.Checking_Suite is
          Array_Tail        : Natural;
          Array_Extent      : Natural;
          Array_Alignment   : Natural;
-         Array_Size        : Natural);
+         Array_Size        : Natural;
+         Outer_Size        : Natural);
 
       procedure Check_Target
         (Facts             : Landin.Targets.Target_Facts;
@@ -215,7 +221,8 @@ package body Landin.Tests.Checking_Suite is
          Array_Tail        : Natural;
          Array_Extent      : Natural;
          Array_Alignment   : Natural;
-         Array_Size        : Natural)
+         Array_Size        : Natural;
+         Outer_Size        : Natural)
       is
          Work  : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
          Order : Landin.Stages.Pipeline;
@@ -277,6 +284,8 @@ package body Landin.Tests.Checking_Suite is
               Declaration_At (4);
             Nested  : constant Landin.Provenance.Declaration_Id :=
               Declaration_At (5);
+            Outer   : constant Landin.Provenance.Declaration_Id :=
+              Declaration_At (6);
          begin
             Landin.Testing.Check
               (Item, Landin.Checking.Has_Layout (Types.all, Span),
@@ -395,15 +404,32 @@ package body Landin.Tests.Checking_Suite is
               (Item,
                Natural (Landin.Checking.Layout_Size (Types.all, Nested)),
                Array_Size, "the complete nested layout receives tail padding");
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Has_Layout (Types.all, Outer)
+                 and then Landin.Checking.Field_Kind_Of
+                   (Types.all, Outer, 2)
+                     = Landin.Checking.Aggregate_Field
+                 and then Landin.Checking.Field_Shape_Of
+                   (Types.all, Outer, 2).Aggregate_Body = Nested,
+               "the named child is one aggregate field with its body");
+            Landin.Testing.Check_Equal
+              (Item,
+               Natural (Landin.Checking.Field_Offset (Types.all, Outer, 2)),
+               Array_Offset, "the child begins at its own alignment");
+            Landin.Testing.Check_Equal
+              (Item, Natural (Landin.Checking.Layout_Size (Types.all, Outer)),
+               Outer_Size,
+               "the outer size contains the child's padded size");
          end;
       end Check_Target;
    begin
       Check_Target
         (Landin.Targets.Linux_X86_64, 8, 9, 8, 16,
-         8, 24, 26, 8, 32);
+         8, 24, 26, 8, 32, 48);
       Check_Target
         (Landin.Targets.Synthetic_32, 4, 5, 4, 8,
-         4, 12, 14, 4, 16);
+         4, 12, 14, 4, 16, 24);
    end Declared_Structs_Follow_Target_Layout;
 
    --  D17: an array's identity is its length and its element, so two

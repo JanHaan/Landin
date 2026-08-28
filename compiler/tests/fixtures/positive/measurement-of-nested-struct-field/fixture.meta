@@ -1,0 +1,5 @@
+class: positive
+summary: D86 measures a depth-one named ordinary struct field from its target-parametric child layout
+constructs: 0370, 0520, 0670, 0750, 1795, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

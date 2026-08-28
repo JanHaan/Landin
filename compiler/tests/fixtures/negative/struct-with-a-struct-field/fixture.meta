@@ -1,5 +1,5 @@
 class: negative
-summary: a struct with a struct field is refused once, and reading another field of it does not ask for a layout the refusal stopped
+summary: D86 keeps nested-struct storage refused once, and reading another field adds no cascade
 constructs: 0670, 0750, 1830
 program: program.ldn
 codes: L0304

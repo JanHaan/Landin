@@ -325,6 +325,7 @@ package body Landin.Tests.Targets_Suite is
          declare
             procedure Row (Label : String; Sizes : Size_List);
             procedure Variant_Row;
+            procedure Nested_Row;
 
             procedure Row (Label : String; Sizes : Size_List) is
                Made  : Placement := Empty_Placement;
@@ -408,6 +409,35 @@ package body Landin.Tests.Targets_Suite is
                       (Byte_Alignment'Image (Alignment_Of (Container)))
                   & LF);
             end Variant_Row;
+
+            procedure Nested_Row is
+               Child : Placement := Empty_Placement;
+               Outer : Placement := Empty_Placement;
+               Child_At, Ignored : Byte_Count;
+            begin
+               Place (Child, Byte_1, Facts, Ignored);
+               Place (Child, Pointer_Size (Facts), Facts, Ignored);
+               for Position in 1 .. 3 loop
+                  Place (Child, Byte_2, Facts, Ignored);
+               end loop;
+
+               Place (Outer, Byte_2, Facts, Ignored);
+               Place
+                 (Outer, Size_Of (Child), Alignment_Of (Child), Child_At);
+               Place (Outer, Byte_1, Facts, Ignored);
+
+               Unbounded.Append
+                 (Text,
+                  LF & "  nested aggregate              child offset"
+                  & " size   align" & LF
+                  & "  " & Padded ("u16 {u8 usize [3]u16} u8", 30)
+                  & Padded (Trimmed (Byte_Count'Image (Child_At)), 13)
+                  & Padded
+                      (Trimmed (Byte_Count'Image (Size_Of (Outer))), 7)
+                  & Trimmed
+                      (Byte_Alignment'Image (Alignment_Of (Outer)))
+                  & LF);
+            end Nested_Row;
          begin
             Unbounded.Append
               (Text, LF & "  aggregate       offsets     size   align"
@@ -417,6 +447,7 @@ package body Landin.Tests.Targets_Suite is
             Row ("u8 usize", [Byte_1, Pointer_Size (Facts)]);
             Row ("u64 u8", [Byte_8, Byte_1]);
             Variant_Row;
+            Nested_Row;
          end;
       end Describe;
    begin

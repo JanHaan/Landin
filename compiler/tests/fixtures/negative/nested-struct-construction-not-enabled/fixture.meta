@@ -1,0 +1,6 @@
+class: negative
+summary: D86 measures a nested struct field without admitting inferred nested-struct construction or storage
+constructs: 0670, 0700, 0750, 1795, 1830
+program: program.ldn
+codes: L0304, L0304
+targets: linux-x86-64, macos-arm64

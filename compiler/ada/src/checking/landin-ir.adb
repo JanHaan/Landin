@@ -899,6 +899,36 @@ package body Landin.IR is
    function Variant_Field_Shape_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Variant_Fields.Length));
 
+   function Aggregate_Field_Run_Is_Valid
+     (Of_Unit : Unit; Shape : Field_Shape) return Boolean
+   is
+   begin
+      return Shape.Cases > 0
+        and then Shape.Payloads_First > 0
+        and then Shape.Payloads_First
+                   <= Variant_Field_Shape_Count (Of_Unit)
+        and then Shape.Cases
+                   <= Variant_Field_Shape_Count (Of_Unit)
+                        - Shape.Payloads_First + 1;
+   end Aggregate_Field_Run_Is_Valid;
+
+   function Aggregate_Field_Count
+     (Of_Unit : Unit; Shape : Field_Shape) return Natural
+   is
+      pragma Unreferenced (Of_Unit);
+   begin
+      return Shape.Cases;
+   end Aggregate_Field_Count;
+
+   function Nth_Aggregate_Field
+     (Of_Unit : Unit; Shape : Field_Shape; Field : Positive)
+      return Field_Shape
+   is
+   begin
+      return Of_Unit.Variant_Fields
+        (Shape.Payloads_First + Field - 1);
+   end Nth_Aggregate_Field;
+
    function Variant_Case_Run_Is_Valid
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
       return Boolean
@@ -1029,7 +1059,15 @@ package body Landin.IR is
         Natural (Into.Variant_Cases.Length);
    begin
       for Payload of Payloads loop
-         Into.Variant_Fields.Append (Payload);
+         declare
+            Stored : Field_Shape := Payload;
+         begin
+            if Stored.Kind = Aggregate_Field_Shape then
+               Stored.Payloads_First :=
+                 Payload_Base + Stored.Payloads_First;
+            end if;
+            Into.Variant_Fields.Append (Stored);
+         end;
       end loop;
 
       for Run of Cases loop
@@ -1051,6 +1089,9 @@ package body Landin.IR is
                if Stored.Kind = Variant_Field_Shape then
                   Stored.Payloads_First :=
                     Case_Base + Stored.Payloads_First;
+               elsif Stored.Kind = Aggregate_Field_Shape then
+                  Stored.Payloads_First :=
+                    Payload_Base + Stored.Payloads_First;
                end if;
                Into.Measurement_Fields.Append (Stored);
             end;
