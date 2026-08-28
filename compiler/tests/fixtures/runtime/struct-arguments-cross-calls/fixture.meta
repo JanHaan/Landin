@@ -1,0 +1,6 @@
+class: runtime
+summary: ordinary structs cross register and stack argument positions by value
+constructs: 0080, 0410, 0670, 0750, 0930, 1920
+program: main.ldn
+status: 91
+targets: linux-x86-64

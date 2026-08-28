@@ -1,0 +1,13 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+consume: (value: pair) -> none =
+end consume
+
+bad: () -> none =
+    mut value: pair
+    value.left = 1
+    consume(value)
+end bad

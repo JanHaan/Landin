@@ -129,8 +129,10 @@ spells, so the case that dispatches them is exhaustive: a new opcode fails to
 compile rather than raising `Compiler_Defect` at run time. R2.30's internal
 scalar convention passes six arguments in registers and every later one in an
 aligned run of eight-byte stack slots, so `L0503`'s former register-only limit
-is retired. Aggregate arguments and returns remain absent; R4.40 later
-completes C ABI classification.
+is retired. A flat ordinary-struct argument occupies one such position as an
+internal address and is copied into independent callee storage before the body
+runs. Further aggregate arguments and aggregate returns remain absent; R4.40
+later completes C ABI classification.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver

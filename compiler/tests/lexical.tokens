@@ -15432,6 +15432,54 @@ file negative/slice-not-enabled/program.ldn tokens 7
   122 123 [
   123 124 ]
   124 126 u8
+file negative/struct-argument-unassigned/program.ldn tokens 47
+  0 4 pair
+  4 5 :
+  6 10 type
+  11 12 =
+  13 19 struct
+  24 28 left
+  28 29 :
+  30 33 i32
+  38 43 right
+  43 44 :
+  45 48 i32
+  49 52 end
+  53 57 pair
+  59 66 consume
+  66 67 :
+  68 69 (
+  69 74 value
+  74 75 :
+  76 80 pair
+  80 81 )
+  82 84 ->
+  85 89 none
+  90 91 =
+  92 95 end
+  96 103 consume
+  105 108 bad
+  108 109 :
+  110 111 (
+  111 112 )
+  113 115 ->
+  116 120 none
+  121 122 =
+  127 130 mut
+  131 136 value
+  136 137 :
+  138 142 pair
+  147 152 value
+  152 153 .
+  153 157 left
+  158 159 =
+  160 161 1
+  166 173 consume
+  173 174 (
+  174 179 value
+  179 180 )
+  181 184 end
+  185 188 bad
 file negative/struct-array-field-clear-keeps-fields-separate/program.ldn tokens 52
   0 6 holder
   6 7 :
@@ -18034,6 +18082,30 @@ file negative/struct-not-enabled/program.ldn tokens 13
   24 25 :
   26 29 i32
   29 30 )
+file negative/struct-return-not-enabled/program.ldn tokens 23
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 i32
+  32 35 end
+  36 41 point
+  170 171 g
+  171 172 :
+  173 174 (
+  174 175 )
+  176 178 ->
+  179 180 (
+  180 185 there
+  185 186 :
+  187 192 point
+  192 193 )
+  194 195 =
+  196 199 end
+  200 201 g
 file negative/struct-state-read-as-a-value/program.ldn tokens 26
   0 8 counters
   8 9 :
@@ -18104,42 +18176,6 @@ file negative/struct-type-name-is-not-storage/program.ldn tokens 42
   217 223 holder
   224 227 end
   228 232 copy
-file negative/struct-value-not-enabled/program.ldn tokens 35
-  0 5 point
-  5 6 :
-  7 11 type
-  12 13 =
-  14 20 struct
-  25 26 x
-  26 27 :
-  28 31 i32
-  32 35 end
-  36 41 point
-  171 172 f
-  172 173 :
-  174 175 (
-  175 179 here
-  179 180 :
-  181 186 point
-  186 187 )
-  188 190 ->
-  191 195 none
-  196 197 =
-  198 201 end
-  202 203 f
-  205 206 g
-  206 207 :
-  208 209 (
-  209 210 )
-  211 213 ->
-  214 215 (
-  215 220 there
-  220 221 :
-  222 227 point
-  227 228 )
-  229 230 =
-  231 234 end
-  235 236 g
 file negative/struct-with-a-struct-field/program.ldn tokens 41
   0 5 inner
   5 6 :

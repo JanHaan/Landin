@@ -207,6 +207,10 @@ package body Landin.IR.Dump is
                           (Slot_Id'Image (Slot_Of (Of_Unit, Item, Value)))
                       & Operands (Item, Value);
 
+            when Storage_Address =>
+               return Lead & " storage "
+                 & Endpoint (Destination_Of (Of_Unit, Item, Value));
+
             when Load_Datum | Store_Datum =>
                declare
                   D : constant Item_Id := Datum_Of (Of_Unit, Item, Value);

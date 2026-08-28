@@ -3988,6 +3988,73 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Nested_Child_Values_Keep_Their_Parent;
 
+   --  D94 carries a complete aggregate argument as a storage identity and
+   --  gives the callee one shaped aggregate parameter slot.
+   procedure Struct_Arguments_Carry_Storage_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Struct_Arguments_Carry_Storage_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "pair: type = struct" & LF
+         & "    left: i32" & LF
+         & "    right: i32" & LF
+         & "end pair" & LF
+         & "take: (prefix: i32, value: pair) -> (answer: i32) =" & LF
+         & "    answer = prefix + value.left + value.right" & LF
+         & "end take" & LF
+         & "use: () -> (answer: i32) =" & LF
+         & "    mut value: pair" & LF
+         & "    value.left = 2" & LF
+         & "    value.right = 3" & LF
+         & "    answer = take(1, value)" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a direct ordinary-struct argument is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Parameter : constant IR.Slot_Id := IR.Nth_Parameter (Unit, 1, 2);
+         Addresses, Calls : Natural := 0;
+      begin
+         Landin.Testing.Check
+           (Item,
+            IR.Is_Aggregate (Unit, 1, Parameter)
+              and then IR.Slot_Field_Count (Unit, 1, Parameter) = 2,
+            "the callee parameter keeps its target-neutral shape");
+         for Position in 1 .. IR.Value_Count (Unit, 2) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+            begin
+               if IR.Op_Of (Unit, 2, Value) = IR.Storage_Address then
+                  Addresses := Addresses + 1;
+               elsif IR.Op_Of (Unit, 2, Value) = IR.Call then
+                  Calls := Calls + 1;
+                  Landin.Testing.Check
+                    (Item, IR.Operand_Count (Unit, 2, Value) = 2,
+                     "the aggregate occupies one source argument position");
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Addresses = 1 and then Calls = 1,
+            "the caller carries one complete storage address");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the internal aggregate carrier");
+      end;
+   end Struct_Arguments_Carry_Storage_Identity;
+
    --  D75 gives D74's target-neutral carrier to both module and frame
    --  storage.  The zero image remains one whole-storage clear, not one
    --  instruction per tag, payload field, or padding byte.
@@ -4980,6 +5047,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "nested child values keep their parent",
          Nested_Child_Values_Keep_Their_Parent'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "struct arguments carry storage identity",
+         Struct_Arguments_Carry_Storage_Identity'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "variant storage carries cases and one clear",
