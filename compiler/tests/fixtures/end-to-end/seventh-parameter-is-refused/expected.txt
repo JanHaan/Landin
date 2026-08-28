@@ -1,2 +1,0 @@
-error[L0503]: `seven` has more parameters than the 6 this backend passes in registers
-  --> <unknown source>

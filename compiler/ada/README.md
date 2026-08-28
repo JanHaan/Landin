@@ -123,12 +123,11 @@ ordinary structs with scalar or fixed-array fields, whole copies and clears,
 compact folded module images, and unfolded variant fields with contextual
 construction, inspection and whole copies. That is every opcode `Landin.IR`
 spells, so the case that dispatches them is exhaustive: a new opcode fails to
-compile rather than raising `Compiler_Defect` at run time. What it cannot do is
-pass a seventh argument: [1650] hands six in registers and the stack half is
-not written, so the driver refuses a wider routine as `L0503` before anything
-is emitted rather than letting an accepted program meet an internal defect.
-`ROADMAP.md` R2.30 owns the internal stack arguments that retire it; R4.40
-later completes their C ABI classification.
+compile rather than raising `Compiler_Defect` at run time. R2.30's internal
+scalar convention passes six arguments in registers and every later one in an
+aligned run of eight-byte stack slots, so `L0503`'s former register-only limit
+is retired. Aggregate arguments and returns remain absent; R4.40 later
+completes C ABI classification.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver

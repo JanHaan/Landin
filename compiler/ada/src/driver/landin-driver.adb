@@ -56,8 +56,6 @@ package body Landin.Driver is
      Rows.Code (Rows.Toolchain_Failed);
    Code_No_Entry : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Entry_Point_Missing);
-   Code_Wide_Call : constant Landin.Diagnostics.Code_String :=
-     Rows.Code (Rows.Argument_Not_In_A_Register);
    Code_Wide_Frame : constant Landin.Diagnostics.Code_String :=
      Rows.Code (Rows.Frame_Not_Addressable);
 
@@ -319,13 +317,9 @@ package body Landin.Driver is
                return;
             end if;
 
-            --  [1650] hands six integer arguments in registers and the
-            --  rest on the stack, and this backend has only the first
-            --  half.  Nothing in the kernel bounds a parameter list, so a
-            --  seventh is a program the frontend accepts and the backend
-            --  cannot emit -- and an accepted program must be told what is
-            --  missing rather than meeting an internal defect.  Asked here
-            --  and before anything is written, for [1970]'s reason above.
+            --  A verified frame may still exceed the displacement encoding
+            --  of this backend.  Ask before anything is written, for
+            --  [1970]'s reason above.
             declare
                Unit : Landin.IR.Unit renames
                  Landin.Stages.Code (Context).all;
@@ -340,25 +334,6 @@ package body Landin.Driver is
                      Item : constant Landin.IR.Item_Id :=
                        Landin.IR.Item_Id (Index);
                   begin
-                     if Landin.IR.Kind_Of (Unit, Item) = Landin.IR.Routine
-                       and then Landin.IR.Parameter_Count (Unit, Item)
-                                > Landin.Backend.X86_64.Register_Arguments
-                     then
-                        Note_Failure
-                          (Code_Wide_Call,
-                           "`"
-                           & Landin.Source.Names.Spelling
-                               (Spellings,
-                                Landin.Resolution.Name_Of
-                                  (Known,
-                                   Landin.IR.Declares (Unit, Item)))
-                           & "` has more parameters than the"
-                           & Natural'Image
-                               (Landin.Backend.X86_64.Register_Arguments)
-                           & " this backend passes in registers");
-                        Refused := True;
-                     end if;
-
                      if Landin.IR.Kind_Of (Unit, Item) = Landin.IR.Routine
                        and then not Landin.Backend.X86_64.Frame_Is_Addressable
                                       (Unit, Item, Facts)

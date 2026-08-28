@@ -1,8 +1,0 @@
-class: end-to-end
-summary: [1650] hands six arguments in registers and this backend has no stack arguments yet, so emitting a seventh is refused rather than met by an internal defect
-constructs: 1650
-program: program.ldn
-expect: expected.txt
-args: ../tests/fixtures/end-to-end/seventh-parameter-is-refused/program.ldn --emit=asm -o build/seventh.s
-status: 1
-targets: linux-x86-64
