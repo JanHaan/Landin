@@ -110,6 +110,26 @@ package Landin.Backend is
       Size      : out Landin.Targets.Byte_Count;
       Alignment : out Landin.Targets.Byte_Alignment);
 
+   --  D76's scalar payload write reaches one field inside one selected
+   --  case.  The offset is relative to the start of the variant part and
+   --  is replayed from the same tag-first/max-payload rule as Field_Extent;
+   --  no target byte offset enters Landin.IR.
+   function Variant_Payload_Field_Offset
+     (Of_Unit       : Landin.IR.Unit;
+      Shape         : Landin.IR.Field_Shape;
+      Which         : Positive;
+      Payload_Field : Positive;
+      Facts         : Landin.Targets.Target_Facts)
+      return Landin.Targets.Byte_Count
+     with Pre => Landin.IR."="
+                   (Shape.Kind, Landin.IR.Variant_Field_Shape)
+                 and then Which <= Shape.Cases
+                 and then Landin.IR.Variant_Case_Run_Is_Valid
+                   (Of_Unit, Shape, Which)
+                 and then Payload_Field <=
+                   Landin.IR.Variant_Case_Field_Count
+                     (Of_Unit, Shape, Which);
+
    --  Answer one target-neutral measurement instruction.  Aggregate
    --  measurements carry declaration-order scalar or compact fixed-array
    --  fields and D74/D75's shared variant case runs; this

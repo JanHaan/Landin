@@ -3239,6 +3239,8 @@ package body Landin.Tests.Backend_Suite is
         & "clear_variant: () -> none =" & LF
         & "    mut local: tagged = zeroed" & LF
         & "    variant_state = zeroed" & LF
+        & "    variant_state.kind = wide_payload(word: 7, byte: 9)" & LF
+        & "    local.kind = array_payload(row: zeroed)" & LF
         & "end clear_variant" & LF;
 
       Native : Landin.Stages.Compilation :=
@@ -3333,9 +3335,25 @@ package body Landin.Tests.Backend_Suite is
            (Item,
             Occurrences (Wide, HT & "movabsq $40, %rcx") = 2
               and then Occurrences (Thin, HT & "movabsq $20, %rcx") = 2
-              and then Occurrences (Wide, HT & "rep stosb") = 2
-              and then Occurrences (Thin, HT & "rep stosb") = 2,
+              and then Occurrences (Wide, HT & "rep stosb") = 4
+              and then Occurrences (Thin, HT & "rep stosb") = 4,
             "module and local zero images clear one target-derived extent");
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Wide, HT & "movabsq $24, %rcx") = 2
+              and then Occurrences (Thin, HT & "movabsq $12, %rcx") = 2
+              and then Contains (Wide, HT & "movb $1, (%rcx)" & LF)
+              and then Contains (Wide, HT & "movb $2, (%rcx)" & LF)
+              and then Contains (Thin, HT & "movb $1, (%rcx)" & LF)
+              and then Contains (Thin, HT & "movb $2, (%rcx)" & LF),
+            "case selection clears one part and writes its zero-based tag");
+         Landin.Testing.Check
+           (Item,
+            Contains (Wide, HT & "movabsq $8, %rdx" & LF)
+              and then Contains (Wide, HT & "movabsq $16, %rdx" & LF)
+              and then Contains (Thin, HT & "movabsq $4, %rdx" & LF)
+              and then Contains (Thin, HT & "movabsq $8, %rdx" & LF),
+            "payload stores replay each target's tag and field layout");
       end;
    end A_Measurement_Follows_The_Target;
 

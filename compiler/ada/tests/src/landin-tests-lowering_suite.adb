@@ -3448,6 +3448,96 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Variant_Storage_Carries_Cases_And_One_Clear;
 
+   --  D76 keeps case construction contextual: selection clears one complete
+   --  part and writes its source-order tag, while each labelled scalar
+   --  payload field is a separate ordered write into that selected case.
+   procedure Variant_Case_Construction_Carries_Its_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Case_Construction_Carries_Its_Identity
+     (Item : in out Landin.Testing.Context)
+   is
+      use type IR.Storage_Kind;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "choice: type = struct" & LF
+         & "    prefix: u8" & LF
+         & "    kind: variant" & LF
+         & "        leaf |" & LF
+         & "        pair: (first: u8, second: u16) |" & LF
+         & "        row: (values: [2]u32)" & LF
+         & "    end kind" & LF
+         & "end choice" & LF
+         & "mut state: choice" & LF
+         & "construct: () -> none =" & LF
+         & "    mut local: choice = (prefix: 1, kind: leaf)" & LF
+         & "    local.kind = row(values: zeroed)" & LF
+         & "    state.kind = pair(first: 2, second: 3)" & LF
+         & "end construct" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "variant case construction is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Selects, Stores : Natural := 0;
+         Slot_Row, Datum_Pair, Wide_Payload : Boolean := False;
+      begin
+         for Value in 1 .. IR.Value_Count (Unit, 2) loop
+            declare
+               Id : constant IR.Value_Id := IR.Value_Id (Value);
+               Op : constant IR.Opcode := IR.Op_Of (Unit, 2, Id);
+            begin
+               if Op = IR.Select_Variant then
+                  Selects := Selects + 1;
+                  declare
+                     Destination : constant IR.Storage :=
+                       IR.Destination_Of (Unit, 2, Id);
+                  begin
+                     Slot_Row := Slot_Row or else
+                       (Destination.Kind = IR.Frame_Slot
+                        and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                        and then IR.Variant_Case_Of (Unit, 2, Id) = 3);
+                     Datum_Pair := Datum_Pair or else
+                       (Destination.Kind = IR.Module_Datum
+                        and then Destination.Datum = 1
+                        and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                        and then IR.Variant_Case_Of (Unit, 2, Id) = 2);
+                  end;
+               elsif Op = IR.Store_Variant_Field then
+                  Stores := Stores + 1;
+                  Wide_Payload := Wide_Payload or else
+                    (IR.Destination_Of (Unit, 2, Id).Kind = IR.Module_Datum
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Payload_Field_Of
+                       (Unit, 2, Id) = 2
+                     and then IR.Result_Of
+                       (Unit, 2, IR.Nth_Operand (Unit, 2, Id, 1))
+                         = Landin.Types.U16);
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, Selects = 3 and then Stores = 2,
+            "each case selects once and scalar payloads write once");
+         Landin.Testing.Check
+           (Item, Slot_Row and then Datum_Pair and then Wide_Payload,
+            "storage, part, case, payload and scalar type all survive");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts lowered variant operations");
+      end;
+   end Variant_Case_Construction_Carries_Its_Identity;
+
    ------------------------------------------------------------------
    --  An internal array shape the source does not pin
    ------------------------------------------------------------------
@@ -4027,6 +4117,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "variant storage carries cases and one clear",
          Variant_Storage_Carries_Cases_And_One_Clear'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "variant case construction carries its identity",
+         Variant_Case_Construction_Carries_Its_Identity'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "an internal empty array has identity measurements",

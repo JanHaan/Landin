@@ -175,6 +175,14 @@ package body Landin.Tests.Verifier_Suite is
          N := IR.Emit_Number (Unit, A, Landin.Types.U16, 7, False, Site);
          IR.Emit_Array_Fill
            (Unit, A, (Kind => IR.Frame_Slot, Slot => Q), 1, N, Site);
+         IR.Emit_Variant_Select
+           (Unit, A, (Kind => IR.Frame_Slot, Slot => T), 3, 2, Site);
+         IR.Emit_Variant_Select
+           (Unit, A, (Kind => IR.Module_Datum, Datum => G), 3, 2, Site);
+         N := IR.Emit_Number (Unit, A, Landin.Types.U32, 9, False, Site);
+         IR.Emit_Variant_Field_Store
+           (Unit, A, (Kind => IR.Module_Datum, Datum => G),
+            3, 2, 1, N, Site);
          N := IR.Emit_Number (Unit, A, Landin.Types.U32, 1, False, Site);
          IR.Emit_Store (Unit, A, S, N, Site);
          N := IR.Emit_Load (Unit, A, S, Site);
@@ -1117,6 +1125,171 @@ package body Landin.Tests.Verifier_Suite is
       end loop;
    end Malformed_Shapes_Are_Rejected;
 
+   --  D76's release checks walk storage, field, case and payload in that
+   --  order.  Each malformed identity is constructible through the public
+   --  builder and must be refused before the next accessor is used.
+   procedure Malformed_Variant_Operations_Are_Rejected
+     (Item : in out Landin.Testing.Context);
+
+   procedure Malformed_Variant_Operations_Are_Rejected
+     (Item : in out Landin.Testing.Context)
+   is
+      type Damage is
+        (Field_Out_Of_Range,
+         Field_Is_Not_A_Variant,
+         Case_Out_Of_Range,
+         Payload_Field_Out_Of_Range,
+         Payload_Field_Is_Not_A_Scalar,
+         Payload_Value_Disagrees,
+         Operation_Inside_A_Datum);
+
+      function Built
+        (Unit : in out IR.Unit;
+         Site : Landin.Provenance.Origin;
+         Harm : Damage) return V.Fault;
+
+      function Built
+        (Unit : in out IR.Unit;
+         Site : Landin.Provenance.Origin;
+         Harm : Damage) return V.Fault
+      is
+         Routine, Datum : IR.Item_Id;
+         Result, Aggregate : IR.Slot_Id;
+         Block : IR.Block_Id;
+         Value : IR.Value_Id;
+      begin
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         Result := IR.Add_Slot
+           (Unit, Routine, Landin.Types.U32, 1, Site);
+         Aggregate := IR.Add_Aggregate_Slot
+           (Unit, Routine, IR.No_Declaration, Site);
+
+         if Harm in Field_Out_Of_Range | Field_Is_Not_A_Variant then
+            IR.Add_Slot_Field (Unit, Routine, Aggregate, Landin.Types.U8);
+         else
+            IR.Add_Slot_Field
+              (Unit, Routine, Aggregate,
+               (Kind           => IR.Variant_Field_Shape,
+                Element        => Landin.Types.U8,
+                Length         => 1,
+                Cases          => 2,
+                Payloads_First => 1),
+               Cases => [(First => 0, Count => 0),
+                         (First => 1, Count => 1)],
+               Payloads =>
+                 [(if Harm = Payload_Field_Is_Not_A_Scalar
+                   then (Kind    => IR.Array_Field_Shape,
+                         Element => Landin.Types.U32,
+                         Length  => 2,
+                         others  => <>)
+                   else (Kind    => IR.Scalar_Field_Shape,
+                         Element => Landin.Types.U32,
+                         Length  => 1,
+                         others  => <>))]);
+         end if;
+         IR.Set_Result_Slot (Unit, Routine, Result);
+
+         Block := IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Routine, Block);
+         Value := IR.Emit_Number
+           (Unit, Routine,
+            (if Harm = Payload_Value_Disagrees
+             then Landin.Types.U16 else Landin.Types.U32),
+            1, False, Site);
+
+         case Harm is
+            when Field_Out_Of_Range =>
+               IR.Emit_Variant_Select
+                 (Unit, Routine,
+                  (Kind => IR.Frame_Slot, Slot => Aggregate),
+                  2, 1, Site);
+            when Field_Is_Not_A_Variant =>
+               IR.Emit_Variant_Select
+                 (Unit, Routine,
+                  (Kind => IR.Frame_Slot, Slot => Aggregate),
+                  1, 1, Site);
+            when Case_Out_Of_Range =>
+               IR.Emit_Variant_Select
+                 (Unit, Routine,
+                  (Kind => IR.Frame_Slot, Slot => Aggregate),
+                  1, 3, Site);
+            when Payload_Field_Out_Of_Range =>
+               IR.Emit_Variant_Field_Store
+                 (Unit, Routine,
+                  (Kind => IR.Frame_Slot, Slot => Aggregate),
+                  1, 2, 2, Value, Site);
+            when Payload_Field_Is_Not_A_Scalar
+               | Payload_Value_Disagrees =>
+               IR.Emit_Variant_Field_Store
+                 (Unit, Routine,
+                  (Kind => IR.Frame_Slot, Slot => Aggregate),
+                  1, 2, 1, Value, Site);
+            when Operation_Inside_A_Datum =>
+               null;
+         end case;
+
+         IR.Emit_Store (Unit, Routine, Result, Value, Site);
+         IR.Emit_Leave (Unit, Routine, Value, Site);
+         IR.Leave_Block (Unit, Routine);
+
+         if Harm = Operation_Inside_A_Datum then
+            Datum := IR.Add_Item
+              (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
+            IR.Add_Field
+              (Unit, Datum,
+               (Kind           => IR.Variant_Field_Shape,
+                Element        => Landin.Types.U8,
+                Length         => 1,
+                Cases          => 1,
+                Payloads_First => 1),
+               Cases => [(First => 0, Count => 0)],
+               Payloads => IR.No_Field_Shapes);
+            Block := IR.Add_Block
+              (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+            IR.Enter (Unit, Datum, Block);
+            IR.Emit_Variant_Select
+              (Unit, Datum, (Kind => IR.Module_Datum, Datum => Datum),
+               1, 1, Site);
+            IR.Emit_Leave (Unit, Datum, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Datum);
+         end if;
+
+         return V.Check (Unit);
+      end Built;
+
+      type Row is record
+         Harm : Damage;
+         Kind : V.Fault_Kind;
+      end record;
+      Wanted : constant array (Positive range <>) of Row :=
+        [(Field_Out_Of_Range, V.Variant_Field_Out_Of_Range),
+         (Field_Is_Not_A_Variant, V.Variant_Field_Is_Not_A_Variant),
+         (Case_Out_Of_Range, V.Variant_Case_Out_Of_Range),
+         (Payload_Field_Out_Of_Range,
+          V.Variant_Payload_Field_Out_Of_Range),
+         (Payload_Field_Is_Not_A_Scalar,
+          V.Variant_Payload_Field_Is_Not_A_Scalar),
+         (Payload_Value_Disagrees, V.Variant_Payload_Value_Disagrees),
+         (Operation_Inside_A_Datum, V.Variant_Operation_Inside_A_Datum)];
+   begin
+      for Each of Wanted loop
+         declare
+            Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Site : Landin.Provenance.Origin;
+            Unit : IR.Unit;
+         begin
+            Ready (Work, Site);
+            IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+            Expect
+              (Item, Built (Unit, Site, Each.Harm), Each.Kind,
+               Damage'Image (Each.Harm) & " is rejected");
+         end;
+      end loop;
+   end Malformed_Variant_Operations_Are_Rejected;
+
    --  D24: an array datum's per-position image has to fit its element type
    --  at the compilation's target facts.  An u8 that holds 300 or a bool
    --  that holds 2 is IR whose bytes the backend has no defined answer
@@ -1823,6 +1996,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "malformed shapes are rejected",
          Malformed_Shapes_Are_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "malformed variant operations are rejected",
+         Malformed_Variant_Operations_Are_Rejected'Access);
       Landin.Testing.Register
         (Into, "verifier", "malformed image values are rejected",
          Malformed_Image_Values_Are_Rejected'Access);

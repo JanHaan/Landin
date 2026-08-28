@@ -88,6 +88,23 @@ package body Landin.IR.Verifier is
                "an array fill's scalar disagrees with its element type",
             when Array_Fill_First_Out_Of_Range =>
                "an array fill begins beyond its destination's last part",
+            when Variant_Operation_Inside_A_Datum =>
+               "a datum contains a runtime variant operation, and [1940]"
+               & " admits none",
+            when Variant_Field_Out_Of_Range =>
+               "a variant operation names a field the aggregate does not"
+               & " have",
+            when Variant_Field_Is_Not_A_Variant =>
+               "a variant operation names a scalar or fixed-array field",
+            when Variant_Case_Out_Of_Range =>
+               "a variant operation names a case the field does not have",
+            when Variant_Payload_Field_Out_Of_Range =>
+               "a variant payload store names a field the case does not"
+               & " have",
+            when Variant_Payload_Field_Is_Not_A_Scalar =>
+               "a variant payload store names a fixed-array field",
+            when Variant_Payload_Value_Disagrees =>
+               "a variant payload store's scalar disagrees with its field",
             when Array_Image_Length_Disagrees =>
                "an array datum's image does not have one value per element",
             when Array_Image_Value_Does_Not_Fit =>
@@ -138,6 +155,8 @@ package body Landin.IR.Verifier is
             when Store_Element => 2,
             when Copy_Array | Clear_Array => 0,
             when Fill_Array    => 1,
+            when Select_Variant => 0,
+            when Store_Variant_Field => 1,
             when Store         => 1,
             when Store_Datum   => 1,
             when Unary_Kind    => 1,
@@ -287,6 +306,91 @@ package body Landin.IR.Verifier is
             when Frame_Slot =>
               Holds (Of_Unit, Item, Place.Slot)
               and then Is_Aggregate (Of_Unit, Item, Place.Slot));
+
+      --  D76's two operations share one release-safe shape gate.  Storage,
+      --  top-level field, variant kind, case run and optional payload field
+      --  are proved in that order before any accessor reads the next layer.
+      function Variant_Shape_Of
+        (Item          : Item_Id;
+         Place         : Storage;
+         Field         : Natural;
+         Which         : Natural;
+         Payload_Field : Natural;
+         Shape         : out Field_Shape;
+         Leaf          : out Field_Shape) return Fault_Kind;
+
+      function Variant_Shape_Of
+        (Item          : Item_Id;
+         Place         : Storage;
+         Field         : Natural;
+         Which         : Natural;
+         Payload_Field : Natural;
+         Shape         : out Field_Shape;
+         Leaf          : out Field_Shape) return Fault_Kind
+      is
+      begin
+         Shape := (others => <>);
+         Leaf := (others => <>);
+
+         case Place.Kind is
+            when Module_Datum =>
+               if not Holds (Of_Unit, Place.Datum)
+                 or else Kind_Of (Of_Unit, Place.Datum) /= Datum
+               then
+                  return Named_Item_Is_Not_A_Datum;
+               end if;
+               if Result_Of (Of_Unit, Place.Datum)
+                    /= Landin.Types.Aggregate
+                 or else Field = 0
+                 or else Field > Field_Count (Of_Unit, Place.Datum)
+               then
+                  return Variant_Field_Out_Of_Range;
+               end if;
+               Shape := Nth_Field_Shape
+                 (Of_Unit, Place.Datum, Positive (Field));
+
+            when Frame_Slot =>
+               if not Holds (Of_Unit, Item, Place.Slot) then
+                  return Slot_Out_Of_Range;
+               end if;
+               if not Is_Aggregate (Of_Unit, Item, Place.Slot)
+                 or else Field = 0
+                 or else Field > Slot_Field_Count
+                   (Of_Unit, Item, Place.Slot)
+               then
+                  return Variant_Field_Out_Of_Range;
+               end if;
+               Shape := Nth_Slot_Field_Shape
+                 (Of_Unit, Item, Place.Slot, Positive (Field));
+         end case;
+
+         if Shape.Kind /= Variant_Field_Shape then
+            return Variant_Field_Is_Not_A_Variant;
+         end if;
+         if Which = 0 or else Which > Shape.Cases then
+            return Variant_Case_Out_Of_Range;
+         end if;
+         if not Variant_Case_Run_Is_Valid
+           (Of_Unit, Shape, Positive (Which))
+         then
+            return Field_Shape_Malformed;
+         end if;
+         if Payload_Field = 0 then
+            return Nothing_Wrong;
+         end if;
+         if Payload_Field > Variant_Case_Field_Count
+           (Of_Unit, Shape, Positive (Which))
+         then
+            return Variant_Payload_Field_Out_Of_Range;
+         end if;
+
+         Leaf := Nth_Variant_Case_Field
+           (Of_Unit, Shape, Positive (Which), Positive (Payload_Field));
+         if Leaf.Kind /= Scalar_Field_Shape then
+            return Variant_Payload_Field_Is_Not_A_Scalar;
+         end if;
+         return Nothing_Wrong;
+      end Variant_Shape_Of;
 
       --  D74 introduced this carrier for measurements; D75 uses the same
       --  target-neutral shape for datum and slot storage.  Prove every run
@@ -1228,6 +1332,35 @@ package body Landin.IR.Verifier is
                                  end if;
                               end;
 
+                           when Select_Variant | Store_Variant_Field =>
+                              if Is_Datum then
+                                 return
+                                   (Kind  => Variant_Operation_Inside_A_Datum,
+                                    Item  => Id,
+                                    Block => Block,
+                                    Value => V);
+                              end if;
+
+                              declare
+                                 Shape, Leaf : Field_Shape;
+                                 Bad : constant Fault_Kind :=
+                                   Variant_Shape_Of
+                                     (Id,
+                                      Destination_Of (Of_Unit, Id, V),
+                                      Element_Field_Of (Of_Unit, Id, V),
+                                      Variant_Case_Of (Of_Unit, Id, V),
+                                      (if Op = Store_Variant_Field
+                                       then Variant_Payload_Field_Of
+                                         (Of_Unit, Id, V)
+                                       else 0),
+                                      Shape, Leaf);
+                              begin
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
+                              end;
+
                            when Fill_Array =>
                               if Is_Datum then
                                  return
@@ -1621,6 +1754,33 @@ package body Landin.IR.Verifier is
                                       (Kind => Store_Datum_Disagrees,
                                        Item => Id, Block => Block,
                                        Value => V);
+                                 end if;
+                              end;
+
+                           when Store_Variant_Field =>
+                              declare
+                                 Shape, Leaf : Field_Shape;
+                                 Bad : constant Fault_Kind :=
+                                   Variant_Shape_Of
+                                     (Id,
+                                      Destination_Of (Of_Unit, Id, V),
+                                      Element_Field_Of (Of_Unit, Id, V),
+                                      Variant_Case_Of (Of_Unit, Id, V),
+                                      Variant_Payload_Field_Of
+                                        (Of_Unit, Id, V),
+                                      Shape, Leaf);
+                              begin
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 elsif Result_Of
+                                      (Of_Unit, Id,
+                                       Nth_Operand (Of_Unit, Id, V, 1))
+                                      /= Leaf.Element
+                                 then
+                                    return
+                                      (Kind => Variant_Payload_Value_Disagrees,
+                                       Item => Id, Block => Block, Value => V);
                                  end if;
                               end;
 

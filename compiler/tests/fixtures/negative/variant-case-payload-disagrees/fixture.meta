@@ -1,0 +1,6 @@
+class: negative
+summary: D76 keeps payload labels complete unique typed and scalar-or-zero-array contextual
+constructs: 0410, 0520, 0530, 0670, 0680, 0690, 0700, 0710, 1790, 1795, 1810, 1900
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0310, L0309, L0308, L0301, L0301, L0304, L0301
