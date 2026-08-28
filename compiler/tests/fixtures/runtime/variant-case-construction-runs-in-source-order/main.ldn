@@ -22,10 +22,23 @@ public main: () -> (code: i32) =
         kind: pair(first: next(), second: next()),
         tail: 0
     )
+    mut inferred := choice(
+        prefix: 9,
+        kind: pair(first: 5, second: 6),
+        tail: 8
+    )
+    mut inferred_ok: bool = false
     state.kind = pair(first: next(), second: next())
     local = (kind: row(values: zeroed), of zeroed)
     state.kind = leaf
-    if calls == 4 and local.prefix == 0 and local.tail == 0 then
+    match inferred.kind
+        leaf: inferred_ok = false
+        pair(first, second): inferred_ok = first == 5 and second == 6
+        row: inferred_ok = false
+    end match
+    if calls == 4 and local.prefix == 0 and local.tail == 0
+      and inferred.prefix == 9 and inferred.tail == 8 and inferred_ok
+    then
         code = 42
     else
         code = 1

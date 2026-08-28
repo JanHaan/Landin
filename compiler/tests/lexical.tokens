@@ -6304,7 +6304,7 @@ file positive/unary-binds-tightest/program.ldn tokens 20
   32 33 *
   34 35 2
   36 39 end
-file positive/variant-case-construction/program.ldn tokens 179
+file positive/variant-case-construction/program.ldn tokens 215
   0 6 choice
   6 7 :
   8 12 type
@@ -6404,86 +6404,122 @@ file positive/variant-case-construction/program.ldn tokens 179
   392 393 :
   394 398 true
   403 404 )
-  409 414 local
-  415 416 =
-  417 418 (
-  418 422 kind
-  422 423 :
-  424 427 row
-  427 428 (
-  428 434 values
-  434 435 :
-  436 442 zeroed
-  442 443 )
-  443 444 ,
-  445 447 of
-  448 454 zeroed
-  454 455 )
-  460 465 state
-  465 466 .
-  466 470 kind
-  471 472 =
-  473 477 pair
-  477 478 (
-  478 483 first
-  483 484 :
-  485 486 5
-  486 487 ,
-  488 494 second
-  494 495 :
-  496 497 6
-  497 498 )
-  503 508 state
-  508 509 .
-  509 513 kind
-  514 515 =
-  516 520 leaf
-  525 530 state
+  409 412 mut
+  413 421 inferred
+  422 424 :=
+  425 431 choice
+  431 432 (
+  441 447 prefix
+  447 448 :
+  449 450 9
+  450 451 ,
+  460 464 kind
+  464 465 :
+  466 470 pair
+  470 471 (
+  471 476 first
+  476 477 :
+  478 480 10
+  480 481 ,
+  482 488 second
+  488 489 :
+  490 492 11
+  492 493 )
+  493 494 ,
+  503 508 ready
+  508 509 :
+  510 514 true
+  519 520 )
+  525 530 local
   531 532 =
-  533 539 choice
-  539 540 (
-  549 555 prefix
-  555 556 :
-  557 558 7
-  558 559 ,
-  568 572 kind
-  572 573 :
-  574 578 pair
-  578 579 (
-  579 584 first
-  584 585 :
-  586 587 8
-  587 588 ,
-  589 591 of
-  592 598 zeroed
-  598 599 )
-  599 600 ,
-  609 614 ready
-  614 615 :
-  616 621 false
-  626 627 )
-  632 633 _
-  634 635 =
-  636 641 local
-  641 642 .
-  642 648 prefix
-  653 654 _
-  655 656 =
-  657 662 local
-  662 663 .
-  663 668 ready
-  673 674 _
-  675 676 =
-  677 682 named
-  682 683 .
-  683 689 prefix
-  694 695 _
-  696 697 =
-  698 703 named
-  703 704 .
-  704 709 ready
-  710 713 end
-  714 723 construct
+  533 534 (
+  534 538 kind
+  538 539 :
+  540 543 row
+  543 544 (
+  544 550 values
+  550 551 :
+  552 558 zeroed
+  558 559 )
+  559 560 ,
+  561 563 of
+  564 570 zeroed
+  570 571 )
+  576 581 state
+  581 582 .
+  582 586 kind
+  587 588 =
+  589 593 pair
+  593 594 (
+  594 599 first
+  599 600 :
+  601 602 5
+  602 603 ,
+  604 610 second
+  610 611 :
+  612 613 6
+  613 614 )
+  619 624 state
+  624 625 .
+  625 629 kind
+  630 631 =
+  632 636 leaf
+  641 646 state
+  647 648 =
+  649 655 choice
+  655 656 (
+  665 671 prefix
+  671 672 :
+  673 674 7
+  674 675 ,
+  684 688 kind
+  688 689 :
+  690 694 pair
+  694 695 (
+  695 700 first
+  700 701 :
+  702 703 8
+  703 704 ,
+  705 707 of
+  708 714 zeroed
+  714 715 )
+  715 716 ,
+  725 730 ready
+  730 731 :
+  732 737 false
+  742 743 )
+  748 749 _
+  750 751 =
+  752 757 local
+  757 758 .
+  758 764 prefix
+  769 770 _
+  771 772 =
+  773 778 local
+  778 779 .
+  779 784 ready
+  789 790 _
+  791 792 =
+  793 798 named
+  798 799 .
+  799 805 prefix
+  810 811 _
+  812 813 =
+  814 819 named
+  819 820 .
+  820 825 ready
+  830 831 _
+  832 833 =
+  834 842 inferred
+  842 843 .
+  843 849 prefix
+  854 855 _
+  856 857 =
+  858 866 inferred
+  866 867 .
+  867 872 ready
+  873 876 end
+  877 886 construct
 file positive/variant-match-exhaustive/program.ldn tokens 108
   0 6 choice
   6 7 :
@@ -16397,7 +16433,7 @@ file negative/variant-abi-not-enabled/program.ldn tokens 46
   177 178 =
   179 182 end
   183 187 make
-file negative/variant-case-construction-contexts-not-enabled/program.ldn tokens 75
+file negative/variant-case-construction-contexts-not-enabled/program.ldn tokens 54
   0 6 choice
   6 7 :
   8 12 type
@@ -16452,27 +16488,6 @@ file negative/variant-case-construction-contexts-not-enabled/program.ldn tokens 
   216 217 :
   218 222 leaf
   222 223 )
-  225 238 local_context
-  238 239 :
-  240 241 (
-  241 242 )
-  243 245 ->
-  246 250 none
-  251 252 =
-  257 262 local
-  263 265 :=
-  266 272 choice
-  272 273 (
-  273 279 prefix
-  279 280 :
-  281 282 1
-  282 283 ,
-  284 288 kind
-  288 289 :
-  290 294 leaf
-  294 295 )
-  296 299 end
-  300 313 local_context
 file negative/variant-case-does-not-belong/program.ldn tokens 70
   0 4 left
   4 5 :
@@ -17404,7 +17419,7 @@ file negative/variant-payload-struct-field-not-enabled/program.ldn tokens 29
   124 128 kind
   129 132 end
   133 138 outer
-file negative/variant-value-not-enabled/program.ldn tokens 92
+file negative/variant-value-not-enabled/program.ldn tokens 72
   0 6 choice
   6 7 :
   8 12 type
@@ -17457,46 +17472,26 @@ file negative/variant-value-not-enabled/program.ldn tokens 92
   233 235 of
   236 242 zeroed
   242 243 )
-  245 249 make
-  249 250 :
-  251 252 (
-  252 253 )
-  254 256 ->
-  257 261 none
-  262 263 =
-  268 273 local
-  274 276 :=
-  277 283 choice
-  283 284 (
-  284 290 prefix
-  290 291 :
-  292 293 1
-  293 294 ,
-  295 297 of
-  298 304 zeroed
-  304 305 )
-  306 309 end
-  310 314 make
-  316 331 copy_assignment
-  331 332 :
-  333 334 (
-  334 335 )
-  336 338 ->
-  339 343 none
-  344 345 =
-  350 353 mut
-  354 358 left
-  358 359 :
-  360 366 choice
-  371 374 mut
-  375 380 right
-  380 381 :
-  382 388 choice
-  393 397 left
-  398 399 =
-  400 405 right
-  406 409 end
-  410 425 copy_assignment
+  245 260 copy_assignment
+  260 261 :
+  262 263 (
+  263 264 )
+  265 267 ->
+  268 272 none
+  273 274 =
+  279 282 mut
+  283 287 left
+  287 288 :
+  289 295 choice
+  300 303 mut
+  304 309 right
+  309 310 :
+  311 317 choice
+  322 326 left
+  327 328 =
+  329 334 right
+  335 338 end
+  339 354 copy_assignment
 file negative/wide-integer-not-enabled/program.ldn tokens 5
   0 4 wide
   4 5 :
