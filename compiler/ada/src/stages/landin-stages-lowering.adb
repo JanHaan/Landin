@@ -1227,6 +1227,12 @@ package body Landin.Stages.Lowering is
                   Destination : IR.Storage;
                   Field       : Natural);
 
+               procedure Write_Variant_Value
+                 (Value       : Syn.Node_Id;
+                  Wrote       : Res.Declaration_Id;
+                  Field       : Positive;
+                  Destination : IR.Storage);
+
                procedure Write_Struct_Literal
                  (Literal     : Syn.Node_Id;
                   Wrote       : Res.Declaration_Id;
@@ -1444,6 +1450,68 @@ package body Landin.Stages.Lowering is
                   end if;
                end Write_Array_Value;
 
+               procedure Write_Variant_Value
+                 (Value       : Syn.Node_Id;
+                  Wrote       : Res.Declaration_Id;
+                  Field       : Positive;
+                  Destination : IR.Storage)
+               is
+                  Which : constant Positive := Positive
+                    (Landin.Checking.Field_Index
+                       (Types.all, Of_Tree, Value));
+               begin
+                  --  Selecting first clears the complete padded part, so
+                  --  omitted scalar leaves, fixed-array zero payloads and
+                  --  every inactive byte have [0540]'s zero image before
+                  --  labelled scalar expressions are committed.
+                  IR.Emit_Variant_Select
+                    (Unit.all, Filling, Destination, Field, Which, Site);
+
+                  if Syn.Kind (Of_Tree, Value) /= Syn.Struct_Literal then
+                     return;
+                  end if;
+
+                  for Position in
+                    1 .. Syn.Field_Value_Count (Of_Tree, Value)
+                  loop
+                     declare
+                        Label : constant Syn.Node_Id :=
+                          Syn.Nth_Field_Value (Of_Tree, Value, Position);
+                        Payload_Field : constant Positive := Positive
+                          (Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Label));
+                        Shape : constant Landin.Checking.Field_Shape :=
+                          Landin.Checking.Nth_Variant_Case_Field
+                            (Types.all, Wrote, Field, Which,
+                             Payload_Field);
+                     begin
+                        case Shape.Kind is
+                           when Landin.Checking.Scalar_Field =>
+                              IR.Emit_Variant_Field_Store
+                                (Unit.all, Filling, Destination,
+                                 Field, Which, Payload_Field,
+                                 Lower_Expression
+                                   (Of_Tree,
+                                    Syn.Value_Of (Of_Tree, Label), Scope),
+                                 Site);
+
+                           when Landin.Checking.Fixed_Array_Field =>
+                              --  D76 admits only `zeroed` here.  The select
+                              --  already cleared this leaf and its padding.
+                              pragma Assert
+                                (Syn.Kind
+                                   (Of_Tree,
+                                    Syn.Value_Of (Of_Tree, Label))
+                                   = Syn.Zeroed_Literal);
+
+                           when Landin.Checking.Variant_Field =>
+                              raise Landin.Compiler_Defect with
+                                "a nested variant payload reached lowering";
+                        end case;
+                     end;
+                  end loop;
+               end Write_Variant_Value;
+
                procedure Write_Struct_Literal
                  (Literal     : Syn.Node_Id;
                   Wrote       : Res.Declaration_Id;
@@ -1505,9 +1573,8 @@ package body Landin.Stages.Lowering is
                                 (Value, Destination, Field);
 
                            when Landin.Checking.Variant_Field =>
-                              raise Landin.Compiler_Defect with
-                                "a variant field reached struct literal"
-                                & " lowering";
+                              Write_Variant_Value
+                                (Value, Wrote, Field, Destination);
                         end case;
                      end;
                   end loop;
@@ -1545,9 +1612,10 @@ package body Landin.Stages.Lowering is
                                     Field => Field);
 
                               when Landin.Checking.Variant_Field =>
-                                 raise Landin.Compiler_Defect with
-                                   "a variant field reached struct fill"
-                                   & " lowering";
+                                 --  D75's zero image selects the first case.
+                                 IR.Emit_Variant_Select
+                                   (Unit.all, Filling, Destination,
+                                    Field, 1, Site);
                            end case;
                         end if;
                      end loop;
@@ -1889,11 +1957,43 @@ package body Landin.Stages.Lowering is
                      end;
 
                   when Syn.Assignment =>
+                     --  D76's direct part assignment is contextual and its
+                     --  target is Not_Typed rather than a general aggregate
+                     --  value.  Lower it before the ordinary whole-struct
+                     --  branch asks the place for an aggregate body.
+                     if Syn.Kind
+                          (Of_Tree, Syn.Target_Of (Of_Tree, Stmt))
+                          = Syn.Member_Selection
+                       and then Landin.Checking.Type_Of
+                         (Types.all, Of_Tree,
+                          Syn.Target_Of (Of_Tree, Stmt)) = Ty.Not_Typed
+                     then
+                        declare
+                           Place : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree, Stmt);
+                           Named : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree, Place);
+                           Wrote : constant Res.Declaration_Id :=
+                             Landin.Checking.Body_Of
+                               (Types.all, Of_Tree, Named);
+                           Field : constant Positive := Positive
+                             (Landin.Checking.Field_Index
+                                (Types.all, Of_Tree, Place));
+                        begin
+                           pragma Assert
+                             (Landin.Checking.Field_Kind_Of
+                                (Types.all, Wrote, Field)
+                                = Landin.Checking.Variant_Field);
+                           Write_Variant_Value
+                             (Syn.Value_Of (Of_Tree, Stmt), Wrote, Field,
+                              Storage_For (Of_Tree, Named));
+                        end;
+
                      --  [0710]'s copy visits the same fields in [0750]'s
                      --  order: a scalar is one field read and write, and
                      --  D54 copies an array field with D50's compact
                      --  operation.  No whole-struct opcode says more.
-                     if Landin.Checking.Type_Of
+                     elsif Landin.Checking.Type_Of
                           (Types.all, Of_Tree,
                            Syn.Target_Of (Of_Tree, Stmt)) = Ty.Aggregate
                      then

@@ -135,6 +135,8 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Admit_Array_Field
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      function Admit_Variant_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Synthesise_Binary
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Check_Call
@@ -148,7 +150,10 @@ package body Landin.Stages.Checking is
          Site    : Landin.Provenance.Origin;
          Because : String);
       procedure Check_Place
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Stepping : Boolean);
+        (Of_Tree        : Syn.Tree;
+         Node           : Syn.Node_Id;
+         Stepping       : Boolean;
+         Variant_Context : Boolean := False);
       procedure Check_Array_Literal
         (Of_Tree      : Syn.Tree;
          Context      : Syn.Node_Id;
@@ -161,6 +166,12 @@ package body Landin.Stages.Checking is
          Literal      : Syn.Node_Id;
          Wrote        : Res.Declaration_Id;
          Static_Image : Boolean);
+      procedure Check_Variant_Value
+        (Of_Tree : Syn.Tree;
+         Site    : Syn.Node_Id;
+         Value   : Syn.Node_Id;
+         Wrote   : Res.Declaration_Id;
+         Field   : Positive);
       procedure Check_Mixed_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -691,28 +702,6 @@ package body Landin.Stages.Checking is
                   Wrote : constant Res.Declaration_Id :=
                     Landin.Checking.Body_Of (Types.all, Of_Tree, Nominal);
                begin
-                  --  D74 permits the declaration and its measurement but
-                  --  not a datum or frame cell.  The typed declaration path
-                  --  owns the same boundary in Declared_As_Node; inferred
-                  --  D72 construction reaches it here instead.
-                  if Wrote /= Res.No_Declaration
-                    and then Landin.Checking.Has_Layout (Types.all, Wrote)
-                    and then Landin.Checking.Has_Variant_Part
-                      (Types.all, Wrote)
-                  then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Literal),
-                        Message => "construction cannot create storage for"
-                                   & " a variant-bearing struct yet",
-                        Refused => Bad.Variant_Value,
-                        Into    => Found);
-                     Landin.Checking.Refuse
-                       (Types.all, Of_Tree, Literal);
-                     return Res.No_Declaration;
-                  end if;
-
                   return Wrote;
                end;
             elsif Held = Ty.Ill_Typed then
@@ -1050,6 +1039,9 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
               and then not Is_Struct_Zeroed_Init
+              and then not
+                (Is_Local_Binding (Of_Tree, Node)
+                 and then Is_Struct_Literal_Init)
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1843,6 +1835,65 @@ package body Landin.Stages.Checking is
          return False;
       end Admit_Array_Field;
 
+      function Admit_Variant_Field
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Member_Selection then
+            return False;
+         end if;
+
+         declare
+            From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
+         begin
+            if Syn.Kind (Of_Tree, From) /= Syn.Name_Reference
+              or else Res.Verdict_Of (Meanings.all, Of_Tree, From)
+                        /= Res.Bound
+            then
+               return False;
+            end if;
+
+            declare
+               Held : constant Ty.Type_Kind := Selected_From (Of_Tree, From);
+            begin
+               if Held /= Ty.Aggregate then
+                  return False;
+               end if;
+
+               declare
+                  Wrote : constant Res.Declaration_Id :=
+                    Landin.Checking.Body_Of (Types.all, Of_Tree, From);
+                  Which : constant Natural :=
+                    (if Wrote = Res.No_Declaration then 0
+                     else Field_At (Wrote, Syn.Name (Of_Tree, Node)));
+               begin
+                  if Which = 0
+                    or else not Landin.Checking.Has_Layout (Types.all, Wrote)
+                    or else Landin.Checking.Field_Kind_Of
+                      (Types.all, Wrote, Which)
+                        /= Landin.Checking.Variant_Field
+                  then
+                     return False;
+                  end if;
+
+                  if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                       = Ty.Undecided
+                  then
+                     --  A variant part is a contextual destination, not a
+                     --  general aggregate value.  Not_Typed records that
+                     --  distinction while allowing Check_Place and lowering
+                     --  to share the resolved field identity.
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Node, Ty.Not_Typed);
+                     Landin.Checking.Note_Field
+                       (Types.all, Of_Tree, Node, Which);
+                  end if;
+                  return True;
+               end;
+            end;
+         end;
+      end Admit_Variant_Field;
+
       function Is_Direct_Module_Field
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
       is
@@ -2610,7 +2661,10 @@ package body Landin.Stages.Checking is
       --  written and two may not.  Stepping says the place is an `inc` or a
       --  `dec`, which [0400] makes an addition and so wants a number too.
       procedure Check_Place
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Stepping : Boolean)
+        (Of_Tree        : Syn.Tree;
+         Node           : Syn.Node_Id;
+         Stepping       : Boolean;
+         Variant_Context : Boolean := False)
       is
          Held : Ty.Type_Kind;
 
@@ -2681,6 +2735,10 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Refuse (Types.all, Of_Tree, Node);
                end if;
 
+               return;
+            end if;
+
+            if Variant_Context then
                return;
             end if;
 
@@ -2812,6 +2870,302 @@ package body Landin.Stages.Checking is
             end loop;
          end if;
       end Check_Array_Literal;
+
+      --  D76: a case value is contextual to one variant part.  A bare case
+      --  selects an empty payload; a case construction labels each scalar
+      --  payload leaf, while a fixed-array leaf may take only its zero image
+      --  in this first executable slice.  The value and its labels retain
+      --  source-order identities for lowering without becoming general
+      --  aggregate values.
+      procedure Check_Variant_Value
+        (Of_Tree : Syn.Tree;
+         Site    : Syn.Node_Id;
+         Value   : Syn.Node_Id;
+         Wrote   : Res.Declaration_Id;
+         Field   : Positive)
+      is
+         Body_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Wrote));
+         Body_Node : constant Syn.Node_Id :=
+           Syn.Declared_Type
+             (Body_Tree.all, Res.Node_Of (Meanings.all, Wrote));
+         Part : constant Syn.Node_Id :=
+           Syn.Nth_Field (Body_Tree.all, Body_Node, Field);
+         Nominal : Syn.Node_Id := Syn.No_Node;
+         Means : Res.Declaration_Id := Res.No_Declaration;
+         Which : Natural := 0;
+         Failed : Boolean := False;
+      begin
+         pragma Assert (Syn.Kind (Body_Tree.all, Part) = Syn.Variant_Part);
+
+         if Syn.Kind (Of_Tree, Value) = Syn.Name_Reference then
+            Nominal := Value;
+         elsif Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
+           and then Syn.Constructed_Type (Of_Tree, Value) /= Syn.No_Node
+         then
+            Nominal := Syn.Constructed_Type (Of_Tree, Value);
+         else
+            Bad.Report
+              (Item    => Bad.Unsupported_Use,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Value),
+               Message => "a variant part takes a bare case name or a"
+                          & " labelled case construction",
+               Refused => Bad.Variant_Value,
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+            return;
+         end if;
+
+         if Res.Verdict_Of (Meanings.all, Of_Tree, Nominal) = Res.Bound then
+            Means := Res.Bound_To (Meanings.all, Of_Tree, Nominal);
+         end if;
+
+         if Means /= Res.No_Declaration
+           and then Res.Sort_Of (Meanings.all, Means) = Res.Case_Name
+         then
+            for Candidate in 1 .. Syn.Case_Count (Body_Tree.all, Part) loop
+               if Res.Source_Of (Meanings.all, Means)
+                    = Syn.Source_Of (Body_Tree.all)
+                 and then Res.Node_Of (Meanings.all, Means)
+                    = Syn.Nth_Case (Body_Tree.all, Part, Candidate)
+               then
+                  Which := Candidate;
+                  exit;
+               end if;
+            end loop;
+         end if;
+
+         if Which = 0 then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Nominal),
+               Message => "this case does not belong to the variant part"
+                          & " selected here",
+               Note    => "D76: a case is identified by the variant part"
+                          & " that declared it",
+               Related => Syn.Origin (Of_Tree, Site),
+               Because => "the variant part selected here",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+            return;
+         end if;
+
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
+              = Ty.Undecided
+         then
+            Landin.Checking.Note
+              (Types.all, Of_Tree, Value, Ty.Not_Typed);
+            Landin.Checking.Note_Field
+              (Types.all, Of_Tree, Value, Which);
+         end if;
+
+         declare
+            Case_Node : constant Syn.Node_Id :=
+              Syn.Nth_Case (Body_Tree.all, Part, Which);
+            Count : constant Natural :=
+              Syn.Payload_Field_Count (Body_Tree.all, Case_Node);
+         begin
+            if Syn.Kind (Of_Tree, Value) = Syn.Name_Reference then
+               if Count > 0 then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Value),
+                     Message => "this case has a payload, so its fields"
+                                & " must be constructed",
+                     Note    => "D76: only a payload-free case is a bare"
+                                & " case value",
+                     Related => Syn.Origin (Body_Tree.all, Case_Node),
+                     Because => "declared with a payload here",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+               end if;
+               return;
+            end if;
+
+            declare
+               type Node_List is array (Natural range <>) of Syn.Node_Id;
+               First : Node_List (1 .. Count) := [others => Syn.No_Node];
+            begin
+               for Position in
+                 1 .. Syn.Field_Value_Count (Of_Tree, Value)
+               loop
+                  declare
+                     Label : constant Syn.Node_Id :=
+                       Syn.Nth_Field_Value (Of_Tree, Value, Position);
+                     Given : constant Syn.Node_Id :=
+                       Syn.Value_Of (Of_Tree, Label);
+                     Payload_Field : Natural := 0;
+                  begin
+                     for Candidate in 1 .. Count loop
+                        if Syn.Name (Of_Tree, Label)
+                          = Syn.Name
+                              (Body_Tree.all,
+                               Syn.Nth_Payload_Field
+                                 (Body_Tree.all, Case_Node, Candidate))
+                        then
+                           Payload_Field := Candidate;
+                           exit;
+                        end if;
+                     end loop;
+
+                     if Payload_Field = 0 then
+                        Bad.Report
+                          (Item    => Bad.Unresolved_Field,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Anchor (Of_Tree, Label),
+                           Message => "this variant case has no payload"
+                                      & " field called `"
+                                      & Spelled (Syn.Name (Of_Tree, Label))
+                                      & "`",
+                           Note    => "D76: a case construction has exactly"
+                                      & " its declared payload fields",
+                           Into    => Found);
+                        Failed := True;
+                     elsif First (Payload_Field) /= Syn.No_Node then
+                        Bad.Report
+                          (Item    => Bad.Field_Named_Twice,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Anchor (Of_Tree, Label),
+                           Message => "this payload field is named twice",
+                           Note    => "D76: each case payload field is"
+                                      & " written once",
+                           Related => Syn.Origin
+                             (Of_Tree, First (Payload_Field)),
+                           Because => "first named here",
+                           Into    => Found);
+                        Failed := True;
+                     else
+                        First (Payload_Field) := Label;
+                        Landin.Checking.Note_Field
+                          (Types.all, Of_Tree, Label, Payload_Field);
+
+                        declare
+                           Shape : constant Landin.Checking.Field_Shape :=
+                             Landin.Checking.Nth_Variant_Case_Field
+                               (Types.all, Wrote, Field, Which,
+                                Payload_Field);
+                        begin
+                           case Shape.Kind is
+                              when Landin.Checking.Scalar_Field =>
+                                 if Syn.Kind (Of_Tree, Given)
+                                      = Syn.Zeroed_Literal
+                                 then
+                                    Landin.Checking.Note
+                                      (Types.all, Of_Tree, Given,
+                                       Shape.Element);
+                                 else
+                                    Require
+                                      (Of_Tree, Given, Shape.Element,
+                                       Syn.Origin (Of_Tree, Label),
+                                       "the variant payload field named"
+                                       & " here");
+                                 end if;
+
+                              when Landin.Checking.Fixed_Array_Field =>
+                                 if Syn.Kind (Of_Tree, Given)
+                                      = Syn.Zeroed_Literal
+                                 then
+                                    Landin.Checking.Note
+                                      (Types.all, Of_Tree, Given,
+                                       Ty.Fixed_Array);
+                                    Landin.Checking.Note_Array
+                                      (Types.all, Of_Tree, Given,
+                                       Shape.Length, Shape.Element);
+                                 else
+                                    Bad.Report
+                                      (Item    => Bad.Unsupported_Use,
+                                       Source  => Syn.Source_Of (Of_Tree),
+                                       Where   => Syn.Where (Of_Tree, Given),
+                                       Message => "a fixed-array case"
+                                                  & " payload accepts only"
+                                                  & " `zeroed` in this slice",
+                                       Refused => Bad.Array_Value,
+                                       Into    => Found);
+                                    Landin.Checking.Refuse
+                                      (Types.all, Of_Tree, Given);
+                                 end if;
+
+                              when Landin.Checking.Variant_Field =>
+                                 raise Landin.Compiler_Defect with
+                                   "a nested variant payload reached D76";
+                           end case;
+                        end;
+
+                        Failed := Failed
+                          or else Landin.Checking.Type_Of
+                            (Types.all, Of_Tree, Given) = Ty.Ill_Typed;
+                     end if;
+                  end;
+               end loop;
+
+               declare
+                  Fill : constant Syn.Node_Id :=
+                    Syn.Struct_Fill (Of_Tree, Value);
+                  Missing : Ada.Strings.Unbounded.Unbounded_String;
+                  Missing_Count : Natural := 0;
+               begin
+                  if Fill /= Syn.No_Node
+                    and then Syn.Kind (Of_Tree, Fill)
+                               /= Syn.Zeroed_Literal
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Fill),
+                        Message => "a case construction's trailing `of`"
+                                   & " accepts only `zeroed`",
+                        Refused => Bad.Variant_Value,
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Fill);
+                     Failed := True;
+                  end if;
+
+                  if Fill = Syn.No_Node then
+                     for Candidate in First'Range loop
+                        if First (Candidate) = Syn.No_Node then
+                           Missing_Count := Missing_Count + 1;
+                           if Missing_Count > 1 then
+                              Ada.Strings.Unbounded.Append (Missing, ", ");
+                           end if;
+                           Ada.Strings.Unbounded.Append
+                             (Missing, "`"
+                              & Spelled
+                                  (Syn.Name
+                                     (Body_Tree.all,
+                                      Syn.Nth_Payload_Field
+                                        (Body_Tree.all, Case_Node,
+                                         Candidate)))
+                              & "`");
+                        end if;
+                     end loop;
+
+                     if Missing_Count > 0 then
+                        Bad.Report
+                          (Item    => Bad.Field_Not_Given,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Value),
+                           Message => "this case construction gives no"
+                                      & " value for "
+                                      & Ada.Strings.Unbounded.To_String
+                                          (Missing),
+                           Note    => "D76: every payload field is labelled"
+                                      & " or covered by trailing `of"
+                                      & " zeroed`",
+                           Into    => Found);
+                        Failed := True;
+                     end if;
+                  end if;
+               end;
+            end;
+         end;
+
+         if Failed then
+            Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+         end if;
+      end Check_Variant_Value;
 
       --  D64: a labelled struct literal is contextual.  The destination
       --  supplies [0710]'s nominal body; labels may be written in any order,
@@ -3218,15 +3572,22 @@ package body Landin.Stages.Checking is
                         Check_Array_Field (Field, Value, Which);
 
                      when Landin.Checking.Variant_Field =>
-                        Bad.Report
-                          (Item    => Bad.Unsupported_Use,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Field),
-                           Message => "a variant part cannot be named by a"
-                                      & " struct literal yet",
-                           Refused => Bad.Variant_Value,
-                           Into    => Found);
-                        Failed := True;
+                        if Static_Image then
+                           Bad.Report
+                             (Item    => Bad.Unsupported_Use,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Field),
+                              Message => "a module struct image cannot"
+                                         & " select a variant case yet",
+                              Refused => Bad.Variant_Value,
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                           Failed := True;
+                        else
+                           Check_Variant_Value
+                             (Of_Tree, Field, Value, Wrote, Which);
+                        end if;
                   end case;
 
                   Failed := Failed
@@ -3795,6 +4156,43 @@ package body Landin.Stages.Checking is
                end;
 
             when Syn.Assignment =>
+               --  D76 gives a directly selected variant part one contextual
+               --  destination form.  It is intercepted before ordinary
+               --  selection synthesis (which correctly keeps the part out
+               --  of general values), while Check_Place still owns root
+               --  mutability and runs before the case is inspected.
+               if Admit_Variant_Field
+                    (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+               then
+                  declare
+                     Place : constant Syn.Node_Id :=
+                       Syn.Target_Of (Of_Tree, Node);
+                     Value : constant Syn.Node_Id :=
+                       Syn.Value_Of (Of_Tree, Node);
+                     Base : constant Syn.Node_Id :=
+                       Syn.Target_Of (Of_Tree, Place);
+                  begin
+                     Check_Place
+                       (Of_Tree, Place, Stepping => False,
+                        Variant_Context => True);
+                     if Landin.Checking.Type_Of
+                          (Types.all, Of_Tree, Place) = Ty.Ill_Typed
+                     then
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Value);
+                     else
+                        Check_Variant_Value
+                          (Of_Tree, Place, Value,
+                           Landin.Checking.Body_Of
+                             (Types.all, Of_Tree, Base),
+                           Positive
+                             (Landin.Checking.Field_Index
+                                (Types.all, Of_Tree, Place)));
+                     end if;
+                  end;
+                  return;
+               end if;
+
                --  D49 supplies the fixed-array shape for a complete `zeroed`
                --  assignment.  D50 additionally recognizes a direct array
                --  name or a selection as copy syntax, D52 recognizes D29's
@@ -3879,36 +4277,57 @@ package body Landin.Stages.Checking is
                         --  the same type.  A copy is the one expression
                         --  position a struct may stand in, because the bytes
                         --  go straight between places without a value.
-                        declare
-                           Got : constant Ty.Type_Kind :=
-                             (if Is_Direct_Binding_Name (Of_Tree, Value)
-                              then Selected_From (Of_Tree, Value)
-                              else Synthesise (Of_Tree, Value));
-                        begin
-                           if Got = Ty.Ill_Typed then
-                              null;
-                           elsif Got /= Ty.Aggregate
-                             or else Landin.Checking.Body_Of
-                                       (Types.all, Of_Tree, Place)
-                                     /= Landin.Checking.Body_Of
-                                          (Types.all, Of_Tree, Value)
-                           then
-                              Bad.Report
-                                (Item    => Bad.Type_Mismatch,
-                                 Source  => Syn.Source_Of (Of_Tree),
-                                 Where   => Syn.Where (Of_Tree, Value),
-                                 Message => "this is not a value of the"
-                                            & " struct type written here",
-                                 Note    => "[0710]: two structs are one type"
-                                            & " when one declaration wrote"
-                                            & " both, and never otherwise",
-                                 Related => Syn.Origin (Of_Tree, Place),
-                                 Because => "the place written here",
-                                 Into    => Found);
-                              Landin.Checking.Refuse
-                                (Types.all, Of_Tree, Value);
-                           end if;
-                        end;
+                        if Landin.Checking.Has_Variant_Part
+                             (Types.all,
+                              Landin.Checking.Body_Of
+                                (Types.all, Of_Tree, Place))
+                        then
+                           --  D75/D76 provide no whole-variant copy: selecting
+                           --  a case is the only nonzero write, and it never
+                           --  reads another variant-bearing value.
+                           Bad.Report
+                             (Item    => Bad.Unsupported_Use,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "a variant-bearing struct cannot be"
+                                         & " copied as a whole yet",
+                              Refused => Bad.Variant_Value,
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        else
+                           declare
+                              Got : constant Ty.Type_Kind :=
+                                (if Is_Direct_Binding_Name (Of_Tree, Value)
+                                 then Selected_From (Of_Tree, Value)
+                                 else Synthesise (Of_Tree, Value));
+                           begin
+                              if Got = Ty.Ill_Typed then
+                                 null;
+                              elsif Got /= Ty.Aggregate
+                                or else Landin.Checking.Body_Of
+                                          (Types.all, Of_Tree, Place)
+                                        /= Landin.Checking.Body_Of
+                                             (Types.all, Of_Tree, Value)
+                              then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "this is not a value of the"
+                                               & " struct type written here",
+                                    Note    => "[0710]: two structs are one"
+                                               & " type when one declaration"
+                                               & " wrote both, and never"
+                                               & " otherwise",
+                                    Related => Syn.Origin (Of_Tree, Place),
+                                    Because => "the place written here",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Value);
+                              end if;
+                           end;
+                        end if;
                      end if;
 
                      return;
@@ -4308,6 +4727,24 @@ package body Landin.Stages.Checking is
                  Construction_Body (Of_Tree.all, Value);
             begin
                if Wrote = Res.No_Declaration then
+                  Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+               elsif Landin.Checking.Has_Layout (Types.all, Wrote)
+                 and then Landin.Checking.Has_Variant_Part
+                   (Types.all, Wrote)
+               then
+                  --  D76 remains contextual to a written destination.
+                  --  Inference would otherwise turn a case construction
+                  --  into the general variant value D75 deliberately left
+                  --  closed.
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree.all),
+                     Where   => Syn.Where (Of_Tree.all, Value),
+                     Message => "an inferred binding cannot take a"
+                                & " variant-bearing construction yet",
+                     Refused => Bad.Variant_Value,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree.all, Value);
                   Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
                else
                   Landin.Checking.Note
@@ -6798,6 +7235,17 @@ package body Landin.Stages.Checking is
                               --  do not also mark the scalar-field table.
                               Array_Sets.Include
                                 (State.Whole_Arrays, (Id, Which));
+                           elsif Landin.Checking.Has_Layout (Types.all, Id)
+                             and then Landin.Checking.Field_Kind_Of
+                               (Types.all,
+                                Landin.Checking.Body_Of (Types.all, Id),
+                                Which) = Landin.Checking.Variant_Field
+                           then
+                              --  D76 establishes the selected case, but D77
+                              --  owns the fact required to read that tag or
+                              --  payload.  Do not misrecord the part as a
+                              --  scalar D16 field in the meantime.
+                              null;
                            else
                               State.Fields (Positive (Id), Which) := True;
                            end if;
@@ -7048,9 +7496,10 @@ package body Landin.Stages.Checking is
             elsif Res.Sort_Of (Meanings.all, Id) = Res.Case_Name then
                --  D74 gives a case a declaration identity so forward uses,
                --  duplicates and module collisions have ordinary name
-               --  semantics.  It deliberately gives that identity no value
-               --  type until D75, so it must not enter Declared_As or Infer:
-               --  both are paths for declarations that carry storage.
+               --  semantics.  D75/D76 deliberately keep that identity
+               --  without a general value type, so it must not enter
+               --  Declared_As or Infer: both are paths for declarations that
+               --  carry storage.
                Landin.Checking.Settle (Types.all, Id, Ty.Not_Typed);
             else
                declare

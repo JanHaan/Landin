@@ -110,6 +110,82 @@ package body Landin.Backend is
          then 1 else Landin.Targets.Alignment_Of (Facts, Held));
    end Field_Extent;
 
+   function Variant_Payload_Field_Offset
+     (Of_Unit       : Landin.IR.Unit;
+      Shape         : Landin.IR.Field_Shape;
+      Which         : Positive;
+      Payload_Field : Positive;
+      Facts         : Landin.Targets.Target_Facts)
+      return Landin.Targets.Byte_Count
+   is
+      Payload_Size : Landin.Targets.Byte_Count := 0;
+      Payload_Alignment : Landin.Targets.Byte_Alignment := 1;
+      Part : Landin.Targets.Placement := Landin.Targets.Empty_Placement;
+      Selected : Landin.Targets.Placement :=
+        Landin.Targets.Empty_Placement;
+      Payload_At, Ignored : Landin.Targets.Byte_Count;
+      Field_At : Landin.Targets.Byte_Count := 0;
+   begin
+      --  First find the union payload's alignment and maximum padded extent.
+      for Case_Index in 1 .. Shape.Cases loop
+         declare
+            Placed : Landin.Targets.Placement :=
+              Landin.Targets.Empty_Placement;
+         begin
+            for Field in 1 .. Landin.IR.Variant_Case_Field_Count
+              (Of_Unit, Shape, Case_Index)
+            loop
+               declare
+                  Size : Landin.Targets.Byte_Count;
+                  Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  Field_Extent
+                    (Of_Unit,
+                     Landin.IR.Nth_Variant_Case_Field
+                       (Of_Unit, Shape, Case_Index, Field),
+                     Facts, Size, Alignment);
+                  Landin.Targets.Place
+                    (Placed, Size, Alignment, Ignored);
+               end;
+            end loop;
+            Payload_Size := Landin.Targets.Byte_Count'Max
+              (Payload_Size, Landin.Targets.Size_Of (Placed));
+            Payload_Alignment := Landin.Targets.Byte_Alignment'Max
+              (Payload_Alignment, Landin.Targets.Alignment_Of (Placed));
+         end;
+      end loop;
+
+      --  The tag is first.  Placing the maximum payload next gives its
+      --  shared base, exactly as Field_Extent does for the whole part.
+      Landin.Targets.Place
+        (Part, Landin.Types.Storage_Size (Shape.Element, Facts),
+         Facts, Ignored);
+      Landin.Targets.Place
+        (Part, Payload_Size, Payload_Alignment, Payload_At);
+
+      --  A selected case retains ordinary D44/D45 declaration-order layout.
+      for Field in 1 .. Payload_Field loop
+         declare
+            Size : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
+            This_At : Landin.Targets.Byte_Count;
+         begin
+            Field_Extent
+              (Of_Unit,
+               Landin.IR.Nth_Variant_Case_Field
+                 (Of_Unit, Shape, Which, Field),
+               Facts, Size, Alignment);
+            Landin.Targets.Place
+              (Selected, Size, Alignment, This_At);
+            if Field = Payload_Field then
+               Field_At := This_At;
+            end if;
+         end;
+      end loop;
+
+      return Payload_At + Field_At;
+   end Variant_Payload_Field_Offset;
+
    ------------------------------------------------------------------
    --  A target-neutral measurement
    ------------------------------------------------------------------

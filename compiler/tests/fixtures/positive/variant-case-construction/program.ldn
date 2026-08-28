@@ -1,0 +1,32 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u16) |
+        row: (values: [2]u32)
+    end kind
+    ready: bool
+end choice
+
+mut state: choice
+
+construct: () -> none =
+    mut local: choice = (prefix: 1, kind: leaf, ready: false)
+    mut named: choice = choice(
+        prefix: 2,
+        kind: pair(first: 3, second: 4),
+        ready: true
+    )
+    local = (kind: row(values: zeroed), of zeroed)
+    state.kind = pair(first: 5, second: 6)
+    state.kind = leaf
+    state = choice(
+        prefix: 7,
+        kind: pair(first: 8, of zeroed),
+        ready: false
+    )
+    _ = local.prefix
+    _ = local.ready
+    _ = named.prefix
+    _ = named.ready
+end construct

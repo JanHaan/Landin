@@ -356,6 +356,9 @@ package body Landin.Backend.X86_64 is
          function Whole_Clear_Extent
            (Place : Landin.IR.Storage; Field : Natural)
             return Landin.Targets.Byte_Count;
+         function Stored_Field_Shape
+           (Place : Landin.IR.Storage; Field : Positive)
+            return Landin.IR.Field_Shape;
 
          function Array_Length_Of
            (Place : Landin.IR.Storage; Field : Natural)
@@ -473,6 +476,18 @@ package body Landin.Backend.X86_64 is
                   end;
             end case;
          end Whole_Clear_Extent;
+
+         function Stored_Field_Shape
+           (Place : Landin.IR.Storage; Field : Positive)
+            return Landin.IR.Field_Shape
+         is
+           (case Place.Kind is
+               when Landin.IR.Module_Datum =>
+                 Landin.IR.Nth_Field_Shape
+                   (Of_Unit, Place.Datum, Field),
+               when Landin.IR.Frame_Slot =>
+                 Landin.IR.Nth_Slot_Field_Shape
+                   (Of_Unit, Item, Place.Slot, Field));
 
          --  A Value_Id restarts in each item, just as a Block_Id does.  The
          --  extra `V` keeps a continuation distinct from a block label.
@@ -796,6 +811,80 @@ package body Landin.Backend.X86_64 is
                         & ", %rcx");
                      Emit ("cld");
                      Emit ("rep stosb");
+                  end;
+
+               when Landin.IR.Select_Variant =>
+                  declare
+                     Destination : constant Landin.IR.Storage :=
+                       Landin.IR.Destination_Of (Of_Unit, Item, Value);
+                     Field : constant Positive := Positive
+                       (Landin.IR.Element_Field_Of
+                          (Of_Unit, Item, Value));
+                     Shape : constant Landin.IR.Field_Shape :=
+                       Stored_Field_Shape (Destination, Field);
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                     Tag : constant Natural :=
+                       Landin.IR.Variant_Case_Of
+                         (Of_Unit, Item, Value) - 1;
+                     Held : constant Held_Size :=
+                       Size_Of (Shape.Element, Facts);
+                  begin
+                     Landin.Backend.Field_Extent
+                       (Of_Unit, Shape, Facts, Size, Alignment);
+                     Storage_Address (Destination, Field, "%rdi");
+                     Emit
+                       ("movabsq $"
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image (Size))
+                        & ", %rcx");
+                     Emit ("xorl %eax, %eax");
+                     Emit ("rep stosb");
+
+                     --  rep stosb advances %rdi, so form the part base
+                     --  again before writing the source-order tag.
+                     Storage_Address (Destination, Field, "%rcx");
+                     Emit
+                       ("mov" & Suffix (Held) & " $"
+                        & Trimmed (Natural'Image (Tag)) & ", (%rcx)");
+                  end;
+
+               when Landin.IR.Store_Variant_Field =>
+                  declare
+                     Destination : constant Landin.IR.Storage :=
+                       Landin.IR.Destination_Of (Of_Unit, Item, Value);
+                     Field : constant Positive := Positive
+                       (Landin.IR.Element_Field_Of
+                          (Of_Unit, Item, Value));
+                     Shape : constant Landin.IR.Field_Shape :=
+                       Stored_Field_Shape (Destination, Field);
+                     Which : constant Positive :=
+                       Positive
+                         (Landin.IR.Variant_Case_Of
+                            (Of_Unit, Item, Value));
+                     Payload_Field : constant Positive :=
+                       Positive
+                         (Landin.IR.Variant_Payload_Field_Of
+                            (Of_Unit, Item, Value));
+                     Leaf : constant Landin.IR.Field_Shape :=
+                       Landin.IR.Nth_Variant_Case_Field
+                         (Of_Unit, Shape, Which, Payload_Field);
+                     At_Offset : constant Landin.Targets.Byte_Count :=
+                       Landin.Backend.Variant_Payload_Field_Offset
+                         (Of_Unit, Shape, Which, Payload_Field, Facts);
+                     Held : constant Held_Size :=
+                       Size_Of (Leaf.Element, Facts);
+                  begin
+                     Storage_Address (Destination, Field, "%rcx");
+                     if At_Offset > 0 then
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (At_Offset))
+                           & ", %rdx");
+                        Emit ("addq %rdx, %rcx");
+                     end if;
+                     Carry (Held, Value_Cell (Operand (1)), "(%rcx)");
                   end;
 
                when Landin.IR.Fill_Array =>
@@ -1700,6 +1789,8 @@ package body Landin.Backend.X86_64 is
                         | Landin.IR.Load_Element | Landin.IR.Store_Element
                         | Landin.IR.Copy_Array | Landin.IR.Clear_Array
                         | Landin.IR.Fill_Array
+                        | Landin.IR.Select_Variant
+                        | Landin.IR.Store_Variant_Field
                         | Landin.IR.Jump | Landin.IR.Branch =>
                         --  [1940] admits none of these in a module value,
                         --  and [1830] refuses a call there by name.

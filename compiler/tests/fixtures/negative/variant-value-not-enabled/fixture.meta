@@ -3,4 +3,4 @@ summary: D75 stores and zeroes variant-bearing structs but keeps literals, copie
 constructs: 0540, 0670, 0680, 0690, 0710, 1790, 1795
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0304, L0304, L0304, L0304
+codes: L0304, L0304, L0304, L0304, L0304

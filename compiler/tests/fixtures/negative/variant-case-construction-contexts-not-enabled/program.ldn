@@ -1,0 +1,14 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        number: (value: u8)
+    end kind
+end choice
+
+module_image: choice = (prefix: 1, kind: number(value: 2))
+inferred := choice(prefix: 1, kind: leaf)
+
+local_context: () -> none =
+    local := choice(prefix: 1, kind: leaf)
+end local_context

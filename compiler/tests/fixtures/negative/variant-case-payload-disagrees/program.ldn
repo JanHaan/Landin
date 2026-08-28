@@ -1,0 +1,18 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        pair: (first: u8, second: bool) |
+        row: (values: [2]u16)
+    end kind
+end choice
+
+mut state: choice
+
+bad: () -> none =
+    state.kind = pair(first: 1)
+    state.kind = pair(first: 1, first: 2, second: true)
+    state.kind = pair(other: 1, first: 2, second: true)
+    state.kind = pair(first: true, second: 1)
+    state.kind = row(values: [1, 2])
+    state.kind = pair
+end bad
