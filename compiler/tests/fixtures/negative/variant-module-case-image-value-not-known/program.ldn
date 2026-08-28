@@ -1,0 +1,12 @@
+answer: () -> (result: u8) =
+    result = 42
+end answer
+
+choice: type = struct
+    kind: variant
+        leaf |
+        number: (value: u8)
+    end kind
+end choice
+
+state: choice = choice(kind: number(value: answer()))

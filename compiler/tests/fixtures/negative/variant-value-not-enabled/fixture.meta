@@ -1,6 +1,0 @@
-class: negative
-summary: D80 keeps bare literals and module static copies of variant-bearing structs refused
-constructs: 0540, 0670, 0680, 0690, 0710, 1790, 1795
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0304, L0304, L0304

@@ -6,5 +6,5 @@ choice: type = struct
     end kind
 end choice
 
-module_image: choice = (prefix: 1, kind: number(value: 2))
-inferred := choice(prefix: 1, kind: leaf)
+source: choice = zeroed
+state: choice = choice(prefix: 0, kind: number(value: source.prefix))

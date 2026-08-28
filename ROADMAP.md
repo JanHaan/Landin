@@ -3218,7 +3218,7 @@ and the fresh aggregate slot is the contextual destination D76's existing
 write sequence needs. No representation changes: checker and lowering seams,
 positive and focused negative fixtures, generated records and the Linux
 runtime case provide evidence. Inferred module construction remains refused
-until a nonzero static variant image exists.
+in this slice; D81 supplies the nonzero static variant image and admits it.
 
 D80 admits contextual whole copy of a variant-bearing struct between direct
 runtime storage places, including typed and inferred local direct-name
@@ -3229,7 +3229,16 @@ variant shapes before access, and the backend copies the target-derived padded
 part as one byte run on both target descriptions. Definite-assignment,
 self-copy and distinct-storage behavior are pinned by focused fixtures, public
 seams, generated records and a Linux runtime case. Module initializers remain
-static-image rules.
+static-image rules, which D81 supplies rather than turning into runtime copies.
+
+D81 admits typed and inferred module case construction and copies the resulting
+selected-case image through D60/D61 module chains. One target-neutral selected
+descriptor points at declaration-order payload descriptors; the verifier proves
+their case shapes and target fit before access, and the backend replays D74's
+tag, payload placement and zero padding on both target descriptions. Static
+fold ownership, forward chains, distinct storage and Linux execution are pinned
+by focused fixtures, public seams and generated records. Fixed-array payload
+literals/repetitions and fixed-array match aliases remain separate decisions.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3274,10 +3283,11 @@ construction in typed local labelled literals and whole assignments, plus
 assignment to a directly selected mutable variant part. D77 admits exhaustive
 matching of that selected part, and D78 binds scalar payload fields as
 arm-local `in`/`inout` aliases. D79 admits inferred local case construction.
-D80 admits runtime whole copies and local direct-name initializers. Static case
-images and inferred module case construction, general reads of the part and
-fixed-array payload bindings remain refused. Parameters and returns retain
-R2.30's aggregate ABI owner.
+D80 admits runtime whole copies and local direct-name initializers. D81 adds
+static selected-case images, inferred module construction and module image
+chains. General reads of the part, fixed-array payload construction beyond
+`zeroed`, and fixed-array payload bindings remain refused. Parameters and
+returns retain R2.30's aggregate ABI owner.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3392,6 +3402,10 @@ D79 migrated inferred local case construction while keeping module inference
 with the static-image boundary.
 D80 migrated whole variant-bearing copies and local direct-name initializers
 while keeping module copies behind the nonzero static-image boundary.
+D81 migrated typed and inferred module case construction plus module image
+chains onto a target-neutral selected-case and payload-descriptor carrier,
+while keeping general aggregate values and the fixed-array payload extensions
+pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

@@ -126,8 +126,8 @@ package body Landin.IR.Verifier is
                "an aggregate datum's first image form carries a nonzero"
                & " value for a fixed-array field",
             when Aggregate_Image_On_Variant_Field =>
-               "a variant-bearing aggregate datum carries a written image"
-               & " although D75 admits only its absent zero image",
+               "an aggregate datum carries a malformed selected variant"
+               & " image",
             when Aggregate_Field_Image_Length_Disagrees =>
                "an aggregate datum's field-image run disagrees with its"
                & " declared fields",
@@ -792,7 +792,7 @@ package body Landin.IR.Verifier is
               and then Image_Length (Of_Unit, Id)
                        >= Element_Total (Field_Count (Of_Unit, Id))
               and then Aggregate_Field_Image_Count (Of_Unit, Id)
-                       /= Field_Count (Of_Unit, Id)
+                       < Field_Count (Of_Unit, Id)
             then
                return (Kind => Aggregate_Field_Image_Length_Disagrees,
                        Item => Id, others => <>);
@@ -803,14 +803,34 @@ package body Landin.IR.Verifier is
               and then Image_Length (Of_Unit, Id)
                        >= Element_Total (Field_Count (Of_Unit, Id))
               and then Aggregate_Field_Image_Count (Of_Unit, Id)
-                       = Field_Count (Of_Unit, Id)
+                       >= Field_Count (Of_Unit, Id)
             then
                declare
                   Expected : Natural := 0;
+                  Expected_Payloads : Natural := 0;
                   Elements : constant Natural :=
                     Natural
                       (Image_Length (Of_Unit, Id)
                        - Element_Total (Field_Count (Of_Unit, Id)));
+                  Payloads : constant Natural :=
+                    Aggregate_Field_Image_Count (Of_Unit, Id)
+                    - Field_Count (Of_Unit, Id);
+                  Run_Fault : constant Fault_Kind :=
+                    Aggregate_Field_Image_Length_Disagrees;
+                  Scalar_Fault : constant Fault_Kind :=
+                    Aggregate_Field_Image_On_Scalar_Field;
+                  Value_Fault : constant Fault_Kind :=
+                    Aggregate_Image_Value_Does_Not_Fit;
+                  Variant_Fault : constant Fault_Kind :=
+                    Aggregate_Image_On_Variant_Field;
+
+                  function Fits
+                    (Held : Landin.Types.Folded;
+                     Element : Landin.Types.Scalar_Name) return Boolean
+                  is (if Element = Landin.Types.Bool
+                      then Held in 0 .. 1
+                      else Landin.Types.Holds
+                        (Held, Landin.Types.Integer_Name (Element), Facts));
                begin
                   for Field in 1 .. Field_Count (Of_Unit, Id) loop
                      declare
@@ -820,40 +840,189 @@ package body Landin.IR.Verifier is
                           Nth_Field_Image (Of_Unit, Id, Field);
                         Image : constant Aggregate_Field_Image :=
                           Field_Image_Of (Of_Unit, Id, Field);
-                        Fits : Boolean := True;
                      begin
-                        if Image.Offset /= Expected
-                          or else Image.Count > Elements - Expected
-                        then
-                           return
-                             (Kind => Aggregate_Field_Image_Length_Disagrees,
-                              Item => Id, others => <>);
-                        end if;
-
                         if Shape.Kind = Variant_Field_Shape then
-                           return
-                             (Kind => Aggregate_Image_On_Variant_Field,
-                              Item => Id, others => <>);
+                           if Held /= 0
+                             or else Image.Offset /= Expected_Payloads
+                           then
+                              return
+                                (Kind => Aggregate_Image_On_Variant_Field,
+                                 Item => Id, others => <>);
+                           elsif Image.Form = Absent then
+                              if Image.Count /= 0 or else Image.Value /= 0
+                              then
+                                 return
+                                   (Kind => Aggregate_Image_On_Variant_Field,
+                                    Item => Id, others => <>);
+                              end if;
+                           elsif Image.Form = Selected then
+                              if Image.Value < 1
+                                or else Image.Value
+                                  > Landin.Types.Folded (Shape.Cases)
+                                or else not Variant_Case_Run_Is_Valid
+                                  (Of_Unit, Shape,
+                                   Positive (Image.Value))
+                                or else Image.Count
+                                  /= Variant_Case_Field_Count
+                                    (Of_Unit, Shape,
+                                     Positive (Image.Value))
+                                or else Image.Count
+                                  > Payloads - Expected_Payloads
+                              then
+                                 return
+                                   (Kind => Aggregate_Image_On_Variant_Field,
+                                    Item => Id, others => <>);
+                              end if;
+
+                              for Payload in 1 .. Image.Count loop
+                                 declare
+                                    Leaf : constant Field_Shape :=
+                                      Nth_Variant_Case_Field
+                                        (Of_Unit, Shape,
+                                         Positive (Image.Value), Payload);
+                                    Payload_Image : constant
+                                      Aggregate_Field_Image :=
+                                        Variant_Payload_Image_Of
+                                          (Of_Unit, Id, Field, Payload);
+                                 begin
+                                    if Payload_Image.Offset /= Expected
+                                      or else Expected > Elements
+                                      or else Payload_Image.Count
+                                        > Elements - Expected
+                                    then
+                                       return
+                                         (Kind => Run_Fault,
+                                          Item => Id, others => <>);
+                                    elsif Leaf.Kind = Scalar_Field_Shape then
+                                       if Payload_Image.Form /= Absent
+                                         or else Payload_Image.Count /= 0
+                                       then
+                                          return
+                                            (Kind => Scalar_Fault,
+                                             Item => Id, others => <>);
+                                       elsif Check_Image
+                                         and then not Fits
+                                           (Payload_Image.Value,
+                                            Leaf.Element)
+                                       then
+                                          return
+                                            (Kind => Value_Fault,
+                                             Item => Id, others => <>);
+                                       end if;
+                                    elsif Leaf.Kind = Variant_Field_Shape then
+                                       return
+                                         (Kind => Field_Shape_Malformed,
+                                          Item => Id, others => <>);
+                                    else
+                                       case Payload_Image.Form is
+                                          when Absent =>
+                                             if Payload_Image.Count /= 0
+                                               or else
+                                                 Payload_Image.Value /= 0
+                                             then
+                                                return
+                                                  (Kind =>
+                                                     Field_Pattern_Fault,
+                                                   Item => Id, others => <>);
+                                             end if;
+                                          when Finite =>
+                                             if Element_Total
+                                                  (Payload_Image.Count)
+                                                  /= Leaf.Length
+                                               or else
+                                                 Payload_Image.Value /= 0
+                                             then
+                                                return
+                                                  (Kind =>
+                                                     Field_Length_Fault,
+                                                   Item => Id, others => <>);
+                                             end if;
+                                          when Repeated =>
+                                             if Payload_Image.Count /= 0
+                                               or else
+                                                 Payload_Image.Value = 0
+                                             then
+                                                return
+                                                  (Kind =>
+                                                     Field_Pattern_Fault,
+                                                   Item => Id, others => <>);
+                                             end if;
+                                          when Hybrid =>
+                                             if Payload_Image.Count = 0
+                                               or else Element_Total
+                                                 (Payload_Image.Count)
+                                                   >= Leaf.Length
+                                             then
+                                                return
+                                                  (Kind =>
+                                                     Field_Pattern_Fault,
+                                                   Item => Id, others => <>);
+                                             end if;
+                                          when Selected =>
+                                             return
+                                               (Kind => Variant_Fault,
+                                                Item => Id, others => <>);
+                                       end case;
+
+                                       if Check_Image then
+                                          if Payload_Image.Form
+                                               in Finite | Hybrid
+                                          then
+                                             for Position in
+                                               1 .. Payload_Image.Count
+                                             loop
+                                                if not Fits
+                                                  (Nth_Variant_Field_Element
+                                                     (Of_Unit, Id, Field,
+                                                      Payload,
+                                                      Part_Position
+                                                        (Position)),
+                                                   Leaf.Element)
+                                                then
+                                                   return
+                                                     (Kind =>
+                                                        Field_Value_Fault,
+                                                      Item => Id,
+                                                      others => <>);
+                                                end if;
+                                             end loop;
+                                          end if;
+
+                                          if Payload_Image.Form
+                                               in Repeated | Hybrid
+                                            and then not Fits
+                                              (Payload_Image.Value,
+                                               Leaf.Element)
+                                          then
+                                             return
+                                               (Kind => Field_Value_Fault,
+                                                Item => Id, others => <>);
+                                          end if;
+                                       end if;
+
+                                       Expected := Expected
+                                         + Payload_Image.Count;
+                                    end if;
+                                 end;
+                              end loop;
+                              Expected_Payloads := Expected_Payloads
+                                + Image.Count;
+                           else
+                              return
+                                (Kind => Aggregate_Image_On_Variant_Field,
+                                 Item => Id, others => <>);
+                           end if;
                         elsif Shape.Kind = Scalar_Field_Shape then
-                           if Image.Form /= Absent or else Image.Count /= 0
+                           if Image.Offset /= Expected
+                             or else Image.Form /= Absent
+                             or else Image.Count /= 0
                            then
                               return
                                 (Kind =>
                                    Aggregate_Field_Image_On_Scalar_Field,
                                  Item => Id, others => <>);
                            elsif Check_Image then
-                              if Shape.Element = Landin.Types.Bool then
-                                 Fits := Held in 0 .. 1;
-                              else
-                                 Fits :=
-                                   Landin.Types.Holds
-                                     (Held,
-                                      Landin.Types.Integer_Name
-                                        (Shape.Element),
-                                      Facts);
-                              end if;
-
-                              if not Fits then
+                              if not Fits (Held, Shape.Element) then
                                  return
                                    (Kind =>
                                       Aggregate_Image_Value_Does_Not_Fit,
@@ -861,7 +1030,15 @@ package body Landin.IR.Verifier is
                               end if;
                            end if;
                         else
-                           if Held /= 0 then
+                           if Image.Offset /= Expected
+                             or else Expected > Elements
+                             or else Image.Count > Elements - Expected
+                           then
+                              return
+                                (Kind =>
+                                   Aggregate_Field_Image_Length_Disagrees,
+                                 Item => Id, others => <>);
+                           elsif Held /= 0 then
                               return
                                 (Kind => Aggregate_Image_On_Array_Field,
                                  Item => Id, others => <>);
@@ -906,85 +1083,51 @@ package body Landin.IR.Verifier is
                                       (Kind => Field_Pattern_Fault,
                                        Item => Id, others => <>);
                                  end if;
+                              when Selected =>
+                                 return
+                                   (Kind => Aggregate_Image_On_Variant_Field,
+                                    Item => Id, others => <>);
                            end case;
-                        end if;
 
-                        Expected := Expected + Image.Count;
+                           if Check_Image then
+                              if Image.Form in Finite | Hybrid then
+                                 for Position in 1 .. Image.Count loop
+                                    if not Fits
+                                      (Nth_Field_Element
+                                         (Of_Unit, Id, Field,
+                                          Part_Position (Position)),
+                                       Shape.Element)
+                                    then
+                                       return
+                                         (Kind => Field_Value_Fault,
+                                          Item => Id, others => <>);
+                                    end if;
+                                 end loop;
+                              end if;
+
+                              if Image.Form in Repeated | Hybrid
+                                and then not Fits
+                                  (Image.Value, Shape.Element)
+                              then
+                                 return
+                                   (Kind => Field_Value_Fault,
+                                    Item => Id, others => <>);
+                              end if;
+                           end if;
+
+                           Expected := Expected + Image.Count;
+                        end if;
                      end;
                   end loop;
 
-                  if Expected /= Elements then
+                  if Expected /= Elements
+                    or else Expected_Payloads /= Payloads
+                  then
                      return
                        (Kind => Aggregate_Field_Image_Length_Disagrees,
                         Item => Id, others => <>);
                   end if;
 
-                  if Check_Image then
-                     for Field in 1 .. Field_Count (Of_Unit, Id) loop
-                        declare
-                           Shape : constant Field_Shape :=
-                             Nth_Field_Shape (Of_Unit, Id, Field);
-                           Image : constant Aggregate_Field_Image :=
-                             Field_Image_Of (Of_Unit, Id, Field);
-                        begin
-                           if Shape.Kind = Array_Field_Shape
-                             and then Image.Form in Finite | Hybrid
-                           then
-                              for Position in 1 .. Image.Count loop
-                                 declare
-                                    Held : constant Landin.Types.Folded :=
-                                      Nth_Field_Element
-                                        (Of_Unit, Id, Field,
-                                         Part_Position (Position));
-                                    Fits : Boolean;
-                                 begin
-                                    if Shape.Element = Landin.Types.Bool then
-                                       Fits := Held in 0 .. 1;
-                                    else
-                                       Fits :=
-                                         Landin.Types.Holds
-                                           (Held,
-                                            Landin.Types.Integer_Name
-                                              (Shape.Element),
-                                            Facts);
-                                    end if;
-
-                                    if not Fits then
-                                       return
-                                         (Kind => Field_Value_Fault,
-                                          Item => Id, others => <>);
-                                    end if;
-                                 end;
-                              end loop;
-                           end if;
-
-                           if Shape.Kind = Array_Field_Shape
-                             and then Image.Form in Repeated | Hybrid
-                           then
-                              declare
-                                 Fits : Boolean;
-                              begin
-                                 if Shape.Element = Landin.Types.Bool then
-                                    Fits := Image.Value in 0 .. 1;
-                                 else
-                                    Fits :=
-                                      Landin.Types.Holds
-                                        (Image.Value,
-                                         Landin.Types.Integer_Name
-                                           (Shape.Element),
-                                         Facts);
-                                 end if;
-
-                                 if not Fits then
-                                    return
-                                      (Kind => Field_Value_Fault,
-                                       Item => Id, others => <>);
-                                 end if;
-                              end;
-                           end if;
-                        end;
-                     end loop;
-                  end if;
                end;
             end if;
 

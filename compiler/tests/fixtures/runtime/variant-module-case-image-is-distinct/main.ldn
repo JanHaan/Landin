@@ -1,0 +1,40 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u16) |
+        row: (values: [2]u32)
+    end kind
+    tail: u8
+end choice
+
+mut origin: choice = choice(
+    prefix: 7,
+    kind: pair(first: 11, second: 13),
+    tail: 17
+)
+mut copy: choice = origin
+mut inferred := choice(
+    prefix: 19,
+    kind: row(values: zeroed),
+    tail: 23
+)
+
+public main: () -> (code: i32) =
+    origin.kind = leaf
+    inferred.kind = leaf
+    mut copy_ok: bool = false
+    match copy.kind
+        leaf: copy_ok = false
+        pair(first, second): copy_ok = first == 11 and second == 13
+        row: copy_ok = false
+    end match
+    if copy_ok and copy.prefix == 7 and copy.tail == 17
+      and origin.prefix == 7 and inferred.prefix == 19
+      and inferred.tail == 23
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
