@@ -1,0 +1,7 @@
+holder: type = struct
+    first: u64
+    second: u64
+end holder
+
+max: u64 = 18446744073709551615
+mut over: holder = (first: max + 1, second: 4294967296 * 4294967296)

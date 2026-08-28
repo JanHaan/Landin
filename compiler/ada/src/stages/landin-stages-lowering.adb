@@ -2160,15 +2160,14 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
-      --  Pass three: D24/D34 initial-image resolution.  An array datum whose
-      --  value is a literal has its per-position fold recorded here; a
-      --  repetition has one folded pattern; and a direct storage name follows
-      --  the D21 chain while preserving either representation.  A chain ending
-      --  at D10 zero or a zero-pattern repetition has no image and stays
-      --  reserved in `.bss`.  A nonzero image reaches `.data`.  The pass is
-      --  separate from Lower_Datum because a source may be written below
-      --  its use [1740] and its item has to exist before this reads it.
-      Resolve_Array_Images :
+      --  Pass three: D24/D34/D66 initial-image resolution.  Array datums keep
+      --  their per-position or compact repetition folds; an aggregate literal
+      --  carries one fold per declaration-order field.  A direct storage name
+      --  follows D21/D60/D61's chain while preserving the source image.  An
+      --  absent or explicit zero image stays reserved in `.bss`; a written
+      --  image reaches `.data`.  This pass follows Lower_Datum because a
+      --  source may be written below its use [1740].
+      Resolve_Module_Images :
       declare
          Declarations : constant Natural :=
            Res.Declaration_Count (Meanings.all);
@@ -2376,6 +2375,13 @@ package body Landin.Stages.Lowering is
                   Known := True;
 
                when Syn.False_Literal =>
+                  Value := 0;
+                  Known := True;
+
+               when Syn.Zeroed_Literal =>
+                  --  D66 gives a labelled scalar `zeroed` its field type;
+                  --  its target-neutral fold is the same zero pattern D42
+                  --  uses at runtime.
                   Value := 0;
                   Known := True;
 
@@ -2888,6 +2894,47 @@ package body Landin.Stages.Lowering is
             Made (Id) := True;
          end Set_Image_From_Mixed_Repetition;
 
+         procedure Set_Image_From_Struct_Literal
+           (Id      : Res.Declaration_Id;
+            Of_Tree : Syn.Tree;
+            Literal : Syn.Node_Id);
+
+         procedure Set_Image_From_Struct_Literal
+           (Id      : Res.Declaration_Id;
+            Of_Tree : Syn.Tree;
+            Literal : Syn.Node_Id)
+         is
+            Item : constant IR.Item_Id := IR.Item_For (Unit.all, Id);
+            Count : constant Natural := IR.Field_Count (Unit.all, Item);
+            Values : Ty.Folded_Array (1 .. Count) := [others => 0];
+         begin
+            for Position in
+              1 .. Syn.Field_Value_Count (Of_Tree, Literal)
+            loop
+               declare
+                  Field : constant Syn.Node_Id :=
+                    Syn.Nth_Field_Value (Of_Tree, Literal, Position);
+                  Which : constant Positive :=
+                    Landin.Checking.Field_Index
+                      (Types.all, Of_Tree, Field);
+                  Held  : Ty.Folded;
+                  Known : Boolean;
+               begin
+                  Fold_Constant
+                    (Of_Tree, Syn.Value_Of (Of_Tree, Field), Held, Known);
+                  if not Known then
+                     raise Landin.Compiler_Defect with
+                       "a module struct literal field the checker accepted"
+                       & " did not fold at lowering";
+                  end if;
+                  Values (Which) := Held;
+               end;
+            end loop;
+
+            IR.Set_Aggregate_Image (Unit.all, Item, Values);
+            Made (Id) := True;
+         end Set_Image_From_Struct_Literal;
+
          procedure Copy_Image_From
            (Destination : Res.Declaration_Id;
             Source_Id   : Res.Declaration_Id);
@@ -2901,6 +2948,22 @@ package body Landin.Stages.Lowering is
             Length : constant IR.Element_Total :=
               IR.Image_Length (Unit.all, Source_Item);
          begin
+            if IR.Result_Of (Unit.all, Source_Item) = Ty.Aggregate then
+               declare
+                  Values : Ty.Folded_Array
+                    (1 .. Positive (Length)) := [others => 0];
+               begin
+                  for Field in Values'Range loop
+                     Values (Field) :=
+                       IR.Nth_Field_Image (Unit.all, Source_Item, Field);
+                  end loop;
+                  IR.Set_Aggregate_Image
+                    (Unit.all, IR.Item_For (Unit.all, Destination), Values);
+                  Made (Destination) := True;
+               end;
+               return;
+            end if;
+
             if IR.Is_Repeated_Image (Unit.all, Source_Item) then
                declare
                   Prefix : constant IR.Element_Total :=
@@ -2987,6 +3050,8 @@ package body Landin.Stages.Lowering is
                null;
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Array_Literal then
                Set_Image_From_Literal (Id, Their_Tree.all, Value);
+            elsif Syn.Kind (Their_Tree.all, Value) = Syn.Struct_Literal then
+               Set_Image_From_Struct_Literal (Id, Their_Tree.all, Value);
             elsif Syn.Kind (Their_Tree.all, Value) = Syn.Array_Repetition then
                Set_Image_From_Repetition (Id, Their_Tree.all, Value);
             elsif Syn.Kind (Their_Tree.all, Value)
@@ -3005,7 +3070,17 @@ package body Landin.Stages.Lowering is
                   if Res.Sort_Of (Meanings.all, Source_Id)
                        = Res.Module_Binding
                     and then Landin.Checking.Type_Of
-                               (Types.all, Source_Id) = Ty.Fixed_Array
+                               (Types.all, Source_Id)
+                               = Landin.Checking.Type_Of (Types.all, Id)
+                    and then
+                      (Landin.Checking.Type_Of (Types.all, Id)
+                         = Ty.Fixed_Array
+                       or else
+                         (Landin.Checking.Type_Of (Types.all, Id)
+                            = Ty.Aggregate
+                          and then Landin.Checking.Body_Of
+                            (Types.all, Source_Id)
+                            = Landin.Checking.Body_Of (Types.all, Id)))
                   then
                      Resolve_Image (Source_Id);
                      if Made (Source_Id) then
@@ -3024,13 +3099,13 @@ package body Landin.Stages.Lowering is
             loop
                if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
                  and then Landin.Checking.Type_Of (Types.all, Id)
-                          = Ty.Fixed_Array
+                          in Ty.Fixed_Array | Ty.Aggregate
                then
                   Resolve_Image (Id);
                end if;
             end loop;
          end if;
-      end Resolve_Array_Images;
+      end Resolve_Module_Images;
 
       --  Every Unit this stage builds, in every build mode.  A failure
       --  is a Landin.Compiler_Defect and never a diagnostic: the

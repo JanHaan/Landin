@@ -523,6 +523,38 @@ package Landin.IR is
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
 
+   --  D66: a nonzero module struct image is one target-neutral folded value
+   --  per declaration-order field.  Scalar entries are the values a backend
+   --  writes at its own widths; an array field carries zero in this first
+   --  slice and the backend reserves that field's target-derived extent.
+   --  Padding is never represented here: it belongs to target layout and is
+   --  emitted as zero by the backend.  D67 may extend an array-field entry
+   --  with D24/D34/D38's compact forms without turning this into target bytes.
+   procedure Set_Aggregate_Image
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Fields : Landin.Types.Folded_Array)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item)
+                           = Landin.Types.Aggregate
+                  and then not Has_Image (Into, Item)
+                  and then Fields'Length = Field_Count (Into, Item)
+                  and then Fields'Length > 0,
+          Post => Has_Image (Into, Item)
+                  and then Image_Length (Into, Item)
+                           = Element_Total (Fields'Length);
+
+   function Nth_Field_Image
+     (Of_Unit : Unit; Item : Item_Id; Field : Positive)
+      return Landin.Types.Folded
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Aggregate
+                 and then Has_Image (Of_Unit, Item)
+                 and then Field <= Field_Count (Of_Unit, Item)
+                 and then Element_Total (Field)
+                          <= Image_Length (Of_Unit, Item);
+
    --  D24: the source-order static image of an array literal datum, one
    --  folded value per position.  An array item with no image is D10's
    --  all-zero storage (or D34's zero-pattern repetition): the backend
@@ -593,7 +625,8 @@ package Landin.IR is
    function Has_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
-                          = Landin.Types.Fixed_Array;
+                          in Landin.Types.Fixed_Array
+                             | Landin.Types.Aggregate;
 
    function Is_Repeated_Image
      (Of_Unit : Unit; Item : Item_Id) return Boolean
@@ -619,7 +652,8 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
-                          = Landin.Types.Fixed_Array
+                          in Landin.Types.Fixed_Array
+                             | Landin.Types.Aggregate
                  and then Has_Image (Of_Unit, Item);
 
    function Nth_Image

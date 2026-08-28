@@ -2,6 +2,8 @@ with Landin.Types;
 
 package body Landin.IR.Verifier is
 
+   use type Landin.Types.Folded;
+
    function Describe (Of_Kind : Fault_Kind) return String
      is (case Of_Kind is
             when Nothing_Wrong        => "nothing wrong",
@@ -91,6 +93,15 @@ package body Landin.IR.Verifier is
             when Array_Image_Value_Does_Not_Fit =>
                "an array datum's image carries a value the element type"
                & " cannot hold on this target",
+            when Aggregate_Image_Length_Disagrees =>
+               "an aggregate datum's image does not have one value per"
+               & " field",
+            when Aggregate_Image_Value_Does_Not_Fit =>
+               "an aggregate datum's image carries a value the field type"
+               & " cannot hold on this target",
+            when Aggregate_Image_On_Array_Field =>
+               "an aggregate datum's first image form carries a nonzero"
+               & " value for a fixed-array field",
             when Callee_Is_Not_A_Routine =>
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
@@ -520,6 +531,61 @@ package body Landin.IR.Verifier is
                      end;
                   end loop;
                end;
+            end if;
+
+            --  D66: a written aggregate image is one folded entry for each
+            --  declaration-order field.  Scalar values are checked at the
+            --  target's own width.  A fixed-array field has only the absent
+            --  zero image in this first carrier, so its placeholder must be
+            --  zero.  Length is checked before any image accessor so release
+            --  builds are protected without relying on contracts.
+            if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
+              and then Has_Image (Of_Unit, Id)
+              and then Image_Length (Of_Unit, Id)
+                       /= Element_Total (Field_Count (Of_Unit, Id))
+            then
+               return (Kind => Aggregate_Image_Length_Disagrees,
+                       Item => Id, others => <>);
+            end if;
+
+            if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
+              and then Has_Image (Of_Unit, Id)
+              and then Image_Length (Of_Unit, Id)
+                       = Element_Total (Field_Count (Of_Unit, Id))
+            then
+               for Field in 1 .. Field_Count (Of_Unit, Id) loop
+                  declare
+                     Shape : constant Field_Shape :=
+                       Nth_Field_Shape (Of_Unit, Id, Field);
+                     Held : constant Landin.Types.Folded :=
+                       Nth_Field_Image (Of_Unit, Id, Field);
+                     Fits : Boolean := True;
+                  begin
+                     if Shape.Kind = Array_Field_Shape then
+                        if Held /= 0 then
+                           return
+                             (Kind => Aggregate_Image_On_Array_Field,
+                              Item => Id, others => <>);
+                        end if;
+                     elsif Check_Image then
+                        if Shape.Element = Landin.Types.Bool then
+                           Fits := Held in 0 .. 1;
+                        else
+                           Fits :=
+                             Landin.Types.Holds
+                               (Held,
+                                Landin.Types.Integer_Name (Shape.Element),
+                                Facts);
+                        end if;
+
+                        if not Fits then
+                           return
+                             (Kind => Aggregate_Image_Value_Does_Not_Fit,
+                              Item => Id, others => <>);
+                        end if;
+                     end if;
+                  end;
+               end loop;
             end if;
 
             --  [1550]: block 1 is where an item starts, and every other

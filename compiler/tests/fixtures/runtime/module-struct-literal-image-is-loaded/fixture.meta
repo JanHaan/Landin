@@ -1,0 +1,6 @@
+class: runtime
+summary: D66 loads module struct images as distinct target-laid-out storage with zero array fields and padding
+constructs: 0040, 0080, 0190, 0410, 0520, 0540, 0670, 0710, 0720, 0750, 1460, 1740, 1810, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

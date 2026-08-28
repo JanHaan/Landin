@@ -2707,7 +2707,7 @@ package body Landin.Tests.Checking_Suite is
          True);
    end Struct_Array_Field_Storage_Classes_Are_Enabled;
 
-   --  D64 carries one nominal body on the contextual literal and records
+   --  D64/D66 carry one nominal body on the contextual literal and record
    --  each source label as a declaration-order field identity.  The syntax
    --  order deliberately differs from layout order.
    procedure Struct_Literals_Carry_Body_And_Field_Identities
@@ -2731,6 +2731,8 @@ package body Landin.Tests.Checking_Suite is
          & "    ready: bool" & LF
          & "    tail: u16" & LF
          & "end holder" & LF
+         & "image: holder = (ready: true, tail: 11, tag: 2,"
+         & " of zeroed)" & LF
          & "mut state: holder" & LF
          & "f: () -> none =" & LF
          & "    local: holder = (ready: true, tail: 5, tag: 3,"
@@ -2778,8 +2780,8 @@ package body Landin.Tests.Checking_Suite is
                      Landin.Syntax.Nth_Field_Value
                        (Of_Tree.all, Node, 1)),
                   (case Seen is
-                      when 1 => 3,
-                      when 2 => 4,
+                      when 1 | 2 => 3,
+                      when 3 => 4,
                       when others => 2),
                   "the first written label keeps its layout identity");
                Landin.Testing.Check_Equal
@@ -2790,11 +2792,12 @@ package body Landin.Tests.Checking_Suite is
                        (Of_Tree.all, Node, 2)),
                   (case Seen is
                       when 1 => 4,
-                      when 2 => 1,
+                      when 2 => 4,
+                      when 3 => 1,
                       when others => 3),
                   "the second written label keeps its layout identity");
 
-               if Seen = 3 then
+               if Seen = 4 then
                   declare
                      Row : constant Landin.Syntax.Node_Id :=
                        Landin.Syntax.Value_Of
@@ -2831,7 +2834,7 @@ package body Landin.Tests.Checking_Suite is
       end;
 
       Landin.Testing.Check_Equal
-        (Item, Seen, 3, "all contextual struct literals were checked");
+        (Item, Seen, 4, "all contextual struct literals were checked");
    end Struct_Literals_Carry_Body_And_Field_Identities;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

@@ -1010,6 +1010,82 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_State_Follows_Its_Target;
 
+   --  D66 writes scalar field folds at target-derived offsets, zeroes array
+   --  fields and padding, and treats an explicitly written all-zero literal
+   --  as `.data` rather than collapsing it into D10's absent image.
+   procedure A_Module_Struct_Literal_Becomes_Data_Image
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Module_Struct_Literal_Becomes_Data_Image
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "machine: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    word: usize" & LF
+        & "    row: [2]u16" & LF
+        & "    ready: bool" & LF
+        & "end machine" & LF
+        & "state: machine = (ready: true, word: 7, tag: 5,"
+        & " of zeroed)" & LF
+        & "blank: machine = (tag: 0, word: 0, ready: false,"
+        & " of zeroed)" & LF;
+   begin
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Synthetic_32);
+         Ran : Natural;
+         Expected : constant String :=
+           HT & ".align 4" & LF
+           & "state:" & LF
+           & HT & ".byte 5" & LF
+           & HT & ".zero 3" & LF
+           & HT & ".long 7" & LF
+           & HT & ".zero 4" & LF
+           & HT & ".byte 1" & LF
+           & HT & ".zero 3" & LF
+           & HT & ".size state, 16" & LF;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, Expected),
+               "the 32-bit image writes fields and zero layout gaps");
+            Landin.Testing.Check
+              (Item,
+               Contains (Text, "blank:" & LF)
+               and then Occurrences (Text, HT & ".data" & LF) = 1
+               and then not Contains
+                 (Text, "blank:" & LF & HT & ".zero 16" & LF),
+               "an explicit all-zero literal remains written data");
+         end;
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+         Expected : constant String :=
+           HT & ".align 8" & LF
+           & "state:" & LF
+           & HT & ".byte 5" & LF
+           & HT & ".zero 7" & LF
+           & HT & ".quad 7" & LF
+           & HT & ".zero 4" & LF
+           & HT & ".byte 1" & LF
+           & HT & ".zero 3" & LF
+           & HT & ".size state, 24" & LF;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check
+           (Item, Contains (Emitted (Work), Expected),
+            "the same target-neutral image follows 64-bit placement");
+      end;
+   end A_Module_Struct_Literal_Becomes_Data_Image;
+
    --  [0750] puts each field at its own offset, and a selection reaches
    --  one by adding that many bytes to the datum's name.  The first field
    --  needs no displacement at all, which is what says the offset is the
@@ -3760,6 +3836,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a struct state follows its target",
          A_Struct_State_Follows_Its_Target'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a module struct literal becomes data image",
+         A_Module_Struct_Literal_Becomes_Data_Image'Access);
       Landin.Testing.Register
         (Into, "backend", "a field is read at its own offset",
          A_Field_Is_Read_At_Its_Own_Offset'Access);

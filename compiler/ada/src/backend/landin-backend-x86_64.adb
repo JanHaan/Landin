@@ -1724,6 +1724,8 @@ package body Landin.Backend.X86_64 is
 
       procedure Emit_Aggregate_Datum (Item : Landin.IR.Item_Id);
 
+      procedure Emit_Aggregate_Image_Datum (Item : Landin.IR.Item_Id);
+
       procedure Emit_Array_Datum (Item : Landin.IR.Item_Id);
 
       procedure Emit_Reserved
@@ -1747,11 +1749,91 @@ package body Landin.Backend.X86_64 is
             Landin.Targets.Alignment_Of (Placed));
       end Emit_Aggregate_Datum;
 
-      --  Whether a module value is all zero, and so is storage to reserve
-      --  rather than bytes to carry.  An aggregate always is: D10 zeroes a
-      --  binding with no value and [1940] admits no other way to write one
-      --  at module level, which is why this asks the type before it asks
-      --  the fold -- an aggregate datum has no scalar answer to fold.  An
+      --  D66 keeps the written aggregate image target-neutral: one fold per
+      --  declaration-order field.  Replay the shared placement here to insert
+      --  this target's padding, write scalar fields at their target widths,
+      --  reserve zero array fields at their compact extents, and keep every
+      --  padding byte zero as [0540] requires.
+      procedure Emit_Aggregate_Image_Datum (Item : Landin.IR.Item_Id) is
+         Placed  : Landin.Targets.Placement;
+         Ignored : Landin.Targets.Byte_Count;
+         Written : Landin.Targets.Byte_Count := 0;
+      begin
+         Place_Fields (Item, Placed, 0, Ignored);
+
+         if Landin.Resolution.Is_Public
+              (Meanings, Landin.IR.Declares (Of_Unit, Item))
+         then
+            Put (Character'Val (9) & ".globl " & Symbol (Item));
+         end if;
+
+         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put (Character'Val (9) & ".align "
+              & Trimmed
+                  (Landin.Targets.Byte_Alignment'Image
+                     (Landin.Targets.Alignment_Of (Placed))));
+         Put (Symbol (Item) & ":");
+
+         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
+            declare
+               Shape : constant Landin.IR.Field_Shape :=
+                 Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field);
+               Field_Size : Landin.Targets.Byte_Count;
+               Field_Alignment : Landin.Targets.Byte_Alignment;
+               At_Field : Landin.Targets.Byte_Count;
+               Field_Placement : Landin.Targets.Placement;
+            begin
+               Place_Fields
+                 (Item, Field_Placement, Landin.IR.Element_Total (Field),
+                  At_Field);
+               Landin.Backend.Field_Extent
+                 (Shape, Facts, Field_Size, Field_Alignment);
+               pragma Unreferenced (Field_Placement, Field_Alignment);
+
+               if At_Field > Written then
+                  Emit
+                    (".zero "
+                     & Trimmed
+                         (Landin.Targets.Byte_Count'Image
+                            (At_Field - Written)));
+               end if;
+
+               if Shape.Kind = Landin.IR.Scalar_Field_Shape then
+                  Emit
+                    (Directive (Size_Of (Shape.Element, Facts)) & " "
+                     & Trimmed
+                         (Landin.Types.Folded'Image
+                            (Landin.IR.Nth_Field_Image
+                               (Of_Unit, Item, Field))));
+               elsif Field_Size > 0 then
+                  Emit
+                    (".zero "
+                     & Trimmed
+                         (Landin.Targets.Byte_Count'Image (Field_Size)));
+               end if;
+
+               Written := At_Field + Field_Size;
+            end;
+         end loop;
+
+         if Landin.Targets.Size_Of (Placed) > Written then
+            Emit
+              (".zero "
+               & Trimmed
+                   (Landin.Targets.Byte_Count'Image
+                      (Landin.Targets.Size_Of (Placed) - Written)));
+         end if;
+
+         Put (Character'Val (9) & ".size " & Symbol (Item) & ", "
+              & Trimmed
+                  (Landin.Targets.Byte_Count'Image
+                     (Landin.Targets.Size_Of (Placed))));
+      end Emit_Aggregate_Image_Datum;
+
+      --  Whether a module value has an absent zero image, and so is storage
+      --  to reserve rather than bytes to carry.  D66 gives an aggregate its
+      --  first written image; omitted and whole-`zeroed` aggregates still
+      --  have none.  An
       --  array datum is zero when it has no image at all.  A D24 literal image
       --  that happens to be every-position-zero is written as `.data` anyway;
       --  D34 deliberately represents a repeated zero pattern as no image, so
@@ -1761,7 +1843,7 @@ package body Landin.Backend.X86_64 is
       function Is_All_Zero (Item : Landin.IR.Item_Id) return Boolean is
       begin
          if Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.Aggregate then
-            return True;
+            return not Landin.IR.Has_Image (Of_Unit, Item);
          end if;
 
          if Landin.IR.Result_Of (Of_Unit, Item)
@@ -1964,7 +2046,11 @@ package body Landin.Backend.X86_64 is
                  and then not Is_All_Zero (Item)
                then
                   if Landin.IR.Result_Of (Of_Unit, Item)
-                     = Landin.Types.Fixed_Array
+                     = Landin.Types.Aggregate
+                  then
+                     Emit_Aggregate_Image_Datum (Item);
+                  elsif Landin.IR.Result_Of (Of_Unit, Item)
+                        = Landin.Types.Fixed_Array
                   then
                      Emit_Array_Image_Datum (Item);
                   else
