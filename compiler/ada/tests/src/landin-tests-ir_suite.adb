@@ -670,6 +670,7 @@ package body Landin.Tests.IR_Suite is
          Slot, Copy_Slot : Landin.IR.Slot_Id;
          Block : Landin.IR.Block_Id;
          Value, Loaded, Payload, Selected, Store, Copy : Landin.IR.Value_Id;
+         Index, Nested : Landin.IR.Value_Id;
       begin
          Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
          Routine := Landin.IR.Add_Item
@@ -684,11 +685,15 @@ package body Landin.Tests.IR_Suite is
              Cases          => 2,
              Payloads_First => 1),
             Cases => [(First => 0, Count => 0),
-                      (First => 1, Count => 1)],
+                      (First => 1, Count => 2)],
             Payloads =>
               [(Kind    => Landin.IR.Scalar_Field_Shape,
                 Element => Landin.Types.U16,
                 Length  => 1,
+                others  => <>),
+               (Kind    => Landin.IR.Array_Field_Shape,
+                Element => Landin.Types.U32,
+                Length  => 2,
                 others  => <>)]);
          Copy_Slot := Landin.IR.Add_Aggregate_Slot
            (Unit, Routine, Landin.IR.No_Declaration, Site);
@@ -700,11 +705,15 @@ package body Landin.Tests.IR_Suite is
              Cases          => 2,
              Payloads_First => 1),
             Cases => [(First => 0, Count => 0),
-                      (First => 1, Count => 1)],
+                      (First => 1, Count => 2)],
             Payloads =>
               [(Kind    => Landin.IR.Scalar_Field_Shape,
                 Element => Landin.Types.U16,
                 Length  => 1,
+                others  => <>),
+               (Kind    => Landin.IR.Array_Field_Shape,
+                Element => Landin.Types.U32,
+                Length  => 2,
                 others  => <>)]);
          Block := Landin.IR.Add_Block
            (Unit, Routine, Landin.Resolution.Program_Scope, Site);
@@ -730,6 +739,13 @@ package body Landin.Tests.IR_Suite is
             (Kind => Landin.IR.Frame_Slot, Slot => Slot),
             (Kind => Landin.IR.Frame_Slot, Slot => Copy_Slot), 1, Site);
          Copy := Landin.IR.Nth_Value (Unit, Routine, Block, 6);
+         Index := Landin.IR.Emit_Number
+           (Unit, Routine, Landin.Types.Usize, 0, False, Site);
+         Nested := Landin.IR.Emit_Load_Slot_Element
+           (Unit, Routine, Slot, Index, Landin.Types.U32, Site,
+            Field => 1, Variant_Case => 2, Variant_Payload_Field => 2);
+         Landin.IR.Emit_Leave (Unit, Routine, Nested, Site);
+         Landin.IR.Leave_Block (Unit, Routine);
 
          Landin.Testing.Check
            (Item,
@@ -806,6 +822,27 @@ package body Landin.Tests.IR_Suite is
               and then Landin.IR.Element_Field_Of
                 (Unit, Routine, Copy) = 1,
             "a variant copy carries two storage identities and one field");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Op_Of (Unit, Routine, Nested) = Landin.IR.Load_Element
+              and then Landin.IR.Reaches_A_Slot (Unit, Routine, Nested)
+              and then Landin.IR.Slot_Of (Unit, Routine, Nested) = Slot
+              and then Landin.IR.Element_Field_Of
+                (Unit, Routine, Nested) = 1
+              and then Landin.IR.Variant_Case_Of
+                (Unit, Routine, Nested) = 2
+              and then Landin.IR.Variant_Payload_Field_Of
+                (Unit, Routine, Nested) = 2
+              and then Landin.IR.Nth_Operand
+                (Unit, Routine, Nested, 1) = Index
+              and then Landin.IR.Result_Of
+                (Unit, Routine, Nested) = Landin.Types.U32,
+            "an element load carries the nested payload identity");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Verifier.Check (Unit).Kind
+              = Landin.IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the nested element load");
 
          declare
             Text : constant String := Landin.IR.Dump.Text
@@ -827,7 +864,10 @@ package body Landin.Tests.IR_Suite is
                         & " case 2 payload field 1 <- 4") /= 0
                and then Ada.Strings.Fixed.Index
                  (Text, "COPY_VARIANT from slot 1 field 1 to slot 2"
-                        & " field 1") /= 0,
+                        & " field 1") /= 0
+               and then Ada.Strings.Fixed.Index
+                 (Text, "LOAD_ELEMENT u32 slot 1 field 1 case 2 payload"
+                        & " field 2 <- 7") /= 0,
                "the dump spells only target-neutral identities");
          end;
       end;

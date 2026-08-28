@@ -7,13 +7,9 @@ end choice
 
 mut state: choice
 
-f: () -> none =
+bad: () -> none =
     match state.kind
         leaf: _ = 0
-        row(values): if true then
-            _ = values
-            mut copy: [2]u8 = values
-            copy = values
-        end if
+        row(values): _ = values[2]
     end match
-end f
+end bad

@@ -1,0 +1,6 @@
+class: runtime
+summary: D85 indexed array payload aliases read and update selected Linux storage
+constructs: 0080, 0190, 0410, 0520, 0560, 0580, 0670, 0680, 0690, 0710, 1210, 1220, 1740, 1790, 1795, 1810, 1900, 1950
+program: main.ldn
+status: 42
+targets: linux-x86-64

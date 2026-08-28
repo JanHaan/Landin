@@ -1213,7 +1213,9 @@ package body Landin.IR is
       Index  : Value_Id;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Field  : Natural := 0) return Value_Id
+      Field  : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0) return Value_Id
    is
       Made : Instruction :=
         Instruction'(Op     => Load_Element,
@@ -1221,6 +1223,8 @@ package body Landin.IR is
                      Site   => Site,
                      Named  => Datum,
                      Element_Field => Field,
+                     Variant_Case => Variant_Case,
+                     Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
    begin
       Made.First_Arg := Natural (Into.Operands.Length);
@@ -1265,7 +1269,9 @@ package body Landin.IR is
       Index  : Value_Id;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Field  : Natural := 0) return Value_Id
+      Field  : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0) return Value_Id
    is
       Made : Instruction :=
         Instruction'(Op     => Load_Element,
@@ -1273,6 +1279,8 @@ package body Landin.IR is
                      Site   => Site,
                      Slot   => Slot,
                      Element_Field => Field,
+                     Variant_Case => Variant_Case,
+                     Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
    begin
       Made.First_Arg := Natural (Into.Operands.Length);
