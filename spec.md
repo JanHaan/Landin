@@ -3749,3 +3749,57 @@ places are designed.
 IR dump; and
 `runtime/struct-array-field-element-zeroed-computed-index-traps` on Linux
 x86-64.
+
+### D63 — Ordinary-struct literal spellings are refused by name
+
+**The tour said** that an ordinary struct may be written as a parenthesized
+field image [0710] and showed call-shaped construction with named fields
+[0700]. The enabled expression grammar [1810] has neither form. Before this
+decision, `(x: 1, y: 2)` entered the parenthesized-expression parser and the
+first `:` produced an unnamed syntax cascade, while `point(x: 1, y: 2)` entered
+the ordinary-call parser and failed for the same reason.
+
+**Chosen:** while ordinary-struct literals remain outside [1810], the parser
+recognizes their unambiguous opening shapes and refuses each complete or
+truncated construct once with L0010. A value-position `(` followed by
+`identifier :` names [0710]'s struct literal. The contextual all-field form
+`(of expression)` names the same construct when `of` is followed by an
+unambiguous expression start: one that is not also a binary operator. Thus
+`(of)`, `(of + 1)`, `(of - 1)` and other ordinary uses of a binding named `of`
+remain parenthesized expressions, while `(of zeroed)`, `(of not ready)` and
+`(of ~mask)` name [0720]'s contextual fill. An identifier call whose
+opening parenthesis is followed by `identifier :` names [0700]'s call-shaped
+construction. Ordinary `(expression)` and positional `callee(arguments)` keep
+their existing grammar and parse.
+
+The refusal consumes balanced parentheses, including nested parentheses, or
+stops at end of input. It returns one error expression and does not create a
+dormant struct-literal node, field-name references or aggregate value. Any
+immediately following bracketed index is skipped as recovery rather than
+reported as a second refused construct. The automatic truncation suite holds
+every prefix to producing a finite, well-formed tree.
+
+The normative grammar is deliberately unchanged. A negative fixture whose
+first report is the frontend's L0010 must remain underivable; adding a
+`struct_literal` production would claim the source is enabled while the parser
+still refuses it. The later literal slice must replace this lookahead with a
+real syntax node and grammar production, teach resolution that field labels are
+not ordinary name references, and migrate these fixtures to positive or
+later-stage evidence. A local runtime image can then lower field by field; a
+module literal additionally needs the nonzero static aggregate-image
+representation D60 deferred.
+
+**Why pin the refusal first:** the named before-state separates migration from
+recovery. It lets the enabling slice prove exactly which L0010 refusals it
+removes without inheriting an accidental cascade as specification.
+
+**The alternatives:** add the grammar and a dormant node now, let the checker
+refuse every use of that node, or leave the accidental syntax reports in
+place. The first two perform half of the enabling slice and require name
+resolution and whole-value policy before any value is admitted; the last has
+no stable construct owner or migration evidence. All were declined.
+
+**Pinned by** the parser public-seam case;
+`negative/struct-literal-not-enabled`;
+`negative/construction-not-enabled`; the generated construct matrix and token
+dump; and the automatic parser truncation suite.

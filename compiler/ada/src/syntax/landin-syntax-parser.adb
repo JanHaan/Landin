@@ -210,6 +210,8 @@ package body Landin.Syntax.Parser is
             function Point return Landin.Source.Span;
             function After_Previous return Landin.Source.Span;
             function Named_Here return Landin.Source.Names.Name_Id;
+            function Named_Ahead (Distance : Tok.Token_Index)
+              return Landin.Source.Names.Name_Id;
             procedure Advance;
             procedure Mark_Reported;
 
@@ -383,6 +385,12 @@ package body Landin.Syntax.Parser is
 
             function Named_Here return Landin.Source.Names.Name_Id
               is (Tok.Name (Tok.Token_At (From, Index)));
+
+            function Named_Ahead (Distance : Tok.Token_Index)
+              return Landin.Source.Names.Name_Id
+              is (if Index + Distance <= Last
+                  then Tok.Name (Tok.Token_At (From, Index + Distance))
+                  else Landin.Source.Names.No_Name);
 
             --  Never past End_Of_Input, which no production consumes.
             procedure Advance is
@@ -881,6 +889,11 @@ package body Landin.Syntax.Parser is
             --  nesting says where it ends.
             procedure Resync_Brackets;
 
+            --  Steps from just inside a refused parenthesized construct to
+            --  its matching closer, including nested parentheses.  The
+            --  opener has already been consumed by both callers.
+            procedure Resync_Parentheses;
+
             --  [0570]'s index, wherever one can be written.  Separate
             --  from the selection loop because a call is not a selection
             --  in [1820] -- `size().x` derives in no rule this grammar
@@ -916,6 +929,24 @@ package body Landin.Syntax.Parser is
                   <<Continue>>
                end loop;
             end Resync_Brackets;
+
+            procedure Resync_Parentheses is
+               Depth : Natural := 1;
+            begin
+               while Peek /= Tok.End_Of_Input loop
+                  if Peek = Tok.Left_Paren then
+                     Depth := Depth + 1;
+                  elsif Peek = Tok.Right_Paren then
+                     Depth := Depth - 1;
+                     Advance;
+                     exit when Depth = 0;
+                     goto Continue;
+                  end if;
+
+                  Advance;
+                  <<Continue>>
+               end loop;
+            end Resync_Parentheses;
 
             function Parse_Selectors (From : Node_Id) return Node_Id is
                Selected : Node_Id := From;
@@ -2262,8 +2293,8 @@ package body Landin.Syntax.Parser is
                end;
             end Parse_Unary;
 
-            --  primary ::= literal | identifier | call
-            --            | "(" expression ")"                     [1820]
+            --  [1810]'s primary expression forms, including literals,
+            --  names, calls, measurements and parenthesized expressions.
             function Parse_Primary return Node_Id is
                At_Item : constant Landin.Source.Span := Here;
             begin
@@ -2556,6 +2587,35 @@ package body Landin.Syntax.Parser is
                end if;
 
                if Peek = Tok.Left_Paren then
+                  --  [0710]'s field image is not part of [1810]'s enabled
+                  --  grammar yet.  Name its unmistakable value-position
+                  --  shapes before `:` can become a cascade from the
+                  --  parenthesized-expression production.  `of` remains a
+                  --  contextual identifier, just as it does in [0560].
+                  if (Ahead (1) = Tok.Identifier
+                      and then
+                        (Ahead (2) = Tok.Colon
+                         or else
+                           (Named_Ahead (1) = Of_Id
+                            and then Pre.Begins_Expression (Ahead (2))
+                            and then not Pre.Is_Binary (Ahead (2)))))
+                  then
+                     Refuse
+                       (Item    => Syn.Struct_Literal,
+                        Where   => At_Item,
+                        Message => "a struct literal is not enabled yet");
+                     Advance;
+                     Resync_Parentheses;
+
+                     while Peek = Tok.Left_Bracket loop
+                        Resync_Brackets;
+                     end loop;
+
+                     return Add
+                       (Error_Expression, At_Item,
+                        Join (At_Item, After_Previous));
+                  end if;
+
                   if Too_Deep (At_Item) then
                      Advance;
                      Resync (List_Anchor);
@@ -2576,9 +2636,8 @@ package body Landin.Syntax.Parser is
                        (Wanted  => Tok.Right_Paren,
                         Message => "a parenthesised expression is closed"
                                    & " with `)`",
-                        Note    => "[1820]: primary ::= literal |"
-                                   & " identifier | call | `(` expression"
-                                   & " `)`",
+                        Note    => "[1810]: a parenthesized expression is"
+                                   & " one primary expression",
                         Related => At_Item,
                         Because => "opened here");
 
@@ -2699,6 +2758,27 @@ package body Landin.Syntax.Parser is
                then
                   return Add
                     (Error_Expression, Name_At, Children => [Callee]);
+               end if;
+
+               --  [0700]'s call-shaped named construction begins like a
+               --  call but its first `name:` argument cannot derive from
+               --  [1810].  Keep it outside the enabled grammar and recover
+               --  as one refused construct until the literal slice owns a
+               --  node for those field names.
+               if Peek = Tok.Identifier and then Ahead (1) = Tok.Colon then
+                  Refuse
+                    (Item    => Syn.Construction,
+                     Where   => Name_At,
+                     Message => "construction is not enabled yet");
+                  Resync_Parentheses;
+
+                  while Peek = Tok.Left_Bracket loop
+                     Resync_Brackets;
+                  end loop;
+
+                  return Add
+                    (Error_Expression, Name_At,
+                     Join (Name_At, After_Previous), [Callee]);
                end if;
 
                if Peek /= Tok.Right_Paren then

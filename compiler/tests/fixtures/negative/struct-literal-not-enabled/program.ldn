@@ -1,0 +1,12 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+origin: point = (x: 0, y: 0)
+
+f: () -> none =
+    local: point = (x: 1, y: (2))
+    local = (x: 3, of zeroed)
+    _ = (of zeroed)
+end f
