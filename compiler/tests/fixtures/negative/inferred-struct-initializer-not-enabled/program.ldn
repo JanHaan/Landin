@@ -4,8 +4,3 @@ end point
 
 state: point
 module := state
-
-local: () -> none =
-    source: point
-    inferred := source
-end local

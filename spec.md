@@ -1226,6 +1226,11 @@ cover its length; a zero-length source is therefore assigned vacuously. Module
 state is wholly assigned by D10. Self-copy follows the same rule, so it cannot
 turn unassigned storage into an assigned value.
 
+A direct storage name resolves to a module or local binding. The name of a type
+declaration, even one whose declared type is the required fixed array, owns no
+runtime storage and is refused by the existing whole-value L0304 rather than
+being lowered as a copy source.
+
 A branch merge intersects what the facts *mean*, not merely how they happen to
 be represented. Whole on both paths remains whole; whole on one path and
 sparse facts on the other keeps those sparse facts; sparse on both keeps their
@@ -1253,7 +1258,8 @@ program never assigned. Both were declined.
 
 **Pinned by** `positive/local-array-copy`,
 `negative/local-array-copy-from-unassigned`,
-`negative/local-array-copy-not-assigned-on-every-path`, and
+`negative/local-array-copy-not-assigned-on-every-path`,
+`negative/array-type-name-is-not-storage`, and
 `runtime/whole-arrays-copy-between-storage` on Linux x86-64.
 
 ### D21 — An array is initialized from a whole-array storage name
@@ -1275,6 +1281,10 @@ inferred form gives the destination the source's exact D17 length and element
 type. The destination is wholly assigned by the copy alone, and both mutable
 and immutable binding forms accept it because a declaration is not an
 assignment [0080].
+
+The source must be a storage binding rather than a type declaration. A type
+name that happens to declare the contextual array type is refused with L0304;
+it cannot supply an initial image or a local copy address.
 
 At module scope `source` is exactly one resolved module storage name. Its
 initial-image chain follows declaration identities, across forward references
@@ -1321,6 +1331,7 @@ same narrow source rule as the explicit form without synthesizing an array
 `negative/module-array-initializer-shape-mismatch`,
 `negative/module-array-initializer-non-name-refused`,
 `negative/module-array-initial-image-cycle`,
+`negative/array-type-name-is-not-storage`,
 `runtime/local-array-initializer-copies-storage`, and
 `runtime/module-array-initializers-copy-images` on Linux x86-64.
 
@@ -1352,7 +1363,7 @@ their computed writes still assign nothing tracked. Every other refused
 value form — an inferred initializer not sourced by a direct storage name, a
 slice, `zeroed`, repetition, an array literal outside D23's one context,
 `lenof`, a general whole value of D46/D47's array-field struct outside D54's
-contextual copy and D55's typed local initializer, or its array field as a
+contextual copy and D55/D56's local initializers, or its array field as a
 whole value or place — stays refused.
 D48 separately admits one element
 selected through that field.
@@ -2610,9 +2621,9 @@ local declaration of the same struct also reported L0304 in this slice because
 the frame's aggregate-slot representation remained scalar-field-only; D47
 supersedes that storage boundary. An initializer, whole
 read or copy, parameter, return and every other whole-value context remain
-refused in this slice; D54 later supersedes the whole-copy boundary and D55,
-after D47 supplies the frame representation, the explicitly typed local
-direct-name initializer boundary.
+refused in this slice; D54 later supersedes the whole-copy boundary and
+D55/D56, after D47 supplies the frame representation, the explicitly typed or
+inferred local direct-storage-name initializer boundary.
 Struct fields of struct type and other nested aggregate composition remain
 outside D45 and therefore outside this decision. D17's internal
 zero-length field rule is unchanged, and source `[0]T` legality remains
@@ -2679,7 +2690,8 @@ recovery walk added no whole-struct report. D48 supersedes that boundary for an
 indexed element and gives it a field-qualified fact. A local
 initializer, whole read or copy, parameter, return and every other whole-value
 context remain refused in this slice; D54 later supersedes the whole-copy
-boundary and D55 the explicitly typed direct-name local initializer boundary.
+boundary and D55/D56 the explicitly typed or inferred direct-storage-name
+local initializer boundary.
 Struct fields of struct type and broader nested aggregate
 composition also remain outside the laid-out kernel.
 
@@ -3213,11 +3225,12 @@ other general value of the struct remain refused in this slice, as do struct
 fields of struct type, fields of elements and nested arrays. In particular, an
 explicitly typed or inferred module initializer from an array-bearing struct
 name reports the existing L0304 once, as do the two local spellings. D55 later
-admits only the explicitly typed local direct-name form. The inferred spelling
-is not D21's direct-array source: before D54 it could silently settle an
-aggregate binding with no value representation, while D54 routes it through
-the ordinary whole-value refusal without changing forward-name or cycle
-ownership.
+admits the explicitly typed local direct-storage-name form and D56 the inferred
+local form. Neither admits the name of a struct type declaration as storage.
+Before D54, the inferred spelling could silently settle an aggregate binding
+with no nominal body or value representation; D54 first routed it through the
+ordinary whole-value refusal, and D56 later carries that missing identity at
+the one admitted boundary without changing forward-name or cycle ownership.
 Parameters and returns still need their own calling-convention decision.
 
 **Why field-wise copy:** the enabled aggregate representation already names
@@ -3243,6 +3256,7 @@ declined.
 `negative/struct-array-field-initializer-not-enabled`;
 `negative/struct-array-field-inferred-initializer-not-enabled`;
 `negative/inferred-struct-initializer-not-enabled`;
+`negative/struct-type-name-is-not-storage`;
 `negative/struct-copy-across-types`; the recorded IR dump; and
 `runtime/struct-array-field-whole-copy` on Linux x86-64.
 
@@ -3283,7 +3297,9 @@ rule, or backend invariant is introduced. D50/D53 already verify the compact
 field shapes and derive the module and frame addresses from target facts on
 both 64- and 32-bit descriptions.
 
-An inferred local binding, a module initializer, a non-name initializer,
+An inferred local binding remains refused in this slice and is admitted by
+D56 only when its value is a direct struct storage name. A module initializer,
+a non-name initializer,
 `zeroed`, a struct literal, an argument, return, discard, operand or bare whole
 read remains refused. The checker reports the existing L0304 once for an
 unsupported binding form; a binding it has already refused reads nothing for
@@ -3302,7 +3318,8 @@ module static image, admit aggregate `zeroed`, or make a struct name a general
 value. Inference needs a separate rule for carrying nominal identity; a module
 initializer needs a static struct-image chain; `zeroed` needs its own
 per-field initialization rule; and a general value settles calls, returns and
-temporary representation. All were declined here.
+temporary representation. All were declined here; D56 later supplies the
+separate nominal-identity rule for local inference only.
 
 **Pinned by** the checker, lowering and backend public-seam cases;
 `positive/local-struct-initialized-from-name`;
@@ -3312,7 +3329,76 @@ temporary representation. All were declined here.
 `negative/local-struct-initializer-non-name-not-enabled`;
 `negative/local-struct-initializer-source-not-declared`;
 `negative/local-struct-initializer-source-type-mismatch`;
+`negative/struct-type-name-is-not-storage`;
 `negative/struct-array-field-initializer-not-enabled`;
 `negative/struct-array-field-inferred-initializer-not-enabled`;
 `negative/inferred-struct-initializer-not-enabled`; the recorded IR dump; and
 `runtime/local-struct-initializer-copies-storage` on Linux x86-64.
+
+### D56 — A local struct is inferred from directly named storage
+
+**The tour said** that an inferred local binding takes its value's type [0050],
+that the new name is not in scope in its own initializer [0110], that named
+structs have nominal identity [0710], and that fields keep declaration order
+[0750]. D55 admitted only the explicitly typed spelling because its written
+type supplied the destination's nominal body.
+
+**Chosen:** a mutable or immutable local binding whose type is omitted may be
+initialized from a direct name of existing module or earlier local storage of
+an enabled ordinary struct type. The destination is inferred to have exactly
+the source's nominal body, including through a type alias. The source must
+resolve to a module or local binding: a struct type declaration is a name but
+is not storage and reports the existing L0304. Per [0110], a same-spelled
+source denotes an outer binding rather than the declaration being introduced.
+
+Inference carries the source body's declaration onto the new local before the
+declaration settles as an aggregate. That identity is the one later field
+selection, contextual whole copy and slot layout use; inference does not
+construct a structural type or a bodyless aggregate value. A scalar-field and
+a fixed-array-field struct follow the same rule. An unresolved source keeps
+resolution's own report, and the existing underway guard preserves the single
+report for a value worked out from itself [1940].
+
+The source read is exactly D54/D55's whole read. Module storage is complete by
+D10; a tracked local must have every scalar D16 fact and every fixed-array
+field whole or complete sparse fact on every arriving path. An internal
+zero-length field is vacuously complete. The initialized destination is a
+fresh, untracked local whose later reads are complete.
+
+Lowering needs no new path after inference: D55 allocates the aggregate frame
+slot and visits the inferred body's fields in declaration order, using scalar
+load/store pairs and one compact D50 `Copy_Array` for each fixed-array field.
+D50/D53's verifier and target-derived address rules are unchanged. No general
+aggregate value, hidden temporary, new IR operation, target offset or backend
+invariant is introduced.
+
+Module inference from a struct name, any non-name initializer, aggregate
+`zeroed`, a struct literal, call result, selected field, argument, return,
+discard, operand and bare whole read remain refused. Explicitly typed local
+initialization remains D55, contextual whole assignment remains D54, and
+module initialization still needs a separate static-image rule. Fields of
+struct type, fields of elements and nested arrays keep their existing
+boundaries.
+
+**Why:** the inferred form differs from D55 only in where its nominal identity
+comes from. Copying the source's already resolved body declaration before
+settling the local makes that identity explicit and lets every later stage
+reuse D55 unchanged. Treating every name whose type is aggregate as a source
+would instead confuse type declarations with storage and recreate the bodyless
+aggregate defect D54 exposed.
+
+**The alternatives:** infer structurally from the field shapes, admit any
+aggregate-typed expression, infer module initial images, or defer all inference
+until general aggregate values exist. Structural inference violates [0710];
+general expressions need a temporary representation; module inference needs a
+static image; and deferral leaves the direct-storage case artificially
+asymmetric with D21. All were declined.
+
+**Pinned by** the checker, lowering and backend public-seam cases;
+`positive/local-struct-inferred-from-name`;
+`negative/local-struct-inferred-source-unassigned`;
+`negative/local-struct-inferred-not-on-every-path`;
+`negative/struct-type-name-is-not-storage`;
+`negative/inferred-struct-initializer-not-enabled`;
+`negative/struct-array-field-inferred-initializer-not-enabled`; the recorded IR
+dump; and `runtime/local-struct-inference-copies-storage` on Linux x86-64.

@@ -1,0 +1,40 @@
+holder: type = struct
+    tag: u8
+    row: [3]usize
+    tail: u16
+end holder
+
+same: type = holder
+
+mut module_source: holder
+
+public main: () -> (code: i32) =
+    mut source: same
+    source.tag = 7
+    source.row[0] = 10
+    source.row[1] = 11
+    source.row[2] = 12
+    source.tail = 701
+
+    mut local := source
+    mut module_source := module_source
+
+    source.tag = 8
+    source.row[1] = 99
+    source.tail = 702
+
+    local.row[2] = 42
+    module_source.row[0] = 21
+
+    if source.tag == 8 and source.row[1] == 99 and source.tail == 702
+        and local.tag == 7 and local.row[0] == 10
+        and local.row[1] == 11 and local.row[2] == 42
+        and local.tail == 701
+        and module_source.tag == 0 and module_source.row[0] == 21
+        and module_source.row[1] == 0 and module_source.tail == 0
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

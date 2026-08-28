@@ -1,0 +1,6 @@
+class: negative
+summary: D54 through D56 require a whole struct copy source to own runtime storage
+constructs: 0050, 0410, 0670, 0710, 1810
+program: program.ldn
+codes: L0304, L0304, L0304
+targets: linux-x86-64, macos-arm64
