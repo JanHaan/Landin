@@ -1140,6 +1140,9 @@ package body Landin.Tests.Verifier_Suite is
          Case_Out_Of_Range,
          Payload_Field_Out_Of_Range,
          Payload_Field_Is_Not_A_Scalar,
+         Array_Case_Out_Of_Range,
+         Array_Payload_Field_Out_Of_Range,
+         Array_Payload_Field_Is_Not_An_Array,
          Payload_Value_Disagrees,
          Payload_Result_Disagrees,
          Tag_Result_Disagrees,
@@ -1181,7 +1184,9 @@ package body Landin.Tests.Verifier_Suite is
                Cases => [(First => 0, Count => 0),
                          (First => 1, Count => 1)],
                Payloads =>
-                 [(if Harm = Payload_Field_Is_Not_A_Scalar
+                 [(if Harm in Payload_Field_Is_Not_A_Scalar
+                            | Array_Case_Out_Of_Range
+                            | Array_Payload_Field_Out_Of_Range
                    then (Kind    => IR.Array_Field_Shape,
                          Element => Landin.Types.U32,
                          Length  => 2,
@@ -1245,6 +1250,23 @@ package body Landin.Tests.Verifier_Suite is
                  (Unit, Routine,
                   (Kind => IR.Frame_Slot, Slot => Aggregate),
                   1, 2, 1, Value, Site);
+            when Array_Case_Out_Of_Range
+               | Array_Payload_Field_Out_Of_Range
+               | Array_Payload_Field_Is_Not_An_Array =>
+               declare
+                  Index : constant IR.Value_Id :=
+                    IR.Emit_Number
+                      (Unit, Routine, Landin.Types.Usize, 0, False, Site);
+               begin
+                  IR.Emit_Store_Slot_Element
+                    (Unit, Routine, Aggregate, Index, Value, Site,
+                     Field => 1,
+                     Variant_Case =>
+                       (if Harm = Array_Case_Out_Of_Range then 3 else 2),
+                     Variant_Payload_Field =>
+                       (if Harm = Array_Payload_Field_Out_Of_Range
+                        then 2 else 1));
+               end;
             when Payload_Result_Disagrees =>
                Value := IR.Emit_Variant_Field_Load
                  (Unit, Routine,
@@ -1305,6 +1327,11 @@ package body Landin.Tests.Verifier_Suite is
           V.Variant_Payload_Field_Out_Of_Range),
          (Payload_Field_Is_Not_A_Scalar,
           V.Variant_Payload_Field_Is_Not_A_Scalar),
+         (Array_Case_Out_Of_Range, V.Variant_Case_Out_Of_Range),
+         (Array_Payload_Field_Out_Of_Range,
+          V.Variant_Payload_Field_Out_Of_Range),
+         (Array_Payload_Field_Is_Not_An_Array,
+          V.Element_Field_Is_Not_An_Array),
          (Payload_Value_Disagrees, V.Variant_Payload_Value_Disagrees),
          (Payload_Result_Disagrees, V.Variant_Payload_Result_Disagrees),
          (Tag_Result_Disagrees, V.Variant_Tag_Result_Disagrees),

@@ -213,9 +213,10 @@ package Landin.IR is
       Fill_Array,
       --  D77 reads the source-order tag of an unfolded variant field.  D78
       --  reads one scalar payload alias.  D76 selects one source-order case
-      --  and writes any labelled scalar leaves of that case.  All carry
-      --  source identities only: the backend derives the tag and payload
-      --  offsets from the aggregate's target-neutral shape.
+      --  and writes any labelled scalar leaves of that case.  D84 gives the
+      --  existing array operations the same case/payload identities for a
+      --  fixed-array leaf.  All carry source identities only: the backend
+      --  derives target offsets from the aggregate's neutral shape.
       Load_Variant_Tag,
       Load_Variant_Field,
       Select_Variant,
@@ -1312,22 +1313,26 @@ package Landin.IR is
                              | Clear_Array | Fill_Array
                              | Select_Variant | Store_Variant_Field;
 
-   --  D76's source-order case and, for a scalar payload write, the
-   --  declaration-order field inside that case.  D78 gives the load the
-   --  same identities.  Neither is a target
+   --  D76's source-order case and declaration-order payload field.  D78
+   --  gives scalar loads the same identities; D84 gives them to element
+   --  stores, array fills and array-copy destinations.  Neither is a target
    --  offset; a selected bare case has no payload field at all.
    function Variant_Case_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Variant_Field
+                          in Load_Element | Store_Element
+                             | Copy_Array | Fill_Array
+                             | Load_Variant_Field
                              | Select_Variant | Store_Variant_Field;
 
    function Variant_Payload_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Variant_Field | Store_Variant_Field;
+                          in Load_Element | Store_Element
+                             | Copy_Array | Fill_Array
+                             | Load_Variant_Field | Store_Variant_Field;
 
    --  The one-based first destination part of a compact array fill.  Full
    --  fills carry 1; D36 suffix fills carry the first part after the prefix.
@@ -1348,7 +1353,9 @@ package Landin.IR is
 
    --  D48's containing aggregate field for an element operation, D49's
    --  destination field for a clear, D50's destination field for a copy,
-   --  and D53's destination field for a fill.  Zero ordinarily means the
+   --  and D53's destination field for a fill.  D84 lets that field contain
+   --  the variant whose selected payload the two identities above reach.
+   --  Zero ordinarily means the
    --  reached storage is itself a fixed array; for D57's Clear_Array it may
    --  instead mean the whole padded aggregate storage.  A positive value is
    --  [0750]'s declaration-order array field.  It is an identity, never a
@@ -1747,7 +1754,9 @@ package Landin.IR is
       Index : Value_Id;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
-      Field : Natural := 0)
+      Field : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Datum)
                  and then Holds (Into, Item, Index)
@@ -1780,7 +1789,9 @@ package Landin.IR is
       Index : Value_Id;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
-      Field : Natural := 0)
+      Field : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Slot)
                  and then Holds (Into, Item, Index)
@@ -1794,7 +1805,9 @@ package Landin.IR is
       Destination : Storage;
       Site       : Landin.Provenance.Origin;
       Source_Field : Natural := 0;
-      Destination_Field : Natural := 0)
+      Destination_Field : Natural := 0;
+      Destination_Variant_Case : Natural := 0;
+      Destination_Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
 
@@ -1824,7 +1837,9 @@ package Landin.IR is
       First       : Part_Position;
       Value       : Value_Id;
       Site        : Landin.Provenance.Origin;
-      Field       : Natural := 0)
+      Field       : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);

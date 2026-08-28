@@ -148,6 +148,24 @@ package body Landin.IR.Dump is
 
       function Rendered (Item : Item_Id; Value : Value_Id) return String
       is
+         function Variant_Qualifier return String;
+
+         function Variant_Qualifier return String is
+         begin
+            if Variant_Payload_Field_Of (Of_Unit, Item, Value) = 0 then
+               return "";
+            end if;
+            return " case "
+              & Trimmed
+                  (Natural'Image
+                     (Variant_Case_Of (Of_Unit, Item, Value)))
+              & " payload field "
+              & Trimmed
+                  (Natural'Image
+                     (Variant_Payload_Field_Of
+                        (Of_Unit, Item, Value)));
+         end Variant_Qualifier;
+
          Op : constant Opcode := Op_Of (Of_Unit, Item, Value);
          Held : constant String := Shown (Result_Of (Of_Unit, Item, Value));
          Lead : constant String :=
@@ -195,6 +213,7 @@ package body Landin.IR.Dump is
                                   (Natural'Image
                                      (Element_Field_Of
                                         (Of_Unit, Item, Value))))
+                         & Variant_Qualifier
                          & Operands (Item, Value);
                end if;
 
@@ -210,6 +229,7 @@ package body Landin.IR.Dump is
                                   (Natural'Image
                                      (Element_Field_Of
                                         (Of_Unit, Item, Value))))
+                         & Variant_Qualifier
                          & Operands (Item, Value);
                end;
 
@@ -228,7 +248,8 @@ package body Landin.IR.Dump is
                     else " field "
                       & Trimmed
                           (Natural'Image
-                             (Element_Field_Of (Of_Unit, Item, Value))));
+                             (Element_Field_Of (Of_Unit, Item, Value))))
+                 & Variant_Qualifier;
 
             when Copy_Variant =>
                return Lead & " from "
@@ -263,6 +284,7 @@ package body Landin.IR.Dump is
                       & Trimmed
                           (Natural'Image
                              (Element_Field_Of (Of_Unit, Item, Value))))
+                 & Variant_Qualifier
                  & " first "
                  & Trimmed
                      (Part_Position'Image

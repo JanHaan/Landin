@@ -1,0 +1,13 @@
+packet: type = struct
+    kind: variant
+        arrays: (row: [3]u8)
+    end kind
+end packet
+
+words: [2]u8 = [1, 2]
+
+bad: () -> none =
+    local: packet = packet(kind: arrays(row: [1, 2]), of zeroed)
+    other: packet = packet(kind: arrays(row: [3 of true]), of zeroed)
+    copied: packet = packet(kind: arrays(row: words), of zeroed)
+end bad

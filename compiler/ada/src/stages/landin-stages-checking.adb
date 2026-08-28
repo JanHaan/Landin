@@ -2958,59 +2958,45 @@ package body Landin.Stages.Checking is
          begin
             pragma Assert (Shape.Kind = Landin.Checking.Fixed_Array_Field);
 
-            if not Static_Image then
-               if Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal then
-                  Landin.Checking.Note
-                    (Types.all, Of_Tree, Given, Ty.Fixed_Array);
-                  Landin.Checking.Note_Array
-                    (Types.all, Of_Tree, Given,
-                     Shape.Length, Shape.Element);
-               else
-                  Bad.Report
-                    (Item    => Bad.Unsupported_Use,
-                     Source  => Syn.Source_Of (Of_Tree),
-                     Where   => Syn.Where (Of_Tree, Given),
-                     Message => "a fixed-array case payload accepts only"
-                                & " `zeroed` in this runtime slice",
-                     Refused => Bad.Array_Value,
-                     Into    => Found);
-                  Landin.Checking.Refuse (Types.all, Of_Tree, Given);
-               end if;
-               return;
-            end if;
-
-            --  D82 reuses D67/D68's finite and compact static array images
-            --  inside D81's selected payload descriptor run.  The label is
-            --  the contextual site, exactly as a D65 struct-array label is.
+            --  D82/D83 reuse D67--D71's static image forms inside D81's
+            --  selected payload descriptor run.  D84 gives runtime case
+            --  construction D65's same contextual array-destination forms.
+            --  Only the static branch asks [1940] to fold its expressions.
             case Syn.Kind (Of_Tree, Given) is
                when Syn.Array_Literal =>
                   Check_Array_Literal
                     (Of_Tree, Label, Given, Shape.Length, Shape.Element,
-                     Static_Image => True);
-                  for Position in
-                    1 .. Syn.Element_Count (Of_Tree, Given)
-                  loop
-                     Require_Known
-                       (Syn.Nth_Element (Of_Tree, Given, Position));
-                  end loop;
+                     Static_Image => Static_Image);
+                  if Static_Image then
+                     for Position in
+                       1 .. Syn.Element_Count (Of_Tree, Given)
+                     loop
+                        Require_Known
+                          (Syn.Nth_Element (Of_Tree, Given, Position));
+                     end loop;
+                  end if;
 
                when Syn.Array_Repetition =>
                   Check_Array_Repetition
                     (Of_Tree, Label, Given, Shape.Length, Shape.Element,
-                     Static_Image => True);
-                  Require_Known (Syn.Repeated_Element (Of_Tree, Given));
+                     Static_Image => Static_Image);
+                  if Static_Image then
+                     Require_Known (Syn.Repeated_Element (Of_Tree, Given));
+                  end if;
 
                when Syn.Mixed_Array_Repetition =>
                   Check_Mixed_Array_Repetition
                     (Of_Tree, Label, Given, Shape.Length, Shape.Element,
-                     Static_Image => True);
-                  for Position in
-                    1 .. Syn.Element_Count (Of_Tree, Given)
-                  loop
-                     Require_Known
-                       (Syn.Nth_Element (Of_Tree, Given, Position));
-                  end loop;
-                  Require_Known (Syn.Repeated_Element (Of_Tree, Given));
+                     Static_Image => Static_Image);
+                  if Static_Image then
+                     for Position in
+                       1 .. Syn.Element_Count (Of_Tree, Given)
+                     loop
+                        Require_Known
+                          (Syn.Nth_Element (Of_Tree, Given, Position));
+                     end loop;
+                     Require_Known (Syn.Repeated_Element (Of_Tree, Given));
+                  end if;
 
                when Syn.Zeroed_Literal =>
                   Landin.Checking.Note
@@ -3021,21 +3007,24 @@ package body Landin.Stages.Checking is
 
                when Syn.Name_Reference =>
                   declare
-                     Is_Module_Storage : constant Boolean :=
-                       Res.Verdict_Of (Meanings.all, Of_Tree, Given)
-                         = Res.Bound
-                       and then Res.Sort_Of
-                         (Meanings.all,
-                          Res.Bound_To (Meanings.all, Of_Tree, Given))
-                           = Res.Module_Binding;
+                     Is_Storage : constant Boolean :=
+                       (if Static_Image
+                        then Res.Verdict_Of
+                               (Meanings.all, Of_Tree, Given) = Res.Bound
+                          and then Res.Sort_Of
+                            (Meanings.all,
+                             Res.Bound_To
+                               (Meanings.all, Of_Tree, Given))
+                              = Res.Module_Binding
+                        else Is_Direct_Binding_Name (Of_Tree, Given));
                      Got : constant Ty.Type_Kind :=
-                       (if Is_Module_Storage
+                       (if Is_Storage
                         then Selected_From (Of_Tree, Given)
                         else Synthesise (Of_Tree, Given));
                   begin
                      if Got = Ty.Ill_Typed then
                         null;
-                     elsif Is_Module_Storage
+                     elsif Is_Storage
                        and then
                          (Got /= Ty.Fixed_Array
                           or else Landin.Checking.Array_Length
@@ -3047,7 +3036,7 @@ package body Landin.Stages.Checking is
                           (Item    => Bad.Type_Mismatch,
                            Source  => Syn.Source_Of (Of_Tree),
                            Where   => Syn.Where (Of_Tree, Given),
-                           Message => "this is not a module array of the"
+                           Message => "this is not an array of the"
                                       & " variant payload's type",
                            Note    => "D17: an array's length and element"
                                       & " type are its identity",
@@ -3061,10 +3050,14 @@ package body Landin.Stages.Checking is
 
                when Syn.Member_Selection =>
                   declare
-                     Is_Module_Storage : constant Boolean :=
-                       Is_Direct_Module_Field (Of_Tree, Given);
+                     Is_Storage : constant Boolean :=
+                       (if Static_Image
+                        then Is_Direct_Module_Field (Of_Tree, Given)
+                        else Syn.Kind
+                          (Of_Tree, Syn.Target_Of (Of_Tree, Given))
+                            = Syn.Name_Reference);
                      Admitted : constant Boolean :=
-                       Is_Module_Storage
+                       Is_Storage
                        and then Admit_Array_Field (Of_Tree, Given);
                      Got : constant Ty.Type_Kind :=
                        (if Admitted
@@ -3073,9 +3066,13 @@ package body Landin.Stages.Checking is
                   begin
                      if Got = Ty.Ill_Typed then
                         null;
-                     elsif Is_Module_Storage
-                       and then not Is_Module_Array_Field
-                         (Of_Tree, Given, Shape.Length, Shape.Element)
+                     elsif Is_Storage
+                       and then
+                         (not Admitted
+                          or else Landin.Checking.Array_Length
+                            (Types.all, Of_Tree, Given) /= Shape.Length
+                          or else Landin.Checking.Array_Element
+                            (Types.all, Of_Tree, Given) /= Shape.Element)
                      then
                         Bad.Report
                           (Item    => Bad.Type_Mismatch,
@@ -3098,9 +3095,14 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Given),
-                     Message => "a module fixed-array case payload takes a"
-                                & " literal, repetition, `zeroed` or a"
-                                & " module array or array-field name",
+                     Message =>
+                       (if Static_Image
+                        then "a module fixed-array case payload takes a"
+                          & " literal, repetition, `zeroed` or a module"
+                          & " array or array-field name"
+                        else "a fixed-array case payload takes a literal,"
+                          & " repetition, `zeroed` or an array or"
+                          & " array-field name"),
                      Refused => Bad.Array_Value,
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Given);

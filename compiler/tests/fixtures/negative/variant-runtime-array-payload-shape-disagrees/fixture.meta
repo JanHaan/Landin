@@ -1,0 +1,5 @@
+class: negative
+summary: D84 keeps D17 length and element ownership on contextual variant array payloads
+constructs: 0520, 0670, 0680, 0690, 0710, 1740, 1795, 1810
+program: program.ldn
+codes: L0301, L0301, L0301

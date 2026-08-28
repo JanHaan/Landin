@@ -1,0 +1,5 @@
+class: negative
+summary: D84 reads a local array payload source as a whole before constructing the case
+constructs: 0520, 0670, 0680, 0690, 0710, 1740, 1795, 1810, 1910
+program: program.ldn
+codes: L0302

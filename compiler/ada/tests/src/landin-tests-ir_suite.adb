@@ -537,7 +537,9 @@ package body Landin.Tests.IR_Suite is
            (Unit, Routine,
             (Kind => Landin.IR.Module_Datum, Datum => Datum),
             (Kind => Landin.IR.Frame_Slot, Slot => Slot), Site,
-            Source_Field => 5, Destination_Field => 6);
+            Source_Field => 5, Destination_Field => 6,
+            Destination_Variant_Case => 9,
+            Destination_Variant_Payload_Field => 10);
          Copy := Landin.IR.Nth_Value (Unit, Routine, Block, 1);
          --  This seam pins transport only; the verifier owns whether field 7
          --  exists and has an array shape in a particular destination.
@@ -549,9 +551,10 @@ package body Landin.Tests.IR_Suite is
          Fill_Value := Landin.IR.Emit_Number
            (Unit, Routine, Landin.Types.U16, 7, False, Site);
          Landin.IR.Emit_Array_Fill
-           (Unit, Routine,
+            (Unit, Routine,
             (Kind => Landin.IR.Frame_Slot, Slot => Slot), 3, Fill_Value, Site,
-            Field => 8);
+            Field => 8, Variant_Case => 11,
+            Variant_Payload_Field => 12);
          Fill := Landin.IR.Nth_Value (Unit, Routine, Block, 4);
 
          Landin.Testing.Check
@@ -573,8 +576,12 @@ package body Landin.Tests.IR_Suite is
             and then Landin.IR.Destination_Of
                        (Unit, Routine, Copy).Slot = Slot
             and then Landin.IR.Element_Field_Of
-                       (Unit, Routine, Copy) = 6,
-            "its endpoints retain storage and field identities");
+                       (Unit, Routine, Copy) = 6
+            and then Landin.IR.Variant_Case_Of
+                       (Unit, Routine, Copy) = 9
+            and then Landin.IR.Variant_Payload_Field_Of
+                       (Unit, Routine, Copy) = 10,
+            "its endpoints retain storage, field and payload identities");
          Landin.Testing.Check_Equal
            (Item, Landin.IR.Operand_Count (Unit, Routine, Copy), 0,
             "its metadata does not grow with the array length");
@@ -606,6 +613,10 @@ package body Landin.Tests.IR_Suite is
                        (Unit, Routine, Fill).Slot = Slot
             and then Landin.IR.Element_Field_Of
                        (Unit, Routine, Fill) = 8
+            and then Landin.IR.Variant_Case_Of
+                       (Unit, Routine, Fill) = 11
+            and then Landin.IR.Variant_Payload_Field_Of
+                       (Unit, Routine, Fill) = 12
             and then Landin.IR.First_Part_Of (Unit, Routine, Fill) = 3,
             "an array fill carries a compact destination, field and start");
          Landin.Testing.Check
@@ -624,7 +635,7 @@ package body Landin.Tests.IR_Suite is
               (Item,
                Ada.Strings.Fixed.Index
                  (Text, "COPY_ARRAY from datum 1 f field 5 to slot 1"
-                        & " field 6") /= 0,
+                        & " field 6 case 9 payload field 10") /= 0,
                "the dump names both storage and field endpoints");
             Landin.Testing.Check
               (Item,
@@ -635,7 +646,8 @@ package body Landin.Tests.IR_Suite is
               (Item,
                Ada.Strings.Fixed.Index
                  (Text,
-                  "FILL_ARRAY destination slot 1 field 8 first 3 <- 3") /= 0,
+                  "FILL_ARRAY destination slot 1 field 8 case 11 payload"
+                  & " field 12 first 3 <- 3") /= 0,
                "the dump names the fill destination, first part and operand");
          end;
       end;

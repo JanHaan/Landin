@@ -204,23 +204,55 @@ package body Landin.IR.Verifier is
       Field_Pattern_Fault : constant Fault_Kind :=
         Aggregate_Field_Image_Pattern_Not_Canonical;
 
-      function Shape_Of
-        (Item    : Item_Id;
-         Place   : Storage;
-         Field   : Natural;
-         Element : out Landin.Types.Scalar_Name;
-         Length  : out Element_Total) return Fault_Kind;
+      function Variant_Shape_Of
+        (Item          : Item_Id;
+         Place         : Storage;
+         Field         : Natural;
+         Which         : Natural;
+         Payload_Field : Natural;
+         Shape         : out Field_Shape;
+         Leaf          : out Field_Shape) return Fault_Kind;
 
       function Shape_Of
         (Item    : Item_Id;
          Place   : Storage;
          Field   : Natural;
          Element : out Landin.Types.Scalar_Name;
-         Length  : out Element_Total) return Fault_Kind
+         Length  : out Element_Total;
+         Which   : Natural := 0;
+         Payload_Field : Natural := 0) return Fault_Kind;
+
+      function Shape_Of
+        (Item    : Item_Id;
+         Place   : Storage;
+         Field   : Natural;
+         Element : out Landin.Types.Scalar_Name;
+         Length  : out Element_Total;
+         Which   : Natural := 0;
+         Payload_Field : Natural := 0) return Fault_Kind
       is
       begin
          Element := Landin.Types.Bool;
          Length := 0;
+
+         if Which /= 0 or else Payload_Field /= 0 then
+            declare
+               Shape, Leaf : Field_Shape;
+               Bad : constant Fault_Kind :=
+                 Variant_Shape_Of
+                   (Item, Place, Field, Which, Payload_Field, Shape, Leaf);
+            begin
+               if Bad /= Nothing_Wrong then
+                  return Bad;
+               end if;
+               if Leaf.Kind /= Array_Field_Shape then
+                  return Element_Field_Is_Not_An_Array;
+               end if;
+               Element := Leaf.Element;
+               Length := Leaf.Length;
+               return Nothing_Wrong;
+            end;
+         end if;
 
          case Place.Kind is
             when Module_Datum =>
@@ -324,15 +356,6 @@ package body Landin.IR.Verifier is
          Which         : Natural;
          Payload_Field : Natural;
          Shape         : out Field_Shape;
-         Leaf          : out Field_Shape) return Fault_Kind;
-
-      function Variant_Shape_Of
-        (Item          : Item_Id;
-         Place         : Storage;
-         Field         : Natural;
-         Which         : Natural;
-         Payload_Field : Natural;
-         Shape         : out Field_Shape;
          Leaf          : out Field_Shape) return Fault_Kind
       is
       begin
@@ -398,9 +421,6 @@ package body Landin.IR.Verifier is
 
          Leaf := Nth_Variant_Case_Field
            (Of_Unit, Shape, Positive (Which), Positive (Payload_Field));
-         if Leaf.Kind /= Scalar_Field_Shape then
-            return Variant_Payload_Field_Is_Not_A_Scalar;
-         end if;
          return Nothing_Wrong;
       end Variant_Shape_Of;
 
@@ -1285,127 +1305,39 @@ package body Landin.IR.Verifier is
                               end if;
 
                            when Load_Element | Store_Element =>
-                              if Reaches_A_Slot (Of_Unit, Id, V) then
-                                 --  D22: a computed element of an
-                                 --  [1810] local array in this item's
-                                 --  frame.  The slot has to exist and
-                                 --  has to be one Add_Array_Slot made.
-                                 declare
-                                    Cell : constant Slot_Id :=
-                                      Slot_Of (Of_Unit, Id, V);
-                                 begin
-                                    if not Holds (Of_Unit, Id, Cell) then
-                                       return (Kind => Slot_Out_Of_Range,
-                                               Item => Id, Block => Block,
-                                               Value => V);
-                                    end if;
-
-                                    if Element_Field_Of (Of_Unit, Id, V) = 0
-                                      and then not Is_Array
-                                                     (Of_Unit, Id, Cell)
-                                    then
-                                       return
-                                         (Kind =>
-                                            Element_Datum_Is_Not_An_Array,
-                                          Item => Id, Block => Block,
-                                          Value => V);
-                                    end if;
-
-                                    if Element_Field_Of (Of_Unit, Id, V) > 0
-                                    then
-                                       declare
-                                          Field : constant Natural :=
-                                            Element_Field_Of
-                                              (Of_Unit, Id, V);
-                                          Not_Array : constant Fault_Kind :=
-                                            Element_Field_Is_Not_An_Array;
-                                       begin
-                                          if not Is_Aggregate
-                                                   (Of_Unit, Id, Cell)
-                                            or else Field > Slot_Field_Count
-                                                              (Of_Unit, Id,
-                                                               Cell)
-                                          then
-                                             return
-                                               (Kind =>
-                                                  Element_Field_Out_Of_Range,
-                                                Item => Id, Block => Block,
-                                                Value => V);
-                                          end if;
-
-                                          if Nth_Slot_Field_Shape
-                                               (Of_Unit, Id, Cell,
-                                                Positive (Field)).Kind
-                                               /= Array_Field_Shape
-                                          then
-                                             return
-                                               (Kind => Not_Array,
-                                                Item => Id, Block => Block,
-                                                Value => V);
-                                          end if;
-                                       end;
-                                    end if;
-                                 end;
-                              else
-                                 declare
-                                    D : constant Item_Id :=
-                                      Datum_Of (Of_Unit, Id, V);
-                                 begin
-                                    if not Holds (Of_Unit, D)
-                                      or else Kind_Of (Of_Unit, D) /= Datum
-                                    then
-                                       return
-                                         (Kind => Named_Item_Is_Not_A_Datum,
-                                          Item => Id, Block => Block,
-                                          Value => V);
-                                    end if;
-
-                                    if Element_Field_Of (Of_Unit, Id, V) = 0
-                                      and then Result_Of (Of_Unit, D)
-                                                   /= Landin.Types.Fixed_Array
-                                    then
-                                       return
-                                         (Kind =>
-                                            Element_Datum_Is_Not_An_Array,
-                                          Item => Id, Block => Block,
-                                          Value => V);
-                                    end if;
-
-                                    if Element_Field_Of (Of_Unit, Id, V) > 0
-                                    then
-                                       declare
-                                          Field : constant Natural :=
-                                            Element_Field_Of
-                                              (Of_Unit, Id, V);
-                                          Not_Array : constant Fault_Kind :=
-                                            Element_Field_Is_Not_An_Array;
-                                       begin
-                                          if Result_Of (Of_Unit, D)
-                                               /= Landin.Types.Aggregate
-                                            or else Field > Field_Count
-                                                              (Of_Unit, D)
-                                          then
-                                             return
-                                               (Kind =>
-                                                  Element_Field_Out_Of_Range,
-                                                Item => Id, Block => Block,
-                                                Value => V);
-                                          end if;
-
-                                          if Nth_Field_Shape
-                                               (Of_Unit, D,
-                                                Positive (Field)).Kind
-                                               /= Array_Field_Shape
-                                          then
-                                             return
-                                               (Kind => Not_Array,
-                                                Item => Id, Block => Block,
-                                                Value => V);
-                                          end if;
-                                       end;
-                                    end if;
-                                 end;
-                              end if;
+                              declare
+                                 Place : constant Storage :=
+                                   (if Reaches_A_Slot (Of_Unit, Id, V)
+                                    then (Kind => Frame_Slot,
+                                          Slot => Slot_Of (Of_Unit, Id, V))
+                                    else (Kind => Module_Datum,
+                                          Datum => Datum_Of
+                                            (Of_Unit, Id, V)));
+                                 Element : Landin.Types.Scalar_Name;
+                                 Length : Element_Total;
+                                 Bad : Fault_Kind :=
+                                   Shape_Of
+                                     (Id, Place,
+                                      Element_Field_Of (Of_Unit, Id, V),
+                                      Element, Length,
+                                      Variant_Case_Of (Of_Unit, Id, V),
+                                      Variant_Payload_Field_Of
+                                        (Of_Unit, Id, V));
+                              begin
+                                 --  Preserve D22's public fault for field
+                                 --  zero while D84 routes nested array leaves
+                                 --  through the same release-safe shape walk.
+                                 if Bad = Array_Storage_Is_Not_An_Array
+                                   and then Element_Field_Of
+                                     (Of_Unit, Id, V) = 0
+                                 then
+                                    Bad := Element_Datum_Is_Not_An_Array;
+                                 end if;
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
+                              end;
 
                            when Copy_Array =>
                               if Is_Datum then
@@ -1435,7 +1367,10 @@ package body Landin.IR.Verifier is
                                  Bad := Shape_Of
                                    (Id, Destination_Of (Of_Unit, Id, V),
                                     Element_Field_Of (Of_Unit, Id, V),
-                                    Destination_Element, Destination_Length);
+                                    Destination_Element, Destination_Length,
+                                    Variant_Case_Of (Of_Unit, Id, V),
+                                    Variant_Payload_Field_Of
+                                      (Of_Unit, Id, V));
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
@@ -1625,7 +1560,10 @@ package body Landin.IR.Verifier is
                                      (Id,
                                       Destination_Of (Of_Unit, Id, V),
                                       Element_Field_Of (Of_Unit, Id, V),
-                                      Element, Length);
+                                      Element, Length,
+                                      Variant_Case_Of (Of_Unit, Id, V),
+                                      Variant_Payload_Field_Of
+                                        (Of_Unit, Id, V));
                               begin
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -1932,23 +1870,28 @@ package body Landin.IR.Verifier is
                               declare
                                  Index : constant Value_Id :=
                                    Nth_Operand (Of_Unit, Id, V, 1);
-                                 Element : constant Landin.Types.Scalar_Name
-                                   :=
-                                     (if Reaches_A_Slot (Of_Unit, Id, V)
-                                      then Slot_Element_Type
-                                             (Of_Unit, Id, V)
-                                      elsif Element_Field_Of
-                                              (Of_Unit, Id, V) = 0
-                                      then Array_Element
-                                             (Of_Unit,
-                                              Datum_Of (Of_Unit, Id, V))
-                                      else Nth_Field_Shape
-                                             (Of_Unit,
-                                              Datum_Of (Of_Unit, Id, V),
-                                              Positive
-                                                (Element_Field_Of
-                                                   (Of_Unit, Id, V))).Element);
+                                 Place : constant Storage :=
+                                   (if Reaches_A_Slot (Of_Unit, Id, V)
+                                    then (Kind => Frame_Slot,
+                                          Slot => Slot_Of (Of_Unit, Id, V))
+                                    else (Kind => Module_Datum,
+                                          Datum => Datum_Of
+                                            (Of_Unit, Id, V)));
+                                 Element : Landin.Types.Scalar_Name;
+                                 Length : Element_Total;
+                                 Bad : constant Fault_Kind :=
+                                   Shape_Of
+                                     (Id, Place,
+                                      Element_Field_Of (Of_Unit, Id, V),
+                                      Element, Length,
+                                      Variant_Case_Of (Of_Unit, Id, V),
+                                      Variant_Payload_Field_Of
+                                        (Of_Unit, Id, V));
                               begin
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
                                  if Result_Of (Of_Unit, Id, Index)
                                       /= Landin.Types.Usize
                                  then
@@ -2020,6 +1963,11 @@ package body Landin.IR.Verifier is
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
+                                 elsif Leaf.Kind /= Scalar_Field_Shape then
+                                    return
+                                      (Kind =>
+                                         Variant_Payload_Field_Is_Not_A_Scalar,
+                                       Item => Id, Block => Block, Value => V);
                                  elsif Result_Of
                                       (Of_Unit, Id,
                                        Nth_Operand (Of_Unit, Id, V, 1))
@@ -2046,6 +1994,11 @@ package body Landin.IR.Verifier is
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
+                                 elsif Leaf.Kind /= Scalar_Field_Shape then
+                                    return
+                                      (Kind =>
+                                         Variant_Payload_Field_Is_Not_A_Scalar,
+                                       Item => Id, Block => Block, Value => V);
                                  elsif Result_Of (Of_Unit, Id, V)
                                        /= Leaf.Element
                                  then

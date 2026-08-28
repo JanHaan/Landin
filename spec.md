@@ -4801,8 +4801,8 @@ payload offset without an aggregate temporary, a static nonzero variant image
 or an ABI rule. A field-wise clear was declined because it would leave union
 padding outside the selected value's zero image. Whole copying waited until
 D80 fixed the source and destination as storage identities and copied the
-complete padded part. Admitting array payload literals or repetitions would
-add D52/D53's write sequence inside the case and is a later extension. D77
+complete padded part. D84 later adds D52/D53's write sequence inside a
+fixed-array payload without changing selection's clear-and-tag operation. D77
 adds tag matching; D78 adds scalar payload binding while retaining that
 fixed-array boundary. D79 also lets a call-shaped case construction infer a
 fresh local binding; D81 later supplies the nonzero static variant image and
@@ -5050,9 +5050,9 @@ references and cycles keep their existing declaration-identity validation;
 a cycle reports L0305 once. Later runtime writes never alias a copied image.
 General aggregate values, arguments and returns remain refused, with the last
 two retaining R2.30's ABI owner. D82 adds finite and repeated fixed-array
-payload images, and D83 copies those images from module array storage. Runtime
-fixed-array payload writes and fixed-array match aliases remain later R2.20
-decisions.
+payload images, D83 copies those images from module array storage, and D84
+adds their contextual runtime write forms. Fixed-array match aliases remain a
+later R2.20 decision.
 
 **Why one extended descriptor run:** target bytes would duplicate the image per
 target and abandon the IR boundary; startup stores would contradict [1460]; a
@@ -5156,9 +5156,9 @@ descriptor and folds.
 **Why both source forms:** admitting only a direct name would leave the static
 payload behind D65's runtime source rule and behind the D69--D71 image graph,
 despite both representations already existing. This remains a contextual
-initializer edge: selected payload arrays are not general values, and runtime
-fixed-array payload writes and fixed-array match aliases remain separate
-decisions.
+initializer edge: selected payload arrays are not general values. Runtime
+fixed-array payload writes follow in D84, while fixed-array match aliases
+remain a separate decision.
 
 **Pinned by** the lowering and backend public seams;
 `positive/variant-module-array-payload-image-copy`;
@@ -5167,3 +5167,62 @@ decisions.
 `negative/variant-module-array-payload-image-copy-source-cycle`; the generated
 token and IR records; and
 `runtime/variant-module-array-payload-image-copy-is-distinct` on Linux x86-64.
+
+### D84 — A runtime case construction writes fixed-array payloads
+
+**The tour said** that a labelled case construction writes its payload
+[0690]--[0700], while array literals, repetitions and copies write a complete
+fixed array [0520]--[0560]. D65 already admitted those contextual forms for an
+ordinary struct field, but D76 kept a runtime variant payload at `zeroed` even
+after D82/D83 supplied the same forms for a static selected-case image.
+
+**Chosen:** a labelled fixed-array payload in D76/D79's runtime case
+construction accepts the same contextual forms as D65's ordinary fixed-array
+field: a finite literal, a full or mixed repetition, `zeroed`, a direct module
+or local fixed-array name, or a directly selected ordinary fixed-array field.
+The value must have the payload leaf's exact D17 length and scalar element
+type. Length, count, element and copy-shape disagreements keep their existing
+L0301 owners. A tracked local source is read as a whole before the case write;
+payload expressions read the state arriving at the statement. A refused or
+immutable destination is reported first and reads no payload.
+
+Selection remains one destination-first operation: it clears the complete
+padded variant part and writes the source-order tag before labelled payloads
+are evaluated once in written order. Literal elements store immediately;
+repetitions evaluate their repeated value once; copies move the complete
+array. A nested `zeroed` payload emits no second clear because selection has
+already cleared every byte of the part. Normal completion retains D76's whole
+variant-field definite-assignment fact.
+
+No new opcode is needed. `Store_Element`, `Fill_Array` and the destination of
+`Copy_Array` gain D76's case and payload-field identities in addition to the
+containing aggregate field. Those numbers are declaration identities, never
+target offsets; direct and ordinary-field array operations keep zeroes and
+their existing text. The verifier proves storage, containing variant field,
+case, payload leaf, array shape, index and value type in that order before any
+shape accessor, in release as well as debug builds. It retains the existing
+array and variant fault kinds.
+
+The backend first performs the bounds check for an element store, then derives
+the containing field base and D74's target-dependent payload-field offset,
+and finally adds the scaled element index. Fills and copies use that same base;
+their width and byte extent come from the selected payload leaf on each target.
+Static module constructions remain D82/D83 image rules, not startup writes.
+Reading a fixed-array payload through a match alias remains refused until the
+next slice, and no selected variant payload becomes a general array value.
+
+**Why extend the existing array operations:** a payload array is still one
+fixed array in known storage. A new opcode for each literal, repetition and
+copy would duplicate their ordering and verifier rules; an aggregate temporary
+would make the construction a general value. Carrying the two missing
+declaration identities lets the established compact operations reach the leaf
+without putting layout bytes into the IR, and is also the address carrier a
+later fixed-array match alias needs.
+
+**Pinned by** the lowering, verifier and backend public seams;
+`positive/variant-runtime-array-payload`;
+`negative/variant-runtime-array-payload-shape-disagrees`;
+`negative/variant-runtime-array-payload-source-unassigned`;
+`negative/immutable-variant-runtime-array-payload`; the generated token and IR
+records; and
+`runtime/variant-runtime-array-payload-writes-target-storage` on Linux x86-64.
