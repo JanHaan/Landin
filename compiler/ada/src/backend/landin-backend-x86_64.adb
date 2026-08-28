@@ -335,6 +335,91 @@ package body Landin.Backend.X86_64 is
          function Size_Of_Slot (Slot : Landin.IR.Slot_Id) return Held_Size
            is (Size_Of (Landin.IR.Type_Of (Of_Unit, Item, Slot), Facts));
 
+         --  D49/D50/D53 ask three compact whole-array operations for the
+         --  same target-derived shape and base address.  Keep that replay in
+         --  one place: a field is an IR identity, never a byte offset.
+         function Array_Length_Of
+           (Place : Landin.IR.Storage; Field : Natural)
+            return Landin.IR.Element_Total;
+         function Array_Element_Of
+           (Place : Landin.IR.Storage; Field : Natural)
+            return Landin.Types.Scalar_Name;
+         procedure Storage_Address
+           (Place : Landin.IR.Storage;
+            Field : Natural;
+            Register : String);
+
+         function Array_Length_Of
+           (Place : Landin.IR.Storage; Field : Natural)
+            return Landin.IR.Element_Total is
+           (case Place.Kind is
+               when Landin.IR.Module_Datum =>
+                 (if Field = 0
+                  then Landin.IR.Array_Length (Of_Unit, Place.Datum)
+                  else Landin.IR.Nth_Field_Shape
+                    (Of_Unit, Place.Datum, Positive (Field)).Length),
+               when Landin.IR.Frame_Slot =>
+                 (if Field = 0
+                  then Landin.IR.Slot_Array_Length
+                    (Of_Unit, Item, Place.Slot)
+                  else Landin.IR.Nth_Slot_Field_Shape
+                    (Of_Unit, Item, Place.Slot, Positive (Field)).Length));
+
+         function Array_Element_Of
+           (Place : Landin.IR.Storage; Field : Natural)
+            return Landin.Types.Scalar_Name is
+           (case Place.Kind is
+               when Landin.IR.Module_Datum =>
+                 (if Field = 0
+                  then Landin.IR.Array_Element (Of_Unit, Place.Datum)
+                  else Landin.IR.Nth_Field_Shape
+                    (Of_Unit, Place.Datum, Positive (Field)).Element),
+               when Landin.IR.Frame_Slot =>
+                 (if Field = 0
+                  then Landin.IR.Slot_Array_Element
+                    (Of_Unit, Item, Place.Slot)
+                  else Landin.IR.Nth_Slot_Field_Shape
+                    (Of_Unit, Item, Place.Slot, Positive (Field)).Element));
+
+         procedure Storage_Address
+           (Place : Landin.IR.Storage;
+            Field : Natural;
+            Register : String) is
+         begin
+            case Place.Kind is
+               when Landin.IR.Module_Datum =>
+                  Emit
+                    ("leaq " & Symbol (Place.Datum) & "(%rip), " & Register);
+                  if Field > 0 then
+                     declare
+                        At_Offset : constant Landin.Targets.Byte_Count :=
+                          Field_Offset
+                            (Place.Datum, Landin.IR.Part_Position (Field));
+                     begin
+                        if At_Offset > 0 then
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (At_Offset))
+                              & ", %rdx");
+                           Emit ("addq %rdx, " & Register);
+                        end if;
+                     end;
+                  end if;
+               when Landin.IR.Frame_Slot =>
+                  Emit
+                    ("leaq "
+                     & Cell
+                         ((if Field = 0
+                           then Landin.Backend.Slot_Offset
+                             (Layout, Place.Slot)
+                           else Landin.Backend.Field_Offset
+                             (Of_Unit, Item, Layout, Place.Slot,
+                              Landin.IR.Part_Position (Field), Facts)))
+                     & ", " & Register);
+            end case;
+         end Storage_Address;
+
          --  A Value_Id restarts in each item, just as a Block_Id does.  The
          --  extra `V` keeps a continuation distinct from a block label.
          function Value_Label (Value : Landin.IR.Value_Id) return String
@@ -613,111 +698,18 @@ package body Landin.Backend.X86_64 is
                      Destination_Field : constant Natural :=
                        Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
 
-                     function Length_Of
-                       (Place : Landin.IR.Storage; Field : Natural)
-                        return Landin.IR.Element_Total;
-                     function Element_Of
-                       (Place : Landin.IR.Storage; Field : Natural)
-                        return Landin.Types.Scalar_Name;
-                     procedure Address_Of
-                       (Place : Landin.IR.Storage;
-                        Field : Natural;
-                        Register : String);
-
-                     function Length_Of
-                       (Place : Landin.IR.Storage; Field : Natural)
-                        return Landin.IR.Element_Total is
-                       (case Place.Kind is
-                           when Landin.IR.Module_Datum =>
-                             (if Field = 0
-                              then Landin.IR.Array_Length
-                                (Of_Unit, Place.Datum)
-                              else Landin.IR.Nth_Field_Shape
-                                (Of_Unit, Place.Datum,
-                                 Positive (Field)).Length),
-                           when Landin.IR.Frame_Slot =>
-                             (if Field = 0
-                              then Landin.IR.Slot_Array_Length
-                                (Of_Unit, Item, Place.Slot)
-                              else Landin.IR.Nth_Slot_Field_Shape
-                                (Of_Unit, Item, Place.Slot,
-                                 Positive (Field)).Length));
-
-                     function Element_Of
-                       (Place : Landin.IR.Storage; Field : Natural)
-                        return Landin.Types.Scalar_Name is
-                       (case Place.Kind is
-                           when Landin.IR.Module_Datum =>
-                             (if Field = 0
-                              then Landin.IR.Array_Element
-                                (Of_Unit, Place.Datum)
-                              else Landin.IR.Nth_Field_Shape
-                                (Of_Unit, Place.Datum,
-                                 Positive (Field)).Element),
-                           when Landin.IR.Frame_Slot =>
-                             (if Field = 0
-                              then Landin.IR.Slot_Array_Element
-                                (Of_Unit, Item, Place.Slot)
-                              else Landin.IR.Nth_Slot_Field_Shape
-                                (Of_Unit, Item, Place.Slot,
-                                 Positive (Field)).Element));
-
-                     procedure Address_Of
-                       (Place : Landin.IR.Storage;
-                        Field : Natural;
-                        Register : String) is
-                     begin
-                        case Place.Kind is
-                           when Landin.IR.Module_Datum =>
-                              Emit
-                                ("leaq " & Symbol (Place.Datum) & "(%rip), "
-                                 & Register);
-                              if Field > 0 then
-                                 declare
-                                    At_Offset : constant
-                                      Landin.Targets.Byte_Count :=
-                                        Field_Offset
-                                          (Place.Datum,
-                                           Landin.IR.Part_Position (Field));
-                                 begin
-                                    if At_Offset > 0 then
-                                       Emit
-                                         ("movabsq $"
-                                          & Trimmed
-                                              (Landin.Targets.Byte_Count'Image
-                                                 (At_Offset))
-                                          & ", %rdx");
-                                       Emit ("addq %rdx, " & Register);
-                                    end if;
-                                 end;
-                              end if;
-                           when Landin.IR.Frame_Slot =>
-                              Emit
-                                ("leaq "
-                                 & Cell
-                                     ((if Field = 0
-                                       then Landin.Backend.Slot_Offset
-                                         (Layout, Place.Slot)
-                                       else Landin.Backend.Field_Offset
-                                         (Of_Unit, Item, Layout, Place.Slot,
-                                          Landin.IR.Part_Position (Field),
-                                          Facts)))
-                                 & ", "
-                                 & Register);
-                        end case;
-                     end Address_Of;
-
                      Bytes : constant Landin.Targets.Byte_Count :=
                        Landin.Targets.Byte_Count
-                         (Length_Of (Source, Source_Field))
+                         (Array_Length_Of (Source, Source_Field))
                        * Landin.Targets.Byte_Count
                            (Landin.Targets.Bytes
                               (Size_Of
-                                 (Element_Of (Source, Source_Field), Facts)));
+                                 (Array_Element_Of (Source, Source_Field),
+                                  Facts)));
                   begin
-                     Address_Of
+                     Storage_Address
                        (Destination, Destination_Field, "%rdi");
-                     Address_Of (Source, Source_Field, "%rsi");
+                     Storage_Address (Source, Source_Field, "%rsi");
                      Emit
                        ("movabsq $"
                         & Trimmed
@@ -738,80 +730,15 @@ package body Landin.Backend.X86_64 is
                      Field : constant Natural :=
                        Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
                      Length : constant Landin.IR.Element_Total :=
-                       (case Destination.Kind is
-                           when Landin.IR.Module_Datum =>
-                             (if Field = 0
-                              then Landin.IR.Array_Length
-                                (Of_Unit, Destination.Datum)
-                              else Landin.IR.Nth_Field_Shape
-                                (Of_Unit, Destination.Datum,
-                                 Positive (Field)).Length),
-                           when Landin.IR.Frame_Slot =>
-                             (if Field = 0
-                              then Landin.IR.Slot_Array_Length
-                                (Of_Unit, Item, Destination.Slot)
-                              else Landin.IR.Nth_Slot_Field_Shape
-                                (Of_Unit, Item, Destination.Slot,
-                                 Positive (Field)).Length));
+                       Array_Length_Of (Destination, Field);
                      Element : constant Landin.Types.Scalar_Name :=
-                       (case Destination.Kind is
-                           when Landin.IR.Module_Datum =>
-                             (if Field = 0
-                              then Landin.IR.Array_Element
-                                (Of_Unit, Destination.Datum)
-                              else Landin.IR.Nth_Field_Shape
-                                (Of_Unit, Destination.Datum,
-                                 Positive (Field)).Element),
-                           when Landin.IR.Frame_Slot =>
-                             (if Field = 0
-                              then Landin.IR.Slot_Array_Element
-                                (Of_Unit, Item, Destination.Slot)
-                              else Landin.IR.Nth_Slot_Field_Shape
-                                (Of_Unit, Item, Destination.Slot,
-                                 Positive (Field)).Element));
+                       Array_Element_Of (Destination, Field);
                      Bytes : constant Landin.Targets.Byte_Count :=
                        Landin.Targets.Byte_Count (Length)
                        * Landin.Targets.Byte_Count
                            (Landin.Targets.Bytes (Size_Of (Element, Facts)));
                   begin
-                     case Destination.Kind is
-                        when Landin.IR.Module_Datum =>
-                           Emit
-                             ("leaq " & Symbol (Destination.Datum)
-                              & "(%rip), %rdi");
-                           if Field > 0 then
-                              declare
-                                 At_Offset : constant
-                                   Landin.Targets.Byte_Count :=
-                                     Field_Offset
-                                       (Destination.Datum,
-                                        Landin.IR.Part_Position (Field));
-                              begin
-                                 if At_Offset > 0 then
-                                    Emit
-                                      ("movabsq $"
-                                       & Trimmed
-                                           (Landin.Targets.Byte_Count'Image
-                                              (At_Offset))
-                                       & ", %rdx");
-                                    Emit ("addq %rdx, %rdi");
-                                 end if;
-                              end;
-                           end if;
-                        when Landin.IR.Frame_Slot =>
-                           Emit
-                             ("leaq "
-                              & Cell
-                                  ((if Field = 0
-                                    then Landin.Backend.Slot_Offset
-                                      (Layout, Destination.Slot)
-                                    else Landin.Backend.Field_Offset
-                                      (Of_Unit, Item, Layout,
-                                       Destination.Slot,
-                                       Landin.IR.Part_Position (Field),
-                                       Facts)))
-                              & ", %rdi");
-                     end case;
+                     Storage_Address (Destination, Field, "%rdi");
                      Emit ("xorl %eax, %eax");
                      Emit
                        ("movabsq $"
@@ -824,27 +751,18 @@ package body Landin.Backend.X86_64 is
 
                when Landin.IR.Fill_Array =>
                   --  D32 evaluates one scalar and repeats its target-width
-                  --  pattern through the destination.  The element count and
-                  --  destination shape stay compact and target-derived.
+                  --  pattern through the destination.  D53 may name an array
+                  --  field; the element count, width and both containing and
+                  --  suffix offsets stay compact and target-derived.
                   declare
                      Destination : constant Landin.IR.Storage :=
                        Landin.IR.Destination_Of (Of_Unit, Item, Value);
+                     Field : constant Natural :=
+                       Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
                      Length : constant Landin.IR.Element_Total :=
-                       (case Destination.Kind is
-                           when Landin.IR.Module_Datum =>
-                             Landin.IR.Array_Length
-                               (Of_Unit, Destination.Datum),
-                           when Landin.IR.Frame_Slot =>
-                             Landin.IR.Slot_Array_Length
-                               (Of_Unit, Item, Destination.Slot));
+                       Array_Length_Of (Destination, Field);
                      Element : constant Landin.Types.Scalar_Name :=
-                       (case Destination.Kind is
-                           when Landin.IR.Module_Datum =>
-                             Landin.IR.Array_Element
-                               (Of_Unit, Destination.Datum),
-                           when Landin.IR.Frame_Slot =>
-                             Landin.IR.Slot_Array_Element
-                               (Of_Unit, Item, Destination.Slot));
+                       Array_Element_Of (Destination, Field);
                      Held : constant Held_Size := Size_Of (Element, Facts);
                      First : constant Landin.IR.Part_Position :=
                        Landin.IR.First_Part_Of (Of_Unit, Item, Value);
@@ -856,16 +774,7 @@ package body Landin.Backend.X86_64 is
                        * Landin.Targets.Byte_Count
                            (Landin.Targets.Bytes (Held));
                   begin
-                     case Destination.Kind is
-                        when Landin.IR.Module_Datum =>
-                           Emit
-                             ("leaq " & Symbol (Destination.Datum)
-                              & "(%rip), %rdi");
-                        when Landin.IR.Frame_Slot =>
-                           Emit
-                             ("leaq " & Slot_Cell (Destination.Slot)
-                              & ", %rdi");
-                     end case;
+                     Storage_Address (Destination, Field, "%rdi");
                      if Offset /= 0 then
                         Emit
                           ("addq $"

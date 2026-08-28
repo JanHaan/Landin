@@ -1192,6 +1192,90 @@ package body Landin.Tests.Backend_Suite is
       Check_Local (Landin.Targets.Synthetic_32, "-12", "4");
    end Array_Field_Literal_Stores_Follow_Their_Target;
 
+   --  D53 composes the target-derived containing-field address with D37's
+   --  suffix offset.  A far module field is register-formed; a local field
+   --  remains an L0504-bounded displacement on both target descriptions.
+   procedure Array_Field_Repetition_Fills_Follow_Their_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure Array_Field_Repetition_Fills_Follow_Their_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Wide : constant String :=
+        "wide: type = struct" & LF
+        & "    prefix: [2147483648]u8" & LF
+        & "    row: [4]u32" & LF
+        & "end wide" & LF
+        & "mut state: wide" & LF
+        & "write: () -> none =" & LF
+        & "    state.row = [1, 2, of 3]" & LF
+        & "end write" & LF;
+      Local : constant String :=
+        "holder: type = struct" & LF
+        & "    tag: u8" & LF
+        & "    row: [4]usize" & LF
+        & "    tail: u16" & LF
+        & "end holder" & LF
+        & "write: () -> none =" & LF
+        & "    mut local: holder" & LF
+        & "    local.row = [1, 2, of 3]" & LF
+        & "end write" & LF;
+
+      procedure Check_Local
+        (Facts  : Landin.Targets.Target_Facts;
+         Field  : String;
+         Suffix : String;
+         Store  : String);
+
+      procedure Check_Local
+        (Facts  : Landin.Targets.Target_Facts;
+         Field  : String;
+         Suffix : String;
+         Store  : String)
+      is
+         Work : Landin.Stages.Compilation := Landin.Stages.Create (Facts);
+         Ran : Natural;
+      begin
+         Lower (Work, Local, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Contains (Text, HT & "leaq " & Field & "(%rbp), %rdi")
+               and then Contains (Text, HT & "addq $" & Suffix & ", %rdi")
+               and then Contains (Text, HT & "movabsq $2, %rcx")
+               and then Contains (Text, HT & "rep " & Store),
+               "the local suffix fill follows target layout and width");
+         end;
+      end Check_Local;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower (Work, Wide, Ran);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "leaq state(%rip), %rdi")
+            and then Contains
+              (Text, HT & "movabsq $2147483648, %rdx")
+            and then Contains (Text, HT & "addq %rdx, %rdi")
+            and then Contains (Text, HT & "addq $8, %rdi")
+            and then Contains (Text, HT & "movabsq $2, %rcx")
+            and then Contains (Text, HT & "rep stosl"),
+            "the wide module suffix composes field and prefix offsets");
+      end;
+
+      Check_Local (Landin.Targets.Linux_X86_64, "-40", "16", "stosq");
+      Check_Local (Landin.Targets.Synthetic_32, "-20", "8", "stosl");
+   end Array_Field_Repetition_Fills_Follow_Their_Target;
+
    --  D49 clears the same far field from its register-formed module address;
    --  the byte count is the field extent, not the containing datum extent.
    procedure A_Wide_Array_Field_Clear_Uses_Registers
@@ -3383,6 +3467,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "array field literal stores follow their target",
          Array_Field_Literal_Stores_Follow_Their_Target'Access);
+      Landin.Testing.Register
+        (Into, "backend", "array field repetition fills follow their target",
+         Array_Field_Repetition_Fills_Follow_Their_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "a wide array field clear uses registers",
          A_Wide_Array_Field_Clear_Uses_Registers'Access);

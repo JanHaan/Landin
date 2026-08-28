@@ -5,9 +5,5 @@ end holder
 mut state: holder
 
 f: () -> none =
-    state.row = [2 of 1]
+    state.row = [1, 2, of 3]
 end f
-
-mixed: () -> none =
-    state.row = [1, of 2]
-end mixed

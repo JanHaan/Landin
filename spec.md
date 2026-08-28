@@ -1887,6 +1887,10 @@ supplies D17's exact length and scalar element type. When `N` is written, it mus
 equal that length exactly. The scalar expression must have the element type,
 including [0190]'s contextual commitment of an untyped integer.
 
+At this boundary an assignment destination is a direct local or module array
+storage name. D53 later admits a directly selected fixed-array field under the
+same full-repetition rule.
+
 The destination is reached first for assignment. The repeated scalar expression
 is then evaluated exactly once, and its target-width bit pattern is stored in
 every element. Normal completion initializes or assigns the destination as a
@@ -2154,6 +2158,9 @@ expression and `repeated` must have type `T`, including [0190]'s contextual
 commitment of an untyped integer. The existing place check retains [1900]'s
 mutability requirement, and a prefix that reaches or passes `N` is refused
 because no repeated suffix remains.
+
+At this boundary the place is a direct local or module array storage name. D53
+later admits a directly selected fixed-array field under the same mixed rule.
 
 The destination is reached and evaluated before any right-hand-side expression.
 Lowering then evaluates each prefix expression left to right and immediately
@@ -3029,11 +3036,11 @@ a D18-wide module field in registers and uses the L0504-bounded target
 displacement for a local; every bounds trap precedes address arithmetic.
 
 This is D29's literal context, not a general field value or place. Full and
-mixed repetition, `zeroed` other than D49, copies other than D50, module
+mixed repetition are a separate decision admitted later by D53; `zeroed` other
+than D49, copies other than D50, module
 initializers, arguments, returns, discards, operands, bare reads, fields of
 elements, struct-of-struct fields and nested arrays keep their existing
-boundaries. In particular, D52 does not widen `Fill_Array`; repetition into a
-field remains a separate decision.
+boundaries. In particular, D52 itself does not widen `Fill_Array`.
 
 **Why reuse element stores:** a literal already names one expression per
 position, and D48 already represents the containing field plus an element
@@ -3054,5 +3061,87 @@ field-qualified fill rule that a literal does not need. All were declined.
 `negative/immutable-struct-array-field-literal`;
 `negative/struct-array-field-literal-reads-incoming-state`;
 `negative/struct-array-field-literal-not-on-every-path`;
-`negative/struct-array-field-repetition-not-enabled`; the recorded IR dump;
-and `runtime/struct-array-field-literal-assignment-order` on Linux x86-64.
+the recorded IR dump; and
+`runtime/struct-array-field-literal-assignment-order` on Linux x86-64.
+
+### D53 — Repetition may assign a fixed-array field compactly
+
+**The tour said** that full repetition evaluates one scalar pattern [0560],
+that mixed repetition evaluates and stores its prefix before evaluating the
+repeated suffix, that assignment reaches its destination before its value
+[0410], and that writability belongs to the root binding [1900]. D32 and D37
+admitted those forms only for direct array storage. D48 made the elements of a
+fixed-array field reachable, while D52 supplied the ordered prefix-store
+representation a mixed field destination needs.
+
+**Chosen:** where `s` directly names D46 module state or a D47 local and `f` is
+a fixed array of enabled scalars, D32's full `[N of expression]` and
+`[of expression]` assignment and D37's mixed
+`[e1, ..., ek, of repeated]` assignment also admit `s.f` as their contextual
+destination. Direct and aliased root, field and scalar element types have the
+same meaning. The field supplies D17's length `N` and element type `T`: a
+written full count must equal `N`, every expression must have type `T`, and a
+mixed prefix must satisfy `1 <= k < N`. Consequently neither form admits an
+internal zero-length field under D32/D37's construct-specific nonzero
+contextual rules. The root must be mutable; L0303 owns an immutable root first
+and alone.
+
+The destination is reached first. A full repetition evaluates its scalar once
+and fills the field. A mixed repetition evaluates and immediately stores each
+prefix expression from left to right, then evaluates the repeated expression
+once and fills positions `k + 1` through `N`. A later prefix or repeated
+expression can therefore observe an earlier prefix write. Reads in all source
+expressions are checked against the definite-assignment state arriving at the
+statement; only normal completion records the binding-and-field whole fact.
+That fact is independent of scalar siblings and other array fields and survives
+a merge only when established on every arriving path. Module state remains
+complete under D10.
+
+Lowering represents a full field repetition with one `Fill_Array`, carrying
+the root storage, the field's declaration-order identity and `First = 1`.
+For a mixed field repetition it uses D52's constant-index `Store_Element`
+sequence for the prefix and one field-qualified `Fill_Array` with
+`First = k + 1` for the suffix. The repeated value is one ordinary scalar IR
+operand; no hidden array temporary, target byte offset or operation per suffix
+element is formed. D32 and D37's direct-array instruction sequences remain
+unchanged with field identity zero.
+
+The verifier first requires a positive field identity to name an array shape
+inside the destination aggregate, then applies D32/D37's existing start and
+element-type checks to that field's shape. These are explicit checks in
+assertion-free builds. Each backend derives the containing field address,
+suffix offset, count and element width from target facts. Linux x86-64
+register-forms a D18-wide module field offset, composes the written prefix
+offset with it, and uses an L0504-bounded field displacement for a local on
+both 64- and 32-bit target descriptions.
+
+This is one contextual assignment rule, not a general field value or place.
+Repetition in local or module initializers from a field, arguments, returns,
+discards, operands, bare reads, fields of elements, struct-of-struct fields and
+nested arrays remains refused. D53 does not change module static images or
+admit a field as an independently carried repetition value.
+
+**Why reuse the compact fill:** D32/D37 already evaluate one repeated scalar
+and keep IR size independent of the target-sized extent, while D48/D52 already
+carry the containing field and ordered prefix writes. Combining those existing
+identities preserves source order without inventing another array
+representation.
+
+**The alternatives:** keep repetition restricted to direct arrays, expand the
+suffix into one element store per target position, form a hidden complete
+array and copy it, or make the selected field a general array place. The first
+leaves D32/D37 unnecessarily asymmetric with D52; the second makes compiler
+work proportional to D18's extent; the third changes observable prefix-store
+order and frame cost; and the fourth broadens unrelated value contexts. All
+were declined.
+
+**Pinned by** the checker, IR, verifier, lowering and backend public-seam cases;
+`positive/struct-array-field-repetition-assignment`;
+`negative/struct-array-field-repetition-count-mismatch`;
+`negative/struct-array-field-mixed-prefix-too-long`;
+`negative/struct-array-field-repetition-element-mismatch`;
+`negative/immutable-struct-array-field-repetition`;
+`negative/struct-array-field-repetition-reads-incoming-state`;
+`negative/struct-array-field-repetition-not-on-every-path`; the recorded IR
+dump; and `runtime/struct-array-field-repetition-assignment-order` on Linux
+x86-64.

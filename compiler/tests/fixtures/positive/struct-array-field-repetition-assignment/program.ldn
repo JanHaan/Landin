@@ -1,0 +1,24 @@
+word: type = usize
+word_row: type = [4]word
+
+holder: type = struct
+    tag: u8
+    row: word_row
+    tail: u16
+end holder
+
+holder_alias: type = holder
+mut state: holder_alias
+
+module_field: (at: usize) -> (result: word) =
+    state.row = [4 of 7]
+    state.row = [1, 2, of 3]
+    result = state.row[at]
+end module_field
+
+local_field: (at: usize) -> (result: word) =
+    mut local: holder_alias
+    local.row = [of 7]
+    local.row = [1, 2, of 3]
+    result = local.row[at]
+end local_field

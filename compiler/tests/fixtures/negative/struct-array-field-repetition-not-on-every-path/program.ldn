@@ -1,0 +1,11 @@
+holder: type = struct
+    row: [3]u8
+end holder
+
+f: (condition: bool, at: usize) -> (result: u8) =
+    mut local: holder
+    if condition then
+        local.row = [of 1]
+    end if
+    result = local.row[at]
+end f

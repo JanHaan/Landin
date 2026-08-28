@@ -199,9 +199,10 @@ package Landin.IR is
       Load_Element,
       Store_Element,
       --  One whole [0520] array copied between two storage places or D50
-      --  fields, or cleared in one place or D49 field for [0540].  Storage
-      --  and field identities never carry one entry per element, so either
-      --  remains compact for D18's target-sized extent.
+      --  fields, cleared in one place or D49 field for [0540], or filled in
+      --  one place or D53 field for [0560].  Storage and field identities
+      --  never carry one entry per element, so each remains compact for
+      --  D18's target-sized extent.
       Copy_Array,
       Clear_Array,
       Fill_Array,
@@ -1068,16 +1069,17 @@ package Landin.IR is
                           in Load_Field | Store_Field;
 
    --  D48's containing aggregate field for an element operation, D49's
-   --  destination field for a clear, and D50's destination field for a
-   --  copy.  Zero means the reached storage is itself a fixed array; a
-   --  positive value is [0750]'s declaration-order field.  It is an
-   --  identity, never a target byte offset.
+   --  destination field for a clear, D50's destination field for a copy,
+   --  and D53's destination field for a fill.  Zero means the reached
+   --  storage is itself a fixed array; a positive value is [0750]'s
+   --  declaration-order field.  It is an identity, never a target byte
+   --  offset.
    function Element_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Element | Store_Element
-                             | Copy_Array | Clear_Array;
+                             | Copy_Array | Clear_Array | Fill_Array;
 
    --  Which array a slot-reaching element operation names.  Only
    --  meaningful when Reaches_A_Slot is true; a computed module-array
@@ -1477,7 +1479,8 @@ package Landin.IR is
       Destination : Storage;
       First       : Part_Position;
       Value       : Value_Id;
-      Site        : Landin.Provenance.Origin)
+      Site        : Landin.Provenance.Origin;
+      Field       : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
