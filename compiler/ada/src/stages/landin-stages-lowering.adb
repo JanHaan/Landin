@@ -2572,8 +2572,20 @@ package body Landin.Stages.Lowering is
                               declare
                                  Wrote : constant Res.Declaration_Id :=
                                    Landin.Checking.Body_Of (Types.all, Id);
+                                 Child_Source : constant Boolean :=
+                                   Syn.Kind (Of_Tree, Value)
+                                     = Syn.Member_Selection;
+                                 Source_Named : constant Syn.Node_Id :=
+                                   (if Child_Source
+                                    then Syn.Target_Of (Of_Tree, Value)
+                                    else Value);
+                                 Source_Parent : constant Natural :=
+                                   (if Child_Source
+                                    then Landin.Checking.Field_Index
+                                      (Types.all, Of_Tree, Value)
+                                    else 0);
                                  Source : constant IR.Storage :=
-                                   Storage_For (Of_Tree, Value);
+                                   Storage_For (Of_Tree, Source_Named);
                                  Destination : constant IR.Storage :=
                                    (Kind => IR.Frame_Slot, Slot => Where);
                               begin
@@ -2582,7 +2594,8 @@ package body Landin.Stages.Lowering is
                                           (Types.all, Wrote)
                                  loop
                                     Copy_Field
-                                      (Wrote, Source, Destination, Field);
+                                      (Wrote, Source, Destination, Field,
+                                       Source_Parent => Source_Parent);
                                  end loop;
                               end;
                            end if;

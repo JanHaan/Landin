@@ -121,9 +121,9 @@ kernel: scalar constants and arithmetic, control flow and calls; module and
 local fixed-array indexing, copying, clearing and filling; and depth-one
 ordinary structs with scalar or fixed-array fields, whole copies and clears,
 compact folded module images, unfolded variant fields with contextual
-construction, inspection and whole copies, plus contextual construction and
-copy of one nested ordinary child and scalar-field, fixed-array-element or
-contextual whole-array operations through it. That is every
+construction, inspection and whole copies, plus contextual construction, assignment and typed-local initialization from
+one nested ordinary child, and scalar-field, fixed-array-element or contextual
+whole-array operations through it. That is every
 opcode `Landin.IR`
 spells, so the case that dispatches them is exhaustive: a new opcode fails to
 compile rather than raising `Compiler_Defect` at run time. R2.30's internal
