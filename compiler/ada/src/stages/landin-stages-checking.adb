@@ -1,5 +1,6 @@
 with Ada.Containers.Ordered_Sets;
 with Ada.Strings.Fixed;
+with Ada.Strings.Unbounded;
 
 with Landin.Checking;
 with Landin.Diagnostics.Checking;
@@ -146,6 +147,10 @@ package body Landin.Stages.Checking is
          Expected     : Landin.Checking.Element_Count;
          Element      : Ty.Scalar_Name;
          Static_Image : Boolean);
+      procedure Check_Struct_Literal
+        (Of_Tree : Syn.Tree;
+         Literal : Syn.Node_Id;
+         Wrote   : Res.Declaration_Id);
       procedure Check_Mixed_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -614,6 +619,18 @@ package body Landin.Stages.Checking is
                        = Syn.Zeroed_Literal
               and then Landin.Checking.Body_Of
                 (Types.all, Of_Tree, Written) /= Res.No_Declaration;
+            --  D64: a written local struct type supplies the body for one
+            --  labelled literal.  Module images remain zero-only, and an
+            --  inferred literal still has no nominal identity to carry.
+            Is_Local_Struct_Literal_Init : constant Boolean :=
+              Held = Ty.Aggregate
+              and then Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Struct_Literal
+              and then Landin.Checking.Body_Of
+                (Types.all, Of_Tree, Written) /= Res.No_Declaration;
             --  D23 admits a literal only where its written local array type
             --  supplies both the element context and the exact length.
             Is_Local_Literal_Init : constant Boolean :=
@@ -732,6 +749,7 @@ package body Landin.Stages.Checking is
               and then not Is_Zeroed_State
               and then not Is_Direct_Struct_Init
               and then not Is_Struct_Zeroed_Init
+              and then not Is_Local_Struct_Literal_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1792,6 +1810,19 @@ package body Landin.Stages.Checking is
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
 
+            when Syn.Struct_Literal =>
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "a struct literal needs an explicitly typed"
+                             & " local initializer or whole assignment",
+                  Note    => "D60 and [1460]: module struct images remain"
+                             & " zero-only",
+                  Refused => Bad.Struct_Value,
+                  Into    => Found);
+               return Kept (Ty.Ill_Typed);
+
             when Syn.Array_Repetition =>
                Bad.Report
                  (Item    => Bad.Unsupported_Use,
@@ -2371,6 +2402,155 @@ package body Landin.Stages.Checking is
          end if;
       end Check_Array_Literal;
 
+      --  D64: a labelled struct literal is contextual.  The destination
+      --  supplies [0710]'s nominal body; labels may be written in any order,
+      --  but each names one scalar field at most once.  A trailing
+      --  `of zeroed` covers every field not named explicitly, including an
+      --  array field through D49's whole-field zero image.
+      procedure Check_Struct_Literal
+        (Of_Tree : Syn.Tree;
+         Literal : Syn.Node_Id;
+         Wrote   : Res.Declaration_Id)
+      is
+         Count : constant Natural :=
+           (if Landin.Checking.Has_Layout (Types.all, Wrote)
+            then Landin.Checking.Layout_Field_Count (Types.all, Wrote)
+            else 0);
+         type Node_List is array (Natural range <>) of Syn.Node_Id;
+         First : Node_List (1 .. Count) := [others => Syn.No_Node];
+         Failed : Boolean := False;
+      begin
+         --  A refused field or a target extent overflow leaves the body
+         --  identified but deliberately without a layout.  That refusal
+         --  owns the diagnostic; the contextual literal must neither ask
+         --  the absent layout for field shapes nor add a cascade.
+         if not Landin.Checking.Has_Layout (Types.all, Wrote) then
+            Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
+            return;
+         end if;
+
+         Landin.Checking.Note
+           (Types.all, Of_Tree, Literal, Ty.Aggregate);
+         Landin.Checking.Note_Body (Types.all, Of_Tree, Literal, Wrote);
+
+         for Position in 1 .. Syn.Field_Value_Count (Of_Tree, Literal) loop
+            declare
+               Field : constant Syn.Node_Id :=
+                 Syn.Nth_Field_Value (Of_Tree, Literal, Position);
+               Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree, Field);
+               Which : constant Natural :=
+                 Field_At (Wrote, Syn.Name (Of_Tree, Field));
+            begin
+               if Which = 0 then
+                  Bad.Report
+                    (Item    => Bad.Unresolved_Field,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Anchor (Of_Tree, Field),
+                     Message => "this struct has no field called `"
+                                & Spelled (Syn.Name (Of_Tree, Field)) & "`",
+                     Note    => "[0750]: a struct has the fields it was"
+                                & " declared with, and no others",
+                     Into    => Found);
+                  Failed := True;
+               elsif First (Which) /= Syn.No_Node then
+                  Bad.Report
+                    (Item    => Bad.Field_Named_Twice,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Anchor (Of_Tree, Field),
+                     Message => "the field `" & Field_Named (Wrote, Which)
+                                & "` is named twice in this struct literal",
+                     Note    => "D64: each labelled field is written once",
+                     Related => Syn.Origin (Of_Tree, First (Which)),
+                     Because => "first named here",
+                     Into    => Found);
+                  Failed := True;
+               else
+                  First (Which) := Field;
+                  Landin.Checking.Note_Field
+                    (Types.all, Of_Tree, Field, Which);
+
+                  if Landin.Checking.Field_Kind_Of
+                       (Types.all, Wrote, Which)
+                     = Landin.Checking.Fixed_Array_Field
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Value),
+                        Message => "a named array field in a struct literal"
+                                   & " is not enabled yet",
+                        Refused => Bad.Array_Value,
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+                     Failed := True;
+                  else
+                     Require
+                       (Of_Tree, Value,
+                        Landin.Checking.Field_Type
+                          (Types.all, Wrote, Which),
+                        Syn.Origin (Of_Tree, Field),
+                        "the struct field named here");
+                     Failed := Failed
+                       or else Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Value) = Ty.Ill_Typed;
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         declare
+            Fill : constant Syn.Node_Id :=
+              Syn.Struct_Fill (Of_Tree, Literal);
+            Missing : Ada.Strings.Unbounded.Unbounded_String;
+            Missing_Count : Natural := 0;
+         begin
+            if Fill /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Fill) /= Syn.Zeroed_Literal
+            then
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Fill),
+                  Message => "a struct literal's trailing `of` accepts only"
+                             & " `zeroed` in this slice",
+                  Refused => Bad.Struct_Value,
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Fill);
+               Failed := True;
+            end if;
+
+            if Fill = Syn.No_Node then
+               for Which in First'Range loop
+                  if First (Which) = Syn.No_Node then
+                     Missing_Count := Missing_Count + 1;
+                     if Missing_Count > 1 then
+                        Ada.Strings.Unbounded.Append (Missing, ", ");
+                     end if;
+                     Ada.Strings.Unbounded.Append
+                       (Missing, "`" & Field_Named (Wrote, Which) & "`");
+                  end if;
+               end loop;
+
+               if Missing_Count > 0 then
+                  Bad.Report
+                    (Item    => Bad.Field_Not_Given,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Literal),
+                     Message => "this struct literal gives no value for "
+                                & Ada.Strings.Unbounded.To_String (Missing),
+                     Note    => "D64: every field is labelled or covered by"
+                                & " a trailing `of zeroed`",
+                     Into    => Found);
+                  Failed := True;
+               end if;
+            end if;
+         end;
+
+         if Failed then
+            Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
+         end if;
+      end Check_Struct_Literal;
+
       procedure Check_Mixed_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -2669,7 +2849,13 @@ package body Landin.Stages.Checking is
                         Written : constant Syn.Node_Id :=
                           Syn.Declared_Type (Of_Tree, Node);
                      begin
-                        if Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
+                        if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
+                        then
+                           Check_Struct_Literal
+                             (Of_Tree, Value,
+                              Landin.Checking.Body_Of
+                                (Types.all, Of_Tree, Written));
+                        elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
                         then
                            --  D57: the written nominal type is the literal's
                            --  only context.  Carry both its aggregate kind and
@@ -2894,7 +3080,12 @@ package body Landin.Stages.Checking is
                     Selected_From (Of_Tree, Place);
                begin
                   if Wants = Ty.Aggregate then
-                     if Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
+                     if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
+                        Check_Struct_Literal
+                          (Of_Tree, Value,
+                           Landin.Checking.Body_Of
+                             (Types.all, Of_Tree, Place));
+                     elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
                         --  D58: a direct mutable struct place supplies both
                         --  [0540]'s aggregate context and [0710]'s body.  The
                         --  literal has no source value and reads nothing.

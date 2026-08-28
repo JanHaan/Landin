@@ -1,0 +1,9 @@
+pair: type = struct
+    x: i32
+    y: i32
+end pair
+
+f: () -> none =
+    mut local: pair
+    local = (x: 1, y: local.x)
+end f

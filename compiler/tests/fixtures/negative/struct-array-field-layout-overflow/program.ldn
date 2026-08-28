@@ -4,3 +4,9 @@ too_large: type = struct
 end too_large
 
 answer: usize = sizeof too_large
+
+mut state: too_large
+
+write: () -> none =
+    state = (tail: 0, of zeroed)
+end write

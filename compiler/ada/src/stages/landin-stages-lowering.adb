@@ -996,6 +996,11 @@ package body Landin.Stages.Lowering is
                function Storage_For
                  (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
 
+               procedure Write_Struct_Literal
+                 (Literal     : Syn.Node_Id;
+                  Wrote       : Res.Declaration_Id;
+                  Destination : IR.Storage);
+
                function Storage_For
                  (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage
                is
@@ -1066,6 +1071,95 @@ package body Landin.Stages.Lowering is
                            Destination_Field => Field);
                   end case;
                end Copy_Field;
+
+               procedure Write_Struct_Literal
+                 (Literal     : Syn.Node_Id;
+                  Wrote       : Res.Declaration_Id;
+                  Destination : IR.Storage)
+               is
+                  Count : constant Natural :=
+                    Landin.Checking.Layout_Field_Count
+                      (Types.all, Wrote);
+                  type Seen_Array is array (Positive range <>) of Boolean;
+                  Seen : Seen_Array (1 .. Count) := [others => False];
+
+                  procedure Store_Scalar
+                    (Field : Positive; Value : IR.Value_Id);
+
+                  procedure Store_Scalar
+                    (Field : Positive; Value : IR.Value_Id) is
+                  begin
+                     case Destination.Kind is
+                        when IR.Module_Datum =>
+                           IR.Emit_Store_Field
+                             (Unit.all, Filling, Destination.Datum,
+                              IR.Part_Position (Field), Value, Site);
+                        when IR.Frame_Slot =>
+                           IR.Emit_Store_Slot_Field
+                             (Unit.all, Filling, Destination.Slot,
+                              IR.Part_Position (Field), Value, Site);
+                     end case;
+                  end Store_Scalar;
+               begin
+                  --  [0410]/D29: named fields are evaluated and committed in
+                  --  source order, irrespective of declaration/layout order.
+                  for Position in
+                    1 .. Syn.Field_Value_Count (Of_Tree, Literal)
+                  loop
+                     declare
+                        Field_Node : constant Syn.Node_Id :=
+                          Syn.Nth_Field_Value
+                            (Of_Tree, Literal, Position);
+                        Field : constant Natural :=
+                          Landin.Checking.Field_Index
+                            (Types.all, Of_Tree, Field_Node);
+                     begin
+                        pragma Assert (Field > 0);
+                        Seen (Field) := True;
+                        Store_Scalar
+                          (Field,
+                           Lower_Expression
+                             (Of_Tree, Syn.Value_Of (Of_Tree, Field_Node),
+                              Scope));
+                     end;
+                  end loop;
+
+                  --  D64's deliberately narrow fill is all-bits zero.  It is
+                  --  written after every labelled value, in declaration
+                  --  order, without forming one heterogeneously typed value.
+                  if Syn.Struct_Fill (Of_Tree, Literal) /= Syn.No_Node then
+                     for Field in Seen'Range loop
+                        if not Seen (Field) then
+                           case Landin.Checking.Field_Kind_Of
+                             (Types.all, Wrote, Field)
+                           is
+                              when Landin.Checking.Scalar_Field =>
+                                 declare
+                                    Held : constant Ty.Scalar_Name :=
+                                      Landin.Checking.Field_Type
+                                        (Types.all, Wrote, Field);
+                                    Zero : IR.Value_Id;
+                                 begin
+                                    if Held = Ty.Bool then
+                                       Zero := IR.Emit_Truth
+                                         (Unit.all, Filling, False, Site);
+                                    else
+                                       Zero := IR.Emit_Number
+                                         (Unit.all, Filling, Held, 0, False,
+                                          Site);
+                                    end if;
+                                    Store_Scalar (Field, Zero);
+                                 end;
+
+                              when Landin.Checking.Fixed_Array_Field =>
+                                 IR.Emit_Array_Clear
+                                   (Unit.all, Filling, Destination, Site,
+                                    Field => Field);
+                           end case;
+                        end if;
+                     end loop;
+                  end if;
+               end Write_Struct_Literal;
 
                function Index_For (Place : Syn.Node_Id) return IR.Value_Id is
                begin
@@ -1353,6 +1447,13 @@ package body Landin.Stages.Lowering is
                                 = Ty.Aggregate
                         then
                            if Syn.Kind (Of_Tree, Value)
+                                = Syn.Struct_Literal
+                           then
+                              Write_Struct_Literal
+                                (Value,
+                                 Landin.Checking.Body_Of (Types.all, Id),
+                                 (Kind => IR.Frame_Slot, Slot => Where));
+                           elsif Syn.Kind (Of_Tree, Value)
                                 = Syn.Zeroed_Literal
                            then
                               --  D57: one whole-storage clear writes the
@@ -1411,7 +1512,14 @@ package body Landin.Stages.Lowering is
                            Destination : constant IR.Storage :=
                              Storage_For (Of_Tree, Place);
                         begin
-                           if Syn.Kind (Of_Tree, From) = Syn.Zeroed_Literal
+                           if Syn.Kind (Of_Tree, From) = Syn.Struct_Literal
+                           then
+                              Write_Struct_Literal
+                                (From,
+                                 Landin.Checking.Body_Of
+                                   (Types.all, Of_Tree, Place),
+                                 Destination);
+                           elsif Syn.Kind (Of_Tree, From) = Syn.Zeroed_Literal
                            then
                               --  D58 reuses D57's field-zero whole aggregate
                               --  clear for either datum or slot storage.  Test

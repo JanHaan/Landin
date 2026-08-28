@@ -4,6 +4,5 @@ point: type = struct
 end point
 
 f: () -> none =
-    _ = (of zeroed)
-    _ = point(x: 1, y: 2)
+    local: point = (x: 1)
 end f

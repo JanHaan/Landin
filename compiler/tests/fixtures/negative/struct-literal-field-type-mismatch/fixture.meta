@@ -1,0 +1,6 @@
+class: negative
+summary: D64 checks each labelled value against the scalar type of that field
+constructs: 0160, 0190, 0670, 0710, 0750, 1810, 1890
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64
