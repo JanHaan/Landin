@@ -4883,11 +4883,10 @@ refer directly to the matched object: reading loads that payload field, and an
 arm's sibling scope. Duplicate names retain L0200 and a use outside the arm
 retains L0201.
 
-This slice binds scalar payload fields. A fixed-array payload binding is L0304;
-it needs the separate question of whether [1220] exposes an array alias or a
-whole contextual value. Omitting bindings still permits a case with any
-payload, so D77's tag-only matching remains unchanged. Parameters and returns
-remain R2.30's ABI work.
+This slice binds scalar payload fields. D85 later binds a fixed-array payload
+as an indexed array alias without making it a whole contextual value. Omitting
+bindings still permits a case with any payload, so D77's tag-only matching
+remains unchanged. Parameters and returns remain R2.30's ABI work.
 
 Lowering records no copied local. It maps each arm-local declaration identity
 to the subject storage, top-level variant field, source-order case and
@@ -4903,13 +4902,12 @@ observable after the match. A copy-in/copy-out rule would add hidden completion
 and early-return semantics, while a copied immutable binding would make the two
 conventions denote different objects. One direct alias rule answers both.
 Named rather than positional omission was declined because field identity is
-already declaration order; array aliases were deferred rather than silently
-copying a whole array.
+already declaration order; D85 later gives array payloads the same direct
+alias rule without silently copying a whole array.
 
 **Pinned by** the parser, IR, lowering and verifier public seams; the resolution
 and checking fixture paths; `positive/variant-match-payload-bindings`;
 `negative/variant-match-binding-count-disagrees`;
-`negative/variant-match-array-binding-not-enabled`;
 `negative/variant-match-in-binding-is-immutable`;
 `negative/variant-match-binding-named-twice`;
 `negative/variant-match-binding-outside-arm`; the generated token, diagnostic
@@ -5050,9 +5048,8 @@ references and cycles keep their existing declaration-identity validation;
 a cycle reports L0305 once. Later runtime writes never alias a copied image.
 General aggregate values, arguments and returns remain refused, with the last
 two retaining R2.30's ABI owner. D82 adds finite and repeated fixed-array
-payload images, D83 copies those images from module array storage, and D84
-adds their contextual runtime write forms. Fixed-array match aliases remain a
-later R2.20 decision.
+payload images, D83 copies those images from module array storage, D84 adds
+their contextual runtime write forms, and D85 adds indexed match aliases.
 
 **Why one extended descriptor run:** target bytes would duplicate the image per
 target and abandon the IR boundary; startup stores would contradict [1460]; a
@@ -5106,8 +5103,8 @@ over the carrier D81 established.
 without adding the two-level runtime address carried by later stores, fills and
 copies. Limiting D82 to finite literals alone would make `zeroed` and compact
 repetition needlessly asymmetric with D67/D68. D83 takes the separate static
-source-resolution edge; runtime construction and match aliases need new
-executable payload operations and definite-assignment facts.
+source-resolution edge; D84 supplies runtime construction and D85 supplies
+indexed match aliases.
 
 **Pinned by** the lowering, verifier and backend public seams;
 `positive/variant-module-array-payload-image`;
@@ -5157,8 +5154,8 @@ descriptor and folds.
 payload behind D65's runtime source rule and behind the D69--D71 image graph,
 despite both representations already existing. This remains a contextual
 initializer edge: selected payload arrays are not general values. Runtime
-fixed-array payload writes follow in D84, while fixed-array match aliases
-remain a separate decision.
+fixed-array payload writes follow in D84, while indexed fixed-array match
+aliases follow in D85.
 
 **Pinned by** the lowering and backend public seams;
 `positive/variant-module-array-payload-image-copy`;
@@ -5208,8 +5205,8 @@ the containing field base and D74's target-dependent payload-field offset,
 and finally adds the scaled element index. Fills and copies use that same base;
 their width and byte extent come from the selected payload leaf on each target.
 Static module constructions remain D82/D83 image rules, not startup writes.
-Reading a fixed-array payload through a match alias remains refused until the
-next slice, and no selected variant payload becomes a general array value.
+D85 later reads and writes individual elements through a match alias; no
+selected variant payload becomes a general array value.
 
 **Why extend the existing array operations:** a payload array is still one
 fixed array in known storage. A new opcode for each literal, repetition and
@@ -5226,3 +5223,52 @@ later fixed-array match alias needs.
 `negative/immutable-variant-runtime-array-payload`; the generated token and IR
 records; and
 `runtime/variant-runtime-array-payload-writes-target-storage` on Linux x86-64.
+
+### D85 — A match-arm name aliases a fixed-array payload by element
+
+**The tour said** that [1220] binds the selected case's payload by position,
+that `inout` permits mutation, and that indexing selects one array element
+[0520], [0580]. D78 implemented that direct alias rule for scalar payloads;
+D84 supplied the target-neutral address of a fixed-array payload but did not
+let a match arm name it.
+
+**Chosen:** a binding corresponding to a fixed-array payload has that payload's
+D17 length and scalar element type. A plain binding is an immutable `in` alias;
+`inout name` is mutable. Either may be indexed to read an element, while only
+the `inout` form may assign, assign `zeroed`, increment or decrement an indexed
+element. `lenof name` reads the contextual length without reading storage.
+Constant indexes outside the payload length keep L0306; an unknown index keeps
+D48's runtime bounds trap and is evaluated once before the value of a write.
+
+The alias denotes the matched module datum or frame slot directly. It creates
+no copied local and no separate definite-assignment fact: D77 already requires
+the complete variant part before its tag may be matched, and the binding exists
+only in the arm for the selected case. An `inout` write is observable through
+the original object after the match. A bare use of the binding remains L0304,
+as do whole-array assignment or initializer sources, arguments, returns,
+discards and operands. This is an indexed contextual alias, not a general
+fixed-array value.
+
+No new opcode is needed. `Load_Element` gains D84's containing-field, case and
+payload-field identities; `Store_Element` already carries them. Direct and
+ordinary-field element operations keep zero identities and their previous IR
+text. The verifier walks storage, containing variant field, case and array
+payload before it reads the payload shape, then checks the `usize` index and
+element result or operand type in explicit release-build code. The backend
+replays D74's target-dependent payload placement and the payload element width
+for both module and frame storage; no offset or width enters the IR.
+
+**Why an indexed alias rather than a copied array:** copying would make `in`
+and `inout` denote different objects or require hidden copy-out behavior on
+every arm exit. Making the name a general whole-array value would widen D20,
+D21 and every argument/return boundary at once. The direct alias already used
+for D78's scalar leaves preserves [1220]'s one rule while indexing supplies the
+only scalar value an expression needs.
+
+**Pinned by** the IR and lowering public seams;
+`positive/variant-match-array-payload-bindings`;
+`negative/variant-match-array-binding-not-enabled`;
+`negative/variant-match-array-binding-is-immutable`;
+`negative/variant-match-array-binding-index-out-of-range`; the generated token
+and IR records; and
+`runtime/variant-match-array-payload-bindings-update-storage` on Linux x86-64.

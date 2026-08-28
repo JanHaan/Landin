@@ -1,0 +1,41 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        row: (values: [3]usize)
+    end kind
+    tail: u8
+end choice
+
+mut state: choice
+
+public main: () -> (code: i32) =
+    mut local: choice = choice(
+        prefix: 1,
+        kind: row(values: [11, 13, 17]),
+        tail: 2
+    )
+    mut at: usize = 1
+    mut answer: usize = 0
+    match local.kind
+        leaf: answer = 1
+        row(values): answer = values[0] + values[at] + values[2]
+    end match
+
+    state.kind = row(values: [19, of 23])
+    match state.kind
+        leaf: answer = 1
+        row(inout values): if true then
+            values[0] = answer
+            values[at] = zeroed
+            inc values[2]
+            answer = values[0] + values[at] + values[2]
+        end if
+    end match
+
+    if answer == 65 and local.prefix == 1 and local.tail == 2 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

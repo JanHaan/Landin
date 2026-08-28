@@ -992,6 +992,42 @@ package body Landin.Stages.Lowering is
                      else 0);
                begin
                   if Res.Sort_Of (Meanings.all, Means)
+                       = Res.Pattern_Binding
+                  then
+                     declare
+                        Alias : Payload_Alias renames
+                          Aliases (Declared (Means));
+                        Index : constant IR.Value_Id :=
+                          Lower_Expression
+                            (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope);
+                     begin
+                        if not Alias.Active then
+                           raise Landin.Compiler_Defect with
+                             "an inactive array match binding reached"
+                             & " lowering";
+                        end if;
+                        case Alias.Source.Kind is
+                           when IR.Module_Datum =>
+                              return IR.Emit_Load_Element
+                                (Unit.all, Filling, Alias.Source.Datum,
+                                 Index, Scalar_At (Of_Tree, Node), Site,
+                                 Field => Alias.Field,
+                                 Variant_Case => Alias.Which,
+                                 Variant_Payload_Field =>
+                                   Alias.Payload_Field);
+                           when IR.Frame_Slot =>
+                              return IR.Emit_Load_Slot_Element
+                                (Unit.all, Filling, Alias.Source.Slot,
+                                 Index, Scalar_At (Of_Tree, Node), Site,
+                                 Field => Alias.Field,
+                                 Variant_Case => Alias.Which,
+                                 Variant_Payload_Field =>
+                                   Alias.Payload_Field);
+                        end case;
+                     end;
+                  end if;
+
+                  if Res.Sort_Of (Meanings.all, Means)
                      = Res.Local_Binding
                   then
                      if Is_Constant_Index (Of_Tree, Node)
@@ -1838,7 +1874,13 @@ package body Landin.Stages.Lowering is
                       (Is_Constant_Index (Of_Tree, Place)
                        and then Syn.Kind
                                   (Of_Tree, Syn.Target_Of (Of_Tree, Place))
-                                /= Syn.Member_Selection)
+                                /= Syn.Member_Selection
+                       and then Res.Sort_Of
+                         (Meanings.all,
+                          Res.Bound_To
+                            (Meanings.all, Of_Tree,
+                             Syn.Target_Of (Of_Tree, Place)))
+                           /= Res.Pattern_Binding)
                   then
                      return IR.No_Value;
                   end if;
@@ -1871,6 +1913,38 @@ package body Landin.Stages.Lowering is
                      then Landin.Checking.Field_Index
                             (Types.all, Of_Tree, From)
                      else 0);
+                  if Res.Sort_Of (Meanings.all, Means)
+                       = Res.Pattern_Binding
+                  then
+                     declare
+                        Alias : Payload_Alias renames
+                          Aliases (Declared (Means));
+                     begin
+                        if not Alias.Active then
+                           raise Landin.Compiler_Defect with
+                             "an inactive array match binding reached"
+                             & " lowering";
+                        end if;
+                        case Alias.Source.Kind is
+                           when IR.Module_Datum =>
+                              return IR.Emit_Load_Element
+                                (Unit.all, Filling, Alias.Source.Datum,
+                                 Index, Scalar_At (Of_Tree, Place), Site,
+                                 Field => Alias.Field,
+                                 Variant_Case => Alias.Which,
+                                 Variant_Payload_Field =>
+                                   Alias.Payload_Field);
+                           when IR.Frame_Slot =>
+                              return IR.Emit_Load_Slot_Element
+                                (Unit.all, Filling, Alias.Source.Slot,
+                                 Index, Scalar_At (Of_Tree, Place), Site,
+                                 Field => Alias.Field,
+                                 Variant_Case => Alias.Which,
+                                 Variant_Payload_Field =>
+                                   Alias.Payload_Field);
+                        end case;
+                     end;
+                  end if;
                   if Res.Sort_Of (Meanings.all, Means) = Res.Local_Binding
                   then
                      return IR.Emit_Load_Slot_Element
@@ -1917,10 +1991,32 @@ package body Landin.Stages.Lowering is
                            raise Landin.Compiler_Defect with
                              "an inactive match binding reached lowering";
                         end if;
-                        IR.Emit_Variant_Field_Store
-                          (Unit.all, Filling, Alias.Source,
-                           Positive (Alias.Field), Positive (Alias.Which),
-                           Positive (Alias.Payload_Field), Value, Site);
+                        if Syn.Kind (Of_Tree, Place) = Syn.Element_Index then
+                           pragma Assert (Index /= IR.No_Value);
+                           case Alias.Source.Kind is
+                              when IR.Module_Datum =>
+                                 IR.Emit_Store_Element
+                                   (Unit.all, Filling, Alias.Source.Datum,
+                                    Index, Value, Site,
+                                    Field => Alias.Field,
+                                    Variant_Case => Alias.Which,
+                                    Variant_Payload_Field =>
+                                      Alias.Payload_Field);
+                              when IR.Frame_Slot =>
+                                 IR.Emit_Store_Slot_Element
+                                   (Unit.all, Filling, Alias.Source.Slot,
+                                    Index, Value, Site,
+                                    Field => Alias.Field,
+                                    Variant_Case => Alias.Which,
+                                    Variant_Payload_Field =>
+                                      Alias.Payload_Field);
+                           end case;
+                        else
+                           IR.Emit_Variant_Field_Store
+                             (Unit.all, Filling, Alias.Source,
+                              Positive (Alias.Field), Positive (Alias.Which),
+                              Positive (Alias.Payload_Field), Value, Site);
+                        end if;
                         return;
                      end;
                   end if;

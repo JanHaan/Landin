@@ -1977,8 +1977,9 @@ package body Landin.Stages.Checking is
       --  D41 is a direct-binding slice; D42 adds one ordinary scalar field or
       --  fixed-array element selected immediately from that storage.  D62
       --  adds the scalar element of a D48 fixed-array field.  D43 adds a
-      --  direct named return, but not one of its subobjects.  Every other
-      --  nested subobject remains a separate contextual position.
+      --  direct named return, but not one of its subobjects.  D85 lets an
+      --  indexed fixed-array match alias supply the same scalar context.
+      --  Every other nested subobject remains a separate contextual position.
       function Is_Zeroed_Scalar_Place
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
@@ -2008,7 +2009,21 @@ package body Landin.Stages.Checking is
               and then Is_Direct_Binding_Name
                 (Of_Tree,
                  Syn.Target_Of
-                   (Of_Tree, Syn.Target_Of (Of_Tree, Node))));
+                   (Of_Tree, Syn.Target_Of (Of_Tree, Node))))
+           or else
+             (Syn.Kind (Of_Tree, Node) = Syn.Element_Index
+              and then Syn.Kind
+                (Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                  = Syn.Name_Reference
+              and then Res.Verdict_Of
+                (Meanings.all, Of_Tree, Syn.Target_Of (Of_Tree, Node))
+                  = Res.Bound
+              and then Res.Sort_Of
+                (Meanings.all,
+                 Res.Bound_To
+                   (Meanings.all, Of_Tree,
+                    Syn.Target_Of (Of_Tree, Node)))
+                  = Res.Pattern_Binding);
       end Is_Zeroed_Scalar_Place;
 
       function Synthesise
@@ -4263,20 +4278,14 @@ package body Landin.Stages.Checking is
                                       (Types.all, Of_Tree, Binding,
                                        Shape.Element);
                                  else
-                                    Bad.Report
-                                      (Item    => Bad.Unsupported_Use,
-                                       Source  => Syn.Source_Of (Of_Tree),
-                                       Where   => Syn.Where
-                                                    (Of_Tree, Binding),
-                                       Message => "a fixed-array payload"
-                                                  & " binding is not"
-                                                  & " enabled yet",
-                                       Refused => Bad.Array_Value,
-                                       Into    => Found);
                                     Landin.Checking.Settle
-                                      (Types.all, Id, Ty.Ill_Typed);
-                                    Landin.Checking.Refuse
-                                      (Types.all, Of_Tree, Binding);
+                                      (Types.all, Id, Ty.Fixed_Array);
+                                    Landin.Checking.Note
+                                      (Types.all, Of_Tree, Binding,
+                                       Ty.Fixed_Array);
+                                    Landin.Checking.Note_Array
+                                      (Types.all, Id,
+                                       Shape.Length, Shape.Element);
                                  end if;
                               end;
                            end loop;

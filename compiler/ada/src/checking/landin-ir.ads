@@ -1315,8 +1315,9 @@ package Landin.IR is
 
    --  D76's source-order case and declaration-order payload field.  D78
    --  gives scalar loads the same identities; D84 gives them to element
-   --  stores, array fills and array-copy destinations.  Neither is a target
-   --  offset; a selected bare case has no payload field at all.
+   --  stores, array fills and array-copy destinations, and D85 gives them to
+   --  element loads.  Neither is a target offset; a selected bare case has
+   --  no payload field at all.
    function Variant_Case_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
@@ -1739,7 +1740,9 @@ package Landin.IR is
       Index  : Value_Id;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Field  : Natural := 0) return Value_Id
+      Field  : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Datum)
                   and then Holds (Into, Item, Index)
@@ -1773,7 +1776,9 @@ package Landin.IR is
       Index  : Value_Id;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Field  : Natural := 0) return Value_Id
+      Field  : Natural := 0;
+      Variant_Case : Natural := 0;
+      Variant_Payload_Field : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Slot)
                   and then Holds (Into, Item, Index)
