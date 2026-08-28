@@ -1,0 +1,5 @@
+class: negative
+summary: D85 keeps an unmarked fixed-array payload alias immutable
+constructs: 0080, 0520, 0680, 0690, 1210, 1810, 1830, 1900
+program: program.ldn
+codes: L0303

@@ -1,0 +1,4 @@
+class: positive
+summary: D85 binds fixed-array payloads as indexed in and inout aliases
+constructs: 0080, 0370, 0410, 0520, 0670, 0680, 0690, 0710, 1210, 1220, 1740, 1795, 1810, 1900, 1950
+program: program.ldn

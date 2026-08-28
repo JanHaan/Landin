@@ -3210,7 +3210,8 @@ its scope. One target-neutral payload load joins D76's existing payload store;
 the verifier and backend derive the scalar leaf and target offset from D74's
 shape. Parser, IR, lowering and verifier seams, resolution/checking fixtures,
 focused diagnostics and a Linux backend/runtime case provide evidence.
-Fixed-array payload aliases remain a separate decision.
+Fixed-array payload aliases remain separate here; D85 later binds them as
+indexed aliases without enabling whole-array values.
 
 D79 admits call-shaped case construction for an inferred local binding. The
 constructor supplies D74's nominal body before inference settles the binding,
@@ -3245,8 +3246,11 @@ Linux runtime case pin the image. D83 copies every compact form from a direct
 module array or directly selected module array field, reusing D69--D71's image
 graph and D81's payload carrier without changing the verifier or backend.
 D84 admits runtime fixed-array payload writes with the established array
-literal, repetition and copy operations. Fixed-array match aliases remain a
-separate decision.
+literal, repetition and copy operations. D85 binds those payloads in match arms
+as direct `in`/`inout` aliases for indexed reads and writes; `Load_Element`
+joins D84's field/case/payload-qualified stores, and focused diagnostics, public
+IR/lowering seams, generated records and a Linux runtime case pin the boundary.
+Bare and whole-array use of the alias remains refused.
 
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
@@ -3297,9 +3301,10 @@ chains. D82 adds finite and repeated fixed-array payloads to those static
 images. D83 copies those static payload images from direct or selected module
 array storage. D84 writes runtime fixed-array payloads from finite literals,
 full or mixed repetitions, `zeroed`, direct array storage and directly selected
-ordinary array fields. General reads of the part and fixed-array payload
-bindings remain refused. Parameters and returns retain R2.30's aggregate ABI
-owner.
+ordinary array fields. D85 gives a fixed-array payload binding its contextual
+shape for `lenof` and indexed `in`/`inout` access while retaining L0304 for bare
+or whole-array use. General reads of the variant part remain refused.
+Parameters and returns retain R2.30's aggregate ABI owner.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3427,6 +3432,9 @@ aliases and general aggregate values pinned.
 D84 migrated runtime fixed-array payload literals, repetitions, clears and
 copies onto field/case/payload-qualified array operations, while keeping match
 aliases and general array or aggregate values pinned.
+D85 migrated fixed-array payload bindings into arm-local indexed `in`/`inout`
+aliases, while keeping bare and whole-array uses and general array values
+pinned.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the

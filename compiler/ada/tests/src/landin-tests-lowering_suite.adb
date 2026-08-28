@@ -3599,12 +3599,19 @@ package body Landin.Tests.Lowering_Suite is
          & "            _ = first" & LF
          & "            second = second" & LF
          & "        end if" & LF
-         & "        row: _ = 3" & LF
+         & "        row(finite, repeated, inout copied): if true then" & LF
+         & "            _ = finite[0]" & LF
+         & "            _ = repeated[1]" & LF
+         & "            copied[0] = finite[1]" & LF
+         & "        end if" & LF
          & "    end match" & LF
          & "    match state.kind" & LF
          & "        leaf: _ = 1" & LF
          & "        pair: _ = 2" & LF
-         & "        row: _ = 3" & LF
+         & "        row(finite, repeated, inout copied): if true then" & LF
+         & "            _ = finite[0]" & LF
+         & "            copied[1] = repeated[0]" & LF
+         & "        end if" & LF
          & "    end match" & LF
          & "end construct" & LF,
          Ran);
@@ -3617,10 +3624,12 @@ package body Landin.Tests.Lowering_Suite is
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
          Selects, Stores, Tag_Loads, Payload_Loads : Natural := 0;
-         Array_Stores, Array_Fills, Array_Copies : Natural := 0;
+         Array_Loads, Array_Stores, Array_Fills, Array_Copies : Natural := 0;
          Slot_Row, Slot_Pair, Datum_Pair, Wide_Payload : Boolean := False;
          Slot_Tag, Datum_Tag : Boolean := False;
          Nested_Store, Nested_Fill, Nested_Copy : Boolean := False;
+         Nested_Slot_Load, Nested_Datum_Load : Boolean := False;
+         Nested_Alias_Slot_Store, Nested_Alias_Datum_Store : Boolean := False;
       begin
          for Value in 1 .. IR.Value_Count (Unit, 2) loop
             declare
@@ -3685,6 +3694,21 @@ package body Landin.Tests.Lowering_Suite is
                      and then IR.Variant_Payload_Field_Of
                        (Unit, 2, Id) in 1 | 2,
                      "payload aliases carry their selected source");
+               elsif Op = IR.Load_Element then
+                  Array_Loads := Array_Loads + 1;
+                  Nested_Slot_Load := Nested_Slot_Load or else
+                    (IR.Reaches_A_Slot (Unit, 2, Id)
+                     and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
+                     and then IR.Variant_Payload_Field_Of
+                       (Unit, 2, Id) in 1 | 2);
+                  Nested_Datum_Load := Nested_Datum_Load or else
+                    (not IR.Reaches_A_Slot (Unit, 2, Id)
+                     and then IR.Datum_Of (Unit, 2, Id) = 1
+                     and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
+                     and then IR.Variant_Payload_Field_Of
+                       (Unit, 2, Id) in 1 | 2);
                elsif Op = IR.Store_Element then
                   Array_Stores := Array_Stores + 1;
                   Nested_Store := Nested_Store or else
@@ -3693,6 +3717,20 @@ package body Landin.Tests.Lowering_Suite is
                      and then IR.Variant_Case_Of (Unit, 2, Id) = 3
                      and then IR.Variant_Payload_Field_Of
                        (Unit, 2, Id) = 1);
+                  Nested_Alias_Slot_Store := Nested_Alias_Slot_Store or else
+                    (IR.Reaches_A_Slot (Unit, 2, Id)
+                     and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
+                     and then IR.Variant_Payload_Field_Of
+                       (Unit, 2, Id) = 3);
+                  Nested_Alias_Datum_Store :=
+                    Nested_Alias_Datum_Store or else
+                    (not IR.Reaches_A_Slot (Unit, 2, Id)
+                     and then IR.Datum_Of (Unit, 2, Id) = 1
+                     and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                     and then IR.Variant_Case_Of (Unit, 2, Id) = 3
+                     and then IR.Variant_Payload_Field_Of
+                       (Unit, 2, Id) = 3);
                elsif Op = IR.Fill_Array then
                   Array_Fills := Array_Fills + 1;
                   Nested_Fill := Nested_Fill or else
@@ -3731,10 +3769,17 @@ package body Landin.Tests.Lowering_Suite is
             "each match loads its source storage and field exactly once");
          Landin.Testing.Check
            (Item,
-            Array_Stores = 2 and then Array_Fills = 1
+            Array_Loads = 5 and then Array_Stores = 4
+              and then Array_Fills = 1
               and then Array_Copies = 1 and then Nested_Store
               and then Nested_Fill and then Nested_Copy,
             "array writes carry top field, case and payload identities");
+         Landin.Testing.Check
+           (Item,
+            Nested_Slot_Load and then Nested_Datum_Load
+              and then Nested_Alias_Slot_Store
+              and then Nested_Alias_Datum_Store,
+            "array payload aliases retain both selected storage kinds");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts lowered variant operations");

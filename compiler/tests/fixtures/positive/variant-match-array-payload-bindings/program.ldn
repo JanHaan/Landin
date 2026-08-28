@@ -1,0 +1,30 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        row: (values: [3]u16)
+    end kind
+end choice
+
+mut state: choice
+
+read_and_write: () -> none =
+    mut at: usize = 1
+    mut local: choice = choice(kind: row(values: [11, 13, 17]), of zeroed)
+    match local.kind
+        leaf: _ = 0
+        row(values): if true then
+            _ = lenof values
+            _ = values[0]
+            _ = values[at]
+        end if
+    end match
+    state.kind = row(values: [19, 23, 29])
+    match state.kind
+        leaf: _ = 0
+        row(inout values): if true then
+            values[0] = 31
+            values[at] = zeroed
+            inc values[2]
+        end if
+    end match
+end read_and_write
