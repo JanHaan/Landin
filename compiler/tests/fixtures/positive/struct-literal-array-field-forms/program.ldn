@@ -1,0 +1,23 @@
+holder: type = struct
+    ready: bool
+    row: [3]usize
+    other: [3]usize
+    tag: u8
+end holder
+
+words: [3]usize = [1, 2, 3]
+mut state: holder
+
+write: () -> (result: usize) =
+    mut local: holder =
+        (other: zeroed, tag: zeroed, row: [4, 5, 6], ready: zeroed)
+    mut copied: holder =
+        (row: words, ready: zeroed, other: local.row, tag: 7)
+    mut assigned: holder
+    assigned =
+        (tag: 8, row: [3 of 9], other: [10, of 11], ready: zeroed)
+    state =
+        (other: copied.row, ready: zeroed, row: zeroed, tag: zeroed)
+    result = local.row[0] + copied.other[1]
+      + assigned.row[2] + assigned.other[2] + state.row[0]
+end write

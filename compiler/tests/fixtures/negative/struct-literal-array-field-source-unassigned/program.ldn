@@ -1,0 +1,12 @@
+holder: type = struct
+    row: [2]u8
+    tag: u8
+end holder
+
+mut state: holder
+
+f: () -> none =
+    mut local: holder
+    local.tag = 1
+    state = (row: local.row, tag: 2)
+end f

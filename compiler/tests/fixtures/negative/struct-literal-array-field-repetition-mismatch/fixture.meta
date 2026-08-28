@@ -1,0 +1,6 @@
+class: negative
+summary: D65 retains the contextual count, prefix and element checks for labelled array repetition
+constructs: 0190, 0520, 0560, 0670, 0710, 0750, 1810, 1830
+program: program.ldn
+codes: L0301, L0301, L0301
+targets: linux-x86-64, macos-arm64

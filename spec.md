@@ -2441,7 +2441,9 @@ selection from an invalid place, a nested subobject destination in this slice,
 and assignment to a named return remain outside it; D43 treats the last as its
 own contextual position and D62 later admits the one nested shape D48 already
 makes an ordinary scalar place. D49 separately treats one fixed-array field as a contextual `zeroed`
-destination without changing this scalar rule. Inferred initialization and every nested, argument, return, operand,
+destination without changing this scalar rule. D65 later applies the same
+typed scalar image to a field label inside D64's contextual struct literal.
+Inferred initialization and every nested, argument, return, operand,
 discard or other general `zeroed` expression remain refused.
 
 **Why the selected type:** a scalar subobject already owns both the type and the
@@ -2459,6 +2461,7 @@ semantics this assignment must preserve. It was declined.
 `negative/inferred-zeroed-not-enabled`, and
 `negative/nested-scalar-zeroed-not-enabled`;
 `positive/struct-array-field-element-zeroed`;
+`positive/struct-literal-array-field-forms`;
 `negative/struct-array-field-element-zeroed-immutable`;
 `negative/struct-array-field-element-zeroed-nested`;
 `runtime/scalar-subobject-zeroed-assignment-clears-values`; and
@@ -3837,9 +3840,8 @@ an unknown label keeps L0308. A field may be named at most once: the second
 label reports L0309, related to the first. Without a trailing fill every field
 must be named; one L0310 at the literal lists the missing fields in declaration
 order. Named fields in this slice must be scalar, and each value is checked in
-that field's resolved scalar context. A named fixed-array field remains the
-existing nested-array L0304, and a named scalar value `zeroed` remains the
-existing nested contextual-literal L0304.
+that field's resolved scalar context. D65 later supplies the same contextual
+destination to scalar `zeroed` and to D49--D53's fixed-array field forms.
 
 The only trailing fill admitted is `of zeroed`. It writes every unnamed scalar
 field as typed integer zero or `false` and clears every unnamed fixed-array
@@ -3892,9 +3894,7 @@ last needs the representation D60 explicitly deferred. All were declined.
 `negative/struct-literal-field-named-twice`;
 `negative/struct-literal-field-not-given`;
 `negative/struct-literal-unknown-field`;
-`negative/struct-literal-array-field-not-enabled`;
 `negative/struct-literal-of-expression-not-enabled`;
-`negative/struct-literal-field-zeroed-not-enabled`;
 `negative/struct-literal-field-type-mismatch`;
 `negative/struct-literal-reads-incoming-state`;
 `negative/struct-literal-without-layout`;
@@ -3904,3 +3904,74 @@ last needs the representation D60 explicitly deferred. All were declined.
 `negative/struct-literal-not-enabled`; the generated catalogue, construct,
 token and IR records; and `runtime/struct-literal-order-and-fill` on Linux
 x86-64.
+
+### D65 — A label is its field's contextual destination
+
+**The tour said** that a struct literal takes its type from context [0710],
+that each written label supplies one field value and a trailing `of` supplies
+the rest [0720], and that evaluation follows written order [0410]. D64 admitted
+the literal but limited written values to ordinary scalar expressions. D42 and
+D49--D53 had already settled the corresponding contextual scalar-zero and
+fixed-array-field assignment forms.
+
+**Chosen:** in D64's explicitly typed local initializer and whole-assignment
+contexts, each label is the same contextual destination as selecting that
+field for assignment. A labelled scalar field additionally accepts `zeroed`,
+which takes D42's resolved scalar type and all-bits-zero image. A labelled
+fixed-array field accepts exactly D49--D53's complete contextual forms: an
+array literal, full or mixed-prefix repetition, `zeroed`, a direct array
+storage name, or a selected fixed-array field of the same D17 shape. The array
+value node records the labelled field's element type and length; the label
+continues to record the declaration-order field identity.
+
+Labels are still evaluated and committed in source order. An array literal
+writes its elements immediately in their own source order; a repetition writes
+its prefix then evaluates its repeated expression once and performs one compact
+fill; a copy is one compact field-qualified copy; and `zeroed` is one compact
+field-qualified clear. A later label therefore observes every earlier labelled
+write. D64's trailing `of zeroed` runs only after all of them and retains its
+declaration-order fill. Reads in every field expression are checked against the
+state arriving at the statement, while successful completion retains D64's
+whole-aggregate definite-assignment facts.
+
+The checker delegates each array form to its existing contextual shape, count,
+element and source-read rule with `Static_Image => False`. Lowering uses one
+field-qualified writer over the existing `Store_Element`, `Fill_Array`,
+`Copy_Array` and `Clear_Array` operations; scalar `zeroed` uses the existing
+typed `Truth` or `Number` followed by a scalar field store. No grammar, syntax
+node, IR operation, verifier rule, backend address form, target fact, layout or
+static image changes.
+
+A nested array literal remains refused as a scalar element, and no other
+general array value is introduced. A general trailing `of expression` remains
+refused: the one expression node has one committed type, while omitted fields
+may be heterogeneous; converting it per field is not enabled, and evaluating
+it again per field would violate the once-only rule. Inferred literals still
+have no nominal body and wait for [0700]'s construction decision. Module
+literals still need D60's nonzero aggregate image carrier. The all-`of`
+spelling remains D63's redundant parser refusal, and general aggregate values
+remain outside this slice.
+
+**Why the field destination:** the selected field already owns exactly the
+shape, storage, diagnostics, ordering and target-derived operation the written
+value needs. Reusing those decisions closes D64's artificial label boundary
+without opening a second array representation or aggregate temporary.
+
+**The alternatives:** admit scalar `zeroed` alone, restrict a general `of`
+expression to accidentally homogeneous fields, convert or re-evaluate that
+expression per field, infer a nominal body from labels, add nonzero module
+images, or admit the all-`of` synonym. The first is too small to justify a
+separate semantic principle; the next three contradict single-node typing,
+once-only evaluation or nominal identity; the fifth needs D60's deferred
+representation; and the last duplicates whole `zeroed`. All were declined.
+
+**Pinned by** the checker and lowering public-seam cases;
+`positive/struct-literal-array-field-forms`;
+`negative/struct-literal-array-field-shape-mismatch`;
+`negative/struct-literal-array-field-element-mismatch`;
+`negative/struct-literal-array-field-repetition-mismatch`;
+`negative/struct-literal-array-field-source-unassigned`;
+`negative/struct-literal-nested-array-value-not-enabled`;
+`negative/immutable-struct-literal-assignment`;
+`negative/struct-literal-of-expression-not-enabled`; the generated token and
+IR records; and `runtime/struct-literal-array-field-order` on Linux x86-64.

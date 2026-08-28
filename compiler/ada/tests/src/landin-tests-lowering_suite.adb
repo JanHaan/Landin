@@ -3334,6 +3334,119 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Struct_Literal_Becomes_Ordered_Field_Writes;
 
+   --  D65 reuses the field-qualified D49--D53 operations for each labelled
+   --  fixed-array field; a scalar `zeroed` label takes the existing typed
+   --  scalar store path.  No aggregate or array temporary is introduced.
+   procedure Struct_Literal_Array_Labels_Use_Field_Operations
+     (Item : in out Landin.Testing.Context);
+
+   procedure Struct_Literal_Array_Labels_Use_Field_Operations
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "holder: type = struct" & LF
+         & "    row: [2]usize" & LF
+         & "    other: [2]usize" & LF
+         & "    ready: bool" & LF
+         & "end holder" & LF
+         & "source: [2]usize = [1, 2]" & LF
+         & "mut state: holder" & LF
+         & "f: () -> none =" & LF
+         & "    state = (row: [3, 4], other: source,"
+         & " ready: zeroed)" & LF
+         & "    state = (row: [2 of 5], other: zeroed, ready: true)" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "every contextual field form lowers");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : IR.Item_Id := IR.No_Item;
+         Element_Stores : Natural := 0;
+         Copy, Fill, Clear : IR.Value_Id := IR.No_Value;
+         False_Store : IR.Value_Id := IR.No_Value;
+      begin
+         for Which in 1 .. IR.Item_Count (Unit) loop
+            if IR.Kind_Of (Unit, IR.Item_Id (Which)) = IR.Routine then
+               Routine := IR.Item_Id (Which);
+            end if;
+         end loop;
+
+         Landin.Testing.Check
+           (Item, Routine /= IR.No_Item, "the function is a routine");
+
+         if Routine /= IR.No_Item then
+            for V in 1 .. IR.Value_Count (Unit, Routine) loop
+               declare
+                  Value : constant IR.Value_Id := IR.Value_Id (V);
+                  Op : constant IR.Opcode := IR.Op_Of (Unit, Routine, Value);
+               begin
+                  case Op is
+                     when IR.Store_Element =>
+                        if IR.Element_Field_Of (Unit, Routine, Value) = 1
+                        then
+                           Element_Stores := Element_Stores + 1;
+                        end if;
+                     when IR.Copy_Array =>
+                        Copy := Value;
+                     when IR.Fill_Array =>
+                        Fill := Value;
+                     when IR.Clear_Array =>
+                        Clear := Value;
+                     when IR.Store_Field =>
+                        if IR.Field_Of (Unit, Routine, Value) = 3
+                          and then IR.Op_Of
+                            (Unit, Routine,
+                             IR.Nth_Operand (Unit, Routine, Value, 1))
+                              = IR.Truth
+                          and then not IR.Truth_Of
+                            (Unit, Routine,
+                             IR.Nth_Operand (Unit, Routine, Value, 1))
+                        then
+                           False_Store := Value;
+                        end if;
+                     when others =>
+                        null;
+                  end case;
+               end;
+            end loop;
+         end if;
+
+         Landin.Testing.Check_Equal
+           (Item, Element_Stores, 2,
+            "the literal writes two elements through field one");
+         Landin.Testing.Check
+           (Item,
+            Copy /= IR.No_Value
+            and then IR.Source_Field_Of (Unit, Routine, Copy) = 0
+            and then IR.Element_Field_Of (Unit, Routine, Copy) = 2,
+            "the direct source copies into field two");
+         Landin.Testing.Check
+           (Item,
+            Fill /= IR.No_Value
+            and then IR.Element_Field_Of (Unit, Routine, Fill) = 1,
+            "repetition fills field one");
+         Landin.Testing.Check
+           (Item,
+            Clear /= IR.No_Value
+            and then IR.Element_Field_Of (Unit, Routine, Clear) = 2,
+            "zeroed clears field two");
+         Landin.Testing.Check
+           (Item, False_Store /= IR.No_Value,
+            "scalar zeroed stores typed false in field three");
+         Check_Terminators (Item, Unit, "struct literal array labels");
+      end;
+   end Struct_Literal_Array_Labels_Use_Field_Operations;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -3482,6 +3595,10 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "a struct literal becomes ordered field writes",
          A_Struct_Literal_Becomes_Ordered_Field_Writes'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "struct literal array labels use field operations",
+         Struct_Literal_Array_Labels_Use_Field_Operations'Access);
       Landin.Testing.Register
         (Into, "lowering", "the recorded corpus is current",
          The_Recorded_Corpus_Is_Current'Access);

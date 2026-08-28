@@ -1,0 +1,6 @@
+class: runtime
+summary: D65 commits each labelled array form in source order, preserves exact self-copies, and evaluates a repetition suffix once
+constructs: 0080, 0190, 0410, 0520, 0540, 0560, 0670, 0710, 0750, 1810, 1900, 1910
+program: main.ldn
+status: 42
+targets: linux-x86-64

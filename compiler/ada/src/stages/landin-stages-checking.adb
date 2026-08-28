@@ -2419,6 +2419,81 @@ package body Landin.Stages.Checking is
          type Node_List is array (Natural range <>) of Syn.Node_Id;
          First : Node_List (1 .. Count) := [others => Syn.No_Node];
          Failed : Boolean := False;
+
+         procedure Check_Array_Field
+           (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive);
+
+         procedure Check_Array_Field
+           (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive)
+         is
+            Expected : constant Landin.Checking.Element_Count :=
+              Landin.Checking.Field_Array_Length
+                (Types.all, Wrote, Which);
+            Element : constant Ty.Scalar_Name :=
+              Landin.Checking.Field_Array_Element
+                (Types.all, Wrote, Which);
+         begin
+            --  D65 makes the label the same contextual destination as the
+            --  selected field in D49--D53.  Each established array spelling
+            --  keeps its own shape check and diagnostic owner.
+            case Syn.Kind (Of_Tree, Value) is
+               when Syn.Array_Literal =>
+                  Check_Array_Literal
+                    (Of_Tree, Field, Value, Expected, Element,
+                     Static_Image => False);
+
+               when Syn.Array_Repetition =>
+                  Check_Array_Repetition
+                    (Of_Tree, Field, Value, Expected, Element,
+                     Static_Image => False);
+
+               when Syn.Mixed_Array_Repetition =>
+                  Check_Mixed_Array_Repetition
+                    (Of_Tree, Field, Value, Expected, Element,
+                     Static_Image => False);
+
+               when Syn.Zeroed_Literal =>
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Value, Ty.Fixed_Array);
+                  Landin.Checking.Note_Array
+                    (Types.all, Of_Tree, Value, Expected, Element);
+
+               when others =>
+                  declare
+                     Admitted : constant Boolean :=
+                       Syn.Kind (Of_Tree, Value) = Syn.Member_Selection
+                       and then Admit_Array_Field (Of_Tree, Value);
+                     Got : constant Ty.Type_Kind :=
+                       (if Admitted
+                            or else Is_Direct_Binding_Name (Of_Tree, Value)
+                        then Selected_From (Of_Tree, Value)
+                        else Synthesise (Of_Tree, Value));
+                  begin
+                     if Got = Ty.Ill_Typed then
+                        null;
+                     elsif Got /= Ty.Fixed_Array
+                       or else Landin.Checking.Array_Length
+                         (Types.all, Of_Tree, Value) /= Expected
+                       or else Landin.Checking.Array_Element
+                         (Types.all, Of_Tree, Value) /= Element
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Value),
+                           Message => "this is not an array of the type"
+                                      & " named by the struct field",
+                           Note    => "D17: an array's length and element"
+                                      & " type are its identity",
+                           Related => Syn.Origin (Of_Tree, Field),
+                           Because => "the field named here",
+                           Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Value);
+                     end if;
+                  end;
+            end case;
+         end Check_Array_Field;
       begin
          --  A refused field or a target extent overflow leaves the body
          --  identified but deliberately without a layout.  That refusal
@@ -2469,31 +2544,37 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note_Field
                     (Types.all, Of_Tree, Field, Which);
 
-                  if Landin.Checking.Field_Kind_Of
-                       (Types.all, Wrote, Which)
-                     = Landin.Checking.Fixed_Array_Field
-                  then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Value),
-                        Message => "a named array field in a struct literal"
-                                   & " is not enabled yet",
-                        Refused => Bad.Array_Value,
-                        Into    => Found);
-                     Landin.Checking.Refuse (Types.all, Of_Tree, Value);
-                     Failed := True;
-                  else
-                     Require
-                       (Of_Tree, Value,
-                        Landin.Checking.Field_Type
-                          (Types.all, Wrote, Which),
-                        Syn.Origin (Of_Tree, Field),
-                        "the struct field named here");
-                     Failed := Failed
-                       or else Landin.Checking.Type_Of
-                         (Types.all, Of_Tree, Value) = Ty.Ill_Typed;
-                  end if;
+                  case Landin.Checking.Field_Kind_Of
+                    (Types.all, Wrote, Which)
+                  is
+                     when Landin.Checking.Scalar_Field =>
+                        declare
+                           Held : constant Ty.Scalar_Name :=
+                             Landin.Checking.Field_Type
+                               (Types.all, Wrote, Which);
+                        begin
+                           if Syn.Kind (Of_Tree, Value)
+                                = Syn.Zeroed_Literal
+                           then
+                              --  D65 extends D42's contextual zero image to
+                              --  the scalar field named by this label.
+                              Landin.Checking.Note
+                                (Types.all, Of_Tree, Value, Held);
+                           else
+                              Require
+                                (Of_Tree, Value, Held,
+                                 Syn.Origin (Of_Tree, Field),
+                                 "the struct field named here");
+                           end if;
+                        end;
+
+                     when Landin.Checking.Fixed_Array_Field =>
+                        Check_Array_Field (Field, Value, Which);
+                  end case;
+
+                  Failed := Failed
+                    or else Landin.Checking.Type_Of
+                      (Types.all, Of_Tree, Value) = Ty.Ill_Typed;
                end if;
             end;
          end loop;

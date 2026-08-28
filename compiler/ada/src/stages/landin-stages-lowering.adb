@@ -996,6 +996,11 @@ package body Landin.Stages.Lowering is
                function Storage_For
                  (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
 
+               procedure Write_Array_Value
+                 (Value       : Syn.Node_Id;
+                  Destination : IR.Storage;
+                  Field       : Natural);
+
                procedure Write_Struct_Literal
                  (Literal     : Syn.Node_Id;
                   Wrote       : Res.Declaration_Id;
@@ -1072,6 +1077,143 @@ package body Landin.Stages.Lowering is
                   end case;
                end Copy_Field;
 
+               procedure Write_Array_Value
+                 (Value       : Syn.Node_Id;
+                  Destination : IR.Storage;
+                  Field       : Natural)
+               is
+                  procedure Store_Element
+                    (Position : Positive; Element : IR.Value_Id);
+
+                  procedure Store_Element
+                    (Position : Positive; Element : IR.Value_Id)
+                  is
+                     Part : constant IR.Part_Position :=
+                       IR.Part_Position (Position);
+                  begin
+                     if Field = 0 then
+                        case Destination.Kind is
+                           when IR.Module_Datum =>
+                              IR.Emit_Store_Field
+                                (Unit.all, Filling, Destination.Datum, Part,
+                                 Element, Site);
+                           when IR.Frame_Slot =>
+                              IR.Emit_Store_Slot_Field
+                                (Unit.all, Filling, Destination.Slot, Part,
+                                 Element, Site);
+                        end case;
+                     else
+                        declare
+                           Index : constant IR.Value_Id :=
+                             IR.Emit_Number
+                               (Unit.all, Filling, Ty.Usize,
+                                Ty.Magnitude (Position - 1), False, Site);
+                        begin
+                           case Destination.Kind is
+                              when IR.Module_Datum =>
+                                 IR.Emit_Store_Element
+                                   (Unit.all, Filling, Destination.Datum,
+                                    Index, Element, Site, Field => Field);
+                              when IR.Frame_Slot =>
+                                 IR.Emit_Store_Slot_Element
+                                   (Unit.all, Filling, Destination.Slot,
+                                    Index, Element, Site, Field => Field);
+                           end case;
+                        end;
+                     end if;
+                  end Store_Element;
+               begin
+                  --  D49--D53/D65: every contextual fixed-array destination
+                  --  uses the same field-qualified operation family.  Field
+                  --  zero is complete array storage; a positive field is the
+                  --  array member of an aggregate datum or slot.
+                  pragma Assert
+                    (Field = 0
+                     or else Syn.Kind (Of_Tree, Value)
+                               in Syn.Array_Literal
+                                  | Syn.Array_Repetition
+                                  | Syn.Mixed_Array_Repetition
+                                  | Syn.Zeroed_Literal
+                                  | Syn.Name_Reference
+                                  | Syn.Member_Selection);
+
+                  if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal then
+                     --  D29/D52 forms each contextual element directly in
+                     --  destination storage in source order.
+                     for Position in
+                       1 .. Syn.Element_Count (Of_Tree, Value)
+                     loop
+                        Store_Element
+                          (Position,
+                           Lower_Expression
+                             (Of_Tree,
+                              Syn.Nth_Element
+                                (Of_Tree, Value, Position),
+                              Scope));
+                     end loop;
+                  elsif Syn.Kind (Of_Tree, Value)
+                          = Syn.Mixed_Array_Repetition
+                  then
+                     --  D37/D53 writes each prefix position, then evaluates
+                     --  one suffix value for the compact fill.
+                     for Position in
+                       1 .. Syn.Element_Count (Of_Tree, Value)
+                     loop
+                        Store_Element
+                          (Position,
+                           Lower_Expression
+                             (Of_Tree,
+                              Syn.Nth_Element
+                                (Of_Tree, Value, Position),
+                              Scope));
+                     end loop;
+
+                     IR.Emit_Array_Fill
+                       (Unit.all, Filling, Destination,
+                        IR.Part_Position
+                          (Syn.Element_Count (Of_Tree, Value) + 1),
+                        Lower_Expression
+                          (Of_Tree,
+                           Syn.Repeated_Element (Of_Tree, Value), Scope),
+                        Site, Field => Field);
+                  elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition
+                  then
+                     IR.Emit_Array_Fill
+                       (Unit.all, Filling, Destination, 1,
+                        Lower_Expression
+                          (Of_Tree,
+                           Syn.Repeated_Element (Of_Tree, Value), Scope),
+                        Site, Field => Field);
+                  elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
+                     IR.Emit_Array_Clear
+                       (Unit.all, Filling, Destination, Site, Field => Field);
+                  else
+                     --  D20/D50: a whole array source is storage, optionally
+                     --  qualified by its containing aggregate field.
+                     declare
+                        Source_Nested : constant Boolean :=
+                          Syn.Kind (Of_Tree, Value) = Syn.Member_Selection;
+                        Source_Named : constant Syn.Node_Id :=
+                          (if Source_Nested
+                           then Syn.Target_Of (Of_Tree, Value)
+                           else Value);
+                        Source_Field : constant Natural :=
+                          (if Source_Nested
+                           then Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Value)
+                           else 0);
+                     begin
+                        IR.Emit_Array_Copy
+                          (Unit.all, Filling,
+                           Source => Storage_For (Of_Tree, Source_Named),
+                           Destination => Destination,
+                           Site => Site,
+                           Source_Field => Source_Field,
+                           Destination_Field => Field);
+                     end;
+                  end if;
+               end Write_Array_Value;
+
                procedure Write_Struct_Literal
                  (Literal     : Syn.Node_Id;
                   Wrote       : Res.Declaration_Id;
@@ -1113,14 +1255,25 @@ package body Landin.Stages.Lowering is
                         Field : constant Natural :=
                           Landin.Checking.Field_Index
                             (Types.all, Of_Tree, Field_Node);
+                        Value : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Field_Node);
                      begin
                         pragma Assert (Field > 0);
                         Seen (Field) := True;
-                        Store_Scalar
-                          (Field,
-                           Lower_Expression
-                             (Of_Tree, Syn.Value_Of (Of_Tree, Field_Node),
-                              Scope));
+                        case Landin.Checking.Field_Kind_Of
+                          (Types.all, Wrote, Field)
+                        is
+                           when Landin.Checking.Scalar_Field =>
+                              Store_Scalar
+                                (Field,
+                                 Lower_Expression
+                                   (Of_Tree, Value, Scope));
+                           when Landin.Checking.Fixed_Array_Field =>
+                              --  D65: the label is the same contextual array
+                              --  destination D49--D53 lower on assignment.
+                              Write_Array_Value
+                                (Value, Destination, Field);
+                        end case;
                      end;
                   end loop;
 
@@ -1573,197 +1726,9 @@ package body Landin.Stages.Lowering is
                            Destination : constant IR.Storage :=
                              Storage_For (Of_Tree, Named);
                         begin
-                           --  D49--D53 are the checker paths that type a whole
-                           --  array-field selection.  Each admitted spelling
-                           --  below either carries the field on its compact
-                           --  operation or uses D48's element identity.
-                           pragma Assert
-                             (Field = 0
-                              or else Syn.Kind (Of_Tree, Value)
-                                        in Syn.Array_Literal
-                                           | Syn.Array_Repetition
-                                           | Syn.Mixed_Array_Repetition
-                                           | Syn.Zeroed_Literal
-                                           | Syn.Name_Reference
-                                           | Syn.Member_Selection);
-
-                           if Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
-                           then
-                              --  D29 forms the contextual value directly in
-                              --  its destination.  Each source expression is
-                              --  lowered and written before the next, exposing
-                              --  [0410]'s order without a hidden array-sized
-                              --  temporary.
-                              for Position in
-                                1 .. Syn.Element_Count (Of_Tree, Value)
-                              loop
-                                 declare
-                                    Element : constant IR.Value_Id :=
-                                      Lower_Expression
-                                        (Of_Tree,
-                                         Syn.Nth_Element
-                                           (Of_Tree, Value, Position),
-                                         Scope);
-                                    Part : constant IR.Part_Position :=
-                                      IR.Part_Position (Position);
-                                 begin
-                                    if Field = 0 then
-                                       case Destination.Kind is
-                                          when IR.Module_Datum =>
-                                             IR.Emit_Store_Field
-                                               (Unit.all, Filling,
-                                                Destination.Datum, Part,
-                                                Element, Site);
-                                          when IR.Frame_Slot =>
-                                             IR.Emit_Store_Slot_Field
-                                               (Unit.all, Filling,
-                                                Destination.Slot, Part,
-                                                Element, Site);
-                                       end case;
-                                    else
-                                       declare
-                                          Index : constant IR.Value_Id :=
-                                            IR.Emit_Number
-                                              (Unit.all, Filling, Ty.Usize,
-                                               Ty.Magnitude (Position - 1),
-                                               False, Site);
-                                       begin
-                                          case Destination.Kind is
-                                             when IR.Module_Datum =>
-                                                IR.Emit_Store_Element
-                                                  (Unit.all, Filling,
-                                                   Destination.Datum, Index,
-                                                   Element, Site,
-                                                   Field => Field);
-                                             when IR.Frame_Slot =>
-                                                IR.Emit_Store_Slot_Element
-                                                  (Unit.all, Filling,
-                                                   Destination.Slot, Index,
-                                                   Element, Site,
-                                                   Field => Field);
-                                          end case;
-                                       end;
-                                    end if;
-                                 end;
-                              end loop;
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   = Syn.Mixed_Array_Repetition
-                           then
-                              --  D37: Storage_For above reaches the complete
-                              --  destination before any right-hand expression.
-                              --  Form each prefix position directly in that
-                              --  storage, then evaluate one suffix value for a
-                              --  compact fill beginning at k + 1.
-                              for Position in
-                                1 .. Syn.Element_Count (Of_Tree, Value)
-                              loop
-                                 declare
-                                    Element : constant IR.Value_Id :=
-                                      Lower_Expression
-                                        (Of_Tree,
-                                         Syn.Nth_Element
-                                           (Of_Tree, Value, Position),
-                                         Scope);
-                                    Part : constant IR.Part_Position :=
-                                      IR.Part_Position (Position);
-                                 begin
-                                    if Field = 0 then
-                                       case Destination.Kind is
-                                          when IR.Module_Datum =>
-                                             IR.Emit_Store_Field
-                                               (Unit.all, Filling,
-                                                Destination.Datum, Part,
-                                                Element, Site);
-                                          when IR.Frame_Slot =>
-                                             IR.Emit_Store_Slot_Field
-                                               (Unit.all, Filling,
-                                                Destination.Slot, Part,
-                                                Element, Site);
-                                       end case;
-                                    else
-                                       declare
-                                          Index : constant IR.Value_Id :=
-                                            IR.Emit_Number
-                                              (Unit.all, Filling, Ty.Usize,
-                                               Ty.Magnitude (Position - 1),
-                                               False, Site);
-                                       begin
-                                          case Destination.Kind is
-                                             when IR.Module_Datum =>
-                                                IR.Emit_Store_Element
-                                                  (Unit.all, Filling,
-                                                   Destination.Datum, Index,
-                                                   Element, Site,
-                                                   Field => Field);
-                                             when IR.Frame_Slot =>
-                                                IR.Emit_Store_Slot_Element
-                                                  (Unit.all, Filling,
-                                                   Destination.Slot, Index,
-                                                   Element, Site,
-                                                   Field => Field);
-                                          end case;
-                                       end;
-                                    end if;
-                                 end;
-                              end loop;
-
-                              IR.Emit_Array_Fill
-                                (Unit.all, Filling, Destination,
-                                 IR.Part_Position
-                                   (Syn.Element_Count (Of_Tree, Value) + 1),
-                                 Lower_Expression
-                                   (Of_Tree,
-                                    Syn.Repeated_Element (Of_Tree, Value),
-                                    Scope),
-                                 Site, Field => Field);
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   = Syn.Array_Repetition
-                           then
-                              IR.Emit_Array_Fill
-                                (Unit.all, Filling, Destination, 1,
-                                 Lower_Expression
-                                   (Of_Tree,
-                                    Syn.Repeated_Element (Of_Tree, Value),
-                                    Scope),
-                                 Site, Field => Field);
-                           elsif Syn.Kind (Of_Tree, Value)
-                                   = Syn.Zeroed_Literal
-                           then
-                              --  D30 reuses D28's one destination-only clear
-                              --  for either local or module runtime storage;
-                              --  D49 adds the containing field identity.
-                              IR.Emit_Array_Clear
-                                (Unit.all, Filling, Destination, Site,
-                                 Field => Field);
-                           else
-                              --  D20/D50 are one compact storage operation:
-                              --  D18 permits a length the compiler host cannot
-                              --  enumerate.  Each positive field is an
-                              --  identity; the backend derives both offsets.
-                              declare
-                                 Source_Nested : constant Boolean :=
-                                   Syn.Kind (Of_Tree, Value)
-                                     = Syn.Member_Selection;
-                                 Source_Named : constant Syn.Node_Id :=
-                                   (if Source_Nested
-                                    then Syn.Target_Of (Of_Tree, Value)
-                                    else Value);
-                                 Source_Field : constant Natural :=
-                                   (if Source_Nested
-                                    then Landin.Checking.Field_Index
-                                      (Types.all, Of_Tree, Value)
-                                    else 0);
-                              begin
-                                 IR.Emit_Array_Copy
-                                   (Unit.all, Filling,
-                                    Source =>
-                                      Storage_For (Of_Tree, Source_Named),
-                                    Destination => Destination,
-                                    Site => Site,
-                                    Source_Field => Source_Field,
-                                    Destination_Field => Field);
-                              end;
-                           end if;
+                           --  D49--D53 and D65 share one field-qualified
+                           --  lowering rule for every contextual array value.
+                           Write_Array_Value (Value, Destination, Field);
                         end;
                      else
                         declare

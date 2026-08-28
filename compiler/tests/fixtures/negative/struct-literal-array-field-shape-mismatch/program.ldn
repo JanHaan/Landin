@@ -1,0 +1,11 @@
+holder: type = struct
+    row: [2]u8
+    tag: u8
+end holder
+
+wide: [3]u8 = [1, 2, 3]
+
+f: () -> none =
+    first: holder = (row: [1], tag: 2)
+    second: holder = (tag: 3, row: wide)
+end f

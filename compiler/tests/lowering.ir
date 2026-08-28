@@ -2510,6 +2510,92 @@ item 2 ROUTINE use result none params 1 slots 7 blocks 1 values 22
     20 LOAD_ELEMENT usize slot 5 field 2 <- 19
     21 STORE slot 7 <- 20
     22 LEAVE
+file positive/struct-literal-array-field-forms/program.ldn
+unit items 3
+item 1 DATUM words result array params 0 slots 0 blocks 1 values 1
+  elements 3 of usize
+  image 1 2 3
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 bool
+  field 2 [3]usize
+  field 3 [3]usize
+  field 4 u8
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 ROUTINE write result usize params 0 slots 8 blocks 1 values 62
+  slot 1 result usize return
+  slot 2 local aggregate fields bool [3]usize [3]usize u8
+  slot 3 copied aggregate fields bool [3]usize [3]usize u8
+  slot 4 assigned aggregate fields bool [3]usize [3]usize u8
+  slot 5 - usize
+  slot 6 - usize
+  slot 7 - usize
+  slot 8 - usize
+  block 1 scope 3 BLOCK length 62
+    1 CLEAR_ARRAY destination slot 2 field 3
+    2 NUMBER u8 0
+    3 STORE_FIELD <- 2
+    4 NUMBER usize 4
+    5 NUMBER usize 0
+    6 STORE_ELEMENT slot 2 field 2 <- 5 4
+    7 NUMBER usize 5
+    8 NUMBER usize 1
+    9 STORE_ELEMENT slot 2 field 2 <- 8 7
+    10 NUMBER usize 6
+    11 NUMBER usize 2
+    12 STORE_ELEMENT slot 2 field 2 <- 11 10
+    13 TRUTH bool false
+    14 STORE_FIELD <- 13
+    15 COPY_ARRAY from datum 1 words to slot 3 field 2
+    16 TRUTH bool false
+    17 STORE_FIELD <- 16
+    18 COPY_ARRAY from slot 2 field 2 to slot 3 field 3
+    19 NUMBER u8 7
+    20 STORE_FIELD <- 19
+    21 NUMBER u8 8
+    22 STORE_FIELD <- 21
+    23 NUMBER usize 9
+    24 FILL_ARRAY destination slot 4 field 2 first 1 <- 23
+    25 NUMBER usize 10
+    26 NUMBER usize 0
+    27 STORE_ELEMENT slot 4 field 3 <- 26 25
+    28 NUMBER usize 11
+    29 FILL_ARRAY destination slot 4 field 3 first 2 <- 28
+    30 TRUTH bool false
+    31 STORE_FIELD <- 30
+    32 COPY_ARRAY from slot 3 field 2 to datum 2 state field 3
+    33 TRUTH bool false
+    34 STORE_FIELD <- 33
+    35 CLEAR_ARRAY destination datum 2 state field 2
+    36 NUMBER u8 0
+    37 STORE_FIELD <- 36
+    38 NUMBER usize 0
+    39 LOAD_ELEMENT usize slot 2 field 2 <- 38
+    40 STORE slot 8 <- 39
+    41 NUMBER usize 1
+    42 LOAD_ELEMENT usize slot 3 field 3 <- 41
+    43 LOAD usize slot 8
+    44 ADD usize <- 43 42
+    45 STORE slot 7 <- 44
+    46 NUMBER usize 2
+    47 LOAD_ELEMENT usize slot 4 field 2 <- 46
+    48 LOAD usize slot 7
+    49 ADD usize <- 48 47
+    50 STORE slot 6 <- 49
+    51 NUMBER usize 2
+    52 LOAD_ELEMENT usize slot 4 field 3 <- 51
+    53 LOAD usize slot 6
+    54 ADD usize <- 53 52
+    55 STORE slot 5 <- 54
+    56 NUMBER usize 0
+    57 LOAD_ELEMENT usize datum 2 state field 2 <- 56
+    58 LOAD usize slot 5
+    59 ADD usize <- 58 57
+    60 STORE slot 1 <- 59
+    61 LOAD usize slot 1
+    62 LEAVE <- 61
 file positive/struct-literal-contexts/program.ldn
 unit items 2
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
