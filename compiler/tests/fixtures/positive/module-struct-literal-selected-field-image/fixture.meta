@@ -1,0 +1,5 @@
+class: positive
+summary: D71 copies every selected module struct array-field image into a labelled field
+constructs: 0050, 0080, 0520, 0540, 0560, 0670, 0710, 0750, 1460, 1740, 1810, 1820, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,15 @@
+source_type: type = struct
+    row: [2]u16
+    tag: u8
+end source_type
+short_type: type = struct
+    row: [1]u16
+end short_type
+byte_type: type = struct
+    row: [2]u8
+end byte_type
+
+source: source_type
+wrong_length: short_type = (row: source.row)
+wrong_element: byte_type = (row: source.row)
+wrong_kind: byte_type = (row: source.tag)

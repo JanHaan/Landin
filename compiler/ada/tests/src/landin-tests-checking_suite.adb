@@ -2709,7 +2709,7 @@ package body Landin.Tests.Checking_Suite is
          True);
    end Struct_Array_Field_Storage_Classes_Are_Enabled;
 
-   --  D64/D66--D69 carry one nominal body on the contextual literal, record
+   --  D64/D66--D71 carry one nominal body on the contextual literal, record
    --  each source label as a declaration-order field identity, and give each
    --  module array label its field's complete static shape.
    procedure Struct_Literals_Carry_Body_And_Field_Identities
@@ -2895,6 +2895,72 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 4, "all contextual struct literals were checked");
    end Struct_Literals_Carry_Body_And_Field_Identities;
 
+   --  D71 gives a selected module struct array field the static label's D17
+   --  context without making the selection a general value.
+   procedure Module_Struct_Field_Image_Carries_Source_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Module_Struct_Field_Image_Carries_Source_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "selected-field-image.ldn",
+         "word: type = u16" & LF
+         & "holder: type = struct" & LF
+         & "    row: [2]word" & LF
+         & "end holder" & LF
+         & "copy: holder = (row: source.row)" & LF
+         & "source: holder = (row: [11, 13])" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a selected field supplies a labelled module image");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Member_Selection
+            then
+               Seen := Seen + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
+                    = Landin.Types.Fixed_Array
+                  and then Landin.Checking.Array_Length
+                    (Types.all, Of_Tree.all, Node) = 2
+                  and then Landin.Checking.Array_Element
+                    (Types.all, Of_Tree.all, Node) = Landin.Types.U16
+                  and then Landin.Checking.Field_Index
+                    (Types.all, Of_Tree.all, Node) = 1,
+                  "the selected source carries its field identity and shape");
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 1, "one selected field image was checked");
+   end Module_Struct_Field_Image_Carries_Source_Shape;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2993,6 +3059,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "struct literals carry body and field contexts",
          Struct_Literals_Carry_Body_And_Field_Identities'Access);
+      Landin.Testing.Register
+        (Into, "checking", "a struct field image carries source shape",
+         Module_Struct_Field_Image_Carries_Source_Shape'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);

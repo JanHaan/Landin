@@ -1998,6 +1998,105 @@ item 8 DATUM blank result struct params 0 slots 0 blocks 1 values 1
   image 0 0 0 0 0
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/module-struct-literal-selected-field-image/program.ldn
+unit items 7
+item 1 DATUM copy result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]u16
+  field 2 [2]u16
+  field 3 [3]u8
+  field 4 [3]u8
+  field 5 [2]u8
+  field 6 [2]u8
+  field 7 [2]u16
+  image 0 0 0 0 0 0 0
+  field 1 image 11 13
+  field 2 image 0 0
+  field 3 image repeat 7
+  field 4 image 1 repeat 2
+  field 7 image 29 31
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM inferred result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]u16
+  field 2 [2]u16
+  field 3 [3]u8
+  field 4 [3]u8
+  field 5 [2]u8
+  field 6 [2]u8
+  field 7 [2]u16
+  image 0 0 0 0 0 0 0
+  field 1 image 11 13
+  field 2 image 0 0
+  field 3 image repeat 7
+  field 4 image 1 repeat 2
+  field 7 image 29 31
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM alias result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]u16
+  field 2 [2]u16
+  field 3 [3]u8
+  field 4 [3]u8
+  field 5 [2]u8
+  field 6 [2]u8
+  field 7 [2]u16
+  image 0 0 0 0 0 0 0
+  field 1 image 11 13
+  field 2 image 0 0
+  field 3 image repeat 7
+  field 4 image 1 repeat 2
+  field 7 image 29 31
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM inferred_alias result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]u16
+  field 2 [2]u16
+  field 3 [3]u8
+  field 4 [3]u8
+  field 5 [2]u8
+  field 6 [2]u8
+  field 7 [2]u16
+  image 0 0 0 0 0 0 0
+  field 1 image 11 13
+  field 2 image 0 0
+  field 3 image repeat 7
+  field 4 image 1 repeat 2
+  field 7 image 29 31
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 DATUM source result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]u16
+  field 2 [2]u16
+  field 3 [3]u8
+  field 4 [3]u8
+  field 5 [2]u8
+  field 6 [2]u8
+  field 7 [2]u16
+  image 0 0 0 0 0 0 0
+  field 1 image 11 13
+  field 2 image 0 0
+  field 3 image repeat 7
+  field 4 image 1 repeat 2
+  field 7 image 29 31
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 6 DATUM selected result array params 0 slots 0 blocks 1 values 1
+  elements 2 of u16
+  image 29 31
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 7 DATUM seed result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]u16
+  field 2 [2]u16
+  field 3 [3]u8
+  field 4 [3]u8
+  field 5 [2]u8
+  field 6 [2]u8
+  field 7 [2]u16
+  image 0 0 0 0 0 0 0
+  field 1 image 29 31
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/module-struct-zeroed-initializer/program.ldn
 unit items 3
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
