@@ -5,7 +5,7 @@ end counters
 mut state: counters
 
 --  [1740]'s state of a struct type is storage a program may declare, and
---  reading the whole of one is a value that waits for the rest of R2.20.
+--  reading the whole of one as a general expression remains refused.
 f: () -> none =
     _ = state
 end f

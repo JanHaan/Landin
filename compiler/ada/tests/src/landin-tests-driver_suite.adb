@@ -96,8 +96,22 @@ package body Landin.Tests.Driver_Suite is
       Landin.Testing.Check
         (Item,
          Contains
-           (Text, "language frontend: scanner, parser, names, types"),
+           (Text,
+            "language frontend: scanner, parser, names, types, "
+            & "definite assignment"),
          "identity names the frontend it has");
+      Landin.Testing.Check
+        (Item,
+         Contains
+           (Text, "backend: linux-x86-64 assembly"),
+         "identity names the assembly backend it has");
+      Landin.Testing.Check
+        (Item,
+         Contains
+           (Text,
+            "executable output: assembled and linked by a"
+            & " GNU-triplet-selected toolchain"),
+         "identity explains how executable output is produced");
       Landin.Testing.Check
         (Item, not Contains (Text, "0."),
          "identity carries no version number");

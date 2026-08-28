@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Mechanical checks over the tour, roadmap, and prototypes.
+Mechanical checks over the live documents, grammar, and fixture corpus.
 
 Not a compiler, parser, or roadmap executor — a set of cheap invariants
 that caught most of the defects found between 0.0.14 and 0.1.0, and that
@@ -2385,6 +2385,40 @@ def fixture_sources():
     return out
 
 
+def pinned_fixtures():
+    """Every fixture in a `Pinned by` paragraph still exists.
+
+    Decision-register evidence is a live reference, unlike a historical
+    sentence that deliberately names a retired fixture.  Several decisions
+    kept citing fixtures after the slice that superseded them deleted those
+    directories, and the prose still read plausibly.  Restricting this check
+    to `Pinned by` paragraphs preserves that history while refusing evidence
+    a reader cannot inspect.
+    """
+    out = []
+    fixture = re.compile(
+        r"`((?:unit|positive|negative|runtime|abi|debugger|end-to-end)"
+        r"/[A-Za-z0-9][A-Za-z0-9._-]*)`")
+    block = re.compile(r"\*\*Pinned by\*\*(.*?)(?=\n\n|\Z)", re.S)
+
+    for relative in LIVE_DOCS:
+        path = os.path.join(ROOT, relative)
+        if not os.path.exists(path):
+            continue
+        text = io.open(path, encoding="utf-8").read()
+        for paragraph in block.finditer(text):
+            for found in fixture.finditer(paragraph.group(0)):
+                named = found.group(1)
+                if os.path.isdir(
+                        os.path.join(ROOT, "compiler/tests/fixtures", named)):
+                    continue
+                at = paragraph.start() + found.start()
+                out.append((relative, text.count("\n", 0, at) + 1,
+                            "this pins %s, which is not a fixture" % named))
+
+    return out
+
+
 def construct_matrix():
     """R1.90's construct matrix, generated from what the corpus says.
 
@@ -3225,6 +3259,7 @@ def main(argv):
     if full_run:
         extra += fixture_constructs()
         extra += fixture_sources()
+        extra += pinned_fixtures()
         extra += lowering_verifies()
     extra += check_matrix(full_run)
     for path, line, why in sorted(set(extra)):

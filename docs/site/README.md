@@ -9,7 +9,7 @@ are the specification; these pages are a reading of them.
 | kind | sources | how it is read |
 |---|---|---|
 | the tour | `tour.md` | as a literate document: every `[NNNN]` construct becomes a block holding its prose and the code that follows, and every citation becomes a link to the construct it names |
-| the prototypes | `prototype-{1..4}-*.txt` | as listings, because in those the code is the argument, with the closing findings pulled out as entries |
+| the prototypes | `prototype-{1..4}-*.md` | as listings, because in those the code is the argument, with the closing findings pulled out as entries |
 | the guides | the Markdown documents named in `GUIDES`, including `examples.md` | as ordinary prose, with `[NNNN]` citations linked into the tour and links between documents rewritten to the pages they name |
 
 Nothing here is a parser, and the highlighting is not written here. It comes
@@ -126,6 +126,6 @@ the build's one rule: nothing beyond the Python standard library. So does
 `assets/fonts.py`, which reads the vendored stylesheets and copies the
 files it found in them.
 
-There is still no build system and no asset pipeline. The shared scanner is a
-file in this repository rather than a package, and Pygments is a dependency of
-the lexer that wraps it rather than of anything the pages need.
+The site has no separate build system or asset pipeline. The shared scanner is
+a file in this repository rather than a package, and Pygments is a dependency
+of the lexer that wraps it rather than of anything the pages need.

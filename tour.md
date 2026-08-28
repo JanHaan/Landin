@@ -2638,12 +2638,13 @@ authority for open work, implementation dependencies, phase gates,
 dispositions and completion evidence. Every inherited item is traced to
 the construct, prototype finding or archived review section it came from.
 
-There is no compiler yet, but implementation begins immediately rather
-than waiting for every unresolved foundation. R0 establishes the Ada
-bootstrap chassis and R1 the executable kernel on Linux x86-64. The first
-major compiler milestone is R3, a complete derived parser program with
-evidence-table dispatch and `any` but without specialization. Target work
-continues through native macOS arm64 and emulator-first Cortex-M.
+The bootstrap compiler now exists. R0's Ada chassis and R1's executable
+kernel are complete: `refine` checks and lowers a program, emits Linux x86-64
+assembly, and can assemble and link a hosted executable. R2 is settling the
+semantic and representation core from executable cases. The first major
+compiler milestone is R3, a complete derived parser program with evidence-
+table dispatch and `any` but without specialization. Target work continues
+through native macOS arm64 and emulator-first Cortex-M.
 
 The endpoint is feature-complete pre-v1. Production status, release
 versioning, package acquisition, competitive optimization and

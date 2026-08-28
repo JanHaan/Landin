@@ -1,7 +1,8 @@
 # Landin — orientation
 
 Everything a fresh reader, or a fresh session, needs before touching
-anything. Written at specification **0.1.0**, with no compiler yet.
+anything. Kept current at specification **0.1.0** while the bootstrap compiler
+advances through the roadmap.
 
 ---
 
@@ -178,16 +179,19 @@ they are parked with a condition rather than refused.
 ## Where the work stands
 
 The specification is coherent and mechanically checked. Four prototypes
-exist and all their findings are worked in. Two outside reviews have
-been folded in, one of which reversed a decision made a day earlier and
-was right to.
+exist and all their findings are worked in. Independent reviews are folded
+back into the specification, roadmap and executable evidence rather than kept
+as a second authority.
 
-**There is no compiler yet.** `ROADMAP.md` is now the sole durable work
-authority. R0 establishes the Ada bootstrap chassis and test harness;
-R1 builds the executable language kernel and first Linux x86-64 path.
-Outstanding grammar, representation, ABI, guarantee, and diagnostic
-questions are settled by the first phase that needs them rather than
-forming one blanket front-end barrier.
+**The bootstrap compiler is working.** R0's Ada chassis and R1's executable
+kernel are complete; R2.20 is active. `refine` runs the frontend, lowers and
+verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and
+link a hosted executable whose runtime behaviour the native x86-64 gate
+checks. macOS arm64 and Cortex-M backends and the standard library remain
+future work. `ROADMAP.md` is the sole durable work authority. Outstanding
+grammar, representation, ABI, guarantee, and diagnostic questions are settled
+by the first phase that needs them rather than forming one blanket front-end
+barrier.
 
 The first major compiler milestone is R3: a complete derived version of
 the parser prototype with useful diagnostics, evidence-table dispatch,

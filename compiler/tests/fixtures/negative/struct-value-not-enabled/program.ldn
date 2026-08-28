@@ -6,3 +6,6 @@ end point
 --  into or out of a function is an ABI rule R2.30 owns.
 f: (here: point) -> none =
 end f
+
+g: () -> (there: point) =
+end g

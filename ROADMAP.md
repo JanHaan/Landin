@@ -306,7 +306,7 @@ in debug and in release; the stage and target seams have contract tests
 including a synthetic 32-bit description; and the executable makes no version
 claim, which the gate job prints rather than merely asserting.
 
-R0 is complete. R1 is next, and R1.10 is unblocked.
+R0 is complete. R1 followed and is complete too.
 
 ## R1 — Executable language kernel
 
@@ -1989,8 +1989,9 @@ asks the same question, so a place is parsed as a place in both positions.
 Definite assignment [1910] was left alone deliberately and says so in code:
 writing one field does not assign the binding, so a selection marks nothing, and
 the name it selects from is a read because that is where the field is. Nothing
-tracked can be a struct yet — a local of one is still refused — so this is the
-rule written down before it can be reached rather than a behaviour change.
+tracked could be a struct at that slice — a local of one was still refused —
+so this was the rule written down before D47 made it reachable rather than a
+behaviour change at D44.
 
 Arrays begin where structs began: a type a program can declare and lay out,
 with a value of one still refused. [1790]'s `type` gained `array_type ::= "["
@@ -2886,10 +2887,26 @@ fresh storage and 64/32-bit field addresses. The positive module/local/alias/
 self-shadow fixture, source-completeness, contextual-form and nominal-identity
 negatives, the recorded IR and an executable independence fixture provide
 evidence. Inferred local initialization remains separate in this slice and is
-admitted by D56 below only from a direct storage name. All module struct
+admitted by D56 only from a direct storage name. All module struct
 initializers remain separate in this slice; D59 admits the typed zero image and
 D60 the typed direct-name image chain. Non-name values, struct literals, calls,
-returns and general aggregate values remain separate slices.
+returns and general aggregate values remain separate slices at D55; D57 later
+admits contextual `zeroed` and D64--D68 the contextual labelled-literal forms.
+
+D56 admits a mutable or immutable inferred local ordinary-struct binding from
+a direct module or earlier local storage name. The checker carries the source's
+nominal body declaration onto the new local before settling it as an aggregate;
+this closes the bodyless inferred-aggregate hole without introducing structural
+typing or a general aggregate value. D54/D55's complete source read and fresh,
+declaration-ordered slot copy apply unchanged, including compact array-field
+copies and target-derived 64/32-bit addresses. A type declaration is not
+storage and is refused in the D20/D21 array paths and D54--D56 struct paths.
+Public checker, lowering and backend seams, module/local/alias/self-shadow and
+runtime independence positives, source-completeness negatives, recorded dumps
+and explicit type-name refusals provide evidence. Module inference, non-name
+initializers, aggregate `zeroed`, static struct images, calls, returns and
+general aggregate values remain separate slices in D56; D61 later admits the
+direct-name module form by reusing D60's static image chain.
 
 D57 admits `zeroed` as the contextual initializer of an explicitly typed local
 ordinary struct. One existing `Clear_Array` instruction with field zero clears
@@ -2986,8 +3003,8 @@ lowering operation, verifier invariant, backend layout or diagnostic code is
 introduced. Parser public-seam, focused negative and automatic truncation
 cases plus regenerated construct and token records provide evidence. D64 below
 adds the grammar and real field-labelled node for the nonempty labelled form.
-The all-fill and call-shaped spellings remain parser refusals, and a module
-literal separately needs D60's deferred nonzero static aggregate image.
+The all-fill and call-shaped spellings remain parser refusals. D64 later adds
+the labelled literal node and D66--D68 its target-neutral module static image.
 
 D64 enables [0710]'s nonempty labelled ordinary-struct literal in an explicitly
 typed local initializer and as the complete right-hand side of assignment to a
@@ -3022,7 +3039,8 @@ lowering seams and regenerated token/IR records provide evidence. General
 types without conversion or re-evaluation; inferred literals wait for
 construction, module literals remain outside D65, and the all-fill synonym and
 general aggregate values remain refused. D66 later supplies D60's nonzero
-image carrier for scalar labels, and D67 its finite-or-zero array-field form.
+image carrier for scalar labels, D67 its finite-or-zero array-field form, and
+D68 its repeated and hybrid field images.
 No grammar,
 syntax, diagnostic, IR, verifier, backend, target or layout invariant changes.
 
@@ -3030,7 +3048,8 @@ D66 admits an explicitly typed mutable or immutable module ordinary struct
 initialized by D64's nonempty labelled literal when every named field is
 scalar and known under [1940]. D64's label, duplicate, missing and `of zeroed`
 rules remain; D67 later supersedes the explicit-array-label refusal with a
-compact finite-or-zero field image. IR records one target-neutral folded entry per
+compact finite-or-zero field image and D68 adds repeated and hybrid forms. IR
+records one target-neutral folded entry per
 declaration-order field, using zero for unnamed scalar fields and for the
 absent image of every array field; verifier checks hold the run to the field
 count, array placeholders to zero and scalar folds to the selected target.
@@ -3077,60 +3096,34 @@ independence fixture provide evidence. Direct or selected array-image copy,
 inferred literals, heterogeneous fills, construction and general aggregate
 values remain separate slices.
 
-D56 admits a mutable or immutable inferred local ordinary-struct binding from
-a direct module or earlier local storage name. The checker carries the source's
-nominal body declaration onto the new local before settling it as an aggregate;
-this closes the bodyless inferred-aggregate hole without introducing structural
-typing or a general aggregate value. D54/D55's complete source read and fresh,
-declaration-ordered slot copy apply unchanged, including compact array-field
-copies and target-derived 64/32-bit addresses. A type declaration is not
-storage and is refused in the D20/D21 array paths and D54--D56 struct paths.
-Public checker, lowering and backend seams, module/local/alias/self-shadow and
-runtime independence positives, source-completeness negatives, recorded dumps
-and explicit type-name refusals provide evidence. Module inference, non-name
-initializers, aggregate `zeroed`, static struct images, calls, returns and
-general aggregate values remain separate slices in D56; D61 later admits the
-direct-name module form by reusing D60's static image chain.
+What is still refused: whole-array values outside the contextual storage forms.
+Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
+D33--D36/D38's repetitions, and D51's selected field for a local binding;
+assignments admit D20's direct storage name, D29/D30/D32/D37's literal,
+`zeroed` and repetitions, plus D49/D50/D52/D53's field-qualified forms. Bare
+whole-array reads, arguments, returns, discards and operands remain refused.
+Within a struct literal D65 admits those runtime array-field destinations and
+D67/D68 admit finite, zero, repeated and hybrid module field images, while a
+direct or selected array-image copy label remains refused.
 
-What is still refused: array initializers other than D21's direct storage name
-and D51's selected field for a local binding,
-D23/D24's explicitly typed local and module literal, D25/D26's inferred local
-and module literal, D27/D28's explicitly typed module and local `zeroed`, D33/D35's
-counted inferred local and module repetition, D34's explicitly typed local and
-module repetition and D36/D38's explicitly typed local and module mixed
-repetition; array assignments other than D20's direct storage name, D29's literal,
-D30's `zeroed`, D32's repetition, D37's mixed-prefix repetition, D49's
-contextual field clear, D50's contextual field copy endpoints and D52's
-contextual field literal and D53's contextual field repetition; general
-whole-array value positions; inferred scalar initialization, named-return
-subobject and nested-subobject scalar `zeroed` assignment beyond D62,
-nested/general scalar and every
-other `zeroed` [0540] context beyond D27/D28/D30/D39/D40/D41/D42/D43/D49/D57/D58/D59/D62/D65; inferred initialization,
-nested and general-value mixed-prefix
-repetition, plus
-count-less inferred and general-value full repetition [0560]; slices
-[0570]; `lenof`
-operands
-other than D14's direct name and D31's literal; and struct initialization other
-than D55/D56's explicitly typed or inferred local direct-storage-name forms,
-D57's explicitly typed local zero image, D59's explicitly typed module zero
-image, D60's explicitly typed module direct-storage-name image chain and D61's
-inferred module direct-storage-name image chain, and D64/D65's explicitly typed
-local labelled literal and contextual field values, plus D66's explicitly
-typed module scalar-labelled static image, D67's finite-or-zero labelled
-array-field image and D68's labelled full or mixed repetition image,
-general whole values,
-inferred struct literals, labelled module array-field image-copy forms, general
-or all-field fills and call-shaped construction beyond D64--D68's contextual
-literal,
-parameters or returns of a struct with an aggregate field beyond D54's
-contextual whole copy, plus selection or whole-place use of
-its array field beyond D48's indexed
-elements, D49's contextual clear, D50's contextual copy endpoints, D51's
-local initializer source, D52's contextual literal destination and D53's
-contextual repetition destination.
-Each is its own slice, and the remaining
-value slices need the initialization work D21 did not settle.
+Inferred scalar initialization; count-less inferred and general-value full or
+mixed repetition [0560]; slices [0570]; and `lenof` operands other than D14's
+direct name and D31's literal remain refused. `zeroed` remains contextual: its
+enabled sites are D27/D28/D30, D39--D43, D49, D57--D59, D62 and D64--D67;
+named-return subobjects, deeper nested places and every general value use stay
+outside those rules.
+
+Struct initialization is contextual too: D55/D56 admit typed and inferred local
+direct-name copies; D57 and D59 typed local and module zero images; D60/D61
+typed and inferred module image chains; D64/D65 typed local labelled literals
+and whole assignments; and D66--D68 typed module labelled images. General
+whole values, inferred struct literals, heterogeneous or all-field fills and
+call-shaped construction remain refused. Parameters and returns of any struct
+type require R2.30's aggregate ABI. An array field may otherwise be reached
+only through D48's indexed elements, D49's contextual clear, D50's copy
+endpoints, D51's local initializer source, and D52/D53's literal or repetition
+destination. Each remaining boundary is its own slice rather than an implicit
+extension of the contextual forms above.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed

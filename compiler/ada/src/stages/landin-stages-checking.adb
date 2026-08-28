@@ -762,7 +762,11 @@ package body Landin.Stages.Checking is
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "a value of a struct type is not enabled"
                                 & " yet",
-                     Refused => Bad.Struct_Value,
+                     Refused =>
+                       (if Syn.Kind (Of_Tree, Node)
+                              in Syn.Parameter | Syn.Named_Return
+                        then Bad.Struct_ABI
+                        else Bad.Struct_Value),
                      Into    => Found);
                end if;
 
@@ -1816,9 +1820,7 @@ package body Landin.Stages.Checking is
                   Source  => Syn.Source_Of (Of_Tree),
                   Where   => Syn.Where (Of_Tree, Node),
                   Message => "a struct literal needs an explicitly typed"
-                             & " local initializer or whole assignment",
-                  Note    => "D60 and [1460]: module struct images remain"
-                             & " zero-only",
+                             & " initializer or whole assignment",
                   Refused => Bad.Struct_Value,
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
@@ -4149,8 +4151,8 @@ package body Landin.Stages.Checking is
                  and then Landin.Checking.Body_Of (Types.all, Source_Id)
                           = Landin.Checking.Body_Of (Types.all, Id)
                then
-                  --  D60: ordinary module structs currently have only D10
-                  --  and D59's zero terminal images.  Following identities
+                  --  D60/D61 follow either D10/D59's absent zero image or
+                  --  D66--D68's labelled folded image.  Following identities
                   --  still rejects a value chain that returns to itself.  A
                   --  body with no layout has already refused the compilation;
                   --  this graph walk adds no fallout for it.
@@ -6225,11 +6227,19 @@ package body Landin.Stages.Checking is
                   when Syn.Return_Statement =>
                      Read_Names (Of_Tree, Syn.Condition_Of (Of_Tree, Item),
                                  State);
-                     Require_Assigned
-                       (Syn.Source_Of (Of_Tree),
-                        Syn.Anchor (Of_Tree, Item), Result, State,
-                        "this returns and no path that arrives assigned"
-                        & " the return");
+                     --  A refused named return is no executable destination.
+                     --  Its ABI report owns the declaration; do not follow it
+                     --  with an assignment report at each `return`.
+                     if Result = Res.No_Declaration
+                       or else Landin.Checking.Type_Of (Types.all, Result)
+                               /= Ty.Ill_Typed
+                     then
+                        Require_Assigned
+                          (Syn.Source_Of (Of_Tree),
+                           Syn.Anchor (Of_Tree, Item), Result, State,
+                           "this returns and no path that arrives assigned"
+                           & " the return");
+                     end if;
 
                      --  [1910]: a `return when` is a return, and the flow
                      --  after it is reachable because the guard may be
@@ -6427,7 +6437,13 @@ package body Landin.Stages.Checking is
                                     Syn.Origin (Of_Tree.all, Node),
                                     State, Exits);
 
-                                 if not Exits then
+                                 if not Exits
+                                   and then
+                                     (Result_Id = Res.No_Declaration
+                                      or else Landin.Checking.Type_Of
+                                                (Types.all, Result_Id)
+                                                /= Ty.Ill_Typed)
+                                 then
                                     Require_Assigned
                                       (Syn.Source_Of (Of_Tree.all),
                                        Syn.Anchor (Of_Tree.all, Node),

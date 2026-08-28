@@ -3,8 +3,9 @@
 #  that fixture discovery resolves compiler/tests the same way everywhere.
 #
 #  Arguments are passed through.  There is one: --record, which writes
-#  compiler/tests/lowering.ir from the corpus as it is now and runs no
-#  case.  Re-run with no argument afterwards to close the loop.
+#  compiler/tests/lowering.ir and compiler/tests/layout.targets from the
+#  corpus as it is now and runs no case.  Re-run with no argument afterwards
+#  to close the loop.
 
 . "$(dirname -- "$0")/env.sh"
 
