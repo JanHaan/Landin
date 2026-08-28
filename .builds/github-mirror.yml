@@ -1,0 +1,43 @@
+#  The disposable GitHub mirror, and not a gate.
+#
+#  git.sr.ht remains the canonical repository.  This separate job copies its
+#  branch and tag namespace to GitHub without making the authoritative Linux
+#  verdict depend on GitHub's availability.  A mailed patch has no GIT_REF and
+#  receives no secrets, so it cannot publish repository state.
+
+image: debian/stable
+
+packages:
+  - ca-certificates
+  - git
+  - openssh-client
+
+#  This is the existing repository SSH key.  It is also used by .build.yml to
+#  read the private landin-fonts repository, and has write access to the
+#  GitHub mirror.
+secrets:
+  - be6acc31-1dff-4c27-94c0-d223f13d5f8a
+
+tasks:
+  - mirror: |
+      case "${GIT_REF:-}" in
+          refs/heads/*|refs/tags/*) ;;
+          *)
+              echo "landin: ${GIT_REF:-no ref} is not a pushed branch or tag; not mirroring"
+              exit 0
+              ;;
+      esac
+
+      #  Pin GitHub's published Ed25519 host key rather than accepting
+      #  whichever key an unattended first connection presents.
+      mkdir -p ~/.ssh
+      echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+        >> ~/.ssh/known_hosts
+
+      #  Clone the canonical repository afresh so this job copies every
+      #  branch and tag, not only the ref builds.sr.ht checked out for it.
+      git clone --bare https://git.sr.ht/~sinnfrei/landin ~/landin-mirror.git
+      cd ~/landin-mirror.git
+      git push --prune git@github.com:JanHaan/Landin.git \
+        '+refs/heads/*:refs/heads/*' \
+        '+refs/tags/*:refs/tags/*'
