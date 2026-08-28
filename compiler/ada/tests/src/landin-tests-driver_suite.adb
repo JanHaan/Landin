@@ -639,15 +639,13 @@ package body Landin.Tests.Driver_Suite is
       end;
    end A_Killed_Toolchain_Is_Reported;
 
-   --  [1650] hands six integer arguments in registers and the rest on the
-   --  stack, and this backend has only the first half.  Nothing in the
-   --  kernel bounds a parameter list, so a seventh is a program the
-   --  frontend accepts and the backend cannot emit -- which must be a
-   --  report naming the parameter, and not an internal defect.
-   procedure A_Seventh_Parameter_Is_Reported
+   --  R2.30 retires the register-only backend limit.  A routine with a
+   --  seventh scalar parameter is ordinary accepted input to emission, not
+   --  a backend refusal.
+   procedure A_Seventh_Parameter_Is_Emitted
      (Item : in out Landin.Testing.Context);
 
-   procedure A_Seventh_Parameter_Is_Reported
+   procedure A_Seventh_Parameter_Is_Emitted
      (Item : in out Landin.Testing.Context)
    is
       Host  : Landin.Testing.Fakes.Fake_Filesystem;
@@ -667,18 +665,18 @@ package body Landin.Tests.Driver_Suite is
          Report : constant String := Unbounded.To_String (Result.Report);
       begin
          Landin.Testing.Check_Equal
-           (Item, Result.Status, Landin.Driver.Status_Reported,
-            "a seventh parameter is a reported refusal");
+           (Item, Result.Status, Landin.Driver.Status_Success,
+            "a seventh parameter is emitted");
          Landin.Testing.Check
-           (Item, Contains (Report, "L0503"), "and says which rule");
+           (Item, Report'Length = 0, "without a backend refusal");
          Landin.Testing.Check
-           (Item, Contains (Report, "seven"),
-            "naming the routine that has one");
-         Landin.Testing.Check
-           (Item, not Host.Exists ("wide.s"),
-            "and nothing is written");
+           (Item,
+            Contains
+              (Host.Written (Landin.Driver.Default_Assembly),
+               "movl 16(%rbp), %eax"),
+            "and assembly for the stack parameter is written");
       end;
-   end A_Seventh_Parameter_Is_Reported;
+   end A_Seventh_Parameter_Is_Emitted;
 
    procedure A_Frame_Outside_Its_Encoding_Is_Reported
      (Item : in out Landin.Testing.Context);
@@ -1016,8 +1014,8 @@ package body Landin.Tests.Driver_Suite is
         (Into, "driver", "a killed toolchain is reported",
          A_Killed_Toolchain_Is_Reported'Access);
       Landin.Testing.Register
-        (Into, "driver", "a seventh parameter is reported",
-         A_Seventh_Parameter_Is_Reported'Access);
+        (Into, "driver", "a seventh parameter is emitted",
+         A_Seventh_Parameter_Is_Emitted'Access);
       Landin.Testing.Register
         (Into, "driver", "a frame outside its encoding is reported",
          A_Frame_Outside_Its_Encoding_Is_Reported'Access);

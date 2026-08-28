@@ -1,0 +1,10 @@
+--  R2.30's internal scalar convention keeps its six-register prefix and
+--  places every later argument in an eight-byte stack slot.  Using both
+--  stack arguments distinguishes source-order placement from one lucky slot.
+wide_sum: (a: i32, b: i32, c: i32, d: i32, e: i32, f: i32, g: i32, h: i32) -> (r: i32) =
+    r = g + h
+end wide_sum
+
+public main: () -> (code: i32) =
+    code = wide_sum(1, 2, 3, 4, 5, 6, 19, 23)
+end main

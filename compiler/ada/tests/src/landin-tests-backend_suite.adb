@@ -855,6 +855,61 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Six_Arguments_Reach_Their_Own_Widths;
 
+   --  R2.30 completes the scalar half of the internal convention: arguments
+   --  after the six-register prefix occupy eight-byte stack slots in source
+   --  order.  The caller rounds and reclaims the outgoing run; the callee
+   --  reads past its return address and saved frame pointer before copying
+   --  those values into ordinary slots.
+   procedure Stack_Arguments_Cross_The_Call
+     (Item : in out Landin.Testing.Context);
+
+   procedure Stack_Arguments_Cross_The_Call
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "g: (a: i32, b: i32, c: i32, d: i32, e: i32, f: i32,"
+         & " g: i32, h: i32) -> (r: i32) =" & LF
+         & "    r = g + h" & LF & "end g" & LF
+         & "f: () -> (r: i32) =" & LF
+         & "    r = g(1, 2, 3, 4, 5, 6, 19, 23)" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text,
+               HT & "movl 16(%rbp), %eax" & LF
+               & HT & "movl %eax, -28(%rbp)" & LF
+               & HT & "movl 24(%rbp), %eax" & LF
+               & HT & "movl %eax, -32(%rbp)" & LF),
+            "the callee copies arguments seven and eight from stack slots");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "subq $16, %rsp" & LF)
+            and then Contains (Text, HT & "movl %eax, 0(%rsp)" & LF)
+            and then Contains (Text, HT & "movl %eax, 8(%rsp)" & LF),
+            "the caller fills one aligned outgoing stack run");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text,
+               HT & "call g" & LF
+               & HT & "addq $16, %rsp" & LF),
+            "the caller reclaims the outgoing run immediately after return");
+      end;
+   end Stack_Arguments_Cross_The_Call;
+
    --  A datum's block describes a value and is not code [1940], so it
    --  becomes an initialized object in `.data` at its own alignment rather
    --  than instructions anything runs.
@@ -4416,6 +4471,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "six arguments reach their own widths",
          Six_Arguments_Reach_Their_Own_Widths'Access);
+      Landin.Testing.Register
+        (Into, "backend", "stack arguments cross the call",
+         Stack_Arguments_Cross_The_Call'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned shift left zeroes beyond the width",
          Unsigned_Shift_Left_Zeroes_Beyond_The_Width'Access);

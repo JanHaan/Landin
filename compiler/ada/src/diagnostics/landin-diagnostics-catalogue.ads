@@ -96,8 +96,9 @@ package Landin.Diagnostics.Catalogue is
       Variant_Case_Not_Matched,
       --  The backend and its toolchain, assigned from R1.80 onwards.  None
       --  is about a frontend construct: two are the host failing to finish
-      --  an accepted program, one is [1970]'s missing entry shape, and two
-      --  are verified shapes this backend cannot encode yet.
+      --  an accepted program, one is [1970]'s missing entry shape, one is a
+      --  verified shape this backend cannot encode, and L0503 is retained
+      --  after R2.30 retired the register-only argument limit.
       No_Toolchain,
       Toolchain_Failed,
       Entry_Point_Missing,
@@ -172,6 +173,9 @@ package Landin.Diagnostics.Catalogue is
             when Literal_Out_Of_Range .. Variant_Case_Not_Matched => Error,
             when No_Toolchain .. Frame_Not_Addressable => Error);
 
+   --  Argument_Not_In_A_Register retired at R2.30: the internal scalar
+   --  convention now places every argument after the sixth in an aligned
+   --  stack run.
    function State (Of_Code : Code_Name) return Disposition
      is (case Of_Code is
             --  Retired at R1.40: the frontend is wired to the
@@ -192,7 +196,9 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
             when Literal_Out_Of_Range .. Variant_Case_Not_Matched => Live,
-            when No_Toolchain .. Frame_Not_Addressable => Live);
+            when No_Toolchain .. Entry_Point_Missing => Live,
+            when Argument_Not_In_A_Register => Retired,
+            when Frame_Not_Addressable => Live);
 
    --  The rule the code enforces, in one line. Documentation, not prose a
    --  user reads: the message at the raise site is what a user reads.
@@ -286,8 +292,7 @@ package Landin.Diagnostics.Catalogue is
                "[1970]: a hosted program with no"
                & " `public main: () -> (code: i32)`",
             when Argument_Not_In_A_Register =>
-               "[1650]: a parameter past the six the ABI hands in"
-               & " registers",
+               "retired: the register-only internal calling limit",
             when Frame_Not_Addressable =>
                "a verified frame outside x86-64's signed displacement"
                & " encoding");

@@ -100,9 +100,13 @@ package body Landin.Backend.X86_64 is
             when Landin.Targets.Byte_4 => "%eax",
             when Landin.Targets.Byte_8 => "%rax");
 
-   --  [1650]'s system C ABI hands the first six integer arguments in
-   --  these registers, in this order.  A seventh parameter is not
-   --  reachable yet and says so rather than picking a register.
+   --  The internal scalar convention uses the System V integer registers
+   --  in their ordinary order, then one eight-byte stack slot per remaining
+   --  argument.  R4.40 owns C's complete classification; this is only the
+   --  scalar convention the enabled Landin kernel needs.  Naming the prefix
+   --  once keeps caller and callee placement in agreement.
+   Register_Arguments : constant := 6;
+
    function Argument_Register
      (Index : Positive; Size : Held_Size) return String
      is (case Index is
@@ -144,7 +148,9 @@ package body Landin.Backend.X86_64 is
                   when Landin.Targets.Byte_8 => "%r9"),
             when others =>
               raise Compiler_Defect
-                with "this ABI passes six integer arguments in registers");
+                with "an argument register index is outside its ABI run");
+
+   Stack_Argument_Bytes : constant Landin.Targets.Byte_Count := 8;
 
    ------------------------------------------------------------------
    --  Text
@@ -1473,34 +1479,71 @@ package body Landin.Backend.X86_64 is
 
                when Landin.IR.Call =>
                   --  [1920] names every parameter once and in order, so the
-                  --  operands are already the argument list and [1650]'s
-                  --  registers are filled from them in that order.  The frame
-                  --  is a multiple of the target's stack alignment, so `%rsp`
-                  --  still meets the ABI at the call.  A `-> none` callee
-                  --  defines nothing, and [1930] says there is no result
-                  --  there to store.
+                  --  operands are already the argument list.  The first six
+                  --  scalars fill the internal convention's integer
+                  --  registers; each later scalar occupies an eight-byte
+                  --  stack slot, in source order from the current `%rsp`.
+                  --  Round the whole outgoing run to the target's stack
+                  --  alignment, keeping the call boundary aligned without
+                  --  making padding part of the argument run.  A `-> none`
+                  --  callee defines nothing, and [1930] says there is no
+                  --  result there to store.
                   declare
                      Callee : constant Landin.IR.Item_Id :=
                        Landin.IR.Callee_Of (Of_Unit, Item, Value);
                      Gives : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
+                     Count : constant Natural :=
+                       Landin.IR.Operand_Count (Of_Unit, Item, Value);
+                     Stack_Bytes : constant Landin.Targets.Byte_Count :=
+                       (if Count <= Register_Arguments then 0
+                        else Landin.Targets.Align_Up
+                          (Landin.Targets.Byte_Count
+                             (Count - Register_Arguments)
+                           * Stack_Argument_Bytes,
+                           Landin.Targets.Stack_Alignment (Facts)));
                   begin
-                     for Index in 1 .. Landin.IR.Operand_Count
-                                         (Of_Unit, Item, Value)
-                     loop
+                     if Stack_Bytes > 0 then
+                        Emit ("subq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image
+                                     (Stack_Bytes))
+                              & ", %rsp");
+                     end if;
+
+                     for Index in 1 .. Count loop
                         declare
                            Argument : constant Landin.IR.Value_Id :=
                              Operand (Index);
                            Held : constant Held_Size :=
                              Size_Of_Value (Argument);
                         begin
-                           Emit ("mov" & Suffix (Held) & " "
-                                 & Value_Cell (Argument) & ", "
-                                 & Argument_Register (Index, Held));
+                           if Index <= Register_Arguments then
+                              Emit ("mov" & Suffix (Held) & " "
+                                    & Value_Cell (Argument) & ", "
+                                    & Argument_Register (Index, Held));
+                           else
+                              Carry
+                                (Held, Value_Cell (Argument),
+                                 Trimmed
+                                   (Landin.Targets.Byte_Count'Image
+                                      (Landin.Targets.Byte_Count
+                                         (Index - Register_Arguments - 1)
+                                       * Stack_Argument_Bytes))
+                                 & "(%rsp)");
+                           end if;
                         end;
                      end loop;
 
                      Emit ("call " & Symbol (Callee));
+
+                     if Stack_Bytes > 0 then
+                        Emit ("addq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image
+                                     (Stack_Bytes))
+                              & ", %rsp");
+                     end if;
 
                      if Gives in Landin.Types.Scalar_Name then
                         declare
@@ -1573,16 +1616,32 @@ package body Landin.Backend.X86_64 is
          end if;
 
          --  A parameter is a slot the caller filled, so the prologue is
-         --  where the ABI's registers become cells like any other.
+         --  where the internal convention's registers and incoming stack
+         --  run become cells like any other.  The return address and saved
+         --  frame pointer occupy the first sixteen bytes above `%rbp`;
+         --  argument seven is therefore at 16(%rbp), followed by one
+         --  eight-byte slot per argument.
          for Index in 1 .. Landin.IR.Parameter_Count (Of_Unit, Item) loop
             declare
                Slot : constant Landin.IR.Slot_Id :=
                  Landin.IR.Nth_Parameter (Of_Unit, Item, Index);
                Held : constant Held_Size := Size_Of_Slot (Slot);
             begin
-               Emit ("mov" & Suffix (Held) & " "
-                     & Argument_Register (Index, Held) & ", "
-                     & Slot_Cell (Slot));
+               if Index <= Register_Arguments then
+                  Emit ("mov" & Suffix (Held) & " "
+                        & Argument_Register (Index, Held) & ", "
+                        & Slot_Cell (Slot));
+               else
+                  Carry
+                    (Held,
+                     Trimmed
+                       (Landin.Targets.Byte_Count'Image
+                          (16 + Landin.Targets.Byte_Count
+                                  (Index - Register_Arguments - 1)
+                                * Stack_Argument_Bytes))
+                     & "(%rbp)",
+                     Slot_Cell (Slot));
+               end if;
             end;
          end loop;
 
