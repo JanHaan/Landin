@@ -3,11 +3,14 @@ point: type = struct
 end point
 
 holder: type = struct
-    row: [1]u16
+    row: [2]u16
 end holder
 
 source: [1]u16 = [7]
 state: point
-selected: holder = (row: [state.x])
-indexed: holder = (row: [source[0]])
-nested: holder = (row: [state.x + 1])
+selected: holder = (row: [state.x, 1])
+indexed: holder = (row: [source[0], 1])
+nested: holder = (row: [state.x + 1, 1])
+full: holder = (row: [of state.x])
+mixed_prefix: holder = (row: [source[0], of 1])
+mixed_suffix: holder = (row: [1, of state.x])

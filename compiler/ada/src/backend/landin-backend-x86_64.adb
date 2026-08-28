@@ -1818,6 +1818,30 @@ package body Landin.Backend.X86_64 is
                                   (Of_Unit, Item, Field,
                                    Landin.IR.Part_Position (Position)))));
                   end loop;
+               elsif Image.Form in Landin.IR.Repeated | Landin.IR.Hybrid
+               then
+                  if Image.Form = Landin.IR.Hybrid then
+                     for Position in 1 .. Image.Count loop
+                        Emit
+                          (Directive (Size_Of (Shape.Element, Facts)) & " "
+                           & Trimmed
+                               (Landin.Types.Folded'Image
+                                  (Landin.IR.Nth_Field_Element
+                                     (Of_Unit, Item, Field,
+                                      Landin.IR.Part_Position (Position)))));
+                     end loop;
+                  end if;
+                  Emit
+                    (".rept "
+                     & Trimmed
+                         (Landin.IR.Element_Total'Image
+                            (Shape.Length
+                             - Landin.IR.Element_Total (Image.Count))));
+                  Emit
+                    (Directive (Size_Of (Shape.Element, Facts)) & " "
+                     & Trimmed
+                         (Landin.Types.Folded'Image (Image.Value)));
+                  Emit (".endr");
                elsif Image.Form = Landin.IR.Absent then
                   if Field_Size > 0 then
                      Emit

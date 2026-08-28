@@ -110,9 +110,9 @@ package body Landin.IR.Verifier is
                & " element type cannot hold on this target",
             when Aggregate_Field_Image_On_Scalar_Field =>
                "an aggregate datum carries an array image on a scalar field",
-            when Aggregate_Field_Image_Form_Not_Carried =>
-               "an aggregate datum carries an array-field image form this"
-               & " IR slice has not enabled",
+            when Aggregate_Field_Image_Pattern_Not_Canonical =>
+               "an aggregate datum carries a noncanonical array-field"
+               & " repetition image",
             when Callee_Is_Not_A_Routine =>
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
@@ -172,6 +172,8 @@ package body Landin.IR.Verifier is
         Aggregate_Field_Image_Length_Disagrees;
       Field_Value_Fault : constant Fault_Kind :=
         Aggregate_Field_Image_Value_Does_Not_Fit;
+      Field_Pattern_Fault : constant Fault_Kind :=
+        Aggregate_Field_Image_Pattern_Not_Canonical;
 
       function Shape_Of
         (Item    : Item_Id;
@@ -690,6 +692,10 @@ package body Landin.IR.Verifier is
                                     return
                                       (Kind => Field_Length_Fault,
                                        Item => Id, others => <>);
+                                 elsif Image.Value /= 0 then
+                                    return
+                                      (Kind => Field_Pattern_Fault,
+                                       Item => Id, others => <>);
                                  end if;
                               when Finite =>
                                  if Element_Total (Image.Count)
@@ -698,12 +704,27 @@ package body Landin.IR.Verifier is
                                     return
                                       (Kind => Field_Length_Fault,
                                        Item => Id, others => <>);
+                                 elsif Image.Value /= 0 then
+                                    return
+                                      (Kind => Field_Pattern_Fault,
+                                       Item => Id, others => <>);
                                  end if;
-                              when Repeated | Hybrid =>
-                                 return
-                                   (Kind =>
-                                      Aggregate_Field_Image_Form_Not_Carried,
-                                    Item => Id, others => <>);
+                              when Repeated =>
+                                 if Image.Count /= 0 or else Image.Value = 0
+                                 then
+                                    return
+                                      (Kind => Field_Pattern_Fault,
+                                       Item => Id, others => <>);
+                                 end if;
+                              when Hybrid =>
+                                 if Image.Count = 0
+                                   or else Element_Total (Image.Count)
+                                             >= Shape.Length
+                                 then
+                                    return
+                                      (Kind => Field_Pattern_Fault,
+                                       Item => Id, others => <>);
+                                 end if;
                            end case;
                         end if;
 
@@ -726,7 +747,7 @@ package body Landin.IR.Verifier is
                              Field_Image_Of (Of_Unit, Id, Field);
                         begin
                            if Shape.Kind = Array_Field_Shape
-                             and then Image.Form = Finite
+                             and then Image.Form in Finite | Hybrid
                            then
                               for Position in 1 .. Image.Count loop
                                  declare
@@ -754,6 +775,31 @@ package body Landin.IR.Verifier is
                                     end if;
                                  end;
                               end loop;
+                           end if;
+
+                           if Shape.Kind = Array_Field_Shape
+                             and then Image.Form in Repeated | Hybrid
+                           then
+                              declare
+                                 Fits : Boolean;
+                              begin
+                                 if Shape.Element = Landin.Types.Bool then
+                                    Fits := Image.Value in 0 .. 1;
+                                 else
+                                    Fits :=
+                                      Landin.Types.Holds
+                                        (Image.Value,
+                                         Landin.Types.Integer_Name
+                                           (Shape.Element),
+                                         Facts);
+                                 end if;
+
+                                 if not Fits then
+                                    return
+                                      (Kind => Field_Value_Fault,
+                                       Item => Id, others => <>);
+                                 end if;
+                              end;
                            end if;
                         end;
                      end loop;

@@ -8,3 +8,6 @@ holder: type = struct
 end holder
 
 state: holder = (tag: 1, row: [answer(), 7])
+full: holder = (tag: 1, row: [of answer()])
+mixed_prefix: holder = (tag: 1, row: [answer(), of 7])
+mixed_suffix: holder = (tag: 1, row: [7, of answer()])

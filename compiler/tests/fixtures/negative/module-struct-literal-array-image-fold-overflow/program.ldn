@@ -4,3 +4,5 @@ end holder
 
 max: u64 = 18446744073709551615
 state: holder = (row: [max + 1, 4294967296 * 4294967296])
+full: holder = (row: [of max + 1])
+mixed: holder = (row: [1, of 4294967296 * 4294967296])

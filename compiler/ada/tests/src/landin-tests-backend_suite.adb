@@ -1010,9 +1010,9 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_State_Follows_Its_Target;
 
-   --  D66/D67 write scalar and finite array-field folds at target-derived
-   --  offsets, zero absent fields and padding, and keep an explicitly written
-   --  all-zero literal in `.data` rather than D10's absent image.
+   --  D66--D68 write scalar, finite, repeated and hybrid array-field folds at
+   --  target-derived offsets, zero absent fields and padding, and keep an
+   --  explicitly written all-zero literal in `.data`.
    procedure A_Module_Struct_Literal_Becomes_Data_Image
      (Item : in out Landin.Testing.Context);
 
@@ -1031,7 +1031,17 @@ package body Landin.Tests.Backend_Suite is
         & "blank: machine = (tag: 0, word: 0, row: zeroed,"
         & " ready: false)" & LF
         & "finite_zero: machine = (tag: 0, word: 0, row: [0, 0],"
-        & " ready: false)" & LF;
+        & " ready: false)" & LF
+        & "patterns: type = struct" & LF
+        & "    repeated: [2]usize" & LF
+        & "    mixed: [3]u8" & LF
+        & "end patterns" & LF
+        & "pattern_state: patterns = (repeated: [of 7],"
+        & " mixed: [1, of 2])" & LF
+        & "zero_patterns: type = struct" & LF
+        & "    mixed: [3]u8" & LF
+        & "end zero_patterns" & LF
+        & "zero_pattern_state: zero_patterns = (mixed: [0, of 0])" & LF;
    begin
       declare
          Work : Landin.Stages.Compilation :=
@@ -1078,6 +1088,32 @@ package body Landin.Tests.Backend_Suite is
                   & HT & ".zero 3" & LF
                   & HT & ".size finite_zero, 16" & LF),
                "an all-zero finite field stays a written image");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  "pattern_state:" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".long 7" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".byte 1" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".byte 2" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".size pattern_state, 12" & LF),
+               "32-bit repetition and hybrid fields retain target padding");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  "zero_pattern_state:" & LF
+                  & HT & ".byte 0" & LF
+                  & HT & ".rept 2" & LF
+                  & HT & ".byte 0" & LF
+                  & HT & ".endr" & LF
+                  & HT & ".size zero_pattern_state, 3" & LF),
+               "an all-zero hybrid remains a written 32-bit image");
          end;
       end;
 
@@ -1115,6 +1151,32 @@ package body Landin.Tests.Backend_Suite is
                & HT & ".zero 3" & LF
                & HT & ".size finite_zero, 24" & LF),
             "the finite zero image follows 64-bit placement");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Emitted (Work),
+               "pattern_state:" & LF
+               & HT & ".rept 2" & LF
+               & HT & ".quad 7" & LF
+               & HT & ".endr" & LF
+               & HT & ".byte 1" & LF
+               & HT & ".rept 2" & LF
+               & HT & ".byte 2" & LF
+               & HT & ".endr" & LF
+               & HT & ".zero 5" & LF
+               & HT & ".size pattern_state, 24" & LF),
+            "64-bit repetition and hybrid fields retain target padding");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Emitted (Work),
+               "zero_pattern_state:" & LF
+               & HT & ".byte 0" & LF
+               & HT & ".rept 2" & LF
+               & HT & ".byte 0" & LF
+               & HT & ".endr" & LF
+               & HT & ".size zero_pattern_state, 3" & LF),
+            "an all-zero hybrid remains a written 64-bit image");
       end;
    end A_Module_Struct_Literal_Becomes_Data_Image;
 
