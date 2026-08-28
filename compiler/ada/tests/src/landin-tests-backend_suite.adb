@@ -1010,9 +1010,9 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Struct_State_Follows_Its_Target;
 
-   --  D66 writes scalar field folds at target-derived offsets, zeroes array
-   --  fields and padding, and treats an explicitly written all-zero literal
-   --  as `.data` rather than collapsing it into D10's absent image.
+   --  D66/D67 write scalar and finite array-field folds at target-derived
+   --  offsets, zero absent fields and padding, and keep an explicitly written
+   --  all-zero literal in `.data` rather than D10's absent image.
    procedure A_Module_Struct_Literal_Becomes_Data_Image
      (Item : in out Landin.Testing.Context);
 
@@ -1026,10 +1026,12 @@ package body Landin.Tests.Backend_Suite is
         & "    row: [2]u16" & LF
         & "    ready: bool" & LF
         & "end machine" & LF
-        & "state: machine = (ready: true, word: 7, tag: 5,"
-        & " of zeroed)" & LF
-        & "blank: machine = (tag: 0, word: 0, ready: false,"
-        & " of zeroed)" & LF;
+        & "state: machine = (ready: true, row: [11, 13], word: 7,"
+        & " tag: 5)" & LF
+        & "blank: machine = (tag: 0, word: 0, row: zeroed,"
+        & " ready: false)" & LF
+        & "finite_zero: machine = (tag: 0, word: 0, row: [0, 0],"
+        & " ready: false)" & LF;
    begin
       declare
          Work : Landin.Stages.Compilation :=
@@ -1041,7 +1043,8 @@ package body Landin.Tests.Backend_Suite is
            & HT & ".byte 5" & LF
            & HT & ".zero 3" & LF
            & HT & ".long 7" & LF
-           & HT & ".zero 4" & LF
+           & HT & ".word 11" & LF
+           & HT & ".word 13" & LF
            & HT & ".byte 1" & LF
            & HT & ".zero 3" & LF
            & HT & ".size state, 16" & LF;
@@ -1061,6 +1064,20 @@ package body Landin.Tests.Backend_Suite is
                and then not Contains
                  (Text, "blank:" & LF & HT & ".zero 16" & LF),
                "an explicit all-zero literal remains written data");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  "finite_zero:" & LF
+                  & HT & ".byte 0" & LF
+                  & HT & ".zero 3" & LF
+                  & HT & ".long 0" & LF
+                  & HT & ".word 0" & LF
+                  & HT & ".word 0" & LF
+                  & HT & ".byte 0" & LF
+                  & HT & ".zero 3" & LF
+                  & HT & ".size finite_zero, 16" & LF),
+               "an all-zero finite field stays a written image");
          end;
       end;
 
@@ -1074,7 +1091,8 @@ package body Landin.Tests.Backend_Suite is
            & HT & ".byte 5" & LF
            & HT & ".zero 7" & LF
            & HT & ".quad 7" & LF
-           & HT & ".zero 4" & LF
+           & HT & ".word 11" & LF
+           & HT & ".word 13" & LF
            & HT & ".byte 1" & LF
            & HT & ".zero 3" & LF
            & HT & ".size state, 24" & LF;
@@ -1083,6 +1101,20 @@ package body Landin.Tests.Backend_Suite is
          Landin.Testing.Check
            (Item, Contains (Emitted (Work), Expected),
             "the same target-neutral image follows 64-bit placement");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Emitted (Work),
+               "finite_zero:" & LF
+               & HT & ".byte 0" & LF
+               & HT & ".zero 7" & LF
+               & HT & ".quad 0" & LF
+               & HT & ".word 0" & LF
+               & HT & ".word 0" & LF
+               & HT & ".byte 0" & LF
+               & HT & ".zero 3" & LF
+               & HT & ".size finite_zero, 24" & LF),
+            "the finite zero image follows 64-bit placement");
       end;
    end A_Module_Struct_Literal_Becomes_Data_Image;
 

@@ -2455,20 +2455,67 @@ package body Landin.Stages.Checking is
          begin
             --  D65 makes the label the same contextual destination as the
             --  selected field in D49--D53.  Each established array spelling
-            --  keeps its own shape check and diagnostic owner.
+            --  keeps its own shape check and diagnostic owner.  D67 admits
+            --  the finite and zero static forms without opening image-copy
+            --  recursion or D34/D38's compact repetitions inside a field.
             if Static_Image then
-               --  D66's first nonzero aggregate carrier holds scalar folds;
-               --  a trailing `of zeroed` may still cover an array field.
-               --  D67 owns labelled literal/repetition/copy array images.
-               Bad.Report
-                 (Item    => Bad.Unsupported_Use,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Value),
-                  Message => "a named array field is not enabled in a"
-                             & " module struct image yet",
-                  Refused => Bad.Array_Value,
-                  Into    => Found);
-               Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+               case Syn.Kind (Of_Tree, Value) is
+                  when Syn.Array_Literal =>
+                     Check_Array_Literal
+                       (Of_Tree, Field, Value, Expected, Element,
+                        Static_Image => True);
+
+                     for Position in
+                       1 .. Syn.Element_Count (Of_Tree, Value)
+                     loop
+                        declare
+                           Each : constant Syn.Node_Id :=
+                             Syn.Nth_Element (Of_Tree, Value, Position);
+                        begin
+                           if not Subtree_Was_Refused (Each)
+                             and then not Is_Known (Of_Tree, Each)
+                           then
+                              Bad.Report
+                                (Item    =>
+                                   Bad.Not_Known_At_Compile_Time,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Each),
+                                 Message => "this array-field image element"
+                                            & " has to be known when the"
+                                            & " module image is formed",
+                                 Note    => "[1940]: nothing runs before"
+                                            & " the entry point [1460]",
+                                 Into    => Found);
+                              Landin.Checking.Refuse
+                                (Types.all, Of_Tree, Each);
+                           end if;
+                        end;
+                     end loop;
+
+                     if Subtree_Was_Refused (Value) then
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Value);
+                     end if;
+
+                  when Syn.Zeroed_Literal =>
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Value, Ty.Fixed_Array);
+                     Landin.Checking.Note_Array
+                       (Types.all, Of_Tree, Value, Expected, Element);
+
+                  when others =>
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Value),
+                        Message => "a module struct array field takes a"
+                                   & " finite literal or `zeroed` in this"
+                                   & " slice",
+                        Refused => Bad.Array_Value,
+                        Into    => Found);
+                     Landin.Checking.Refuse
+                       (Types.all, Of_Tree, Value);
+               end case;
                return;
             end if;
 
@@ -4874,9 +4921,9 @@ package body Landin.Stages.Checking is
          end if;
 
          --  D66 folds each written scalar field independently in the
-         --  labelled literal's nominal context.  Labels map to layout order
-         --  through Note_Field/Field_Index; array fields are either supplied
-         --  by the trailing zero fill or have already been refused.
+         --  labelled literal's nominal context.  D67 applies the same D24
+         --  fold and range owner to every finite array-field element.  Labels
+         --  map to layout order through Note_Field/Field_Index.
          if Wanted = Ty.Aggregate
            and then Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Value)
@@ -4909,6 +4956,26 @@ package body Landin.Stages.Checking is
                         begin
                            if Element in Ty.Integer_Name then
                               Check_Image_Scalar (Image_Value, Element);
+                           end if;
+                        end;
+                     elsif Syn.Kind (Of_Tree, Image_Value)
+                             = Syn.Array_Literal
+                     then
+                        declare
+                           Element : constant Ty.Scalar_Name :=
+                             Landin.Checking.Field_Array_Element
+                               (Types.all, Wrote, Which);
+                        begin
+                           if Element in Ty.Integer_Name then
+                              for Each in
+                                1 .. Syn.Element_Count
+                                       (Of_Tree, Image_Value)
+                              loop
+                                 Check_Image_Scalar
+                                   (Syn.Nth_Element
+                                      (Of_Tree, Image_Value, Each),
+                                    Element);
+                              end loop;
                            end if;
                         end;
                      end if;

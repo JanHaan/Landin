@@ -1,0 +1,6 @@
+class: negative
+summary: D67 refuses a finite array-field image fold its selected-target element type does not hold
+constructs: 0040, 0190, 0520, 0670, 0710, 0750, 1740, 1810, 1940
+program: program.ldn
+codes: L0300
+targets: linux-x86-64, macos-arm64

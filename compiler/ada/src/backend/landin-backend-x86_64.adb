@@ -12,6 +12,7 @@ package body Landin.Backend.X86_64 is
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Opcode;
    use type Landin.IR.Element_Total;
+   use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Field_Shape_Kind;
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
@@ -1778,6 +1779,8 @@ package body Landin.Backend.X86_64 is
             declare
                Shape : constant Landin.IR.Field_Shape :=
                  Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field);
+               Image : constant Landin.IR.Aggregate_Field_Image :=
+                 Landin.IR.Field_Image_Of (Of_Unit, Item, Field);
                Field_Size : Landin.Targets.Byte_Count;
                Field_Alignment : Landin.Targets.Byte_Alignment;
                At_Field : Landin.Targets.Byte_Count;
@@ -1805,11 +1808,27 @@ package body Landin.Backend.X86_64 is
                          (Landin.Types.Folded'Image
                             (Landin.IR.Nth_Field_Image
                                (Of_Unit, Item, Field))));
-               elsif Field_Size > 0 then
-                  Emit
-                    (".zero "
-                     & Trimmed
-                         (Landin.Targets.Byte_Count'Image (Field_Size)));
+               elsif Image.Form = Landin.IR.Finite then
+                  for Position in 1 .. Image.Count loop
+                     Emit
+                       (Directive (Size_Of (Shape.Element, Facts)) & " "
+                        & Trimmed
+                            (Landin.Types.Folded'Image
+                               (Landin.IR.Nth_Field_Element
+                                  (Of_Unit, Item, Field,
+                                   Landin.IR.Part_Position (Position)))));
+                  end loop;
+               elsif Image.Form = Landin.IR.Absent then
+                  if Field_Size > 0 then
+                     Emit
+                       (".zero "
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image (Field_Size)));
+                  end if;
+               else
+                  raise Landin.Compiler_Defect with
+                    "an aggregate array-field image form reached x86-64"
+                    & " before its backend rule";
                end if;
 
                Written := At_Field + Field_Size;

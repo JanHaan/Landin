@@ -1,0 +1,13 @@
+point: type = struct
+    x: u16
+end point
+
+holder: type = struct
+    row: [1]u16
+end holder
+
+source: [1]u16 = [7]
+state: point
+selected: holder = (row: [state.x])
+indexed: holder = (row: [source[0]])
+nested: holder = (row: [state.x + 1])

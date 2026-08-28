@@ -1,0 +1,6 @@
+class: negative
+summary: D67 requires a finite array-field image to match the field's declared length
+constructs: 0040, 0520, 0670, 0710, 0750, 1740, 1810, 1940
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

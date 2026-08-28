@@ -19,6 +19,7 @@ package body Landin.Stages.Lowering is
 
    use type IR.Block_Id;
    use type IR.Element_Total;
+   use type IR.Field_Shape_Kind;
    use type IR.Item_Id;
    use type IR.Slot_Id;
    use type IR.Part_Position;
@@ -2906,7 +2907,9 @@ package body Landin.Stages.Lowering is
          is
             Item : constant IR.Item_Id := IR.Item_For (Unit.all, Id);
             Count : constant Natural := IR.Field_Count (Unit.all, Item);
-            Values : Ty.Folded_Array (1 .. Count) := [others => 0];
+            type Node_Array is array (Positive range <>) of Syn.Node_Id;
+            Nodes : Node_Array (1 .. Count) := [others => Syn.No_Node];
+            Element_Count : Natural := 0;
          begin
             for Position in
               1 .. Syn.Field_Value_Count (Of_Tree, Literal)
@@ -2917,22 +2920,94 @@ package body Landin.Stages.Lowering is
                   Which : constant Positive :=
                     Landin.Checking.Field_Index
                       (Types.all, Of_Tree, Field);
-                  Held  : Ty.Folded;
-                  Known : Boolean;
                begin
-                  Fold_Constant
-                    (Of_Tree, Syn.Value_Of (Of_Tree, Field), Held, Known);
-                  if not Known then
-                     raise Landin.Compiler_Defect with
-                       "a module struct literal field the checker accepted"
-                       & " did not fold at lowering";
+                  Nodes (Which) := Field;
+                  if Syn.Kind
+                       (Of_Tree, Syn.Value_Of (Of_Tree, Field))
+                       = Syn.Array_Literal
+                  then
+                     Element_Count := Element_Count
+                       + Syn.Element_Count
+                           (Of_Tree, Syn.Value_Of (Of_Tree, Field));
                   end if;
-                  Values (Which) := Held;
                end;
             end loop;
 
-            IR.Set_Aggregate_Image (Unit.all, Item, Values);
-            Made (Id) := True;
+            declare
+               Values : Ty.Folded_Array (1 .. Count) := [others => 0];
+               Images : IR.Aggregate_Field_Image_Array (1 .. Count) :=
+                 [others => (others => <>)];
+               Elements : Ty.Folded_Array (1 .. Element_Count) :=
+                 [others => 0];
+               Cursor : Natural := 0;
+            begin
+               for Which in 1 .. Count loop
+                  Images (Which).Offset := Cursor;
+
+                  if Nodes (Which) /= Syn.No_Node then
+                     declare
+                        Value : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Nodes (Which));
+                        Shape : constant IR.Field_Shape :=
+                          IR.Nth_Field_Shape (Unit.all, Item, Which);
+                     begin
+                        if Shape.Kind = IR.Scalar_Field_Shape then
+                           declare
+                              Held  : Ty.Folded;
+                              Known : Boolean;
+                           begin
+                              Fold_Constant
+                                (Of_Tree, Value, Held, Known);
+                              if not Known then
+                                 raise Landin.Compiler_Defect with
+                                   "a module struct literal field the"
+                                   & " checker accepted did not fold at"
+                                   & " lowering";
+                              end if;
+                              Values (Which) := Held;
+                           end;
+                        elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Literal
+                        then
+                           Images (Which).Form := IR.Finite;
+                           Images (Which).Count :=
+                             Syn.Element_Count (Of_Tree, Value);
+                           for Position in
+                             1 .. Syn.Element_Count (Of_Tree, Value)
+                           loop
+                              declare
+                                 Held  : Ty.Folded;
+                                 Known : Boolean;
+                              begin
+                                 Fold_Constant
+                                   (Of_Tree,
+                                    Syn.Nth_Element
+                                      (Of_Tree, Value, Position),
+                                    Held, Known);
+                                 if not Known then
+                                    raise Landin.Compiler_Defect with
+                                      "a module struct array-field element"
+                                      & " the checker accepted did not"
+                                      & " fold at lowering";
+                                 end if;
+                                 Elements (Cursor + Position) := Held;
+                              end;
+                           end loop;
+                           Cursor := Cursor + Images (Which).Count;
+                        elsif Syn.Kind (Of_Tree, Value)
+                                /= Syn.Zeroed_Literal
+                        then
+                           raise Landin.Compiler_Defect with
+                             "a module struct array-field image outside"
+                             & " D67 reached lowering";
+                        end if;
+                     end;
+                  end if;
+               end loop;
+
+               IR.Set_Aggregate_Image
+                 (Unit.all, Item, Values, Images, Elements);
+               Made (Id) := True;
+            end;
          end Set_Image_From_Struct_Literal;
 
          procedure Copy_Image_From
@@ -2950,15 +3025,34 @@ package body Landin.Stages.Lowering is
          begin
             if IR.Result_Of (Unit.all, Source_Item) = Ty.Aggregate then
                declare
-                  Values : Ty.Folded_Array
-                    (1 .. Positive (Length)) := [others => 0];
+                  Fields : constant Natural :=
+                    IR.Field_Count (Unit.all, Source_Item);
+                  Elements_Count : constant Natural :=
+                    Natural (Length - IR.Element_Total (Fields));
+                  Values : Ty.Folded_Array (1 .. Fields) := [others => 0];
+                  Images : IR.Aggregate_Field_Image_Array
+                    (1 .. Fields) := [others => (others => <>)];
+                  Elements : Ty.Folded_Array (1 .. Elements_Count) :=
+                    [others => 0];
+                  Cursor : Natural := 0;
                begin
-                  for Field in Values'Range loop
+                  for Field in 1 .. Fields loop
                      Values (Field) :=
                        IR.Nth_Field_Image (Unit.all, Source_Item, Field);
+                     Images (Field) :=
+                       IR.Field_Image_Of (Unit.all, Source_Item, Field);
+                     Images (Field).Offset := Cursor;
+                     for Position in 1 .. Images (Field).Count loop
+                        Elements (Cursor + Position) :=
+                          IR.Nth_Field_Element
+                            (Unit.all, Source_Item, Field,
+                             IR.Part_Position (Position));
+                     end loop;
+                     Cursor := Cursor + Images (Field).Count;
                   end loop;
                   IR.Set_Aggregate_Image
-                    (Unit.all, IR.Item_For (Unit.all, Destination), Values);
+                    (Unit.all, IR.Item_For (Unit.all, Destination), Values,
+                     Images, Elements);
                   Made (Destination) := True;
                end;
                return;
