@@ -57,12 +57,16 @@ the four prototypes, the roadmap, and the implementation notes. Every
 `[NNNN]` citation links to the construct it names, and hovering one shows what
 it says.
 
-The repository the pages are generated from is at
-**https://git.sr.ht/~sinnfrei/landin**, and it is the only copy:
+The canonical repository the pages are generated from is at
+**https://git.sr.ht/~sinnfrei/landin**:
 
 ```sh
 git clone https://git.sr.ht/~sinnfrei/landin
 ```
+
+An automatically maintained GitHub mirror is at
+**https://github.com/JanHaan/Landin**. Changes still originate on SourceHut;
+the mirror copies its branches and tags.
 
 The CI gate republishes the pages as its last task on every push to `main`,
 so they read what the repository says. To render or publish by hand:
