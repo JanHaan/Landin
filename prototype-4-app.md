@@ -539,7 +539,7 @@ The arena is a block, so its extent is exact and everything the
 program allocated dies with it [0820]. Hosted, that is the same
 moment the process exits, so the block is bookkeeping rather than
 necessity — but it is the same code that would run where it is
-necessary, which was the point of the range from 32KB to 32TB.
+necessary, which was the point of the range from 32 KB to 32 TB.
 What is not stated anywhere is what happens to that frame origin
 when the arena is passed on as a parameter, which it is here. [W7]
 

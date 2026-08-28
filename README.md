@@ -1,7 +1,7 @@
 # Landin
 
-> Ada, but small. Zig, but sweeter. One systems language from 32KB to
-> 32TB. Move fast, keep the pointers, and let the compiler tell you
+> Ada, but small. Zig, but sweeter. One systems language from 32 KB to
+> 32 TB. Move fast, keep the pointers, and let the compiler tell you
 > when you are being an idiot.
 
 A systems programming language, its compiler and a small standard
