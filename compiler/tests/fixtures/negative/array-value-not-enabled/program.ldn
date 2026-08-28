@@ -1,7 +1,7 @@
 row: type = [4]u8
 
---  A declaration-only local has frame storage now, while the whole array
---  value still waits for copying and initialization in a later R2.20 slice.
+--  A declaration-only local has frame storage now, while a bare whole-array
+--  read remains outside the contextual copy and initializer forms.
 f: () -> none =
     mut here: row
     _ = here

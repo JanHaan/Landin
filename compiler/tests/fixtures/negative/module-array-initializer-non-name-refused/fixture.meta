@@ -1,5 +1,5 @@
 class: negative
-summary: R2.20 admits only a direct module storage name as an array initializer and preserves every general array-value refusal
+summary: R2.20 admits contextual module array images, but an indexed scalar is not an array initializer or a general array value
 constructs: 0520, 1740
 program: program.ldn
 codes: L0304

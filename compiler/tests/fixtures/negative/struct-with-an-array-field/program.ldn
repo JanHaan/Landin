@@ -1,4 +1,4 @@
---  D47 gives this type one local frame cell, but no whole aggregate value.
+--  D47 gives this type one local frame cell, but no bare whole-aggregate read.
 holder: type = struct
     row: [4]u8
     count: u32

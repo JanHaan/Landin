@@ -54,6 +54,8 @@ replaced.
 | `Landin.Types` | the eleven scalar names, their widths, and ordinary storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Checking` | what type every node and declaration has, including a nominal aggregate's identity and scalar/fixed-array declared layout | decide a rule, or ask the host for a width |
 | `Landin.IR` | the target-neutral instructions: items, slots, blocks, values, an aggregate datum or slot's scalar or compact fixed-array fields, declaration-order folded aggregate images with compact per-field finite, repeated or hybrid array segments, field identities on nested element operations and compound-storage clears, fills and both array-copy endpoints, the same neutral shapes in a separate measurement run, and the only construction of one | hold a scope tree, name a machine, ask a width, or hold an offset or padding byte |
+| `Landin.IR.Verifier` | release-build well-formedness of a completed Unit and target-aware fit of its static images | diagnose source, repair malformed IR, or choose backend policy |
+| `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the target extent of one neutral field shape, where a scalar or fixed-array field sits inside an aggregate datum or slot, and the layout of a scalar/fixed-array field run, counted in target bytes | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, and the target-width scalar, finite-array and compact repetition directives and padding for written aggregate images | decide a layout, write a file, or run a tool |
 | `Landin.Backend.Toolchain` | the one command line that finishes a compilation, and the triplet it is found by | know what ELF is, invoke a linker directly, or search a PATH |
@@ -64,17 +66,18 @@ replaced.
 | `Landin.Diagnostics.Lexical` | turning a scanner fault into a diagnostic | invent a code, or a roadmap item |
 | `Landin.Diagnostics.Syntactic` | turning a parse failure into a diagnostic, and naming the constructs only the parser can meet | invent a code, a construct, or a roadmap item |
 | `Landin.Diagnostics.Resolution` | turning a duplicate or an unknown name into a diagnostic | invent a code, or attach a sentence to no place |
-| `Landin.Diagnostics.Checking` | turning a type that does not agree into a diagnostic | invent a code, a construct, or a roadmap item |
+| `Landin.Diagnostics.Checking` | turning a type that does not agree or a checker-recognised deferred use into a diagnostic, including the refused-type table and L0304 ownership | invent a code, a construct, or a roadmap item |
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific dependency | grow a second host concern |
 | `Landin.Targets` | target facts and layout arithmetic | ask the host how wide a pointer is |
+| `Landin.Targets.Capabilities` | which described targets have a backend and the triplet selected to finish their output | infer capability from width, invoke a tool, or canonicalise a triplet |
 | `Landin.Stages` | the compilation context, the stage interface, pipelines, and everything a stage builds that outlives it | know which stages exist, or which order they run in |
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
 | `Landin.Stages.Resolution` | the order the trees are walked in | own the resolution table, or a code |
 | `Landin.Stages.Checking` | the three type passes and the assignment walk | own a table, a code, or a width |
-| `Landin.Stages.Lowering` | the walk that builds the IR, and refusing to run on a refused program | own the Unit, work out a scope, or raise a diagnostic |
-| `Landin.Driver` | argument classification and the result | implement a language rule |
+| `Landin.Stages.Lowering` | the walk that builds and verifies the IR, and refusing to run on a refused program | own the Unit, work out a scope, or raise a diagnostic |
+| `Landin.Driver` | argument and `--emit` classification, pipeline orchestration, output/toolchain selection and the result | implement a language rule |
 | `Refine` | printing and the exit status | contain a decision |
 
 Public specifications stay narrow, and a representation is private wherever a
@@ -112,46 +115,42 @@ what owns the pipeline.
 ## What is deliberately absent
 
 `Landin.Backend` lays out a routine's frame and
-`Landin.Backend.X86_64` emits assembly for the current scalar kernel: literals,
-truths, slot traffic, checked and wrapping add, subtract and multiply,
-division, remainder, negation, complement, logical not, the three bitwise
-operators, both shifts, comparisons, calls, jumps, branches, returns, and
-module values as folded data reached by name. That is every opcode `Landin.IR`
-spells, so the case that dispatches them is exhaustive: a new opcode fails to
-compile rather than raising `Compiler_Defect` at run time. What it cannot do
-is pass a seventh argument: [1650] hands six in registers and the stack half
-is not written, so the driver refuses a wider routine as `L0503` before
-anything is emitted rather than letting an accepted program meet an internal
-defect. `ROADMAP.md` R4.40 owns the stack arguments that retire it.
+`Landin.Backend.X86_64` emits assembly for every operation in the enabled
+kernel: scalar constants and arithmetic, control flow and calls; module and
+local fixed-array indexing, copying, clearing and filling; and depth-one
+ordinary structs with scalar or fixed-array fields, whole copies and clears,
+and compact folded module images. That is every opcode `Landin.IR` spells, so
+the case that dispatches them is exhaustive: a new opcode fails to compile
+rather than raising `Compiler_Defect` at run time. What it cannot do is pass a
+seventh argument: [1650] hands six in registers and the stack half is not
+written, so the driver refuses a wider routine as `L0503` before anything is
+emitted rather than letting an accepted program meet an internal defect.
+`ROADMAP.md` R4.40 owns the stack arguments that retire it.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver
 `Landin.Backend.Toolchain` names, so a constant-return `main` runs and exits
 with its own `code`. The assembly half is host-independent by the rule that
 nothing outside `Landin.Targets` may ask the host anything: emitting for
-`linux-x86-64` produces identical bytes on macOS and on Linux. The finishing
+`linux-x86-64` produces identical assembly text on macOS and on Linux. The finishing
 half is not, and says so — a host without the target's triplet-prefixed
 driver reports `L0500` rather than reaching for whatever `gcc` names, which
 on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
 
 The `Runtime` fixture class compiles programs, links them, runs them on the
-target and checks their statuses. The Linux gate therefore proves literal
-return, checked arithmetic across every fixed integer width, wrapping add,
-subtract and multiply across signed and unsigned boundaries, signed and
-unsigned division and remainder, the unary and bitwise operators, shifts
-within and beyond the width, calls that carry six arguments and recurse,
-folded module values and module state a function updates, and
-comparison-driven control flow on the
-hardware the backend emits for. A
-host without the target toolchain fails
-rather than silently skipping that evidence. `ROADMAP.md` R1.80 owns the
-remaining backend work.
+target and checks their statuses. The Linux gate therefore proves the scalar
+arithmetic and control-flow kernel, six-argument and recursive calls, folded
+module values, fixed arrays, ordinary structs and their target-derived module
+and frame layouts on the hardware the backend emits for. A host without the
+target toolchain fails rather than silently skipping that evidence. The active
+R2 items own extensions to the semantic and representation core; later target
+and ABI work remains with the roadmap items that name it.
 
-What does exist behind it is the whole frontend: `refine` scans and parses
-every `.ldn` file it is given, resolves every name in them as one module,
-checks the type of everything and that every name is assigned before it is
-read, reports what none of the four could read, lowers every function it
-accepted into `Landin.IR`, verifies it and can dump it.
+The native path sits behind the whole frontend: `refine` scans and parses every
+`.ldn` file it is given, resolves every name in them as one module, checks the
+type of everything and that every name is assigned before it is read, reports
+what none of the four could read, lowers every function it accepted into
+`Landin.IR`, verifies it and can dump it.
 
 A width is a function of a type and a target description, never a property of
 either alone, and `Landin.Types.Width` is the only place one is formed.

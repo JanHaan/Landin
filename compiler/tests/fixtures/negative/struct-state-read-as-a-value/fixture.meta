@@ -1,5 +1,5 @@
 class: negative
-summary: [1740]'s module state may have a struct type, and reading the whole of one is a value that waits for the rest of R2.20
+summary: [1740]'s module state may have a struct type, while reading the whole of one as a general expression remains refused
 constructs: 0670, 1740, 1830
 program: program.ldn
 codes: L0304

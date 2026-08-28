@@ -13,13 +13,13 @@ One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
-**Status: specification 0.1.0. The bootstrap compiler implements the executable
-kernel and produces native Linux x86-64 executables. `refine` scans and parses
-whole programs, resolves names, checks types and definite assignment, lowers
-accepted functions to verified target-neutral IR, and emits assembly or invokes
-the platform toolchain. R2.20 is extending that path with target-dependent
-structs and fixed arrays; aggregate construction, aggregate function ABIs, and
-the standard library remain ahead.**
+**Status: specification 0.1.0. R0 and R1 are complete, and R2.20 is
+active. `refine` scans, parses, resolves names, checks types and definite
+assignment, lowers and verifies target-neutral IR, emits Linux x86-64
+assembly, and can assemble and link a hosted executable. Runtime fixtures run
+those binaries on the native x86-64 gate. The enabled kernel includes scalars,
+fixed arrays and depth-one ordinary structs; native macOS arm64, Cortex-M and
+the standard library remain future work.**
 
 ## What is here
 
@@ -31,8 +31,8 @@ the standard library remain ahead.**
 | `examples.md` | complete programs the compiler emits and the Linux gate runs today: recursive Fibonacci and three sorting algorithms. |
 | `ROADMAP.md` | the sole durable authority for open work, implementation dependencies, phase gates, and dispositions. Read it before proposing or scheduling work. |
 | `AGENTS.md` | how to work in this repository: the authority order, the commands, and the rules the chassis already keeps. |
-| `check.py` | mechanical checks over the specification, roadmap, and prototypes. Run it after touching any of them. |
-| `compiler/ada/` | the Ada 2022 bootstrap compiler. Today: the chassis, `refine`, and its own test harness. |
+| `check.py` | mechanical checks over the live documents, grammar and fixture corpus. Run it after touching any of them. |
+| `compiler/ada/` | the Ada 2022 bootstrap compiler: `refine`, its frontend and verified IR, the Linux x86-64 backend and toolchain path, and its own test harness. |
 | `compiler/tests/` | fixtures, in a format that outlives the implementation checking them. |
 | `scripts/` | build, test, clean and toolchain commands. Provider-neutral, except `linux-loop.sh`, which drives Apple Container by name. |
 | `environments/` | the pinned `linux/amd64` image the local Linux loop builds, and `pins.sh`, the one place a toolchain version or checksum is written. |
@@ -115,21 +115,25 @@ export LANDIN_GPRBUILD_HOME=...  # the pinned GPRbuild
 On a nix machine, `nix develop` puts the pinned toolchain on `PATH` for you.
 
 `refine --identify` will tell you what it is. Giving it one or more `.ldn`
-files runs the whole frontend over them as one module: a program it accepts
-produces nothing, and one it does not gets a report with a span, a caret and a
-note. If what you wrote is a construct the tour describes and the kernel
-omits, the note names the paragraph that describes it and the roadmap item
-that enables it.
+files runs the frontend, lowering and verification over them as one module.
+Without `--emit` an accepted program deliberately writes no output file;
+`--emit=asm -o program.s` writes Linux x86-64 assembly, and `--emit=exe -o
+program` assembles and links a hosted executable when the target toolchain and
+[1970]'s entry point are present. A program it refuses gets a report with a
+span, a caret and a note. If what you wrote is a construct the tour describes
+and the kernel omits, the note names the paragraph that describes it and the
+roadmap item that enables it.
 
 ## What comes next
 
-Implementation begins immediately rather than waiting for every design
-foundation to be settled in advance. `ROADMAP.md` starts with the Ada 2022
-bootstrap chassis at R0, which is complete: it builds and passes its suite on
-macOS arm64, in a pinned `linux/amd64` container, and on x86-64 hardware in
-CI. R1 builds an executable language kernel and the first Linux x86-64
-compile/assemble/link/run path. Language and architecture questions are
-resolved when the first vertical slice needs them.
+Implementation proceeds in executable vertical slices rather than waiting for
+every design foundation to be settled in advance. R0's Ada 2022 bootstrap
+chassis and R1's executable language kernel are complete: the compiler builds
+and passes its suite on macOS arm64, in a pinned `linux/amd64` container, and
+on x86-64 hardware in CI, where its Linux binaries run. R2 is active; R2.20 is
+currently extending target-parametric aggregate semantics and representation.
+Language and architecture questions are resolved when the first vertical
+slice needs them.
 
 The first major compiler milestone is R3: a complete derived version of the
 parser prototype with useful diagnostics, evidence-table dispatch, and `any`;

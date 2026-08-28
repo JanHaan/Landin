@@ -1,8 +1,9 @@
 # Development and validation environments
 
 `ROADMAP.md` R0.70 owns this document. It records which environment produces
-which kind of evidence, and it deliberately names no CI provider: hosting is
-not selected yet, and every command below is an ordinary shell command.
+which kind of evidence. Hosting is git.sr.ht with builds.sr.ht, selected at
+R0.70; only the CI manifests name that provider, while every command they run
+below is an ordinary repository command.
 
 ## The three environments
 
@@ -184,7 +185,7 @@ that depends on the operating system, the C library, the linker and the
 real evidence, and it is why the Linux checksums in
 `compiler/ada/TOOLCHAIN.md` are now verified rather than transcribed. What it
 does not do is execute x86-64 instructions on x86-64 hardware — Rosetta
-translates them — so once R1.80 emits machine code, instruction-level and
+translates them — so since R1.80 produces runnable executables, instruction-level and
 timing-sensitive results from this loop are not authority. That distinction is
 why the roadmap named the native gate before there was any code to run in it,
 and it is why the gate now exists: from R1.80 onwards, `refine` emits

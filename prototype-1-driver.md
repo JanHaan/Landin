@@ -1,10 +1,11 @@
 # Landin prototype 1 — a driver from a vendor SVD
 
 Current with specification 0.1.0. Its own findings X1-X9 are all
-resolved below. No compiler exists, so this is read as a
-specification test: every line is meant to follow a rule that is
-written down, and every place where the tour was silent is recorded at
-the end, under WHERE THE SPECIFICATION WAS SILENT.
+resolved below. The bootstrap compiler exists, but this Cortex-M program uses
+future constructs and deliberate omissions, so it remains a specification
+test: every line is meant to follow a rule that is written down, and every
+place where the tour was silent is recorded at the end, under WHERE THE
+SPECIFICATION WAS SILENT.
 
 The target is a Cortex-M0 class part. GPIO, a timer, and a UART that
 receives by DMA and signals completion from an interrupt handler.

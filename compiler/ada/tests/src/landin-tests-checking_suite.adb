@@ -1,9 +1,9 @@
 --  What the checker answers about nominal aggregate identity, asked directly.
 --
---  Struct values are not enabled yet, so no source expression can expose the
---  distinction from outside.  Lowering needs the answer before it can admit
---  one: this asks the table at that seam rather than pretending equal layouts
---  prove [0710]'s nominal rule.
+--  Struct values remain contextual, so ordinary expressions cannot expose the
+--  distinction from outside those contexts.  Lowering needs the answer before
+--  it can admit one: this asks the table at that seam rather than pretending
+--  equal layouts prove [0710]'s nominal rule.
 
 with Landin.Checking;
 with Landin.Provenance;

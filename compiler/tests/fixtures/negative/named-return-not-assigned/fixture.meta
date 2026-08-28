@@ -1,0 +1,6 @@
+class: negative
+summary: [1910] an accepted named return must be assigned at each return and where its body can reach the end
+constructs: 1910
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0302, L0302

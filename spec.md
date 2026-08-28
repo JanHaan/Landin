@@ -108,16 +108,16 @@ keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
 
 ### [1770] The kernel's literals are integers, booleans, and contextual zero
 
-The kernel's literals are integers, the two booleans, and `zeroed` in the
-contexts D27, D28, D30 and D39--D42 admit. Integer literals are untyped and take
+The kernel's literals are integers, the two booleans, and contextual `zeroed`.
+Integer literals are untyped and take
 the type of their context [0190], defaulting to i32 with none [0200]; the bases
 and the separator are [0220]'s. `zeroed` has no type of its own: [0540] gives it
-the all-bits-zero image of its context. D27/D28 supply an explicitly typed module
-or local fixed-array initializer, D30 supplies a fixed-array assignment
-destination, D39/D40 supply an explicitly typed module or local scalar
-initializer respectively, D41 supplies a mutable scalar binding assignment, and
-D42 supplies an ordinary scalar field or fixed-array element assignment
-destination. Floats
+the all-bits-zero image of a directly supplied initializer, assignment or
+field-label context. D27--D30 establish fixed-array contexts, D39--D43 scalar
+contexts, D49 and D57--D59 whole array-field and ordinary-struct contexts,
+D62 the depth-one indexed field place, and D64--D67 labelled struct fields and
+static images. It remains refused where no enabled construct supplies that
+context. Floats
 [0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
 not enabled yet.
@@ -164,10 +164,10 @@ line_comment  ::= "--" (any byte except line_end)*
 A binding names one thing, and says how much it may change.
 The full form, the inferred form and the mutable form are [0040],
 [0050] and [0060]; a binding with no value must be assigned before
-it is read [0080]. The kernel's types are the eleven scalar names and what
-[1795] declares from them: several names sharing one declaration
-[0100], structs, variants and the rest of TYPES YOU DECLARE are
-not enabled yet. A type position holds a name either way, since
+it is read [0080]. The kernel's types are the eleven scalar names, fixed arrays,
+and what [1795] declares from them: aliases and named ordinary structs with
+enabled scalar or fixed-array fields. Variants and the other TYPES YOU DECLARE
+remain deferred. A type position holds a declared name either way, since
 [1760] makes the eleven ordinary declared names the kernel
 predeclares; the grammar spells them out because they are the
 only ones a program does not have to declare for itself.
@@ -251,7 +251,8 @@ returning none has nothing to bind and [1020] wants a result
 discarded on purpose rather than by omission. A call whose result
 is dropped that way is the one place the kernel accepts an
 expression standing alone.
-A place is [1820]'s selection, so a field of a struct is written
+A place is [1820]'s indexed selection, so a binding, a field of a struct, or
+an enabled array element is written
 and stepped exactly as the binding holding it is. What may be
 written is [1900]'s and not this rule's: a field is writable when
 the binding it belongs to is.
@@ -292,6 +293,10 @@ An index [0570] binds the same way and for the same reason, and it
 takes what a selection named: 'a[i]' and 'a.b[i]' are both written
 and neither derives from a call, because nothing selects from one
 [1820] and nothing indexes one either.
+An ordinary-struct literal is [0710]'s nonempty run of labelled field values,
+optionally followed by [0720]'s contextual fill. D64--D68 state the contexts
+that admit it; the call-shaped construction `T(field: value)` and the all-fill
+spelling remain refused by name.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
@@ -414,6 +419,8 @@ kernel these positions give a literal a type:
 - the type of the place an assignment writes [1810]
 - the type of the parameter an argument fills [1800]
 - the named return's type, for an expression body [0880]
+- the element type of a contextual array literal or repetition
+- the field type of a contextual labelled struct literal
 - the other operand's type, for a binary operator
 - a unary operator's own context, handed on [1820]
 - a branch's condition and an exit's 'when', both of which
@@ -666,7 +673,7 @@ use this rule; its build description names the entry [1650].
 A rule above is one of two things, and a reader cannot tell them apart by
 reading it: a transcription of something `tour.md` already decided, or a
 decision taken because the tour said nothing and an implementation could not
-proceed without one. Twelve were decisions. They are listed here with what
+proceed without one. The decisions are listed here with what
 the tour said before, what was chosen, and what a competent reader could
 have chosen instead — because a decision written in the same voice as a
 transcription looks like it was always there, and [1050] was missed twice by
@@ -1069,7 +1076,9 @@ Normal completion assigns every destination scalar bit and every destination
 array-field whole fact without conflating the two representations.
 A binding or assignment the checker has already refused reads nothing for
 definite assignment: the statement cannot execute, so its owning report is not
-followed by an L0302 from an otherwise unassigned source inside it.
+followed by an L0302 from an otherwise unassigned source inside it. A named
+return the checker has refused is likewise not a destination [1910] can require
+at `return` or at the body's end; its owning ABI report stands alone.
 
 **Why the field and not the binding:** [1910] tracks the thing an assignment
 writes, and an assignment to a place writes a field. It is also the answer
@@ -1416,13 +1425,14 @@ expression. Each element is evaluated and stored in source order. The fresh
 local is thereby initialized as a whole, so a later computed index meets D22's
 whole-array requirement without a preceding copy.
 
-This is one contextual initializer and not a general array value. An inferred
-binding [0530], a module binding, assignment to an existing array, a parameter,
-return, argument or discard still refuses the literal. An empty literal,
-repetition [0560], `zeroed` [0540], slices [0570], nested array values and
-non-scalar elements remain outside this slice. In particular, requiring one
-expression in the literal grammar does not decide whether a programmer may
-write the zero-length type `[0]T`.
+This is one contextual initializer and not a general array value. D24 later
+admits the explicitly typed module form, D25 the inferred local form and D29
+assignment to an existing array. A parameter, return, argument or discard
+still refuses the literal. An empty literal, repetition [0560], `zeroed`
+[0540], slices [0570], nested array values and non-scalar elements remain
+outside this slice. In particular, requiring one expression in the literal
+grammar does not decide whether a programmer may write the zero-length type
+`[0]T`.
 
 **Why the written type:** it gives both facts the checker needs without an
 array-value inference rule: D17's exact length and the scalar context [0190]
@@ -1440,8 +1450,7 @@ not become unstated consequences of accepting one local initializer.
 
 **Pinned by** `positive/local-array-literal-initializer`,
 `negative/local-array-literal-length-mismatch`,
-`negative/local-array-literal-element-mismatch`,
-`negative/array-literal-assignment-not-enabled`, and
+`negative/local-array-literal-element-mismatch`, and
 `runtime/local-array-literal-initializes-elements` on Linux x86-64.
 
 ### D24 — A written module array type gives a literal its static image
@@ -1666,10 +1675,10 @@ per declaration.
 
 This is a contextual initializer, not an array-valued expression or a runtime
 operation. D27 itself does not infer a type for `name := zeroed`; D28 separately
-admits a typed local array initializer, D30 an array assignment, and D39 a typed
-module scalar initializer. Local scalar initialization and every inferred form
-remain refused. D27 introduces no IR opcode, temporary, startup copy, or
-source-order element evaluation. Repetition [0560],
+admits a typed local array initializer, D30 an array assignment, D39 a typed
+module scalar initializer and D40 a typed local scalar initializer. Every
+inferred form remains refused. D27 introduces no IR opcode, temporary, startup
+copy, or source-order element evaluation. Repetition [0560],
 slices [0570], empty literals, non-scalar array elements, parameters, returns,
 arguments, and general whole-array value positions remain outside this slice.
 
@@ -1686,8 +1695,7 @@ rules; the second has no source fact from which to derive either `N` or `T`.
 Both were declined.
 
 **Pinned by** `positive/module-array-zeroed-initializer`,
-`negative/inferred-zeroed-not-enabled`,
-`negative/local-scalar-zeroed-not-enabled`, and
+`negative/inferred-zeroed-not-enabled`, and
 `runtime/module-array-zeroed-reads-zero` on Linux x86-64.
 
 ### D28 — A local zero image is one runtime storage operation
@@ -1715,10 +1723,11 @@ therefore remain independent of the target-sized length D18 admits, and no
 array-valued temporary or hidden zero datum exists.
 
 This remains one contextual initializer. D28 does not infer a shape for
-`name := zeroed`; D30 separately admits array assignment and D39 a typed module
-scalar initializer. Local scalar initialization, scalar assignment, and
-`zeroed` as an argument, return, discard, nested or general expression remain
-refused. Module arrays continue to use D27's absent static image rather than this runtime instruction.
+`name := zeroed`; D30 separately admits array assignment, D39/D40 typed module
+and local scalar initializers, and D41 scalar assignment. `zeroed` as an
+argument, return, discard, nested or general expression remains refused.
+Module arrays continue to use D27's absent static image rather than this
+runtime instruction.
 Repetition [0560], slices [0570], empty literals, non-scalar array elements,
 parameters, and returns remain outside this slice.
 
@@ -1735,8 +1744,7 @@ place/value boundary beyond fresh initialization and needs its own definite-
 assignment and evaluation decision. Both were declined.
 
 **Pinned by** `positive/local-array-zeroed-initializer`,
-`negative/inferred-zeroed-not-enabled`,
-`negative/local-scalar-zeroed-not-enabled`, and
+`negative/inferred-zeroed-not-enabled`, and
 `runtime/local-array-zeroed-reads-zero` on Linux x86-64.
 
 ### D29 — Array literal assignment forms the value in its destination
@@ -1939,14 +1947,14 @@ Neither IR nor compiler work enumerates D18's extent, and no hidden array
 storage or temporary is formed.
 
 This first repetition slice deliberately requires an explicitly typed local
-initializer or an existing mutable array place. It does not admit an inferred
-binding, module initializer or static image, mixed-prefix form such as
-`[0x7F, 0x45, of 0]`, argument, return, discard, nested repetition or general
-array value. Since `of` remains [1760]'s contextual spelling rather than a
-reserved word, `[of, other, of]` remains an ordinary literal whose elements may
-name a binding called `of`; repetition is recognized only where the token after
-`of` can begin its scalar expression. Thus `[of + 1]` also remains an ordinary
-one-element literal.
+initializer or an existing mutable array place. D33/D35 later admit counted
+local and module inference, D34 the typed module static image, and D36--D38 the
+mixed-prefix forms. Argument, return, discard, nested repetition and general
+array values remain refused. Since `of` remains [1760]'s contextual spelling
+rather than a reserved word, `[of, other, of]` remains an ordinary literal
+whose elements may name a binding called `of`; repetition is recognized only
+where the token after `of` can begin its scalar expression. Thus `[of + 1]`
+also remains an ordinary one-element literal.
 
 **Why once:** the source writes one expression, and evaluating it once makes the
 runtime work visible without multiplying side effects by a type-level count.
@@ -1962,8 +1970,7 @@ program contains. It was declined.
 `negative/array-repetition-count-mismatch`,
 `negative/array-repetition-element-mismatch`,
 `negative/array-repetition-countless-inferred-initializer-not-enabled`,
-`negative/array-repetition-reads-incoming-state`,
-`negative/array-mixed-repetition-assignment-not-enabled`, and
+`negative/array-repetition-reads-incoming-state`, and
 `runtime/array-repetition-evaluates-once` on Linux x86-64.
 
 ### D33 — A counted local repetition supplies its inferred shape
@@ -2092,8 +2099,9 @@ out-of-range or overflowing pattern can reach lowering as a compiler defect.
 D34's representation and emission apply unchanged: a nonzero pattern is one
 compact repeated image, direct module-array name chains preserve it, and a zero
 pattern is the absent loader-zeroed image emitted in `.bss`. Zero count,
-count-less inferred repetition, every mixed-prefix context later than D36's
-explicitly typed local, and every general array value position remain refused.
+count-less inferred repetition and every general array value position remain
+refused. D36 later admits the explicitly typed local mixed form, D37 its
+assignment and D38 the explicitly typed module image.
 
 **Why only counted:** without a written type or source run, `[of expression]`
 has no source for its length. The scalar can determine an element type but not
@@ -2112,7 +2120,6 @@ already represents the result. It was declined.
 `negative/module-array-repetition-fold-range`,
 `negative/inferred-array-repetition-zero-count`,
 `negative/array-repetition-countless-inferred-initializer-not-enabled`,
-`negative/module-array-mixed-repetition-not-enabled`,
 `negative/array-repetition-general-value-not-enabled`, and
 `runtime/array-repetition-evaluates-once` on Linux x86-64.
 
@@ -2587,11 +2594,12 @@ folds and static module array images use the same checked layout as D44. The
 verifier requires a scalar measurement leaf to have its canonical length one;
 the dump exposes an array leaf as `[N]element`.
 
-This decision does not enable a runtime value of a struct with an aggregate
-field: such a binding, parameter, return, whole copy, nested field place or
-indexed place remains refused. A struct field of struct type, nested aggregate
-composition, inline anonymous measurement and `lenof` on a struct also remain
-deferred. Scalar-field struct behaviour is unchanged.
+At this decision a struct with an aggregate field still had no runtime storage
+or value context. D46--D65 later add its module and frame storage, indexed and
+whole-field places, contextual initializers, whole copies, zero images and
+labelled literals. Parameters, returns, a struct field of struct type, deeper
+nested aggregate composition, inline anonymous measurement and `lenof` on a
+struct remain deferred. Scalar-field struct measurement is unchanged.
 
 **Why the compact leaf:** D18 permits an array length no host or IR vector can
 enumerate, while its element and count are the complete representation-
@@ -2765,7 +2773,8 @@ other index is checked at runtime and traps before any address is formed under
 array only in this index-base context: as a whole value, copy endpoint, or
 non-`zeroed` assignment destination it remains refused with L0304. D49 later
 supersedes the complete `s.f = zeroed` statement, D50 later supersedes the
-copy-endpoint boundary, and D52 later supersedes a literal destination alone.
+copy-endpoint boundary, and D52/D53 later supersede literal and repetition
+destinations.
 
 D10 makes module state complete from declaration, so an indexed module-field
 read has no assignment requirement. A declaration-only local instead follows
@@ -2842,7 +2851,8 @@ The selection is typed as an array only as the destination of that complete
 assignment. At this boundary, as a value, copy source or destination,
 non-`zeroed` destination, `inc`/`dec` target, operand, or nested `zeroed`
 expression it remains refused with L0304; D50 later supersedes the copy
-endpoints alone. An immutable root reports L0303 first and alone under [1900].
+endpoints, D52 the literal destination and D53 repetition destinations. An
+immutable root reports L0303 first and alone under [1900].
 The destination is reached first and `zeroed` evaluates nothing [0410]. Every
 enabled scalar has a zero image, so the complete field has one [0540].
 
@@ -2927,8 +2937,9 @@ This is a copy context, not a general array value. A fixed-array field remains
 refused as a module initializer source, argument, return, discard, operand, or
 bare read, and as a literal, repetition, or other non-`zeroed`, non-copy
 assignment destination. D51 later admits it as a local initializer source
-without changing those positions, and D52 later admits a literal destination
-alone. Whole copies of the containing struct keep D46's refusal in this slice;
+without changing those positions, and D52/D53 later admit literal and
+repetition destinations. Whole copies of the containing struct keep D46's
+refusal in this slice;
 D54 later gives the field-wise lowering path an explicit array branch.
 
 Lowering emits one compact `Copy_Array` carrying both root storage identities
@@ -3315,9 +3326,10 @@ both 64- and 32-bit descriptions.
 An inferred local binding remains refused in this slice and is admitted by
 D56 only when its value is a direct struct storage name. A module initializer
 remains refused in this slice; D60/D61 later admit its typed and inferred
-direct-name forms. A non-name initializer,
-`zeroed` in this slice, a struct literal, an argument, return, discard, operand or bare whole
-read remains refused. The checker reports the existing L0304 once for an
+direct-name forms. At D55, a non-name initializer, `zeroed`, a struct literal,
+an argument, return, discard, operand or bare whole read remained refused;
+D57 later admits typed local `zeroed` and D64/D65 the typed local labelled
+literal. The checker reports the existing L0304 once for an
 unsupported binding form; a binding it has already refused reads nothing for
 definite assignment under D16. Parameters and returns still need their own
 calling-convention decision, and struct-of-struct fields, fields of elements
@@ -3549,8 +3561,9 @@ Module state is complete under D10, so D16 gains no fact or flow rule. An
 inferred module `name := zeroed`, initialization from another struct name in
 this slice, a struct literal, call, argument, return, discard, operand, nested
 expression and general aggregate value remain refused. D60 later admits the
-typed direct-name static image chain. Fields of struct type, fields of elements
-and nested arrays keep their boundaries.
+typed direct-name static image chain and D66--D68 the typed module labelled
+literal. Fields of struct type, fields of elements and nested arrays keep their
+boundaries.
 
 **Why no new image:** the explicit spelling denotes exactly the image D10
 already requires. A runtime clear cannot run before [1460]; a finite byte image
@@ -3610,9 +3623,10 @@ not read again for [1940], preserving its owning report without a cascade. An
 inferred module binding in this slice, a non-name initializer, struct literal,
 call, field selection, argument, return, discard, operand, nested expression
 and general aggregate value remain refused. D61 later admits the inferred
-direct-name form. D55/D56's local initializers and D57--D59's zero-image
-contexts are unchanged. Struct fields of struct type, fields of elements and
-nested arrays keep their boundaries.
+direct-name form and D66--D68 the typed module labelled literal. D55/D56's
+local initializers and D57--D59's zero-image contexts are unchanged. Struct
+fields of struct type, fields of elements and nested arrays keep their
+boundaries.
 
 **Why a static copy:** aliasing would make a later write through one declaration
 change the other, contrary to D21 and D54's value semantics. A startup copy
@@ -3667,19 +3681,22 @@ validator reports that same cycle once. The mechanisms are disjoint: a failed
 inference is `Ill_Typed` and is not visited as an image, while the validator
 only visits successfully settled arrays and aggregates.
 
-Every currently constructible terminal image remains zero. Lowering reuses the
-inferred body to record one ordinary aggregate datum, compact field shapes and
-an operandless `Leave`; no finite image, runtime copy, clear, new instruction
-or target offset is introduced. The backend reserves each destination's
-target-derived padded extent as a separate zero-initialized object on 64- and
-32-bit descriptions. D60's requirement that a future nonzero terminal extend
-the representation applies unchanged.
+At this decision every constructible terminal image was zero. Lowering reused
+the inferred body to record one ordinary aggregate datum, compact field shapes
+and an operandless `Leave`; no finite image, runtime copy, clear, new
+instruction or target offset was introduced. D66--D68 later added
+target-neutral labelled scalar, finite, repeated and hybrid field images and
+copy those terminal images through the same D60/D61 declaration chain into
+distinct padded objects on 64- and 32-bit descriptions.
 
-A non-name initializer, `zeroed` without a written type, struct literal, call,
+A non-name initializer or `zeroed` without a written type, call,
 field selection, argument, return, discard, operand, nested expression and
-general aggregate value remain refused. D55/D56's local forms and D57--D60's
-contextual zero and typed module forms are unchanged. Struct fields of struct
-type, fields of elements and nested arrays keep their boundaries.
+general aggregate value remain refused. D64--D68 admit a struct literal only
+in their explicitly typed contextual local, assignment and module-image forms;
+inferred literals and call-shaped construction remain refused. D55/D56's local
+forms and D57--D60's contextual zero and typed module forms are unchanged.
+Struct fields of struct type, fields of elements and nested arrays keep their
+boundaries.
 
 **Why now:** D56 already provides the only missing nominal-identity step and
 D60 already proves and represents the module image. Reusing both closes the
@@ -3784,15 +3801,15 @@ immediately following bracketed index is skipped as recovery rather than
 reported as a second refused construct. The automatic truncation suite holds
 every prefix to producing a finite, well-formed tree.
 
-The normative grammar is deliberately unchanged. A negative fixture whose
+At D63 the normative grammar was deliberately unchanged. A negative fixture whose
 first report is the frontend's L0010 must remain underivable; adding a
 `struct_literal` production would claim the source is enabled while the parser
 still refuses it. The later literal slice must replace this lookahead with a
 real syntax node and grammar production, teach resolution that field labels are
 not ordinary name references, and migrate these fixtures to positive or
-later-stage evidence. A local runtime image can then lower field by field; a
-module literal additionally needs the nonzero static aggregate-image
-representation D60 deferred.
+later-stage evidence. D64 performs that migration and lowers local and
+assignment contexts field by field; D66--D68 add the target-neutral module
+static-image representation D60 deferred.
 
 **Why pin the refusal first:** the named before-state separates migration from
 recovery. It lets the enabling slice prove exactly which L0010 refusals it
@@ -3949,8 +3966,8 @@ may be heterogeneous; converting it per field is not enabled, and evaluating
 it again per field would violate the once-only rule. Inferred literals still
 have no nominal body and wait for [0700]'s construction decision. Module
 literals remain outside this slice; D66 later supplies D60's nonzero aggregate
-image carrier for scalar labels, and D67 adds its finite-or-zero array-field
-form. The all-`of`
+image carrier for scalar labels, D67 adds its finite-or-zero array-field form,
+and D68 its repeated and hybrid forms. The all-`of`
 spelling remains D63's redundant parser refusal, and general aggregate values
 remain outside this slice.
 
@@ -3993,11 +4010,13 @@ layout. The written type supplies the literal's nominal body. D64's freely
 ordered, unique labels, L0308 unknown-field owner, L0309 duplicate owner and
 L0310 missing-field owner apply unchanged. Each explicitly named field in this
 first static carrier must be scalar. D67 later supersedes that boundary for a
-finite or `zeroed` fixed-array label. A trailing `of zeroed` supplies zero or
+finite or `zeroed` fixed-array label, and D68 adds full and mixed repetition.
+A trailing `of zeroed` supplies zero or
 `false` to every unnamed scalar field and the absent zero image to every
 unnamed fixed-array field. A fixed-array field named explicitly is L0304 in
 this slice; D67 later admits its finite literal and `zeroed` forms through a
-compact per-field image, while repetition and copy remain later decisions.
+compact per-field image, D68 admits repetition, and image copy remains a later
+decision.
 
 Each scalar field expression must be known without execution under [1940]: a
 literal, contextual scalar `zeroed`, an enabled operator over known operands,
@@ -4130,8 +4149,8 @@ add name-chain copy before a general carrier, flatten target bytes, or emit a
 startup routine. The first and third add recursive image and cycle questions;
 the second leaves a needless asymmetry with `of zeroed`; and the last two
 violate target neutrality or [1460]. The complete compact carrier with only
-finite and absent producers was chosen; its repetition and copy producers wait
-for their own evidence.
+finite and absent producers was chosen. D68 later supplies repetition; direct
+or selected image copy still waits for its own evidence.
 
 **Pinned by** the IR, verifier, checker, lowering and backend public-seam cases;
 `positive/module-struct-literal-array-image`;
@@ -4192,8 +4211,9 @@ recursion or cycle rule is introduced.
 
 A direct module array storage name or selected array field remains L0304 as a
 labelled module image. Resolving the former requires following another datum's
-finite, repeated or hybrid image and is deferred to D69; the latter retains the
-standing refusal of a selected field as an ordinary module array initializer.
+finite, repeated or hybrid image and remains a later image-resolution decision;
+the latter retains the standing refusal of a selected field as an ordinary
+module array initializer.
 Inferred literals, heterogeneous `of expression`, all-`of`, construction and
 general aggregate values remain refused. No grammar, syntax node, diagnostic
 code, runtime instruction, target fact or layout rule changes.
