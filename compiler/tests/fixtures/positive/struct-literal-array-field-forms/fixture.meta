@@ -1,0 +1,5 @@
+class: positive
+summary: D65 makes each labelled scalar or fixed-array field its own contextual assignment destination
+constructs: 0080, 0190, 0410, 0520, 0540, 0560, 0670, 0710, 0750, 1810, 1900, 1910
+program: program.ldn
+targets: linux-x86-64, macos-arm64

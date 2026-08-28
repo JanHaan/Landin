@@ -1,0 +1,44 @@
+holder: type = struct
+    row: [3]usize
+    copy: [3]usize
+    tag: usize
+    ready: bool
+end holder
+
+mut calls: usize = 0
+mut state: holder
+
+next: (base: usize) -> (value: usize) =
+    calls = calls + 1
+    value = base + calls
+end next
+
+public main: () -> (code: i32) =
+    state =
+        (tag: 10,
+         row: [next(state.tag), of next(state.row[0])],
+         copy: state.row,
+         ready: zeroed)
+    local: holder =
+        (copy: zeroed, tag: zeroed, ready: zeroed, row: [1, 2, 3])
+    state =
+        (row: state.row,
+         copy: state.copy,
+         tag: state.tag,
+         ready: state.ready)
+
+    if calls == 2
+      and state.tag == 10 and not state.ready
+      and state.row[0] == 11
+      and state.row[1] == 13 and state.row[2] == 13
+      and state.copy[0] == 11
+      and state.copy[1] == 13 and state.copy[2] == 13
+      and local.row[0] == 1 and local.row[2] == 3
+      and local.copy[0] == 0 and local.copy[2] == 0
+      and local.tag == 0 and not local.ready
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

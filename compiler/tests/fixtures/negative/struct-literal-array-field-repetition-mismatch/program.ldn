@@ -1,0 +1,10 @@
+holder: type = struct
+    row: [3]u8
+    tag: u8
+end holder
+
+f: () -> none =
+    count: holder = (row: [2 of 1], tag: 1)
+    prefix: holder = (tag: 2, row: [1, 2, 3, of 4])
+    element: holder = (row: [3 of true], tag: 3)
+end f
