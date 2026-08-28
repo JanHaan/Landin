@@ -1,0 +1,5 @@
+class: positive
+summary: D81 carries typed, inferred and copied module variant case images
+constructs: 0040, 0050, 0190, 0670, 0680, 0690, 0700, 0710, 0750, 1210, 1740, 1790, 1795, 1810, 1940
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -1980,7 +1980,147 @@ package body Landin.Backend.X86_64 is
                             (At_Field - Written)));
                end if;
 
-               if Shape.Kind = Landin.IR.Scalar_Field_Shape then
+               if Shape.Kind = Landin.IR.Variant_Field_Shape
+                 and then Image.Form = Landin.IR.Selected
+               then
+                  declare
+                     Selected : constant Positive := Positive (Image.Value);
+                     In_Field : Landin.Targets.Byte_Count :=
+                       Landin.Targets.Byte_Count
+                         (Landin.Targets.Bytes
+                            (Size_Of (Shape.Element, Facts)));
+                  begin
+                     Emit
+                       (Directive (Size_Of (Shape.Element, Facts)) & " "
+                        & Trimmed
+                            (Natural'Image (Natural (Selected) - 1)));
+
+                     for Payload in 1 .. Image.Count loop
+                        declare
+                           Leaf : constant Landin.IR.Field_Shape :=
+                             Landin.IR.Nth_Variant_Case_Field
+                               (Of_Unit, Shape, Selected, Payload);
+                           Payload_Image : constant
+                             Landin.IR.Aggregate_Field_Image :=
+                               Landin.IR.Variant_Payload_Image_Of
+                                 (Of_Unit, Item, Field, Payload);
+                           At_Payload : constant
+                             Landin.Targets.Byte_Count :=
+                               Landin.Backend.Variant_Payload_Field_Offset
+                                 (Of_Unit, Shape, Selected, Payload, Facts);
+                           Payload_Size : Landin.Targets.Byte_Count;
+                           Payload_Alignment :
+                             Landin.Targets.Byte_Alignment;
+                        begin
+                           Landin.Backend.Field_Extent
+                             (Of_Unit, Leaf, Facts, Payload_Size,
+                              Payload_Alignment);
+                           pragma Unreferenced (Payload_Alignment);
+
+                           if At_Payload > In_Field then
+                              Emit
+                                (".zero "
+                                 & Trimmed
+                                     (Landin.Targets.Byte_Count'Image
+                                        (At_Payload - In_Field)));
+                           end if;
+
+                           if Leaf.Kind =
+                                Landin.IR.Scalar_Field_Shape
+                           then
+                              Emit
+                                (Directive
+                                   (Size_Of (Leaf.Element, Facts))
+                                 & " "
+                                 & Trimmed
+                                     (Landin.Types.Folded'Image
+                                        (Payload_Image.Value)));
+                           elsif Payload_Image.Form = Landin.IR.Finite then
+                              for Position in 1 .. Payload_Image.Count loop
+                                 Emit
+                                   (Directive
+                                      (Size_Of (Leaf.Element, Facts))
+                                    & " "
+                                    & Trimmed
+                                        (Landin.Types.Folded'Image
+                                           (Landin.IR
+                                              .Nth_Variant_Field_Element
+                                                (Of_Unit, Item, Field,
+                                                 Payload,
+                                                 Landin.IR.Part_Position
+                                                   (Position)))));
+                              end loop;
+                           elsif Payload_Image.Form
+                                   in Landin.IR.Repeated | Landin.IR.Hybrid
+                           then
+                              if Payload_Image.Form = Landin.IR.Hybrid then
+                                 for Position in
+                                   1 .. Payload_Image.Count
+                                 loop
+                                    Emit
+                                      (Directive
+                                         (Size_Of (Leaf.Element, Facts))
+                                       & " "
+                                       & Trimmed
+                                           (Landin.Types.Folded'Image
+                                              (Landin.IR
+                                                 .Nth_Variant_Field_Element
+                                                   (Of_Unit, Item, Field,
+                                                    Payload,
+                                                    Landin.IR.Part_Position
+                                                      (Position)))));
+                                 end loop;
+                              end if;
+                              Emit
+                                (".rept "
+                                 & Trimmed
+                                     (Landin.IR.Element_Total'Image
+                                        (Leaf.Length
+                                         - Landin.IR.Element_Total
+                                             (Payload_Image.Count))));
+                              Emit
+                                (Directive (Size_Of (Leaf.Element, Facts))
+                                 & " "
+                                 & Trimmed
+                                     (Landin.Types.Folded'Image
+                                        (Payload_Image.Value)));
+                              Emit (".endr");
+                           elsif Payload_Image.Form = Landin.IR.Absent then
+                              if Payload_Size > 0 then
+                                 Emit
+                                   (".zero "
+                                    & Trimmed
+                                        (Landin.Targets.Byte_Count'Image
+                                           (Payload_Size)));
+                              end if;
+                           else
+                              raise Landin.Compiler_Defect with
+                                "a nested selected variant image reached"
+                                & " x86-64";
+                           end if;
+
+                           In_Field := At_Payload + Payload_Size;
+                        end;
+                     end loop;
+
+                     if Field_Size > In_Field then
+                        Emit
+                          (".zero "
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image
+                                  (Field_Size - In_Field)));
+                     end if;
+                  end;
+               elsif Shape.Kind = Landin.IR.Variant_Field_Shape
+                 and then Image.Form = Landin.IR.Absent
+               then
+                  if Field_Size > 0 then
+                     Emit
+                       (".zero "
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image (Field_Size)));
+                  end if;
+               elsif Shape.Kind = Landin.IR.Scalar_Field_Shape then
                   Emit
                     (Directive (Size_Of (Shape.Element, Facts)) & " "
                      & Trimmed

@@ -1041,7 +1041,17 @@ package body Landin.Tests.Backend_Suite is
         & "zero_patterns: type = struct" & LF
         & "    mixed: [3]u8" & LF
         & "end zero_patterns" & LF
-        & "zero_pattern_state: zero_patterns = (mixed: [0, of 0])" & LF;
+        & "zero_pattern_state: zero_patterns = (mixed: [0, of 0])" & LF
+        & "choice: type = struct" & LF
+        & "    kind: variant" & LF
+        & "        leaf |" & LF
+        & "        pair: (first: u8, second: u16)" & LF
+        & "    end kind" & LF
+        & "end choice" & LF
+        & "selected: choice = choice(kind: pair(first: 11,"
+        & " second: 13))" & LF
+        & "selected_copy: choice = selected" & LF
+        & "selected_inferred := choice(kind: leaf)" & LF;
    begin
       declare
          Work : Landin.Stages.Compilation :=
@@ -1114,6 +1124,33 @@ package body Landin.Tests.Backend_Suite is
                   & HT & ".endr" & LF
                   & HT & ".size zero_pattern_state, 3" & LF),
                "an all-zero hybrid remains a written 32-bit image");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text,
+                  "selected:" & LF
+                  & HT & ".byte 1" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".byte 11" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".word 13" & LF
+                  & HT & ".size selected, 6" & LF)
+               and then Contains
+                 (Text,
+                  "selected_copy:" & LF
+                  & HT & ".byte 1" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".byte 11" & LF
+                  & HT & ".zero 1" & LF
+                  & HT & ".word 13" & LF
+                  & HT & ".size selected_copy, 6" & LF)
+               and then Contains
+                 (Text,
+                  "selected_inferred:" & LF
+                  & HT & ".byte 0" & LF
+                  & HT & ".zero 5" & LF
+                  & HT & ".size selected_inferred, 6" & LF),
+               "selected variant images write tags, payloads and padding");
          end;
       end;
 
@@ -1177,6 +1214,18 @@ package body Landin.Tests.Backend_Suite is
                & HT & ".endr" & LF
                & HT & ".size zero_pattern_state, 3" & LF),
             "an all-zero hybrid remains a written 64-bit image");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Emitted (Work),
+               "selected:" & LF
+               & HT & ".byte 1" & LF
+               & HT & ".zero 1" & LF
+               & HT & ".byte 11" & LF
+               & HT & ".zero 1" & LF
+               & HT & ".word 13" & LF
+               & HT & ".size selected, 6" & LF),
+            "the same selected image follows 64-bit placement");
       end;
    end A_Module_Struct_Literal_Becomes_Data_Image;
 

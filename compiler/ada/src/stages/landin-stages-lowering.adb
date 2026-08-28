@@ -3477,6 +3477,7 @@ package body Landin.Stages.Lowering is
             type Node_Array is array (Positive range <>) of Syn.Node_Id;
             Nodes : Node_Array (1 .. Count) := [others => Syn.No_Node];
             Element_Count : Natural := 0;
+            Payload_Count : Natural := 0;
          begin
             for Position in
               1 .. Syn.Field_Value_Count (Of_Tree, Literal)
@@ -3489,7 +3490,26 @@ package body Landin.Stages.Lowering is
                       (Types.all, Of_Tree, Field);
                begin
                   Nodes (Which) := Field;
-                  if Syn.Kind
+                  if IR.Nth_Field_Shape
+                       (Unit.all, Item, Which).Kind
+                       = IR.Variant_Field_Shape
+                  then
+                     declare
+                        Value : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Field);
+                        Selected : constant Positive :=
+                          Positive
+                            (Landin.Checking.Field_Index
+                               (Types.all, Of_Tree, Value));
+                     begin
+                        Payload_Count := Payload_Count
+                          + IR.Variant_Case_Field_Count
+                              (Unit.all,
+                               IR.Nth_Field_Shape
+                                 (Unit.all, Item, Which),
+                               Selected);
+                     end;
+                  elsif Syn.Kind
                        (Of_Tree, Syn.Value_Of (Of_Tree, Field))
                        in Syn.Array_Literal | Syn.Mixed_Array_Repetition
                   then
@@ -3567,9 +3587,12 @@ package body Landin.Stages.Lowering is
                Values : Ty.Folded_Array (1 .. Count) := [others => 0];
                Images : IR.Aggregate_Field_Image_Array (1 .. Count) :=
                  [others => (others => <>)];
+               Payloads : IR.Aggregate_Field_Image_Array
+                 (1 .. Payload_Count) := [others => (others => <>)];
                Elements : Ty.Folded_Array (1 .. Element_Count) :=
                  [others => 0];
                Cursor : Natural := 0;
+               Payload_Cursor : Natural := 0;
             begin
                for Which in 1 .. Count loop
                   Images (Which).Offset := Cursor;
@@ -3595,6 +3618,91 @@ package body Landin.Stages.Lowering is
                                    & " lowering";
                               end if;
                               Values (Which) := Held;
+                           end;
+                        elsif Shape.Kind = IR.Variant_Field_Shape then
+                           declare
+                              Selected : constant Positive :=
+                                Positive
+                                  (Landin.Checking.Field_Index
+                                     (Types.all, Of_Tree, Value));
+                              Payload_Count : constant Natural :=
+                                IR.Variant_Case_Field_Count
+                                  (Unit.all, Shape, Selected);
+                              Payload_Nodes : Node_Array
+                                (1 .. Payload_Count) :=
+                                  [others => Syn.No_Node];
+                           begin
+                              Images (Which) :=
+                                (Form   => IR.Selected,
+                                 Offset => Payload_Cursor,
+                                 Count  => Payload_Count,
+                                 Value  => Ty.Folded (Selected));
+
+                              if Syn.Kind (Of_Tree, Value)
+                                   = Syn.Struct_Literal
+                              then
+                                 for Position in
+                                   1 .. Syn.Field_Value_Count
+                                          (Of_Tree, Value)
+                                 loop
+                                    declare
+                                       Label : constant Syn.Node_Id :=
+                                         Syn.Nth_Field_Value
+                                           (Of_Tree, Value, Position);
+                                       Payload : constant Positive :=
+                                         Positive
+                                           (Landin.Checking.Field_Index
+                                              (Types.all, Of_Tree, Label));
+                                    begin
+                                       Payload_Nodes (Payload) := Label;
+                                    end;
+                                 end loop;
+                              end if;
+
+                              for Payload in 1 .. Payload_Count loop
+                                 declare
+                                    Image : IR.Aggregate_Field_Image
+                                      renames Payloads
+                                        (Payload_Cursor + Payload);
+                                    Leaf : constant IR.Field_Shape :=
+                                      IR.Nth_Variant_Case_Field
+                                        (Unit.all, Shape, Selected, Payload);
+                                 begin
+                                    Image.Offset := Cursor;
+                                    if Leaf.Kind =
+                                         IR.Scalar_Field_Shape
+                                      and then Payload_Nodes (Payload)
+                                        /= Syn.No_Node
+                                    then
+                                       declare
+                                          Held : Ty.Folded;
+                                          Known : Boolean;
+                                       begin
+                                          Fold_Constant
+                                            (Of_Tree,
+                                             Syn.Value_Of
+                                               (Of_Tree,
+                                                Payload_Nodes (Payload)),
+                                             Held, Known);
+                                          if not Known then
+                                             raise Landin.Compiler_Defect
+                                               with "a module variant"
+                                               & " payload the checker"
+                                               & " accepted did not fold";
+                                          end if;
+                                          Image.Value := Held;
+                                       end;
+                                    elsif Leaf.Kind =
+                                      IR.Variant_Field_Shape
+                                    then
+                                       raise Landin.Compiler_Defect with
+                                         "a nested variant payload reached"
+                                         & " module image lowering";
+                                    end if;
+                                 end;
+                              end loop;
+                              Payload_Cursor := Payload_Cursor
+                                + Payload_Count;
                            end;
                         elsif Syn.Kind (Of_Tree, Value)
                                 in Syn.Array_Literal
@@ -3767,7 +3875,7 @@ package body Landin.Stages.Lowering is
                end loop;
 
                IR.Set_Aggregate_Image
-                 (Unit.all, Item, Values, Images, Elements);
+                 (Unit.all, Item, Values, Images, Payloads, Elements);
                Made (Id) := True;
             end;
          end Set_Image_From_Struct_Literal;
@@ -3851,6 +3959,10 @@ package body Landin.Stages.Lowering is
                           (Unit.all, Destination, Prefix, Image.Value);
                      end;
                      Made (Id) := True;
+
+                  when IR.Selected =>
+                     raise Landin.Compiler_Defect with
+                       "a selected variant field was used as an array image";
                end case;
             end;
          end Set_Image_From_Struct_Field;
@@ -3874,22 +3986,79 @@ package body Landin.Stages.Lowering is
                     IR.Field_Count (Unit.all, Source_Item);
                   Elements_Count : constant Natural :=
                     Natural (Length - IR.Element_Total (Fields));
+                  Payload_Count : constant Natural :=
+                    IR.Aggregate_Field_Image_Count
+                      (Unit.all, Source_Item) - Fields;
                   Values : Ty.Folded_Array (1 .. Fields) := [others => 0];
                   Images : IR.Aggregate_Field_Image_Array
                     (1 .. Fields) := [others => (others => <>)];
+                  Payloads : IR.Aggregate_Field_Image_Array
+                    (1 .. Payload_Count) := [others => (others => <>)];
                   Elements : Ty.Folded_Array (1 .. Elements_Count) :=
                     [others => 0];
                   Cursor : Natural := 0;
+                  Payload_Cursor : Natural := 0;
                begin
                   for Field in 1 .. Fields loop
                      Values (Field) :=
                        IR.Nth_Field_Image (Unit.all, Source_Item, Field);
-                     Copy_Field_Descriptor
-                       (Source_Item, Field, Cursor, Images (Field), Elements);
+                     declare
+                        Source_Image : constant IR.Aggregate_Field_Image :=
+                          IR.Field_Image_Of
+                            (Unit.all, Source_Item, Field);
+                     begin
+                        if Source_Image.Form = IR.Selected then
+                           Images (Field) := Source_Image;
+                           Images (Field).Offset := Payload_Cursor;
+                           for Payload in 1 .. Source_Image.Count loop
+                              declare
+                                 Source_Payload : constant
+                                   IR.Aggregate_Field_Image :=
+                                     IR.Variant_Payload_Image_Of
+                                       (Unit.all, Source_Item, Field,
+                                        Payload);
+                                 Target : IR.Aggregate_Field_Image renames
+                                   Payloads (Payload_Cursor + Payload);
+                              begin
+                                 Target := Source_Payload;
+                                 Target.Offset := Cursor;
+                                 if Source_Payload.Form
+                                      in IR.Finite | IR.Hybrid
+                                 then
+                                    for Position in
+                                      1 .. Source_Payload.Count
+                                    loop
+                                       Elements (Cursor + Position) :=
+                                         IR.Nth_Variant_Field_Element
+                                           (Unit.all, Source_Item, Field,
+                                            Payload,
+                                            IR.Part_Position (Position));
+                                    end loop;
+                                 elsif Source_Payload.Form = IR.Selected
+                                 then
+                                    raise Landin.Compiler_Defect with
+                                      "a nested selected variant image"
+                                      & " reached aggregate image copying";
+                                 elsif Source_Payload.Count /= 0 then
+                                    raise Landin.Compiler_Defect with
+                                      "a compact variant payload image"
+                                      & " carried finite elements";
+                                 end if;
+                                 Cursor := Cursor + Source_Payload.Count;
+                              end;
+                           end loop;
+                           Payload_Cursor := Payload_Cursor
+                             + Source_Image.Count;
+                        else
+                           Copy_Field_Descriptor
+                             (Source_Item, Field, Cursor, Images (Field),
+                              Elements);
+                        end if;
+                     end;
                   end loop;
                   IR.Set_Aggregate_Image
                     (Unit.all, IR.Item_For (Unit.all, Destination), Values,
-                     Images, Elements);
+                     Images, Payloads, Elements);
                   Made (Destination) := True;
                end;
                return;

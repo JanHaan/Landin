@@ -568,13 +568,16 @@ package Landin.IR is
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
 
-   type Field_Image_Form is (Absent, Finite, Repeated, Hybrid);
+   type Field_Image_Form is (Absent, Finite, Repeated, Hybrid, Selected);
 
    --  D67: the target-neutral image carried beside one aggregate field.
    --  Offset and Count select a finite run concatenated after D66's one flat
    --  fold per field.  Absent is the field's zero image; Finite is enabled by
    --  D67.  D68 uses Repeated for one nonzero full pattern and Hybrid for a
-   --  finite prefix followed by one suffix pattern.
+   --  finite prefix followed by one suffix pattern.  Selected is D81's
+   --  variant image: Value is the one-based case, while Offset and Count
+   --  select its declaration-order payload descriptors from the same item
+   --  run after the aggregate's top-level descriptors.
    type Aggregate_Field_Image is record
       Form   : Field_Image_Form     := Absent;
       Offset : Natural              := 0;
@@ -630,6 +633,31 @@ package Landin.IR is
                            = Element_Total
                                (Fields'Length + Elements'Length);
 
+   --  D81 appends one descriptor per selected variant payload field after
+   --  the top-level descriptors.  Array elements from either level share
+   --  Elements; every offset is relative to that one fold run.
+   procedure Set_Aggregate_Image
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Fields   : Landin.Types.Folded_Array;
+      Images   : Aggregate_Field_Image_Array;
+      Payloads : Aggregate_Field_Image_Array;
+      Elements : Landin.Types.Folded_Array)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item)
+                           = Landin.Types.Aggregate
+                  and then not Has_Image (Into, Item)
+                  and then Fields'Length = Field_Count (Into, Item)
+                  and then Images'Length = Field_Count (Into, Item)
+                  and then Fields'Length > 0
+                  and then Field_Image_Element_Count (Images)
+                             + Field_Image_Element_Count (Payloads)
+                           = Element_Total (Elements'Length),
+          Post => Has_Image (Into, Item)
+                  and then Image_Length (Into, Item)
+                           = Element_Total
+                               (Fields'Length + Elements'Length);
+
    function Aggregate_Field_Image_Count
      (Of_Unit : Unit; Item : Item_Id) return Natural
      with Pre => Holds (Of_Unit, Item)
@@ -668,6 +696,56 @@ package Landin.IR is
                             + Element_Total
                                 (Field_Image_Of
                                    (Of_Unit, Item, Field).Offset)
+                            + Element_Total (Position)
+                          <= Image_Length (Of_Unit, Item);
+
+   function Variant_Payload_Image_Of
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Field   : Positive;
+      Payload : Positive) return Aggregate_Field_Image
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Aggregate
+                 and then Has_Image (Of_Unit, Item)
+                 and then Field <= Field_Count (Of_Unit, Item)
+                 and then Field_Image_Of (Of_Unit, Item, Field).Form
+                          = Selected
+                 and then Payload
+                          <= Field_Image_Of
+                               (Of_Unit, Item, Field).Count
+                 and then Field_Count (Of_Unit, Item)
+                            + Field_Image_Of
+                                (Of_Unit, Item, Field).Offset
+                            + Payload
+                          <= Aggregate_Field_Image_Count (Of_Unit, Item);
+
+   function Nth_Variant_Field_Element
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Field   : Positive;
+      Payload : Positive;
+      Position : Part_Position) return Landin.Types.Folded
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Aggregate
+                 and then Has_Image (Of_Unit, Item)
+                 and then Field <= Field_Count (Of_Unit, Item)
+                 and then Field_Image_Of (Of_Unit, Item, Field).Form
+                          = Selected
+                 and then Payload
+                          <= Field_Image_Of
+                               (Of_Unit, Item, Field).Count
+                 and then Variant_Payload_Image_Of
+                   (Of_Unit, Item, Field, Payload).Form in Finite | Hybrid
+                 and then Element_Total (Position)
+                          <= Element_Total
+                               (Variant_Payload_Image_Of
+                                  (Of_Unit, Item, Field, Payload).Count)
+                 and then Element_Total (Field_Count (Of_Unit, Item))
+                            + Element_Total
+                                (Variant_Payload_Image_Of
+                                   (Of_Unit, Item, Field, Payload).Offset)
                             + Element_Total (Position)
                           <= Image_Length (Of_Unit, Item);
 

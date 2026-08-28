@@ -171,7 +171,8 @@ package body Landin.Stages.Checking is
          Site    : Syn.Node_Id;
          Value   : Syn.Node_Id;
          Wrote   : Res.Declaration_Id;
-         Field   : Positive);
+         Field   : Positive;
+         Static_Image : Boolean := False);
       procedure Check_Match
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Mixed_Array_Repetition
@@ -1041,10 +1042,8 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
               and then not Is_Struct_Zeroed_Init
-              and then not
-                (Is_Local_Binding (Of_Tree, Node)
-                 and then
-                   (Is_Struct_Literal_Init or else Is_Direct_Struct_Init))
+              and then not Is_Struct_Literal_Init
+              and then not Is_Direct_Struct_Init
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -2887,7 +2886,8 @@ package body Landin.Stages.Checking is
          Site    : Syn.Node_Id;
          Value   : Syn.Node_Id;
          Wrote   : Res.Declaration_Id;
-         Field   : Positive)
+         Field   : Positive;
+         Static_Image : Boolean := False)
       is
          Body_Tree : constant not null access constant Syn.Tree :=
            Tree_For (Res.Source_Of (Meanings.all, Wrote));
@@ -2900,6 +2900,31 @@ package body Landin.Stages.Checking is
          Means : Res.Declaration_Id := Res.No_Declaration;
          Which : Natural := 0;
          Failed : Boolean := False;
+
+         function Subtree_Was_Refused
+           (Node : Syn.Node_Id) return Boolean;
+
+         function Subtree_Was_Refused
+           (Node : Syn.Node_Id) return Boolean
+         is
+         begin
+            if Node = Syn.No_Node then
+               return False;
+            elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                    = Ty.Ill_Typed
+            then
+               return True;
+            end if;
+
+            for Slot in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+               if Subtree_Was_Refused
+                    (Syn.Slot (Of_Tree, Node, Slot))
+               then
+                  return True;
+               end if;
+            end loop;
+            return False;
+         end Subtree_Was_Refused;
       begin
          pragma Assert (Syn.Kind (Body_Tree.all, Part) = Syn.Variant_Part);
 
@@ -3067,6 +3092,37 @@ package body Landin.Stages.Checking is
                                        Syn.Origin (Of_Tree, Label),
                                        "the variant payload field named"
                                        & " here");
+                                 end if;
+
+                                 if Static_Image
+                                   and then Landin.Checking.Type_Of
+                                     (Types.all, Of_Tree, Given)
+                                       /= Ty.Ill_Typed
+                                 then
+                                    Refuse_Static_Image_Subtree
+                                      (Of_Tree, Given,
+                                       "a module variant payload field");
+
+                                    if Subtree_Was_Refused (Given) then
+                                       Landin.Checking.Refuse
+                                         (Types.all, Of_Tree, Given);
+                                    elsif not Is_Known (Of_Tree, Given) then
+                                       Bad.Report
+                                         (Item    =>
+                                            Bad.Not_Known_At_Compile_Time,
+                                          Source  => Syn.Source_Of (Of_Tree),
+                                          Where   => Syn.Where
+                                            (Of_Tree, Given),
+                                          Message => "this variant payload"
+                                            & " value has to be known when"
+                                            & " the module image is formed",
+                                          Note    => "[1940]: nothing runs"
+                                            & " before the entry point"
+                                            & " [1460]",
+                                          Into    => Found);
+                                       Landin.Checking.Refuse
+                                         (Types.all, Of_Tree, Given);
+                                    end if;
                                  end if;
 
                               when Landin.Checking.Fixed_Array_Field =>
@@ -3577,22 +3633,9 @@ package body Landin.Stages.Checking is
                         Check_Array_Field (Field, Value, Which);
 
                      when Landin.Checking.Variant_Field =>
-                        if Static_Image then
-                           Bad.Report
-                             (Item    => Bad.Unsupported_Use,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Field),
-                              Message => "a module struct image cannot"
-                                         & " select a variant case yet",
-                              Refused => Bad.Variant_Value,
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Value);
-                           Failed := True;
-                        else
-                           Check_Variant_Value
-                             (Of_Tree, Field, Value, Wrote, Which);
-                        end if;
+                        Check_Variant_Value
+                          (Of_Tree, Field, Value, Wrote, Which,
+                           Static_Image);
                   end case;
 
                   Failed := Failed
@@ -4960,25 +5003,6 @@ package body Landin.Stages.Checking is
                  Construction_Body (Of_Tree.all, Value);
             begin
                if Wrote = Res.No_Declaration then
-                  Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
-               elsif Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
-                 and then Landin.Checking.Has_Layout (Types.all, Wrote)
-                 and then Landin.Checking.Has_Variant_Part
-                   (Types.all, Wrote)
-               then
-                  --  D79 gives an inferred local construction its fresh
-                  --  aggregate slot as the contextual destination.  A
-                  --  module binding still needs a nonzero static variant
-                  --  image, which this representation does not carry yet.
-                  Bad.Report
-                    (Item    => Bad.Unsupported_Use,
-                     Source  => Syn.Source_Of (Of_Tree.all),
-                     Where   => Syn.Where (Of_Tree.all, Value),
-                     Message => "an inferred module binding cannot take a"
-                                & " variant-bearing construction yet",
-                     Refused => Bad.Variant_Value,
-                     Into    => Found);
-                  Landin.Checking.Refuse (Types.all, Of_Tree.all, Value);
                   Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
                else
                   Landin.Checking.Note
@@ -6356,57 +6380,106 @@ package body Landin.Stages.Checking is
                      Image_Value : constant Syn.Node_Id :=
                        Syn.Value_Of (Of_Tree, Field);
                   begin
-                     if Landin.Checking.Field_Kind_Of
-                          (Types.all, Wrote, Which)
-                          = Landin.Checking.Scalar_Field
-                     then
-                        declare
-                           Element : constant Ty.Scalar_Name :=
-                             Landin.Checking.Field_Type
-                               (Types.all, Wrote, Which);
-                        begin
-                           if Element in Ty.Integer_Name then
-                              Check_Image_Scalar (Image_Value, Element);
+                     case Landin.Checking.Field_Kind_Of
+                       (Types.all, Wrote, Which)
+                     is
+                        when Landin.Checking.Scalar_Field =>
+                           declare
+                              Element : constant Ty.Scalar_Name :=
+                                Landin.Checking.Field_Type
+                                  (Types.all, Wrote, Which);
+                           begin
+                              if Element in Ty.Integer_Name then
+                                 Check_Image_Scalar (Image_Value, Element);
+                              end if;
+                           end;
+
+                        when Landin.Checking.Fixed_Array_Field =>
+                           if Syn.Kind (Of_Tree, Image_Value)
+                                in Syn.Array_Literal
+                                   | Syn.Array_Repetition
+                                   | Syn.Mixed_Array_Repetition
+                           then
+                              declare
+                                 Element : constant Ty.Scalar_Name :=
+                                   Landin.Checking.Field_Array_Element
+                                     (Types.all, Wrote, Which);
+                              begin
+                                 if Element in Ty.Integer_Name then
+                                    if Syn.Kind (Of_Tree, Image_Value)
+                                         = Syn.Array_Repetition
+                                    then
+                                       Check_Image_Scalar
+                                         (Syn.Repeated_Element
+                                            (Of_Tree, Image_Value),
+                                          Element);
+                                    else
+                                       for Each in
+                                         1 .. Syn.Element_Count
+                                                (Of_Tree, Image_Value)
+                                       loop
+                                          Check_Image_Scalar
+                                            (Syn.Nth_Element
+                                               (Of_Tree, Image_Value, Each),
+                                             Element);
+                                       end loop;
+
+                                       if Syn.Kind (Of_Tree, Image_Value)
+                                            = Syn.Mixed_Array_Repetition
+                                       then
+                                          Check_Image_Scalar
+                                            (Syn.Repeated_Element
+                                               (Of_Tree, Image_Value),
+                                             Element);
+                                       end if;
+                                    end if;
+                                 end if;
+                              end;
                            end if;
-                        end;
-                     elsif Syn.Kind (Of_Tree, Image_Value)
-                             in Syn.Array_Literal | Syn.Array_Repetition
-                                | Syn.Mixed_Array_Repetition
-                     then
-                        declare
-                           Element : constant Ty.Scalar_Name :=
-                             Landin.Checking.Field_Array_Element
-                               (Types.all, Wrote, Which);
-                        begin
-                           if Element in Ty.Integer_Name then
+
+                        when Landin.Checking.Variant_Field =>
+                           declare
+                              Selected : constant Positive :=
+                                Positive
+                                  (Landin.Checking.Field_Index
+                                     (Types.all, Of_Tree, Image_Value));
+                           begin
                               if Syn.Kind (Of_Tree, Image_Value)
-                                   = Syn.Array_Repetition
+                                   = Syn.Struct_Literal
                               then
-                                 Check_Image_Scalar
-                                   (Syn.Repeated_Element
-                                      (Of_Tree, Image_Value), Element);
-                              else
                                  for Each in
-                                   1 .. Syn.Element_Count
+                                   1 .. Syn.Field_Value_Count
                                           (Of_Tree, Image_Value)
                                  loop
-                                    Check_Image_Scalar
-                                      (Syn.Nth_Element
-                                         (Of_Tree, Image_Value, Each),
-                                       Element);
+                                    declare
+                                       Label : constant Syn.Node_Id :=
+                                         Syn.Nth_Field_Value
+                                           (Of_Tree, Image_Value, Each);
+                                       Payload : constant Positive :=
+                                         Positive
+                                           (Landin.Checking.Field_Index
+                                              (Types.all, Of_Tree, Label));
+                                       Shape : constant
+                                         Landin.Checking.Field_Shape :=
+                                           Landin.Checking
+                                             .Nth_Variant_Case_Field
+                                               (Types.all, Wrote, Which,
+                                                Selected, Payload);
+                                    begin
+                                       if Shape.Kind =
+                                            Landin.Checking.Scalar_Field
+                                         and then Shape.Element
+                                           in Ty.Integer_Name
+                                       then
+                                          Check_Image_Scalar
+                                            (Syn.Value_Of (Of_Tree, Label),
+                                             Shape.Element);
+                                       end if;
+                                    end;
                                  end loop;
-
-                                 if Syn.Kind (Of_Tree, Image_Value)
-                                      = Syn.Mixed_Array_Repetition
-                                 then
-                                    Check_Image_Scalar
-                                      (Syn.Repeated_Element
-                                         (Of_Tree, Image_Value), Element);
-                                 end if;
                               end if;
-                           end if;
-                        end;
-                     end if;
+                           end;
+                     end case;
                   end;
                end loop;
             end;

@@ -506,7 +506,47 @@ package body Landin.IR.Dump is
                        Field_Image_Of (Of_Unit, Id, F);
                      Rendered : Unbounded.Unbounded_String;
                   begin
-                     if Image.Form /= Absent then
+                     if Image.Form = Selected then
+                        Put
+                          ("  field " & Trimmed (Natural'Image (F))
+                           & " case "
+                           & Trimmed
+                               (Landin.Types.Folded'Image (Image.Value)));
+                        declare
+                           Shape : constant Field_Shape :=
+                             Nth_Field_Shape (Of_Unit, Id, F);
+                        begin
+                           for Payload in 1 .. Image.Count loop
+                              declare
+                                 Leaf : constant Field_Shape :=
+                                   Nth_Variant_Case_Field
+                                     (Of_Unit, Shape,
+                                      Positive (Image.Value), Payload);
+                                 Payload_Image : constant
+                                   Aggregate_Field_Image :=
+                                     Variant_Payload_Image_Of
+                                       (Of_Unit, Id, F, Payload);
+                              begin
+                                 if Leaf.Kind = Scalar_Field_Shape then
+                                    Put
+                                      ("    payload "
+                                       & Trimmed
+                                           (Natural'Image (Payload))
+                                       & " image "
+                                       & Trimmed
+                                           (Landin.Types.Folded'Image
+                                              (Payload_Image.Value)));
+                                 elsif Payload_Image.Form = Absent then
+                                    Put
+                                      ("    payload "
+                                       & Trimmed
+                                           (Natural'Image (Payload))
+                                       & " zeroed");
+                                 end if;
+                              end;
+                           end loop;
+                        end;
+                     elsif Image.Form /= Absent then
                         if Image.Form in Finite | Hybrid then
                            for P in 1 .. Image.Count loop
                               if P /= 1 then
