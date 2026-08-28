@@ -1,0 +1,5 @@
+class: positive
+summary: D58 assigns the complete zero image to module and local ordinary structs
+constructs: 0040, 0060, 0080, 0190, 0520, 0540, 0670, 0710, 0750, 1810, 1900, 1910
+program: program.ldn
+targets: linux-x86-64, macos-arm64

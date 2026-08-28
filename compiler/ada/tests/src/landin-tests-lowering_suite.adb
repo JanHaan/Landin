@@ -1520,7 +1520,8 @@ package body Landin.Tests.Lowering_Suite is
    end A_Local_Zeroed_Array_Becomes_One_Clear;
 
    --  D30 lowers assignment to local and module arrays through the same
-   --  destination-only Clear_Array operation D28 introduced.
+   --  destination-only Clear_Array operation D28 introduced.  D58 reuses
+   --  field zero for the padded whole of module and local aggregate storage.
    procedure Zeroed_Assignment_Clears_Either_Storage_Kind
      (Item : in out Landin.Testing.Context);
 
@@ -1536,10 +1537,19 @@ package body Landin.Tests.Lowering_Suite is
       Lower
         (Work,
          "mut state: [2]u32" & LF
+         & "holder: type = struct" & LF
+         & "    tag: u8" & LF
+         & "    row: [2]u32" & LF
+         & "    tail: u16" & LF
+         & "end holder" & LF
+         & "mut structure: holder" & LF
          & "f: () -> none =" & LF
          & "    mut row: [3]u16" & LF
+         & "    mut local: holder" & LF
          & "    row = zeroed" & LF
          & "    state = zeroed" & LF
+         & "    local = zeroed" & LF
+         & "    structure = zeroed" & LF
          & "end f" & LF,
          Ran);
 
@@ -1549,22 +1559,42 @@ package body Landin.Tests.Lowering_Suite is
 
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := 3;
       begin
          Landin.Testing.Check_Equal
-           (Item, IR.Value_Count (Unit, 2), 3,
-            "two clears and the leave are the complete instruction run");
+           (Item, IR.Value_Count (Unit, Routine), 5,
+            "four clears and the leave are the complete instruction run");
          Landin.Testing.Check
-           (Item, IR.Op_Of (Unit, 2, 1) = IR.Clear_Array
-                  and then IR.Destination_Of (Unit, 2, 1).Kind
+           (Item, IR.Op_Of (Unit, Routine, 1) = IR.Clear_Array
+                  and then IR.Destination_Of (Unit, Routine, 1).Kind
                              = IR.Frame_Slot
-                  and then IR.Destination_Of (Unit, 2, 1).Slot = 1,
-            "the first clear names the local frame slot");
+                  and then IR.Destination_Of (Unit, Routine, 1).Slot = 1
+                  and then IR.Element_Field_Of (Unit, Routine, 1) = 0,
+            "the first clear names the local array slot");
          Landin.Testing.Check
-           (Item, IR.Op_Of (Unit, 2, 2) = IR.Clear_Array
-                  and then IR.Destination_Of (Unit, 2, 2).Kind
+           (Item, IR.Op_Of (Unit, Routine, 2) = IR.Clear_Array
+                  and then IR.Destination_Of (Unit, Routine, 2).Kind
                              = IR.Module_Datum
-                  and then IR.Destination_Of (Unit, 2, 2).Datum = 1,
-            "the second clear names the module datum");
+                  and then IR.Destination_Of (Unit, Routine, 2).Datum = 1
+                  and then IR.Element_Field_Of (Unit, Routine, 2) = 0,
+            "the second clear names the module array datum");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, Routine, 3) = IR.Clear_Array
+                  and then IR.Destination_Of (Unit, Routine, 3).Kind
+                             = IR.Frame_Slot
+                  and then IR.Destination_Of (Unit, Routine, 3).Slot = 2
+                  and then IR.Element_Field_Of (Unit, Routine, 3) = 0,
+            "the third clear names the local aggregate slot");
+         Landin.Testing.Check
+           (Item, IR.Op_Of (Unit, Routine, 4) = IR.Clear_Array
+                  and then IR.Destination_Of (Unit, Routine, 4).Kind
+                             = IR.Module_Datum
+                  and then IR.Destination_Of (Unit, Routine, 4).Datum = 2
+                  and then IR.Element_Field_Of (Unit, Routine, 4) = 0,
+            "the fourth clear names the module aggregate datum");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "array and aggregate whole-storage clears verify together");
       end;
    end Zeroed_Assignment_Clears_Either_Storage_Kind;
 
