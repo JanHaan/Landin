@@ -3244,10 +3244,11 @@ item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 3 bool
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE construct result none params 0 slots 2 blocks 1 values 37
+item 2 ROUTINE construct result none params 0 slots 3 blocks 1 values 48
   slot 1 local aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 2 named aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
-  block 1 scope 3 BLOCK length 37
+  slot 3 inferred aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
+  block 1 scope 3 BLOCK length 48
     1 NUMBER u8 1
     2 STORE_FIELD <- 1
     3 SELECT_VARIANT destination slot 1 field 2 case 1
@@ -3262,29 +3263,40 @@ item 2 ROUTINE construct result none params 0 slots 2 blocks 1 values 37
     12 STORE_VARIANT_FIELD destination slot 2 field 2 case 2 payload field 2 <- 11
     13 TRUTH bool true
     14 STORE_FIELD <- 13
-    15 SELECT_VARIANT destination slot 1 field 2 case 3
-    16 NUMBER u8 0
-    17 STORE_FIELD <- 16
-    18 TRUTH bool false
-    19 STORE_FIELD <- 18
-    20 SELECT_VARIANT destination datum 1 state field 2 case 2
-    21 NUMBER u8 5
-    22 STORE_VARIANT_FIELD destination datum 1 state field 2 case 2 payload field 1 <- 21
-    23 NUMBER u16 6
-    24 STORE_VARIANT_FIELD destination datum 1 state field 2 case 2 payload field 2 <- 23
-    25 SELECT_VARIANT destination datum 1 state field 2 case 1
-    26 NUMBER u8 7
-    27 STORE_FIELD <- 26
-    28 SELECT_VARIANT destination datum 1 state field 2 case 2
-    29 NUMBER u8 8
-    30 STORE_VARIANT_FIELD destination datum 1 state field 2 case 2 payload field 1 <- 29
-    31 TRUTH bool false
-    32 STORE_FIELD <- 31
-    33 LOAD_FIELD u8
-    34 LOAD_FIELD bool
-    35 LOAD_FIELD u8
-    36 LOAD_FIELD bool
-    37 LEAVE
+    15 NUMBER u8 9
+    16 STORE_FIELD <- 15
+    17 SELECT_VARIANT destination slot 3 field 2 case 2
+    18 NUMBER u8 10
+    19 STORE_VARIANT_FIELD destination slot 3 field 2 case 2 payload field 1 <- 18
+    20 NUMBER u16 11
+    21 STORE_VARIANT_FIELD destination slot 3 field 2 case 2 payload field 2 <- 20
+    22 TRUTH bool true
+    23 STORE_FIELD <- 22
+    24 SELECT_VARIANT destination slot 1 field 2 case 3
+    25 NUMBER u8 0
+    26 STORE_FIELD <- 25
+    27 TRUTH bool false
+    28 STORE_FIELD <- 27
+    29 SELECT_VARIANT destination datum 1 state field 2 case 2
+    30 NUMBER u8 5
+    31 STORE_VARIANT_FIELD destination datum 1 state field 2 case 2 payload field 1 <- 30
+    32 NUMBER u16 6
+    33 STORE_VARIANT_FIELD destination datum 1 state field 2 case 2 payload field 2 <- 32
+    34 SELECT_VARIANT destination datum 1 state field 2 case 1
+    35 NUMBER u8 7
+    36 STORE_FIELD <- 35
+    37 SELECT_VARIANT destination datum 1 state field 2 case 2
+    38 NUMBER u8 8
+    39 STORE_VARIANT_FIELD destination datum 1 state field 2 case 2 payload field 1 <- 38
+    40 TRUTH bool false
+    41 STORE_FIELD <- 40
+    42 LOAD_FIELD u8
+    43 LOAD_FIELD bool
+    44 LOAD_FIELD u8
+    45 LOAD_FIELD bool
+    46 LOAD_FIELD u8
+    47 LOAD_FIELD bool
+    48 LEAVE
 file positive/variant-match-exhaustive/program.ldn
 unit items 2
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1

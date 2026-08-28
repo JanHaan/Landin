@@ -3476,6 +3476,8 @@ package body Landin.Tests.Lowering_Suite is
          & "mut state: choice" & LF
          & "construct: () -> none =" & LF
          & "    mut local: choice = (prefix: 1, kind: leaf)" & LF
+         & "    mut inferred := choice(prefix: 4,"
+         & " kind: pair(first: 5, second: 6))" & LF
          & "    local.kind = row(values: zeroed)" & LF
          & "    state.kind = pair(first: 2, second: 3)" & LF
          & "    match local.kind" & LF
@@ -3502,7 +3504,7 @@ package body Landin.Tests.Lowering_Suite is
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
          Selects, Stores, Tag_Loads, Payload_Loads : Natural := 0;
-         Slot_Row, Datum_Pair, Wide_Payload : Boolean := False;
+         Slot_Row, Slot_Pair, Datum_Pair, Wide_Payload : Boolean := False;
          Slot_Tag, Datum_Tag : Boolean := False;
       begin
          for Value in 1 .. IR.Value_Count (Unit, 2) loop
@@ -3520,6 +3522,10 @@ package body Landin.Tests.Lowering_Suite is
                        (Destination.Kind = IR.Frame_Slot
                         and then IR.Element_Field_Of (Unit, 2, Id) = 2
                         and then IR.Variant_Case_Of (Unit, 2, Id) = 3);
+                     Slot_Pair := Slot_Pair or else
+                       (Destination.Kind = IR.Frame_Slot
+                        and then IR.Element_Field_Of (Unit, 2, Id) = 2
+                        and then IR.Variant_Case_Of (Unit, 2, Id) = 2);
                      Datum_Pair := Datum_Pair or else
                        (Destination.Kind = IR.Module_Datum
                         and then Destination.Datum = 1
@@ -3569,13 +3575,15 @@ package body Landin.Tests.Lowering_Suite is
          end loop;
 
          Landin.Testing.Check
-           (Item, Selects = 3 and then Stores = 3,
+           (Item, Selects = 4 and then Stores = 5,
             "case construction and inout aliases write scalar payloads");
          Landin.Testing.Check_Equal
            (Item, Payload_Loads, 2,
             "each referenced payload alias loads from matched storage");
          Landin.Testing.Check
-           (Item, Slot_Row and then Datum_Pair and then Wide_Payload,
+           (Item,
+            Slot_Row and then Slot_Pair and then Datum_Pair
+              and then Wide_Payload,
             "storage, part, case, payload and scalar type all survive");
          Landin.Testing.Check
            (Item, Tag_Loads = 2 and then Slot_Tag and then Datum_Tag,

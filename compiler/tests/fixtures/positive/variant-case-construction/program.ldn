@@ -17,6 +17,11 @@ construct: () -> none =
         kind: pair(first: 3, second: 4),
         ready: true
     )
+    mut inferred := choice(
+        prefix: 9,
+        kind: pair(first: 10, second: 11),
+        ready: true
+    )
     local = (kind: row(values: zeroed), of zeroed)
     state.kind = pair(first: 5, second: 6)
     state.kind = leaf
@@ -29,4 +34,6 @@ construct: () -> none =
     _ = local.ready
     _ = named.prefix
     _ = named.ready
+    _ = inferred.prefix
+    _ = inferred.ready
 end construct

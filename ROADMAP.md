@@ -3199,6 +3199,14 @@ shape. Parser, IR, lowering and verifier seams, resolution/checking fixtures,
 focused diagnostics and a Linux backend/runtime case provide evidence.
 Fixed-array payload aliases remain a separate decision.
 
+D79 admits call-shaped case construction for an inferred local binding. The
+constructor supplies D74's nominal body before inference settles the binding,
+and the fresh aggregate slot is the contextual destination D76's existing
+write sequence needs. No representation changes: checker and lowering seams,
+positive and focused negative fixtures, generated records and the Linux
+runtime case provide evidence. Inferred module construction remains refused
+until a nonzero static variant image exists.
+
 What is still refused: whole-array values outside the contextual storage forms.
 Initializers admit D21's direct storage name, D23--D28's literal and `zeroed`,
 D33--D36/D38's repetitions, and D51/D70's selected field for a local or module
@@ -3241,10 +3249,10 @@ assignment with the complete zero image. D76 admits contextual case
 construction in typed local labelled literals and whole assignments, plus
 assignment to a directly selected mutable variant part. D77 admits exhaustive
 matching of that selected part, and D78 binds scalar payload fields as
-arm-local `in`/`inout` aliases. Whole copies, static case images, inferred
-variant-bearing construction, general reads of the part and fixed-array
-payload bindings remain refused. Parameters and returns retain R2.30's
-aggregate ABI owner.
+arm-local `in`/`inout` aliases. D79 admits inferred local case construction.
+Whole copies, static case images and inferred module case construction,
+general reads of the part and fixed-array payload bindings remain refused.
+Parameters and returns retain R2.30's aggregate ABI owner.
 
 [0540] says a type *has* a zero image when all-zero is a valid value for it,
 which is what lets D27/D28/D30's surrounding array and D39--D43's scalar be zeroed
@@ -3350,6 +3358,13 @@ variant slices.
 D75 migrated declaration storage and the complete zero image onto that same
 target-neutral carrier, while keeping copies, literals, inferred values,
 construction, direct part access, matching and payload bindings pinned.
+D76 migrated contextual case construction into typed local storage and whole
+assignment while keeping static images, inference and general values pinned.
+D77 migrated exhaustive tag matching while keeping payload access pinned.
+D78 migrated positional scalar payload aliases while keeping fixed-array
+payload aliases pinned.
+D79 migrated inferred local case construction while keeping module inference
+with the static-image boundary.
 
 Both of those reached a defect, and finding them twice in one afternoon showed
 a third thing wrong that was nothing to do with arrays: a defect threw away the
@@ -3404,16 +3419,21 @@ an assignment target and a parenthesised value — so the fixture now writes an
 index in all five places one can be written and reads five refusals back. A refused bracketed run is stepped over by nesting so one
 report does not become three.
 
-Complete ordinary structs and implement arrays, C/packed structs, variants,
-tags, payload alignment
-and the policy for spare-bit folding. Use measured fixtures rather than host
-Ada representation as authority.
+Complete ordinary structs, fixed arrays and the language's default variant
+layout, including tags, payload alignment and the spare-bit policy. Use
+measured fixtures rather than host Ada representation as authority. D74's
+policy is tag-first and unfolded; a future explicit `layout(optimal)` policy
+belongs to R4.50, `layout(c)` to R4.40, and packed encodings and layout to
+R6.40.
 
 Sources: legacy A3, which had no tracked citation.
 
-Exit evidence: deterministic layouts cover every value family, including
-variant tag width/position and folded/unfolded cases; debugger type provenance
-survives.
+Exit evidence: deterministic target-parametric layouts cover scalars, fixed
+arrays, ordinary structs and the unfolded default variant representation;
+executable cases cover tag width and position, payload alignment, images,
+construction and inspection. Source and declared-type provenance remain in the
+target-neutral lowering so R4.60 can emit debugger information without
+reconstructing it.
 
 ### R2.30 — Implement functions, control flow and declared errors
 Status: planned
@@ -3667,7 +3687,9 @@ Depends on: R2.30, R4.30
 Cover `c_int` and related types, `char` signedness, aggregate arguments and
 returns, enums, unions, bitfields, varargs, callbacks, thread-local storage,
 `errno`, foreign ownership, failure boundaries and calling convention as part
-of function identity. Stack arguments arrive here too: R1.80 emits [1650]'s
+of function identity. Implement `layout(c)` here against that same selected
+ABI rather than treating the host Ada representation as authority. Stack
+arguments arrive here too: R1.80 emits [1650]'s
 six register arguments and refuses a seventh as `L0503` rather than passing
 one, so this is the item that has to make that refusal stop being needed. Provide binding generation sufficient to avoid a
 hand-written-declaration workflow, without turning the compiler into a header
@@ -3684,6 +3706,8 @@ Depends on: R1.70, R2.70, R4.10
 
 Implement deterministic local simplification, instruction selection, a simple
 register allocator and measured specialization after shared dispatch works.
+Implement the explicit `layout(optimal)` field-reordering policy here, where
+its size benefit can be measured without changing the source-order default.
 Implement the amended normative specialization policy and build report without
 claiming competitive optimization.
 
