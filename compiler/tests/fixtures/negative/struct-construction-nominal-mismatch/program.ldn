@@ -1,0 +1,14 @@
+left: type = struct
+    value: i32
+end left
+
+right: type = struct
+    value: i32
+end right
+
+bad: left = right(value: 1)
+
+f: () -> none =
+    mut here: left = left(value: 0)
+    here = right(value: 2)
+end f

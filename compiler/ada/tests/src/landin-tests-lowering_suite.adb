@@ -3510,8 +3510,9 @@ package body Landin.Tests.Lowering_Suite is
    end The_Recorded_Corpus_Is_Current;
 
    --  D64 commits labelled scalar fields in source order, then writes the
-   --  omitted fields in declaration order.  A fixed-array omission reuses
-   --  D49's field-qualified clear rather than expanding the array extent.
+   --  omitted fields in declaration order.  D72's nominal spelling reaches
+   --  the same direct-destination path.  A fixed-array omission reuses D49's
+   --  field-qualified clear rather than expanding the array extent.
    procedure A_Struct_Literal_Becomes_Ordered_Field_Writes
      (Item : in out Landin.Testing.Context);
 
@@ -3532,7 +3533,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end holder" & LF
          & "mut state: holder" & LF
          & "f: () -> none =" & LF
-         & "    state = (second: state.first + 1, first: 10,"
+         & "    state = holder(second: state.first + 1, first: 10,"
          & " of zeroed)" & LF
          & "end f" & LF,
          Ran);

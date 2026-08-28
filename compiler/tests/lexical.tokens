@@ -5560,6 +5560,174 @@ file positive/struct-array-field-zeroed-assignment/program.ldn tokens 111
   417 418 ]
   419 422 end
   423 426 use
+file positive/struct-construction-contexts/program.ldn tokens 167
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 i32
+  36 37 y
+  37 38 :
+  39 42 i32
+  43 46 end
+  47 52 point
+  54 58 same
+  58 59 :
+  60 64 type
+  65 66 =
+  67 72 point
+  74 80 origin
+  81 83 :=
+  84 89 point
+  89 90 (
+  90 91 x
+  91 92 :
+  93 95 10
+  95 96 ,
+  97 98 y
+  98 99 :
+  100 102 20
+  102 103 )
+  104 109 typed
+  109 110 :
+  111 116 point
+  117 118 =
+  119 124 point
+  124 125 (
+  125 126 y
+  126 127 :
+  128 129 2
+  129 130 ,
+  131 132 x
+  132 133 :
+  134 135 1
+  135 136 )
+  137 144 aliased
+  144 145 :
+  146 150 same
+  151 152 =
+  153 157 same
+  157 158 (
+  158 159 x
+  159 160 :
+  161 162 3
+  162 163 ,
+  164 165 y
+  165 166 :
+  167 168 4
+  168 169 )
+  170 174 copy
+  174 175 :
+  176 181 point
+  182 183 =
+  184 190 origin
+  192 198 packet
+  198 199 :
+  200 204 type
+  205 206 =
+  207 213 struct
+  218 221 tag
+  221 222 :
+  223 225 u8
+  230 233 row
+  233 234 :
+  235 236 [
+  236 237 2
+  237 238 ]
+  238 241 u16
+  242 245 end
+  246 252 packet
+  254 259 words
+  259 260 :
+  261 262 [
+  262 263 2
+  263 264 ]
+  264 267 u16
+  268 269 =
+  270 271 [
+  271 273 11
+  273 274 ,
+  275 277 13
+  277 278 ]
+  279 284 image
+  285 287 :=
+  288 294 packet
+  294 295 (
+  295 298 row
+  298 299 :
+  300 305 words
+  305 306 ,
+  307 310 tag
+  310 311 :
+  312 313 7
+  313 314 )
+  316 317 f
+  317 318 :
+  319 320 (
+  320 321 )
+  322 324 ->
+  325 329 none
+  330 331 =
+  336 341 local
+  342 344 :=
+  345 350 point
+  350 351 (
+  351 352 x
+  352 353 :
+  354 355 5
+  355 356 ,
+  357 358 y
+  358 359 :
+  360 361 6
+  361 362 )
+  367 378 typed_local
+  378 379 :
+  380 385 point
+  386 387 =
+  388 393 point
+  393 394 (
+  394 395 y
+  395 396 :
+  397 398 8
+  398 399 ,
+  400 401 x
+  401 402 :
+  403 404 7
+  404 405 )
+  410 413 mut
+  414 422 assigned
+  422 423 :
+  424 429 point
+  434 442 assigned
+  443 444 =
+  445 449 same
+  449 450 (
+  450 451 x
+  451 452 :
+  453 454 9
+  454 455 ,
+  456 457 y
+  457 458 :
+  459 461 10
+  461 462 )
+  467 468 _
+  469 470 =
+  471 476 local
+  476 477 .
+  477 478 x
+  479 480 +
+  481 492 typed_local
+  492 493 .
+  493 494 y
+  495 496 +
+  497 505 assigned
+  505 506 .
+  506 507 x
+  508 511 end
+  512 513 f
 file positive/struct-literal-array-field-forms/program.ldn tokens 197
   0 6 holder
   6 7 :
@@ -7483,7 +7651,7 @@ file negative/condition-is-not-believed/program.ldn tokens 21
   59 61 if
   62 65 end
   66 67 f
-file negative/construction-not-enabled/program.ldn tokens 48
+file negative/construction-not-enabled/program.ldn tokens 73
   0 5 point
   5 6 :
   7 11 type
@@ -7497,41 +7665,66 @@ file negative/construction-not-enabled/program.ldn tokens 48
   39 42 i32
   43 46 end
   47 52 point
-  54 60 origin
-  60 61 :
-  62 67 point
-  68 69 =
-  70 75 point
-  75 76 (
-  76 77 x
-  77 78 :
-  79 80 0
-  80 81 ,
-  82 83 y
-  83 84 :
-  85 86 0
-  86 87 )
-  89 90 f
-  90 91 :
-  92 93 (
-  93 94 )
-  95 97 ->
-  98 102 none
-  103 104 =
-  109 110 _
-  111 112 =
-  113 118 point
-  118 119 (
-  119 120 x
-  120 121 :
-  122 123 1
-  123 124 ,
-  125 126 y
-  126 127 :
-  128 129 2
-  129 130 )
-  131 134 end
-  135 136 f
+  54 58 take
+  58 59 :
+  60 61 (
+  61 66 value
+  66 67 :
+  68 71 i32
+  71 72 )
+  73 75 ->
+  76 80 none
+  81 82 =
+  83 86 end
+  87 91 take
+  93 94 f
+  94 95 :
+  96 97 (
+  97 98 )
+  99 101 ->
+  102 106 none
+  107 108 =
+  113 114 _
+  115 116 =
+  117 122 point
+  122 123 (
+  123 124 x
+  124 125 :
+  126 127 1
+  127 128 ,
+  129 130 y
+  130 131 :
+  132 133 2
+  133 134 )
+  139 140 _
+  141 142 =
+  143 148 point
+  148 149 (
+  149 150 x
+  150 151 :
+  152 153 3
+  153 154 ,
+  155 156 y
+  156 157 :
+  158 159 4
+  159 160 )
+  161 162 +
+  163 164 1
+  169 173 take
+  173 174 (
+  174 179 point
+  179 180 (
+  180 181 x
+  181 182 :
+  183 184 5
+  184 185 ,
+  186 187 y
+  187 188 :
+  189 190 6
+  190 191 )
+  191 192 )
+  193 196 end
+  197 198 f
 file negative/convention-not-enabled/program.ldn tokens 14
   0 1 f
   1 2 :
@@ -8042,6 +8235,48 @@ file negative/immutable-struct-array-field-zeroed/program.ldn tokens 30
   100 106 zeroed
   107 110 end
   111 116 clear
+file negative/immutable-struct-construction-assignment/program.ldn tokens 41
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 i32
+  32 35 end
+  36 41 point
+  43 48 state
+  48 49 :
+  50 55 point
+  57 58 f
+  58 59 :
+  60 61 (
+  61 62 )
+  63 65 ->
+  66 70 none
+  71 72 =
+  77 82 local
+  82 83 :
+  84 89 point
+  94 99 state
+  100 101 =
+  102 107 point
+  107 108 (
+  108 109 x
+  109 110 :
+  111 112 1
+  112 113 )
+  118 123 local
+  124 125 =
+  126 131 point
+  131 132 (
+  132 133 x
+  133 134 :
+  135 136 2
+  136 137 )
+  138 141 end
+  142 143 f
 file negative/immutable-struct-field/program.ldn tokens 27
   0 8 counters
   8 9 :
@@ -14037,6 +14272,160 @@ file negative/struct-array-fields-keep-assignment-separate/program.ldn tokens 63
   182 183 ]
   184 187 end
   188 190 at
+file negative/struct-construction-all-of-not-enabled/program.ldn tokens 19
+  0 5 point
+  5 6 :
+  7 11 type
+  12 13 =
+  14 20 struct
+  25 26 x
+  26 27 :
+  28 31 i32
+  32 35 end
+  36 41 point
+  43 48 state
+  48 49 :
+  50 55 point
+  56 57 =
+  58 63 point
+  63 64 (
+  64 66 of
+  67 73 zeroed
+  73 74 )
+file negative/struct-construction-callee-not-struct/program.ldn tokens 65
+  0 4 make
+  4 5 :
+  6 7 (
+  7 8 x
+  8 9 :
+  10 13 i32
+  13 14 )
+  15 17 ->
+  18 19 (
+  19 24 value
+  24 25 :
+  26 29 i32
+  29 30 )
+  31 32 =
+  37 42 value
+  43 44 =
+  45 46 x
+  47 50 end
+  51 55 make
+  57 62 state
+  62 63 :
+  64 67 i32
+  68 69 =
+  70 71 0
+  73 79 scalar
+  80 82 :=
+  83 85 u8
+  85 86 (
+  86 87 x
+  87 88 :
+  89 90 1
+  90 91 )
+  92 98 called
+  99 101 :=
+  102 106 make
+  106 107 (
+  107 108 x
+  108 109 :
+  110 111 1
+  111 112 )
+  113 118 bound
+  119 121 :=
+  122 127 state
+  127 128 (
+  128 129 x
+  129 130 :
+  131 132 1
+  132 133 )
+  135 136 f
+  136 137 :
+  138 139 (
+  139 140 )
+  141 143 ->
+  144 148 none
+  149 150 =
+  155 160 local
+  161 163 :=
+  164 168 make
+  168 169 (
+  169 170 x
+  170 171 :
+  172 173 2
+  173 174 )
+  175 178 end
+  179 180 f
+file negative/struct-construction-nominal-mismatch/program.ldn tokens 58
+  0 4 left
+  4 5 :
+  6 10 type
+  11 12 =
+  13 19 struct
+  24 29 value
+  29 30 :
+  31 34 i32
+  35 38 end
+  39 43 left
+  45 50 right
+  50 51 :
+  52 56 type
+  57 58 =
+  59 65 struct
+  70 75 value
+  75 76 :
+  77 80 i32
+  81 84 end
+  85 90 right
+  92 95 bad
+  95 96 :
+  97 101 left
+  102 103 =
+  104 109 right
+  109 110 (
+  110 115 value
+  115 116 :
+  117 118 1
+  118 119 )
+  121 122 f
+  122 123 :
+  124 125 (
+  125 126 )
+  127 129 ->
+  130 134 none
+  135 136 =
+  141 144 mut
+  145 149 here
+  149 150 :
+  151 155 left
+  156 157 =
+  158 162 left
+  162 163 (
+  163 168 value
+  168 169 :
+  170 171 0
+  171 172 )
+  177 181 here
+  182 183 =
+  184 189 right
+  189 190 (
+  190 195 value
+  195 196 :
+  197 198 2
+  198 199 )
+  200 203 end
+  204 205 f
+file negative/struct-construction-type-not-declared/program.ldn tokens 8
+  0 5 state
+  6 8 :=
+  9 16 nowhere
+  16 17 (
+  17 22 value
+  22 23 :
+  24 25 1
+  25 26 )
 file negative/struct-copy-across-types/program.ldn tokens 45
   0 4 here
   4 5 :
@@ -14604,7 +14993,7 @@ file negative/struct-literal-nested-array-value-not-enabled/program.ldn tokens 4
   121 122 )
   123 126 end
   127 128 f
-file negative/struct-literal-not-enabled/program.ldn tokens 40
+file negative/struct-literal-not-enabled/program.ldn tokens 28
   0 5 point
   5 6 :
   7 11 type
@@ -14631,20 +15020,8 @@ file negative/struct-literal-not-enabled/program.ldn tokens 40
   79 81 of
   82 88 zeroed
   88 89 )
-  94 95 _
-  96 97 =
-  98 103 point
-  103 104 (
-  104 105 x
-  105 106 :
-  107 108 1
-  108 109 ,
-  110 111 y
-  111 112 :
-  113 114 2
-  114 115 )
-  116 119 end
-  120 121 f
+  90 93 end
+  94 95 f
 file negative/struct-literal-of-expression-not-enabled/program.ldn tokens 34
   0 5 point
   5 6 :
@@ -14752,7 +15129,7 @@ file negative/struct-literal-unknown-field/program.ldn tokens 31
   94 95 )
   96 99 end
   100 101 f
-file negative/struct-literal-without-layout/program.ldn tokens 39
+file negative/struct-literal-without-layout/program.ldn tokens 55
   0 6 holder
   6 7 :
   8 12 type
@@ -14783,15 +15160,31 @@ file negative/struct-literal-without-layout/program.ldn tokens 39
   114 115 :
   116 117 1
   117 118 )
-  123 128 state
-  129 130 =
-  131 132 (
-  132 137 value
-  137 138 :
-  139 140 2
-  140 141 )
-  142 145 end
-  146 151 write
+  123 134 constructed
+  135 137 :=
+  138 144 holder
+  144 145 (
+  145 150 value
+  150 151 :
+  152 153 2
+  153 154 )
+  159 164 state
+  165 166 =
+  167 168 (
+  168 173 value
+  173 174 :
+  175 176 2
+  176 177 )
+  182 187 state
+  188 189 =
+  190 196 holder
+  196 197 (
+  197 202 value
+  202 203 :
+  204 205 3
+  205 206 )
+  207 210 end
+  211 216 write
 file negative/struct-measurement-fold-overflow/program.ldn tokens 42
   0 6 header
   6 7 :

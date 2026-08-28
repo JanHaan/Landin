@@ -2895,6 +2895,90 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 4, "all contextual struct literals were checked");
    end Struct_Literals_Carry_Body_And_Field_Identities;
 
+   --  D72 keeps construction on the existing literal node and carries the
+   --  leading type's nominal body into both typed and inferred contexts.
+   procedure Constructions_Carry_Their_Nominal_Body
+     (Item : in out Landin.Testing.Context);
+
+   procedure Constructions_Carry_Their_Nominal_Body
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Seen  : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "constructions.ldn",
+         "point: type = struct" & LF
+         & "    x: i32" & LF
+         & "    y: i32" & LF
+         & "end point" & LF
+         & "same: type = point" & LF
+         & "origin := point(x: 1, y: 2)" & LF
+         & "typed: point = same(x: 3, y: 4)" & LF
+         & "mut state: point" & LF
+         & "f: () -> none =" & LF
+         & "    local := point(x: 5, y: 6)" & LF
+         & "    typed_local: same = point(x: 7, y: 8)" & LF
+         & "    state = same(x: 9, y: 10)" & LF
+         & "end f" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "typed, inferred, module, local and assignment construction pass");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Struct_Literal
+              and then Landin.Syntax.Constructed_Type (Of_Tree.all, Node)
+                         /= Landin.Syntax.No_Node
+            then
+               Seen := Seen + 1;
+               declare
+                  Nominal : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Constructed_Type (Of_Tree.all, Node);
+               begin
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Syntax.Kind (Of_Tree.all, Nominal)
+                       = Landin.Syntax.Type_Reference,
+                     "construction carries its leading name as a type");
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Checking.Type_Of
+                       (Types.all, Of_Tree.all, Node)
+                         = Landin.Types.Aggregate
+                     and then Landin.Checking.Body_Of
+                       (Types.all, Of_Tree.all, Node)
+                         = Landin.Checking.Body_Of
+                           (Types.all, Of_Tree.all, Nominal),
+                     "the construction and nominal type carry one body");
+               end;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 5, "all construction contexts were checked");
+   end Constructions_Carry_Their_Nominal_Body;
+
    --  D71 gives a selected module struct array field the static label's D17
    --  context without making the selection a general value.
    procedure Module_Struct_Field_Image_Carries_Source_Shape
@@ -3059,6 +3143,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "struct literals carry body and field contexts",
          Struct_Literals_Carry_Body_And_Field_Identities'Access);
+      Landin.Testing.Register
+        (Into, "checking", "construction carries its nominal body",
+         Constructions_Carry_Their_Nominal_Body'Access);
       Landin.Testing.Register
         (Into, "checking", "a struct field image carries source shape",
          Module_Struct_Field_Image_Carries_Source_Shape'Access);

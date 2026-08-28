@@ -377,7 +377,7 @@ package body Landin.Tests.Parser_Suite is
          & "  x: i32" & ASCII.LF
          & "end point" & ASCII.LF
          & "origin: point = point(x: 1)" & ASCII.LF,
-         "L0010", "call-shaped construction");
+         "", "call-shaped construction");
 
       Check_Program
         ("point: type = struct" & ASCII.LF
@@ -392,7 +392,7 @@ package body Landin.Tests.Parser_Suite is
          & "  x: i32" & ASCII.LF
          & "end point" & ASCII.LF
          & "origin: point = point(x: 1) +",
-         "L0010, L0102", "an error following a refused construction");
+         "L0102", "an error following a construction");
 
       Check_Program
         ("add: (x: i32, y: i32) -> (sum: i32) =" & ASCII.LF

@@ -1,0 +1,13 @@
+make: (x: i32) -> (value: i32) =
+    value = x
+end make
+
+state: i32 = 0
+
+scalar := u8(x: 1)
+called := make(x: 1)
+bound := state(x: 1)
+
+f: () -> none =
+    local := make(x: 2)
+end f
