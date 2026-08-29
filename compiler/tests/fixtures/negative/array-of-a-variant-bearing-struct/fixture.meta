@@ -1,0 +1,6 @@
+class: negative
+summary: a variant part is reached by a run and an index is a value, so a fixed array of a variant-bearing struct waits for a whole-element place
+constructs: 0520, 0670, 0680, 1795
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

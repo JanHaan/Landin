@@ -1,0 +1,68 @@
+tagged: type = struct
+    kind: variant
+        leaf |
+        pair: (first: i32, second: i32)
+    end kind
+end tagged
+
+holder: type = struct
+    lead: i32
+    inside: tagged
+    tail: i32
+end holder
+
+carrier: type = struct
+    which: variant
+        empty |
+        wrapped: (value: tagged, weight: i32)
+    end which
+end carrier
+
+mut state: holder
+mut boxed: carrier
+
+selected: () -> (result: i32) =
+    mut local: holder
+    local = zeroed
+    local.lead = 1
+    local.tail = 2
+    local.inside.kind = pair(first: 3, second: 4)
+    result = local.lead + local.tail
+    match local.inside.kind
+        leaf: result = result + 0
+        pair(first, second): result = result + first + second
+    end match
+end selected
+
+copied: () -> (result: i32) =
+    mut local: holder
+    local = zeroed
+    local.inside.kind = pair(first: 5, second: 6)
+    state = local
+    result = 0
+    match state.inside.kind
+        leaf: result = 0
+        pair(first, second): result = first + second
+    end match
+end copied
+
+carried: () -> (result: i32) =
+    mut local: holder
+    local = zeroed
+    local.inside.kind = pair(first: 6, second: 6)
+    boxed.which = wrapped(value: local.inside, weight: 9)
+    result = 0
+    match boxed.which
+        empty: result = 0
+        wrapped(value, weight): if true then
+            match value.kind
+                leaf: result = weight
+                pair(first, second): result = weight + first + second
+            end match
+        end if
+    end match
+end carried
+
+public main: () -> (code: i32) =
+    code = selected() + copied() + carried()
+end main
