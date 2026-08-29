@@ -1,0 +1,25 @@
+core: type = struct
+    value: i32
+end core
+
+middle: type = struct
+    inner: core
+end middle
+
+outer: type = struct
+    body: middle
+end outer
+
+read: () -> (result: i32) =
+    mut local: outer
+    local.body.inner.value = 1
+    result = local.body.inner.value
+end read
+
+partial: (which: bool) -> (result: i32) =
+    mut local: outer
+    if which then
+        local.body.inner.value = 2
+    end if
+    result = local.body.inner.value
+end partial

@@ -5354,7 +5354,7 @@ reconstruct it; carrying a target byte extent would make the IR target-specific.
 
 **Pinned by** the checking, lowering and verifier public seams;
 `positive/measurement-of-nested-struct-field`;
-`negative/nested-struct-construction-not-enabled`; the generated layout, token
+`negative/module-struct-image-with-a-child`; the generated layout, token
 and IR records; and
 `runtime/nested-struct-measurements-answer-for-the-target` on Linux x86-64.
 
@@ -5399,7 +5399,7 @@ ABI work owns the remaining nonzero/general-value boundary.
 **Pinned by** the lowering, verifier and backend public seams;
 `positive/nested-struct-zero-storage`;
 `negative/struct-with-a-struct-field`;
-`negative/nested-struct-construction-not-enabled`; the generated token and IR
+`negative/module-struct-image-with-a-child`; the generated token and IR
 records; and `runtime/nested-struct-zero-storage-keeps-neighbours` on Linux
 x86-64.
 
@@ -6331,3 +6331,77 @@ second nesting mechanism beside this one.
 **Pinned by** the lowering, verifier and backend public seams; the malformed
 case `Path_Step_Below_A_Scalar_Leaf`; and the generated IR record, which now
 names the base field and every step of every field operation.
+
+### D119 — Ordinary nesting has no depth
+
+**The tour said** that a struct's field may have any type a binding may have
+[0670] [0750], and that member selection chains as `a.b.c` [0420] [1820]. D86
+admitted exactly one named ordinary child and refused a child that had one of
+its own, because the pair of identities D88--D90 carried could not say what a
+third selection reached.
+
+**Chosen:** an ordinary struct field may be an ordinary struct however deeply
+that composes. Layout is unchanged: a field's extent is its own body's
+already-computed layout, so the recursion is the one the checker already does
+over declarations. A scalar leaf and a fixed-array leaf are a value and a
+place at any depth, and a fixed-array leaf keeps every contextual assignment
+form it has at depth one.
+
+Definite assignment keeps one fact per part, named by D117's run rather than
+by a parent and a child. A fact about a part follows from a fact about
+anything containing it, which is now "a fact named by a shorter run with the
+same steps"; branch joins intersect the runs and apply that same containment
+rule from either side. A whole child at depth two or more is D119's, and a
+variant part inside a child is D120's; both remain refused here.
+
+Lowering resolves a selection chain once, into the name it started from, the
+first selection's field and D117's run of the rest. The verifier walks a
+nested field run recursively, under a budget the vector's own length gives, so
+a run that named itself is refused rather than followed.
+
+**Why no depth limit:** every limit here would be an implementation's, not the
+language's — the tour writes `a.b.c` and stops. The one thing a depth costs is
+that the flow stage can no longer pack a path into an integer, which it did
+with a stride that would have overflowed silently at a field count and depth
+no rule forbids.
+
+**Pinned by** `positive/deep-nested-struct-leaves`,
+`negative/deep-nested-leaf-unassigned`, the generated IR record, and
+`runtime/deep-nested-struct-leaves` on Linux x86-64.
+
+### D120 — A whole ordinary child is a place at any depth
+
+**The tour said** that a whole ordinary struct may be zeroed, constructed and
+copied [0540] [0700] [0710]. D91 gave those forms to one named child of a
+parent; D118 then let a child hold a child, which left the deeper one with
+leaves but no whole.
+
+**Chosen:** `a.b.c…` naming an ordinary child is a contextual aggregate
+assignment place at any depth, with exactly D91's forms: `zeroed`, a matching
+labelled literal or nominal construction, and a storage copy from the same
+nominal type reached by any chain. An explicitly typed local may be
+initialized from one, and a local may infer its nominal body from one. A
+nominal construction whose body has an ordinary child is admitted, because the
+labelled child value is already checked against that child's own body.
+
+The root binding decides mutability, and the child remains no general
+expression value: no operand, no discard, and no module image. A module
+binding's initializer still takes only a direct name or one field of one,
+because [1940] folds it rather than copying it.
+
+Lowering keeps one notion of place — a base field and D117's run below it —
+and descends into it. A literal fills a place; a copy visits the same fields
+in [0750]'s order one place deeper on each side; `zeroed` is one whole-part
+clear whose extent the backend derives from the shape the run reaches. The
+verifier recognises a whole child at the end of a run, not only at the base
+field.
+
+**Why not a general child value:** D91's argument is unchanged by depth. Every
+accepted form still has known destination storage and commits in [0410]'s
+order, and a first-class child value would need a representation, an ABI rule
+and an expression lifetime that none of these assignments wants.
+
+**Pinned by** `positive/deep-nested-struct-children`,
+`negative/deep-nested-child-copy-unassigned`,
+`negative/module-struct-image-with-a-child`, the generated IR record, and
+`runtime/deep-nested-struct-children` on Linux x86-64.

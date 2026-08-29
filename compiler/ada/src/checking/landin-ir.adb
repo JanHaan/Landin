@@ -289,6 +289,34 @@ package body Landin.IR is
       Into.Items (Positive (Item)) := Held;
    end Add_Field;
 
+   function Add_Shape_Run
+     (Into : in out Unit; Shapes : Field_Shape_Array) return Natural
+   is
+      First : constant Natural := Natural (Into.Variant_Fields.Length) + 1;
+   begin
+      if Shapes'Length = 0 then
+         return 0;
+      end if;
+      for Shape of Shapes loop
+         Into.Variant_Fields.Append (Shape);
+      end loop;
+      return First;
+   end Add_Shape_Run;
+
+   function Add_Case_Run
+     (Into : in out Unit; Runs : Case_Run_Array) return Natural
+   is
+      First : constant Natural := Natural (Into.Variant_Cases.Length) + 1;
+   begin
+      if Runs'Length = 0 then
+         return 0;
+      end if;
+      for Run of Runs loop
+         Into.Variant_Cases.Append (Run);
+      end loop;
+      return First;
+   end Add_Case_Run;
+
    procedure Add_Field
      (Into     : in out Unit;
       Item     : Item_Id;
