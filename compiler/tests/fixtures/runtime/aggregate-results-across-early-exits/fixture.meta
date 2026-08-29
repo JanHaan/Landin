@@ -1,0 +1,6 @@
+class: runtime
+summary: aggregate calls complete named results before early and final exits
+constructs: 0050, 0670, 1050, 1890, 1920
+program: main.ldn
+status: 84
+targets: linux-x86-64

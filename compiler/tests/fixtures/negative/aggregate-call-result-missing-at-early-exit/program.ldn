@@ -1,0 +1,15 @@
+pair: type = struct
+    value: i32
+end pair
+
+make: (value: i32) -> (result: pair) =
+    result = (value: value)
+end make
+
+bad: (fill: bool) -> (result: pair) =
+    if fill then
+        result = make(42)
+        return
+    end if
+    return
+end bad
