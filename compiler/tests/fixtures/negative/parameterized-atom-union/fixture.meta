@@ -1,0 +1,6 @@
+class: negative
+summary: a parameterized declaration cannot use the separate atom-union declaration alternative
+constructs: 0630, 0640, 1350, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0010

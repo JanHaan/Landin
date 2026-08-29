@@ -995,6 +995,59 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
+   --  D135 disappears before IR construction: direct applications on module
+   --  and local storage carry the existing fixed-array item and slot shapes,
+   --  while the template itself creates no item.
+   procedure Parameterized_Aliases_Lower_As_Ordinary_Arrays
+     (Item : in out Landin.Testing.Context);
+
+   procedure Parameterized_Aliases_Lower_As_Ordinary_Arrays
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran  : Natural;
+   begin
+      Lower
+        (Work,
+         "bytes: type (t: type, fixed n: u64) = [n]t" & LF
+         & "mut module: bytes(u16, 3)" & LF
+         & "f: () -> none =" & LF
+         & "    local: bytes(u8, 5)" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Local : constant IR.Slot_Id := IR.Slot_Id'(1);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Item_Count (Unit), 2,
+            "the compile-time template creates no IR item");
+         Landin.Testing.Check
+           (Item, IR.Kind_Of (Unit, 1) = IR.Datum
+             and then IR.Result_Of (Unit, 1) = Landin.Types.Fixed_Array
+             and then IR.Array_Length (Unit, 1) = 3
+             and then IR.Array_Element (Unit, 1) = Landin.Types.U16,
+            "the module application is an ordinary array datum");
+         Landin.Testing.Check
+           (Item, IR.Kind_Of (Unit, 2) = IR.Routine
+             and then IR.Slot_Count (Unit, 2) = 1
+             and then IR.Is_Array (Unit, 2, Local)
+             and then IR.Slot_Array_Length (Unit, 2, Local) = 5
+             and then IR.Slot_Array_Element (Unit, 2, Local)
+                        = Landin.Types.U8,
+            "the local application is an ordinary array slot");
+         Check_Terminators (Item, Unit, "parameterized alias erasure");
+      end;
+   end Parameterized_Aliases_Lower_As_Ordinary_Arrays;
+
+   ------------------------------------------------------------------
+
    --  [0670]'s state carries each field's compact target-neutral shape and
    --  no value at all: D10, D59's explicit spelling and D60/D61's typed and
    --  inferred direct-name image chains share the same zero image, and where
@@ -5711,6 +5764,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "module array images keep distinct datums",
          Module_Array_Images_Keep_Distinct_Datums'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "parameterized aliases lower as arrays",
+         Parameterized_Aliases_Lower_As_Ordinary_Arrays'Access);
       Landin.Testing.Register
         (Into, "lowering", "a logical module value becomes blocks",
          A_Logical_Module_Value_Becomes_Blocks'Access);

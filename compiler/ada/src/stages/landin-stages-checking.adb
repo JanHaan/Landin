@@ -64,6 +64,28 @@ package body Landin.Stages.Checking is
       Facts : constant Landin.Targets.Target_Facts := Target (Context);
       Found : Landin.Diagnostics.Diagnostic_List;
 
+      --  Generic declarations are templates, not runtime types.  This
+      --  short-lived stack detects expansion cycles without recording an
+      --  instantiation-specific answer against a template syntax node.
+      Generic_Expansion : array
+        (Positive range 1 .. Positive'Max
+           (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
+             [others => False];
+
+      type Type_Descriptor is record
+         Kind    : Ty.Type_Kind := Ty.Ill_Typed;
+         Length  : Landin.Checking.Element_Count := 0;
+         Element : Ty.Scalar_Name := Ty.U8;
+      end record;
+
+      type Formal_Actual is record
+         Formal : Res.Declaration_Id := Res.No_Declaration;
+         Value  : Type_Descriptor;
+         Fixed  : Ty.Magnitude := 0;
+      end record;
+
+      type Formal_Actual_Array is array (Positive range <>) of Formal_Actual;
+
       ------------------------------------------------------------
 
       function Tree_For (Id : Landin.Source.Source_Id)
@@ -363,12 +385,487 @@ package body Landin.Stages.Checking is
          For_Declaration : Res.Declaration_Id := Res.No_Declaration)
          return Ty.Type_Kind;
 
+      --  D135 substitutes only while expanding an application.  The result
+      --  is a value local to this walk; in particular, an array node in a
+      --  generic alias never receives the length of one instantiation.
+      function Normalized_Type
+        (Of_Tree : Syn.Tree;
+         Written : Syn.Node_Id;
+         Actuals : Formal_Actual_Array) return Type_Descriptor;
+
+      procedure Report_Application
+        (Of_Tree : Syn.Tree; At_Node : Syn.Node_Id; Message : String);
+
+      function Fixed_Argument
+        (Of_Tree : Syn.Tree;
+         Written : Syn.Node_Id;
+         Actuals : Formal_Actual_Array;
+         Valid   : out Boolean) return Ty.Magnitude;
+
+      procedure Report_Application
+        (Of_Tree : Syn.Tree; At_Node : Syn.Node_Id; Message : String) is
+      begin
+         Bad.Report
+           (Item    => Bad.Unsupported_Use,
+            Source  => Syn.Source_Of (Of_Tree),
+            Where   => Syn.Where (Of_Tree, At_Node),
+            Message => Message,
+            Refused => Bad.Parameterized_Type_Alias,
+            Into    => Found);
+      end Report_Application;
+
+      function Fixed_Argument
+        (Of_Tree : Syn.Tree;
+         Written : Syn.Node_Id;
+         Actuals : Formal_Actual_Array;
+         Valid   : out Boolean) return Ty.Magnitude
+      is
+      begin
+         Valid := False;
+         if Syn.Kind (Of_Tree, Written) = Syn.Integer_Literal then
+            declare
+               Snap : constant Landin.Source.Snapshot :=
+                 Source (Context, Syn.Source_Of (Of_Tree));
+               Text : constant String := Landin.Source.Slice
+                 (Snap, Syn.Digit_Span (Of_Tree, Written));
+               Value : Ty.Magnitude;
+               Overflowed : Boolean;
+            begin
+               Ty.Evaluate (Text, Syn.Base (Of_Tree, Written), Value,
+                            Overflowed);
+               if Overflowed then
+                  Bad.Report
+                    (Item    => Bad.Literal_Out_Of_Range,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Written),
+                     Message => "this fixed argument is too large",
+                     Note    => "[1350]: a fixed argument is a compile-time"
+                                & " integer",
+                     Into    => Found);
+                  return 0;
+               end if;
+               Valid := True;
+               return Value;
+            end;
+         end if;
+
+         if Syn.Kind (Of_Tree, Written)
+              in Syn.Name_Reference | Syn.Type_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Written) = Res.Bound
+         then
+            declare
+               Formal : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Written);
+            begin
+               if Res.Sort_Of (Meanings.all, Formal) = Res.Fixed_Parameter
+               then
+                  for Each of Actuals loop
+                     if Each.Formal = Formal then
+                        Valid := True;
+                        return Each.Fixed;
+                     end if;
+                  end loop;
+               end if;
+            end;
+         end if;
+
+         Report_Application
+           (Of_Tree, Written,
+            "this fixed argument is not an integer literal or fixed formal");
+         return 0;
+      end Fixed_Argument;
+
+      function Normalized_Type
+        (Of_Tree : Syn.Tree;
+         Written : Syn.Node_Id;
+         Actuals : Formal_Actual_Array) return Type_Descriptor
+      is
+         function Invalid return Type_Descriptor
+           is ((Kind => Ty.Ill_Typed, others => <>));
+
+         procedure Require_Type_Actual
+           (At_Node : Syn.Node_Id; Got : Type_Descriptor;
+            Into : out Type_Descriptor);
+
+         procedure Require_Type_Actual
+           (At_Node : Syn.Node_Id; Got : Type_Descriptor;
+            Into : out Type_Descriptor) is
+         begin
+            if Got.Kind = Ty.Ill_Typed then
+               --  The nested normalization already diagnosed its reason.
+               Into := Invalid;
+            elsif Got.Kind in Ty.Scalar_Name | Ty.Fixed_Array then
+               Into := Got;
+            else
+               Report_Application
+                 (Of_Tree, At_Node,
+                  "this positional argument must be a scalar or fixed-array"
+                  & " type");
+               Into := Invalid;
+            end if;
+         end Require_Type_Actual;
+      begin
+         if Syn.Kind (Of_Tree, Written) = Syn.Type_Name then
+            return (Kind    => Landin.Checking.Named
+                      (Types.all, Syn.Name (Of_Tree, Written)),
+                    others => <>);
+         end if;
+
+         if Syn.Kind (Of_Tree, Written) = Syn.Array_Type then
+            declare
+               Element : constant Type_Descriptor := Normalized_Type
+                 (Of_Tree, Syn.Element_Of (Of_Tree, Written), Actuals);
+               Value : Ty.Magnitude;
+               Is_Fixed : Boolean;
+            begin
+               if Element.Kind not in Ty.Scalar_Name then
+                  Report_Application
+                    (Of_Tree, Syn.Element_Of (Of_Tree, Written),
+                     "an applied alias can make an array only of a scalar"
+                     & " type");
+                  return Invalid;
+               end if;
+
+               Value := Fixed_Argument
+                 (Of_Tree, Syn.Bound_Of (Of_Tree, Written), Actuals,
+                  Is_Fixed);
+               if not Is_Fixed then
+                  return Invalid;
+               end if;
+
+               declare
+                  Element_Bytes : constant Ty.Magnitude := Ty.Magnitude
+                    (Landin.Targets.Bytes
+                       (Ty.Storage_Size
+                          (Ty.Scalar_Name (Element.Kind), Facts)));
+                  Maximum_Bytes : constant Ty.Magnitude := Ty.Magnitude
+                    (Landin.Targets.Maximum_Object_Size (Facts));
+               begin
+                  if Element_Bytes /= 0
+                    and then Value > Maximum_Bytes / Element_Bytes
+                  then
+                     Bad.Report
+                       (Item    => Bad.Literal_Out_Of_Range,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where
+                          (Of_Tree, Syn.Bound_Of (Of_Tree, Written)),
+                        Message => "this array is larger than the target can"
+                                   & " address",
+                        Note    => "D18: an array's byte extent must fit the"
+                                   & " target's usize",
+                        Into    => Found);
+                     return Invalid;
+                  end if;
+               end;
+
+               return (Kind    => Ty.Fixed_Array,
+                       Length  => Landin.Checking.Element_Count (Value),
+                       Element => Ty.Scalar_Name (Element.Kind));
+            end;
+         end if;
+
+         if Syn.Kind (Of_Tree, Written) = Syn.Type_Reference then
+            if Res.Verdict_Of (Meanings.all, Of_Tree, Written) /= Res.Bound
+            then
+               Report_Application
+                 (Of_Tree, Written, "this type argument names no type");
+               return Invalid;
+            end if;
+
+            declare
+               Means : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Written);
+            begin
+               if Res.Sort_Of (Meanings.all, Means)
+                    = Res.Type_Parameter
+               then
+                  for Each of Actuals loop
+                     if Each.Formal = Means then
+                        return Each.Value;
+                     end if;
+                  end loop;
+                  Report_Application
+                    (Of_Tree, Written,
+                     "this type formal has no argument in this application");
+                  return Invalid;
+               end if;
+
+               if Res.Sort_Of (Meanings.all, Means) /= Res.Module_Type then
+                  Report_Application
+                    (Of_Tree, Written,
+                     "this positional argument is not a type");
+                  return Invalid;
+               end if;
+
+               declare
+                  Template : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Means));
+                  Declaration : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Means);
+               begin
+                  if Syn.Type_Formal_Count
+                       (Template.all, Declaration) /= 0
+                  then
+                     Report_Application
+                       (Of_Tree, Written,
+                        "this parameterized type alias requires arguments");
+                     return Invalid;
+                  end if;
+               end;
+
+               declare
+                  Held : constant Ty.Type_Kind := Settled_Type (Means);
+               begin
+                  if Held = Ty.Fixed_Array then
+                     return
+                       (Kind    => Held,
+                        Length  => Landin.Checking.Array_Length
+                          (Types.all, Means),
+                        Element => Landin.Checking.Array_Element
+                          (Types.all, Means));
+                  end if;
+                  return (Kind => Held, others => <>);
+               end;
+            end;
+         end if;
+
+         if Syn.Kind (Of_Tree, Written) /= Syn.Type_Application then
+            Report_Application
+              (Of_Tree, Written, "this positional argument must be a type");
+            return Invalid;
+         end if;
+
+         declare
+            Target : constant Syn.Node_Id :=
+              Syn.Applied_Type (Of_Tree, Written);
+         begin
+            if Syn.Kind (Of_Tree, Target) /= Syn.Type_Reference
+              or else Res.Verdict_Of
+                (Meanings.all, Of_Tree, Target) /= Res.Bound
+            then
+               Report_Application
+                 (Of_Tree, Target,
+                  "a parameterized type application targets a declared alias");
+               return Invalid;
+            end if;
+
+            declare
+               Means : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Target);
+            begin
+               if Res.Sort_Of (Meanings.all, Means) /= Res.Module_Type then
+                  Report_Application
+                    (Of_Tree, Target,
+                     "a parameterized type application targets a type alias");
+                  return Invalid;
+               end if;
+
+               declare
+                  Template : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Means));
+                  Declaration : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Means);
+                  Formal_Count : constant Natural := Syn.Type_Formal_Count
+                    (Template.all, Declaration);
+               begin
+                  if Formal_Count = 0 then
+                     Report_Application
+                       (Of_Tree, Target, "this type alias takes no arguments");
+                     return Invalid;
+                  end if;
+                  if Syn.Type_Argument_Count (Of_Tree, Written)
+                       /= Formal_Count
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Written),
+                        Message => "this alias application has "
+                                   & Counted
+                                     (Syn.Type_Argument_Count
+                                        (Of_Tree, Written),
+                                      "argument") & ", but `"
+                                   & Spelled
+                                     (Syn.Name (Template.all, Declaration))
+                                   & "` needs "
+                                   & Counted (Formal_Count, "argument"),
+                        Note    => "[1350]: type alias arguments are"
+                                   & " positional",
+                        Related => Syn.Origin (Template.all, Declaration),
+                        Because => "the alias declares this positional run",
+                        Into    => Found);
+                     return Invalid;
+                  end if;
+
+                  if Generic_Expansion (Positive (Means)) then
+                     Bad.Report
+                       (Item    => Bad.Cyclic_Type_Alias,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Written),
+                        Message => "this parameterized type alias eventually"
+                                   & " applies itself",
+                        Note    => "[1350]: a type alias expansion must reach"
+                                   & " a concrete type",
+                        Into    => Found);
+                     return Invalid;
+                  end if;
+
+                  declare
+                     Bound : Formal_Actual_Array (1 .. Formal_Count) :=
+                       [others => (others => <>)];
+                     Good : Boolean := True;
+                  begin
+                     --  Give every binder its declaration identity first.
+                     --  Type actuals are then substituted before fixed
+                     --  actuals are checked, so `fixed n: t, t: type` has
+                     --  the order-independent meaning D135 requires.
+                     for Index in 1 .. Formal_Count loop
+                        declare
+                           Formal_Node : constant Syn.Node_Id :=
+                             Syn.Nth_Type_Formal
+                               (Template.all, Declaration, Index);
+                        begin
+                           Bound (Index).Formal := Declaration_At
+                             (Syn.Source_Of (Template.all), Formal_Node);
+                        end;
+                     end loop;
+
+                     for Index in 1 .. Formal_Count loop
+                        declare
+                           Formal_Node : constant Syn.Node_Id :=
+                             Syn.Nth_Type_Formal
+                               (Template.all, Declaration, Index);
+                           Argument : constant Syn.Node_Id :=
+                             Syn.Nth_Type_Argument (Of_Tree, Written, Index);
+                        begin
+                           if Syn.Kind (Template.all, Formal_Node)
+                                = Syn.Type_Formal
+                           then
+                              Require_Type_Actual
+                                (Argument,
+                                 Normalized_Type (Of_Tree, Argument, Actuals),
+                                 Bound (Index).Value);
+                              Good := Good and then Bound (Index).Value.Kind
+                                /= Ty.Ill_Typed;
+                           end if;
+                        end;
+                     end loop;
+
+                     if not Good then
+                        return Invalid;
+                     end if;
+
+                     for Index in 1 .. Formal_Count loop
+                        declare
+                           Formal_Node : constant Syn.Node_Id :=
+                             Syn.Nth_Type_Formal
+                               (Template.all, Declaration, Index);
+                           Argument : constant Syn.Node_Id :=
+                             Syn.Nth_Type_Argument (Of_Tree, Written, Index);
+                        begin
+                           if Syn.Kind (Template.all, Formal_Node)
+                                = Syn.Fixed_Formal
+                           then
+                              declare
+                                 Is_Fixed : Boolean;
+                                 Value : constant Ty.Magnitude :=
+                                   Fixed_Argument
+                                     (Of_Tree, Argument, Actuals, Is_Fixed);
+                                 Expected : constant Type_Descriptor :=
+                                   Normalized_Type
+                                     (Template.all,
+                                      Syn.Declared_Type
+                                        (Template.all, Formal_Node),
+                                      Bound);
+                              begin
+                                 if not Is_Fixed then
+                                    Good := False;
+                                 elsif Expected.Kind not in Ty.Integer_Name
+                                 then
+                                    Report_Application
+                                      (Of_Tree, Argument,
+                                       "this fixed formal does not have an"
+                                       & " integer type");
+                                    Good := False;
+                                 elsif not Ty.Fits
+                                   (Value, Ty.Scalar_Name (Expected.Kind),
+                                    Facts, Negated => False)
+                                 then
+                                    Report_Application
+                                      (Of_Tree, Argument,
+                                       "this fixed argument does not fit its"
+                                       & " declared integer type");
+                                    Good := False;
+                                 else
+                                    Bound (Index).Fixed := Value;
+                                 end if;
+                              end;
+                           end if;
+                        end;
+                     end loop;
+
+                     if not Good then
+                        return Invalid;
+                     end if;
+
+                     Generic_Expansion (Positive (Means)) := True;
+                     declare
+                        Result : constant Type_Descriptor := Normalized_Type
+                          (Template.all,
+                           Syn.Declared_Type
+                             (Template.all, Declaration),
+                           Bound);
+                     begin
+                        Generic_Expansion (Positive (Means)) := False;
+                        if Result.Kind = Ty.Ill_Typed then
+                           --  The nested expansion already diagnosed its
+                           --  failure; each application reports once.
+                           return Invalid;
+                        elsif Result.Kind
+                          not in Ty.Scalar_Name | Ty.Fixed_Array
+                        then
+                           Report_Application
+                             (Of_Tree, Written,
+                              "this parameterized alias does not normalize to"
+                              & " a scalar or fixed-array type");
+                           return Invalid;
+                        end if;
+                        return Result;
+                     end;
+                  end;
+               end;
+            end;
+         end;
+      end Normalized_Type;
+
       function Type_At
         (Of_Tree        : Syn.Tree;
          Written        : Syn.Node_Id;
          For_Declaration : Res.Declaration_Id := Res.No_Declaration)
          return Ty.Type_Kind is
       begin
+         if Syn.Kind (Of_Tree, Written) = Syn.Type_Application then
+            if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                 /= Ty.Undecided
+            then
+               return Landin.Checking.Type_Of (Types.all, Of_Tree, Written);
+            end if;
+
+            declare
+               Result : constant Type_Descriptor := Normalized_Type
+                 (Of_Tree, Written,
+                  Formal_Actual_Array'(1 .. 0 => (others => <>)));
+            begin
+               Landin.Checking.Note (Types.all, Of_Tree, Written, Result.Kind);
+               if Result.Kind = Ty.Fixed_Array then
+                  Landin.Checking.Note_Array
+                    (Types.all, Of_Tree, Written,
+                     Result.Length, Result.Element);
+               end if;
+               return Result.Kind;
+            end;
+         end if;
+
          --  [0640]: source order describes a set, not an encoding.  Flatten
          --  aliases and repeated members into one structural identity while
          --  retaining declaration identities rather than inventing ordinals.
@@ -935,20 +1432,35 @@ package body Landin.Stages.Checking is
             Means : constant Res.Declaration_Id :=
               Res.Bound_To (Meanings.all, Of_Tree, Written);
          begin
-            if Res.Sort_Of (Meanings.all, Means) = Res.Type_Parameter then
+            if Res.Sort_Of (Meanings.all, Means) = Res.Type_Parameter
+              or else Res.Sort_Of (Meanings.all, Means) = Res.Fixed_Parameter
+            then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                     = Ty.Undecided
                then
                   Landin.Checking.Note (Types.all, Of_Tree, Written,
                                         Ty.Ill_Typed);
-                  Bad.Report
-                    (Item    => Bad.Unsupported_Use,
-                     Source  => Syn.Source_Of (Of_Tree),
-                     Where   => Syn.Where (Of_Tree, Written),
-                     Message => "this type formal's substitution is not"
-                                & " enabled yet",
-                     Refused => Bad.Type_Formal_Substitution,
-                     Into    => Found);
+                  Report_Application
+                    (Of_Tree, Written,
+                     "a type formal is available only while an alias is"
+                     & " being applied");
+               end if;
+               return Ty.Ill_Typed;
+            end if;
+
+            if Res.Sort_Of (Meanings.all, Means) = Res.Module_Type
+              and then Syn.Type_Formal_Count
+                (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
+                 Res.Node_Of (Meanings.all, Means)) /= 0
+            then
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                    = Ty.Undecided
+               then
+                  Landin.Checking.Note (Types.all, Of_Tree, Written,
+                                        Ty.Ill_Typed);
+                  Report_Application
+                    (Of_Tree, Written,
+                     "this parameterized type alias requires arguments");
                end if;
                return Ty.Ill_Typed;
             end if;
@@ -1470,6 +1982,7 @@ package body Landin.Stages.Checking is
               --  carries wherever it is written.
               and then Syn.Kind (Of_Tree, Written)
                        in Syn.Type_Reference | Syn.Array_Type
+                          | Syn.Type_Application
               and then
                 (Held /= Ty.Aggregate
                  or else
@@ -11924,15 +12437,26 @@ package body Landin.Stages.Checking is
             = Landin.Checking.Untouched
          then
             if Res.Sort_Of (Meanings.all, Id) = Res.Module_Type then
-               --  Settled_Type marks an alias before following it, so a
-               --  cycle returns to an Underway declaration rather than
-               --  recursively settling the declaration the outer pass is
-               --  still visiting.
-               declare
-                  Written : constant Ty.Type_Kind := Settled_Type (Id);
-               begin
-                  pragma Unreferenced (Written);
-               end;
+               --  A parameterized alias is compile-time-only template
+               --  syntax.  Its individual applications settle concrete
+               --  descriptors, so the declaration itself has no runtime
+               --  type or layout to materialize.
+               if Syn.Type_Formal_Count
+                    (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+                     Res.Node_Of (Meanings.all, Id)) /= 0
+               then
+                  Landin.Checking.Settle (Types.all, Id, Ty.Not_Typed);
+               else
+                  --  Settled_Type marks an alias before following it, so a
+                  --  cycle returns to an Underway declaration rather than
+                  --  recursively settling the declaration the outer pass is
+                  --  still visiting.
+                  declare
+                     Written : constant Ty.Type_Kind := Settled_Type (Id);
+                  begin
+                     pragma Unreferenced (Written);
+                  end;
+               end if;
             elsif Res.Sort_Of (Meanings.all, Id)
                     in Res.Type_Parameter | Res.Fixed_Parameter
             then

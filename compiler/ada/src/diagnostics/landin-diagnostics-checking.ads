@@ -118,9 +118,9 @@ package Landin.Diagnostics.Checking is
       --  and so does an element the kernel cannot lay out end to end.
       Array_Value,
       Array_Element,
-      --  D135 parses and resolves parameterized aliases before this
-      --  increment has substitution or fixed-argument validation.
-      Type_Formal_Substitution,
+      --  D135's parameterized aliases are checked here, including an
+      --  unapplied constructor and malformed positional application.
+      Parameterized_Type_Alias,
       --  [0540]'s contextual all-bits-zero image.
       Zeroed_Value);
 
@@ -135,7 +135,7 @@ package Landin.Diagnostics.Checking is
             when Variant_Value      => "[0680]",
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
-            when Type_Formal_Substitution => "[1350]",
+            when Parameterized_Type_Alias => "[1350]",
             when Zeroed_Value       => "[0540]")
      with Post => Landin.Tokens.Is_Valid_Construct (Construct'Result);
 
@@ -196,6 +196,6 @@ private
                | Array_Value
                | Array_Element
                | Zeroed_Value      => "R2.20",
-            when Type_Formal_Substitution => "R2.40");
+            when Parameterized_Type_Alias => "R2.40");
 
 end Landin.Diagnostics.Checking;

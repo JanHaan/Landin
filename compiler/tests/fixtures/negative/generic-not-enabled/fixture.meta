@@ -1,6 +1,0 @@
-class: negative
-summary: [1830] a type parameter is [1290] and not enabled
-constructs: 1830, 1290
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0012, L0010, L0012, L0012

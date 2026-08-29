@@ -1,1 +1,0 @@
-f: (T: type, x: T) -> (r: T) = x end

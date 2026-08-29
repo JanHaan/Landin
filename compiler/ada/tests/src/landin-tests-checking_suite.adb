@@ -634,6 +634,159 @@ package body Landin.Tests.Checking_Suite is
       Check_Target (Landin.Targets.Synthetic_32, 16, 4);
    end Array_Types_Are_Their_Length_And_Element;
 
+   --  D135: a saturated alias application is erased into the same scalar or
+   --  fixed-array descriptor as direct syntax.  Template bodies and formals
+   --  remain compile-time syntax: no answer from either application is
+   --  written back onto them.
+   procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
+     (Item : in out Landin.Testing.Context);
+
+   procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "parameterized-aliases.ldn",
+         "identity: type (t: type) = t" & LF
+         & "bytes: type (t: type, fixed n: u64) = [n]t" & LF
+         & "nested: type (fixed n: integer, integer: type, t: type)"
+         & " = bytes(t, n)" & LF
+         & "word: type = identity(u16)" & LF
+         & "pair: type = identity([2]u8)" & LF
+         & "four: type = nested(4, u8, u32)" & LF
+         & "mut direct: bytes(u8, 7)" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "scalar, fixed and nested substitutions are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id;
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id
+         is
+            Node : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, Position);
+         begin
+            for Id in Landin.Provenance.Declaration_Id'(1)
+                      .. Landin.Provenance.Declaration_Id
+                           (Landin.Resolution.Declaration_Count (Meanings.all))
+            loop
+               if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                 and then Landin.Resolution.Node_Of (Meanings.all, Id) = Node
+               then
+                  return Id;
+               end if;
+            end loop;
+            return Landin.Provenance.No_Declaration;
+         end Declaration_At;
+
+         Identity : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Of_Tree.all, 1);
+         Bytes : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Of_Tree.all, 2);
+         Nested : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Of_Tree.all, 3);
+         Word : constant Landin.Provenance.Declaration_Id :=
+           Declaration_At (4);
+         Pair : constant Landin.Provenance.Declaration_Id :=
+           Declaration_At (5);
+         Four : constant Landin.Provenance.Declaration_Id :=
+           Declaration_At (6);
+         Direct : constant Landin.Provenance.Declaration_Id :=
+           Declaration_At (7);
+         type Template_Array is array (Positive range <>) of
+           Landin.Syntax.Node_Id;
+         Compile_Time_Formals : Natural := 0;
+      begin
+         Landin.Testing.Check
+           (Item, Landin.Checking.Type_Of (Types.all, Word)
+                    = Landin.Types.U16,
+            "a scalar application erases to its scalar descriptor");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Type_Of (Types.all, Pair)
+                    = Landin.Types.Fixed_Array
+             and then Landin.Checking.Array_Length (Types.all, Pair) = 2
+             and then Landin.Checking.Array_Element (Types.all, Pair)
+                        = Landin.Types.U8,
+            "a fixed-array type actual retains its existing descriptor");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Type_Of (Types.all, Four)
+                    = Landin.Types.Fixed_Array
+             and then Landin.Checking.Array_Length (Types.all, Four) = 4
+             and then Landin.Checking.Array_Element (Types.all, Four)
+                        = Landin.Types.U32,
+            "nested type and fixed substitutions erase to one array shape");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Type_Of (Types.all, Direct)
+                    = Landin.Types.Fixed_Array
+             and then Landin.Checking.Array_Length (Types.all, Direct) = 7
+             and then Landin.Checking.Array_Element (Types.all, Direct)
+                        = Landin.Types.U8,
+            "a direct application is an ordinary fixed-array binding");
+
+         for Template of Template_Array'[Identity, Bytes, Nested] loop
+            declare
+               Template_Body : constant Landin.Syntax.Node_Id :=
+                 Landin.Syntax.Declared_Type (Of_Tree.all, Template);
+            begin
+               Landin.Testing.Check
+                 (Item, Landin.Checking.Type_Of
+                          (Types.all, Of_Tree.all, Template_Body)
+                            = Landin.Types.Undecided,
+                  "a template body stores no instantiation type");
+               if Landin.Syntax.Kind (Of_Tree.all, Template_Body)
+                    = Landin.Syntax.Array_Type
+               then
+                  Landin.Testing.Check_Equal
+                    (Item, Natural (Landin.Checking.Array_Length
+                      (Types.all, Of_Tree.all, Template_Body)), 0,
+                     "a template array stores no instantiation length");
+               end if;
+            end;
+         end loop;
+
+         for Id in Landin.Provenance.Declaration_Id'(1)
+                   .. Landin.Provenance.Declaration_Id
+                        (Landin.Resolution.Declaration_Count (Meanings.all))
+         loop
+            if Landin.Resolution.Sort_Of (Meanings.all, Id)
+                 in Landin.Resolution.Type_Parameter
+                    | Landin.Resolution.Fixed_Parameter
+            then
+               Compile_Time_Formals := Compile_Time_Formals + 1;
+               Landin.Testing.Check
+                 (Item, Landin.Checking.Type_Of (Types.all, Id)
+                          = Landin.Types.Not_Typed,
+                  "a formal has no runtime type descriptor");
+            end if;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Compile_Time_Formals, 6,
+            "every formal was retained only for compile-time substitution");
+      end;
+   end Parameterized_Aliases_Normalize_To_Existing_Descriptors;
+
    --  R2.20: inference from a direct storage name carries D17's exact shape
    --  onto module and local declarations, independent of destination
    --  mutability and whether the source is module or prior-local storage.
@@ -3595,6 +3748,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array types are their length and element",
          Array_Types_Are_Their_Length_And_Element'Access);
+      Landin.Testing.Register
+        (Into, "checking", "parameterized aliases normalize descriptors",
+         Parameterized_Aliases_Normalize_To_Existing_Descriptors'Access);
       Landin.Testing.Register
         (Into, "checking", "inferred arrays carry their source shape",
          Inferred_Array_Bindings_Carry_Their_Source_Shape'Access);
