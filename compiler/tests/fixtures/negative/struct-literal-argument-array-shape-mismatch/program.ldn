@@ -1,0 +1,11 @@
+packet: type = struct
+    tag: i32
+    row: [2]i32
+end packet
+
+consume: (value: packet) -> none =
+end consume
+
+bad: () -> none =
+    consume((tag: 1, row: [2]))
+end bad

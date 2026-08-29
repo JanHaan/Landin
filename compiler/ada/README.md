@@ -134,8 +134,8 @@ position as an internal address and is copied into independent shaped callee
 storage before the body runs; a direct field or depth-one child path preserves
 its neutral field identities on that address, contextual `zeroed` clears a
 fresh shaped caller temporary, array literals or repetitions fill one in
-source order with compact suffix fills, and scalar-field struct construction
-fills one by nominal labels. Further aggregate arguments and aggregate
+source order with compact suffix fills, and flat struct construction fills one
+by nominal scalar or fixed-array labels. Further aggregate arguments and aggregate
 returns remain absent; R4.40 later completes C ABI classification.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and

@@ -5812,3 +5812,32 @@ arguments by D94/D96; only direct literal construction is narrower.
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/struct-literal-argument-nominal-mismatch`; the generated token and IR
 records; and `runtime/struct-arguments-cross-calls` on Linux x86-64.
+
+### D101 — Struct literal arguments may contain fixed-array fields
+
+**The tour said** that a labelled array field receives the same contextual
+array forms as standalone fixed-array storage [0520] [0700]. D100 restricted
+argument construction to scalar fields even though its caller temporary already
+carried compact fixed-array field shapes.
+
+**Chosen:** a flat ordinary-struct literal argument may label fixed-array
+fields with literals, full or mixed repetitions, `zeroed`, or matching direct
+and D96 nested storage paths. Each label commits in source order. Explicit
+array elements are stored in order, repetition uses one compact suffix fill,
+`zeroed` clears the field extent, and storage sources use one compact copy.
+`of zeroed` clears any omitted fixed-array field after all labels.
+
+Every operation targets the aggregate temporary by declaration-order field
+identity. Source copies retain independent parent and child identities. No
+field offset, padding byte or expanded repeated suffix enters checked IR; the
+complete temporary then follows D94's ordinary one-position transport and
+callee copy.
+
+**Why this closes only fixed-array leaves:** D65 already supplies their finite
+contextual operation family and compact shape. Ordinary-child and variant
+fields require recursive construction or case selection and remain separate
+argument slices rather than being flattened here.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/struct-literal-argument-array-shape-mismatch`; the generated token and
+IR records; and `runtime/struct-arguments-cross-calls` on Linux x86-64.
