@@ -147,6 +147,11 @@ package body Landin.Stages.Checking is
          Expected : Res.Declaration_Id;
          Related  : Landin.Provenance.Origin;
          Because  : String) return Boolean;
+      --  D121: whether a binding's value names an array element.  What is
+      --  refused there is one particular thing and says so.
+      function Names_An_Element
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+
       function Declared_As_Node
         (Of_Tree         : Syn.Tree;
          Node            : Syn.Node_Id;
@@ -390,6 +395,12 @@ package body Landin.Stages.Checking is
                         Length  => Landin.Checking.Array_Length
                                      (Types.all, Of_Tree,
                                       Syn.Declared_Type (Of_Tree, Each)),
+                        --  D121: an ordinary-struct element carries the
+                        --  declaration that wrote it, as a child does.
+                        Aggregate_Body =>
+                          Landin.Checking.Array_Element_Body
+                            (Types.all, Of_Tree,
+                             Syn.Declared_Type (Of_Tree, Each)),
                         others  => <>);
                   elsif Held = Ty.Aggregate
                     and then Aggregate_Allowed
@@ -553,16 +564,47 @@ package body Landin.Stages.Checking is
                Element : constant Syn.Node_Id :=
                  Syn.Element_Of (Of_Tree, Written);
                Held : constant Ty.Type_Kind := Type_At (Of_Tree, Element);
+               --  D121: [0520]'s element may be an ordinary struct.  Its
+               --  extent is that struct's own already-computed layout, so
+               --  the only thing an array adds is the repetition.  One
+               --  that has a variant part has no carrier yet, for the
+               --  reason an ordinary child holding one has none.
+               Element_Body : constant Res.Declaration_Id :=
+                 (if Held = Ty.Aggregate
+                  then Landin.Checking.Body_Of (Types.all, Of_Tree, Element)
+                  else Res.No_Declaration);
+               Aggregate_Element : constant Boolean :=
+                 Element_Body /= Res.No_Declaration
+                 and then Landin.Checking.Has_Layout
+                   (Types.all, Element_Body)
+                 and then not Landin.Checking.Has_Variant_Part
+                   (Types.all, Element_Body);
                Length : Landin.Checking.Element_Count := 0;
             begin
-               if Held not in Ty.Scalar_Name then
-                  if Held /= Ty.Ill_Typed then
+               if Held not in Ty.Scalar_Name
+                 and then not Aggregate_Element
+               then
+                  --  Three passes reach a written type; the first to
+                  --  refuse it records that, so a reader sees one report.
+                  if Held /= Ty.Ill_Typed
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree, Written) = Ty.Undecided
+                  then
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Written, Ty.Ill_Typed);
                      Bad.Report
                        (Item    => Bad.Unsupported_Use,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Element),
-                        Message => "an array of this is not enabled yet",
-                        Refused => Bad.Array_Element,
+                        Message =>
+                          (if Held = Ty.Aggregate
+                           then "an array of a struct with a variant part"
+                                & " is not enabled yet"
+                           else "an array of this is not enabled yet"),
+                        Refused =>
+                          (if Held = Ty.Aggregate
+                           then Bad.Nested_Variant_Struct
+                           else Bad.Array_Element),
                         Into    => Found);
                   end if;
 
@@ -600,9 +642,14 @@ package body Landin.Stages.Checking is
 
                   declare
                      Element_Bytes : constant Ty.Magnitude :=
-                       Ty.Magnitude
-                         (Landin.Targets.Bytes
-                            (Ty.Storage_Size (Ty.Scalar_Name (Held), Facts)));
+                       (if Aggregate_Element
+                        then Ty.Magnitude
+                          (Landin.Checking.Layout_Size
+                             (Types.all, Element_Body))
+                        else Ty.Magnitude
+                          (Landin.Targets.Bytes
+                             (Ty.Storage_Size
+                                (Ty.Scalar_Name (Held), Facts))));
                      Maximum_Bytes : constant Ty.Magnitude :=
                        Ty.Magnitude
                          (Landin.Targets.Maximum_Object_Size (Facts));
@@ -627,7 +674,13 @@ package body Landin.Stages.Checking is
                end;
 
                Landin.Checking.Note_Array
-                 (Types.all, Of_Tree, Written, Length, Held);
+                 (Types.all, Of_Tree, Written, Length,
+                  (if Aggregate_Element then Ty.U8 else Ty.Scalar_Name
+                     (Held)));
+               if Aggregate_Element then
+                  Landin.Checking.Note_Array_Element_Body
+                    (Types.all, Of_Tree, Written, Element_Body);
+               end if;
                return Ty.Fixed_Array;
             end;
          end if;
@@ -1376,12 +1429,18 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
-                     Message => "a value of a struct type is not enabled"
-                                & " yet",
+                     Message =>
+                       (if Names_An_Element (Of_Tree, Node)
+                        then "a whole array element of a struct type is"
+                             & " not a value or a place yet"
+                        else "a value of a struct type is not enabled"
+                             & " yet"),
                      Refused =>
                        (if Syn.Kind (Of_Tree, Node)
                               in Syn.Parameter | Syn.Named_Return
                         then Bad.Struct_ABI
+                        elsif Names_An_Element (Of_Tree, Node)
+                        then Bad.Whole_Element_Aggregate
                         else Bad.Struct_Value),
                      Into    => Found);
                end if;
@@ -1456,6 +1515,11 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Array_Length
                        (Types.all, Of_Tree.all, Written),
                      Landin.Checking.Array_Element
+                       (Types.all, Of_Tree.all, Written));
+                  --  D121's element body is part of that shape.
+                  Landin.Checking.Note_Array_Element_Body
+                    (Types.all, Id,
+                     Landin.Checking.Array_Element_Body
                        (Types.all, Of_Tree.all, Written));
                end if;
 
@@ -2197,6 +2261,17 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
+         --  D121: an element of an array of ordinary structs is a struct,
+         --  so a selection may start from one.  Synthesise settles its
+         --  index and its [0710] identity; this only carries the answer.
+         if Syn.Kind (Of_Tree, Node) = Syn.Element_Index then
+            declare
+               Held : constant Ty.Type_Kind := Synthesise (Of_Tree, Node);
+            begin
+               return Held;
+            end;
+         end if;
+
          if Syn.Kind (Of_Tree, Node) = Syn.Name_Reference
            and then Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
          then
@@ -2235,6 +2310,12 @@ package body Landin.Stages.Checking is
                        (Types.all, Of_Tree, Node,
                         Landin.Checking.Array_Length (Types.all, Means),
                         Landin.Checking.Array_Element (Types.all, Means));
+                     --  D121: which struct the elements are is part of
+                     --  that shape.
+                     Landin.Checking.Note_Array_Element_Body
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Array_Element_Body
+                          (Types.all, Means));
                   end if;
 
                   return Held;
@@ -2255,6 +2336,22 @@ package body Landin.Stages.Checking is
          end loop;
          return Syn.Kind (Of_Tree, Where) = Syn.Name_Reference;
       end Selects_From_A_Name;
+
+      function Names_An_Element
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Where : Syn.Node_Id :=
+           (if Syn.Kind (Of_Tree, Node) = Syn.Binding
+            then Syn.Value_Of (Of_Tree, Node) else Syn.No_Node);
+      begin
+         if Where = Syn.No_Node then
+            return False;
+         end if;
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+            Where := Syn.Target_Of (Of_Tree, Where);
+         end loop;
+         return Syn.Kind (Of_Tree, Where) = Syn.Element_Index;
+      end Names_An_Element;
 
       function Chain_Names_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
@@ -2330,6 +2427,13 @@ package body Landin.Stages.Checking is
                                    (Types.all, Wrote, Which),
                                  Landin.Checking.Field_Array_Element
                                    (Types.all, Wrote, Which));
+                              --  D121: an ordinary-struct element is part
+                              --  of that field's shape.
+                              Landin.Checking.Note_Array_Element_Body
+                                (Types.all, Of_Tree, Node,
+                                 Landin.Checking.Field_Shape_Of
+                                   (Types.all, Wrote, Which)
+                                     .Aggregate_Body);
                               return True;
                            end if;
                         end;
@@ -2967,6 +3071,25 @@ package body Landin.Stages.Checking is
                   --  write is a place operation and establishes no element
                   --  fact of its own.  Module arrays keep D10's complete
                   --  state and their runtime-index path is unchanged.
+                  --  D121: [0520]'s element may be an ordinary struct,
+                  --  and then indexing hands back that struct with its
+                  --  own [0710] identity rather than a scalar.
+                  declare
+                     Body_Of_Element : constant Res.Declaration_Id :=
+                       Landin.Checking.Array_Element_Body
+                         (Types.all, Of_Tree, From);
+                  begin
+                     if Body_Of_Element /= Res.No_Declaration then
+                        if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+                             = Ty.Undecided
+                        then
+                           Landin.Checking.Note_Body
+                             (Types.all, Of_Tree, Node, Body_Of_Element);
+                        end if;
+                        return Kept (Ty.Aggregate);
+                     end if;
+                  end;
+
                   return Kept
                     (Landin.Checking.Array_Element
                        (Types.all, Of_Tree, From));
@@ -5489,6 +5612,25 @@ package body Landin.Stages.Checking is
                   Wants : constant Ty.Type_Kind :=
                     Selected_From (Of_Tree, Place);
                begin
+                  --  D121: a leaf of an element is a place; the whole
+                  --  element is not one yet, because an index is a value
+                  --  and the contextual assignment forms reach a place
+                  --  through identities alone.
+                  if Wants = Ty.Aggregate
+                    and then Syn.Kind (Of_Tree, Place) = Syn.Element_Index
+                  then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Place),
+                        Message => "a whole array element of a struct"
+                                   & " type is not a value or a place yet",
+                        Refused => Bad.Whole_Element_Aggregate,
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+                     return;
+                  end if;
+
                   if Wants = Ty.Aggregate then
                      if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
                         declare

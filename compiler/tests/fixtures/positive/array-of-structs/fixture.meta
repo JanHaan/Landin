@@ -1,0 +1,5 @@
+class: positive
+summary: D121 gives a fixed array an ordinary struct element, as a field and as whole storage, and selects leaves through an index
+constructs: 0420, 0520, 0540, 0570, 0670, 0750, 1795, 1810, 1820
+program: program.ldn
+targets: linux-x86-64, macos-arm64

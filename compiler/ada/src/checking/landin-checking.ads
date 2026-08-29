@@ -321,6 +321,10 @@ package Landin.Checking is
       Length  : Element_Count            := 1;
       Cases   : Natural                  := 0;
       Payloads_First : Natural           := 0;
+      --  The child's body for an Aggregate_Field, and since D121 the
+      --  element's body for a Fixed_Array_Field whose elements are an
+      --  ordinary struct.  Both answer the same question -- which
+      --  declaration wrote the struct this field is made of.
       Aggregate_Body : Declaration_Id    := No_Declaration;
    end record;
 
@@ -540,6 +544,40 @@ package Landin.Checking is
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
 
+   --  D121: which declaration wrote the ordinary struct an array's
+   --  elements are, or No_Declaration when the element is one of [1790]'s
+   --  scalars.  It sits beside the length and the scalar element for the
+   --  reason the aggregate's body does: a Type_Kind says the category and
+   --  never which one.
+   function Array_Element_Body
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Declaration_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Array_Element_Body
+     (Of_Table : Table; Id : Declaration_Id) return Declaration_Id
+     with Pre => Is_Prepared (Of_Table) and then Contains (Of_Table, Id);
+
+   procedure Note_Array_Element_Body
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Wrote   : Declaration_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node),
+          Post => Array_Element_Body (Into, Of_Tree, Node) = Wrote;
+
+   procedure Note_Array_Element_Body
+     (Into  : in out Table;
+      Id    : Declaration_Id;
+      Wrote : Declaration_Id)
+     with Pre  => Is_Prepared (Into) and then Contains (Into, Id),
+          Post => Array_Element_Body (Into, Id) = Wrote;
+
    procedure Note_Array
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
@@ -581,6 +619,19 @@ package Landin.Checking is
       Facts     : Landin.Targets.Target_Facts;
       Size      : out Landin.Targets.Byte_Count;
       Alignment : out Landin.Targets.Byte_Alignment);
+
+   --  D121's aggregate element.  Its extent is the element body's own
+   --  padded layout, which is already computed by the time an array of it
+   --  can be written: a struct is laid out before anything may hold one.
+   procedure Array_Extent
+     (Of_Table  : Table;
+      Length    : Element_Count;
+      Element   : Declaration_Id;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+     with Pre => Is_Prepared (Of_Table)
+                 and then Contains (Of_Table, Element)
+                 and then Has_Layout (Of_Table, Element);
 
    --  Says what a node synthesised.  Once: a second Note on one node is a
    --  pass that walked it twice, which is the defect this refuses rather
@@ -727,6 +778,9 @@ private
    type Array_Shape is record
       Length  : Element_Count            := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
+      --  D121: which declaration wrote the ordinary struct the elements
+      --  are, when they are not one of [1790]'s scalars.
+      Element_Body : Declaration_Id      := No_Declaration;
    end record;
 
    package Shape_Vectors is new Ada.Containers.Vectors

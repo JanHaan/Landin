@@ -1,0 +1,6 @@
+class: runtime
+summary: elements of a fixed array of ordinary structs are read and written through an index, and whole such arrays are zeroed and copied
+constructs: 0420, 0520, 0540, 0570, 0670, 0750, 1810, 1820, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

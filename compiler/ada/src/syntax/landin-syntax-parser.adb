@@ -959,20 +959,17 @@ package body Landin.Syntax.Parser is
 
             function Parse_Selectors (From : Node_Id) return Node_Id is
                Selected : Node_Id := From;
-
-               --  [1820] spells `selection ("[" expression "]")*`, so the
-               --  brackets come after the whole selection and nothing
-               --  derives a dot after one.  Once a bracket has been read
-               --  the dots are over, and saying so here is what keeps the
-               --  parser and the grammar agreeing about legal source.
-               Indexed : Boolean := False;
             begin
-               --  [1820]'s order: the dots, then the brackets, and no
-               --  dot after a bracket.  A call and a parenthesis are each
-               --  their own production and neither reaches this loop, so
-               --  what it reads is exactly what `indexed` derives.
+               --  [1820] spells `selection (("[" expression "]")
+               --  | ("." identifier))*`, so a dot and a bracket may follow
+               --  each other in either order and as often as the source
+               --  writes them -- which is what the tour writes at
+               --  `w.items[i].x`.  A call and a parenthesis are each their
+               --  own production and neither reaches this loop, so what it
+               --  reads is exactly what `indexed` derives.
                loop
-                  --  indexed ::= selection ("[" expression "]")*  [1820]
+                  --  indexed ::= selection (("[" expression "]")
+                  --                            | ("." identifier))*  [1820]
                   if Peek = Tok.Left_Bracket then
                      declare
                         At_Open : constant Landin.Source.Span := Here;
@@ -1001,26 +998,10 @@ package body Landin.Syntax.Parser is
                                Children => [Selected, Index]);
                      end;
 
-                     Indexed := True;
                      goto Next;
                   end if;
 
                   exit when Peek /= Tok.Dot;
-
-                  if Indexed then
-                     Refuse
-                       (Item    => Syn.Selection_From_An_Index,
-                        Where   => Here,
-                        Message => "selecting from an index is not"
-                                   & " enabled yet");
-                     Advance;
-
-                     if Peek = Tok.Identifier then
-                        Advance;
-                     end if;
-
-                     return Selected;
-                  end if;
 
                   declare
                      Named   : Landin.Source.Names.Name_Id;

@@ -94,6 +94,47 @@ item 2 DATUM flags result array params 0 slots 0 blocks 1 values 1
   elements 8 of bool
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/array-of-structs/program.ldn
+unit items 4
+item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]struct (i32,i32)
+  field 2 i32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM cells result array params 0 slots 0 blocks 1 values 1
+  elements 3 of struct (i32,i32)
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM spare result array params 0 slots 0 blocks 1 values 1
+  elements 3 of struct (i32,i32)
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 ROUTINE exercise result none params 0 slots 2 blocks 1 values 22
+  slot 1 local aggregate fields [2]struct (i32,i32) i32
+  slot 2 room elements 3 of struct (i32,i32)
+  block 1 scope 3 BLOCK length 22
+    1 CLEAR_ARRAY destination slot 1
+    2 CLEAR_ARRAY destination slot 2
+    3 NUMBER i32 3
+    4 NUMBER usize 1
+    5 STORE_ELEMENT slot 1 field 1 inside 1 <- 4 3
+    6 NUMBER usize 1
+    7 LOAD_ELEMENT i32 slot 1 field 1 inside 1 <- 6
+    8 NUMBER usize 1
+    9 STORE_ELEMENT slot 1 field 1 inside 2 <- 8 7
+    10 NUMBER i32 5
+    11 NUMBER usize 0
+    12 STORE_ELEMENT datum 2 cells inside 1 <- 11 10
+    13 NUMBER usize 0
+    14 LOAD_ELEMENT i32 datum 2 cells inside 1 <- 13
+    15 NUMBER usize 2
+    16 STORE_ELEMENT slot 2 inside 2 <- 15 14
+    17 COPY_ARRAY from slot 2 to datum 3 spare
+    18 COPY_ARRAY from datum 3 spare to datum 2 cells
+    19 COPY_ARRAY from slot 1 field 1 to datum 1 state field 1
+    20 LOAD_FIELD i32 slot 1 field 2
+    21 STORE_FIELD datum 1 state field 2 <- 20
+    22 LEAVE
 file positive/array-type-is-declared/program.ldn
 unit signatures 0 items 0
 file positive/array-types-alias-and-agree/program.ldn

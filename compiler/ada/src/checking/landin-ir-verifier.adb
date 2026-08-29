@@ -234,11 +234,13 @@ package body Landin.IR.Verifier is
          Nested  : Path_Step_Array;
          Element : out Landin.Types.Scalar_Name) return Fault_Kind;
 
+      --  D121: an array's element may be an aggregate, so what an array
+      --  shape answers is the element's shape and not a scalar name.
       function Shape_Of
         (Item    : Item_Id;
          Place   : Storage;
          Field   : Natural;
-         Element : out Landin.Types.Scalar_Name;
+         Element : out Field_Shape;
          Length  : out Element_Total;
          Which   : Natural := 0;
          Payload_Field : Natural := 0;
@@ -335,14 +337,14 @@ package body Landin.IR.Verifier is
         (Item    : Item_Id;
          Place   : Storage;
          Field   : Natural;
-         Element : out Landin.Types.Scalar_Name;
+         Element : out Field_Shape;
          Length  : out Element_Total;
          Which   : Natural := 0;
          Payload_Field : Natural := 0;
          Nested  : Path_Step_Array := No_Path_Steps) return Fault_Kind
       is
       begin
-         Element := Landin.Types.Bool;
+         Element := (others => <>);
          Length := 0;
 
          if Nested'Length /= 0 then
@@ -393,7 +395,7 @@ package body Landin.IR.Verifier is
                   if Leaf.Kind /= Array_Field_Shape then
                      return Element_Field_Is_Not_An_Array;
                   end if;
-                  Element := Leaf.Element;
+                  Element := Array_Element_Shape (Of_Unit, Leaf);
                   Length := Leaf.Length;
                   return Nothing_Wrong;
                end;
@@ -413,7 +415,7 @@ package body Landin.IR.Verifier is
                if Leaf.Kind /= Array_Field_Shape then
                   return Element_Field_Is_Not_An_Array;
                end if;
-               Element := Leaf.Element;
+               Element := Array_Element_Shape (Of_Unit, Leaf);
                Length := Leaf.Length;
                return Nothing_Wrong;
             end;
@@ -434,7 +436,7 @@ package body Landin.IR.Verifier is
                      return Array_Storage_Is_Not_An_Array;
                   end if;
 
-                  Element := Array_Element (Of_Unit, Place.Datum);
+                  Element := Array_Element_Shape (Of_Unit, Place.Datum);
                   Length := Array_Length (Of_Unit, Place.Datum);
                else
                   if Result_Of (Of_Unit, Place.Datum)
@@ -451,8 +453,10 @@ package body Landin.IR.Verifier is
                      return Element_Field_Is_Not_An_Array;
                   end if;
 
-                  Element := Nth_Field_Shape
-                    (Of_Unit, Place.Datum, Positive (Field)).Element;
+                  Element := Array_Element_Shape
+                    (Of_Unit,
+                     Nth_Field_Shape
+                       (Of_Unit, Place.Datum, Positive (Field)));
                   Length := Nth_Field_Shape
                     (Of_Unit, Place.Datum, Positive (Field)).Length;
                end if;
@@ -467,7 +471,8 @@ package body Landin.IR.Verifier is
                      return Array_Storage_Is_Not_An_Array;
                   end if;
 
-                  Element := Slot_Array_Element (Of_Unit, Item, Place.Slot);
+                  Element := Slot_Array_Element_Shape
+                    (Of_Unit, Item, Place.Slot);
                   Length := Slot_Array_Length (Of_Unit, Item, Place.Slot);
                else
                   if not Is_Aggregate (Of_Unit, Item, Place.Slot)
@@ -484,8 +489,10 @@ package body Landin.IR.Verifier is
                      return Element_Field_Is_Not_An_Array;
                   end if;
 
-                  Element := Nth_Slot_Field_Shape
-                    (Of_Unit, Item, Place.Slot, Positive (Field)).Element;
+                  Element := Array_Element_Shape
+                    (Of_Unit,
+                     Nth_Slot_Field_Shape
+                       (Of_Unit, Item, Place.Slot, Positive (Field)));
                   Length := Nth_Slot_Field_Shape
                     (Of_Unit, Item, Place.Slot, Positive (Field)).Length;
                end if;
@@ -691,7 +698,18 @@ package body Landin.IR.Verifier is
               or else Shape.Cases /= 0
               or else Shape.Payloads_First /= 0;
          elsif Shape.Kind = Array_Field_Shape then
-            return Shape.Cases /= 0 or else Shape.Payloads_First /= 0;
+            --  D121: an aggregate element is one run of exactly one shape.
+            --  No run at all is the scalar element every array had before.
+            if Shape.Cases = 0 then
+               return Shape.Payloads_First /= 0;
+            end if;
+            return Shape.Cases /= 1
+              or else not Array_Element_Is_Aggregate (Of_Unit, Shape)
+              or else Left = 0
+              or else Field_Shape_Is_Malformed
+                (Array_Element_Shape (Of_Unit, Shape),
+                 Aggregate_Allowed => True,
+                 Budget => Left - 1);
          elsif Shape.Kind = Aggregate_Field_Shape then
             if not Aggregate_Allowed
               or else Shape.Length /= 1
@@ -1677,7 +1695,7 @@ package body Landin.IR.Verifier is
                                    Element_Field_Of (Of_Unit, Id, V);
                                  Nested : constant Path_Step_Array :=
                                    Path_Of (Of_Unit, Id, V);
-                                 Element : Landin.Types.Scalar_Name;
+                                 Element : Field_Shape;
                                  Length : Element_Total;
                                  Bad : Fault_Kind := Nothing_Wrong;
                               begin
@@ -1846,7 +1864,7 @@ package body Landin.IR.Verifier is
                                     else (Kind => Module_Datum,
                                           Datum => Datum_Of
                                             (Of_Unit, Id, V)));
-                                 Element : Landin.Types.Scalar_Name;
+                                 Element : Field_Shape;
                                  Length : Element_Total;
                                  Bad : Fault_Kind :=
                                    Shape_Of
@@ -1886,7 +1904,7 @@ package body Landin.IR.Verifier is
 
                               declare
                                  Source_Element, Destination_Element :
-                                   Landin.Types.Scalar_Name;
+                                   Field_Shape;
                                  Source_Length, Destination_Length :
                                    Element_Total;
                                  Bad : Fault_Kind;
@@ -1916,7 +1934,9 @@ package body Landin.IR.Verifier is
                                             Block => Block, Value => V);
                                  end if;
 
-                                 if Source_Element /= Destination_Element
+                                 if not Same_Shape
+                                   (Of_Unit, Source_Element,
+                                    Destination_Element)
                                    or else Source_Length /= Destination_Length
                                  then
                                     return
@@ -2023,7 +2043,7 @@ package body Landin.IR.Verifier is
                                    Destination_Of (Of_Unit, Id, V);
                                  Field : constant Natural :=
                                    Element_Field_Of (Of_Unit, Id, V);
-                                 Element : Landin.Types.Scalar_Name;
+                                 Element : Field_Shape;
                                  Length  : Element_Total;
                                  Bad     : Fault_Kind := Nothing_Wrong;
                               begin
@@ -2099,7 +2119,7 @@ package body Landin.IR.Verifier is
                               end if;
 
                               declare
-                                 Element : Landin.Types.Scalar_Name;
+                                 Element : Field_Shape;
                                  Length  : Element_Total;
                                  Bad     : constant Fault_Kind :=
                                    Shape_Of
@@ -2127,10 +2147,13 @@ package body Landin.IR.Verifier is
                                        Item => Id, Block => Block, Value => V);
                                  end if;
 
-                                 if Result_Of
+                                 --  A fill repeats one scalar pattern, so
+                                 --  D121's aggregate element has none.
+                                 if Element.Kind /= Scalar_Field_Shape
+                                   or else Result_Of
                                       (Of_Unit, Id,
                                        Nth_Operand (Of_Unit, Id, V, 1))
-                                      /= Element
+                                      /= Element.Element
                                  then
                                     return
                                       (Kind => Array_Fill_Value_Disagrees,
@@ -2534,7 +2557,7 @@ package body Landin.IR.Verifier is
                                     else (Kind => Module_Datum,
                                           Datum => Datum_Of
                                             (Of_Unit, Id, V)));
-                                 Element : Landin.Types.Scalar_Name;
+                                 Element : Field_Shape;
                                  Length : Element_Total;
                                  Bad : constant Fault_Kind :=
                                    Shape_Of
@@ -2560,8 +2583,29 @@ package body Landin.IR.Verifier is
                                        Value => V);
                                  end if;
 
+                                 --  D121: the operation reaches the
+                                 --  element, and then whatever run [0420]
+                                 --  selected inside it.
+                                 if not Path_Is_Valid
+                                   (Of_Unit, Element,
+                                    Element_Path_Of (Of_Unit, Id, V))
+                                   or else Shape_At
+                                     (Of_Unit, Element,
+                                      Element_Path_Of (Of_Unit, Id, V)).Kind
+                                       /= Scalar_Field_Shape
+                                 then
+                                    return
+                                      (Kind => Element_Field_Is_Not_An_Array,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+
                                  if Op = Load_Element then
-                                    if Result_Of (Of_Unit, Id, V) /= Element
+                                    if Result_Of (Of_Unit, Id, V)
+                                       /= Shape_At
+                                            (Of_Unit, Element,
+                                             Element_Path_Of
+                                               (Of_Unit, Id, V)).Element
                                     then
                                        return
                                          (Kind => Result_Disagrees,
@@ -2571,7 +2615,10 @@ package body Landin.IR.Verifier is
                                  elsif Result_Of
                                          (Of_Unit, Id,
                                           Nth_Operand (Of_Unit, Id, V, 2))
-                                       /= Element
+                                       /= Shape_At
+                                            (Of_Unit, Element,
+                                             Element_Path_Of
+                                               (Of_Unit, Id, V)).Element
                                  then
                                     return
                                       (Kind => Store_Datum_Disagrees,

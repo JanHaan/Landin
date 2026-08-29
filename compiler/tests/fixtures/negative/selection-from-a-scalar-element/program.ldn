@@ -1,0 +1,8 @@
+mut words: [4]u32
+
+--  D121 admits `a[i].f` when [0520]'s element is an ordinary struct.  A
+--  scalar element has no field to select, which is the ordinary
+--  "not a struct" refusal and not a syntactic one.
+f: () -> (r: u32) =
+    r = words[0].x
+end f

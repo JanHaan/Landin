@@ -132,17 +132,31 @@ package body Landin.Backend is
          end;
       end if;
 
-      if Landin.Targets.Byte_Count (Shape.Length)
-        > Landin.Targets.Byte_Count'Last / Bytes
-      then
-         raise Landin.Compiler_Defect with
-           "an IR aggregate array field extent overflows";
-      end if;
+      --  D121: an aggregate element repeats its own padded extent, which
+      --  is the same recursion this procedure already is.
+      declare
+         Element_Size : Landin.Targets.Byte_Count := Bytes;
+         Element_Alignment : Landin.Targets.Byte_Alignment :=
+           Landin.Targets.Alignment_Of (Facts, Held);
+      begin
+         if Landin.IR.Array_Element_Is_Aggregate (Of_Unit, Shape) then
+            Field_Extent
+              (Of_Unit, Landin.IR.Array_Element_Shape (Of_Unit, Shape),
+               Facts, Element_Size, Element_Alignment);
+         end if;
 
-      Size := Landin.Targets.Byte_Count (Shape.Length) * Bytes;
-      Alignment :=
-        (if Shape.Length = 0
-         then 1 else Landin.Targets.Alignment_Of (Facts, Held));
+         if Element_Size > 0
+           and then Landin.Targets.Byte_Count (Shape.Length)
+                      > Landin.Targets.Byte_Count'Last / Element_Size
+         then
+            raise Landin.Compiler_Defect with
+              "an IR aggregate array field extent overflows";
+         end if;
+
+         Size := Landin.Targets.Byte_Count (Shape.Length) * Element_Size;
+         Alignment :=
+           (if Shape.Length = 0 then 1 else Element_Alignment);
+      end;
    end Field_Extent;
 
    function Variant_Payload_Field_Offset
@@ -333,16 +347,18 @@ package body Landin.Backend is
    begin
       if Landin.IR.Is_Array (Of_Unit, Item, Slot) then
          declare
-            Element_Size : constant Landin.Targets.Scalar_Size :=
-              Size_Of
-                (Landin.IR.Slot_Array_Element (Of_Unit, Item, Slot), Facts);
+            Element_Size : Landin.Targets.Byte_Count;
+            Element_Alignment : Landin.Targets.Byte_Alignment;
          begin
+            Field_Extent
+              (Of_Unit,
+               Landin.IR.Slot_Array_Element_Shape (Of_Unit, Item, Slot),
+               Facts, Element_Size, Element_Alignment);
             Size :=
               Landin.Targets.Byte_Count
                 (Landin.IR.Slot_Array_Length (Of_Unit, Item, Slot))
-              * Landin.Targets.Byte_Count
-                  (Landin.Targets.Bytes (Element_Size));
-            Alignment := Landin.Targets.Alignment_Of (Facts, Element_Size);
+              * Element_Size;
+            Alignment := Element_Alignment;
          end;
       else
          Place_Slot_Fields
@@ -365,14 +381,19 @@ package body Landin.Backend is
       Offset : Landin.Targets.Byte_Count;
    begin
       if Landin.IR.Is_Array (Of_Unit, Item, Slot) then
-         Offset :=
-           Landin.Targets.Byte_Count
-             (Landin.IR.Element_Total (Field) - 1)
-           * Landin.Targets.Byte_Count
-               (Landin.Targets.Bytes
-                  (Size_Of
-                     (Landin.IR.Slot_Array_Element (Of_Unit, Item, Slot),
-                      Facts)));
+         declare
+            Element_Size : Landin.Targets.Byte_Count;
+            Element_Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            Field_Extent
+              (Of_Unit,
+               Landin.IR.Slot_Array_Element_Shape (Of_Unit, Item, Slot),
+               Facts, Element_Size, Element_Alignment);
+            Offset :=
+              Landin.Targets.Byte_Count
+                (Landin.IR.Element_Total (Field) - 1)
+              * Element_Size;
+         end;
       else
          Place_Slot_Fields
            (Of_Unit, Item, Slot, Facts, Positive (Field), Placed, Offset);

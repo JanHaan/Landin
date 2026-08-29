@@ -683,8 +683,27 @@ package Landin.IR is
           Post => Array_Element (Into, Item) = Of_Type
                   and then Array_Length (Into, Item) = Length;
 
+   --  D121's aggregate element.  The shape is the element's own, built by
+   --  Add_Shape_Run like any other nested run, so the item carries no
+   --  second representation of what an aggregate is.
+   procedure Set_Array
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Element : Field_Shape;
+      Length  : Element_Total)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item)
+                           = Landin.Types.Fixed_Array,
+          Post => Array_Length (Into, Item) = Length;
+
    function Array_Element
      (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array;
+
+   function Array_Element_Shape
+     (Of_Unit : Unit; Item : Item_Id) return Field_Shape
      with Pre => Holds (Of_Unit, Item)
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
@@ -1089,6 +1108,21 @@ package Landin.IR is
                   and then Slot_Array_Length
                              (Into, Item, Add_Array_Slot'Result) = Length;
 
+   function Add_Array_Slot
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Element  : Field_Shape;
+      Length   : Element_Total;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+     with Pre  => Holds (Into, Item)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Slot_Count (Into, Item) = Slot_Count (Into, Item)'Old + 1
+                  and then Holds (Into, Item, Add_Array_Slot'Result)
+                  and then Is_Array (Into, Item, Add_Array_Slot'Result)
+                  and then Slot_Array_Length
+                             (Into, Item, Add_Array_Slot'Result) = Length;
+
    function Is_Array
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
      with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
@@ -1096,6 +1130,11 @@ package Landin.IR is
    function Slot_Array_Element
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
       return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Unit, Item, Slot)
+                 and then Is_Array (Of_Unit, Item, Slot);
+
+   function Slot_Array_Element_Shape
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
      with Pre => Holds (Of_Unit, Item, Slot)
                  and then Is_Array (Of_Unit, Item, Slot);
 
@@ -1582,6 +1621,17 @@ package Landin.IR is
                              | Load_Element | Store_Element
                              | Copy_Array | Clear_Array | Fill_Array;
 
+   --  D121's run below the element an indexed operation reaches.  Empty
+   --  when the element is itself the scalar the operation names; a step
+   --  when [0520]'s element is an aggregate and [0420] selected into it.
+   --  It is applied after the index, which is a value and not a step.
+   function Element_Path_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Path_Step_Array
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Load_Element | Store_Element;
+
    --  How deep that path goes, for a caller that only has to know
    --  whether the operation is direct.
    function Path_Depth_Of
@@ -1644,6 +1694,26 @@ package Landin.IR is
                  and then Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
                  and then Field <= Aggregate_Field_Count (Of_Unit, Shape);
 
+   --  D121: [0520]'s element may be an aggregate, and then the shape names
+   --  a run of exactly one describing it.  A scalar element stays in
+   --  Element, so every existing array shape is unchanged and the question
+   --  "is the element an aggregate" is answered without a target.
+   function Array_Element_Is_Aggregate
+     (Of_Unit : Unit; Shape : Field_Shape) return Boolean
+     with Pre => Shape.Kind = Array_Field_Shape;
+
+   function Array_Element_Shape
+     (Of_Unit : Unit; Shape : Field_Shape) return Field_Shape
+     with Pre => Shape.Kind = Array_Field_Shape;
+
+   --  Whether two shapes describe the same thing.  Two runs built at
+   --  different moments sit at different places in the shared vector, so
+   --  what makes them one shape is what they hold and not where they
+   --  start -- the same question [0710] asks of two structs, asked of
+   --  their neutral images.
+   function Same_Shape
+     (Of_Unit : Unit; Left, Right : Field_Shape) return Boolean;
+
    --  Which array a slot-reaching element operation names.  Only
    --  meaningful when Reaches_A_Slot is true; a computed module-array
    --  element carries no slot and asks Datum_Of instead.  The reached
@@ -1658,6 +1728,8 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Element_Total
      with Pre => Slot_Element_Shape_Is_Valid (Of_Unit, Item, Value);
 
+   --  What the operation finally reads or writes: the element, and since
+   --  D121 whatever run below it Element_Path_Of names.
    function Slot_Element_Type
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Scalar_Name
@@ -1976,7 +2048,8 @@ package Landin.IR is
       Field  : Natural := 0;
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
-      Variant_Payload_Field : Natural := 0) return Value_Id
+      Variant_Payload_Field : Natural := 0;
+      Below  : Path_Step_Array := No_Path_Steps) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Datum)
                   and then Holds (Into, Item, Index)
@@ -1994,7 +2067,8 @@ package Landin.IR is
       Field : Natural := 0;
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
-      Variant_Payload_Field : Natural := 0)
+      Variant_Payload_Field : Natural := 0;
+      Below : Path_Step_Array := No_Path_Steps)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Datum)
                  and then Holds (Into, Item, Index)
@@ -2016,7 +2090,8 @@ package Landin.IR is
       Field  : Natural := 0;
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
-      Variant_Payload_Field : Natural := 0) return Value_Id
+      Variant_Payload_Field : Natural := 0;
+      Below  : Path_Step_Array := No_Path_Steps) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Slot)
                   and then Holds (Into, Item, Index)
@@ -2035,7 +2110,8 @@ package Landin.IR is
       Field : Natural := 0;
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
-      Variant_Payload_Field : Natural := 0)
+      Variant_Payload_Field : Natural := 0;
+      Below : Path_Step_Array := No_Path_Steps)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Slot)
                  and then Holds (Into, Item, Index)
@@ -2325,6 +2401,8 @@ private
       Source      : Storage                   := (others => <>);
       Source_Field : Natural                  := 0;
       Source_Nested : Run;
+      --  D121's run below an indexed element.
+      Below_Element : Run;
       Destination : Storage                   := (others => <>);
       Target      : Block_Id                  := No_Block;
       Alternative : Block_Id                  := No_Block;
@@ -2349,7 +2427,9 @@ private
       Aggregate   : Boolean                   := False;
       Array_Shape : Boolean                   := False;
       Fields      : Run;
-      Element     : Landin.Types.Scalar_Name  := Landin.Types.Bool;
+      --  D121: the element's own shape.  A scalar element is a
+      --  Scalar_Field_Shape, which is what every array before D121 had.
+      Element     : Field_Shape;
       Length      : Element_Total             := 0;
       Signature   : Signature_Id              := No_Signature;
       Declaration : Declaration_Id            := No_Declaration;
@@ -2379,8 +2459,10 @@ private
       Blocks      : Run;
       Values      : Run;
       Fields      : Run;
-      --  [0520]'s shape, when Result says the item is an array.
-      Element     : Landin.Types.Scalar_Name  := Landin.Types.Bool;
+      --  [0520]'s shape, when Result says the item is an array.  D121
+      --  lets that element be an aggregate, so it is a shape and not a
+      --  scalar name.
+      Element     : Field_Shape;
       Length      : Element_Total             := 0;
       --  D24's source-order static image is one Folded value per position.
       --  D34 instead stores one value and marks it repeated; neither an

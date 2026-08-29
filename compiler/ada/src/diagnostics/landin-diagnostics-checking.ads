@@ -126,6 +126,11 @@ package Landin.Diagnostics.Checking is
       --  folded image run has no carrier for a child's own image.  The
       --  same construction inside a function is admitted.
       Nested_Module_Image,
+      --  D121 makes [0520]'s element an ordinary struct and every leaf of
+      --  one a value and a place.  The whole element is neither yet: an
+      --  index is a value rather than an identity, so reaching one whole
+      --  needs an address the contextual forms do not form.
+      Whole_Element_Aggregate,
       --  [0520] declares one; a value of one waits, as a struct's did,
       --  and so does an element the kernel cannot lay out end to end.
       Array_Value,
@@ -147,6 +152,7 @@ package Landin.Diagnostics.Checking is
             when Variant_Value
                | Nested_Variant_Struct => "[0680]",
             when Nested_Module_Image => "[1940]",
+            when Whole_Element_Aggregate => "[0520]",
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
             when Zeroed_Value       => "[0540]")
@@ -209,7 +215,8 @@ private
                | Text_Type         => "R4.10",
             when Struct_ABI
                | Nested_Variant_Struct
-               | Nested_Module_Image   => "R2.30",
+               | Nested_Module_Image
+               | Whole_Element_Aggregate => "R2.30",
             when Struct_Value
                | Variant_Value
                | Array_Value

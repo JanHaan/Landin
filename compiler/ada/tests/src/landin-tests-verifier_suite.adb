@@ -238,6 +238,7 @@ package body Landin.Tests.Verifier_Suite is
       Field_Beyond_The_Aggregate,
       Nested_Field_Beyond_The_Child,
       Path_Step_Below_A_Scalar_Leaf,
+      Element_Path_Below_A_Scalar_Element,
       Nested_Element_Beyond_The_Child,
       Field_Operation_Names_An_Array,
       Field_Store_Names_An_Array,
@@ -667,6 +668,20 @@ package body Landin.Tests.Verifier_Suite is
                     Nested => [(Field => 1, Case_Index => 0),
                                (Field => 1, Case_Index => 0)]);
             pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         --  D121 lets an indexed operation carry a run inside the
+         --  element, so it also has to refuse one below a scalar element.
+         --  E is `[4]u32`, whose element has no field to select.
+         when Element_Path_Below_A_Scalar_Element =>
+            N := IR.Emit_Number
+                   (Unit, A, Landin.Types.Usize, 1, False, Site);
+            M := IR.Emit_Load_Element
+                   (Unit, A, E, N, Landin.Types.U32, Site,
+                    Below => Below (1));
+            pragma Assert (M /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -1190,6 +1205,8 @@ package body Landin.Tests.Verifier_Suite is
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
          (Nested_Field_Beyond_The_Child, V.Field_Is_Not_A_Scalar),
          (Path_Step_Below_A_Scalar_Leaf, V.Field_Is_Not_A_Scalar),
+         (Element_Path_Below_A_Scalar_Element,
+          V.Element_Field_Is_Not_An_Array),
          (Nested_Element_Beyond_The_Child,
           V.Element_Field_Is_Not_An_Array),
          (Field_Operation_Names_An_Array, V.Field_Is_Not_A_Scalar),

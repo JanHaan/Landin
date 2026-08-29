@@ -1,0 +1,17 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+mut cells: [3]point = zeroed
+origin: point = (x: 1, y: 2)
+
+whole: () -> none =
+    cells[0] = origin
+    cells[1] = point(x: 3, y: 4)
+end whole
+
+taken: () -> (r: i32) =
+    piece: point = cells[2]
+    r = piece.x
+end taken
