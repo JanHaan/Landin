@@ -1,0 +1,5 @@
+class: negative
+summary: whole result assignment retains the anonymous aggregate field names
+constructs: 0060, 0920, 0990, 1810, 1890, 1920
+program: program.ldn
+codes: L0301
