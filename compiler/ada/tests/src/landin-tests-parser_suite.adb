@@ -1177,6 +1177,9 @@ package body Landin.Tests.Parser_Suite is
    procedure Parameterized_Type_Aliases_Are_Parsed
      (Item : in out Landin.Testing.Context);
 
+   procedure Parameterized_Structs_Are_Parsed
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Alias_Errors_Keep_Grammar_Boundaries
      (Item : in out Landin.Testing.Context);
 
@@ -1330,6 +1333,87 @@ package body Landin.Tests.Parser_Suite is
       end;
    end Parameterized_Type_Aliases_Are_Parsed;
 
+   --  The parser uses the same declaration, formal, struct-body and
+   --  application nodes it already uses separately.  This is deliberately
+   --  a parser-only seam: checker support for the nominal instance is later.
+   procedure Parameterized_Structs_Are_Parsed
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("structs.ldn",
+           "pair: type (left: type, fixed count: left) = struct" & ASCII.LF
+           & "    first: left" & ASCII.LF
+           & "    rest: [count]left" & ASCII.LF
+           & "end pair" & ASCII.LF
+           & "sample: pair(u8, 2)" & ASCII.LF);
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         Pair : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Parsed, 1);
+         Left : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Type_Formal (Parsed, Pair, 1);
+         Count : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Type_Formal (Parsed, Pair, 2);
+         Struct_Body : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type (Parsed, Pair);
+         First : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Field (Parsed, Struct_Body, 1);
+         Rest : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Field (Parsed, Struct_Body, 2);
+         Application : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2));
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "a parameterized struct parses without a syntax report");
+         Landin.Testing.Check
+           (Item, Landin.Syntax.Type_Formal_Count (Parsed, Pair) = 2
+             and then Landin.Syntax.Kind (Parsed, Left)
+                        = Landin.Syntax.Type_Formal
+             and then Landin.Syntax.Kind (Parsed, Count)
+                        = Landin.Syntax.Fixed_Formal,
+            "the parameterized struct retains both formal kinds");
+         Landin.Testing.Check
+           (Item, Landin.Syntax.Kind (Parsed, Struct_Body)
+                    = Landin.Syntax.Struct_Body
+             and then Landin.Syntax.Field_Count (Parsed, Struct_Body) = 2
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Declared_Type (Parsed, First))
+                  = Landin.Syntax.Type_Reference
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Declared_Type (Parsed, Rest))
+                  = Landin.Syntax.Array_Type,
+            "the struct body retains field types that use its formals");
+         Landin.Testing.Check
+           (Item, Landin.Syntax.Kind (Parsed, Application)
+                    = Landin.Syntax.Type_Application
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Applied_Type (Parsed, Application))
+                  = Landin.Syntax.Type_Reference
+             and then Landin.Syntax.Type_Argument_Count
+               (Parsed, Application) = 2
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Nth_Type_Argument
+                  (Parsed, Application, 1)) = Landin.Syntax.Type_Name
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Nth_Type_Argument
+                  (Parsed, Application, 2))
+                    = Landin.Syntax.Integer_Literal,
+            "a parameterized struct application retains positional arguments");
+      end;
+   end Parameterized_Structs_Are_Parsed;
+
    procedure Parameterized_Alias_Errors_Keep_Grammar_Boundaries
      (Item : in out Landin.Testing.Context)
    is
@@ -1433,6 +1517,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "parses parameterized type aliases",
          Parameterized_Type_Aliases_Are_Parsed'Access);
+      Landin.Testing.Register
+        (Into, "parser", "parses parameterized struct type declarations",
+         Parameterized_Structs_Are_Parsed'Access);
       Landin.Testing.Register
         (Into, "parser", "parameterized aliases keep grammar boundaries",
          Parameterized_Alias_Errors_Keep_Grammar_Boundaries'Access);

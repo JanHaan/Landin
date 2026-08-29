@@ -1,0 +1,4 @@
+pair: type (item: type) = struct
+    first: item
+end pair
+sample: pair(u8)

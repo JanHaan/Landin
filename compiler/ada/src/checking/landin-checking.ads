@@ -87,7 +87,8 @@ package Landin.Checking is
    --  but cannot construct one from an integer.  The enabled
    --  nonparameterized struct is the canonical empty-actual instance of its
    --  template declaration; R2.40 extends the same table with normalized
-   --  ordered actual tuples without enabling parameterized struct syntax.
+   --  ordered actual tuples without yet checking parameterized struct
+   --  applications.
    package Nominal_Identities is
       type Id is private;
 

@@ -241,7 +241,7 @@ nothing is refused [1860] both hold for it unchanged.
 ```landin-grammar
 type_declaration ::= identifier ":" "type"
                      ("=" (atom_union | type | struct_body)
-                     | type_formals "=" type)
+                     | type_formals "=" (type | struct_body))
 type_formals    ::= "(" type_formal ("," type_formal)* ")"
 type_formal     ::= identifier ":" "type"
                   | "fixed" identifier ":" type
@@ -7386,7 +7386,7 @@ verifier case, the generated IR record, and
 `runtime/computed-aggregate-elements`, `runtime/r230-composition`, and
 `runtime/r230-composition-trap` on Linux x86-64.
 
-### D135 — Parameterized aliases collect their formals before their bodies
+### D135 — Parameterized type declarations collect their formals before their bodies
 
 **The tour said** that type and fixed parameters are compile-time [1290], that
 a type takes them through its own declaration rather than a function [1350],
@@ -7394,18 +7394,22 @@ and that `fixed` marks compile-time knowledge [1490]. It did not settle the
 binder spelling, the scope that owns those names, or whether textual order
 could make a fixed formal's declared type resolve differently.
 
-**Chosen:** a parameterized alias is written `name: type (t: type, fixed n:
-u32) = rhs`, with `fixed` before its name. `fixed` is reserved. Its arguments
-are positional: a type application is `name(type_argument, ...)`, where an
-argument is a type or an integer for a fixed formal. A fixed formal may supply
-an array bound, so `[n]t` is an alias body. This increment admits only aliases
-with formals: a parameterized struct and every generic function remain outside
-the enabled kernel.
+**Chosen:** a parameterized type declaration is written `name: type (t: type,
+fixed n: u32) = rhs`, with `fixed` before its name. `fixed` is reserved. Its
+arguments are positional: a type application is `name(type_argument, ...)`,
+where an argument is a type or an integer for a fixed formal. A fixed formal
+may supply an array bound, so `[n]t` is an alias body. The grammar admits that
+formal list before either an alias type or a struct body. This increment carries
+a parameterized struct through parsing and resolution only; checking,
+instantiation and runtime representation of its applications remain outside the
+enabled kernel. A parameterized atom union and every generic function remain
+outside it.
 
 One type-declaration scope contains all of the formals. The resolver collects
 the complete formal list into that scope before it resolves any fixed formal's
-declared type or the alias right-hand side. Thus a formal may name one written
-later, but the formals do not escape to the module or another declaration.
+declared type or the declaration right-hand side. Thus a formal may name one
+written later, but the formals do not escape to the module or another
+declaration.
 
 A fully applied alias is normalized during checking. A type formal accepts a
 scalar or fixed-array type descriptor. A fixed formal has an integer type and
@@ -7437,11 +7441,14 @@ would leak its name and create collisions unrelated aliases cannot share. A
 function-shaped type maker would instead introduce execution where [1350]
 requires substitution. All were declined.
 
-**Pinned by** the parser, resolution, checking and lowering public-seam cases;
+**Pinned by** the parameterized-alias and parameterized-struct parser and
+resolution public-seam cases; the checking and lowering public-seam cases;
 `positive/parameterized-type-alias-scalar`,
 `positive/parameterized-type-alias-fixed-array`; the
-`negative/parameterized-alias-*` and `negative/parameterized-atom-union`
-fixtures; the generated lexical, construct and IR records; and
+`negative/parameterized-alias-*`,
+`negative/parameterized-atom-union` and
+`negative/parameterized-struct-checking-deferred` fixtures; the generated
+lexical, construct and IR records; and
 `runtime/parameterized-type-alias-fixed-array` on Linux x86-64.
 
 ### D136 — Fixed-array bounds use a closed target-independent fold
