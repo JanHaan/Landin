@@ -1,0 +1,20 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+make: (left: i32, right: i32) -> (result: pair) =
+    result = (left: left, right: right)
+end make
+
+public main: () -> (code: i32) =
+    mut chosen: pair
+    if true then
+        chosen = make(19, 23)
+    else
+        chosen = make(100, 100)
+    end if
+    code = 0
+    return when false
+    code = chosen.left + chosen.right
+end main
