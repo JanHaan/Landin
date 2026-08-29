@@ -1666,7 +1666,8 @@ package body Landin.Stages.Checking is
                           and then Landin.Checking.Field_Kind_Of
                             (Types.all, Expected, Field)
                               in Landin.Checking.Scalar_Field
-                                 | Landin.Checking.Fixed_Array_Field;
+                                 | Landin.Checking.Fixed_Array_Field
+                                 | Landin.Checking.Variant_Field;
                      end loop;
 
                      if Leaf_Only

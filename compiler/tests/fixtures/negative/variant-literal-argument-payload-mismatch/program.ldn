@@ -1,0 +1,13 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        row: (values: [2]u8)
+    end kind
+end choice
+
+consume: (value: choice) -> none =
+end consume
+
+bad: () -> none =
+    consume((kind: row(values: [1])))
+end bad

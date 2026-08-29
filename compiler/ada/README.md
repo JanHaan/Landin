@@ -135,8 +135,9 @@ storage before the body runs; a direct field or depth-one child path preserves
 its neutral field identities on that address, contextual `zeroed` clears a
 fresh shaped caller temporary, array literals or repetitions fill one in
 source order with compact suffix fills, and flat struct construction fills one
-by nominal scalar or fixed-array labels. Variant-bearing storage also retains
-its compact case and payload shape across the copy. Further aggregate arguments
+by nominal scalar, fixed-array or variant labels. Variant-bearing storage and
+constructed temporaries retain compact case and payload shapes across the copy.
+Further aggregate arguments
 and aggregate returns remain absent; R4.40 later completes C ABI classification.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and

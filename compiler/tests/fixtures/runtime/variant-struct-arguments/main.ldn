@@ -28,4 +28,8 @@ public main: () -> (code: i32) =
         tail: 0
     )
     code = inspect(state) + inspect(zeroed)
+           + inspect((prefix: 0,
+                      kind: pair(first: 19, second: 23),
+                      tail: 0))
+           + inspect(choice(kind: row(values: [2 of 1]), of zeroed))
 end main

@@ -1,0 +1,6 @@
+class: negative
+summary: a variant literal argument checks its selected payload against the parameter shape
+constructs: 0520, 0670, 0680, 0690, 0700, 1920
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64
