@@ -1,0 +1,22 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+make: (left: i32, right: i32) -> (result: pair) =
+    result = (left: left, right: right)
+end make
+
+choose: (first: bool) -> (result: pair) =
+    if first then
+        result = make(20, 22)
+        return
+    end if
+    result = make(21, 21)
+end choose
+
+public main: () -> (code: i32) =
+    first := choose(true)
+    second := choose(false)
+    code = first.left + first.right + second.left + second.right
+end main

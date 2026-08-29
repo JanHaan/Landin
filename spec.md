@@ -6215,3 +6215,24 @@ literal assignment by an equivalent call change whether later reads are legal.
 
 **Pinned by** `negative/aggregate-call-result-not-assigned-on-every-path` and
 `runtime/aggregate-results-across-branches` on Linux x86-64.
+
+### D116 — Every aggregate-result exit performs its own final copy
+
+**The tour said** that every reachable `return` requires the named return to be
+assigned [1890] [1910]. Aggregate caller-owned storage makes the consequence
+observable at more than the function's lexical end.
+
+**Chosen:** each accepted early or final exit from an aggregate-returning
+function copies the complete independent named-result slot into that call's
+hidden caller destination. An aggregate call may complete the named result
+immediately before either exit. Flow checking refuses an exit reached without
+the complete result; another arm having completed and exited does not lend its
+fact to that path.
+
+**Why every exit copies:** redirecting only lexical fallthrough would make an
+early `return` expose an unfilled caller image, while returning the callee slot's
+address would expose dead frame storage. Both violate the same by-value result
+boundary.
+
+**Pinned by** `negative/aggregate-call-result-missing-at-early-exit` and
+`runtime/aggregate-results-across-early-exits` on Linux x86-64.
