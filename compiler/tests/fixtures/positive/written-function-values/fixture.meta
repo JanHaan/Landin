@@ -1,0 +1,5 @@
+class: positive
+summary: a written function type names explicitly typed local storage
+constructs: 0870, 1000, 1790, 1795, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64

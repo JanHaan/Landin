@@ -1,0 +1,8 @@
+unary: type = (value: i32) -> (result: i32)
+
+identity: (value: i32) -> (result: i32) = value end identity
+
+use: () -> (result: i32) =
+    current: unary = identity
+    result = current(4)
+end use

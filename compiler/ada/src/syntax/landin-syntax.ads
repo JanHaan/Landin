@@ -185,6 +185,11 @@ package Landin.Syntax is
       --  [0520]'s array, whose length is part of it.  Two slots: the
       --  bound, which is [1770]'s integer literal, and the element type.
       Array_Type,
+      --  D117's written infallible function type.  Its first slot is the
+      --  named return, or No_Node for `none`; its trailing run is the
+      --  parameter descriptions in source order.  It has no body and its
+      --  parameter names declare nothing.
+      Function_Type,
       --  [0670]'s block form, which a type declaration may give instead
       --  of a name, and one of its fields.  A field is a binding without
       --  a value [0750] and keeps the position it was written in,
@@ -215,7 +220,7 @@ package Landin.Syntax is
    subtype Expression_Kind is Node_Kind range Call .. Logical_Or;
 
    subtype Type_Reference_Kind is Node_Kind
-     range Error_Type .. Array_Type;
+     range Error_Type .. Function_Type;
 
    --  What a type declaration may name: a type, or a body of its own.
    subtype Type_Body_Kind is Node_Kind range Error_Type .. Struct_Body;
@@ -458,20 +463,24 @@ package Landin.Syntax is
                            in Function_Declaration | If_Arm | Match_Arm,
           Post => Contains (Of_Tree, Body_Of'Result);
 
-   --  `returns` [1800].  No_Node is `-> none`, and a function with no
-   --  return has no expression body for one to fill.
+   --  `returns` [1800].  No_Node is `-> none`, and a function declaration
+   --  with no return has no expression body for one to fill.  A written
+   --  Function_Type carries the same signature positions without a body.
    function Return_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
-                 and then Kind (Of_Tree, Id) = Function_Declaration;
+                 and then Kind (Of_Tree, Id)
+                            in Function_Declaration | Function_Type;
 
    function Parameter_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
-                 and then Kind (Of_Tree, Id) = Function_Declaration;
+                 and then Kind (Of_Tree, Id)
+                            in Function_Declaration | Function_Type;
 
    function Nth_Parameter
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
-                  and then Kind (Of_Tree, Id) = Function_Declaration
+                  and then Kind (Of_Tree, Id)
+                             in Function_Declaration | Function_Type
                   and then Index <= Parameter_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Parameter'Result);
 

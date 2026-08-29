@@ -40,6 +40,8 @@ package body Landin.Syntax is
                | Type_Reference           => 0,
             --  The bound and the element type.
             when Array_Type               => 2,
+            --  The named return, or No_Node; parameters trail it.
+            when Function_Type            => 1,
             --  A struct body's fields are its trailing run; a field's
             --  one slot is its type.
             when Struct_Body              => 0,

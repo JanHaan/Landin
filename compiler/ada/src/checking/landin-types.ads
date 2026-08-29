@@ -1,10 +1,13 @@
 --  The language's types.
 --
---  `spec.md` [1790] is the authority: the kernel's types are the eleven
---  scalar names and nothing else.  This package is that rule made
---  addressable, and it is meant to be the only place in the compiler where
---  the eleven are written down, which is what lets `check.py` keep
---  comparing the column below with the tour's own `type` rule.
+--  `spec.md` [1790] is the authority: the enabled kernel has eleven scalar
+--  names plus aggregate, fixed-array and function-value categories.  This
+--  package is that rule made addressable, and it is meant to be the only
+--  place in the compiler where the eleven are written down, which is what
+--  lets `check.py` keep comparing the column below with the tour's own
+--  `type` rule.  The identity or structural facts that distinguish two
+--  values within the latter categories live beside the per-node answer in
+--  Landin.Checking.
 --
 --  It is the mirror of Landin.Targets, and it is the sentence that
 --  package's header asks for.  Landin.Targets holds machine facts and says
@@ -79,9 +82,9 @@ package Landin.Types is
       --  structural, so its identity is a length and an element type and
       --  those are two more facts than a Type_Kind holds.
       Fixed_Array,
-      --  [0870]/[1000]: a runtime code address.  D113 first carries the
-      --  signature declaration separately in Landin.Checking, as aggregate
-      --  nominal identity is carried separately above.
+      --  [0870]/[1000]: a runtime code address.  D117 carries its complete
+      --  target-neutral signature descriptor separately in Landin.Checking,
+      --  as aggregate nominal identity is carried separately above.
       Function_Value);
 
    subtype Scalar_Name is Type_Kind range U8 .. Bool;
