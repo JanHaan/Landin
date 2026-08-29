@@ -5900,3 +5900,32 @@ layout and make equivalent named storage use a different convention.
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/variant-literal-argument-payload-mismatch`; the generated token and
 IR records; and `runtime/variant-struct-arguments` on Linux x86-64.
+
+### D104 — A depth-one nested struct may cross an argument boundary
+
+**The tour said** that an ordinary child retains its nominal boundary [0710]
+and D86--D93 represent one such child by parent and child field identities.
+D94 carried the child itself but still refused a parameter whose complete type
+contained that field.
+
+**Chosen:** an ordinary struct parameter may contain one depth-one ordinary
+child whose fields are scalar or fixed arrays. Direct matching storage or
+contextual `zeroed` may supply the complete outer argument. Definite assignment
+requires every outer scalar/array field and the complete ordinary child; sparse
+assignment of one nested leaf is not enough. Direct outer struct-literal
+construction with an ordinary-child label remains separate.
+
+The parameter slot retains an `Aggregate_Field_Shape` whose compact payload run
+is the child's declaration-order scalar and array leaves. D94's caller carrier
+still occupies one ABI position and the callee copies the complete recursively
+placed padded extent before running. Child field and element reads then reuse
+D88/D89's neutral parent/child identities.
+
+**Why preserve one slot:** splitting the child into ABI operands would erase
+its nominal boundary and make operand count depend on composition. The existing
+recursive target placement already derives its extent from neutral shape, so
+opaque one-position transport remains sufficient.
+
+**Pinned by** the checker, flow, lowering, verifier and backend public seams;
+`negative/nested-struct-argument-unassigned`; the generated token and IR
+records; and `runtime/nested-storage-arguments` on Linux x86-64.

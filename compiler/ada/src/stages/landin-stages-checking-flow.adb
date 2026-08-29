@@ -508,7 +508,8 @@ package body Landin.Stages.Checking.Flow is
                          not State.Fields (Positive (Id), Each),
                        when Landin.Checking.Fixed_Array_Field =>
                          not Array_Is_Assigned (Id, Each, State),
-                       when Landin.Checking.Aggregate_Field => False,
+                       when Landin.Checking.Aggregate_Field =>
+                         not State.Fields (Positive (Id), Each),
                        when Landin.Checking.Variant_Field =>
                          not State.Fields (Positive (Id), Each))
                then
