@@ -1,0 +1,7 @@
+node: type = struct
+    direct: (value: node) -> (result: node)
+    through_one: () -> (result: alias)
+    through_two: (value: again) -> none
+end node
+alias: type = node
+again: type = alias

@@ -1,0 +1,7 @@
+alias: type = node
+node: type = struct
+    kind: variant
+        leaf |
+        next: (value: alias)
+    end kind
+end node

@@ -1,0 +1,4 @@
+alias: type = node
+node: type = struct
+    next: alias
+end node

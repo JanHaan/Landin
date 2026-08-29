@@ -1,0 +1,4 @@
+alias: type = node
+node: type = struct
+    children: [0]alias
+end node

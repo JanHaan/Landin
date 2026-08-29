@@ -7575,9 +7575,16 @@ An alias expansion that reaches no type remains L0307. A nominal field,
 nominal array element or variant payload that would require a finite instance
 to contain itself by value is instead L0313, whether the cycle crosses aliases
 or templates. Function-signature references do not form such a value-layout
-edge: a function field is the already enabled one-`usize` carrier. A zero-length
-nominal array still validates its element identity and is not an escape from
-the recursion rule.
+edge: a function field is the already enabled one-`usize` carrier. This applies
+to parameter and result positions, recursively nested function signatures, and
+ordinary nonparameterized structs as well as parameterized instances. An
+ordinary signature lookup may therefore take the canonical empty-actual nominal
+identity before that struct's layout is ready and follows ordinary alias chains
+without settling them by value. Mutually recursive ordinary structs connected
+only by such signature references each have a finite pointer-carrier layout,
+independent of declaration order. A zero-length nominal array at a field or
+payload still validates its element identity and is not an escape from the
+recursion rule.
 
 **Why the complete tuple:** dropping an unused actual makes adding the first
 field that uses it silently change existing type identity. Structuralizing the
@@ -7589,8 +7596,12 @@ or leak compile-time binders into runtime representation. All were declined.
 **Pinned by** the checking, lowering and verifier public-seam cases;
 `positive/parameterized-struct-basic`,
 `positive/parameterized-struct-instances`,
-`positive/parameterized-struct-identity-only` and
-`positive/parameterized-struct-lazy-value-layout`; the
+`positive/parameterized-struct-identity-only`,
+`positive/parameterized-struct-lazy-value-layout`;
+`positive/ordinary-struct-function-signature-recursion`,
+`positive/ordinary-struct-function-signature-alias-first`,
+`positive/ordinary-struct-function-signature-alias-last`, and the two
+`positive/ordinary-struct-mutual-function-signatures-*` order fixtures; the
 `negative/parameterized-struct-*` (including the unused indirect, mutual and
 multi-wrapper recursion cases) and `negative/nominal-struct-recursive-layout`
 fixtures; the generated IR and
