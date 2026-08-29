@@ -5,6 +5,8 @@
 --  it can admit one: this asks the table at that seam rather than pretending
 --  equal layouts prove [0710]'s nominal rule.
 
+with Ada.Assertions;
+
 with Landin.Checking;
 with Landin.Diagnostics;
 with Landin.IR;
@@ -29,6 +31,10 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Syntax.Node_Kind;
+   use type Landin.Checking.Actual_Kind;
+   use type Landin.Checking.Actual_Type_Form;
+   use type Landin.Checking.Array_Element_Form;
+   use type Landin.Checking.Atom_Set_Id;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Field_Kind;
    use type Landin.Checking.Instance_State;
@@ -404,6 +410,36 @@ package body Landin.Tests.Checking_Suite is
            Landin.Checking.Nominal_Type_Id;
          Before : constant Natural :=
            Landin.Checking.Nominal_Type_Count (Types.all);
+
+         procedure Check_Foreign_Key
+           (Key : Landin.Checking.Actual_Key; Name : String);
+
+         procedure Check_Foreign_Key
+           (Key : Landin.Checking.Actual_Key; Name : String)
+         is
+            Actuals : Landin.Checking.Actual_Tuple :=
+              Landin.Checking.Empty_Actuals;
+            Made : Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.No_Nominal_Type;
+         begin
+            Landin.Checking.Append_Actual (Actuals, Key);
+            Landin.Testing.Check
+              (Item, not Landin.Checking.Holds (Types.all, Key)
+                       and then not Landin.Checking.Holds
+                         (Types.all, Actuals),
+               Name & " key retains its foreign table provenance");
+            begin
+               Made := Landin.Checking.Intern_Nominal_Instance
+                 (Types.all, Left_Template, Actuals);
+               Landin.Testing.Check
+                 (Item, Made = Landin.Checking.No_Nominal_Type,
+                  Name & " foreign key cannot be interned");
+            exception
+               when Ada.Assertions.Assertion_Error | Landin.Compiler_Defect =>
+                  Landin.Testing.Check
+                    (Item, True, Name & " foreign key is rejected");
+            end;
+         end Check_Foreign_Key;
       begin
          Landin.IR.Prepare (Unit.all, Meanings.all);
          Landin.Testing.Check
@@ -417,6 +453,8 @@ package body Landin.Tests.Checking_Suite is
             Landin.Checking.Intern_Nominal_Instance
               (Types.all, Left_Template, Landin.Checking.Empty_Actuals)
               = Left_Empty
+              and then Landin.Checking.Instance_Actual_Count
+                (Types.all, Left_Empty) = 0
               and then Landin.Checking.Instance_State_Of
                 (Types.all, Left_Empty) = Landin.Checking.Instance_Ready,
             "an ordinary struct is the interner's empty-tuple instance");
@@ -565,6 +603,90 @@ package body Landin.Tests.Checking_Suite is
             Ordered /= Reversed and then Scalar_Kind /= Fixed_Kind,
             "actual order and actual kind distinguish unused phantom actuals");
 
+         declare
+            Ordered_First : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Ordered, 1);
+            Ordered_Second : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Ordered, 2);
+            Reversed_First : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Reversed, 1);
+            Scalar_Key : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Scalar, 1);
+            Fixed_Key : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Fixed_Hex, 1);
+            Atom_Key : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Atom_Set, 1);
+            Scalar_Array_Key : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Scalar_Array, 1);
+            Aggregate_Array_Key : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Aggregate_Array, 1);
+            Nested_Key : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Nested, 1);
+            Function_Actual_Key : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Nth_Instance_Actual
+                (Types.all, Function_Key, 1);
+         begin
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Instance_Actual_Count (Types.all, Ordered) = 2
+                 and then Landin.Checking.Instance_Actual_Count
+                   (Types.all, Reversed) = 2
+                 and then Landin.Checking.Actual_Kind_Of (Ordered_First)
+                   = Landin.Checking.Type_Actual_Kind
+                 and then Landin.Checking.Type_Form_Of (Ordered_First)
+                   = Landin.Checking.Scalar_Actual_Type
+                 and then Landin.Checking.Scalar_Of
+                   (Types.all, Ordered_First) = Landin.Types.U8
+                 and then Landin.Checking.Actual_Kind_Of (Ordered_Second)
+                   = Landin.Checking.Fixed_Actual_Kind
+                 and then Landin.Checking.Fixed_Magnitude_Of
+                   (Ordered_Second) = 1
+                 and then Landin.Checking.Actual_Kind_Of (Reversed_First)
+                   = Landin.Checking.Fixed_Actual_Kind,
+               "same-template unequal tuples round-trip in exact order");
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Scalar_Of (Types.all, Scalar_Key)
+                   = Landin.Types.U8
+                 and then Landin.Checking.Fixed_Magnitude_Of (Fixed_Key)
+                   = Decimal_Value
+                 and then Landin.Checking.Atom_Set_Of
+                   (Types.all, Atom_Key) = Set_Left_Right,
+               "scalar, fixed and structural atom actuals round-trip");
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Array_Length_Of
+                   (Types.all, Scalar_Array_Key) = 3
+                 and then Landin.Checking.Array_Element_Form_Of
+                   (Types.all, Scalar_Array_Key)
+                     = Landin.Checking.Scalar_Array_Element
+                 and then Landin.Checking.Array_Scalar_Element_Of
+                   (Types.all, Scalar_Array_Key) = Landin.Types.U8
+                 and then Landin.Checking.Array_Length_Of
+                   (Types.all, Aggregate_Array_Key) = 3
+                 and then Landin.Checking.Array_Element_Form_Of
+                   (Types.all, Aggregate_Array_Key)
+                     = Landin.Checking.Nominal_Array_Element
+                 and then Landin.Checking.Array_Nominal_Element_Of
+                   (Types.all, Aggregate_Array_Key) = Left_Empty,
+               "fixed-array descriptors round-trip both element families");
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Nominal_Of (Types.all, Nested_Key) = Fixed_Hex
+                 and then Landin.Checking.Function_Signature_Of
+                   (Types.all, Function_Actual_Key) = Wrapper_Left,
+               "nested nominal and function descriptors round-trip");
+         end;
+
          Landin.Testing.Check
            (Item,
             Landin.Checking.Instance_State_Of (Types.all, Ordered)
@@ -586,6 +708,93 @@ package body Landin.Tests.Checking_Suite is
                  Two (Landin.Checking.Scalar_Type_Actual (Landin.Types.U8),
                       Landin.Checking.Fixed_Actual (1))) = Ordered,
             "invalid state is retained outside the immutable key");
+
+         declare
+            Foreign_Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+            Foreign_Order : Landin.Stages.Pipeline;
+            Foreign_Src : Landin.Source.Source_Id;
+            Foreign_Ran : Natural;
+         begin
+            Foreign_Src := Landin.Stages.Add_Source
+              (Foreign_Work, "foreign-instances.ldn", Source_Text);
+            Landin.Stages.Append (Foreign_Order, Frontend'Access);
+            Landin.Stages.Append (Foreign_Order, Names'Access);
+            Landin.Stages.Append (Foreign_Order, Checker'Access);
+            Foreign_Ran := Landin.Stages.Run (Foreign_Order, Foreign_Work);
+            Landin.Testing.Check_Equal
+              (Item, Foreign_Ran, 3, "the foreign checker ran");
+            Landin.Testing.Check
+              (Item, not Landin.Stages.Failed (Foreign_Work),
+               "the foreign collision templates are accepted");
+
+            declare
+               Foreign_Tree : constant not null access constant
+                 Landin.Syntax.Tree := Landin.Syntax.Forest.Tree_Of
+                   (Landin.Stages.Trees (Foreign_Work).all, Foreign_Src);
+               Foreign_Types : constant not null access
+                 Landin.Checking.Table := Landin.Stages.Types (Foreign_Work);
+               Foreign_Left : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nth_Nominal_Type (Foreign_Types.all, 1);
+               Foreign_Right : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nth_Nominal_Type (Foreign_Types.all, 2);
+               Foreign_Left_Template : constant
+                 Landin.Provenance.Declaration_Id :=
+                   Landin.Checking.Template_Of
+                     (Foreign_Types.all, Foreign_Left);
+               Foreign_Right_Template : constant
+                 Landin.Provenance.Declaration_Id :=
+                   Landin.Checking.Template_Of
+                     (Foreign_Types.all, Foreign_Right);
+               Foreign_Set : constant Landin.Checking.Atom_Set_Id :=
+                 Landin.Checking.Add_Atom_Set
+                   (Foreign_Types.all,
+                    [Foreign_Left_Template, Foreign_Right_Template]);
+               Foreign_Site : constant Landin.Provenance.Origin :=
+                 Landin.Syntax.Origin
+                   (Foreign_Tree.all,
+                    Landin.Syntax.Nth_Declaration (Foreign_Tree.all, 1));
+               Foreign_Signature : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Add_Signature
+                   (Into       => Foreign_Types.all,
+                    Parameters => Landin.Checking.No_Signature_Parts,
+                    Result     =>
+                      (Kind => Landin.Types.U8, Site => Foreign_Site,
+                       others => <>),
+                    Site       => Foreign_Site);
+               Foreign_Atom_Key : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Atom_Set_Type_Actual
+                   (Foreign_Types.all, Foreign_Set);
+               Foreign_Nominal_Key : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Nominal_Type_Actual
+                   (Foreign_Types.all, Foreign_Left);
+               Foreign_Array_Key : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Fixed_Array_Type_Actual
+                   (Foreign_Types.all, 3, Foreign_Left);
+               Foreign_Function_Key : constant Landin.Checking.Actual_Key :=
+                 Landin.Checking.Function_Type_Actual
+                   (Foreign_Types.all, Foreign_Signature);
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  Foreign_Left = Left_Empty
+                    and then Foreign_Set = Set_Left_Right
+                    and then Foreign_Signature = Signature_Left,
+                  "foreign descriptors deliberately collide numerically");
+               Check_Foreign_Key (Foreign_Atom_Key, "atom-set");
+               Check_Foreign_Key (Foreign_Nominal_Key, "nominal");
+               Check_Foreign_Key (Foreign_Array_Key, "nominal-array");
+               Check_Foreign_Key (Foreign_Function_Key, "signature");
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Holds
+                    (Types.all, Landin.Checking.Scalar_Type_Actual
+                       (Landin.Types.U8))
+                    and then Landin.Checking.Holds
+                      (Types.all, Landin.Checking.Fixed_Actual (1)),
+                  "pure scalar and fixed keys remain table-independent");
+            end;
+         end;
 
          Landin.Testing.Check
            (Item,

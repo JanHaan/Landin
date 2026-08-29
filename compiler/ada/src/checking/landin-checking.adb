@@ -28,6 +28,7 @@ package body Landin.Checking is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Targets.Byte_Count;
    use type Landin.Types.Magnitude;
+   use type System.Address;
 
    ------------------------------------------------------------------
    --  Nominal instance keys
@@ -44,76 +45,156 @@ package body Landin.Checking is
 
    function Scalar_Type_Actual
      (Scalar : Landin.Types.Scalar_Name) return Actual_Key
-     is (Form => Type_Argument, Type_Form => Scalar_Identity,
+     is (Kind => Type_Actual_Kind, Type_Form => Scalar_Actual_Type,
          Scalar => Scalar, others => <>);
 
    function Atom_Set_Type_Actual
-     (Of_Table : Table; Atoms : Atom_Set_Id) return Actual_Key is
-      pragma Unreferenced (Of_Table);
-   begin
-      return
-        (Form => Type_Argument, Type_Form => Atom_Set_Identity,
-         Atoms => Atoms, others => <>);
-   end Atom_Set_Type_Actual;
+     (Of_Table : Table; Atoms : Atom_Set_Id) return Actual_Key
+     is (Kind => Type_Actual_Kind, Type_Form => Atom_Set_Actual_Type,
+         Owner => Of_Table'Address, Atoms => Atoms, others => <>);
 
    function Fixed_Array_Type_Actual
      (Length  : Element_Count;
       Element : Landin.Types.Scalar_Name) return Actual_Key
-     is (Form => Type_Argument, Type_Form => Fixed_Array_Identity,
+     is (Kind => Type_Actual_Kind, Type_Form => Fixed_Array_Actual_Type,
          Length => Length, Scalar => Element, others => <>);
 
    function Fixed_Array_Type_Actual
      (Of_Table : Table;
       Length   : Element_Count;
-      Element  : Nominal_Type_Id) return Actual_Key is
-      pragma Unreferenced (Of_Table);
-   begin
-      return
-        (Form => Type_Argument, Type_Form => Fixed_Array_Identity,
-         Length => Length, Nominal => Element, others => <>);
-   end Fixed_Array_Type_Actual;
+      Element  : Nominal_Type_Id) return Actual_Key
+     is (Kind => Type_Actual_Kind, Type_Form => Fixed_Array_Actual_Type,
+         Owner => Of_Table'Address, Length => Length, Nominal => Element,
+         others => <>);
 
    function Nominal_Type_Actual
-     (Of_Table : Table; Nominal : Nominal_Type_Id) return Actual_Key is
-      pragma Unreferenced (Of_Table);
-   begin
-      return
-        (Form => Type_Argument, Type_Form => Nominal_Identity,
-         Nominal => Nominal, others => <>);
-   end Nominal_Type_Actual;
+     (Of_Table : Table; Nominal : Nominal_Type_Id) return Actual_Key
+     is (Kind => Type_Actual_Kind, Type_Form => Nominal_Actual_Type,
+         Owner => Of_Table'Address, Nominal => Nominal, others => <>);
 
    function Function_Type_Actual
-     (Of_Table : Table; Signature : Signature_Id) return Actual_Key is
-      pragma Unreferenced (Of_Table);
-   begin
-      return
-        (Form => Type_Argument, Type_Form => Function_Identity,
-         Signature => Signature, others => <>);
-   end Function_Type_Actual;
+     (Of_Table : Table; Signature : Signature_Id) return Actual_Key
+     is (Kind => Type_Actual_Kind, Type_Form => Function_Actual_Type,
+         Owner => Of_Table'Address, Signature => Signature, others => <>);
 
    function Fixed_Actual (Value : Landin.Types.Magnitude) return Actual_Key
-     is (Form => Fixed_Argument, Value => Value, others => <>);
+     is (Kind => Fixed_Actual_Kind, Value => Value, others => <>);
+
+   function Actual_Kind_Of (Key : Actual_Key) return Actual_Kind
+     is (Key.Kind);
+
+   function Type_Form_Of (Key : Actual_Key) return Actual_Type_Form
+     is (Key.Type_Form);
+
+   function Scalar_Of
+     (Of_Table : Table; Key : Actual_Key) return Landin.Types.Scalar_Name is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "a scalar actual key belongs to another checking table";
+      end if;
+      return Key.Scalar;
+   end Scalar_Of;
+
+   function Atom_Set_Of
+     (Of_Table : Table; Key : Actual_Key) return Atom_Set_Id is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "an atom-set actual key belongs to another checking table";
+      end if;
+      return Key.Atoms;
+   end Atom_Set_Of;
+
+   function Array_Length_Of
+     (Of_Table : Table; Key : Actual_Key) return Element_Count is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "an array actual key belongs to another checking table";
+      end if;
+      return Key.Length;
+   end Array_Length_Of;
+
+   function Array_Element_Form_Of
+     (Of_Table : Table; Key : Actual_Key) return Array_Element_Form is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "an array actual key belongs to another checking table";
+      end if;
+      return (if Key.Nominal = No_Nominal_Type
+              then Scalar_Array_Element else Nominal_Array_Element);
+   end Array_Element_Form_Of;
+
+   function Array_Scalar_Element_Of
+     (Of_Table : Table; Key : Actual_Key) return Landin.Types.Scalar_Name is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "an array actual key belongs to another checking table";
+      end if;
+      return Key.Scalar;
+   end Array_Scalar_Element_Of;
+
+   function Array_Nominal_Element_Of
+     (Of_Table : Table; Key : Actual_Key) return Nominal_Type_Id is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "an array actual key belongs to another checking table";
+      end if;
+      return Key.Nominal;
+   end Array_Nominal_Element_Of;
+
+   function Nominal_Of
+     (Of_Table : Table; Key : Actual_Key) return Nominal_Type_Id is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "a nominal actual key belongs to another checking table";
+      end if;
+      return Key.Nominal;
+   end Nominal_Of;
+
+   function Function_Signature_Of
+     (Of_Table : Table; Key : Actual_Key) return Signature_Id is
+   begin
+      if not Holds (Of_Table, Key) then
+         raise Landin.Compiler_Defect with
+           "a function actual key belongs to another checking table";
+      end if;
+      return Key.Signature;
+   end Function_Signature_Of;
+
+   function Fixed_Magnitude_Of
+     (Key : Actual_Key) return Landin.Types.Magnitude
+     is (Key.Value);
 
    function Holds (Of_Table : Table; Key : Actual_Key) return Boolean is
    begin
       if not Is_Prepared (Of_Table) then
          return False;
-      elsif Key.Form = Fixed_Argument then
+      elsif Key.Kind = Fixed_Actual_Kind then
          return True;
       end if;
 
       case Key.Type_Form is
-         when Scalar_Identity =>
+         when Scalar_Actual_Type =>
             return True;
-         when Atom_Set_Identity =>
-            return Holds (Of_Table, Key.Atoms);
-         when Fixed_Array_Identity =>
+         when Atom_Set_Actual_Type =>
+            return Key.Owner = Of_Table'Address
+              and then Holds (Of_Table, Key.Atoms);
+         when Fixed_Array_Actual_Type =>
             return Key.Nominal = No_Nominal_Type
-              or else Holds (Of_Table, Key.Nominal);
-         when Nominal_Identity =>
-            return Holds (Of_Table, Key.Nominal);
-         when Function_Identity =>
-            return Holds (Of_Table, Key.Signature)
+              or else (Key.Owner = Of_Table'Address
+                       and then Holds (Of_Table, Key.Nominal));
+         when Nominal_Actual_Type =>
+            return Key.Owner = Of_Table'Address
+              and then Holds (Of_Table, Key.Nominal);
+         when Function_Actual_Type =>
+            return Key.Owner = Of_Table'Address
+              and then Holds (Of_Table, Key.Signature)
               and then Signature_Error_Form (Of_Table, Key.Signature)
                            /= Inferred;
       end case;
@@ -135,20 +216,20 @@ package body Landin.Checking is
    function Actuals_Agree
      (Of_Table : Table; Left, Right : Actual_Key) return Boolean is
    begin
-      if Left.Form /= Right.Form then
+      if Left.Kind /= Right.Kind then
          return False;
-      elsif Left.Form = Fixed_Argument then
+      elsif Left.Kind = Fixed_Actual_Kind then
          return Left.Value = Right.Value;
       elsif Left.Type_Form /= Right.Type_Form then
          return False;
       end if;
 
       case Left.Type_Form is
-         when Scalar_Identity =>
+         when Scalar_Actual_Type =>
             return Left.Scalar = Right.Scalar;
-         when Atom_Set_Identity =>
+         when Atom_Set_Actual_Type =>
             return Atom_Sets_Agree (Of_Table, Left.Atoms, Right.Atoms);
-         when Fixed_Array_Identity =>
+         when Fixed_Array_Actual_Type =>
             if Left.Length /= Right.Length
               or else (Left.Nominal = No_Nominal_Type)
                         /= (Right.Nominal = No_Nominal_Type)
@@ -159,9 +240,9 @@ package body Landin.Checking is
             else
                return Left.Nominal = Right.Nominal;
             end if;
-         when Nominal_Identity =>
+         when Nominal_Actual_Type =>
             return Left.Nominal = Right.Nominal;
-         when Function_Identity =>
+         when Function_Actual_Type =>
             return Signatures_Agree
               (Of_Table, Left.Signature, Right.Signature);
       end case;
@@ -224,8 +305,34 @@ package body Landin.Checking is
    function Intern_Nominal_Instance
      (Into     : in out Table;
       Template : Declaration_Id;
-      Actuals  : Actual_Tuple) return Nominal_Type_Id
-     is (Intern (Into, Template, Actuals));
+      Actuals  : Actual_Tuple) return Nominal_Type_Id is
+   begin
+      --  Table is tagged limited and therefore passed by reference and cannot
+      --  be copied.  Descriptor keys retain that stable object's Address as
+      --  a compilation-local provenance token; this release-build guard is
+      --  the backstop behind the public contract.
+      if not Holds (Into, Actuals) then
+         raise Landin.Compiler_Defect with
+           "nominal actuals belong to another checking table";
+      end if;
+      return Intern (Into, Template, Actuals);
+   end Intern_Nominal_Instance;
+
+   function Instance_Actual_Count
+     (Of_Table : Table; Id : Nominal_Type_Id) return Natural
+     is (Of_Table.Nominal_Actual_Runs
+           (Nominal_Identities.Position (Of_Table, Id)).Count);
+
+   function Nth_Instance_Actual
+     (Of_Table : Table;
+      Id       : Nominal_Type_Id;
+      Position : Positive) return Actual_Key
+   is
+      Members : constant Run := Of_Table.Nominal_Actual_Runs
+        (Nominal_Identities.Position (Of_Table, Id));
+   begin
+      return Of_Table.Nominal_Actuals (Members.First + Position);
+   end Nth_Instance_Actual;
 
    ------------------------------------------------------------------
    --  Building
