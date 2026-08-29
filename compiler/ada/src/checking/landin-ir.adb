@@ -551,6 +551,26 @@ package body Landin.IR is
       return Slot_Id (Held.Slots.Count);
    end Add_Aggregate_Slot;
 
+   function Add_Address_Slot
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Shape  : Field_Shape;
+      Site   : Landin.Provenance.Origin) return Slot_Id
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Slots, Natural (Into.Slots.Length));
+      Into.Slots.Append
+        (Slot_Record'(Of_Type   => Landin.Types.Usize,
+                      Element   => Shape,
+                      Addressed => True,
+                      Site      => Site,
+                      others    => <>));
+      Held.Slots.Count := Held.Slots.Count + 1;
+      Into.Items (Positive (Item)) := Held;
+      return Slot_Id (Held.Slots.Count);
+   end Add_Address_Slot;
+
    function Part_Count (Of_Unit : Unit; Item : Item_Id) return Element_Total
      is (if Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
          then Array_Length (Of_Unit, Item)
@@ -878,6 +898,14 @@ package body Landin.IR is
    function Is_Aggregate
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Aggregate);
+
+   function Is_Address
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Addressed);
+
+   function Address_Shape
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element);
 
    function Add_Array_Slot
      (Into     : in out Unit;
@@ -1770,20 +1798,31 @@ package body Landin.IR is
       Place       : Storage;
       Site        : Landin.Provenance.Origin;
       Field       : Natural := 0;
-      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+      Nested      : Path_Step_Array := No_Path_Steps;
+      Index       : Value_Id := No_Value) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
+      Made : Instruction :=
+        Instruction'(Op              => Storage_Address,
+                     Result          => Landin.Types.Usize,
+                     Site            => Site,
+                     Destination     => Place,
+                     Element_Field   => Field,
+                     Nested          => Steps,
+                     Indexed_Address => Index /= No_Value,
+                     others          => <>);
    begin
-      return Append
-        (Into, Item,
-         Instruction'(Op            => Storage_Address,
-                      Result        => Landin.Types.Usize,
-                      Site          => Site,
-                      Destination   => Place,
-                      Element_Field => Field,
-                      Nested        => Steps,
-                      others        => <>));
+      if Index /= No_Value then
+         Made.First_Arg := Natural (Into.Operands.Length);
+         Made.Args := 1;
+         Into.Operands.Append (Index);
+      end if;
+      return Append (Into, Item, Made);
    end Emit_Storage_Address;
+
+   function Storage_Address_Has_Index
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     is (Held (Of_Unit, Item, Value).Indexed_Address);
 
    function Emit_Number
      (Into    : in out Unit;

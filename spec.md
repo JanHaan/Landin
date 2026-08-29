@@ -1402,11 +1402,10 @@ mean anything.
 answer, and is stated here so nobody reads the gap as a question. The array
 is structural and the element is whatever it is: two `[4]point` are one type
 exactly when the two `point`s are, which is [0710] doing its own work inside
-this rule and not an exception to it. No implementation carries it yet: this
-kernel lays out an array of a scalar and refuses any other element by name.
-R2.30's aggregate-value work owns the element carrier, operations and fixture;
-R2.20's completed layout evidence does not pretend a scalar-only array shape
-represents it.
+this rule and not an exception to it. D122 supplies the aggregate element
+carrier, D127 its known whole-element contexts, and D134 the computed ones;
+the earlier R2.20 layout evidence did not pretend its scalar-only array shape
+represented them.
 
 **Pinned by** `positive/array-type-is-declared`,
 `positive/array-types-alias-and-agree`,
@@ -4755,8 +4754,9 @@ temporary, IR operation, verifier rule, backend address form, target fact or
 layout change.
 
 Construction in an argument, return, discard, operand, nested expression or any
-other general expression position remains L0304. Struct parameters and returns
-still require R2.30's aggregate ABI. Construction does not enable [0700]'s
+other general expression position remained L0304 at this increment. D100--D105
+later admit construction in the aggregate argument contexts, and D106--D116
+close aggregate results. Construction does not enable [0700]'s
 scalar conversion form, anonymous struct types, struct-of-struct fields,
 heterogeneous `of expression` or the all-field synonym.
 
@@ -4897,9 +4897,9 @@ in a datum or slot; D75 reuses it there without changing the layout.
 
 A binding, parameter, named return, initializer, assignment, `zeroed`, copy,
 literal or construction that would create storage or a value of a
-variant-bearing struct was one L0304 at this boundary. Parameters and returns
-retain R2.30's `Struct_ABI` owner; other sites use D74's `Variant_Value`
-refusal at [0680]. A case name used as a general value or construction callee
+variant-bearing struct was one L0304 at this boundary. D102/D103 later admit
+its aggregate argument contexts and D106--D116 its results; other sites used
+D74's `Variant_Value` refusal at [0680]. A case name used as a general value or construction callee
 has the same owner. D75 supplies storage and the zero image, D76 then
 admits contextual case construction without creating a general variant
 value, and D77 reads its tag through an exhaustive match.
@@ -4958,8 +4958,8 @@ admits the directly selected mutable part as one contextual case destination;
 D79 admits inferred local construction, and D80 admits a contextual whole
 copy between runtime storage places. Static module copy chains, inferred
 module construction, arguments, returns and every general aggregate value
-remain refused. Parameters and named returns
-retain R2.30's `Struct_ABI` owner. D77 owns tag matching and D78 scalar payload
+remained refused at this increment. D102/D103 later admit parameters and
+D106--D116 named results. D77 owns tag matching and D78 scalar payload
 bindings.
 
 The IR uses the same target-neutral `Variant_Field_Shape` for measurement,
@@ -5136,7 +5136,7 @@ retains L0201.
 This slice binds scalar payload fields. D85 later binds a fixed-array payload
 as an indexed array alias without making it a whole contextual value. Omitting
 bindings still permits a case with any payload, so D77's tag-only matching
-remains unchanged. Parameters and returns remain R2.30's ABI work.
+remains unchanged. D102--D116 later close aggregate parameters and returns.
 
 Lowering records no copied local. It maps each arm-local declaration identity
 to the subject storage, top-level variant field, source-order case and
@@ -5246,8 +5246,8 @@ opaque byte operation would duplicate D54's established scalar/array paths and
 erase their verifier types. One compact operation for the only union-shaped
 field keeps the IR target-neutral and the existing field semantics visible.
 Static nonzero variant images and inferred module construction follow in D81.
-General aggregate values, arguments and returns remain separate decisions;
-the last two retain R2.30's ABI owner.
+General aggregate values, arguments and returns remained separate decisions;
+D94--D116 later close the internal argument and result contexts.
 
 **Pinned by** the IR, lowering, verifier and backend public seams;
 `positive/variant-whole-copy`;
@@ -5296,8 +5296,9 @@ D60/D61 module struct image chains copy the selected descriptor, payload
 descriptors and element folds into distinct destination storage. Forward
 references and cycles keep their existing declaration-identity validation;
 a cycle reports L0305 once. Later runtime writes never alias a copied image.
-General aggregate values, arguments and returns remain refused, with the last
-two retaining R2.30's ABI owner. D82 adds finite and repeated fixed-array
+General aggregate values, arguments and returns remained refused at this
+increment. D94--D116 later close the internal argument and result contexts.
+D82 adds finite and repeated fixed-array
 payload images, D83 copies those images from module array storage, D84 adds
 their contextual runtime write forms, and D85 adds indexed match aliases.
 
@@ -5585,9 +5586,9 @@ and local cells are distinct.
 
 This slice does not make the child selection a value or place. `s.child`,
 nonzero labelled literals, construction, inference, whole copy, static nonzero
-images, deeper nesting and aggregate variant payloads stay L0304; parameters
-and returns retain R2.30's aggregate-ABI owner. D88 separately admits
-`s.child.field` for scalar leaves. Those are value-path decisions, not hidden
+images, deeper nesting and aggregate variant payloads stayed L0304 at this
+increment; D88--D132 close those contextual and internal-ABI boundaries. D88
+separately admits `s.child.field` for scalar leaves. Those are value-path decisions, not hidden
 consequences of allocating a cell.
 
 Runtime datum and slot shapes reuse D86's target-neutral
@@ -5602,8 +5603,8 @@ offset, width or padding byte in the IR.
 **Why zero storage first:** the complete zero image needs no nested path and no
 aggregate temporary, while a selected field or nonzero copy does. Flattening
 the child into parent fields would lose D86's nominal provenance; storing its
-target extent would make the IR target-specific. R2.30's aggregate-value and
-ABI work owns the remaining nonzero/general-value boundary.
+target extent would make the IR target-specific. D88--D132 later close the
+remaining nonzero contextual and internal-ABI boundary.
 
 **Pinned by** the lowering, verifier and backend public seams;
 `positive/nested-struct-zero-storage`;
@@ -6679,7 +6680,7 @@ place, and an array whose element is a struct with a variant part. D127 admits
 both, by making a known index one step of the run rather than a value.
 
 **Pinned by** `positive/array-of-structs`,
-`negative/whole-array-element-place`,
+`positive/computed-whole-array-elements`,
 `negative/selection-from-a-scalar-element`, the malformed case
 `Element_Path_Below_A_Scalar_Element`, the generated IR record, and
 `runtime/array-of-structs` on Linux x86-64.
@@ -6902,9 +6903,10 @@ it, so a run that starts at whole array storage gives its first step to the
 part — which is what a known index of a scalar array has always meant. That
 one promotion is the only place the two conventions meet.
 
-A computed index stays refused. Reaching a whole element there would need an
-address the contextual forms do not form, and the refusal is the same one
-whether the element is the subject or a variant part inside it.
+This decision initially left a computed index refused because reaching a whole
+element needed an address the contextual forms did not form. D134 closes that
+boundary with a checked, unspellable storage address while leaving known
+positions as the identity steps chosen here.
 
 **Why not a new opcode or operand:** an indexed operation already carries a
 scaled index and a run; a known position needs neither, because it is a
@@ -6920,8 +6922,8 @@ last one missing; the third duplicates D118's run at one depth.
 
 **Pinned by** `positive/whole-array-elements`,
 `positive/variant-inside-an-element`,
-`negative/whole-array-element-place`,
-`negative/variant-part-below-a-computed-index`, the malformed case
+`positive/computed-whole-array-elements`,
+`positive/variant-part-at-a-computed-index`, the malformed case
 `Whole_Element_Beyond_The_Array`, the generated IR record, and
 `runtime/whole-array-elements` and `runtime/variant-inside-an-element` on
 Linux x86-64.
@@ -7303,3 +7305,70 @@ action. All were declined.
 `runtime/undo-does-not-unwind-traps` on Linux x86-64, together with the parser,
 checker/flow, cleanup-policy, lowering/verifier and x86 backend public-seam
 cases and the generated lexical, construct and IR records.
+
+### D134 — A computed aggregate element has a checked internal address
+
+**The tour said** that an array is a value and assignment copies [0520], that
+an enabled array element is a place [1810], that indexing checks the length
+before computing an address [0580] [1950], and that evaluation order is fixed
+[0410]. It never distinguishes a whole aggregate element at a known index from
+one at a computed index. D127 made the known position an identity step but left
+the computed form refused because the contextual aggregate operations then had
+no carrier for its address.
+
+**Chosen:** every whole aggregate-element context D127 admits also accepts a
+computed index: typed and inferred local copies, whole assignment from
+`zeroed`, construction, storage, calls or non-loop control values, aggregate
+arguments and named results, and a variant part inside the element. Aggregate
+parameters and named results are ordinary storage endpoints in those same
+copies. A chain may contain more than one computed index; each is evaluated
+from the root outward, exactly once.
+
+Lowering evaluates and bounds-checks a computed destination before evaluating
+its assigned value. It forms an internal storage address carrying the complete
+target-neutral shape reached, stores that carrier in an unnamed `usize` frame
+slot when it must cross a control edge, and applies the existing contextual
+aggregate operations through it. The address is unspellable in Landin source,
+is never a source pointer or alias, and creates no new source type or ABI
+position. Known indexes remain D127's identity steps and introduce no runtime
+operand.
+
+The verifier proves that an indexed address starts at fixed-array storage, that
+its operand is `usize`, that the reached element shape agrees with the address
+slot, and that an arbitrary integer cannot substitute for it. The Linux x86-64
+backend performs the bounds check before multiplying by the target-derived
+padded element extent and adding the result to the target-derived storage
+base. It derives every later child, array and variant offset from the neutral
+shape as before. D22's definite-assignment rule is unchanged: a computed read
+of tracked local storage needs the whole-array fact, and a computed write
+establishes no particular element fact.
+
+A computed variant subject is copied once into independent shaped storage
+before its exhaustive tag cascade, so payload aliases of scalar, fixed-array
+or ordinary-aggregate shape all refer to that one subject value. A computed
+variant destination preserves its siblings in shaped storage while its selected
+case is formed in source order, then writes the complete element back. Calls
+registered by `defer` or `undo` use the ordinary complete-call parser and may
+therefore delay a selected function-field callee as well as a direct or locally
+stored function value.
+
+**Why an internal checked address:** expanding one operation per scalar leaf
+cannot represent a target-sized fixed-array field compactly; exposing a source
+pointer would enable aliasing and pointer syntax R2.50 owns; and one special
+computed-element opcode per construction, copy, call, control or variant form
+would duplicate the contextual operation family. One verified shaped address
+lets those existing forms compose without freezing target offsets in IR.
+
+**The alternatives:** keep D127's computed refusal, materialise every computed
+element in a temporary and never address the original, or make every subobject
+path carry interleaved runtime values. The first contradicts [0520] and [1810]
+after every other element context exists. The second cannot update the original
+place without another carrier. The third would put block-local values into the
+shared identity path and make every existing path consumer distinguish two
+meanings. All were declined.
+
+**Pinned by** `positive/computed-whole-array-elements`,
+`positive/variant-part-at-a-computed-index`, the malformed runtime-address
+verifier case, the generated IR record, and
+`runtime/computed-aggregate-elements`, `runtime/r230-composition`, and
+`runtime/r230-composition-trap` on Linux x86-64.

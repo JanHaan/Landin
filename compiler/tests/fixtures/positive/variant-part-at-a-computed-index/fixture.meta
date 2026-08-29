@@ -1,0 +1,5 @@
+class: positive
+summary: a variant part inside an aggregate element is selected and matched through a computed index
+constructs: 0520, 0670, 0680, 1210, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64

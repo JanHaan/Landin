@@ -1,0 +1,237 @@
+bad: atom
+problem: type = bad
+
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+unary: type = (value: i32) -> (result: i32)
+operation: type = (a: i32, b: i32, c: i32, d: i32,
+                   e: i32, f: i32, g: i32, h: i32, fails: bool)
+                  -> (record: pair, callback: unary, sum: i32) ! problem
+pair_operation: type = (a: i32, b: i32, c: i32, d: i32,
+                        e: i32, f: i32, g: i32, h: i32, fails: bool)
+                       -> (record: pair) ! problem
+cleaner: type = (value: pair, a: i32, b: i32, c: i32, d: i32,
+                 e: i32, f: i32, g: i32, h: i32)
+                -> (saved: pair, callback: unary)
+
+operation_box: type = struct
+    run: operation
+end operation_box
+
+cleanup_box: type = struct
+    run: cleaner
+end cleanup_box
+
+pair_box: type = struct
+    run: pair_operation
+end pair_box
+
+plus_one: (value: i32) -> (result: i32) = value + 1 end plus_one
+plus_two: (value: i32) -> (result: i32) = value + 2 end plus_two
+
+primary: (a: i32, b: i32, c: i32, d: i32,
+          e: i32, f: i32, g: i32, h: i32, fails: bool)
+         -> (record: pair, callback: unary, sum: i32) ! problem =
+    fail bad when fails
+    sum = a + b + c + d + e + f + g + h
+    record = pair(left: sum, right: a + h)
+    callback = plus_one
+end primary
+
+alternate: (a: i32, b: i32, c: i32, d: i32,
+            e: i32, f: i32, g: i32, h: i32, fails: bool)
+           -> (record: pair, callback: unary, sum: i32) ! problem =
+    fail bad when fails
+    sum = 40
+    record = pair(left: 1, right: 1)
+    callback = plus_two
+end alternate
+
+build_pair: (a: i32, b: i32, c: i32, d: i32,
+             e: i32, f: i32, g: i32, h: i32, fails: bool)
+            -> (record: pair) ! problem =
+    fail bad when fails
+    record = pair(left: a + b + c + d, right: e + f + g + h)
+end build_pair
+
+fallback: () -> (record: pair, callback: unary, sum: i32) =
+    record = pair(left: 20, right: 20)
+    callback = plus_two
+    sum = 2
+end fallback
+
+first_box: operation_box = (run: primary)
+second_box: operation_box = (run: alternate)
+builder: pair_box = (run: build_pair)
+mut records: [2]pair = zeroed
+
+mut defer_count: i32 = 0
+mut undo_count: i32 = 0
+mut defer_sum: i32 = 0
+mut undo_sum: i32 = 0
+
+defer_clean: (value: pair, a: i32, b: i32, c: i32, d: i32,
+              e: i32, f: i32, g: i32, h: i32)
+             -> (saved: pair, callback: unary) =
+    defer_count = defer_count + 1
+    defer_sum = defer_sum + value.left + value.right
+                + a + b + c + d + e + f + g + h
+    saved = value
+    callback = plus_one
+end defer_clean
+
+undo_clean: (value: pair, a: i32, b: i32, c: i32, d: i32,
+             e: i32, f: i32, g: i32, h: i32)
+            -> (saved: pair, callback: unary) =
+    undo_count = undo_count + 1
+    undo_sum = undo_sum + value.left + value.right
+               + a + b + c + d + e + f + g + h
+    saved = value
+    callback = plus_two
+end undo_clean
+
+deferred: cleanup_box = (run: defer_clean)
+undone: cleanup_box = (run: undo_clean)
+
+failer: () -> none ! problem = fail bad end failer
+
+multiple_and_errors: (choose_first: bool, fails: bool) -> (result: i32) =
+    chosen: operation = if choose_first then
+        first_box.run
+    else
+        second_box.run
+    end if
+    whole := chosen(1, 2, 3, 4, 5, 6, 7, 8, fails) else fallback()
+    (record: split, callback: next, sum, _) :=
+        first_box.run(1, 2, 3, 4, 5, 6, 7, 8, false) else fallback()
+    result = whole.record.left + whole.callback(5) + whole.sum
+             + split.right + next(1) + sum
+end multiple_and_errors
+
+propagate: (candidate: operation, fails: bool)
+           -> (record: pair, callback: unary, sum: i32) ! ... =
+    try candidate(1, 2, 3, 4, 5, 6, 7, 8, fails)
+end propagate
+
+computed_recovery: (at: usize, fails: bool) -> (result: i32) =
+    records[at] = builder.run(1, 2, 3, 4, 5, 6, 7, 8, fails)
+                  else pair(left: 20, right: 22)
+    result = records[at].left + records[at].right
+end computed_recovery
+
+computed_try: (at: usize) -> (result: i32) ! problem =
+    records[at] = try builder.run(1, 2, 3, 4, 5, 6, 7, 8, false)
+    result = records[at].left + records[at].right
+end computed_try
+
+normal_exit: () -> none ! problem =
+    value: pair = (left: 1, right: 2)
+    defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+end normal_exit
+
+return_exit: () -> none ! problem =
+    value: pair = (left: 1, right: 2)
+    defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    return
+end return_exit
+
+handled_exit: () -> none ! problem =
+    value: pair = (left: 1, right: 2)
+    defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    _ = primary(1, 2, 3, 4, 5, 6, 7, 8, true) else fallback()
+end handled_exit
+
+direct_failure: () -> none ! problem =
+    value: pair = (left: 1, right: 2)
+    defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    fail bad
+end direct_failure
+
+try_failure: () -> none ! ... =
+    value: pair = (left: 1, right: 2)
+    defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    try failer()
+end try_failure
+
+guarded_exit: (fails: bool) -> none ! problem =
+    value: pair = (left: 1, right: 2)
+    defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    fail bad when fails
+    return when not fails
+end guarded_exit
+
+if_failure: () -> none ! problem =
+    value: pair = (left: 1, right: 2)
+    defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    _ = if true then
+        fail bad when true
+        1
+    else
+        2
+    end if
+end if_failure
+
+match_failure: () -> none ! problem =
+    value: pair = (left: 1, right: 2)
+    defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, 1)
+    _ = match bad
+        bad: begin
+            fail bad when true
+            1
+        end
+    end match
+end match_failure
+
+late_failure: () -> none ! problem =
+    mut value: pair = (left: 1, right: 1)
+    mut last: i32 = 1
+    defer deferred.run(value, 1, 1, 1, 1, 1, 1, 1, last)
+    undo undone.run(value, 1, 1, 1, 1, 1, 1, 1, last)
+    value.left = 19
+    value.right = 23
+    last = 35
+    fail bad
+end late_failure
+
+public main: () -> (code: i32) =
+    composition: bool = multiple_and_errors(true, false) == 125
+    recovered: bool = multiple_and_errors(true, true) == 76
+    relayed := propagate(first_box.run, true) else fallback()
+    propagation: bool = relayed.record.left + relayed.record.right
+                        + relayed.callback(1) + relayed.sum == 45
+    computed_calls: bool = computed_recovery(0, false) == 36
+                           and computed_recovery(1, true) == 42
+                           and (computed_try(0) else 0) == 36
+
+    normal_exit() else 0
+    return_exit() else 0
+    handled_exit() else 0
+    direct_failure() else 0
+    try_failure() else 0
+    guarded_exit(false) else 0
+    guarded_exit(true) else 0
+    if_failure() else 0
+    match_failure() else 0
+    late_failure() else 0
+
+    exits: bool = defer_count == 10 and undo_count == 6
+                  and defer_sum == 183 and undo_sum == 139
+    if composition and recovered and propagation and computed_calls
+      and exits
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

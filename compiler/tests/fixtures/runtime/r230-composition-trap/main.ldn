@@ -1,0 +1,38 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+unary: type = (value: i32) -> (result: i32)
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+cleaner: type = (value: pair, a: i32, b: i32, c: i32, d: i32,
+                 e: i32, f: i32, g: i32, h: i32)
+                -> (saved: pair, callback: unary)
+box: type = struct
+    run: cleaner
+end box
+
+identity: (value: i32) -> (result: i32) = value end identity
+mut at: usize = 2
+mut cells: [2]point = zeroed
+
+make_safe: (value: pair, a: i32, b: i32, c: i32, d: i32,
+            e: i32, f: i32, g: i32, h: i32)
+           -> (saved: pair, callback: unary) =
+    at = 0
+    saved = value
+    callback = identity
+end make_safe
+
+cleanup: box = (run: make_safe)
+
+public main: () -> (code: i32) =
+    defer cleanup.run(pair(left: 1, right: 2), 1, 2, 3, 4, 5, 6, 7, 8)
+    undo cleanup.run(pair(left: 1, right: 2), 1, 2, 3, 4, 5, 6, 7, 8)
+    cells[at] = point(x: 1, y: 2)
+    code = 1
+end main

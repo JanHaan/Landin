@@ -150,22 +150,6 @@ package body Landin.Stages.Checking is
          Expected : Res.Declaration_Id;
          Related  : Landin.Provenance.Origin;
          Because  : String) return Boolean;
-      --  D121: whether a binding's value names an array element.  What is
-      --  refused there is one particular thing and says so.
-      function Names_An_Element
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-      --  D127: whether an index [0570] names a position the compiler
-      --  knows.  A known position is an identity like a field, so it can
-      --  be one step of D118's run; a computed one is a value and cannot.
-      function Is_Known_Index
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-      --  Whether a chain reaches a whole element the compiler can place:
-      --  every index in it is known.
-      function Chain_Indices_Are_Known
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-      function Refuses_A_Computed_Element
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-
       function Declared_As_Node
         (Of_Tree         : Syn.Tree;
          Node            : Syn.Node_Id;
@@ -197,8 +181,9 @@ package body Landin.Stages.Checking is
       --  source a place rather than a value.
       function Chain_Names_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-      --  D127: the same question where a whole element is admitted, so a
-      --  chain may pass through a known index as well as a selection.
+      --  A whole aggregate element is storage whether its index is known
+      --  or computed; lowering retains a checked internal address for the
+      --  latter without exposing a source pointer.
       function Chain_Names_Element_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Is_Aggregate_Alias_Name
@@ -1774,16 +1759,9 @@ package body Landin.Stages.Checking is
                     (Item    => Bad.Unsupported_Use,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
-                     Message =>
-                       (if Refuses_A_Computed_Element (Of_Tree, Node)
-                        then "a whole array element at a computed index is"
-                             & " not a value or a place yet"
-                        else "a value of a struct type is not enabled"
-                             & " yet"),
-                     Refused =>
-                       (if Refuses_A_Computed_Element (Of_Tree, Node)
-                        then Bad.Whole_Element_Aggregate
-                        else Bad.Struct_Value),
+                     Message => "a value of a struct type is not enabled"
+                                & " yet",
+                     Refused => Bad.Struct_Value,
                      Into    => Found);
                end if;
 
@@ -2488,14 +2466,7 @@ package body Landin.Stages.Checking is
                elsif Wants in Ty.Aggregate | Ty.Fixed_Array
                  and then Syn.Kind (Of_Tree, Argument)
                             in Syn.Name_Reference | Syn.Member_Selection
-                               | Syn.Call
-                 and then
-                   (Syn.Kind (Of_Tree, Argument)
-                      in Syn.Name_Reference | Syn.Call
-                    or else Wants = Ty.Fixed_Array
-                    or else Syn.Kind
-                      (Of_Tree, Syn.Target_Of (Of_Tree, Argument))
-                        = Syn.Name_Reference)
+                               | Syn.Element_Index | Syn.Call
                then
                   declare
                      Got : constant Ty.Type_Kind :=
@@ -3195,18 +3166,17 @@ package body Landin.Stages.Checking is
          return Synthesise (Of_Tree, Node);
       end Selected_From;
 
-      --  D127: a known index is one step of a chain like a selection is,
-      --  so the walk down to the name it started at reads through both.
+      --  An index is part of a storage chain whether it is known or computed.
+      --  The checker retains its value semantics separately; this walk only
+      --  finds the binding whose mutability and storage the chain uses.
       function Chain_Root_Of
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
       is
          Where : Syn.Node_Id := Node;
       begin
          loop
-            if Syn.Kind (Of_Tree, Where) = Syn.Member_Selection then
-               Where := Syn.Target_Of (Of_Tree, Where);
-            elsif Syn.Kind (Of_Tree, Where) = Syn.Element_Index
-              and then Is_Known_Index (Of_Tree, Where)
+            if Syn.Kind (Of_Tree, Where)
+                 in Syn.Member_Selection | Syn.Element_Index
             then
                Where := Syn.Target_Of (Of_Tree, Where);
             else
@@ -3219,64 +3189,6 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
         is (Syn.Kind (Of_Tree, Chain_Root_Of (Of_Tree, Node))
               = Syn.Name_Reference);
-
-      function Is_Known_Index
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
-      is
-         Written : constant Syn.Node_Id := Syn.Index_Of (Of_Tree, Node);
-      begin
-         return Syn.Kind (Of_Tree, Written) = Syn.Integer_Literal
-           or else
-             (Syn.Kind (Of_Tree, Written) = Syn.Negation
-              and then Syn.Kind
-                         (Of_Tree, Syn.Operand_Of (Of_Tree, Written))
-                         = Syn.Integer_Literal);
-      end Is_Known_Index;
-
-      function Chain_Indices_Are_Known
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
-      is
-         Where : Syn.Node_Id := Node;
-      begin
-         loop
-            if Syn.Kind (Of_Tree, Where) = Syn.Member_Selection then
-               Where := Syn.Target_Of (Of_Tree, Where);
-            elsif Syn.Kind (Of_Tree, Where) = Syn.Element_Index then
-               if not Is_Known_Index (Of_Tree, Where) then
-                  return False;
-               end if;
-               Where := Syn.Target_Of (Of_Tree, Where);
-            else
-               return True;
-            end if;
-         end loop;
-      end Chain_Indices_Are_Known;
-
-      --  D127: an element the refusal above is really about, which is one
-      --  a computed index reaches.  A known index is admitted, so a
-      --  binding refused for another reason must not be described as one.
-      function Refuses_A_Computed_Element
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
-      is
-        (Names_An_Element (Of_Tree, Node)
-         and then not Chain_Indices_Are_Known
-           (Of_Tree, Syn.Value_Of (Of_Tree, Node)));
-
-      function Names_An_Element
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
-      is
-         Where : Syn.Node_Id :=
-           (if Syn.Kind (Of_Tree, Node) = Syn.Binding
-            then Syn.Value_Of (Of_Tree, Node) else Syn.No_Node);
-      begin
-         if Where = Syn.No_Node then
-            return False;
-         end if;
-         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
-            Where := Syn.Target_Of (Of_Tree, Where);
-         end loop;
-         return Syn.Kind (Of_Tree, Where) = Syn.Element_Index;
-      end Names_An_Element;
 
       function Chain_Starts_At_A_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
@@ -3298,7 +3210,8 @@ package body Landin.Stages.Checking is
                      and then Res.Sort_Of
                        (Meanings.all,
                         Res.Bound_To (Meanings.all, Of_Tree, Node))
-                         in Res.Module_Binding | Res.Local_Binding));
+                         in Res.Module_Binding | Res.Local_Binding
+                            | Res.Parameter | Res.Named_Return));
 
       function Chain_Names_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
@@ -3316,19 +3229,13 @@ package body Landin.Stages.Checking is
       is
          Where : Syn.Node_Id := Node;
       begin
-         --  D127: a known index is an identity like a field, so a chain
-         --  may pass through one.  A computed index is a value, which
-         --  leaves the chain standing on an element this refuses.
+         --  Both known and computed indexes remain inside the storage chain;
+         --  only lowering decides whether a step is an identity or a checked
+         --  runtime address.
+         while Syn.Kind (Of_Tree, Where)
+           in Syn.Member_Selection | Syn.Element_Index
          loop
-            if Syn.Kind (Of_Tree, Where) = Syn.Member_Selection then
-               Where := Syn.Target_Of (Of_Tree, Where);
-            elsif Syn.Kind (Of_Tree, Where) = Syn.Element_Index
-              and then Is_Known_Index (Of_Tree, Where)
-            then
-               Where := Syn.Target_Of (Of_Tree, Where);
-            else
-               exit;
-            end if;
+            Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
          return Root_Names_Storage (Of_Tree, Where);
       end Chain_Names_Element_Storage;
@@ -3545,7 +3452,8 @@ package body Landin.Stages.Checking is
            and then Res.Sort_Of
                       (Meanings.all,
                        Res.Bound_To (Meanings.all, Of_Tree, Node))
-                    in Res.Module_Binding | Res.Local_Binding;
+                    in Res.Module_Binding | Res.Local_Binding
+                       | Res.Parameter | Res.Named_Return;
       end Is_Direct_Binding_Name;
 
       --  D120: a match alias for an ordinary-struct payload names storage
@@ -7413,27 +7321,6 @@ package body Landin.Stages.Checking is
                   Wants : constant Ty.Type_Kind :=
                     Selected_From (Of_Tree, Place);
                begin
-                  --  D121: a leaf of an element is a place; the whole
-                  --  element at a computed index is not one yet, because
-                  --  the contextual forms reach a place through identities
-                  --  alone and a computed index is a value.  D127 admits a
-                  --  known one, which is an identity like a field.
-                  if Wants = Ty.Aggregate
-                    and then Syn.Kind (Of_Tree, Place) = Syn.Element_Index
-                    and then not Chain_Indices_Are_Known (Of_Tree, Place)
-                  then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Place),
-                        Message => "a whole array element at a computed"
-                                   & " index is not a value or a place yet",
-                        Refused => Bad.Whole_Element_Aggregate,
-                        Into    => Found);
-                     Landin.Checking.Refuse (Types.all, Of_Tree, Value);
-                     return;
-                  end if;
-
                   if Wants = Ty.Aggregate then
                      declare
                         Shape : constant Landin.Checking.Signature_Id :=
@@ -8907,8 +8794,8 @@ package body Landin.Stages.Checking is
               not Direct_Field
               and then Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
               and then Syn.Kind (Of_Tree.all, Value)
-                         = Syn.Member_Selection
-              and then Chain_Names_Storage (Of_Tree.all, Value)
+                         in Syn.Member_Selection | Syn.Element_Index
+              and then Chain_Names_Element_Storage (Of_Tree.all, Value)
               and then Selected_From (Of_Tree.all, Value) = Ty.Aggregate;
             Direct_Struct : constant Boolean :=
               (Named_Storage

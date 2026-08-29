@@ -2089,9 +2089,10 @@ than a value, so a whole array element at one is a value and a place wherever
 a whole ordinary child is, and an array whose element is a struct with a
 variant part follows. Where a run may start became one question: base zero with
 no run is the storage itself, base zero with a run is whole array storage, and
-a positive base is a struct's field or an array's element position. A computed
-index stays refused, because reaching a whole element there would need an
-address the contextual forms do not form.
+a positive base is a struct's field or an array's element position. This
+increment left a computed index refused because reaching a whole element there
+needed an address the contextual forms did not form; the fiftieth increment
+closes that boundary.
 
 The forty-fourth increment gives [0920]'s two-or-more named returns one
 anonymous structural aggregate. Ordered result runs extend recursive function
@@ -2179,15 +2180,37 @@ anonymous multiple results retain their ordinary target-neutral convention and
 caller-owned discard temporary, leaving the verifier and x86 backend no
 unwind-specific form. R4.10 remains the owner of loops and their transfers.
 
-Further aggregate arguments and result contexts remain here too; R4.40 later
-supplies complete C ABI classification rather than owning this internal
+The fiftieth increment performs the completion audit rather than treating the
+preceding implementation diary as proof of closure. D134 gives every D127
+whole-aggregate element context a computed index. Each such index is evaluated
+and bounds-checked once before its use, then retained across control edges as
+an unspellable address slot carrying the complete neutral element shape. Chains
+may contain several computed indexes. Known positions remain identity steps;
+the verifier rejects a non-`usize` index, a non-array base, a mismatched shape
+or an ordinary integer substituted for the address, and the x86 backend alone
+derives the padded stride and offsets. Typed and inferred copies, construction,
+`zeroed`, direct and failing call results, non-loop control values, arguments,
+named results and nested variant subjects and destinations all cross that one
+carrier. Aggregate parameters and named returns are ordinary storage sources in
+those copies.
+
+The same audit removes refusal rows whose enabling work had already landed:
+`try` and `fail` leave the parser refusal catalogue; a missing module function
+image is [1940]'s `L0305`, not an R2.30 feature refusal; and calling a
+non-function is [1920]'s `L0301` type mismatch. The aggregate-ABI refusal had
+no reachable raise after parameters and results were enabled and is removed
+rather than preserved as dead authority. `defer` and `undo` now parse the
+ordinary complete call after their contextual word, so a selected function
+field is delayed with its arguments just like a direct or locally stored
+callee. R4.40 still owns C ABI classification and changes none of this internal
 convention.
 
 D118--D127 close the nested-ordinary forms R2.20 left contextual: whole
 nested field selection, construction and copy, deeper recursive composition,
 aggregate variant payloads, D17's fixed arrays whose element is an aggregate,
 a variant part anywhere a struct may sit, and a whole array element at a known
-position. D132 closes their remaining static-image boundary for ordinary-child
+position. D134 gives that element every computed-index context without changing
+its definite-assignment rule. D132 closes the remaining static-image boundary for ordinary-child
 and ordinary-payload values while preserving R2.20's neutral shape provenance
 and leaving target layout in the backend.
 
@@ -2206,7 +2229,17 @@ ordinary and variant-payload fields through nested and indexed storage,
 expression-valued non-loop controls, lexical reverse-order deferred cleanup,
 failure-only undo interleaved with defer, late direct and indirect cleanup
 arguments, more arguments than the register-only stopgap accepted and every
-enabled control-flow exit path.
+enabled control-flow exit path. `runtime/r230-composition` composes those
+claims in one program: direct and function-field failing calls, register and
+stack arguments, aggregate and anonymous multiple results, by-name
+reconstruction, call recovery and propagation, function-valued control joins,
+late aggregate cleanup arguments, normal fallthrough, successful and guarded
+return, direct and guarded fail, failed `try`, local recovery, `if`, `match` and
+bare-block exits. `runtime/r230-composition-trap` composes a computed aggregate
+bounds trap with delayed function-field cleanups and proves registration does
+not evaluate them; `runtime/computed-aggregate-elements` covers every computed
+whole-element carrier, including nested indexes and scalar, fixed-array and
+ordinary-aggregate variant payloads.
 Malformed IR also proves
 that a runtime address, malformed recursive image descriptor or static routine
 target cannot substitute for its neutral descriptor. Recursive module image

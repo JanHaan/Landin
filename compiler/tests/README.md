@@ -6,7 +6,7 @@ is eventually rewritten, these must still be the tests it has to pass.
 
 ## Layout
 
-```
+```text
 compiler/tests/
   fixtures/<class>/<name>/fixture.meta   the fixture and its metadata
   harness-cases/malformed/               trees that must be rejected
@@ -78,13 +78,18 @@ only the kernel the compiler implements today:
 
 The kernel still does not have loops, so these examples deliberately use
 recursion and module-level arrays. R2.30 now also accepts internal aggregate
-parameters and results, expression-valued `if`, exhaustive `match`, bare
-`begin` blocks, lexical `defer`, failure-only `undo`, and recursively folded
-module images whose ordinary children or ordinary variant payloads retain
-independent target-laid-out storage. Their dedicated fixtures exercise
-caller-owned scalar, fixed-array and struct join storage, reverse-order cleanup
-across normal, successful-return and declared-failure edges with traps excluded,
-and recursive static images on 32- and 64-bit target facts. On Linux x86-64,
+parameters and results, whole aggregate elements at checked computed indexes,
+expression-valued `if`, exhaustive `match`, bare `begin` blocks, lexical
+`defer`, failure-only `undo`, and recursively folded module images whose
+ordinary children or ordinary variant payloads retain independent
+target-laid-out storage. Their dedicated fixtures exercise caller-owned scalar,
+fixed-array and struct join storage, nested computed-element addresses,
+reverse-order cleanup across normal, successful-return and declared-failure
+edges with traps excluded, and recursive static images on 32- and 64-bit target
+facts. `runtime/r230-composition` combines errors, anonymous multiple results,
+function-field calls, control values, register and stack arguments, defer/undo
+and every enabled non-trap exit; `runtime/r230-composition-trap` covers the
+remaining stop edge. On Linux x86-64,
 compile one of the
 recursive examples from the repository root with:
 

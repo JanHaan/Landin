@@ -1,0 +1,80 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+bucket: type = struct
+    items: [2]point
+    tail: i32
+end bucket
+
+tagged: type = struct
+    kind: variant
+        leaf |
+        pair: (first: i32, second: i32)
+    end kind
+end tagged
+
+rich_tagged: type = struct
+    kind: variant
+        empty |
+        full: (values: [2]i32, child: point)
+    end kind
+end rich_tagged
+
+mut cells: [4]point = zeroed
+mut buckets: [2]bucket = zeroed
+mut tags: [2]tagged = zeroed
+mut rich: [2]rich_tagged = zeroed
+
+made: () -> (result: point) =
+    result = point(x: 5, y: 6)
+end made
+
+take: (value: point) -> (result: i32) =
+    result = value.x + value.y
+end take
+
+computed: (at: usize) -> (result: i32) =
+    cells[at] = point(x: 10, y: 1)
+    cells[at + 1] = made()
+    cells[at + 2] = cells[at]
+    cells[at + 3] = zeroed
+    typed: point = cells[at + 1]
+    inferred := cells[at + 2]
+    cells[at] = if true then inferred else typed end if
+    result = take(cells[at]) + take(typed) + take(inferred)
+end computed
+
+nested: (outer: usize, inner: usize) -> (result: i32) =
+    buckets[outer].items[inner] = point(x: 7, y: 8)
+    picked := buckets[outer].items[inner]
+    result = take(picked) + take(buckets[outer].items[inner])
+end nested
+
+variant: (at: usize) -> (result: i32) =
+    result = 0
+    tags[at].kind = pair(first: 2, second: 3)
+    match tags[at].kind
+        leaf: result = 1
+        pair(first, second): result = first + second
+    end match
+end variant
+
+rich_variant: (at: usize) -> (result: i32) =
+    result = 0
+    rich[at].kind = full(values: [4, 5], child: point(x: 6, y: 7))
+    match rich[at].kind
+        empty: result = 1
+        full(values, child):
+            result = values[0] + values[1] + child.x + child.y
+    end match
+end rich_variant
+
+public main: () -> (code: i32) =
+    code = 1
+    if computed(0) + nested(1, 1) + variant(1)
+       + rich_variant(0) == 90 then
+        code = 42
+    end if
+end main

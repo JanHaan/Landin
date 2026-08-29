@@ -2987,6 +2987,64 @@ package body Landin.Tests.Verifier_Suite is
       end;
    end Malformed_Error_IR_Is_Rejected;
 
+   procedure Malformed_Runtime_Addresses_Are_Rejected
+     (Item : in out Landin.Testing.Context);
+
+   procedure Malformed_Runtime_Addresses_Are_Rejected
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      declare
+         Unit : IR.Unit;
+         Routine : IR.Item_Id;
+         Result, Address : IR.Slot_Id;
+         Block : IR.Block_Id;
+         Value : IR.Value_Id;
+         First : Natural;
+         Shape : IR.Field_Shape;
+      begin
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         Result := IR.Add_Slot
+           (Unit, Routine, Landin.Types.U32, 2, Site);
+         IR.Set_Result_Slot (Unit, Routine, Result);
+         First := IR.Add_Shape_Run
+           (Unit,
+            [(Kind => IR.Scalar_Field_Shape,
+              Element => Landin.Types.U32,
+              Length => 1, others => <>)]);
+         Shape :=
+           (Kind => IR.Aggregate_Field_Shape,
+            Element => Landin.Types.Bool,
+            Length => 1,
+            Cases => 1,
+            Payloads_First => First,
+            others => <>);
+         Address := IR.Add_Address_Slot
+           (Unit, Routine, Shape, Site);
+         Block := IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Routine, Block);
+         Value := IR.Emit_Number
+           (Unit, Routine, Landin.Types.Usize, 0, False, Site);
+         IR.Emit_Store (Unit, Routine, Address, Value, Site);
+         Value := IR.Emit_Number
+           (Unit, Routine, Landin.Types.U32, 0, False, Site);
+         IR.Emit_Store (Unit, Routine, Result, Value, Site);
+         Value := IR.Emit_Load (Unit, Routine, Result, Site);
+         IR.Emit_Leave (Unit, Routine, Value, Site);
+         IR.Leave_Block (Unit, Routine);
+         Expect
+           (Item, V.Check (Unit), V.Address_Value_Disagrees,
+            "an integer cannot substitute for a checked storage address");
+      end;
+   end Malformed_Runtime_Addresses_Are_Rejected;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -3013,6 +3071,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "malformed error IR is rejected",
          Malformed_Error_IR_Is_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "malformed runtime addresses are rejected",
+         Malformed_Runtime_Addresses_Are_Rejected'Access);
    end Register;
 
 end Landin.Tests.Verifier_Suite;
