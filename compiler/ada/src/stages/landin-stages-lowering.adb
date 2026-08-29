@@ -54,14 +54,21 @@ package body Landin.Stages.Lowering is
    --  and D118's run below it, with base zero meaning the storage itself;
    --  selecting a field of the storage names that field and nothing under
    --  it, and selecting a field of anything deeper extends the run.
-   function Descended_Base (Base : Natural; Field : Positive) return Natural
-     is (if Base = 0 then Field else Base);
+   --  D127: base zero says "the storage itself", and a run may start
+   --  there -- an array element is reached by a step and not by a base.
+   --  So a place is fresh only when it has neither, and descending into
+   --  one that already has a run adds a step like any other.
+   function Descended_Base
+     (Base  : Natural;
+      Steps : IR.Path_Step_Array;
+      Field : Positive) return Natural
+     is (if Base = 0 and then Steps'Length = 0 then Field else Base);
 
    function Descended_Steps
      (Base  : Natural;
       Steps : IR.Path_Step_Array;
       Field : Positive) return IR.Path_Step_Array
-     is (if Base = 0 then IR.No_Path_Steps
+     is (if Base = 0 and then Steps'Length = 0 then IR.No_Path_Steps
          else Steps
               & IR.Path_Step_Array'
                   [1 => (Field      => IR.Part_Position (Field),
@@ -580,6 +587,41 @@ package body Landin.Stages.Lowering is
          return IR.Part_Position (Value + 1);
       end Constant_Index;
 
+      --  D127: a field operation names one part and then a run below it,
+      --  so a run that starts at whole array storage gives its first step
+      --  to the part -- which is what a known index of a scalar array has
+      --  always been.  A whole-part operation instead keeps base zero,
+      --  because zero is how it says "the storage itself".
+      function Leaf_Base
+        (Base : Natural; Steps : IR.Path_Step_Array) return IR.Part_Position
+        is (if Base > 0 then IR.Part_Position (Base)
+            else Steps (Steps'First).Field);
+
+      function Leaf_Steps
+        (Base : Natural; Steps : IR.Path_Step_Array)
+         return IR.Path_Step_Array
+        is (if Base > 0 then Steps
+            else Steps (Steps'First + 1 .. Steps'Last));
+
+      --  D127: a chain is a run of selectors, and a compile-time-known
+      --  index is one of them -- an identity like a field.  A computed
+      --  index is a value, so a chain stops at one and Chain_Index finds
+      --  it separately.
+      function Selects_One_Step
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+        is (Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+            or else (Syn.Kind (Of_Tree, Node) = Syn.Element_Index
+                     and then Is_Constant_Index (Of_Tree, Node)));
+
+      --  Which part one step of a chain names: [0750]'s declaration order
+      --  for a field, [0520]'s one-based position for a known index.
+      function Step_Position
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural
+        is (if Syn.Kind (Of_Tree, Node) = Syn.Element_Index
+            then Natural (Constant_Index (Of_Tree, Node))
+            else Landin.Checking.Field_Index (Types.all, Of_Tree, Node));
+
+
       --  One target-neutral shape per checker shape, built bottom up so
       --  that the run a shape names already exists when the shape does.
       --  D118's path is what reads these back and has no depth of its own,
@@ -781,7 +823,7 @@ package body Landin.Stages.Lowering is
       is
          Where : Syn.Node_Id := Node;
       begin
-         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+         while Selects_One_Step (Of_Tree, Where) loop
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
          return Where;
@@ -793,7 +835,7 @@ package body Landin.Stages.Lowering is
          Where : Syn.Node_Id := Node;
          Total : Natural := 0;
       begin
-         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+         while Selects_One_Step (Of_Tree, Where) loop
             Total := Total + 1;
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
@@ -806,8 +848,12 @@ package body Landin.Stages.Lowering is
          Where : Syn.Node_Id := Node;
          Base  : Natural := 0;
       begin
-         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
-            Base := Landin.Checking.Field_Index (Types.all, Of_Tree, Where);
+         while Selects_One_Step (Of_Tree, Where) loop
+            --  D127: a run that starts at whole array storage has no base
+            --  field, so its first known index is a step and not a base.
+            Base :=
+              (if Syn.Kind (Of_Tree, Where) = Syn.Element_Index then 0
+               else Landin.Checking.Field_Index (Types.all, Of_Tree, Where));
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
          return Base;
@@ -817,14 +863,19 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array
       is
          Depth : constant Natural := Chain_Depth (Of_Tree, Node);
-         Steps : IR.Path_Step_Array
-           (1 .. Natural'Max (0, Depth - 1)) := [others => (others => <>)];
+         --  A run that starts at whole array storage keeps every step,
+         --  because base zero names no part.
+         Kept : constant Natural :=
+           (if Chain_Base (Of_Tree, Node) = 0 then Depth
+            else Natural'Max (0, Depth - 1));
+         Steps : IR.Path_Step_Array (1 .. Kept) :=
+           [others => (others => <>)];
          Where : Syn.Node_Id := Node;
       begin
          for Step in reverse Steps'Range loop
             Steps (Step) :=
-              (Field      => IR.Part_Position
-                 (Landin.Checking.Field_Index (Types.all, Of_Tree, Where)),
+              (Field      =>
+                 IR.Part_Position (Step_Position (Of_Tree, Where)),
                Case_Index => 0);
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
@@ -836,7 +887,7 @@ package body Landin.Stages.Lowering is
       is
          Where : Syn.Node_Id := Node;
       begin
-         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+         while Selects_One_Step (Of_Tree, Where) loop
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
          if Syn.Kind (Of_Tree, Where) = Syn.Element_Index then
@@ -862,7 +913,7 @@ package body Landin.Stages.Lowering is
          Depth : Natural := 0;
          Where : Syn.Node_Id := Node;
       begin
-         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+         while Selects_One_Step (Of_Tree, Where) loop
             Depth := Depth + 1;
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
@@ -878,8 +929,8 @@ package body Landin.Stages.Lowering is
          begin
             for Step in reverse Steps'Range loop
                Steps (Step) :=
-                 (Field      => IR.Part_Position
-                    (Landin.Checking.Field_Index (Types.all, Of_Tree, Each)),
+                 (Field      =>
+                    IR.Part_Position (Step_Position (Of_Tree, Each)),
                   Case_Index => 0);
                Each := Syn.Target_Of (Of_Tree, Each);
             end loop;
@@ -896,8 +947,8 @@ package body Landin.Stages.Lowering is
       begin
          for Step in reverse Steps'Range loop
             Steps (Step) :=
-              (Field      => IR.Part_Position
-                 (Landin.Checking.Field_Index (Types.all, Of_Tree, Where)),
+              (Field      =>
+                 IR.Part_Position (Step_Position (Of_Tree, Where)),
                Case_Index => 0);
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
@@ -952,11 +1003,15 @@ package body Landin.Stages.Lowering is
 
       --  The run that reaches the variant part an alias names, from its
       --  base field.  Empty when the part is the base field itself.
+      --  D127: the alias recorded the promoted base, so the run it kept
+      --  is the promoted one -- the same two answers, taken together.
       function Alias_Steps
         (Of_Tree : Syn.Tree; Alias : Payload_Alias)
          return IR.Path_Step_Array
         is (if Alias.Subject = Syn.No_Node then IR.No_Path_Steps
-            else Rooted_Steps (Of_Tree, Alias.Subject));
+            else Leaf_Steps
+              (Rooted_Base (Of_Tree, Alias.Subject),
+               Rooted_Steps (Of_Tree, Alias.Subject)));
 
       function Rooted_Steps
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array
@@ -2719,15 +2774,15 @@ package body Landin.Stages.Lowering is
                      when IR.Module_Datum =>
                         return IR.Emit_Load_Field
                                  (Unit.all, Filling, Place.Datum,
-                                  IR.Part_Position (Base),
+                                  Leaf_Base (Base, Child_Steps),
                                   Scalar_At (Of_Tree, Node), Site,
-                                  Nested => Child_Steps);
+                                  Nested => Leaf_Steps (Base, Child_Steps));
                      when IR.Frame_Slot =>
                         return IR.Emit_Load_Slot_Field
                                  (Unit.all, Filling, Place.Slot,
-                                  IR.Part_Position (Base),
+                                  Leaf_Base (Base, Child_Steps),
                                   Scalar_At (Of_Tree, Node), Site,
-                                  Nested => Child_Steps);
+                                  Nested => Leaf_Steps (Base, Child_Steps));
                   end case;
                end;
 
@@ -2958,10 +3013,14 @@ package body Landin.Stages.Lowering is
            Landin.Checking.Body_Of (Types.all, Of_Tree, Holder);
          Field : constant Positive := Positive
            (Landin.Checking.Field_Index (Types.all, Of_Tree, Subject));
-         Base : constant Positive :=
-           Positive (Rooted_Base (Of_Tree, Subject));
-         Steps : constant IR.Path_Step_Array :=
+         --  D127: a run that starts at whole array storage gives its
+         --  first step to the part the operation names.
+         Reached : constant Natural := Rooted_Base (Of_Tree, Subject);
+         Walked : constant IR.Path_Step_Array :=
            Rooted_Steps (Of_Tree, Subject);
+         Base : constant Positive := Positive (Leaf_Base (Reached, Walked));
+         Steps : constant IR.Path_Step_Array :=
+           Leaf_Steps (Reached, Walked);
          Shape : constant Landin.Checking.Field_Shape :=
            Landin.Checking.Field_Shape_Of (Types.all, Wrote, Field);
          Tag_Type : constant Ty.Integer_Name :=
@@ -3228,11 +3287,12 @@ package body Landin.Stages.Lowering is
                     IR.No_Path_Steps)
                is
                   From_Field : constant Natural :=
-                    Descended_Base (Source_Base, Field);
+                    Descended_Base (Source_Base, Source_Steps, Field);
                   From_Steps : constant IR.Path_Step_Array :=
                     Descended_Steps (Source_Base, Source_Steps, Field);
                   Into_Field : constant Natural :=
-                    Descended_Base (Destination_Base, Field);
+                    Descended_Base
+                      (Destination_Base, Destination_Steps, Field);
                   Into_Steps : constant IR.Path_Step_Array :=
                     Descended_Steps
                       (Destination_Base, Destination_Steps, Field);
@@ -3247,32 +3307,46 @@ package body Landin.Stages.Lowering is
                                (Types.all, Wrote, Field);
                            Taken : IR.Value_Id;
                         begin
+                           --  D127: a field operation names one part and
+                           --  a run below it, so a run that starts at
+                           --  whole array storage gives its first step to
+                           --  the part it names.
                            case Source.Kind is
                               when IR.Module_Datum =>
                                  Taken :=
                                    IR.Emit_Load_Field
                                      (Unit.all, Filling, Source.Datum,
-                                      IR.Part_Position (From_Field),
-                                      Held, Site, Nested => From_Steps);
+                                      Leaf_Base (From_Field, From_Steps),
+                                      Held, Site,
+                                      Nested =>
+                                        Leaf_Steps
+                                          (From_Field, From_Steps));
                               when IR.Frame_Slot =>
                                  Taken :=
                                    IR.Emit_Load_Slot_Field
                                      (Unit.all, Filling, Source.Slot,
-                                      IR.Part_Position (From_Field),
-                                      Held, Site, Nested => From_Steps);
+                                      Leaf_Base (From_Field, From_Steps),
+                                      Held, Site,
+                                      Nested =>
+                                        Leaf_Steps
+                                          (From_Field, From_Steps));
                            end case;
 
                            case Destination.Kind is
                               when IR.Module_Datum =>
                                  IR.Emit_Store_Field
                                    (Unit.all, Filling, Destination.Datum,
-                                    IR.Part_Position (Into_Field),
-                                    Taken, Site, Nested => Into_Steps);
+                                    Leaf_Base (Into_Field, Into_Steps),
+                                    Taken, Site,
+                                    Nested =>
+                                      Leaf_Steps (Into_Field, Into_Steps));
                               when IR.Frame_Slot =>
                                  IR.Emit_Store_Slot_Field
                                    (Unit.all, Filling, Destination.Slot,
-                                    IR.Part_Position (Into_Field),
-                                    Taken, Site, Nested => Into_Steps);
+                                    Leaf_Base (Into_Field, Into_Steps),
+                                    Taken, Site,
+                                    Nested =>
+                                      Leaf_Steps (Into_Field, Into_Steps));
                            end case;
                         end;
 
@@ -3317,11 +3391,15 @@ package body Landin.Stages.Lowering is
                           (Unit.all, Filling,
                            Source        => Source,
                            Destination   => Destination,
-                           Field         => From_Field,
+                           Field         =>
+                             Positive (Leaf_Base (From_Field, From_Steps)),
                            Site          => Site,
-                           Source_Nested => From_Steps,
-                           Destination_Field  => Into_Field,
-                           Destination_Nested => Into_Steps);
+                           Source_Nested =>
+                             Leaf_Steps (From_Field, From_Steps),
+                           Destination_Field  =>
+                             Positive (Leaf_Base (Into_Field, Into_Steps)),
+                           Destination_Nested =>
+                             Leaf_Steps (Into_Field, Into_Steps));
                   end case;
                end Copy_Field;
 
@@ -3662,21 +3740,28 @@ package body Landin.Stages.Lowering is
                     (Field : Positive; Value : IR.Value_Id)
                   is
                      Into_Field : constant Natural :=
-                       Descended_Base (Base, Field);
+                       Descended_Base (Base, Steps, Field);
                      Into_Steps : constant IR.Path_Step_Array :=
                        Descended_Steps (Base, Steps, Field);
                   begin
+                     --  D127: a field operation names one part, so a run
+                     --  that starts at whole array storage gives its first
+                     --  step to the part it names.
                      case Destination.Kind is
                         when IR.Module_Datum =>
                            IR.Emit_Store_Field
                              (Unit.all, Filling, Destination.Datum,
-                              IR.Part_Position (Into_Field),
-                              Value, Site, Nested => Into_Steps);
+                              Leaf_Base (Into_Field, Into_Steps),
+                              Value, Site,
+                              Nested =>
+                                Leaf_Steps (Into_Field, Into_Steps));
                         when IR.Frame_Slot =>
                            IR.Emit_Store_Slot_Field
                              (Unit.all, Filling, Destination.Slot,
-                              IR.Part_Position (Into_Field),
-                              Value, Site, Nested => Into_Steps);
+                              Leaf_Base (Into_Field, Into_Steps),
+                              Value, Site,
+                              Nested =>
+                                Leaf_Steps (Into_Field, Into_Steps));
                      end case;
                   end Store_Scalar;
                begin
@@ -3715,7 +3800,7 @@ package body Landin.Stages.Lowering is
                               --  destination D49--D53 lower on assignment.
                               Write_Array_Value
                                 (Value, Destination,
-                                 Descended_Base (Base, Field),
+                                 Descended_Base (Base, Steps, Field),
                                  Path =>
                                    Descended_Steps (Base, Steps, Field));
 
@@ -3725,7 +3810,7 @@ package body Landin.Stages.Lowering is
                                    Landin.Checking.Field_Shape_Of
                                      (Types.all, Wrote, Field).Aggregate_Body;
                                  Into_Field : constant Natural :=
-                                   Descended_Base (Base, Field);
+                                   Descended_Base (Base, Steps, Field);
                                  Into_Steps :
                                    constant IR.Path_Step_Array :=
                                      Descended_Steps (Base, Steps, Field);
@@ -3777,7 +3862,7 @@ package body Landin.Stages.Lowering is
                               --  place deeper, like every other label.
                               Write_Variant_Value
                                 (Value, Wrote, Field, Destination,
-                                 Base  => Descended_Base (Base, Field),
+                                 Base  => Descended_Base (Base, Steps, Field),
                                  Steps =>
                                    Descended_Steps (Base, Steps, Field));
                         end case;
@@ -3824,7 +3909,8 @@ package body Landin.Stages.Lowering is
                                  --  all-bits-zero image [0540].
                                  IR.Emit_Array_Clear
                                    (Unit.all, Filling, Destination, Site,
-                                    Field  => Descended_Base (Base, Field),
+                                    Field  =>
+                                      Descended_Base (Base, Steps, Field),
                                     Nested =>
                                       Descended_Steps (Base, Steps, Field));
 
@@ -3832,7 +3918,8 @@ package body Landin.Stages.Lowering is
                                  --  D75's zero image selects the first case.
                                  IR.Emit_Variant_Select
                                    (Unit.all, Filling, Destination,
-                                    Descended_Base (Base, Field), 1, Site,
+                                    Descended_Base (Base, Steps, Field),
+                                    1, Site,
                                     Nested =>
                                       Descended_Steps (Base, Steps, Field));
                            end case;
@@ -4095,13 +4182,15 @@ package body Landin.Stages.Lowering is
                            when IR.Module_Datum =>
                               IR.Emit_Store_Field
                                 (Unit.all, Filling, Into.Datum,
-                                 IR.Part_Position (Base),
-                                 Value, Site, Nested => Child_Steps);
+                                 Leaf_Base (Base, Child_Steps),
+                                 Value, Site,
+                                 Nested => Leaf_Steps (Base, Child_Steps));
                            when IR.Frame_Slot =>
                               IR.Emit_Store_Slot_Field
                                 (Unit.all, Filling, Into.Slot,
-                                 IR.Part_Position (Base),
-                                 Value, Site, Nested => Child_Steps);
+                                 Leaf_Base (Base, Child_Steps),
+                                 Value, Site,
+                                 Nested => Leaf_Steps (Base, Child_Steps));
                         end case;
                      end;
 
@@ -4548,10 +4637,17 @@ package body Landin.Stages.Lowering is
                            Field : constant Positive := Positive
                              (Landin.Checking.Field_Index
                                 (Types.all, Of_Tree, Place));
-                           Base : constant Positive :=
-                             Positive (Chain_Base (Of_Tree, Place));
-                           Steps : constant IR.Path_Step_Array :=
+                           --  D127: a variant part is reached like any
+                           --  other part, so a run that starts at whole
+                           --  array storage gives its first step to it.
+                           Reached : constant Natural :=
+                             Chain_Base (Of_Tree, Place);
+                           Walked : constant IR.Path_Step_Array :=
                              Chain_Steps (Of_Tree, Place);
+                           Base : constant Positive :=
+                             Positive (Leaf_Base (Reached, Walked));
+                           Steps : constant IR.Path_Step_Array :=
+                             Leaf_Steps (Reached, Walked);
                         begin
                            pragma Assert
                              (Landin.Checking.Field_Kind_Of

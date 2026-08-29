@@ -4769,7 +4769,7 @@ boundary. All were declined.
 **Pinned by** the parser, resolution, lowering, verifier and target-layout
 public seams; `positive/variant-part-measured`;
 `negative/variant-part-empty`; `negative/variant-case-duplicate`;
-`negative/array-of-a-variant-bearing-struct`;
+`positive/variant-inside-an-element`;
 `negative/variant-case-value-not-enabled`;
 `negative/variant-return-unassigned`; the generated construct, token, IR and
 target-layout records; the backend seam against both target descriptions; and
@@ -6488,7 +6488,7 @@ selection below it is then an ordinary step of the same run.
 
 **Pinned by** `positive/variant-struct-payload`,
 `negative/variant-struct-payload-mismatch`,
-`negative/array-of-a-variant-bearing-struct`, the generated IR
+`positive/variant-inside-an-element`, the generated IR
 record, and `runtime/variant-struct-payloads` on Linux x86-64.
 
 ### D122 — A fixed array's element may be an ordinary struct
@@ -6520,14 +6520,12 @@ applied after the scaled index, which is the only new thing an instruction
 holds: an index is a value and cannot be a step. Two shapes are the same shape
 when they hold the same thing, not when their runs start in the same place.
 
-Two forms stay refused and name this item. A whole element is neither a value
-nor a place: the contextual forms reach one through identities alone, and an
-index is a value. And an array whose element is a struct with a variant part
-has no carrier, for the reason an ordinary child holding one has none.
+Two forms stayed refused and named this item: a whole element as a value or a
+place, and an array whose element is a struct with a variant part. D127 admits
+both, by making a known index one step of the run rather than a value.
 
 **Pinned by** `positive/array-of-structs`,
 `negative/whole-array-element-place`,
-`negative/array-of-a-variant-bearing-struct`,
 `negative/selection-from-a-scalar-element`, the malformed case
 `Element_Path_Below_A_Scalar_Element`, the generated IR record, and
 `runtime/array-of-structs` on Linux x86-64.
@@ -6716,10 +6714,59 @@ is the reached part's own and not the base field's. A run *below* a selected
 payload is a `Case_Index` step of the same run, so nothing is ever added after
 the payload and one order suffices.
 
-An array element is still refused: a run reaches a part by identities, and an
-index is a value. D127 gives an element a place and admits it there.
+An array element was still refused here: a run reaches a part by identities,
+and an index is a value. D127 makes a known index one of those identities and
+admits it there.
 
 **Pinned by** `positive/nested-variant-parts`,
-`negative/array-of-a-variant-bearing-struct`, the malformed case
+`positive/variant-inside-an-element`, the malformed case
 `Variant_Path_Reaches_A_Scalar`, the generated IR record, and
 `runtime/nested-variant-parts` on Linux x86-64.
+
+### D127 — A known index is an identity, so an element is a place
+
+**The tour said** that a fixed array is its element repeated [0520], that a
+whole struct may be zeroed, constructed and copied [0540] [0700] [0710], and
+it writes `w.items[i].x` outright. D122 gave an array an ordinary struct
+element and made a leaf of one a value and a place, but left the whole element
+neither, and refused an element with a variant part: every whole-part and
+variant operation reaches its part by identities, and an index is a value.
+
+**Chosen:** an index the compiler knows is one of those identities, so it is
+one step of D118's run. A whole array element at a known position is a value
+and a place wherever a whole ordinary child is one: `zeroed`, a labelled
+literal or nominal construction, a copy from storage of the same nominal type,
+a call's destination, and a call argument. An array whose element is a struct
+with a variant part follows, because the run now reaches the part.
+
+Where a run may start is one question, asked once. Base zero with no run is
+the storage itself; base zero with a run is whole array storage the run starts
+at; a positive base is [0750]'s field of a struct, or [0520]'s element
+position of an array. A field operation names one part and then a run below
+it, so a run that starts at whole array storage gives its first step to the
+part — which is what a known index of a scalar array has always meant. That
+one promotion is the only place the two conventions meet.
+
+A computed index stays refused. Reaching a whole element there would need an
+address the contextual forms do not form, and the refusal is the same one
+whether the element is the subject or a variant part inside it.
+
+**Why not a new opcode or operand:** an indexed operation already carries a
+scaled index and a run; a known position needs neither, because it is a
+position. Adding a second element operand would make every consumer ask which
+of two ways an element was named, and the neutral IR would hold a number that
+is a value in one form and an identity in the other.
+
+**The alternatives:** admit a computed index by forming an address, keep the
+whole element refused and enable only the variant element, or give an element
+its own opcode. The first crosses the boundary that keeps every contextual
+form addressable by identity; the second leaves the array's own whole form the
+last one missing; the third duplicates D118's run at one depth.
+
+**Pinned by** `positive/whole-array-elements`,
+`positive/variant-inside-an-element`,
+`negative/whole-array-element-place`,
+`negative/variant-part-below-a-computed-index`, the malformed case
+`Whole_Element_Beyond_The_Array`, the generated IR record, and
+`runtime/whole-array-elements` and `runtime/variant-inside-an-element` on
+Linux x86-64.

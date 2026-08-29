@@ -2069,15 +2069,24 @@ selected case fixes their order — the run reaches the part, the case is
 selected inside it — and a run below a payload is a case step of the same run,
 so nothing follows the payload.
 
-D118--D122 have closed the nested-ordinary forms R2.20 left contextual:
+The thirty-eighth increment makes a known index one identity of the run
+rather than a value, so a whole array element at one is a value and a place
+wherever a whole ordinary child is, and an array whose element is a struct
+with a variant part follows. Where a run may start became one question: base
+zero with no run is the storage itself, base zero with a run is whole array
+storage, and a positive base is a struct's field or an array's element
+position. A computed index stays refused, because reaching a whole element
+there would need an address the contextual forms do not form.
+
+D118--D127 have closed the nested-ordinary forms R2.20 left contextual:
 whole nested field selection, construction and copy, deeper recursive
 composition, aggregate variant payloads, D17's fixed arrays whose element
-is an aggregate, and a variant part anywhere a struct may sit. They reuse
-R2.20's neutral shape provenance rather than reopening its target layout.
-What they leave for a later increment of this item, each refused by name and
-pointing here: a module image containing an ordinary-child or
-ordinary-payload value; and a whole array element as a value or a place,
-which is also what a variant part inside an element waits for.
+is an aggregate, a variant part anywhere a struct may sit, and a whole array
+element at a known position. They reuse R2.20's neutral shape provenance
+rather than reopening its target layout. What they leave for a later
+increment of this item, refused by name and pointing here: a module image
+containing an ordinary-child or ordinary-payload value, which [1940] folds
+rather than copies.
 
 Error atoms remain identity without payload. This item does not invent a
 second error mechanism without executable pressure: R3.50's hosted I/O and

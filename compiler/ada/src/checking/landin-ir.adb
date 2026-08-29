@@ -447,9 +447,15 @@ package body Landin.IR is
       Element : Field_Shape;
       Length  : Element_Total)
    is
+      --  D127: an aggregate element is kept in the shared run as well, so
+      --  Whole_Array_Shape can name it without fabricating one.
+      Where : constant Natural :=
+        (if Element.Kind = Scalar_Field_Shape then 0
+         else Add_Shape_Run (Into, [1 => Element]));
       Held : Item_Record := Landin.IR.Element (Into, Item);
    begin
       Held.Element := Element;
+      Held.Element_Run := Where;
       Held.Length := Length;
       Into.Items (Positive (Item)) := Held;
    end Set_Array;
@@ -461,6 +467,15 @@ package body Landin.IR is
    function Array_Element_Shape
      (Of_Unit : Unit; Item : Item_Id) return Field_Shape
      is (Element (Of_Unit, Item).Element);
+
+   function Whole_Array_Shape
+     (Of_Unit : Unit; Item : Item_Id) return Field_Shape
+     is (Kind           => Array_Field_Shape,
+         Element        => Element (Of_Unit, Item).Element.Element,
+         Length         => Element (Of_Unit, Item).Length,
+         Cases          =>
+           (if Element (Of_Unit, Item).Element_Run = 0 then 0 else 1),
+         Payloads_First => Element (Of_Unit, Item).Element_Run);
 
    function Array_Length
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
@@ -716,12 +731,16 @@ package body Landin.IR is
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin) return Slot_Id
    is
+      Where : constant Natural :=
+        (if Element.Kind = Scalar_Field_Shape then 0
+         else Add_Shape_Run (Into, [1 => Element]));
       Held : Item_Record := Landin.IR.Element (Into, Item);
    begin
       Open_Run (Held.Slots, Natural (Into.Slots.Length));
       Into.Slots.Append
         (Slot_Record'(Array_Shape => True,
                       Element     => Element,
+                      Element_Run => Where,
                       Length      => Length,
                       Declaration => Declares,
                       Site        => Site,
@@ -743,6 +762,20 @@ package body Landin.IR is
    function Slot_Array_Element_Shape
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element);
+
+   function Whole_Slot_Array_Shape
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
+     is (Kind           => Array_Field_Shape,
+         Element        =>
+           Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element.Element,
+         Length         =>
+           Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Length,
+         Cases          =>
+           (if Of_Unit.Slots
+                 (Slot_At (Of_Unit, Item, Slot)).Element_Run = 0
+            then 0 else 1),
+         Payloads_First =>
+           Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element_Run);
 
    function Slot_Array_Length
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total

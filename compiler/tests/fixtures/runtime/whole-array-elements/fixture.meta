@@ -1,0 +1,6 @@
+class: runtime
+summary: a whole array element written, copied, returned into and read back holds exactly its own storage, and its neighbours keep theirs
+constructs: 0520, 0540, 0670, 0700, 0710, 0750, 1810
+program: main.ldn
+status: 42
+targets: linux-x86-64

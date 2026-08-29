@@ -1,0 +1,20 @@
+tagged: type = struct
+    kind: variant
+        leaf |
+        pair: (first: i32, second: i32)
+    end kind
+end tagged
+
+mut rows: [2]tagged
+
+written: (at: usize) -> none =
+    rows[at].kind = pair(first: 1, second: 2)
+end written
+
+matched: (at: usize) -> (r: i32) =
+    r = 0
+    match rows[at].kind
+        leaf: r = 1
+        pair(first, second): r = first + second
+    end match
+end matched

@@ -270,14 +270,18 @@ package body Landin.Backend.X86_64 is
          if Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
          then
             declare
-               Held : constant Held_Size :=
-                 Size_Of (Landin.IR.Array_Element (Of_Unit, Item), Facts);
+               --  D122 admits an aggregate element, so the stride is the
+               --  element shape's own extent and not a scalar width.
+               Size : Landin.Targets.Byte_Count;
+               Alignment : Landin.Targets.Byte_Alignment;
             begin
+               Landin.Backend.Field_Extent
+                 (Of_Unit,
+                  Landin.IR.Array_Element_Shape (Of_Unit, Item),
+                  Facts, Size, Alignment);
                if Wanted > 0 then
                   Offset :=
-                    Landin.Targets.Byte_Count (Wanted - 1)
-                    * Landin.Targets.Byte_Count
-                        (Landin.Targets.Bytes (Held));
+                    Landin.Targets.Byte_Count (Wanted - 1) * Size;
                end if;
             end;
 
@@ -414,9 +418,19 @@ package body Landin.Backend.X86_64 is
             return Landin.IR.Field_Shape;
          --  D126: the part a variant operation reaches, which is its base
          --  field and then whatever run [0420] composed below it.
+         function Root_Shape_Of
+           (Place : Landin.IR.Storage; Field : Natural)
+            return Landin.IR.Field_Shape;
+         --  D127: the part a base position names.  For storage that is an
+         --  array that is [0520]'s element, which is what a known index of
+         --  a scalar array has always meant; for a struct it is [0750]'s
+         --  field.
+         function Part_Shape_Of
+           (Place : Landin.IR.Storage; Which : Landin.IR.Part_Position)
+            return Landin.IR.Field_Shape;
          function Reached_Shape
            (Place  : Landin.IR.Storage;
-            Field  : Positive;
+            Field  : Natural;
             Nested : Landin.IR.Path_Step_Array)
             return Landin.IR.Field_Shape;
 
@@ -436,12 +450,11 @@ package body Landin.Backend.X86_64 is
          begin
             if Payload_Field > 0 then
                return Landin.IR.Nth_Variant_Case_Field
-                 (Of_Unit, Reached_Shape (Place, Positive (Field), Nested),
+                 (Of_Unit, Reached_Shape (Place, Field, Nested),
                   Positive (Which), Positive (Payload_Field)).Length;
             end if;
             if Nested'Length > 0 then
-               return Reached_Shape
-                 (Place, Positive (Field), Nested).Length;
+               return Reached_Shape (Place, Field, Nested).Length;
             end if;
             return
               (case Place.Kind is
@@ -459,16 +472,48 @@ package body Landin.Backend.X86_64 is
                         Positive (Field)).Length));
          end Array_Length_Of;
 
+         --  D127: where a run starts.  A positive base field is that
+         --  field's shape; base zero is storage that is itself an array,
+         --  said as one shape so a run may start there too.
+         function Root_Shape_Of
+           (Place : Landin.IR.Storage; Field : Natural)
+            return Landin.IR.Field_Shape
+         is (if Field > 0
+             then Part_Shape_Of (Place, Landin.IR.Part_Position (Field))
+             else (case Place.Kind is
+                      when Landin.IR.Module_Datum =>
+                        Landin.IR.Whole_Array_Shape (Of_Unit, Place.Datum),
+                      when Landin.IR.Frame_Slot =>
+                        Landin.IR.Whole_Slot_Array_Shape
+                          (Of_Unit, Item, Place.Slot)));
+
+         function Part_Shape_Of
+           (Place : Landin.IR.Storage; Which : Landin.IR.Part_Position)
+            return Landin.IR.Field_Shape
+         is (case Place.Kind is
+                when Landin.IR.Module_Datum =>
+                  (if Landin.IR.Result_Of (Of_Unit, Place.Datum)
+                        = Landin.Types.Fixed_Array
+                   then Landin.IR.Array_Element_Shape (Of_Unit, Place.Datum)
+                   else Landin.IR.Nth_Field_Shape
+                     (Of_Unit, Place.Datum, Positive (Which))),
+                when Landin.IR.Frame_Slot =>
+                  (if Landin.IR.Is_Array (Of_Unit, Item, Place.Slot)
+                   then Landin.IR.Slot_Array_Element_Shape
+                     (Of_Unit, Item, Place.Slot)
+                   else Landin.IR.Nth_Slot_Field_Shape
+                     (Of_Unit, Item, Place.Slot, Positive (Which))));
+
          --  D121: the shape of one element of the array an operation
          --  reaches.  A scalar element answers as itself, so every caller
          --  that only wants a width still gets one.
          function Reached_Shape
            (Place  : Landin.IR.Storage;
-            Field  : Positive;
+            Field  : Natural;
             Nested : Landin.IR.Path_Step_Array)
             return Landin.IR.Field_Shape
          is (Landin.IR.Shape_At
-               (Of_Unit, Stored_Field_Shape (Place, Field), Nested));
+               (Of_Unit, Root_Shape_Of (Place, Field), Nested));
 
          function Element_Shape_Of
            (Place         : Landin.IR.Storage;
@@ -484,13 +529,13 @@ package body Landin.Backend.X86_64 is
                  (Of_Unit,
                   Landin.IR.Nth_Variant_Case_Field
                     (Of_Unit,
-                     Reached_Shape (Place, Positive (Field), Nested),
+                     Reached_Shape (Place, Field, Nested),
                      Positive (Which), Positive (Payload_Field)));
             end if;
             if Nested'Length > 0 then
                return Landin.IR.Array_Element_Shape
                  (Of_Unit,
-                  Reached_Shape (Place, Positive (Field), Nested));
+                  Reached_Shape (Place, Field, Nested));
             end if;
             case Place.Kind is
                when Landin.IR.Module_Datum =>
@@ -592,11 +637,10 @@ package body Landin.Backend.X86_64 is
             --  offset is its own shape's and not the base field's.  A run
             --  *below* a selected payload is a Case_Index step of the same
             --  run, so nothing is ever added after the payload.
-            if Nested'Length > 0 and then Field > 0 then
+            if Nested'Length > 0 then
                declare
                   At_Offset : constant Landin.Targets.Byte_Count :=
-                    Path_Offset
-                      (Stored_Field_Shape (Place, Positive (Field)), Nested);
+                    Path_Offset (Root_Shape_Of (Place, Field), Nested);
                begin
                   if At_Offset > 0 then
                      Emit
@@ -613,8 +657,7 @@ package body Landin.Backend.X86_64 is
                declare
                   At_Offset : constant Landin.Targets.Byte_Count :=
                     Landin.Backend.Variant_Payload_Field_Offset
-                      (Of_Unit,
-                       Reached_Shape (Place, Positive (Field), Nested),
+                      (Of_Unit, Reached_Shape (Place, Field, Nested),
                        Positive (Which), Positive (Payload_Field), Facts);
                begin
                   if At_Offset > 0 then
@@ -647,23 +690,20 @@ package body Landin.Backend.X86_64 is
                         (Of_Unit, Item, Place.Slot));
          begin
             --  D91 clears one whole child; D119 clears one however far
-            --  down the path went.  Either way the extent is the reached
-            --  field's own, replayed against this target.
-            if Field > 0
-              and then Landin.IR.Shape_At
-                (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
-                 Nested).Kind = Landin.IR.Aggregate_Field_Shape
+            --  down the path went; D127 lets that run start at whole array
+            --  storage, so an element is reached the same way.  Either way
+            --  the extent is the reached part's own, replayed against this
+            --  target.
+            if (Field > 0 or else Nested'Length > 0)
+              and then Reached_Shape (Place, Field, Nested).Kind
+                         = Landin.IR.Aggregate_Field_Shape
             then
                declare
                   Size : Landin.Targets.Byte_Count;
                   Alignment : Landin.Targets.Byte_Alignment;
                begin
                   Landin.Backend.Field_Extent
-                    (Of_Unit,
-                     Landin.IR.Shape_At
-                       (Of_Unit,
-                        Stored_Field_Shape (Place, Positive (Field)),
-                        Nested),
+                    (Of_Unit, Reached_Shape (Place, Field, Nested),
                      Facts, Size, Alignment);
                   return Size;
                end;
@@ -725,7 +765,26 @@ package body Landin.Backend.X86_64 is
             Total   : Landin.Targets.Byte_Count := 0;
          begin
             for Step of Path loop
-               if Step.Case_Index = 0 then
+               if Step.Case_Index = 0
+                 and then Reached.Kind = Landin.IR.Array_Field_Shape
+               then
+                  --  D127: a step into an array names [0520]'s element
+                  --  position, so the offset is one multiplication.
+                  declare
+                     Element : constant Landin.IR.Field_Shape :=
+                       Landin.IR.Array_Element_Shape (Of_Unit, Reached);
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Field_Extent
+                       (Of_Unit, Element, Facts, Size, Alignment);
+                     Total := Total
+                       + Landin.Targets.Byte_Count
+                           (Landin.IR.Element_Total (Step.Field) - 1)
+                         * Size;
+                     Reached := Element;
+                  end;
+               elsif Step.Case_Index = 0 then
                   declare
                      Placed : Landin.Targets.Placement :=
                        Landin.Targets.Empty_Placement;
@@ -1489,8 +1548,9 @@ package body Landin.Backend.X86_64 is
                                   (Of_Unit, Item, Slot, Which)
                            else Landin.IR.Shape_At
                                   (Of_Unit,
-                                   Landin.IR.Nth_Slot_Field_Shape
-                                     (Of_Unit, Item, Slot, Positive (Which)),
+                                   Part_Shape_Of
+                                     ((Kind => Landin.IR.Frame_Slot,
+                                       Slot => Slot), Which),
                                    Nested).Element);
                         Held : constant Held_Size := Size_Of (Kind, Facts);
                         Top : constant Landin.Targets.Byte_Count :=
@@ -1502,8 +1562,9 @@ package body Landin.Backend.X86_64 is
                         At_Offset : constant Landin.Targets.Byte_Count :=
                           (if Nested'Length = 0 then Top
                            else Top - Path_Offset
-                             (Landin.IR.Nth_Slot_Field_Shape
-                                (Of_Unit, Item, Slot, Positive (Which)),
+                             (Part_Shape_Of
+                                ((Kind => Landin.IR.Frame_Slot,
+                                  Slot => Slot), Which),
                               Nested));
                         Place : constant String := Cell (At_Offset);
                      begin
@@ -1534,16 +1595,18 @@ package body Landin.Backend.X86_64 is
                        + (if Nested'Length = 0
                           then Landin.Targets.Byte_Count'(0)
                           else Path_Offset
-                            (Landin.IR.Nth_Field_Shape
-                               (Of_Unit, Datum, Positive (Which)),
+                            (Part_Shape_Of
+                               ((Kind  => Landin.IR.Module_Datum,
+                                 Datum => Datum), Which),
                              Nested));
                      Kind : constant Landin.Types.Scalar_Name :=
                        (if Nested'Length = 0
                         then Landin.IR.Nth_Part (Of_Unit, Datum, Which)
                         else Landin.IR.Shape_At
                                (Of_Unit,
-                                Landin.IR.Nth_Field_Shape
-                                  (Of_Unit, Datum, Positive (Which)),
+                                Part_Shape_Of
+                                  ((Kind  => Landin.IR.Module_Datum,
+                                    Datum => Datum), Which),
                                 Nested).Element);
                      Held : constant Held_Size := Size_Of (Kind, Facts);
                   begin

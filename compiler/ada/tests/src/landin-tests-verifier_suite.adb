@@ -239,6 +239,7 @@ package body Landin.Tests.Verifier_Suite is
       Nested_Field_Beyond_The_Child,
       Path_Step_Below_A_Scalar_Leaf,
       Variant_Path_Reaches_A_Scalar,
+      Whole_Element_Beyond_The_Array,
       Element_Path_Below_A_Scalar_Element,
       Nested_Element_Beyond_The_Child,
       Field_Operation_Names_An_Array,
@@ -728,6 +729,20 @@ package body Landin.Tests.Verifier_Suite is
                    (Unit, A, E, N, Landin.Types.U32, Site,
                     Below => Below (1));
             pragma Assert (M /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         --  D127 lets a run start at whole array storage, so it also has
+         --  to refuse one whose first step is past the array's own length.
+         --  Q is a local `[4]u32` and there is no ninth element.
+         when Whole_Element_Beyond_The_Array =>
+            IR.Emit_Array_Clear
+              (Unit, A,
+               Destination => (Kind => IR.Frame_Slot, Slot => Q),
+               Site        => Site,
+               Field       => 0,
+               Nested      => [(Field => 9, Case_Index => 0)]);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -1267,6 +1282,8 @@ package body Landin.Tests.Verifier_Suite is
          (Path_Step_Below_A_Scalar_Leaf, V.Field_Is_Not_A_Scalar),
          (Variant_Path_Reaches_A_Scalar,
           V.Variant_Field_Is_Not_A_Variant),
+         (Whole_Element_Beyond_The_Array,
+          V.Element_Field_Is_Not_An_Array),
          (Element_Path_Below_A_Scalar_Element,
           V.Element_Field_Is_Not_An_Array),
          (Nested_Element_Beyond_The_Child,

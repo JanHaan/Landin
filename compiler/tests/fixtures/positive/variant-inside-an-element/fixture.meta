@@ -1,0 +1,5 @@
+class: positive
+summary: D127 gives a fixed array an element that is a struct with a variant part, selected, written, copied and matched through the run a known index starts
+constructs: 0520, 0670, 0680, 0700, 0710, 0750, 1810, 1970
+program: program.ldn
+targets: linux-x86-64, macos-arm64
