@@ -29,7 +29,9 @@ package body Landin.Stages.Checking is
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
    use type Landin.Checking.Progress;
+   use type Landin.Checking.Atom_Set_Id;
    use type Landin.Checking.Element_Count;
+   use type Landin.Checking.Error_Set_Form;
    use type Landin.Checking.Field_Kind;
    use type Landin.Checking.Signature_Id;
    use type Res.Verdict;
@@ -105,6 +107,7 @@ package body Landin.Stages.Checking is
                when Ty.Scalar_Name     => "`" & Ty.Spelling (Item) & "`",
                when Ty.Untyped_Integer => "a number",
                when Ty.No_Value        => "nothing",
+               when Ty.Atom_Value      => "an atom",
                when others             => "something unknown");
 
       --  A requirement that is not a real type is checked and says
@@ -231,6 +234,8 @@ package body Landin.Stages.Checking is
          --  source signature whose ordered named results form this value.
          Result_Shape : Landin.Checking.Signature_Id :=
            Landin.Checking.No_Signature;
+         Atoms        : Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.No_Atom_Set;
       end record;
 
       No_Value_Context : constant Value_Context := (others => <>);
@@ -253,6 +258,12 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Wanted  : Ty.Type_Kind;
+         Site    : Landin.Provenance.Origin;
+         Because : String);
+      procedure Require_Atom
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Wanted  : Landin.Checking.Atom_Set_Id;
          Site    : Landin.Provenance.Origin;
          Because : String);
       procedure Check_Place
@@ -356,6 +367,91 @@ package body Landin.Stages.Checking is
          For_Declaration : Res.Declaration_Id := Res.No_Declaration)
          return Ty.Type_Kind is
       begin
+         --  [0640]: source order describes a set, not an encoding.  Flatten
+         --  aliases and repeated members into one structural identity while
+         --  retaining declaration identities rather than inventing ordinals.
+         if Syn.Kind (Of_Tree, Written) = Syn.Atom_Union_Type then
+            declare
+               Limit : constant Natural :=
+                 Res.Declaration_Count (Meanings.all);
+               Members : Landin.Checking.Atom_Array
+                 (1 .. Positive'Max (1, Limit)) :=
+                   [others => Res.No_Declaration];
+               Count : Natural := 0;
+               Valid : Boolean := True;
+            begin
+               for Index in 1 .. Syn.Atom_Member_Count
+                 (Of_Tree, Written)
+               loop
+                  declare
+                     Member : constant Syn.Node_Id :=
+                       Syn.Nth_Atom_Member (Of_Tree, Written, Index);
+                     Held : constant Ty.Type_Kind :=
+                       Type_At (Of_Tree, Member);
+                  begin
+                     if Held = Ty.Atom_Value then
+                        declare
+                           Set_Id : constant Landin.Checking.Atom_Set_Id :=
+                             Landin.Checking.Atom_Set_Of
+                               (Types.all, Of_Tree, Member);
+                        begin
+                           for Position in 1 .. Landin.Checking.Atom_Count
+                             (Types.all, Set_Id)
+                           loop
+                              declare
+                                 Atom : constant Res.Declaration_Id :=
+                                   Landin.Checking.Nth_Atom
+                                     (Types.all, Set_Id, Position);
+                                 Seen : Boolean := False;
+                              begin
+                                 for Prior in 1 .. Count loop
+                                    Seen := Seen
+                                      or else Members (Prior) = Atom;
+                                 end loop;
+                                 if not Seen then
+                                    Count := Count + 1;
+                                    Members (Count) := Atom;
+                                 end if;
+                              end;
+                           end loop;
+                        end;
+                     elsif Held /= Ty.Ill_Typed then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Member),
+                           Message => "this union member is not an atom"
+                                      & " type",
+                           Note    => "[0640]: an atom union contains only"
+                                      & " atom identities",
+                           Related => Syn.Origin (Of_Tree, Written),
+                           Because => "the union declared here",
+                           Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Member);
+                        Valid := False;
+                     else
+                        Valid := False;
+                     end if;
+                  end;
+               end loop;
+
+               if not Valid or else Count = 0 then
+                  return Ty.Ill_Typed;
+               end if;
+
+               declare
+                  Set_Id : constant Landin.Checking.Atom_Set_Id :=
+                    Landin.Checking.Add_Atom_Set
+                      (Types.all, Members (1 .. Count));
+               begin
+                  Landin.Checking.Note_Atom_Set
+                    (Types.all, Of_Tree, Written, Set_Id);
+                  return Ty.Atom_Value;
+               end;
+            end;
+         end if;
+
          --  D117's written function type is the same target-neutral
          --  descriptor a declared function receives.  Build it once per
          --  syntax occurrence; aliases and values copy its identity below.
@@ -825,7 +921,9 @@ package body Landin.Stages.Checking is
             Means : constant Res.Declaration_Id :=
               Res.Bound_To (Meanings.all, Of_Tree, Written);
          begin
-            if Res.Sort_Of (Meanings.all, Means) /= Res.Module_Type then
+            if Res.Sort_Of (Meanings.all, Means)
+                 not in Res.Module_Type | Res.Module_Atom
+            then
                --  Every place that needs this type asks again, so the
                --  node carries whether it has been answered for: without
                --  that a name used once is reported once per pass.
@@ -873,6 +971,10 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note_Signature
                     (Types.all, Of_Tree, Written,
                      Landin.Checking.Signature_Of (Types.all, Means));
+               elsif Held = Ty.Atom_Value then
+                  Landin.Checking.Note_Atom_Set
+                    (Types.all, Of_Tree, Written,
+                     Landin.Checking.Atom_Set_Of (Types.all, Means));
                end if;
 
                return Held;
@@ -890,6 +992,10 @@ package body Landin.Stages.Checking is
          Results : Landin.Checking.Signature_Part_Array
            (1 .. Syn.Return_Count (Of_Tree, Node)) :=
              [others => (others => <>)];
+         Errors : Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.No_Atom_Set;
+         Error_Form : Landin.Checking.Error_Set_Form :=
+           Landin.Checking.Infallible;
          Valid : Boolean := True;
 
          function Part_At
@@ -914,6 +1020,11 @@ package body Landin.Stages.Checking is
             case Held is
                when Ty.Scalar_Name =>
                   null;
+               when Ty.Atom_Value =>
+                  Part.Atoms := Landin.Checking.Atom_Set_Of
+                    (Types.all, Of_Tree, Written);
+                  Valid := Valid
+                    and then Part.Atoms /= Landin.Checking.No_Atom_Set;
                when Ty.Aggregate =>
                   Part.Aggregate_Body :=
                     Landin.Checking.Body_Of (Types.all, Of_Tree, Written);
@@ -1004,10 +1115,13 @@ package body Landin.Stages.Checking is
                      Scalar : Landin.Targets.Scalar_Size;
                   begin
                      case Part.Kind is
-                        when Ty.Scalar_Name | Ty.Function_Value =>
+                        when Ty.Scalar_Name | Ty.Function_Value
+                           | Ty.Atom_Value =>
                            Scalar := Ty.Storage_Size
                              ((if Part.Kind = Ty.Function_Value
-                               then Ty.Usize else Ty.Scalar_Name (Part.Kind)),
+                               then Ty.Usize
+                               elsif Part.Kind = Ty.Atom_Value
+                               then Ty.U32 else Ty.Scalar_Name (Part.Kind)),
                               Facts);
                            Size := Landin.Targets.Byte_Count
                              (Landin.Targets.Bytes (Scalar));
@@ -1062,6 +1176,41 @@ package body Landin.Stages.Checking is
             end;
          end if;
 
+         if Syn.Error_Set_Of (Of_Tree, Node) /= Syn.No_Node then
+            declare
+               Written : constant Syn.Node_Id :=
+                 Syn.Error_Set_Of (Of_Tree, Node);
+            begin
+               if Syn.Kind (Of_Tree, Written) = Syn.Inferred_Error_Set then
+                  if Syn.Kind (Of_Tree, Node) /= Syn.Function_Declaration
+                    or else Syn.Is_Public (Of_Tree, Node)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Written),
+                        Message => "`! ...` is private routine inference,"
+                                   & " not a concrete function type",
+                        Note    => "[0960]: public and first-class"
+                                   & " signatures write a concrete set",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this signature needs a stable type",
+                        Into    => Found);
+                     Valid := False;
+                  else
+                     Error_Form := Landin.Checking.Inferred;
+                  end if;
+               elsif Type_At (Of_Tree, Written) = Ty.Atom_Value then
+                  Errors := Landin.Checking.Atom_Set_Of
+                    (Types.all, Of_Tree, Written);
+                  Error_Form := Landin.Checking.Concrete;
+                  Valid := Errors /= Landin.Checking.No_Atom_Set;
+               else
+                  Valid := False;
+               end if;
+            end;
+         end if;
+
          if not Valid then
             return Landin.Checking.No_Signature;
          end if;
@@ -1069,7 +1218,8 @@ package body Landin.Stages.Checking is
          declare
             Made : constant Landin.Checking.Signature_Id :=
               Landin.Checking.Add_Signature
-                (Types.all, Parts, Results, Syn.Origin (Of_Tree, Node));
+                (Types.all, Parts, Results, Syn.Origin (Of_Tree, Node),
+                 Errors, Error_Form);
          begin
             Landin.Checking.Note_Signature
               (Types.all, Of_Tree, Node, Made);
@@ -1628,6 +1778,17 @@ package body Landin.Stages.Checking is
            Tree_For (Res.Source_Of (Meanings.all, Id));
          Node    : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
       begin
+         if Syn.Kind (Of_Tree.all, Node) = Syn.Atom_Declaration then
+            declare
+               Set_Id : constant Landin.Checking.Atom_Set_Id :=
+                 Landin.Checking.Add_Atom_Set
+                   (Types.all, [1 => Id]);
+            begin
+               Landin.Checking.Note_Atom_Set (Types.all, Id, Set_Id);
+               return Ty.Atom_Value;
+            end;
+         end if;
+
          if Syn.Kind (Of_Tree.all, Node) = Syn.Function_Declaration then
             declare
                Signature : constant Landin.Checking.Signature_Id :=
@@ -1694,6 +1855,13 @@ package body Landin.Stages.Checking is
                        (Types.all, Of_Tree.all, Written));
                end if;
 
+               if Held = Ty.Atom_Value then
+                  Landin.Checking.Note_Atom_Set
+                    (Types.all, Id,
+                     Landin.Checking.Atom_Set_Of
+                       (Types.all, Of_Tree.all, Written));
+               end if;
+
                --  D118: a type alias and explicitly typed local carry the
                --  descriptor written by their type position.  This is
                --  independent of whichever function value later fills it.
@@ -1757,10 +1925,12 @@ package body Landin.Stages.Checking is
                return Ty.Ill_Typed;
 
             when Landin.Checking.Untouched =>
-               if Res.Sort_Of (Meanings.all, Id) = Res.Module_Type then
-                  --  A forward type alias reaches here before pass one's
-                  --  outer walk reaches the declaration it names.  Settle
-                  --  that written type now; Infer is only [1790]'s `:=`
+               if Res.Sort_Of (Meanings.all, Id)
+                    in Res.Module_Type | Res.Module_Atom
+               then
+                  --  A forward type alias or atom reaches here before pass
+                  --  one's outer walk reaches the declaration it names.
+                  --  Settle that written type now; Infer is only [1790]'s `:=`
                   --  binding and would ask a type declaration for a value.
                   Landin.Checking.Begin_Inference (Types.all, Id);
 
@@ -1939,6 +2109,55 @@ package body Landin.Stages.Checking is
          end if;
       end Require;
 
+      procedure Require_Atom
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Wanted  : Landin.Checking.Atom_Set_Id;
+         Site    : Landin.Provenance.Origin;
+         Because : String)
+      is
+         Got : Ty.Type_Kind;
+      begin
+         if Node = Syn.No_Node then
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+         then
+            Check_Contextual_Value
+              (Of_Tree, Node,
+               (Kind => Ty.Atom_Value, Atoms => Wanted, others => <>),
+               Site, Because);
+            return;
+         end if;
+
+         Got := Synthesise (Of_Tree, Node);
+         if Got = Ty.Ill_Typed then
+            return;
+         end if;
+
+         if Got /= Ty.Atom_Value
+           or else not Landin.Checking.Is_Subset
+             (Types.all,
+              Landin.Checking.Atom_Set_Of (Types.all, Of_Tree, Node),
+              Wanted)
+         then
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "this is not an atom admitted by the set"
+                          & " required here",
+               Note    => "[0640]: an atom value may widen only into a"
+                          & " union that contains its identity",
+               Related => Site,
+               Because => Because,
+               Into    => Found);
+         end if;
+      end Require_Atom;
+
       ------------------------------------------------------------
       --  Asking a node what type it has
       ------------------------------------------------------------
@@ -1983,6 +2202,27 @@ package body Landin.Stages.Checking is
                Because => "the function compared here",
                Into    => Found);
             Landin.Checking.Refuse (Types.all, Of_Tree, Right);
+            return Ty.Ill_Typed;
+         end if;
+
+         if Left_Type = Ty.Atom_Value or else Right_Type = Ty.Atom_Value then
+            if Left_Type = Ty.Atom_Value
+              and then Right_Type = Ty.Atom_Value
+              and then Of_Kind in Syn.Equal_To | Syn.Not_Equal_To
+            then
+               return Ty.Bool;
+            end if;
+
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Anchor (Of_Tree, Node),
+               Message => "atoms support identity comparison with `==` or"
+                          & " `<>` only",
+               Note    => "[0630]: an atom has identity without payload",
+               Related => Syn.Origin (Of_Tree, Left),
+               Because => "the atom used here",
+               Into    => Found);
             return Ty.Ill_Typed;
          end if;
 
@@ -2083,6 +2323,7 @@ package body Landin.Stages.Checking is
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
                if Wants in Ty.Aggregate | Ty.Fixed_Array | Ty.Function_Value
+                              | Ty.Atom_Value
                  and then Syn.Kind (Of_Tree, Argument)
                             in Syn.If_Statement | Syn.Match_Statement
                                | Syn.Bare_Block
@@ -2099,6 +2340,8 @@ package body Landin.Stages.Checking is
                            Expected.Element_Body := Parameter.Aggregate_Body;
                         when Ty.Function_Value =>
                            Expected.Signature := Parameter.Signature;
+                        when Ty.Atom_Value =>
+                           Expected.Atoms := Parameter.Atoms;
                         when others =>
                            raise Landin.Compiler_Defect;
                      end case;
@@ -2106,6 +2349,10 @@ package body Landin.Stages.Checking is
                        (Of_Tree, Argument, Expected, Parameter.Site,
                         "this parameter");
                   end;
+               elsif Wants = Ty.Atom_Value then
+                  Require_Atom
+                    (Of_Tree, Argument, Parameter.Atoms, Parameter.Site,
+                     "this atom-valued parameter");
                elsif Wants = Ty.Function_Value then
                   declare
                      Got : constant Ty.Type_Kind :=
@@ -2296,6 +2543,87 @@ package body Landin.Stages.Checking is
             end;
          end loop;
 
+         if Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+           and then Landin.Checking.Signature_Error_Form
+             (Types.all, Signature) /= Landin.Checking.Inferred
+           and then
+             (Syn.Name
+                (Of_Tree, Syn.Recovery_Of (Of_Tree, Node))
+                = Landin.Source.Names.No_Name
+              or else Landin.Checking.State_Of
+                (Types.all,
+                 Declaration_At
+                   (Syn.Source_Of (Of_Tree),
+                    Syn.Recovery_Of (Of_Tree, Node)))
+                  /= Landin.Checking.Untouched)
+         then
+            declare
+               Recovery : constant Syn.Node_Id :=
+                 Syn.Recovery_Of (Of_Tree, Node);
+               Recovery_Body : constant Syn.Node_Id :=
+                 Syn.Else_Body (Of_Tree, Recovery);
+               Errors : constant Landin.Checking.Atom_Set_Id :=
+                 Landin.Checking.Signature_Errors (Types.all, Signature);
+               Expected : Value_Context :=
+                 (Kind => (if Result_Count > 1 then Ty.Aggregate
+                           else Result.Kind),
+                  Result_Shape =>
+                    (if Result_Count > 1 then Signature
+                     else Landin.Checking.No_Signature),
+                  others => <>);
+               Result_Site : constant Landin.Provenance.Origin :=
+                 (if Result_Count = 1 then Result.Site
+                  else Landin.Checking.Signature_Origin
+                    (Types.all, Signature));
+            begin
+               if Errors = Landin.Checking.No_Atom_Set then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Recovery),
+                     Message => "this call cannot fail, so it has no error"
+                                & " for `else` to handle",
+                     Note    => "[1030]: call-site `else` handles only the"
+                                & " declared error channel",
+                     Related => Landin.Checking.Signature_Origin
+                       (Types.all, Signature),
+                     Because => "this infallible signature",
+                     Into    => Found);
+               end if;
+
+               if Result_Count = 1 then
+                  case Result.Kind is
+                     when Ty.Atom_Value =>
+                        Expected.Atoms := Result.Atoms;
+                     when Ty.Aggregate =>
+                        Expected.Nominal := Result.Aggregate_Body;
+                     when Ty.Fixed_Array =>
+                        Expected.Length := Result.Length;
+                        Expected.Element := Result.Element;
+                        Expected.Element_Body := Result.Aggregate_Body;
+                     when Ty.Function_Value =>
+                        Expected.Signature := Result.Signature;
+                     when others =>
+                        null;
+                  end case;
+               end if;
+
+               if Syn.Kind (Of_Tree, Recovery_Body) = Syn.Block then
+                  if Result_Count = 0 then
+                     Check_Block (Of_Tree, Recovery_Body, Ty.No_Value);
+                  else
+                     Check_Block
+                       (Of_Tree, Recovery_Body, Expected.Kind, Expected,
+                        Result_Site, "the successful call result");
+                  end if;
+               else
+                  Check_Contextual_Value
+                    (Of_Tree, Recovery_Body, Expected, Result_Site,
+                     "the successful call result");
+               end if;
+            end;
+         end if;
+
          if Result_Count = 0 then
             return Ty.No_Value;
          elsif Result_Count > 1 then
@@ -2304,7 +2632,10 @@ package body Landin.Stages.Checking is
             return Ty.Aggregate;
          end if;
 
-         if Result.Kind = Ty.Aggregate then
+         if Result.Kind = Ty.Atom_Value then
+            Landin.Checking.Note_Atom_Set
+              (Types.all, Of_Tree, Node, Result.Atoms);
+         elsif Result.Kind = Ty.Aggregate then
             Landin.Checking.Note_Body
               (Types.all, Of_Tree, Node, Result.Aggregate_Body);
          elsif Result.Kind = Ty.Fixed_Array then
@@ -3412,6 +3743,11 @@ package body Landin.Stages.Checking is
                           (Types.all, Of_Tree, Node,
                            Landin.Checking.Signature_Of (Types.all, Means));
                         return Kept (Ty.Function_Value);
+                     elsif Held = Ty.Atom_Value then
+                        Landin.Checking.Note_Atom_Set
+                          (Types.all, Of_Tree, Node,
+                           Landin.Checking.Atom_Set_Of (Types.all, Means));
+                        return Kept (Ty.Atom_Value);
                      end if;
 
                      --  [1740]'s state of [0670]'s type is storage a program
@@ -3745,6 +4081,91 @@ package body Landin.Stages.Checking is
                   end;
                end;
 
+            when Syn.Try_Expression =>
+               declare
+                  Operand : constant Syn.Node_Id :=
+                    Syn.Operand_Of (Of_Tree, Node);
+                  Held : Ty.Type_Kind;
+               begin
+                  if Syn.Kind (Of_Tree, Operand) /= Syn.Call
+                    or else
+                      (Syn.Kind (Of_Tree, Operand) = Syn.Call
+                       and then Syn.Recovery_Of (Of_Tree, Operand)
+                                  /= Syn.No_Node)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Node),
+                        Message => "`try` propagates one unrecovered call",
+                        Note    => "[0960]: `try` is visible at the call site",
+                        Related => Syn.Origin (Of_Tree, Operand),
+                        Because => "this operand",
+                        Into    => Found);
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+
+                  Held := Synthesise (Of_Tree, Operand);
+                  declare
+                     Callee : constant Syn.Node_Id :=
+                       Syn.Callee_Of (Of_Tree, Operand);
+                     Means : constant Res.Declaration_Id :=
+                       (if Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+                              = Res.Bound
+                        then Res.Bound_To (Meanings.all, Of_Tree, Callee)
+                        else Res.No_Declaration);
+                     Signature : constant Landin.Checking.Signature_Id :=
+                       (if Means = Res.No_Declaration
+                        then Landin.Checking.No_Signature
+                        else Landin.Checking.Signature_Of
+                          (Types.all, Means));
+                  begin
+                     if Signature /= Landin.Checking.No_Signature
+                       and then Landin.Checking.Signature_Errors
+                         (Types.all, Signature)
+                           = Landin.Checking.No_Atom_Set
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Node),
+                           Message => "this call cannot fail, so `try` has"
+                                      & " no error to propagate",
+                           Note    => "[0960]: `try` is for the declared"
+                                      & " error outcome of a call",
+                           Related => Landin.Checking.Signature_Origin
+                             (Types.all, Signature),
+                           Because => "this infallible signature",
+                           Into    => Found);
+                     end if;
+                  end;
+
+                  if Held = Ty.Atom_Value then
+                     Landin.Checking.Note_Atom_Set
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Atom_Set_Of
+                          (Types.all, Of_Tree, Operand));
+                  elsif Held = Ty.Aggregate then
+                     Landin.Checking.Note_Body
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Body_Of
+                          (Types.all, Of_Tree, Operand));
+                  elsif Held = Ty.Fixed_Array then
+                     Landin.Checking.Note_Array
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Array_Length
+                          (Types.all, Of_Tree, Operand),
+                        Landin.Checking.Array_Element
+                          (Types.all, Of_Tree, Operand));
+                  elsif Held = Ty.Function_Value then
+                     Landin.Checking.Note_Signature
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Signature_Of
+                          (Types.all, Of_Tree, Operand));
+                  end if;
+                  return Kept (Held);
+               end;
+
             when Syn.Call =>
                declare
                   Callee : constant Syn.Node_Id :=
@@ -3889,8 +4310,12 @@ package body Landin.Stages.Checking is
                   when Res.Named_Return    => True,
                   when Res.Parameter       => False,
                   when Res.Module_Function => False,
+                  --  An atom declaration is a value and a type, but it is
+                  --  identity rather than storage and cannot be written.
+                  when Res.Module_Atom => False,
                   --  [1795] names a type, and a type is not a place.
                   when Res.Module_Type | Res.Case_Name => False,
+                  when Res.Error_Binding => False,
                   when Res.Pattern_Binding =>
                      Syn.Is_Mutable (Their_Tree.all, Their_Node),
                   when Res.Result_Binding => False,
@@ -3909,6 +4334,8 @@ package body Landin.Stages.Checking is
                              "is a parameter, and a parameter is taken in",
                           when Res.Module_Function =>
                              "names a function, which is not a place",
+                          when Res.Module_Atom =>
+                             "names an atom identity, which is not a place",
                           when others =>
                              "is not mutable, so it may not be written"),
                   Note    => "[1900]: a mutable binding and a named return"
@@ -3965,12 +4392,18 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Where : Syn.Node_Id; Context : String)
       is
          What : constant String :=
-           (case Syn.Kind (Of_Tree, Where) is
-               when Syn.Member_Selection => "a field selection",
-               when Syn.Element_Index    => "an array index",
-               when Syn.Array_Literal    => "a nested array literal",
-               when others               => "");
+           (if Where = Syn.No_Node then ""
+            else
+              (case Syn.Kind (Of_Tree, Where) is
+                  when Syn.Member_Selection => "a field selection",
+                  when Syn.Element_Index    => "an array index",
+                  when Syn.Array_Literal    => "a nested array literal",
+                  when others               => ""));
       begin
+         if Where = Syn.No_Node then
+            return;
+         end if;
+
          if What /= "" then
             Bad.Report
               (Item    => Bad.Unsupported_Use,
@@ -5477,6 +5910,170 @@ package body Landin.Stages.Checking is
             end loop;
          end Refuse_Bindings;
       begin
+         --  [0640]/[1030]: an atom union is already a closed value set, so
+         --  the same exhaustive control form matches it directly.  Unlike a
+         --  variant case it has no payload aliases to establish.
+         if not Admit_Variant_Field (Of_Tree, Subject)
+           and then Synthesise (Of_Tree, Subject) = Ty.Atom_Value
+         then
+            declare
+               Set_Id : constant Landin.Checking.Atom_Set_Id :=
+                 Landin.Checking.Atom_Set_Of
+                   (Types.all, Of_Tree, Subject);
+               Seen : array
+                 (1 .. Res.Declaration_Count (Meanings.all)) of Boolean :=
+                   [others => False];
+               Wildcard : Syn.Node_Id := Syn.No_Node;
+            begin
+               for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+                  declare
+                     Arm : constant Syn.Node_Id :=
+                       Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+                     Pattern : constant Syn.Node_Id :=
+                       Syn.Match_Pattern (Of_Tree, Arm);
+                     Means : Res.Declaration_Id := Res.No_Declaration;
+                  begin
+                     if Syn.Match_Binding_Count (Of_Tree, Arm) /= 0 then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Pattern),
+                           Message => "an atom arm has no payload to bind",
+                           Note    => "[0630]: an atom is identity without"
+                                      & " payload",
+                           Related => Syn.Origin (Of_Tree, Subject),
+                           Because => "this atom subject",
+                           Into    => Found);
+                        Refuse_Bindings (Arm);
+                     end if;
+
+                     if Syn.Name (Of_Tree, Pattern)
+                          = Landin.Source.Names.No_Name
+                     then
+                        if Wildcard /= Syn.No_Node then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Pattern),
+                              Message => "this match has two wildcard arms",
+                              Note    => "[0640]: one exhaustive arm can"
+                                         & " cover the atoms left over",
+                              Related => Syn.Origin (Of_Tree, Wildcard),
+                              Because => "the first wildcard",
+                              Into    => Found);
+                        else
+                           Wildcard := Pattern;
+                           Landin.Checking.Note
+                             (Types.all, Of_Tree, Pattern, Ty.Not_Typed);
+                           if Position /= Syn.Match_Arm_Count
+                             (Of_Tree, Node)
+                           then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Pattern),
+                                 Message => "the wildcard atom arm is last",
+                                 Note    => "[0640]: `_` covers every atom"
+                                            & " not named by another arm",
+                                 Related => Syn.Origin (Of_Tree, Subject),
+                                 Because => "this matched atom set",
+                                 Into    => Found);
+                           end if;
+                        end if;
+                     elsif Res.Verdict_Of
+                       (Meanings.all, Of_Tree, Pattern) = Res.Bound
+                     then
+                        Means := Res.Bound_To
+                          (Meanings.all, Of_Tree, Pattern);
+                        if Res.Sort_Of (Meanings.all, Means)
+                             /= Res.Module_Atom
+                          or else not Landin.Checking.Contains_Atom
+                            (Types.all, Set_Id, Means)
+                        then
+                           Means := Res.No_Declaration;
+                        end if;
+                     end if;
+
+                     if Syn.Name (Of_Tree, Pattern)
+                          /= Landin.Source.Names.No_Name
+                     then
+                        if Means = Res.No_Declaration then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Pattern),
+                              Message => "this atom is not a member of the"
+                                         & " matched set",
+                              Note    => "[0640]: every named arm belongs to"
+                                         & " the subject's atom union",
+                              Related => Syn.Origin (Of_Tree, Subject),
+                              Because => "this matched atom set",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Pattern);
+                        elsif Seen (Positive (Means)) then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Pattern),
+                              Message => "this atom is matched twice",
+                              Note    => "[0640]: an exhaustive match names"
+                                         & " each atom at most once",
+                              Related => Syn.Origin (Of_Tree, Subject),
+                              Because => "this matched atom set",
+                              Into    => Found);
+                        else
+                           Seen (Positive (Means)) := True;
+                           Landin.Checking.Note
+                             (Types.all, Of_Tree, Pattern, Ty.Atom_Value);
+                           Landin.Checking.Note_Atom_Set
+                             (Types.all, Of_Tree, Pattern,
+                              Landin.Checking.Atom_Set_Of
+                                (Types.all, Means));
+                        end if;
+                     end if;
+
+                     Check_Block
+                       (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
+                        Expected, Value_Site, Value_Because);
+                  end;
+               end loop;
+
+               if Wildcard = Syn.No_Node then
+                  for Index in 1 .. Landin.Checking.Atom_Count
+                    (Types.all, Set_Id)
+                  loop
+                     declare
+                        Missing : constant Res.Declaration_Id :=
+                          Landin.Checking.Nth_Atom
+                            (Types.all, Set_Id, Index);
+                        Their_Tree : constant not null access constant
+                          Syn.Tree :=
+                            Tree_For (Res.Source_Of (Meanings.all, Missing));
+                        Their_Node : constant Syn.Node_Id :=
+                          Res.Node_Of (Meanings.all, Missing);
+                     begin
+                        if not Seen (Positive (Missing)) then
+                           Bad.Report
+                             (Item    => Bad.Variant_Case_Not_Matched,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Subject),
+                              Message => "this match has no arm for `"
+                                         & Spelled
+                                             (Syn.Name
+                                                (Their_Tree.all, Their_Node))
+                                         & "`",
+                              Note    => "[0640]: matching an atom union is"
+                                         & " exhaustive",
+                              Into    => Found);
+                        end if;
+                     end;
+                  end loop;
+               end if;
+               return;
+            end;
+         end if;
+
          if not Admit_Variant_Field (Of_Tree, Subject) then
             declare
                Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Subject);
@@ -6013,6 +6610,18 @@ package body Landin.Stages.Checking is
                               end if;
                            end;
                         end if;
+                     end;
+                  elsif Wants = Ty.Atom_Value then
+                     declare
+                        Written : constant Syn.Node_Id :=
+                          Syn.Declared_Type (Of_Tree, Node);
+                     begin
+                        Require_Atom
+                          (Of_Tree, Value,
+                           Landin.Checking.Atom_Set_Of
+                             (Types.all, Of_Tree, Written),
+                           Syn.Origin (Of_Tree, Written),
+                           "the atom type written here");
                      end;
                   elsif Wants = Ty.Function_Value then
                      declare
@@ -6589,6 +7198,16 @@ package body Landin.Stages.Checking is
                      return;
                   end if;
 
+                  if Wants = Ty.Atom_Value then
+                     Require_Atom
+                       (Of_Tree, Value,
+                        Landin.Checking.Atom_Set_Of
+                          (Types.all, Of_Tree, Place),
+                        Syn.Origin (Of_Tree, Place),
+                        "the atom place written here");
+                     return;
+                  end if;
+
                   if Wants = Ty.Function_Value then
                      declare
                         Place_Id : constant Res.Declaration_Id :=
@@ -6710,6 +7329,29 @@ package body Landin.Stages.Checking is
                   pragma Unreferenced (Got);
                end;
 
+            when Syn.Fail_Statement =>
+               declare
+                  Error : constant Syn.Node_Id :=
+                    Syn.Value_Of (Of_Tree, Node);
+                  Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Error);
+               begin
+                  if Got /= Ty.Atom_Value and then Decidable (Got) then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Error),
+                        Message => "`fail` carries one atom identity",
+                        Note    => "[0940]: errors are payload-free atoms",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this failing exit",
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Error);
+                  end if;
+                  Require
+                    (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Ty.Bool,
+                     Syn.Origin (Of_Tree, Node), "the guard of this exit");
+               end;
+
             when Syn.Return_Statement =>
                --  [1890]: an exit's `when` is a condition, so it is a bool
                --  for [1050]'s reason asked where the exit is.
@@ -6743,6 +7385,13 @@ package body Landin.Stages.Checking is
             when Syn.Bare_Block =>
                Check_Block
                  (Of_Tree, Syn.Body_Of (Of_Tree, Node), Returns);
+
+            when Syn.Try_Expression =>
+               declare
+                  Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Node);
+               begin
+                  pragma Unreferenced (Got);
+               end;
 
             when Syn.Call =>
                --  [1920]: a call standing alone is a statement, and one
@@ -6903,6 +7552,9 @@ package body Landin.Stages.Checking is
             elsif Expected.Kind = Ty.Function_Value then
                Landin.Checking.Note_Signature
                  (Types.all, Of_Tree, Node, Expected.Signature);
+            elsif Expected.Kind = Ty.Atom_Value then
+               Landin.Checking.Note_Atom_Set
+                 (Types.all, Of_Tree, Node, Expected.Atoms);
             end if;
          end if;
       end Note_Context;
@@ -7110,6 +7762,9 @@ package body Landin.Stages.Checking is
                   end if;
                end;
 
+            when Ty.Atom_Value =>
+               Require_Atom (Of_Tree, Node, Expected.Atoms, Site, Because);
+
             when Ty.Function_Value =>
                declare
                   Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Node);
@@ -7217,6 +7872,9 @@ package body Landin.Stages.Checking is
             elsif Got = Ty.Function_Value then
                Expected.Signature := Landin.Checking.Signature_Of
                  (Types.all, Of_Tree, First);
+            elsif Got = Ty.Atom_Value then
+               Expected.Atoms := Landin.Checking.Atom_Set_Of
+                 (Types.all, Of_Tree, First);
             end if;
          end if;
 
@@ -7274,7 +7932,8 @@ package body Landin.Stages.Checking is
                return Res.Sort_Of
                         (Meanings.all,
                          Res.Bound_To (Meanings.all, Of_Tree, Node))
-                      in Res.Module_Function | Res.Module_Binding;
+                      in Res.Module_Function | Res.Module_Binding
+                         | Res.Module_Atom;
 
             when others =>
                for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
@@ -7363,6 +8022,33 @@ package body Landin.Stages.Checking is
             end;
          end Refuse_Unreadable_Subtree;
       begin
+         --  Zero is reserved to the failing-call success carrier and is no
+         --  source atom.  Unlike scalar module storage, an atom binding
+         --  therefore has no omitted or `zeroed` static image.
+         if Landin.Checking.Type_Of
+              (Types.all,
+               Declaration_At (Syn.Source_Of (Of_Tree), Node))
+              = Ty.Atom_Value
+           and then
+             (Value = Syn.No_Node
+              or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal)
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Node),
+               Message => "a module atom binding needs an atom initializer",
+               Note    => "[0630]: every atom value is a declared identity;"
+                          & " there is no implicit zero atom",
+               Related => Syn.Origin
+                 (Of_Tree,
+                  (if Written = Syn.No_Node then Node else Written)),
+               Because => "this atom binding",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+            return;
+         end if;
+
          --  A contextual initializer boundary already owns a refused binding
          --  or value.  Every Declared_As_Node refusal marks the written type,
          --  while D51's selected field marks the value; [1940] must not add a
@@ -7769,6 +8455,11 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note_Signature
                     (Types.all, Id,
                      Landin.Checking.Signature_Of
+                       (Types.all, Of_Tree.all, Value));
+               elsif Got = Ty.Atom_Value then
+                  Landin.Checking.Note_Atom_Set
+                    (Types.all, Id,
+                     Landin.Checking.Atom_Set_Of
                        (Types.all, Of_Tree.all, Value));
                end if;
 
@@ -9574,6 +10265,590 @@ package body Landin.Stages.Checking is
          end;
       end Check_Operands;
 
+      ------------------------------------------------------------
+      --  [0940]/[0960]: whole-module error-set inference
+      ------------------------------------------------------------
+
+      procedure Finalize_Error_Sets;
+
+      procedure Finalize_Error_Sets is
+         Signature_Total : constant Natural :=
+           Landin.Checking.Signature_Count (Types.all);
+         Declaration_Total : constant Natural :=
+           Res.Declaration_Count (Meanings.all);
+         Signature_Last : constant Positive :=
+           Positive'Max (1, Signature_Total);
+         Declaration_Last : constant Positive :=
+           Positive'Max (1, Declaration_Total);
+
+         type Effect_Matrix is array
+           (Positive range <>, Positive range <>) of Boolean;
+         Effects : Effect_Matrix
+           (1 .. Signature_Last, 1 .. Declaration_Last) :=
+             [others => [others => False]];
+         Required : Effect_Matrix
+           (1 .. Signature_Last, 1 .. Declaration_Last) :=
+             [others => [others => False]];
+         Edges : Effect_Matrix
+           (1 .. Signature_Last, 1 .. Signature_Last) :=
+             [others => [others => False]];
+         Owns_Body : array (1 .. Signature_Last) of Boolean :=
+           [others => False];
+         Recovery_Signatures : array (1 .. Declaration_Last) of
+           Landin.Checking.Signature_Id :=
+             [others => Landin.Checking.No_Signature];
+
+         type Call_Issue is record
+            Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+            Node : Syn.Node_Id := Syn.No_Node;
+            Signature : Landin.Checking.Signature_Id :=
+              Landin.Checking.No_Signature;
+         end record;
+
+         function Total_Nodes return Natural;
+
+         function Total_Nodes return Natural is
+            Total : Natural := 0;
+         begin
+            for Index in 1 .. Source_Count (Context) loop
+               Total := Total + Syn.Node_Count
+                 (Tree_For (Nth_Source (Context, Index)).all);
+            end loop;
+            return Total;
+         end Total_Nodes;
+
+         Issues : array (1 .. Positive'Max (1, Total_Nodes)) of Call_Issue :=
+           [others => (others => <>)];
+         Deferred_Recoveries : array
+           (1 .. Positive'Max (1, Total_Nodes)) of Call_Issue :=
+             [others => (others => <>)];
+         Issue_Count : Natural := 0;
+         Deferred_Recovery_Count : Natural := 0;
+
+         function Signature_For_Call
+           (Of_Tree : Syn.Tree; Call : Syn.Node_Id)
+            return Landin.Checking.Signature_Id;
+         procedure Include_Set
+           (Into : in out Effect_Matrix;
+            Row : Positive;
+            Set_Id : Landin.Checking.Atom_Set_Id);
+         procedure Include_Expression
+           (Of_Tree : Syn.Tree;
+            Node : Syn.Node_Id;
+            Caller : Positive;
+            Into : in out Effect_Matrix);
+         procedure Scan
+           (Of_Tree : Syn.Tree;
+            Node : Syn.Node_Id;
+            Caller : Positive);
+
+         function Signature_For_Call
+           (Of_Tree : Syn.Tree; Call : Syn.Node_Id)
+            return Landin.Checking.Signature_Id
+         is
+            Callee : constant Syn.Node_Id :=
+              Syn.Callee_Of (Of_Tree, Call);
+         begin
+            if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) /= Res.Bound
+            then
+               return Landin.Checking.No_Signature;
+            end if;
+            return Landin.Checking.Signature_Of
+              (Types.all, Res.Bound_To (Meanings.all, Of_Tree, Callee));
+         end Signature_For_Call;
+
+         procedure Include_Set
+           (Into : in out Effect_Matrix;
+            Row : Positive;
+            Set_Id : Landin.Checking.Atom_Set_Id) is
+         begin
+            if Set_Id = Landin.Checking.No_Atom_Set then
+               return;
+            end if;
+            for Index in 1 .. Landin.Checking.Atom_Count
+              (Types.all, Set_Id)
+            loop
+               declare
+                  Atom : constant Res.Declaration_Id :=
+                    Landin.Checking.Nth_Atom (Types.all, Set_Id, Index);
+               begin
+                  Into (Row, Positive (Atom)) := True;
+               end;
+            end loop;
+         end Include_Set;
+
+         procedure Include_Expression
+           (Of_Tree : Syn.Tree;
+            Node : Syn.Node_Id;
+            Caller : Positive;
+            Into : in out Effect_Matrix)
+         is
+         begin
+            if Node = Syn.No_Node then
+               return;
+            end if;
+
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.Name_Reference =>
+                  if Res.Verdict_Of (Meanings.all, Of_Tree, Node) = Res.Bound
+                  then
+                     declare
+                        Id : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Of_Tree, Node);
+                     begin
+                        if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding
+                          and then Recovery_Signatures (Positive (Id))
+                                     /= Landin.Checking.No_Signature
+                        then
+                           Edges
+                             (Caller,
+                              Positive
+                                (Recovery_Signatures (Positive (Id)))) :=
+                               True;
+                        else
+                           Include_Set
+                             (Into, Caller,
+                              Landin.Checking.Atom_Set_Of (Types.all, Id));
+                        end if;
+                     end;
+                  end if;
+
+               when Syn.Call =>
+                  declare
+                     Signature : constant Landin.Checking.Signature_Id :=
+                       Signature_For_Call (Of_Tree, Node);
+                  begin
+                     if Signature /= Landin.Checking.No_Signature then
+                        Include_Set
+                          (Into, Caller,
+                           Landin.Checking.Signature_Result
+                             (Types.all, Signature).Atoms);
+                     end if;
+                  end;
+
+               when Syn.Try_Expression =>
+                  Include_Expression
+                    (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Caller, Into);
+
+               when Syn.If_Statement =>
+                  for Index in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
+                     declare
+                        Runs : constant Syn.Node_Id :=
+                          Syn.Body_Of
+                            (Of_Tree, Syn.Nth_Arm (Of_Tree, Node, Index));
+                     begin
+                        Include_Expression
+                          (Of_Tree, Syn.Block_Value (Of_Tree, Runs),
+                           Caller, Into);
+                     end;
+                  end loop;
+                  if Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node then
+                     Include_Expression
+                       (Of_Tree,
+                        Syn.Block_Value
+                          (Of_Tree, Syn.Else_Body (Of_Tree, Node)),
+                        Caller, Into);
+                  end if;
+
+               when Syn.Match_Statement =>
+                  for Index in 1 .. Syn.Match_Arm_Count
+                    (Of_Tree, Node)
+                  loop
+                     declare
+                        Runs : constant Syn.Node_Id :=
+                          Syn.Body_Of
+                            (Of_Tree,
+                             Syn.Nth_Match_Arm (Of_Tree, Node, Index));
+                     begin
+                        Include_Expression
+                          (Of_Tree, Syn.Block_Value (Of_Tree, Runs),
+                           Caller, Into);
+                     end;
+                  end loop;
+
+               when Syn.Bare_Block =>
+                  Include_Expression
+                    (Of_Tree,
+                     Syn.Block_Value
+                       (Of_Tree, Syn.Body_Of (Of_Tree, Node)),
+                     Caller, Into);
+
+               when others =>
+                  declare
+                     Set_Id : constant Landin.Checking.Atom_Set_Id :=
+                       Landin.Checking.Atom_Set_Of
+                         (Types.all, Of_Tree, Node);
+                  begin
+                     Include_Set (Into, Caller, Set_Id);
+                  end;
+            end case;
+         end Include_Expression;
+
+         procedure Scan
+           (Of_Tree : Syn.Tree;
+            Node : Syn.Node_Id;
+            Caller : Positive)
+         is
+         begin
+            if Node = Syn.No_Node then
+               return;
+            end if;
+
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.Anonymous_Function =>
+                  --  Its body has its own signature and is scanned below.
+                  return;
+
+               when Syn.Fail_Statement =>
+                  Include_Expression
+                    (Of_Tree, Syn.Value_Of (Of_Tree, Node), Caller,
+                     Required);
+                  Scan (Of_Tree, Syn.Value_Of (Of_Tree, Node), Caller);
+                  Scan
+                    (Of_Tree, Syn.Condition_Of (Of_Tree, Node), Caller);
+                  return;
+
+               when Syn.Try_Expression =>
+                  declare
+                     Call : constant Syn.Node_Id :=
+                       Syn.Operand_Of (Of_Tree, Node);
+                  begin
+                     if Syn.Kind (Of_Tree, Call) = Syn.Call
+                       and then Syn.Recovery_Of (Of_Tree, Call) = Syn.No_Node
+                     then
+                        declare
+                           Signature : constant
+                             Landin.Checking.Signature_Id :=
+                               Signature_For_Call (Of_Tree, Call);
+                        begin
+                           if Signature /= Landin.Checking.No_Signature then
+                              Edges (Caller, Positive (Signature)) := True;
+                           end if;
+                        end;
+                        for Index in 1 .. Syn.Argument_Count
+                          (Of_Tree, Call)
+                        loop
+                           Scan
+                             (Of_Tree,
+                              Syn.Nth_Argument (Of_Tree, Call, Index),
+                              Caller);
+                        end loop;
+                     end if;
+                  end;
+                  return;
+
+               when Syn.Call =>
+                  for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+                     Scan
+                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Index),
+                        Caller);
+                  end loop;
+
+                  declare
+                     Signature : constant Landin.Checking.Signature_Id :=
+                       Signature_For_Call (Of_Tree, Node);
+                     Recovery : constant Syn.Node_Id :=
+                       Syn.Recovery_Of (Of_Tree, Node);
+                  begin
+                     if Recovery /= Syn.No_Node then
+                        if Signature /= Landin.Checking.No_Signature
+                          and then Landin.Checking.Signature_Error_Form
+                            (Types.all, Signature) = Landin.Checking.Inferred
+                        then
+                           Deferred_Recovery_Count :=
+                             Deferred_Recovery_Count + 1;
+                           Deferred_Recoveries (Deferred_Recovery_Count) :=
+                             (Source => Syn.Source_Of (Of_Tree),
+                              Node => Node,
+                              Signature => Signature);
+                        end if;
+                        if Syn.Name (Of_Tree, Recovery)
+                             /= Landin.Source.Names.No_Name
+                          and then Signature
+                                     /= Landin.Checking.No_Signature
+                        then
+                           declare
+                              Id : constant Res.Declaration_Id :=
+                                Declaration_At
+                                  (Syn.Source_Of (Of_Tree), Recovery);
+                           begin
+                              Recovery_Signatures (Positive (Id)) :=
+                                Signature;
+                           end;
+                        end if;
+                        Scan
+                          (Of_Tree, Syn.Else_Body (Of_Tree, Recovery),
+                           Caller);
+                     elsif Signature /= Landin.Checking.No_Signature then
+                        Issue_Count := Issue_Count + 1;
+                        Issues (Issue_Count) :=
+                          (Source => Syn.Source_Of (Of_Tree),
+                           Node => Node,
+                           Signature => Signature);
+                     end if;
+                  end;
+                  return;
+
+               when others =>
+                  null;
+            end case;
+
+            for Index in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+               Scan (Of_Tree, Syn.Slot (Of_Tree, Node, Index), Caller);
+            end loop;
+         end Scan;
+
+         Changed : Boolean;
+      begin
+         if Signature_Total = 0 then
+            return;
+         end if;
+
+         --  A concrete callee promises its whole written set, independent
+         --  of which atoms its present body happens to use.
+         for Signature in 1 .. Signature_Total loop
+            if Landin.Checking.Signature_Error_Form
+                 (Types.all, Landin.Checking.Signature_Id (Signature))
+                 = Landin.Checking.Concrete
+            then
+               Include_Set
+                 (Effects, Signature,
+                  Landin.Checking.Signature_Errors
+                    (Types.all,
+                     Landin.Checking.Signature_Id (Signature)));
+            end if;
+         end loop;
+
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Nth_Source (Context, Index));
+            begin
+               for Position in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+                  declare
+                     Node : constant Syn.Node_Id :=
+                       Syn.Nth_Declaration (Of_Tree.all, Position);
+                  begin
+                     if Syn.Kind (Of_Tree.all, Node)
+                          = Syn.Function_Declaration
+                     then
+                        declare
+                           Id : constant Res.Declaration_Id :=
+                             Declaration_At
+                               (Syn.Source_Of (Of_Tree.all), Node);
+                           Signature : constant
+                             Landin.Checking.Signature_Id :=
+                               Landin.Checking.Signature_Of
+                                 (Types.all, Id);
+                        begin
+                           if Signature /= Landin.Checking.No_Signature then
+                              Owns_Body (Positive (Signature)) := True;
+                              Scan
+                                (Of_Tree.all, Syn.Body_Of (Of_Tree.all, Node),
+                                 Positive (Signature));
+                           end if;
+                        end;
+                     end if;
+                  end;
+               end loop;
+
+               for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all)
+               loop
+                  if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function
+                  then
+                     declare
+                        Signature : constant Landin.Checking.Signature_Id :=
+                          Landin.Checking.Signature_Of
+                            (Types.all, Of_Tree.all, Node);
+                     begin
+                        if Signature /= Landin.Checking.No_Signature then
+                           Owns_Body (Positive (Signature)) := True;
+                           Scan
+                             (Of_Tree.all, Syn.Body_Of (Of_Tree.all, Node),
+                              Positive (Signature));
+                        end if;
+                     end;
+                  end if;
+               end loop;
+            end;
+         end loop;
+
+         for Signature in 1 .. Signature_Total loop
+            if Landin.Checking.Signature_Error_Form
+                 (Types.all, Landin.Checking.Signature_Id (Signature))
+                 = Landin.Checking.Inferred
+            then
+               for Atom in 1 .. Declaration_Total loop
+                  Effects (Signature, Atom) := Required (Signature, Atom);
+               end loop;
+            end if;
+         end loop;
+
+         loop
+            Changed := False;
+            for Caller in 1 .. Signature_Total loop
+               for Callee in 1 .. Signature_Total loop
+                  if Edges (Caller, Callee) then
+                     for Atom in 1 .. Declaration_Total loop
+                        if Effects (Callee, Atom) then
+                           if not Required (Caller, Atom) then
+                              Required (Caller, Atom) := True;
+                              Changed := True;
+                           end if;
+                           if Landin.Checking.Signature_Error_Form
+                             (Types.all,
+                              Landin.Checking.Signature_Id (Caller))
+                                = Landin.Checking.Inferred
+                             and then not Effects (Caller, Atom)
+                           then
+                              Effects (Caller, Atom) := True;
+                              Changed := True;
+                           end if;
+                        end if;
+                     end loop;
+                  end if;
+               end loop;
+            end loop;
+            exit when not Changed;
+         end loop;
+
+         for Signature in 1 .. Signature_Total loop
+            if Landin.Checking.Signature_Error_Form
+                 (Types.all, Landin.Checking.Signature_Id (Signature))
+                 = Landin.Checking.Inferred
+            then
+               declare
+                  Count : Natural := 0;
+               begin
+                  for Atom in 1 .. Declaration_Total loop
+                     if Effects (Signature, Atom) then
+                        Count := Count + 1;
+                     end if;
+                  end loop;
+
+                  if Count = 0 then
+                     Landin.Checking.Finalize_Inferred_Errors
+                       (Types.all,
+                        Landin.Checking.Signature_Id (Signature),
+                        Landin.Checking.No_Atom_Set);
+                  else
+                     declare
+                        Members : Landin.Checking.Atom_Array (1 .. Count);
+                        Next : Natural := 0;
+                     begin
+                        for Atom in 1 .. Declaration_Total loop
+                           if Effects (Signature, Atom) then
+                              Next := Next + 1;
+                              Members (Next) := Res.Declaration_Id (Atom);
+                           end if;
+                        end loop;
+                        Landin.Checking.Finalize_Inferred_Errors
+                          (Types.all,
+                           Landin.Checking.Signature_Id (Signature),
+                           Landin.Checking.Add_Atom_Set
+                             (Types.all, Members));
+                     end;
+                  end if;
+               end;
+            end if;
+         end loop;
+
+         --  Recovery names become ordinary immutable atom values only after
+         --  recursive inference has made their call's set concrete.
+         for Id in Res.Declaration_Id'(1)
+                   .. Res.Declaration_Id (Declaration_Total)
+         loop
+            if Res.Sort_Of (Meanings.all, Id) = Res.Error_Binding then
+               Landin.Checking.Begin_Inference (Types.all, Id);
+               declare
+                  Signature : constant Landin.Checking.Signature_Id :=
+                    Recovery_Signatures (Positive (Id));
+                  Errors : constant Landin.Checking.Atom_Set_Id :=
+                    (if Signature = Landin.Checking.No_Signature
+                     then Landin.Checking.No_Atom_Set
+                     else Landin.Checking.Signature_Errors
+                       (Types.all, Signature));
+               begin
+                  if Errors = Landin.Checking.No_Atom_Set then
+                     Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
+                  else
+                     Landin.Checking.Note_Atom_Set (Types.all, Id, Errors);
+                     Landin.Checking.Settle
+                       (Types.all, Id, Ty.Atom_Value);
+                  end if;
+               end;
+            end if;
+         end loop;
+
+         for Index in 1 .. Deferred_Recovery_Count loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Deferred_Recoveries (Index).Source);
+               Checked : constant Ty.Type_Kind :=
+                 Check_Call
+                   (Of_Tree.all, Deferred_Recoveries (Index).Node,
+                    Deferred_Recoveries (Index).Signature);
+            begin
+               pragma Unreferenced (Checked);
+            end;
+         end loop;
+
+         for Signature in 1 .. Signature_Total loop
+            if Owns_Body (Signature) then
+               for Atom in 1 .. Declaration_Total loop
+                  if Required (Signature, Atom)
+                    and then not Effects (Signature, Atom)
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Landin.Checking.Signature_Origin
+                          (Types.all,
+                           Landin.Checking.Signature_Id (Signature)).Source,
+                        Where   => Landin.Checking.Signature_Origin
+                          (Types.all,
+                           Landin.Checking.Signature_Id (Signature)).Where,
+                        Message => "this body can fail with an atom outside"
+                                   & " its declared error set",
+                        Note    => "[0940]: every failing path belongs to"
+                                   & " the function's `!` set",
+                        Related => Landin.Checking.Signature_Origin
+                          (Types.all,
+                           Landin.Checking.Signature_Id (Signature)),
+                        Because => "this declared signature",
+                        Into    => Found);
+                     exit;
+                  end if;
+               end loop;
+            end if;
+         end loop;
+
+         for Index in 1 .. Issue_Count loop
+            if Landin.Checking.Signature_Errors
+                 (Types.all, Issues (Index).Signature)
+                 /= Landin.Checking.No_Atom_Set
+            then
+               declare
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Issues (Index).Source);
+               begin
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Issues (Index).Source,
+                     Where   => Syn.Where
+                       (Of_Tree.all, Issues (Index).Node),
+                     Message => "this failing call is neither tried nor"
+                                & " recovered with `else`",
+                     Note    => "[0960]/[1030]: write `try` to propagate or"
+                                & " `else` to handle the declared error",
+                     Related => Landin.Checking.Signature_Origin
+                       (Types.all, Issues (Index).Signature),
+                     Because => "this failing signature",
+                     Into    => Found);
+               end;
+            end if;
+         end loop;
+      end Finalize_Error_Sets;
+
       --  Declared and anonymous functions share one body rule.  The latter
       --  reaches this procedure when its expression is synthesized, while a
       --  module declaration reaches it in pass three below.
@@ -9614,6 +10889,9 @@ package body Landin.Stages.Checking is
 
          if Count > 1 then
             Expected.Result_Shape := Signature;
+         elsif Gives = Ty.Atom_Value then
+            Expected.Atoms := Landin.Checking.Atom_Set_Of
+              (Types.all, Declaration_At (Syn.Source_Of (Of_Tree), Result));
          elsif Gives = Ty.Aggregate then
             Expected.Nominal := Landin.Checking.Body_Of
               (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
@@ -9689,10 +10967,11 @@ package body Landin.Stages.Checking is
                Landin.Checking.Settle (Types.all, Id, Ty.Not_Typed);
             elsif Res.Sort_Of (Meanings.all, Id)
                     in Res.Pattern_Binding | Res.Result_Binding
+                       | Res.Error_Binding
             then
-               --  D78 settles each positional payload alias only after its
-               --  arm has been paired with a case.  [0990] likewise settles
-               --  a selected local only after checking its source result.
+               --  Payload aliases, selected multiple-result locals and
+               --  recovery error names receive their contextual type when
+               --  their owning construct is checked.
                null;
             else
                declare
@@ -9715,15 +10994,14 @@ package body Landin.Stages.Checking is
             = Landin.Checking.Untouched
            and then Res.Sort_Of (Meanings.all, Id)
              not in Res.Pattern_Binding | Res.Result_Binding
+                | Res.Error_Binding
          then
             Infer (Id);
          end if;
       end loop;
 
-      --  Anonymous bodies are checked only after every declaration has been
-      --  settled.  Their code address determines an inferred module binding
-      --  without executing the body, and a later body reference to that
-      --  binding is therefore not an initializer cycle.
+      --  Materialize every anonymous signature before error inference.  Its
+      --  body is checked only after the recursive `! ...` graph is final.
       for Index in 1 .. Source_Count (Context) loop
          declare
             Of_Tree : constant not null access constant Syn.Tree :=
@@ -9735,10 +11013,30 @@ package body Landin.Stages.Checking is
                      Held : constant Ty.Type_Kind :=
                        Synthesise (Of_Tree.all, Node);
                   begin
-                     if Held = Ty.Function_Value then
-                        Check_Routine_Body (Of_Tree.all, Node);
-                     end if;
+                     pragma Assert
+                       (Held in Ty.Function_Value | Ty.Ill_Typed);
                   end;
+               end if;
+            end loop;
+         end;
+      end loop;
+
+      Finalize_Error_Sets;
+
+      --  Anonymous bodies can now check calls and `fail` against finalized
+      --  concrete sets, including mutually recursive private inference.
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Nth_Source (Context, Index));
+         begin
+            for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all) loop
+               if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function
+                 and then Landin.Checking.Signature_Of
+                   (Types.all, Of_Tree.all, Node)
+                     /= Landin.Checking.No_Signature
+               then
+                  Check_Routine_Body (Of_Tree.all, Node);
                end if;
             end loop;
          end;

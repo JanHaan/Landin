@@ -1,0 +1,8 @@
+north, south: atom
+compass: type = north | south
+
+f: (direction: compass) -> (value: i32) =
+    value = match direction
+        north: 1
+    end match
+end f

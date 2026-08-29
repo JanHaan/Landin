@@ -14,6 +14,10 @@ package body Landin.IR.Verifier is
                & " run says they are",
             when Operand_Runs_Overlap =>
                "a call's operands are not where its run says they are",
+            when Atom_Set_Runs_Overlap =>
+               "an atom set's members are not where its run says they are",
+            when Atom_Set_Malformed =>
+               "an atom set is empty, duplicated or names no declaration",
             when Signature_Runs_Overlap =>
                "a signature's parameters are not where its run says they are",
             when Signature_Part_Malformed =>
@@ -52,6 +56,10 @@ package body Landin.IR.Verifier is
                "a routine's slots disagree with its signature descriptor",
             when Function_Value_Signature_Disagrees =>
                "a function value disagrees with its slot or call signature",
+            when Atom_Metadata_Disagrees =>
+               "an atom carrier disagrees with its structural atom set",
+            when Atom_Identity_Not_In_Set =>
+               "an atom constant's declaration is not in its atom set",
             when Field_Shape_Malformed =>
                "an aggregate's scalar field has a length other than one",
             when Condition_Is_Not_A_Bool =>
@@ -155,8 +163,12 @@ package body Landin.IR.Verifier is
                "a call names an item that is not a routine",
             when Call_Inside_A_Datum  =>
                "a datum contains a call, and [1940] admits none",
+            when Call_Failure_Slot_Disagrees =>
+               "a call's failure slot disagrees with its declared errors",
             when Leave_Disagrees_With_Item =>
-               "a leave carries a value the item does not give back");
+               "a leave carries a value the item does not give back",
+            when Fail_Disagrees_With_Signature =>
+               "a fail carries an atom outside its routine's error set");
 
    --  How many operands each opcode carries.  [1820] decides every row
    --  but Call, whose count is its callee's parameter count [1920].
@@ -180,10 +192,12 @@ package body Landin.IR.Verifier is
             when Store_Datum   => 1,
             when Unary_Kind    => 1,
             when Binary_Kind   => 2,
+            when Failure_Test  => 1,
             when Function_Address | Call | Indirect_Call => 0,
             when Jump          => 0,
             when Branch        => 1,
-            when Leave         => 0);
+            when Leave         => 0,
+            when Fail          => 1);
 
    function Check
      (Of_Unit    : Unit;
@@ -776,6 +790,9 @@ package body Landin.IR.Verifier is
       function Carrier_Kind (Part : Signature_Part)
         return Landin.Types.Type_Kind;
 
+      function Atom_Metadata_Is_Subset
+        (Left, Right : Atom_Set_Id) return Boolean;
+
       function Part_Agrees_With_Slot
         (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
          return Boolean;
@@ -902,22 +919,30 @@ package body Landin.IR.Verifier is
             when Landin.Types.Scalar_Name =>
                return Part.Aggregate_Body /= No_Declaration
                  or else Part.Length /= 0
-                 or else Part.Signature /= No_Signature;
+                 or else Part.Signature /= No_Signature
+                 or else
+                   (Part.Atoms /= No_Atom_Set
+                    and then
+                      (Part.Kind /= Landin.Types.U32
+                       or else not Holds (Of_Unit, Part.Atoms)));
             when Landin.Types.Aggregate =>
                return Part.Aggregate_Body = No_Declaration
                  or else Natural (Part.Aggregate_Body)
                            > Declaration_Limit (Of_Unit)
                  or else Part.Length /= 0
-                 or else Part.Signature /= No_Signature;
+                 or else Part.Signature /= No_Signature
+                 or else Part.Atoms /= No_Atom_Set;
             when Landin.Types.Fixed_Array =>
                return (Part.Aggregate_Body /= No_Declaration
                          and then Natural (Part.Aggregate_Body)
                            > Declaration_Limit (Of_Unit))
-                 or else Part.Signature /= No_Signature;
+                 or else Part.Signature /= No_Signature
+                 or else Part.Atoms /= No_Atom_Set;
             when Landin.Types.Function_Value =>
                return Part.Aggregate_Body /= No_Declaration
                  or else Part.Length /= 0
-                 or else not Holds (Of_Unit, Part.Signature);
+                 or else not Holds (Of_Unit, Part.Signature)
+                 or else Part.Atoms /= No_Atom_Set;
             when others =>
                return True;
          end case;
@@ -939,6 +964,34 @@ package body Landin.IR.Verifier is
         is (if Part.Kind = Landin.Types.Function_Value
             then Landin.Types.Usize else Part.Kind);
 
+      function Atom_Metadata_Agrees
+        (Left, Right : Atom_Set_Id) return Boolean
+        is ((Left = No_Atom_Set and then Right = No_Atom_Set)
+            or else
+              (Holds (Of_Unit, Left)
+               and then Holds (Of_Unit, Right)
+               and then Atom_Sets_Agree (Of_Unit, Left, Right)));
+
+      function Atom_Metadata_Is_Subset
+        (Left, Right : Atom_Set_Id) return Boolean
+      is
+      begin
+         if Left = No_Atom_Set or else Right = No_Atom_Set then
+            return Left = Right;
+         end if;
+         if not Holds (Of_Unit, Left) or else not Holds (Of_Unit, Right) then
+            return False;
+         end if;
+         for Index in 1 .. Atom_Count (Of_Unit, Left) loop
+            if not Contains_Atom
+              (Of_Unit, Right, Nth_Atom (Of_Unit, Left, Index))
+            then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end Atom_Metadata_Is_Subset;
+
       function Part_Agrees_With_Slot
         (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
          return Boolean
@@ -946,7 +999,9 @@ package body Landin.IR.Verifier is
                when Landin.Types.Scalar_Name =>
                   not Is_Aggregate (Of_Unit, Item, Slot)
                   and then not Is_Array (Of_Unit, Item, Slot)
-                  and then Type_Of (Of_Unit, Item, Slot) = Part.Kind,
+                  and then Type_Of (Of_Unit, Item, Slot) = Part.Kind
+                  and then Atom_Metadata_Agrees
+                    (Part.Atoms, Atom_Set_Of (Of_Unit, Item, Slot)),
                when Landin.Types.Aggregate =>
                   Is_Aggregate (Of_Unit, Item, Slot),
                when Landin.Types.Fixed_Array =>
@@ -1025,6 +1080,50 @@ package body Landin.IR.Verifier is
          return (Kind => Unprepared_Unit, others => <>);
       end if;
 
+      --  [0630]/[0640]: sets partition one declaration-identity vector.
+      --  Validate it before a signature, slot or instruction asks membership.
+      declare
+         Members : Natural := 0;
+      begin
+         for Which in 1 .. Atom_Set_Count (Of_Unit) loop
+            declare
+               Held : constant Atom_Set_Record := Of_Unit.Atom_Sets (Which);
+            begin
+               if Held.Members.Count = 0
+                 or else Held.Members.First /= Members
+                 or else Held.Members.First > Natural (Of_Unit.Atoms.Length)
+                 or else Held.Members.Count
+                   > Natural (Of_Unit.Atoms.Length) - Held.Members.First
+               then
+                  return (Kind => Atom_Set_Runs_Overlap, others => <>);
+               end if;
+
+               for Index in 1 .. Held.Members.Count loop
+                  declare
+                     Atom : constant Declaration_Id :=
+                       Of_Unit.Atoms (Held.Members.First + Index);
+                  begin
+                     if Atom = No_Declaration
+                       or else Natural (Atom) > Declaration_Limit (Of_Unit)
+                     then
+                        return (Kind => Atom_Set_Malformed, others => <>);
+                     end if;
+                     for Prior in 1 .. Index - 1 loop
+                        if Of_Unit.Atoms (Held.Members.First + Prior) = Atom
+                        then
+                           return (Kind => Atom_Set_Malformed, others => <>);
+                        end if;
+                     end loop;
+                  end;
+               end loop;
+               Members := Members + Held.Members.Count;
+            end;
+         end loop;
+         if Members /= Natural (Of_Unit.Atoms.Length) then
+            return (Kind => Atom_Set_Runs_Overlap, others => <>);
+         end if;
+      end;
+
       --  D117's descriptors partition one parameter vector.  Validate the
       --  runs and every semantic part before an item or instruction asks a
       --  descriptor any question.
@@ -1036,6 +1135,11 @@ package body Landin.IR.Verifier is
                Held : constant Signature_Record :=
                  Of_Unit.Signatures (Which);
             begin
+               if Held.Errors /= No_Atom_Set
+                 and then not Holds (Of_Unit, Held.Errors)
+               then
+                  return (Kind => Signature_Part_Malformed, others => <>);
+               end if;
                if Held.Parameters.Count /= 0
                  and then Held.Parameters.First /= Parts
                then
@@ -1313,6 +1417,8 @@ package body Landin.IR.Verifier is
                declare
                   Signature : constant Signature_Id :=
                     Signature_Of (Of_Unit, Id, Slot_Id (Slot));
+                  Atoms : constant Atom_Set_Id :=
+                    Atom_Set_Of (Of_Unit, Id, Slot_Id (Slot));
                begin
                   if Signature /= No_Signature
                     and then
@@ -1329,9 +1435,33 @@ package body Landin.IR.Verifier is
                            then Function_Value_Signature_Disagrees
                            else Signature_Out_Of_Range),
                         Item => Id, others => <>);
+                  elsif Atoms /= No_Atom_Set
+                    and then
+                      (not Holds (Of_Unit, Atoms)
+                       or else Signature /= No_Signature
+                       or else Is_Aggregate
+                         (Of_Unit, Id, Slot_Id (Slot))
+                       or else Is_Array (Of_Unit, Id, Slot_Id (Slot))
+                       or else Type_Of (Of_Unit, Id, Slot_Id (Slot))
+                                 /= Landin.Types.U32)
+                  then
+                     return (Kind => Atom_Metadata_Disagrees,
+                             Item => Id, others => <>);
                   end if;
                end;
             end loop;
+
+            if Atom_Set_Of (Of_Unit, Id) /= No_Atom_Set
+              and then
+                (not Holds (Of_Unit, Atom_Set_Of (Of_Unit, Id))
+                 or else Result_Of (Of_Unit, Id) /= Landin.Types.U32
+                 or else
+                   (Kind_Of (Of_Unit, Id) = Datum
+                    and then Signature_Of (Of_Unit, Id) /= No_Signature))
+            then
+               return (Kind => Atom_Metadata_Disagrees,
+                       Item => Id, others => <>);
+            end if;
 
             if Kind_Of (Of_Unit, Id) = Datum
               and then (Signature_Of (Of_Unit, Id) /= No_Signature
@@ -1391,6 +1521,14 @@ package body Landin.IR.Verifier is
                         elsif Count > 1 then Landin.Types.Aggregate
                         else Carrier_Kind (Result));
                   begin
+                     if not Atom_Metadata_Agrees
+                       (Atom_Set_Of (Of_Unit, Id),
+                        (if Count = 1 then Result.Atoms else No_Atom_Set))
+                     then
+                        return (Kind => Atom_Metadata_Disagrees,
+                                Item => Id, others => <>);
+                     end if;
+
                      if Result_Of (Of_Unit, Id) /= Carrier
                        or else Parameter_Count (Of_Unit, Id)
                                  /= Signature_Carrier_Count (Signature)
@@ -1938,6 +2076,22 @@ package body Landin.IR.Verifier is
                         --  not exist has to be caught before anything
                         --  asks it a question.
                         case Op is
+                           when Atom =>
+                              if not Holds
+                                (Of_Unit, Atom_Set_Of (Of_Unit, Id, V))
+                              then
+                                 return (Kind => Atom_Metadata_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              elsif not Contains_Atom
+                                (Of_Unit, Atom_Set_Of (Of_Unit, Id, V),
+                                 Atom_Of (Of_Unit, Id, V))
+                              then
+                                 return (Kind => Atom_Identity_Not_In_Set,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
                            when Storage_Address =>
                               declare
                                  Place : constant Storage :=
@@ -2603,6 +2757,39 @@ package body Landin.IR.Verifier is
                                        end if;
                                     end;
                                  end if;
+
+                                 declare
+                                    Errors : constant Atom_Set_Id :=
+                                      Signature_Errors
+                                        (Of_Unit, Signature);
+                                    Failure : constant Slot_Id :=
+                                      Failure_Slot_Of (Of_Unit, Id, V);
+                                 begin
+                                    if Errors = No_Atom_Set then
+                                       if Failure /= No_Slot then
+                                          return
+                                            (Kind =>
+                                               Call_Failure_Slot_Disagrees,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    elsif not Holds
+                                      (Of_Unit, Id, Failure)
+                                      or else Type_Of
+                                        (Of_Unit, Id, Failure)
+                                          /= Landin.Types.U32
+                                      or else not Atom_Metadata_Agrees
+                                        (Errors,
+                                         Atom_Set_Of
+                                           (Of_Unit, Id, Failure))
+                                    then
+                                       return
+                                         (Kind =>
+                                            Call_Failure_Slot_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
                               end;
 
                            when Jump | Branch =>
@@ -2761,6 +2948,33 @@ package body Landin.IR.Verifier is
                                     end if;
                                  end;
 
+                                 declare
+                                    Left_Atoms : constant Atom_Set_Id :=
+                                      Atom_Set_Of (Of_Unit, Id, L);
+                                    Right_Atoms : constant Atom_Set_Id :=
+                                      Atom_Set_Of (Of_Unit, Id, R);
+                                 begin
+                                    if (Left_Atoms = No_Atom_Set)
+                                         /= (Right_Atoms = No_Atom_Set)
+                                      or else
+                                        (Left_Atoms /= No_Atom_Set
+                                         and then
+                                           (Op not in Comparison_Kind
+                                            or else
+                                              (not Atom_Metadata_Is_Subset
+                                                 (Left_Atoms, Right_Atoms)
+                                               and then not
+                                                 Atom_Metadata_Is_Subset
+                                                   (Right_Atoms,
+                                                    Left_Atoms))))
+                                    then
+                                       return
+                                         (Kind => Atom_Metadata_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
+
                                  --  and that type back, or a bool from a
                                  --  comparison [0350].
                                  if Result_Of (Of_Unit, Id, V)
@@ -2870,6 +3084,18 @@ package body Landin.IR.Verifier is
                                     end if;
                                  end;
 
+                                 if not Atom_Metadata_Is_Subset
+                                   (Atom_Set_Of
+                                      (Of_Unit, Id,
+                                       Nth_Operand (Of_Unit, Id, V, 1)),
+                                    Atom_Set_Of (Of_Unit, Id, S))
+                                 then
+                                    return
+                                      (Kind => Atom_Metadata_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+
                                  --  [1900]: a parameter may not be
                                  --  written, because the unmarked
                                  --  convention is [0900]'s `in`.
@@ -2917,6 +3143,14 @@ package body Landin.IR.Verifier is
                                     return
                                       (Kind =>
                                          Function_Value_Signature_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 elsif not Atom_Metadata_Is_Subset
+                                   (Atom_Set_Of (Of_Unit, Id, Stored),
+                                    Atom_Set_Of (Of_Unit, Datum))
+                                 then
+                                    return
+                                      (Kind => Atom_Metadata_Disagrees,
                                        Item => Id, Block => Block,
                                        Value => V);
                                  end if;
@@ -3161,6 +3395,35 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
+                           when Failure_Test =>
+                              declare
+                                 Error : constant Value_Id :=
+                                   Nth_Operand (Of_Unit, Id, V, 1);
+                              begin
+                                 if Result_Of (Of_Unit, Id, V)
+                                      /= Landin.Types.Bool
+                                   or else Result_Of (Of_Unit, Id, Error)
+                                      /= Landin.Types.U32
+                                   or else not Holds
+                                     (Of_Unit,
+                                      Atom_Set_Of (Of_Unit, Id, Error))
+                                 then
+                                    return
+                                      (Kind => Atom_Metadata_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+                              end;
+
+                           when Atom =>
+                              if Result_Of (Of_Unit, Id, V)
+                                   /= Landin.Types.U32
+                              then
+                                 return
+                                   (Kind => Atom_Metadata_Disagrees,
+                                    Item => Id, Block => Block, Value => V);
+                              end if;
+
                            when Function_Address =>
                               if Result_Of (Of_Unit, Id, V)
                                    /= Landin.Types.Usize
@@ -3205,6 +3468,14 @@ package body Landin.IR.Verifier is
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,
                                             Value => V);
+                                 elsif not Atom_Metadata_Agrees
+                                   (Atom_Set_Of (Of_Unit, Id, V),
+                                    Declared_Result.Atoms)
+                                 then
+                                    return
+                                      (Kind => Atom_Metadata_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
                                  end if;
 
                                  if Indirect
@@ -3292,6 +3563,10 @@ package body Landin.IR.Verifier is
                                     begin
                                        if not Agrees
                                          or else not Signature_Agrees
+                                         or else not Atom_Metadata_Is_Subset
+                                           (Atom_Set_Of
+                                              (Of_Unit, Id, Argument),
+                                            Parameter.Atoms)
                                        then
                                           return
                                             (Kind => Operands_Disagree,
@@ -3300,6 +3575,31 @@ package body Landin.IR.Verifier is
                                        end if;
                                     end;
                                  end loop;
+                              end;
+
+                           when Fail =>
+                              declare
+                                 Error : constant Value_Id :=
+                                   Nth_Operand (Of_Unit, Id, V, 1);
+                                 Signature : constant Signature_Id :=
+                                   Signature_Of (Of_Unit, Id);
+                              begin
+                                 if Is_Datum
+                                   or else not Holds (Of_Unit, Signature)
+                                   or else Signature_Errors
+                                     (Of_Unit, Signature) = No_Atom_Set
+                                   or else Result_Of (Of_Unit, Id, Error)
+                                     /= Landin.Types.U32
+                                   or else not Atom_Metadata_Is_Subset
+                                     (Atom_Set_Of (Of_Unit, Id, Error),
+                                      Signature_Errors
+                                        (Of_Unit, Signature))
+                                 then
+                                    return
+                                      (Kind => Fail_Disagrees_With_Signature,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
                               end;
 
                            when Leave =>
@@ -3361,6 +3661,15 @@ package body Landin.IR.Verifier is
                                        return
                                          (Kind =>
                                             Function_Value_Signature_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    elsif not Atom_Metadata_Is_Subset
+                                      (Atom_Set_Of
+                                         (Of_Unit, Id, Returned),
+                                       Atom_Set_Of (Of_Unit, Id))
+                                    then
+                                       return
+                                         (Kind => Atom_Metadata_Disagrees,
                                           Item => Id, Block => Block,
                                           Value => V);
                                     end if;

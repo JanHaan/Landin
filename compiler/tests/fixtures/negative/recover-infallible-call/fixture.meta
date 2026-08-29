@@ -1,0 +1,6 @@
+class: negative
+summary: call-site else handles only a declared error outcome
+constructs: 1030
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, synthetic-32

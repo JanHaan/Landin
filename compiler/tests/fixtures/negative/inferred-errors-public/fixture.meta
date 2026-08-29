@@ -1,0 +1,6 @@
+class: negative
+summary: a public function signature writes a concrete error set
+constructs: 0090, 0940, 0960
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, synthetic-32

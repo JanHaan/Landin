@@ -1,0 +1,10 @@
+bad: atom
+problem: type = bad
+
+leaf: () -> (value: i32) ! problem =
+    fail bad
+end leaf
+
+caller: () -> (value: i32) =
+    value = leaf()
+end caller

@@ -1,0 +1,13 @@
+missing, denied: atom
+missing_set: type = missing
+denied_set: type = denied
+
+wants_missing: type = () -> none ! missing_set
+
+fails_denied: () -> none ! denied_set =
+    fail denied
+end fails_denied
+
+f: () -> none =
+    callback: wants_missing = fails_denied
+end f

@@ -154,6 +154,9 @@ package body Landin.Stages.Resolution is
             Declare_One
               (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Which), Signature);
          end loop;
+         Resolve
+           (Of_Tree, Syn.Error_Set_Of (Of_Tree, Node),
+            Landin.Resolution.Program_Scope);
 
          if Syn.Kind (Of_Tree, Runs) = Syn.Block then
             declare
@@ -194,6 +197,38 @@ package body Landin.Stages.Resolution is
          --  form could only be a statement.  Keep that rule here, in the
          --  general expression walk, rather than at one statement caller.
          case Syn.Kind (Of_Tree, Node) is
+            when Syn.Call =>
+               Resolve (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Inside);
+               for Argument in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+                  Resolve
+                    (Of_Tree,
+                     Syn.Nth_Argument (Of_Tree, Node, Argument), Inside);
+               end loop;
+
+               if Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node then
+                  declare
+                     Recovery : constant Syn.Node_Id :=
+                       Syn.Recovery_Of (Of_Tree, Node);
+                     Runs : constant Syn.Node_Id :=
+                       Syn.Else_Body (Of_Tree, Recovery);
+                     Recovery_Scope : constant Landin.Resolution.Scope_Id :=
+                       Landin.Resolution.Open_Scope
+                         (Meanings.all, Landin.Resolution.Block, Inside);
+                  begin
+                     Landin.Resolution.Record_Scope
+                       (Meanings.all, Of_Tree, Recovery, Recovery_Scope);
+                     Declare_One (Of_Tree, Recovery, Recovery_Scope);
+                     if Syn.Kind (Of_Tree, Runs) = Syn.Block then
+                        Landin.Resolution.Record_Scope
+                          (Meanings.all, Of_Tree, Runs, Recovery_Scope);
+                        Walk_Block (Of_Tree, Runs, Recovery_Scope);
+                     else
+                        Resolve (Of_Tree, Runs, Recovery_Scope);
+                     end if;
+                  end;
+               end if;
+               return;
+
             when Syn.If_Statement =>
                for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
                   declare
@@ -408,6 +443,19 @@ package body Landin.Stages.Resolution is
                        (Of_Tree.all, Node,
                         Landin.Resolution.Program_Scope,
                         Resolve_Declared => False);
+                     if Syn.Kind (Of_Tree.all, Node)
+                          = Syn.Atom_Declaration
+                     then
+                        for Member in 1 .. Syn.Slot_Count
+                          (Of_Tree.all, Node)
+                        loop
+                           Declare_One
+                             (Of_Tree.all,
+                              Syn.Slot (Of_Tree.all, Node, Member),
+                              Landin.Resolution.Program_Scope,
+                              Resolve_Declared => False);
+                        end loop;
+                     end if;
                   end if;
                end;
             end loop;
@@ -546,6 +594,11 @@ package body Landin.Stages.Resolution is
                                    (Of_Tree.all, Node, Which),
                                  Signature);
                            end loop;
+
+                           Resolve
+                             (Of_Tree.all,
+                              Syn.Error_Set_Of (Of_Tree.all, Node),
+                              Landin.Resolution.Program_Scope);
 
                            --  [1800]'s expression body opens no scope,
                            --  because an expression declares nothing.

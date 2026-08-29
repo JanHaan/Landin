@@ -641,7 +641,31 @@ package body Landin.Stages.Checking.Flow is
          Id        : Res.Declaration_Id;
          State     : Assigned_Set;
          Message   : String;
-         Field     : Tracked_Field := 0) is
+         Field     : Tracked_Field := 0)
+      is
+         procedure Report_Unassigned (Why : String);
+
+         procedure Report_Unassigned (Why : String)
+         is
+            Their_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Id));
+            Their_Node : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Id);
+         begin
+            Bad.Report
+              (Item    => Bad.Not_Definitely_Assigned,
+               Source  => At_Source,
+               Where   => At_Span,
+               Message => Why,
+               Note    => "[1910]: no condition is believed, so a name"
+                          & " assigned in one arm of an `if` and not in"
+                          & " another is not assigned after it",
+               Related => Landin.Provenance.Origin'
+                 (Source => Res.Source_Of (Meanings.all, Id),
+                  Where  => Syn.Anchor (Their_Tree.all, Their_Node)),
+               Because => "declared here with no value",
+               Into    => Found);
+         end Report_Unassigned;
       begin
          --  D16 assigns a struct a field at a time, so reading the whole
          --  of one wants every field: the first one no path assigned is
@@ -653,32 +677,37 @@ package body Landin.Stages.Checking.Flow is
             for Each in
               1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
             loop
-               if Each in 1 .. Widest_Struct
-                 and then
-                   (case Landin.Checking.Field_Kind_Of
-                           (Types.all,
-                            Landin.Checking.Body_Of (Types.all, Id), Each)
-                    is
-                       when Landin.Checking.Scalar_Field =>
-                         not State.Fields (Positive (Id), Each),
-                       when Landin.Checking.Fixed_Array_Field =>
-                         not Array_Is_Assigned (Id, One (Each), State),
-                       when Landin.Checking.Aggregate_Field =>
-                         not State.Fields (Positive (Id), Each),
-                       when Landin.Checking.Variant_Field =>
-                         not State.Fields (Positive (Id), Each))
-               then
-                  Require_Assigned
-                    (At_Source, At_Span, Id, State,
-                     "the whole of `"
-                     & Spelled (Res.Name_Of (Meanings.all, Id))
-                     & "` is read here and no path that arrives assigned"
-                     & " its `"
-                     & Field_Named
-                         (Landin.Checking.Body_Of (Types.all, Id), Each)
-                     & "`",
-                     Each);
-                  return;
+               if Each in 1 .. Widest_Struct then
+                  declare
+                     Kind : constant Landin.Checking.Field_Kind :=
+                       Landin.Checking.Field_Kind_Of
+                         (Types.all,
+                          Landin.Checking.Body_Of (Types.all, Id), Each);
+                     Missing : Boolean;
+                  begin
+                     case Kind is
+                        when Landin.Checking.Fixed_Array_Field =>
+                           Missing := not Array_Is_Assigned
+                             (Id, One (Each), State);
+                        when Landin.Checking.Scalar_Field
+                           | Landin.Checking.Aggregate_Field
+                           | Landin.Checking.Variant_Field =>
+                           Missing :=
+                             not State.Fields (Positive (Id), Each);
+                     end case;
+
+                     if Missing then
+                        Report_Unassigned
+                          ("the whole of `"
+                           & Spelled (Res.Name_Of (Meanings.all, Id))
+                           & "` is read here and no path that arrives"
+                           & " assigned its `"
+                           & Field_Named
+                               (Landin.Checking.Body_Of (Types.all, Id), Each)
+                           & "`");
+                        return;
+                     end if;
+                  end;
                end if;
             end loop;
 
@@ -695,27 +724,7 @@ package body Landin.Stages.Checking.Flow is
             return;
          end if;
 
-         declare
-            Their_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Res.Source_Of (Meanings.all, Id));
-            Their_Node : constant Syn.Node_Id :=
-              Res.Node_Of (Meanings.all, Id);
-         begin
-            Bad.Report
-              (Item    => Bad.Not_Definitely_Assigned,
-               Source  => At_Source,
-               Where   => At_Span,
-               Message => Message,
-               Note    => "[1910]: no condition is believed, so a name"
-                          & " assigned in one arm of an `if` and not in"
-                          & " another is not assigned after it",
-               Related => Landin.Provenance.Origin'
-                            (Source => Res.Source_Of (Meanings.all, Id),
-                             Where  => Syn.Anchor
-                                         (Their_Tree.all, Their_Node)),
-               Because => "declared here with no value",
-               Into    => Found);
-         end;
+         Report_Unassigned (Message);
       end Require_Assigned;
 
       procedure Require_Returns_Assigned
@@ -1383,7 +1392,7 @@ package body Landin.Stages.Checking.Flow is
            Node /= Syn.No_Node
            and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
              in Ty.Scalar_Name | Ty.Fixed_Array | Ty.Aggregate
-                | Ty.Function_Value;
+                | Ty.Function_Value | Ty.Atom_Value;
       begin
          if Node = Syn.No_Node then
             Edges := Fallthrough_Edge;
@@ -1532,6 +1541,75 @@ package body Landin.Stages.Checking.Flow is
                Flow_Block
                  (Of_Tree, Syn.Body_Of (Of_Tree, Node), Result,
                   Syn.Origin (Of_Tree, Node), State, Edges, Needs_Value);
+
+            when Syn.Call =>
+               Edges := Fallthrough_Edge;
+               for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
+                  exit when not Edges.Falls_Through;
+                  declare
+                     Part : Edge_Facts;
+                  begin
+                     Flow_Expression
+                       (Of_Tree, Syn.Nth_Argument (Of_Tree, Node, Index),
+                        Result, State, Part, Whole_As);
+                     Edges.Returns := Edges.Returns or Part.Returns;
+                     Edges.Falls_Through := Part.Falls_Through;
+                  end;
+               end loop;
+
+               if Edges.Falls_Through
+                 and then Syn.Recovery_Of (Of_Tree, Node) /= Syn.No_Node
+               then
+                  declare
+                     Recovery : constant Syn.Node_Id :=
+                       Syn.Recovery_Of (Of_Tree, Node);
+                     Recovery_Body : constant Syn.Node_Id :=
+                       Syn.Else_Body (Of_Tree, Recovery);
+                     Recovered : Assigned_Set := State;
+                     Recovery_Edges : Edge_Facts;
+                  begin
+                     if Syn.Kind (Of_Tree, Recovery_Body) = Syn.Block then
+                        Flow_Block
+                          (Of_Tree, Recovery_Body, Result,
+                           Syn.Origin (Of_Tree, Recovery), Recovered,
+                           Recovery_Edges, Needs_Value);
+                     else
+                        Flow_Expression
+                          (Of_Tree, Recovery_Body, Result, Recovered,
+                           Recovery_Edges, Whole_As);
+                     end if;
+                     Edges.Returns :=
+                       Edges.Returns or Recovery_Edges.Returns;
+                     if Recovery_Edges.Falls_Through then
+                        --  Both success and recovered fallthrough reach the
+                        --  consumer, so only facts true on both survive.
+                        Merge (State, False, Recovered);
+                     end if;
+                     --  The successful call edge always continues.
+                     Edges.Falls_Through := True;
+                  end;
+               end if;
+
+            when Syn.Try_Expression =>
+               Flow_Expression
+                 (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Result,
+                  State, Edges, Whole_As);
+               --  The call may fail after evaluating its arguments.  Run
+               --  every active failure-applicable cleanup on that edge; the
+               --  success edge keeps this state and continues.
+               if Edges.Falls_Through then
+                  declare
+                     Failure_State : Assigned_Set := State;
+                     Cleanup_Edges : Edge_Facts;
+                  begin
+                     Flow_Cleanups
+                       (Of_Tree, 1, Cleanup.Failure_Propagation,
+                        Result, Failure_State, Cleanup_Edges);
+                     Edges.Returns := Edges.Returns
+                       or Cleanup_Edges.Returns
+                       or Cleanup_Edges.Falls_Through;
+                  end;
+               end if;
 
             when Syn.Logical_And | Syn.Logical_Or =>
                --  [0340]/[0410]: after the left operand falls through, one
@@ -1983,8 +2061,9 @@ package body Landin.Stages.Checking.Flow is
                        (Of_Tree, Syn.Target_Of (Of_Tree, Item), Result,
                         State, Step);
 
-                  when Syn.Discard | Syn.Call | Syn.If_Statement
-                     | Syn.Match_Statement | Syn.Bare_Block =>
+                  when Syn.Discard | Syn.Call | Syn.Try_Expression
+                     | Syn.If_Statement | Syn.Match_Statement
+                     | Syn.Bare_Block =>
                      Flow_Expression
                        (Of_Tree, Item, Result, State, Step);
 
@@ -1997,6 +2076,60 @@ package body Landin.Stages.Checking.Flow is
                           (Kind   => Cleanup.Deferred_Call,
                            Call   => Syn.Deferred_Call (Of_Tree, Item),
                            Active => True));
+
+                  when Syn.Fail_Statement =>
+                     if Syn.Condition_Of (Of_Tree, Item) = Syn.No_Node then
+                        Flow_Expression
+                          (Of_Tree, Syn.Value_Of (Of_Tree, Item), Result,
+                           State, Step);
+                        if Step.Falls_Through then
+                           declare
+                              Failure_State : Assigned_Set := State;
+                              Cleanup_Edges : Edge_Facts;
+                           begin
+                              Flow_Cleanups
+                                (Of_Tree, 1, Cleanup.Failure_Propagation,
+                                 Result, Failure_State, Cleanup_Edges);
+                              Step.Returns := Step.Returns
+                                or Cleanup_Edges.Returns
+                                or Cleanup_Edges.Falls_Through;
+                              Step.Falls_Through := False;
+                           end;
+                        end if;
+                     else
+                        Flow_Expression
+                          (Of_Tree, Syn.Condition_Of (Of_Tree, Item), Result,
+                           State, Step);
+                        if Step.Falls_Through then
+                           declare
+                              Failing : Assigned_Set := State;
+                              Error_Edges : Edge_Facts;
+                           begin
+                              Flow_Expression
+                                (Of_Tree, Syn.Value_Of (Of_Tree, Item),
+                                 Result, Failing, Error_Edges);
+                              if Error_Edges.Falls_Through then
+                                 declare
+                                    Cleanup_Edges : Edge_Facts;
+                                 begin
+                                    Flow_Cleanups
+                                      (Of_Tree, 1,
+                                       Cleanup.Failure_Propagation,
+                                       Result, Failing, Cleanup_Edges);
+                                    Error_Edges.Returns :=
+                                      Error_Edges.Returns
+                                      or Cleanup_Edges.Returns
+                                      or Cleanup_Edges.Falls_Through;
+                                 end;
+                              end if;
+                              Step.Returns := Step.Returns
+                                or Error_Edges.Returns;
+                              --  The guard's false edge continues with only
+                              --  facts established while evaluating it.
+                              Step.Falls_Through := True;
+                           end;
+                        end if;
+                     end if;
 
                   when Syn.Return_Statement =>
                      Flow_Expression

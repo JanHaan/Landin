@@ -191,6 +191,7 @@ R0 creates a reproducible Ada project and an implementation-independent test
 surface without pretending that a Landin frontend already exists.
 
 ### R0.10 — Establish bootstrap repository layout
+
 Status: complete
 Depends on: none
 
@@ -204,6 +205,7 @@ ownership are documented; no Landin semantic decision is embedded in the
 chassis.
 
 ### R0.20 — Pin the canonical Ada toolchain
+
 Status: complete
 Depends on: R0.10
 
@@ -216,6 +218,7 @@ Exit evidence: the exact compiler and builder versions, runtime profile and
 warning policy are recorded and reproduced from a clean environment.
 
 ### R0.30 — Establish shared fixtures and custom harness
+
 Status: complete
 Depends on: R0.10
 
@@ -235,6 +238,7 @@ remains the complete deterministic suite. Recording and then running may share
 one build, but remain two binary modes so a case never writes a golden.
 
 ### R0.40 — Establish source and diagnostic foundations
+
 Status: complete
 Depends on: R0.10
 
@@ -247,6 +251,7 @@ Exit evidence: unit cases cover invalid offsets, line endings, multi-label
 diagnostics and stable ordering.
 
 ### R0.50 — Establish compiler and platform-tool boundaries
+
 Status: complete
 Depends on: R0.20, R0.30, R0.40
 
@@ -260,6 +265,7 @@ identity, invokes fake tool adapters in tests and distinguishes diagnostics
 from infrastructure failures.
 
 ### R0.60 — Establish tested stage and target seams
+
 Status: complete
 Depends on: R0.20, R0.30
 
@@ -274,6 +280,7 @@ Exit evidence: contract tests exercise fake stages and at least one synthetic
 32-bit target description on the 64-bit development host.
 
 ### R0.70 — Establish development and validation environments
+
 Status: complete
 Depends on: R0.50, R0.60
 
@@ -328,6 +335,7 @@ not wait for raw storage, generics or Cortex-M, but it includes the minimum
 SysV/ELF ABI needed to run rather than calling verified IR an executable.
 
 ### R1.10 — Add the normative kernel grammar
+
 Status: complete
 Depends on: R0.30
 
@@ -353,6 +361,7 @@ Two rounds of reading the grammar by hand found sixty-eight defects and still
 missed that a lone `_` parsed as a name, which is why the corpus exists.
 
 ### R1.20 — Implement lexical analysis
+
 Status: complete
 Depends on: R1.10, R0.40
 
@@ -387,6 +396,7 @@ belongs to the work that enables a literal carrying escapes, and R4.10 owns
 the remaining hosted literal forms.
 
 ### R1.30 — Establish the diagnostic catalogue
+
 Status: complete
 Depends on: R0.40, R1.20
 
@@ -439,6 +449,7 @@ and spans waits for R1.40, because until a parser runs there is no program
 that produces more than one diagnostic worth ordering.
 
 ### R1.40 — Implement the recovering parser
+
 Status: complete
 Depends on: R1.20, R1.30
 
@@ -547,6 +558,7 @@ hold; a discovered failure becomes a minimized fixture rather than a new
 random seed.
 
 ### R1.50 — Collect declarations and resolve names
+
 Status: complete
 Depends on: R1.40
 
@@ -645,6 +657,7 @@ code sequence its fixture names, checked by running `Landin.Driver.Execute` the
 way a user runs it rather than by assembling the stages in a test.
 
 ### R1.60 — Check the executable kernel
+
 Status: complete
 Depends on: R1.50
 
@@ -763,6 +776,7 @@ the parser's table; three mutations were tried from both sides and each was
 reported. 78 cases, 1671 checks.
 
 ### R1.70 — Implement target-neutral IR and verification
+
 Status: complete
 Depends on: R1.60, R0.60
 
@@ -985,7 +999,7 @@ decision rested on was measured rather than recalled, on this repository's
 own first three targets.
 
 | | shift amount, over-wide or negative | a zero divisor |
-|---|---|---|
+| --- | --- | --- |
 | x86-64 | masks the count to 5 bits, 6 at 64-bit | `IDIV` raises a hardware fault |
 | AArch64 | masks the same way | `SDIV` answers 0, silently |
 | Cortex-M0 | takes the low 8 bits and saturates: >= 32 gives 0 | no divide instruction exists at all |
@@ -1017,6 +1031,7 @@ known-and-does-not-fit. A quotient that does not exist is a stronger case
 than a sum that does not fit, and it was the one getting through.
 
 ### R1.80 — Implement the minimal Linux x86-64 native path
+
 Status: complete
 Depends on: R1.70, R0.50, R0.70
 
@@ -1492,6 +1507,7 @@ fixture still cannot name two source files. Each is recorded above where the
 work that meets it will find it.
 
 ### R1.90 — Close the executable-kernel corpus
+
 Status: complete
 Depends on: R1.80
 
@@ -1681,6 +1697,7 @@ needed by the hosted parser. Raw storage remains container-driven and closes
 in R3 rather than being designed in isolation.
 
 ### R2.10 — Establish target-parametric data layout
+
 Status: complete
 Depends on: R1.60, R1.70
 
@@ -1756,6 +1773,7 @@ raise a compiler defect, which R2.20 turns into a diagnosis when a program
 can first cause one.
 
 ### R2.20 — Implement aggregates, variants and complete value layout
+
 Status: complete
 Depends on: R2.10
 
@@ -1823,6 +1841,7 @@ through verified target-neutral IR and the Linux x86-64 runtime corpus.
 matrix make that evidence reproducible.
 
 ### R2.30 — Implement functions, control flow and declared errors
+
 Status: active
 Depends on: R2.20, R1.70, R1.80
 
@@ -2032,8 +2051,7 @@ scope directly inside the module, capture no enclosing routine declaration and
 lower after module items in deterministic source/post-order to backend-local
 routine symbols.
 
-Function-valued struct fields and declared-error function types remain in this
-item.
+Function-valued struct fields remain in this item.
 
 The thirty-ninth increment replaces the flow checker's Boolean exit summary
 with explicit fallthrough and return-compatible edge facts. Only continuing
@@ -2099,6 +2117,24 @@ which never unwinds. Its failure-only cleanup policy is reserved for `undo`;
 the spelling remains refused until this item's declared-error increment
 supplies a failure edge, and R4.10 still owns every loop transfer.
 
+The forty-sixth increment enables payload-free atoms and declared errors.
+Atom declarations mint identity; aliases and unions flatten to structural sets,
+and singleton values widen only into containing sets. Concrete error sets join
+recursive function signatures, while private `! ...` routines are solved as a
+whole-module least fixed point, including mutual recursion. `fail`, `try`,
+direct and indirect failing calls, standalone propagation and call-site `else`
+use explicit fallthrough/failure edges across scalar, atom, function, fixed-
+array and aggregate results; recovery names are scoped atom values, and atom
+matches are exhaustive. Neutral IR carries atom-set runs, atom identities,
+call failure slots, `Failure_Test` and `Fail`; malformed membership, signatures,
+slots and exits are verifier faults. Linux x86-64 assigns dense nonzero `u32`
+atom codes and reserves `%r10d`, with zero for success, without consuming an
+ordinary argument or result position. Positive, negative, generated-IR and
+Linux runtime evidence covers module/local values, recursive inference,
+register/stack calls, direct/indirect calls, recovery and propagation. Failure
+edges run every active deferred cleanup under the existing exit selector;
+`undo` remains the next failure-only cleanup spelling.
+
 Further aggregate arguments and result contexts remain here too; R4.40 later
 supplies complete C ABI classification rather than owning this internal
 convention.
@@ -2132,6 +2168,7 @@ that a runtime address, nested descriptor or static routine target cannot
 substitute for its neutral signature descriptor.
 
 ### R2.40 — Implement fixed parameters and compile-time substitution
+
 Status: planned
 Depends on: R2.10, R1.50
 
@@ -2143,6 +2180,7 @@ Exit evidence: generic shape fixtures and negative non-fixed cases pass; no
 user code executes during compilation.
 
 ### R2.50 — Implement references and local lifetime checks
+
 Status: planned
 Depends on: R2.20, R2.30
 
@@ -2159,6 +2197,7 @@ Exit evidence: the origin/borrow corpus includes required spans and notes;
 accepted escape cases and deliberately unchecked boundaries remain explicit.
 
 ### R2.60 — Implement concepts and conformance collection
+
 Status: planned
 Depends on: R2.20, R2.40
 
@@ -2173,6 +2212,7 @@ Exit evidence: lookup and collision tests pass; users cannot synthesize or
 override compiler-supplied entries; the supplied set is closed and documented.
 
 ### R2.70 — Implement the generic evidence schema
+
 Status: planned
 Depends on: R2.10, R2.30, R2.60, R1.80
 
@@ -2188,6 +2228,7 @@ layout, entry order, size and alignment are ABI-tested; specialization is not
 required.
 
 ### R2.80 — Implement `any C`
+
 Status: planned
 Depends on: R2.50, R2.70
 
@@ -2201,6 +2242,7 @@ Exit evidence: at least two heterogeneous conformances dispatch through real
 tables; origin and permission failures are diagnosed.
 
 ### R2.90 — Establish guarantee and semantic coverage registers
+
 Status: planned
 Depends on: R2.30, R2.50, R2.60, R2.70, R2.80
 
@@ -2229,6 +2271,7 @@ container pressure, implements the minimum normative module and hosted-service
 surfaces, and runs a complete parser workload written in Landin.
 
 ### R3.10 — Implement minimum modules and ordered roots
+
 Status: planned
 Depends on: R1.50, R2.40, R2.60, R0.50
 
@@ -2242,6 +2285,7 @@ Exit evidence: a multi-module program resolves deterministic roots and rejects
 ambiguous/colliding conformances.
 
 ### R3.20 — Build the allocator and container pressure case
+
 Status: planned
 Depends on: R2.50, R2.60, R2.70
 
@@ -2256,6 +2300,7 @@ Exit evidence: the pressure fixture demonstrates the exact initialization and
 release transitions the type must represent.
 
 ### R3.30 — Implement honest raw storage and `core/mem`
+
 Status: planned
 Depends on: R3.20, R2.10
 
@@ -2270,6 +2315,7 @@ double-admit and invalid-release cases pass; containers no longer pretend
 uninitialized bytes are `T`.
 
 ### R3.40 — Implement parser-support core modules
+
 Status: planned
 Depends on: R3.30, R2.70, R2.80
 
@@ -2281,6 +2327,7 @@ Exit evidence: allocator failure paths, arena-origin behavior and pointer
 vectors pass through compiled Landin code.
 
 ### R3.50 — Implement the minimum hosted ABI and I/O
+
 Status: planned
 Depends on: R1.80, R2.30, R3.10
 
@@ -2292,6 +2339,7 @@ Exit evidence: Landin `core/io` reads parser input, writes diagnostics and
 reports world-dependent failures through declared errors.
 
 ### R3.60 — Implement diagnostics as runtime dispatch
+
 Status: planned
 Depends on: R1.30, R2.80, R3.50
 
@@ -2302,6 +2350,7 @@ Exit evidence: two logger implementations receive identical ordered notes;
 bounded overflow and hosted I/O failure follow their specified channels.
 
 ### R3.70 — Complete and run the derived parser program
+
 Status: planned
 Depends on: R3.10, R3.40, R3.60, R2.90
 
@@ -2332,6 +2381,7 @@ application workloads, adds usable source debugging and implements only
 baseline measured optimization.
 
 ### R4.10 — Close the hosted construct matrix
+
 Status: planned
 Depends on: R3.70
 
@@ -2343,6 +2393,7 @@ Exit evidence: every hosted `[NNNN]` row has implementation and positive or
 negative evidence; no omission is hidden by prototype coverage.
 
 ### R4.20 — Complete hosted core containers and library slice
+
 Status: planned
 Depends on: R3.40, R4.10
 
@@ -2356,6 +2407,7 @@ Exit evidence: containers run with heap, arena, fixed and failing allocators;
 all omission and layering choices are recorded.
 
 ### R4.30 — Complete hosted modules and toolchain directives
+
 Status: planned
 Depends on: R3.10, R4.10
 
@@ -2369,6 +2421,7 @@ Exit evidence: deterministic root and option cases pass; private caches expose
 no stable interface.
 
 ### R4.40 — Implement the narrow complete C ABI and bindings
+
 Status: planned
 Depends on: R2.30, R4.30
 
@@ -2389,6 +2442,7 @@ Exit evidence: ABI differential tests call in both directions; unsupported C
 forms fail explicitly; generated declarations are deterministic.
 
 ### R4.50 — Implement baseline code generation and specialization
+
 Status: planned
 Depends on: R1.70, R2.70, R4.10
 
@@ -2406,6 +2460,7 @@ what happened; scalar loop lowering and code-quality smoke measurements meet
 the documented baseline.
 
 ### R4.60 — Implement usable Linux source debugging
+
 Status: planned
 Depends on: R1.70, R1.80, R4.50
 
@@ -2417,6 +2472,7 @@ Exit evidence: scripted debugger sessions prove breakpoints, stepping, stacks
 and selected locals in unoptimized and baseline-optimized builds.
 
 ### R4.70 — Complete and run the derived container program
+
 Status: planned
 Depends on: R4.20, R4.50, R4.60
 
@@ -2427,6 +2483,7 @@ Exit evidence: list, small vector, map and tree paths execute on Linux x86-64;
 raw-storage, evidence and origin invariants are exercised.
 
 ### R4.80 — Complete and run the derived hosted application
+
 Status: planned
 Depends on: R4.20, R4.30, R4.40, R4.70
 
@@ -2437,6 +2494,7 @@ Exit evidence: the application selects heterogeneous implementations at
 runtime, processes hosted I/O and executes on Linux x86-64.
 
 ### R4.90 — Close Linux hosted parity
+
 Status: planned
 Depends on: R4.60, R4.70, R4.80
 
@@ -2459,6 +2517,7 @@ R5 proves target isolation on the actual development platform before the
 freestanding backend begins.
 
 ### R5.10 — Establish the native macOS compiler environment
+
 Status: planned
 Depends on: R0.70, R4.90
 
@@ -2470,6 +2529,7 @@ Exit evidence: provider-neutral commands build `refine` and run its harness on
 native macOS arm64 with captured tool versions.
 
 ### R5.20 — Isolate target contracts
+
 Status: planned
 Depends on: R4.90, R0.60
 
@@ -2482,6 +2542,7 @@ canonically equal across hosts where specified; target differences are
 localized and reviewed.
 
 ### R5.30 — Implement Darwin arm64 lowering
+
 Status: planned
 Depends on: R5.10, R5.20, R2.30
 
@@ -2499,6 +2560,7 @@ Exit evidence: ABI differential and end-to-end cases execute natively on macOS
 arm64.
 
 ### R5.40 — Implement macOS arm64 source debugging
+
 Status: planned
 Depends on: R5.30, R4.60
 
@@ -2509,6 +2571,7 @@ Exit evidence: scripted native debugger sessions provide the same selected
 source experience as Linux where platform facilities permit.
 
 ### R5.50 — Close hosted target parity
+
 Status: planned
 Depends on: R5.30, R5.40, R4.70, R4.80
 
@@ -2532,6 +2595,7 @@ language's hardware pressure. Emulator evidence has separate CPU/startup and
 peripheral-behavior lanes; physical hardware remains supplemental.
 
 ### R6.10 — Select the Cortex-M execution profile
+
 Status: planned
 Depends on: R5.50
 
@@ -2544,6 +2608,7 @@ Exit evidence: the profile can test boot/vectors/traps/debugging and names a
 separate reproducible route for every required MMIO/DMA behavior.
 
 ### R6.20 — Instantiate the 32-bit layout and ABI
+
 Status: planned
 Depends on: R2.10, R5.20, R6.10
 
@@ -2554,6 +2619,7 @@ Exit evidence: prior synthetic 32-bit goldens agree with emitted layout and ABI
 probes; no x86 pointer-size assumption survives.
 
 ### R6.30 — Define and implement the concurrency memory model
+
 Status: planned
 Depends on: R2.90, R5.20, R6.10
 
@@ -2567,6 +2633,7 @@ Exit evidence: normative text and executable/model cases cover atomics,
 volatile access, barriers, interrupts, DMA and cache behavior.
 
 ### R6.40 — Define and implement packed invalid encodings
+
 Status: planned
 Depends on: R2.20, R6.20
 
@@ -2580,6 +2647,7 @@ Exit evidence: positive and negative encoded-value cases and reserved-bit
 read/modify/write behavior pass through the peripheral harness.
 
 ### R6.50 — Implement the Cortex-M backend
+
 Status: planned
 Depends on: R5.20, R6.20, R6.30, R6.40
 
@@ -2591,6 +2659,7 @@ Exit evidence: the shared target-applicable IR corpus assembles and executes in
 the selected emulator profile.
 
 ### R6.60 — Implement startup, vectors and machine directives
+
 Status: planned
 Depends on: R4.30, R6.30, R6.40, R6.50
 
@@ -2601,6 +2670,7 @@ Exit evidence: firmware boots, vectors and interrupts execute, sections land at
 expected addresses and link/map evidence is deterministic.
 
 ### R6.70 — Implement the freestanding Landin core slice
+
 Status: planned
 Depends on: R3.30, R3.40, R6.30, R6.50, R6.60
 
@@ -2611,6 +2681,7 @@ Exit evidence: the linker closure contains only declared freestanding modules
 and startup/toolchain shims; allocator and panic behavior fit the profile.
 
 ### R6.80 — Establish checked-in generated device fixtures
+
 Status: planned
 Depends on: R6.10, R6.40
 
@@ -2622,6 +2693,7 @@ Exit evidence: fixture provenance and regeneration requirements are documented;
 the compiler gate does not depend on an unbuilt package ecosystem.
 
 ### R6.90 — Complete and run the derived driver program
+
 Status: planned
 Depends on: R6.60, R6.70, R6.80
 
@@ -2633,6 +2705,7 @@ Exit evidence: register images, volatile access, interrupts, vector placement,
 DMA handoff/visibility and failure behavior execute with recorded outcomes.
 
 ### R6.100 — Close freestanding evidence
+
 Status: planned
 Depends on: R6.90
 
@@ -2656,6 +2729,7 @@ R7 closes coverage and dispositions. It does not release, declare production
 readiness or begin self-hosting.
 
 ### R7.10 — Audit every normative construct
+
 Status: planned
 Depends on: R5.50, R6.100
 
@@ -2667,6 +2741,7 @@ transfer first amends the tour so the roadmap never overrides the specification.
 Exit evidence: no construct row is missing, unowned or unexplained.
 
 ### R7.20 — Close deferred normative behavior
+
 Status: planned
 Depends on: R4.50, R7.10
 
@@ -2679,6 +2754,7 @@ Exit evidence: `[1310]` and every other formerly delayed normative row have
 implementation and tests or an evidence-backed tour amendment.
 
 ### R7.30 — Disposition every inherited item
+
 Status: planned
 Depends on: R7.10
 
@@ -2690,6 +2766,7 @@ Exit evidence: the 32-row migration appendix and all later discoveries have an
 explicit terminal disposition.
 
 ### R7.40 — Close all evidence registers
+
 Status: planned
 Depends on: R2.90, R7.20, R7.30
 
@@ -2701,6 +2778,7 @@ grammar for every construct the tour still describes; no matrix contains a gap, 
 test, unowned target or contradictory disposition.
 
 ### R7.50 — Prove deterministic baseline toolchain behavior
+
 Status: planned
 Depends on: R4.90, R5.50, R6.100, R7.40
 
@@ -2712,6 +2790,7 @@ Exit evidence: equivalent closures produce declared deterministic artifacts and
 all target-specific debugger/map requirements pass.
 
 ### R7.60 — Run complete derived prototype coverage
+
 Status: planned
 Depends on: R3.70, R4.70, R4.80, R5.50, R6.90, R7.50
 
@@ -2723,6 +2802,7 @@ Exit evidence: every derivation row has inputs, outputs, target results and a
 trace back to the original design record.
 
 ### R7.70 — Declare the roadmap endpoint
+
 Status: planned
 Depends on: R7.60
 
@@ -2792,7 +2872,7 @@ retained. Reopen one only with new evidence that answers its preserved rationale
 and record the reopening explicitly.
 
 | Legacy item | Preserved decision, trigger and sources | Roadmap owner or successor |
-|---|---|---|
+| --- | --- | --- |
 | A1 — Normative grammar | Add lexical rules, an explicit precedence table, statement grammar and expression grammar. Sources: `H§P0.1`; `R` bottom line. | Incremental ownership starts in R1.10 and continues with each construct phase; complete normative grammar closes in R7.40. |
 | A2 — Raw storage as a type | `[0510]` withdrew `slice_from` as an honest answer. Track capacity apart from initialized count, admit one slot at a time and release only initialized values; derive the shape from containers. Sources: `[0510]`, Z8, `R§2`, `H§4`. | R3.20, R3.30 |
 | A3 — Full value layout | Decide variant tag width/position, payload alignment and spare-bit folding through implementation measurements. The legacy item had no tracked citation. | R2.10, R2.20 |

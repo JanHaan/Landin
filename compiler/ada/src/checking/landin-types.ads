@@ -70,6 +70,10 @@ package Landin.Types is
       I8, I16, I32, I64,
       Usize, Isize,
       Bool,
+      --  [0630]/[0640]: identity without payload.  The complete singleton
+      --  or union set lives beside this broad category in Landin.Checking,
+      --  as an aggregate's nominal body and an array's shape do.
+      Atom_Value,
       --  A type a program declared a body for [1795], laid out by
       --  [0750].  Which one is not here: this package holds what a type
       --  *is* and an aggregate's identity is which declaration wrote it,

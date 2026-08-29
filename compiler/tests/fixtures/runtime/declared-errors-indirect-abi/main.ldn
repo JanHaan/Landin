@@ -1,0 +1,39 @@
+bad: atom
+problem: type = bad
+
+packet: type = struct
+    x: i32
+    y: i32
+end packet
+
+builder_type: type = (a: i32, b: i32, c: i32, d: i32,
+                     e: i32, f: i32, g: i32, h: i32, fails: bool)
+                    -> (result: packet) ! problem
+
+make: (a: i32, b: i32, c: i32, d: i32,
+       e: i32, f: i32, g: i32, h: i32, fails: bool)
+      -> (result: packet) ! problem =
+    fail bad when fails
+    result = packet(x: a + b + c + d + e + f + g + h, y: 6)
+end make
+
+alternate: (a: i32, b: i32, c: i32, d: i32,
+            e: i32, f: i32, g: i32, h: i32, fails: bool)
+           -> (result: packet) ! problem =
+    fail bad when fails
+    result = packet(x: 40, y: 2)
+end alternate
+
+public main: () -> (code: i32) =
+    mut builder: builder_type = make
+    first: packet = builder(1, 2, 3, 4, 5, 6, 7, 8, false)
+                    else packet(x: 0, y: 0)
+    builder = alternate
+    second: packet = builder(1, 2, 3, 4, 5, 6, 7, 8, true)
+                     else packet(x: 40, y: 2)
+    if first.x + first.y == 42 and second.x + second.y == 42 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

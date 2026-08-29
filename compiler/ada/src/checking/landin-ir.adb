@@ -51,8 +51,69 @@ package body Landin.IR is
    end Prepare;
 
    ------------------------------------------------------------------
-   --  Signatures
+   --  Atom sets and signatures
    ------------------------------------------------------------------
+
+   function Atom_Set_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Atom_Sets.Length));
+
+   function Add_Atom_Set
+     (Into : in out Unit; Atoms : Atom_Array) return Atom_Set_Id
+   is
+      Made : Atom_Set_Record := (Members => (First => 0, Count => 0));
+   begin
+      Made.Members.First := Natural (Into.Atoms.Length);
+      for Atom of Atoms loop
+         Into.Atoms.Append (Atom);
+         Made.Members.Count := Made.Members.Count + 1;
+      end loop;
+      Into.Atom_Sets.Append (Made);
+      return Atom_Set_Id (Into.Atom_Sets.Last_Index);
+   end Add_Atom_Set;
+
+   function Atom_Count
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id) return Natural
+     is (Of_Unit.Atom_Sets (Positive (Set_Id)).Members.Count);
+
+   function Nth_Atom
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id; Index : Positive)
+      return Declaration_Id
+   is
+      Members : constant Run :=
+        Of_Unit.Atom_Sets (Positive (Set_Id)).Members;
+   begin
+      return Of_Unit.Atoms (Members.First + Index);
+   end Nth_Atom;
+
+   function Contains_Atom
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id; Atom : Declaration_Id)
+      return Boolean
+   is
+   begin
+      for Index in 1 .. Atom_Count (Of_Unit, Set_Id) loop
+         if Nth_Atom (Of_Unit, Set_Id, Index) = Atom then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Contains_Atom;
+
+   function Atom_Sets_Agree
+     (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
+   is
+   begin
+      if Atom_Count (Of_Unit, Left) /= Atom_Count (Of_Unit, Right) then
+         return False;
+      end if;
+      for Index in 1 .. Atom_Count (Of_Unit, Left) loop
+         if not Contains_Atom
+           (Of_Unit, Right, Nth_Atom (Of_Unit, Left, Index))
+         then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Atom_Sets_Agree;
 
    function Signature_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Signatures.Length));
@@ -60,11 +121,13 @@ package body Landin.IR is
    function Add_Signature_With_Results
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
-      Results    : Signature_Part_Array) return Signature_Id
+      Results    : Signature_Part_Array;
+      Errors     : Atom_Set_Id := No_Atom_Set) return Signature_Id
    is
       Made : Signature_Record :=
         (Parameters => (First => 0, Count => 0),
-         Results    => (First => 0, Count => 0));
+         Results    => (First => 0, Count => 0),
+         Errors     => Errors);
 
       procedure Append (Parts : Signature_Part_Array; To_Run : in out Run);
 
@@ -88,15 +151,16 @@ package body Landin.IR is
    function Add_Signature
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
-      Result     : Signature_Part) return Signature_Id
+      Result     : Signature_Part;
+      Errors     : Atom_Set_Id := No_Atom_Set) return Signature_Id
    is
    begin
       if Result.Kind = Landin.Types.No_Value then
          return Add_Signature_With_Results
-           (Into, Parameters, No_Signature_Parts);
+           (Into, Parameters, No_Signature_Parts, Errors);
       end if;
       return Add_Signature_With_Results
-        (Into, Parameters, Signature_Part_Array'[1 => Result]);
+        (Into, Parameters, Signature_Part_Array'[1 => Result], Errors);
    end Add_Signature;
 
    function Signature_Parameter_Count
@@ -137,6 +201,10 @@ package body Landin.IR is
       return Nth_Signature_Result (Of_Unit, Signature, 1);
    end Signature_Result;
 
+   function Signature_Errors
+     (Of_Unit : Unit; Signature : Signature_Id) return Atom_Set_Id
+     is (Of_Unit.Signatures (Positive (Signature)).Errors);
+
    function Signatures_Agree
      (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
    is
@@ -145,7 +213,13 @@ package body Landin.IR is
             and then
               (case A.Kind is
                   when Landin.Types.No_Value => True,
-                  when Landin.Types.Scalar_Name => True,
+                  when Landin.Types.Scalar_Name =>
+                     (if A.Atoms = No_Atom_Set or else B.Atoms = No_Atom_Set
+                      then A.Atoms = B.Atoms
+                      else Holds (Of_Unit, A.Atoms)
+                        and then Holds (Of_Unit, B.Atoms)
+                        and then Atom_Sets_Agree
+                          (Of_Unit, A.Atoms, B.Atoms)),
                   when Landin.Types.Aggregate =>
                      A.Aggregate_Body = B.Aggregate_Body,
                   when Landin.Types.Fixed_Array =>
@@ -159,7 +233,14 @@ package body Landin.IR is
                        (Of_Unit, A.Signature, B.Signature),
                   when others => False));
    begin
-      if Signature_Parameter_Count (Of_Unit, Left)
+      if (Signature_Errors (Of_Unit, Left) = No_Atom_Set)
+           /= (Signature_Errors (Of_Unit, Right) = No_Atom_Set)
+        or else
+          (Signature_Errors (Of_Unit, Left) /= No_Atom_Set
+           and then not Atom_Sets_Agree
+             (Of_Unit, Signature_Errors (Of_Unit, Left),
+              Signature_Errors (Of_Unit, Right)))
+        or else Signature_Parameter_Count (Of_Unit, Left)
            /= Signature_Parameter_Count (Of_Unit, Right)
         or else Signature_Result_Count (Of_Unit, Left)
            /= Signature_Result_Count (Of_Unit, Right)
@@ -238,6 +319,18 @@ package body Landin.IR is
    function Signature_Of (Of_Unit : Unit; Item : Item_Id)
       return Signature_Id
      is (Element (Of_Unit, Item).Signature);
+
+   function Atom_Set_Of (Of_Unit : Unit; Item : Item_Id) return Atom_Set_Id
+     is (Element (Of_Unit, Item).Atom_Set);
+
+   procedure Set_Atom_Set
+     (Into : in out Unit; Item : Item_Id; Atoms : Atom_Set_Id)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Atom_Set := Atoms;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Atom_Set;
 
    procedure Set_Signature
      (Into : in out Unit; Item : Item_Id; Signature : Signature_Id)
@@ -421,7 +514,8 @@ package body Landin.IR is
       Of_Type  : Landin.Types.Scalar_Name;
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin;
-      Signature : Signature_Id := No_Signature) return Slot_Id
+      Signature : Signature_Id := No_Signature;
+      Atoms     : Atom_Set_Id := No_Atom_Set) return Slot_Id
    is
       Held : Item_Record := Element (Into, Item);
    begin
@@ -429,6 +523,7 @@ package body Landin.IR is
       Into.Slots.Append
         (Slot_Record'(Of_Type     => Of_Type,
                       Signature   => Signature,
+                      Atom_Set    => Atoms,
                       Declaration => Declares,
                       Site        => Site,
                       others      => <>));
@@ -945,10 +1040,12 @@ package body Landin.IR is
       Of_Type  : Landin.Types.Scalar_Name;
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin;
-      Signature : Signature_Id := No_Signature) return Slot_Id
+      Signature : Signature_Id := No_Signature;
+      Atoms     : Atom_Set_Id := No_Atom_Set) return Slot_Id
    is
       Made : constant Slot_Id :=
-        Add_Slot (Into, Item, Of_Type, Declares, Site, Signature);
+        Add_Slot
+          (Into, Item, Of_Type, Declares, Site, Signature, Atoms);
       Held : Item_Record := Element (Into, Item);
    begin
       --  A parameter is a slot the caller filled, and the run below is
@@ -1023,6 +1120,10 @@ package body Landin.IR is
    function Signature_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Signature_Id
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Signature);
+
+   function Atom_Set_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Atom_Set_Id
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Atom_Set);
 
    function Declares
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
@@ -1164,9 +1265,22 @@ package body Landin.IR is
       return No_Signature;
    end Signature_Of;
 
+   function Atom_Set_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Atom_Set_Id
+     is (Held (Of_Unit, Item, Value).Atom_Set);
+
+   function Atom_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Declaration_Id
+     is (Held (Of_Unit, Item, Value).Atom_Identity);
+
    function Call_Signature
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
      is (Held (Of_Unit, Item, Value).Signature);
+
+   function Failure_Slot_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Slot_Id
+     is (Held (Of_Unit, Item, Value).Slot);
 
    function Origin_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Provenance.Origin
@@ -1754,6 +1868,21 @@ package body Landin.IR is
                          Truth  => Value,
                          others => <>)));
 
+   function Emit_Atom
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Identity : Declaration_Id;
+      Atoms    : Atom_Set_Id;
+      Site     : Landin.Provenance.Origin) return Value_Id
+     is (Append
+           (Into, Item,
+            Instruction'(Op            => Atom,
+                         Result        => Landin.Types.U32,
+                         Site          => Site,
+                         Atom_Set      => Atoms,
+                         Atom_Identity => Identity,
+                         others        => <>)));
+
    function Emit_Load
      (Into : in out Unit;
       Item : Item_Id;
@@ -1766,6 +1895,7 @@ package body Landin.IR is
                          Site   => Site,
                          Slot   => Slot,
                          Signature => Signature_Of (Into, Item, Slot),
+                         Atom_Set => Atom_Set_Of (Into, Item, Slot),
                          others => <>)));
 
    procedure Emit_Store
@@ -1801,6 +1931,7 @@ package body Landin.IR is
                          Site      => Site,
                          Named     => Datum,
                          Signature => Signature_Of (Into, Datum),
+                         Atom_Set  => Atom_Set_Of (Into, Datum),
                          others    => <>)));
 
    function Emit_Load_Field
@@ -2407,6 +2538,24 @@ package body Landin.IR is
       return Append (Into, Item, Made);
    end Emit_Binary;
 
+   function Emit_Failure_Test
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Error : Value_Id;
+      Site  : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op => Failure_Test,
+                     Result => Landin.Types.Bool,
+                     Site => Site,
+                     others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Error);
+      return Append (Into, Item, Made);
+   end Emit_Failure_Test;
+
    function Emit_Function_Address
      (Into  : in out Unit;
       Item  : Item_Id;
@@ -2426,7 +2575,8 @@ package body Landin.IR is
       Item   : Item_Id;
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Failure : Slot_Id := No_Slot) return Value_Id
      is (Append
            (Into, Item,
             Instruction'(Op        => Call,
@@ -2434,6 +2584,18 @@ package body Landin.IR is
                          Site      => Site,
                          Named     => Callee,
                          Signature => Signature_Of (Into, Callee),
+                         Atom_Set  =>
+                           (if Signature_Of (Into, Callee) /= No_Signature
+                              and then Holds
+                                (Into, Signature_Of (Into, Callee))
+                            then
+                              (if Signature_Result_Count
+                                    (Into, Signature_Of (Into, Callee)) = 1
+                               then Nth_Signature_Result
+                                 (Into, Signature_Of (Into, Callee), 1).Atoms
+                               else No_Atom_Set)
+                            else No_Atom_Set),
+                         Slot      => Failure,
                          First_Arg => 0,
                          Args      => 0,
                          others    => <>)));
@@ -2443,13 +2605,20 @@ package body Landin.IR is
       Item      : Item_Id;
       Signature : Signature_Id;
       Result    : Landin.Types.Type_Kind;
-      Site      : Landin.Provenance.Origin) return Value_Id
+      Site      : Landin.Provenance.Origin;
+      Failure   : Slot_Id := No_Slot) return Value_Id
      is (Append
            (Into, Item,
             Instruction'(Op        => Indirect_Call,
                          Result    => Result,
                          Site      => Site,
                          Signature => Signature,
+                         Atom_Set  =>
+                           (if Signature_Result_Count (Into, Signature) = 1
+                            then Nth_Signature_Result
+                              (Into, Signature, 1).Atoms
+                            else No_Atom_Set),
+                         Slot      => Failure,
                          First_Arg => 0,
                          Args      => 0,
                          others    => <>)));
@@ -2519,6 +2688,23 @@ package body Landin.IR is
       Where := Append (Into, Item, Made);
       pragma Assert (Where /= No_Value);
    end Emit_Branch;
+
+   procedure Emit_Fail
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Error : Value_Id;
+      Site  : Landin.Provenance.Origin)
+   is
+      Made : Instruction :=
+        Instruction'(Op => Fail, Site => Site, others => <>);
+      Where : Value_Id;
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Error);
+      Where := Append (Into, Item, Made);
+      pragma Assert (Where /= No_Value);
+   end Emit_Fail;
 
    procedure Emit_Leave
      (Into  : in out Unit;

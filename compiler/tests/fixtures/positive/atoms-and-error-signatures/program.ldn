@@ -1,0 +1,46 @@
+north, south, east, west: atom
+compass: type = north | south | east | west
+reordered: type = west | east | south | north
+
+missing, denied: atom
+problems: type = missing | denied
+operation: type = (value: i32) -> (result: i32) ! problems
+
+selected: compass = south
+
+leaf: (value: i32) -> (result: i32) ! problems =
+    fail missing when value < 0
+    result = value
+end leaf
+
+forward: (value: i32) -> (result: i32) ! ... =
+    result = try leaf(value)
+end forward
+
+first: (value: i32) -> (result: i32) ! ... =
+    fail missing when value == 1
+    result = try second(value)
+end first
+
+second: (value: i32) -> (result: i32) ! ... =
+    fail denied when value == 2
+    result = if value == 0 then 0 else try first(0) end if
+end second
+
+use: (turn: compass, value: i32) -> (result: i32) =
+    local: reordered = turn
+    worker: operation = leaf
+    from_worker := worker(value) else 0
+    from_forward := forward(value) else (problem)
+        match problem
+            missing: 1
+            _: 2
+        end match
+    end
+    result = match local
+        north: from_worker
+        south: from_forward
+        east: 3
+        west: 4
+    end match
+end use

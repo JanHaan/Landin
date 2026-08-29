@@ -1,0 +1,9 @@
+a, b: atom
+only_a: type = a
+both: type = a | b
+
+f: () -> none =
+    mut narrow: only_a = a
+    wide: both = b
+    narrow = wide
+end f

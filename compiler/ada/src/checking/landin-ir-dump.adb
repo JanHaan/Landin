@@ -60,10 +60,32 @@ package body Landin.IR.Dump is
         is (if Holds (Of_Unit, Id)
             then Named (Declares (Of_Unit, Id)) else "-");
 
+      function Atom_Set_Text (Set_Id : Atom_Set_Id) return String;
+
+      function Atom_Set_Text (Set_Id : Atom_Set_Id) return String
+      is
+         Text : Unbounded.Unbounded_String;
+      begin
+         if Set_Id = No_Atom_Set then
+            return "";
+         end if;
+         Unbounded.Append (Text, " atoms {");
+         for Index in 1 .. Atom_Count (Of_Unit, Set_Id) loop
+            if Index > 1 then
+               Unbounded.Append (Text, ", ");
+            end if;
+            Unbounded.Append
+              (Text, Named (Nth_Atom (Of_Unit, Set_Id, Index)));
+         end loop;
+         Unbounded.Append (Text, "}");
+         return Unbounded.To_String (Text);
+      end Atom_Set_Text;
+
       function Signature_Part_Text (Part : Signature_Part) return String
         is (case Part.Kind is
                when Landin.Types.No_Value => "none",
-               when Landin.Types.Scalar_Name => Shown (Part.Kind),
+               when Landin.Types.Scalar_Name =>
+                  Shown (Part.Kind) & Atom_Set_Text (Part.Atoms),
                when Landin.Types.Aggregate =>
                   "struct " & Named (Part.Aggregate_Body),
                when Landin.Types.Fixed_Array =>
@@ -277,6 +299,11 @@ package body Landin.IR.Dump is
                return Lead & " "
                       & (if Truth_Of (Of_Unit, Item, Value)
                          then "true" else "false");
+
+            when Atom =>
+               return Lead & " identity "
+                 & Named (Atom_Of (Of_Unit, Item, Value))
+                 & Atom_Set_Text (Atom_Set_Of (Of_Unit, Item, Value));
 
             when Load | Store =>
                return Lead & " slot "
@@ -507,6 +534,14 @@ package body Landin.IR.Dump is
                          & Trimmed
                              (Signature_Id'Image
                                 (Call_Signature (Of_Unit, Item, Value)))
+                         & (if Failure_Slot_Of (Of_Unit, Item, Value)
+                                  = No_Slot
+                            then ""
+                            else " failure slot "
+                              & Trimmed
+                                  (Slot_Id'Image
+                                     (Failure_Slot_Of
+                                        (Of_Unit, Item, Value))))
                          & Operands (Item, Value);
                end;
 
@@ -515,6 +550,12 @@ package body Landin.IR.Dump is
                  & Trimmed
                      (Signature_Id'Image
                         (Call_Signature (Of_Unit, Item, Value)))
+                 & (if Failure_Slot_Of (Of_Unit, Item, Value) = No_Slot
+                    then ""
+                    else " failure slot "
+                      & Trimmed
+                          (Slot_Id'Image
+                             (Failure_Slot_Of (Of_Unit, Item, Value))))
                  & Operands (Item, Value);
 
             when Jump =>
@@ -563,6 +604,12 @@ package body Landin.IR.Dump is
          & Trimmed (Natural'Image (Signature_Count (Of_Unit)))
          & " items " & Trimmed (Natural'Image (Item_Count (Of_Unit))));
 
+      for Which in 1 .. Atom_Set_Count (Of_Unit) loop
+         Put
+           ("atom set " & Trimmed (Atom_Set_Id'Image (Atom_Set_Id (Which)))
+            & Atom_Set_Text (Atom_Set_Id (Which)));
+      end loop;
+
       for Which in 1 .. Signature_Count (Of_Unit) loop
          declare
             Id : constant Signature_Id := Signature_Id (Which);
@@ -594,7 +641,11 @@ package body Landin.IR.Dump is
                   then "none"
                   elsif Signature_Result_Count (Of_Unit, Id) = 1
                   then Unbounded.To_String (Results)
-                  else "(" & Unbounded.To_String (Results) & ")"));
+                  else "(" & Unbounded.To_String (Results) & ")")
+               & (if Signature_Errors (Of_Unit, Id) = No_Atom_Set
+                  then ""
+                  else " errors"
+                    & Atom_Set_Text (Signature_Errors (Of_Unit, Id))));
          end;
       end loop;
 
@@ -609,6 +660,7 @@ package body Landin.IR.Dump is
                  & " " & Item_Kind'Image (Kind_Of (Of_Unit, Id))
                  & " " & Item_Named (Id)
                  & " result " & Shown (Result_Of (Of_Unit, Id))
+                 & Atom_Set_Text (Atom_Set_Of (Of_Unit, Id))
                  & (if Signature_Of (Of_Unit, Id) = No_Signature then ""
                     else " signature "
                       & Trimmed
@@ -901,6 +953,7 @@ package body Landin.IR.Dump is
                              & Unbounded.To_String (Fields)
                         else Landin.Types.Spelling
                                (Type_Of (Of_Unit, Id, Slot)))
+                     & Atom_Set_Text (Atom_Set_Of (Of_Unit, Id, Slot))
                      & (if Signature_Of (Of_Unit, Id, Slot) = No_Signature
                         then ""
                         else " signature "
