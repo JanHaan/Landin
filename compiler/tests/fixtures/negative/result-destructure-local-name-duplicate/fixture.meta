@@ -1,0 +1,5 @@
+class: negative
+summary: renamed result fields remain ordinary declarations in one local scope
+constructs: 0920, 0990, 1840, 1850
+program: program.ldn
+codes: L0200

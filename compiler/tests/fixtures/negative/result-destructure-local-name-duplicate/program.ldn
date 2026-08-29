@@ -1,0 +1,7 @@
+pair: () -> (left: i32, right: i32) =
+    left = 1
+    right = 2
+end pair
+bad: () -> none =
+    (left: value, right: value) := pair()
+end bad
