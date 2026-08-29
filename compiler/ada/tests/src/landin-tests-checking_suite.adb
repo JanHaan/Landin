@@ -7,6 +7,7 @@
 
 with Landin.Checking;
 with Landin.Diagnostics;
+with Landin.IR;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -16,10 +17,12 @@ with Landin.Stages.Syntax;
 with Landin.Syntax;
 with Landin.Syntax.Forest;
 with Landin.Targets;
+with Landin.Tokens;
 with Landin.Types;
 
 package body Landin.Tests.Checking_Suite is
 
+   use type Landin.IR.Nominal_Type_Id;
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Source.Span;
    use type Landin.Resolution.Declaration_Sort;
@@ -28,8 +31,10 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Field_Kind;
+   use type Landin.Checking.Instance_State;
    use type Landin.Checking.Nominal_Type_Id;
    use type Landin.Checking.Signature_Id;
+   use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
@@ -73,6 +78,9 @@ package body Landin.Tests.Checking_Suite is
      & "end outer" & LF;
 
    procedure Declarations_Give_Structs_Their_Identity
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nominal_Instances_Intern_Normalized_Actuals
      (Item : in out Landin.Testing.Context);
 
    procedure Declared_Structs_Follow_Target_Layout
@@ -215,6 +223,470 @@ package body Landin.Tests.Checking_Suite is
             "Has_Layout safely rejects an identity the table does not hold");
       end;
    end Declarations_Give_Structs_Their_Identity;
+
+   procedure Nominal_Instances_Intern_Normalized_Actuals
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "left: type = struct" & LF
+        & "    value: usize" & LF
+        & "end left" & LF
+        & "right: type = struct" & LF
+        & "    value: usize" & LF
+        & "end right" & LF;
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+
+      function One (Actual : Landin.Checking.Actual_Key)
+        return Landin.Checking.Actual_Tuple;
+
+      function One (Actual : Landin.Checking.Actual_Key)
+        return Landin.Checking.Actual_Tuple
+      is
+         Result : Landin.Checking.Actual_Tuple :=
+           Landin.Checking.Empty_Actuals;
+      begin
+         Landin.Checking.Append_Actual (Result, Actual);
+         return Result;
+      end One;
+
+      function Two (First, Second : Landin.Checking.Actual_Key)
+        return Landin.Checking.Actual_Tuple;
+
+      function Two (First, Second : Landin.Checking.Actual_Key)
+        return Landin.Checking.Actual_Tuple
+      is
+         Result : Landin.Checking.Actual_Tuple :=
+           Landin.Checking.Empty_Actuals;
+      begin
+         Landin.Checking.Append_Actual (Result, First);
+         Landin.Checking.Append_Actual (Result, Second);
+         return Result;
+      end Two;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "instances.ldn", Source_Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "the ordinary templates are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Unit : constant not null access Landin.IR.Unit :=
+           Landin.Stages.Code (Work);
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id;
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id
+         is
+            Node : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, Position);
+         begin
+            for Id in Landin.Provenance.Declaration_Id'(1)
+                      .. Landin.Provenance.Declaration_Id
+                           (Landin.Resolution.Declaration_Count (Meanings.all))
+            loop
+               if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                 and then Landin.Resolution.Node_Of (Meanings.all, Id) = Node
+               then
+                  return Id;
+               end if;
+            end loop;
+            return Landin.Provenance.No_Declaration;
+         end Declaration_At;
+
+         Left_Template : constant Landin.Provenance.Declaration_Id :=
+           Declaration_At (1);
+         Right_Template : constant Landin.Provenance.Declaration_Id :=
+           Declaration_At (2);
+         Left_Empty : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Empty_Nominal_Instance
+             (Types.all, Left_Template);
+         Right_Empty : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Empty_Nominal_Instance
+             (Types.all, Right_Template);
+         Site : constant Landin.Provenance.Origin :=
+           Landin.Syntax.Origin
+             (Of_Tree.all, Landin.Syntax.Nth_Declaration (Of_Tree.all, 1));
+         Set_Left_Right : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Add_Atom_Set
+             (Types.all, [Left_Template, Right_Template]);
+         Set_Right_Left : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Add_Atom_Set
+             (Types.all, [Right_Template, Left_Template]);
+         Set_Left : constant Landin.Checking.Atom_Set_Id :=
+           Landin.Checking.Add_Atom_Set (Types.all, [1 => Left_Template]);
+         Signature_Left : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Add_Signature
+             (Types.all,
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.U8, Site => Site,
+                       others => <>)],
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.Aggregate,
+                       Nominal => Left_Empty, Site => Site, others => <>)],
+              Site, Set_Left_Right, Landin.Checking.Concrete);
+         Signature_Alias : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Add_Signature
+             (Types.all,
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.U8, Site => Site,
+                       others => <>)],
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.Aggregate,
+                       Nominal => Left_Empty, Site => Site, others => <>)],
+              Site, Set_Right_Left, Landin.Checking.Concrete);
+         Signature_Different : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Add_Signature
+             (Types.all,
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.I8, Site => Site,
+                       others => <>)],
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.Aggregate,
+                       Nominal => Left_Empty, Site => Site, others => <>)],
+              Site, Set_Left_Right, Landin.Checking.Concrete);
+         Wrapper_Left : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Add_Signature
+             (Types.all,
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.Function_Value,
+                       Signature => Signature_Left, Site => Site,
+                       others => <>)],
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.Fixed_Array, Length => 3,
+                       Nominal => Left_Empty, Site => Site, others => <>)],
+              Site);
+         Wrapper_Alias : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Add_Signature
+             (Types.all,
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.Function_Value,
+                       Signature => Signature_Alias, Site => Site,
+                       others => <>)],
+              Landin.Checking.Signature_Part_Array'
+                [1 => (Kind => Landin.Types.Fixed_Array, Length => 3,
+                       Nominal => Left_Empty, Site => Site, others => <>)],
+              Site);
+
+         Hex_Value, Decimal_Value : Landin.Types.Magnitude;
+         Hex_Overflow, Decimal_Overflow : Boolean;
+         Scalar, Scalar_Alias, Other_Scalar, Other_Template :
+           Landin.Checking.Nominal_Type_Id;
+         Fixed_Hex, Fixed_Decimal, Fixed_Different :
+           Landin.Checking.Nominal_Type_Id;
+         Nested, Nested_Again : Landin.Checking.Nominal_Type_Id;
+         Atom_Set, Atom_Set_Alias, Atom_Set_Different :
+           Landin.Checking.Nominal_Type_Id;
+         Scalar_Array, Scalar_Array_Count :
+           Landin.Checking.Nominal_Type_Id;
+         Aggregate_Array, Other_Aggregate_Array :
+           Landin.Checking.Nominal_Type_Id;
+         Function_Key, Function_Alias, Function_Different :
+           Landin.Checking.Nominal_Type_Id;
+         Ordered, Reversed, Scalar_Kind, Fixed_Kind :
+           Landin.Checking.Nominal_Type_Id;
+         Before : constant Natural :=
+           Landin.Checking.Nominal_Type_Count (Types.all);
+      begin
+         Landin.IR.Prepare (Unit.all, Meanings.all);
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Item_Count (Unit.all) = 0
+              and then Landin.IR.Nominal_Type_Count (Unit.all) = 0,
+            "checking has created no IR runtime or nominal entity");
+
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Intern_Nominal_Instance
+              (Types.all, Left_Template, Landin.Checking.Empty_Actuals)
+              = Left_Empty
+              and then Landin.Checking.Instance_State_Of
+                (Types.all, Left_Empty) = Landin.Checking.Instance_Ready,
+            "an ordinary struct is the interner's empty-tuple instance");
+
+         Landin.Types.Evaluate
+           ("ff", Landin.Tokens.Hexadecimal, Hex_Value, Hex_Overflow);
+         Landin.Types.Evaluate
+           ("255", Landin.Tokens.Decimal, Decimal_Value, Decimal_Overflow);
+         Landin.Testing.Check
+           (Item,
+            not Hex_Overflow and then not Decimal_Overflow
+              and then Hex_Value = Decimal_Value,
+            "radix spellings normalize to one mathematical magnitude");
+
+         Scalar := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Scalar_Type_Actual (Landin.Types.U8)));
+         Scalar_Alias := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Scalar_Type_Actual (Landin.Types.U8)));
+         Other_Scalar := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Scalar_Type_Actual (Landin.Types.I8)));
+         Other_Template := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Right_Template,
+            One (Landin.Checking.Scalar_Type_Actual (Landin.Types.U8)));
+         Landin.Testing.Check
+           (Item,
+            Scalar = Scalar_Alias
+              and then Scalar /= Other_Scalar
+              and then Scalar /= Other_Template,
+            "normalized aliases share keys while scalar and template"
+            & " identity differ");
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Nominal_Identities.Position (Types.all, Scalar)
+              = Before + 1
+              and then Landin.Checking.Nth_Nominal_Type
+                (Types.all, Before + 1) = Scalar,
+            "new identities follow checker interning order");
+
+         Fixed_Hex := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Fixed_Actual (Hex_Value)));
+         Fixed_Decimal := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Fixed_Actual (Decimal_Value)));
+         Fixed_Different := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Fixed_Actual (Decimal_Value - 1)));
+         Landin.Testing.Check
+           (Item,
+            Fixed_Hex = Fixed_Decimal
+              and then Fixed_Hex /= Fixed_Different,
+            "fixed keys retain normalized value but no radix or formal type");
+
+         Nested := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Right_Template,
+            One (Landin.Checking.Nominal_Type_Actual
+                   (Types.all, Fixed_Hex)));
+         Nested_Again := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Right_Template,
+            One (Landin.Checking.Nominal_Type_Actual
+                   (Types.all, Fixed_Decimal)));
+         Landin.Testing.Check
+           (Item, Nested = Nested_Again,
+            "a nested nominal actual uses its interned instance identity");
+
+         Atom_Set := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all, Set_Left_Right)));
+         Atom_Set_Alias := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all, Set_Right_Left)));
+         Atom_Set_Different := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Atom_Set_Type_Actual
+                   (Types.all, Set_Left)));
+         Landin.Testing.Check
+           (Item,
+            Atom_Set = Atom_Set_Alias
+              and then Atom_Set /= Atom_Set_Different,
+            "atom-set actual identity is structural rather than descriptor"
+            & " order");
+
+         Scalar_Array := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Fixed_Array_Type_Actual
+                   (3, Landin.Types.U8)));
+         Scalar_Array_Count := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Fixed_Array_Type_Actual
+                   (4, Landin.Types.U8)));
+         Aggregate_Array := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Fixed_Array_Type_Actual
+                   (Types.all, 3, Left_Empty)));
+         Other_Aggregate_Array := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Fixed_Array_Type_Actual
+                   (Types.all, 3, Right_Empty)));
+         Landin.Testing.Check
+           (Item,
+            Scalar_Array /= Scalar_Array_Count
+              and then Scalar_Array /= Aggregate_Array
+              and then Aggregate_Array /= Other_Aggregate_Array,
+            "array count and scalar-versus-nominal element identity remain"
+            & " exact");
+
+         Function_Key := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Function_Type_Actual
+                   (Types.all, Wrapper_Left)));
+         Function_Alias := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Function_Type_Actual
+                   (Types.all, Wrapper_Alias)));
+         Function_Different := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Function_Type_Actual
+                   (Types.all, Signature_Different)));
+         Landin.Testing.Check
+           (Item,
+            Function_Key = Function_Alias
+              and then Function_Key /= Function_Different,
+            "nested function signatures use complete structural identity");
+
+         Ordered := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            Two (Landin.Checking.Scalar_Type_Actual (Landin.Types.U8),
+                 Landin.Checking.Fixed_Actual (1)));
+         Reversed := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            Two (Landin.Checking.Fixed_Actual (1),
+                 Landin.Checking.Scalar_Type_Actual (Landin.Types.U8)));
+         Scalar_Kind := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Scalar_Type_Actual (Landin.Types.U8)));
+         Fixed_Kind := Landin.Checking.Intern_Nominal_Instance
+           (Types.all, Left_Template,
+            One (Landin.Checking.Fixed_Actual (0)));
+         Landin.Testing.Check
+           (Item,
+            Ordered /= Reversed and then Scalar_Kind /= Fixed_Kind,
+            "actual order and actual kind distinguish unused phantom actuals");
+
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Instance_State_Of (Types.all, Ordered)
+              = Landin.Checking.Instance_Unseen,
+            "interning reserves unseen instance and layout storage");
+         Landin.Checking.Begin_Instance (Types.all, Ordered);
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Instance_State_Of (Types.all, Ordered)
+              = Landin.Checking.Instance_Building,
+            "instance storage records recursive construction in progress");
+         Landin.Checking.Invalidate_Instance (Types.all, Ordered);
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Instance_State_Of (Types.all, Ordered)
+              = Landin.Checking.Instance_Invalid
+              and then Landin.Checking.Intern_Nominal_Instance
+                (Types.all, Left_Template,
+                 Two (Landin.Checking.Scalar_Type_Actual (Landin.Types.U8),
+                      Landin.Checking.Fixed_Actual (1))) = Ordered,
+            "invalid state is retained outside the immutable key");
+
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Item_Count (Unit.all) = 0
+              and then Landin.IR.Nominal_Type_Count (Unit.all) = 0
+              and then Landin.Checking.Declaration_Limit (Types.all)
+                = Landin.Resolution.Declaration_Count (Meanings.all),
+            "interning synthesizes no declaration, IR item, or runtime"
+            & " entity");
+
+         for Position in
+           1 .. Landin.Checking.Nominal_Type_Count (Types.all)
+         loop
+            declare
+               Source : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nth_Nominal_Type (Types.all, Position);
+               Made : constant Landin.IR.Nominal_Type_Id :=
+                 Landin.IR.Add_Nominal_Type
+                   (Unit.all, Landin.Checking.Template_Of (Types.all, Source));
+            begin
+               Landin.Testing.Check
+                 (Item,
+                  Landin.IR.Nth_Nominal_Type (Unit.all, Position) = Made
+                    and then Landin.IR.Template_Of (Unit.all, Made)
+                      = Landin.Checking.Template_Of (Types.all, Source),
+                  "IR nominal mapping follows checker interning order");
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Landin.IR.Item_Count (Unit.all) = 0,
+            "mapping nominal type metadata creates no runtime item");
+      end;
+
+      declare
+         procedure Check_Target
+           (Facts : Landin.Targets.Target_Facts;
+            Position : out Positive;
+            Size : out Natural);
+
+         procedure Check_Target
+           (Facts : Landin.Targets.Target_Facts;
+            Position : out Positive;
+            Size : out Natural)
+         is
+            Target_Work : Landin.Stages.Compilation :=
+              Landin.Stages.Create (Facts);
+            Target_Order : Landin.Stages.Pipeline;
+            Target_Src : Landin.Source.Source_Id;
+            pragma Unreferenced (Target_Src);
+            Target_Ran : Natural;
+         begin
+            Target_Src := Landin.Stages.Add_Source
+              (Target_Work, "target-key.ldn",
+               "machine: type = struct" & LF
+               & "    value: usize" & LF
+               & "end machine" & LF);
+            Landin.Stages.Append (Target_Order, Frontend'Access);
+            Landin.Stages.Append (Target_Order, Names'Access);
+            Landin.Stages.Append (Target_Order, Checker'Access);
+            Target_Ran := Landin.Stages.Run (Target_Order, Target_Work);
+            Landin.Testing.Check_Equal
+              (Item, Target_Ran, 3, "the target checker ran");
+            Landin.Testing.Check
+              (Item, not Landin.Stages.Failed (Target_Work),
+               "the target comparison template is accepted");
+
+            declare
+               Target_Types : constant not null access Landin.Checking.Table :=
+                 Landin.Stages.Types (Target_Work);
+               Machine : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nth_Nominal_Type (Target_Types.all, 1);
+               Made : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Intern_Nominal_Instance
+                   (Target_Types.all,
+                    Landin.Checking.Template_Of (Target_Types.all, Machine),
+                    Two
+                      (Landin.Checking.Scalar_Type_Actual
+                         (Landin.Types.Usize),
+                       Landin.Checking.Fixed_Actual (255)));
+            begin
+               Position := Landin.Checking.Nominal_Identities.Position
+                 (Target_Types.all, Made);
+               Size := Natural
+                 (Landin.Checking.Layout_Size (Target_Types.all, Machine));
+            end;
+         end Check_Target;
+
+         Position_64, Position_32 : Positive;
+         Size_64, Size_32 : Natural;
+      begin
+         Check_Target
+           (Landin.Targets.Linux_X86_64, Position_64, Size_64);
+         Check_Target
+           (Landin.Targets.Synthetic_32, Position_32, Size_32);
+         Landin.Testing.Check
+           (Item,
+            Position_64 = Position_32
+              and then Size_64 = 8 and then Size_32 = 4,
+            "target-dependent layout cannot enter a nominal actual key");
+      end;
+   end Nominal_Instances_Intern_Normalized_Actuals;
 
    procedure Declared_Structs_Follow_Target_Layout
      (Item : in out Landin.Testing.Context)
@@ -4248,6 +4720,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "array types are their length and element",
          Array_Types_Are_Their_Length_And_Element'Access);
+      Landin.Testing.Register
+        (Into, "checking", "nominal instances intern normalized actuals",
+         Nominal_Instances_Intern_Normalized_Actuals'Access);
       Landin.Testing.Register
         (Into, "checking", "parameterized aliases normalize descriptors",
          Parameterized_Aliases_Normalize_To_Existing_Descriptors'Access);
