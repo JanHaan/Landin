@@ -6196,3 +6196,22 @@ turn a deterministic type error into register and storage corruption.
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/function-value-signature-mismatch`; the generated token and IR
 records; and `runtime/indirect-function-abi` on Linux x86-64.
+
+### D115 — Aggregate call completion is an ordinary assignment fact
+
+**The tour said** that no condition is believed and a name assigned in one
+branch but not another is not assigned after the branch [1910]. A call's hidden
+result destination does not create an exception to that rule.
+
+**Chosen:** when an aggregate-returning call completes into a local place, that
+place gains exactly the same definite-assignment fact as a whole-place
+assignment. Branch joins intersect that fact normally. A guarded return does
+not erase a fact on its continuing edge, and it still requires every named
+return to be complete on the edge that exits.
+
+**Why this is not a call-specific flow rule:** the hidden destination is only a
+transport convention. Giving it stronger flow semantics would let replacing a
+literal assignment by an equivalent call change whether later reads are legal.
+
+**Pinned by** `negative/aggregate-call-result-not-assigned-on-every-path` and
+`runtime/aggregate-results-across-branches` on Linux x86-64.

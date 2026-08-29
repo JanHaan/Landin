@@ -118,7 +118,7 @@
 1020   tour        accepted emitted refused           Discarding a result must be explicit
 1030   tour        -                                  Handling
 1040   tour        -                                  A caller parameter is filled in by the compiler with the
-1050   tour        accepted emitted                   Branch
+1050   tour        accepted emitted executed refused  Branch
 1060   tour        accepted emitted                   Every construct has a one-line form
 1070   tour        -                                  A declaration is allowed in a condition
 1080   tour        -                                  A block has the value of its last expression
