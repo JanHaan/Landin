@@ -4179,6 +4179,7 @@ package body Landin.Tests.Lowering_Suite is
          & "end take" & LF
          & "use: () -> none =" & LF
          & "    take(zeroed)" & LF
+         & "    take((prefix: 1, kind: pair(first: 2, second: 3)))" & LF
          & "end use" & LF,
          Ran);
 
@@ -4191,6 +4192,7 @@ package body Landin.Tests.Lowering_Suite is
          Parameter : constant IR.Slot_Id := IR.Nth_Parameter (Unit, 1, 1);
          Shape : constant IR.Field_Shape :=
            IR.Nth_Slot_Field_Shape (Unit, 1, Parameter, 2);
+         Selects, Stores : Natural := 0;
       begin
          Landin.Testing.Check
            (Item,
@@ -4198,6 +4200,22 @@ package body Landin.Tests.Lowering_Suite is
               and then Shape.Kind = IR.Variant_Field_Shape
               and then Shape.Cases = 2,
             "the parameter retains its variant cases and payload run");
+         for Position in 1 .. IR.Value_Count (Unit, 2) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+            begin
+               if IR.Op_Of (Unit, 2, Value) = IR.Select_Variant then
+                  Selects := Selects + 1;
+               elsif IR.Op_Of (Unit, 2, Value)
+                       = IR.Store_Variant_Field
+               then
+                  Stores := Stores + 1;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Selects = 1 and then Stores = 2,
+            "the caller constructs the selected payload in its temporary");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts the variant-bearing parameter carrier");

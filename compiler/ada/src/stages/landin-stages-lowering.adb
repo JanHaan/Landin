@@ -735,10 +735,16 @@ package body Landin.Stages.Lowering is
                              Site_Of (Of_Tree, Argument));
 
                         procedure Write_Array_Field
-                          (Field : Positive; Value : Syn.Node_Id);
+                          (Field         : Positive;
+                           Value         : Syn.Node_Id;
+                           Variant_Case  : Natural := 0;
+                           Payload_Field : Natural := 0);
 
                         procedure Write_Array_Field
-                          (Field : Positive; Value : Syn.Node_Id)
+                          (Field         : Positive;
+                           Value         : Syn.Node_Id;
+                           Variant_Case  : Natural := 0;
+                           Payload_Field : Natural := 0)
                         is
                            Kind : constant Syn.Node_Kind :=
                              Syn.Kind (Of_Tree, Value);
@@ -765,7 +771,9 @@ package body Landin.Stages.Lowering is
                                  IR.Emit_Store_Slot_Element
                                    (Unit.all, Filling, Temporary, Index, Held,
                                     Site_Of (Of_Tree, Element),
-                                    Field => Field);
+                                    Field => Field,
+                                    Variant_Case => Variant_Case,
+                                    Variant_Payload_Field => Payload_Field);
                               end;
                            end loop;
 
@@ -784,13 +792,18 @@ package body Landin.Stages.Lowering is
                                     Lower_Expression
                                       (Of_Tree, Repeated, Scope),
                                     Site_Of (Of_Tree, Repeated),
-                                    Field => Field);
+                                    Field => Field,
+                                    Variant_Case => Variant_Case,
+                                    Variant_Payload_Field => Payload_Field);
                               end;
                            elsif Kind = Syn.Zeroed_Literal then
-                              IR.Emit_Array_Clear
-                                (Unit.all, Filling,
-                                 (Kind => IR.Frame_Slot, Slot => Temporary),
-                                 Site_Of (Of_Tree, Value), Field => Field);
+                              if Payload_Field = 0 then
+                                 IR.Emit_Array_Clear
+                                   (Unit.all, Filling,
+                                    (Kind => IR.Frame_Slot,
+                                     Slot => Temporary),
+                                    Site_Of (Of_Tree, Value), Field => Field);
+                              end if;
                            elsif Kind not in Syn.Array_Literal then
                               declare
                                  Selected : constant Boolean :=
@@ -833,10 +846,75 @@ package body Landin.Stages.Lowering is
                                     Site => Site_Of (Of_Tree, Value),
                                     Source_Field => Source_Field,
                                     Source_Nested_Field => Source_Child,
-                                    Destination_Field => Field);
+                                    Destination_Field => Field,
+                                    Destination_Variant_Case => Variant_Case,
+                                    Destination_Variant_Payload_Field =>
+                                      Payload_Field);
                               end;
                            end if;
                         end Write_Array_Field;
+
+                        procedure Write_Variant_Field
+                          (Field : Positive; Value : Syn.Node_Id);
+
+                        procedure Write_Variant_Field
+                          (Field : Positive; Value : Syn.Node_Id)
+                        is
+                           Variant_Case : constant Positive := Positive
+                             (Landin.Checking.Field_Index
+                                (Types.all, Of_Tree, Value));
+                        begin
+                           IR.Emit_Variant_Select
+                             (Unit.all, Filling,
+                              (Kind => IR.Frame_Slot, Slot => Temporary),
+                              Field, Variant_Case,
+                              Site_Of (Of_Tree, Value));
+
+                           if Syn.Kind (Of_Tree, Value)
+                                /= Syn.Struct_Literal
+                           then
+                              return;
+                           end if;
+
+                           for Position in
+                             1 .. Syn.Field_Value_Count (Of_Tree, Value)
+                           loop
+                              declare
+                                 Label : constant Syn.Node_Id :=
+                                   Syn.Nth_Field_Value
+                                     (Of_Tree, Value, Position);
+                                 Payload_Field : constant Positive := Positive
+                                   (Landin.Checking.Field_Index
+                                      (Types.all, Of_Tree, Label));
+                                 Shape : constant
+                                   Landin.Checking.Field_Shape :=
+                                     Landin.Checking.Nth_Variant_Case_Field
+                                       (Types.all, Id, Field, Variant_Case,
+                                        Payload_Field);
+                                 Payload : constant Syn.Node_Id :=
+                                   Syn.Value_Of (Of_Tree, Label);
+                              begin
+                                 case Shape.Kind is
+                                    when Landin.Checking.Scalar_Field =>
+                                       IR.Emit_Variant_Field_Store
+                                         (Unit.all, Filling,
+                                          (Kind => IR.Frame_Slot,
+                                           Slot => Temporary),
+                                          Field, Variant_Case, Payload_Field,
+                                          Lower_Expression
+                                            (Of_Tree, Payload, Scope),
+                                          Site_Of (Of_Tree, Label));
+                                    when Landin.Checking.Fixed_Array_Field =>
+                                       Write_Array_Field
+                                         (Field, Payload,
+                                          Variant_Case => Variant_Case,
+                                          Payload_Field => Payload_Field);
+                                    when others =>
+                                       raise Landin.Compiler_Defect;
+                                 end case;
+                              end;
+                           end loop;
+                        end Write_Variant_Field;
                      begin
                         for Field in 1 .. Count loop
                            Add_Stored_Field
@@ -869,7 +947,9 @@ package body Landin.Stages.Lowering is
                                        Site_Of (Of_Tree, Label));
                                  when Landin.Checking.Fixed_Array_Field =>
                                     Write_Array_Field (Field, Value);
-                                 when others =>
+                                 when Landin.Checking.Variant_Field =>
+                                    Write_Variant_Field (Field, Value);
+                                 when Landin.Checking.Aggregate_Field =>
                                     raise Landin.Compiler_Defect;
                               end case;
                            end;
@@ -912,7 +992,14 @@ package body Landin.Stages.Lowering is
                                            Slot => Temporary),
                                           Site_Of (Of_Tree, Argument),
                                           Field => Field);
-                                    when others =>
+                                    when Landin.Checking.Variant_Field =>
+                                       IR.Emit_Variant_Select
+                                         (Unit.all, Filling,
+                                          (Kind => IR.Frame_Slot,
+                                           Slot => Temporary),
+                                          Field, 1,
+                                          Site_Of (Of_Tree, Argument));
+                                    when Landin.Checking.Aggregate_Field =>
                                        raise Landin.Compiler_Defect;
                                  end case;
                               end if;

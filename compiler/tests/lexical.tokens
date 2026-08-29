@@ -18945,6 +18945,67 @@ file negative/variant-case-value-not-enabled/program.ldn tokens 32
   156 157 :
   158 159 1
   159 160 )
+file negative/variant-literal-argument-payload-mismatch/program.ldn tokens 60
+  0 6 choice
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 30 kind
+  30 31 :
+  32 39 variant
+  48 52 leaf
+  53 54 |
+  63 66 row
+  66 67 :
+  68 69 (
+  69 75 values
+  75 76 :
+  77 78 [
+  78 79 2
+  79 80 ]
+  80 82 u8
+  82 83 )
+  88 91 end
+  92 96 kind
+  97 100 end
+  101 107 choice
+  109 116 consume
+  116 117 :
+  118 119 (
+  119 124 value
+  124 125 :
+  126 132 choice
+  132 133 )
+  134 136 ->
+  137 141 none
+  142 143 =
+  144 147 end
+  148 155 consume
+  157 160 bad
+  160 161 :
+  162 163 (
+  163 164 )
+  165 167 ->
+  168 172 none
+  173 174 =
+  179 186 consume
+  186 187 (
+  187 188 (
+  188 192 kind
+  192 193 :
+  194 197 row
+  197 198 (
+  198 204 values
+  204 205 :
+  206 207 [
+  207 208 1
+  208 209 ]
+  209 210 )
+  210 211 )
+  211 212 )
+  213 216 end
+  217 220 bad
 file negative/variant-match-array-binding-index-out-of-range/program.ldn tokens 59
   0 6 choice
   6 7 :

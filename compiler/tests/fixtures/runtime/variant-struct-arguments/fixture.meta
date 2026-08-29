@@ -2,5 +2,5 @@ class: runtime
 summary: variant-bearing structs cross calls by value and keep their selected payload
 constructs: 0080, 0410, 0670, 0750, 0770, 0930, 1920
 program: main.ldn
-status: 43
+status: 87
 targets: linux-x86-64
