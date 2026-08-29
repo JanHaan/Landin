@@ -113,22 +113,14 @@ package body Landin.IR.Dump is
                      if Payload > 1 then
                         Unbounded.Append (Result, ",");
                      end if;
-                     declare
-                        Leaf : constant Field_Shape :=
-                          Nth_Variant_Case_Field
-                            (Of_Unit, Shape, Which, Payload);
-                     begin
-                        if Leaf.Kind = Scalar_Field_Shape then
-                           Unbounded.Append
-                             (Result, Landin.Types.Spelling (Leaf.Element));
-                        else
-                           Unbounded.Append
-                             (Result,
-                              "[" & Trimmed
-                                (Element_Total'Image (Leaf.Length))
-                              & "]" & Landin.Types.Spelling (Leaf.Element));
-                        end if;
-                     end;
+                     --  D120 lets a payload be an ordinary struct, so a
+                     --  payload is spelt by the same one spelling every
+                     --  other shape is.
+                     Unbounded.Append
+                       (Result,
+                        Shape_Text
+                          (Nth_Variant_Case_Field
+                             (Of_Unit, Shape, Which, Payload)));
                   end loop;
                   Unbounded.Append (Result, ")");
                end loop;

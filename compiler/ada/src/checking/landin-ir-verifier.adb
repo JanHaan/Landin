@@ -736,6 +736,10 @@ package body Landin.IR.Verifier is
                return True;
             end if;
 
+            if Left = 0 then
+               return True;
+            end if;
+
             for Payload in 1 ..
               Variant_Case_Field_Count (Of_Unit, Shape, Which)
             loop
@@ -744,14 +748,14 @@ package body Landin.IR.Verifier is
                     Nth_Variant_Case_Field
                       (Of_Unit, Shape, Which, Payload);
                begin
-                  --  D74/D75 keep payloads depth one.  A future nested
-                  --  aggregate representation must choose its own carrier.
+                  --  D120 admits an ordinary struct payload, which is the
+                  --  same run and the same walk as an ordinary child's.  A
+                  --  variant part inside a payload still has no carrier.
                   if Leaf.Kind = Variant_Field_Shape
-                    or else Leaf.Cases /= 0
-                    or else Leaf.Payloads_First /= 0
-                    or else
-                      (Leaf.Kind = Scalar_Field_Shape
-                       and then Leaf.Length /= 1)
+                    or else Field_Shape_Is_Malformed
+                      (Leaf,
+                       Aggregate_Allowed => True,
+                       Budget => Left - 1)
                   then
                      return True;
                   end if;

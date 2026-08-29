@@ -117,6 +117,15 @@ package Landin.Diagnostics.Checking is
       --  storage and a zero image, and D76 admits contextual case writes;
       --  a general variant value remains refused.
       Variant_Value,
+      --  D120 admits an ordinary struct as a field and as a variant
+      --  payload.  One that has a variant part of its own has no carrier
+      --  yet: every operation that reaches a variant part names it at the
+      --  base field and not through a run.
+      Nested_Variant_Struct,
+      --  [1940] folds a module value rather than copying one, and D67's
+      --  folded image run has no carrier for a child's own image.  The
+      --  same construction inside a function is admitted.
+      Nested_Module_Image,
       --  [0520] declares one; a value of one waits, as a struct's did,
       --  and so does an element the kernel cannot lay out end to end.
       Array_Value,
@@ -135,7 +144,9 @@ package Landin.Diagnostics.Checking is
             when Text_Type          => "[0600]",
             when Struct_Value
                | Struct_ABI         => "[0670]",
-            when Variant_Value      => "[0680]",
+            when Variant_Value
+               | Nested_Variant_Struct => "[0680]",
+            when Nested_Module_Image => "[1940]",
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
             when Zeroed_Value       => "[0540]")
@@ -196,7 +207,9 @@ private
             when Wide_Integer_Type
                | Float_Type
                | Text_Type         => "R4.10",
-            when Struct_ABI         => "R2.30",
+            when Struct_ABI
+               | Nested_Variant_Struct
+               | Nested_Module_Image   => "R2.30",
             when Struct_Value
                | Variant_Value
                | Array_Value

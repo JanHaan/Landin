@@ -1,0 +1,27 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+choice: type = struct
+    kind: variant
+        leaf |
+        spot: (at: point, weight: i32)
+    end kind
+end choice
+
+mut state: choice
+
+place: point = (x: 5, y: 6)
+
+exercise: () -> none =
+    mut local: choice
+    state.kind = spot(at: point(x: 1, y: 2), weight: 3)
+    local.kind = spot(at: place, weight: 4)
+    state.kind = spot(at: zeroed, weight: 5)
+    match state.kind
+        leaf: local.kind = leaf
+        spot(at, weight):
+            local.kind = spot(at: at, weight: weight + at.x)
+    end match
+end exercise

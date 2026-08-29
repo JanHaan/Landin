@@ -1,0 +1,23 @@
+point: type = struct
+    x: i32
+end point
+
+mark: type = struct
+    x: i32
+end mark
+
+choice: type = struct
+    kind: variant
+        leaf |
+        spot: (at: point)
+    end kind
+end choice
+
+other: mark = (x: 1)
+
+mut state: choice
+image: choice = (kind: spot(at: point(x: 2)))
+
+wrong: () -> none =
+    state.kind = spot(at: other)
+end wrong
