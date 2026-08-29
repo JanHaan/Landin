@@ -107,6 +107,11 @@ package body Landin.IR is
                      A.Aggregate_Body = B.Aggregate_Body,
                   when Landin.Types.Fixed_Array =>
                      A.Length = B.Length and then A.Element = B.Element,
+                  when Landin.Types.Function_Value =>
+                     Holds (Of_Unit, A.Signature)
+                     and then Holds (Of_Unit, B.Signature)
+                     and then Signatures_Agree
+                       (Of_Unit, A.Signature, B.Signature),
                   when others => False));
    begin
       if Signature_Parameter_Count (Of_Unit, Left)
@@ -190,6 +195,18 @@ package body Landin.IR is
       Held.Signature := Signature;
       Into.Items (Positive (Item)) := Held;
    end Set_Signature;
+
+   procedure Set_Function_Target
+     (Into : in out Unit; Item : Item_Id; Target : Item_Id)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Function_Image := Target;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Function_Target;
+
+   function Function_Target (Of_Unit : Unit; Item : Item_Id) return Item_Id
+     is (Element (Of_Unit, Item).Function_Image);
 
    function Item_For (Of_Unit : Unit; Declared : Declaration_Id)
      return Item_Id
@@ -840,10 +857,11 @@ package body Landin.IR is
       Item     : Item_Id;
       Of_Type  : Landin.Types.Scalar_Name;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Signature : Signature_Id := No_Signature) return Slot_Id
    is
       Made : constant Slot_Id :=
-        Add_Slot (Into, Item, Of_Type, Declares, Site);
+        Add_Slot (Into, Item, Of_Type, Declares, Site, Signature);
       Held : Item_Record := Element (Into, Item);
    begin
       --  A parameter is a slot the caller filled, and the run below is
@@ -1033,9 +1051,27 @@ package body Landin.IR is
 
    function Signature_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
-     is (if Op_Of (Of_Unit, Item, Value) in Function_Address | Load
-         then Held (Of_Unit, Item, Value).Signature
-         else No_Signature);
+   is
+      Instruction_Held : constant Instruction :=
+        Held (Of_Unit, Item, Value);
+   begin
+      if Instruction_Held.Op in Function_Address | Load | Load_Datum then
+         return Instruction_Held.Signature;
+      end if;
+      if Instruction_Held.Op in Call | Indirect_Call
+        and then Holds (Of_Unit, Instruction_Held.Signature)
+      then
+         declare
+            Result : constant Signature_Part :=
+              Signature_Result (Of_Unit, Instruction_Held.Signature);
+         begin
+            if Result.Kind = Landin.Types.Function_Value then
+               return Result.Signature;
+            end if;
+         end;
+      end if;
+      return No_Signature;
+   end Signature_Of;
 
    function Call_Signature
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
@@ -1661,11 +1697,12 @@ package body Landin.IR is
       Site  : Landin.Provenance.Origin) return Value_Id
      is (Append
            (Into, Item,
-            Instruction'(Op     => Load_Datum,
-                         Result => Result_Of (Into, Datum),
-                         Site   => Site,
-                         Named  => Datum,
-                         others => <>)));
+            Instruction'(Op        => Load_Datum,
+                         Result    => Result_Of (Into, Datum),
+                         Site      => Site,
+                         Named     => Datum,
+                         Signature => Signature_Of (Into, Datum),
+                         others    => <>)));
 
    function Emit_Load_Field
      (Into   : in out Unit;

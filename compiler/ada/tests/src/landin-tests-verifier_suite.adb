@@ -291,6 +291,8 @@ package body Landin.Tests.Verifier_Suite is
       Array_Fill_Inside_A_Datum,
       Condition_Is_A_Number,
       Function_Signature_Part_Is_Malformed,
+      Function_Parameter_Uses_A_Different_Signature,
+      Function_Datum_Uses_A_Different_Signature,
       Call_Missing_An_Argument,
       Indirect_Call_Uses_A_Different_Signature,
       Unreachable_Block,
@@ -308,6 +310,7 @@ package body Landin.Tests.Verifier_Suite is
       S, P, Q, R, T : IR.Slot_Id;
       B, C : IR.Block_Id;
       N, M : IR.Value_Id;
+      Parameter_Signature : IR.Signature_Id := IR.No_Signature;
    begin
       if Harm = Function_Signature_Part_Is_Malformed then
          declare
@@ -324,6 +327,7 @@ package body Landin.Tests.Verifier_Suite is
       A := IR.Add_Item (Unit, IR.Routine, 1, Landin.Types.U32, Site);
       if Harm in Call_Missing_An_Argument
                    | Indirect_Call_Uses_A_Different_Signature
+                   | Function_Datum_Uses_A_Different_Signature
       then
          declare
             Signature : constant IR.Signature_Id :=
@@ -333,6 +337,27 @@ package body Landin.Tests.Verifier_Suite is
                  (Kind => Landin.Types.U32, others => <>));
          begin
             IR.Set_Signature (Unit, A, Signature);
+         end;
+      elsif Harm = Function_Parameter_Uses_A_Different_Signature then
+         declare
+            Expected : constant IR.Signature_Id :=
+              IR.Add_Signature
+                (Unit, IR.No_Signature_Parts,
+                 (Kind => Landin.Types.U32, others => <>));
+            Other : constant IR.Signature_Id :=
+              IR.Add_Signature
+                (Unit, IR.No_Signature_Parts,
+                 (Kind => Landin.Types.Bool, others => <>));
+            Outer : constant IR.Signature_Id :=
+              IR.Add_Signature
+                (Unit,
+                 [(Kind      => Landin.Types.Function_Value,
+                   Signature => Expected,
+                   others    => <>)],
+                 (Kind => Landin.Types.U32, others => <>));
+         begin
+            IR.Set_Signature (Unit, A, Outer);
+            Parameter_Signature := Other;
          end;
       end if;
       --  E precedes the deliberately blockless helper datums so the
@@ -347,7 +372,22 @@ package body Landin.Tests.Verifier_Suite is
       else
          IR.Set_Array (Unit, E, Landin.Types.U32, 4);
       end if;
-      D := IR.Add_Item (Unit, IR.Datum, 3, Landin.Types.U32, Site);
+      D := IR.Add_Item
+        (Unit, IR.Datum, 3,
+         (if Harm = Function_Datum_Uses_A_Different_Signature
+          then Landin.Types.Usize else Landin.Types.U32),
+         Site);
+      if Harm = Function_Datum_Uses_A_Different_Signature then
+         declare
+            Other : constant IR.Signature_Id :=
+              IR.Add_Signature
+                (Unit, IR.No_Signature_Parts,
+                 (Kind => Landin.Types.U32, others => <>));
+         begin
+            IR.Set_Signature (Unit, D, Other);
+            IR.Set_Function_Target (Unit, D, A);
+         end;
+      end if;
       G := IR.Add_Item (Unit, IR.Datum, 5, Landin.Types.Aggregate, Site);
       if Harm = Variant_Datum_Tag_Is_Signed then
          IR.Add_Field
@@ -400,7 +440,11 @@ package body Landin.Tests.Verifier_Suite is
          return V.Check (Unit);
       end if;
 
-      P := IR.Add_Parameter (Unit, A, Landin.Types.U32, 2, Site);
+      P := IR.Add_Parameter
+        (Unit, A,
+         (if Harm = Function_Parameter_Uses_A_Different_Signature
+          then Landin.Types.Usize else Landin.Types.U32),
+         2, Site, Signature => Parameter_Signature);
       S := IR.Add_Slot (Unit, A, Landin.Types.U32, 4, Site);
       Q := IR.Add_Array_Slot
         (Unit, A, Landin.Types.U32, 4, IR.No_Declaration, Site);
@@ -1103,7 +1147,9 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
-         when Function_Signature_Part_Is_Malformed =>
+         when Function_Signature_Part_Is_Malformed
+            | Function_Parameter_Uses_A_Different_Signature
+            | Function_Datum_Uses_A_Different_Signature =>
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -1293,6 +1339,10 @@ package body Landin.Tests.Verifier_Suite is
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
          (Function_Signature_Part_Is_Malformed,
           V.Signature_Part_Malformed),
+         (Function_Parameter_Uses_A_Different_Signature,
+          V.Routine_Signature_Disagrees),
+         (Function_Datum_Uses_A_Different_Signature,
+          V.Function_Value_Signature_Disagrees),
          (Call_Missing_An_Argument,   V.Wrong_Operand_Count),
          (Indirect_Call_Uses_A_Different_Signature,
           V.Function_Value_Signature_Disagrees),

@@ -1,0 +1,16 @@
+unary: type = (value: i32) -> (result: i32)
+factory: type = (candidate: unary) -> (result: unary)
+
+identity: (value: i32) -> (result: i32) = value end identity
+
+static_callback: unary =
+    (value: i32) -> (result: i32) = identity(value) + 1 end
+inferred_static := identity
+
+return_it: (candidate: unary) -> (result: unary) = candidate end return_it
+
+use: () -> (result: i32) =
+    local: unary = (value: i32) -> (result: i32) = value * 2 end
+    returned := return_it(local)
+    result = static_callback(returned(inferred_static(3)))
+end use

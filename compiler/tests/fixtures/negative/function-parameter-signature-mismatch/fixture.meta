@@ -1,0 +1,5 @@
+class: negative
+summary: a function-valued parameter requires its complete nested signature
+constructs: 0900, 1000, 1800, 1890, 1920
+program: program.ldn
+codes: L0301

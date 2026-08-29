@@ -9,8 +9,10 @@ package body Landin.Backend.X86_64 is
 
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
+   use type Landin.IR.Declaration_Id;
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Opcode;
+   use type Landin.IR.Signature_Id;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Field_Shape_Kind;
@@ -199,18 +201,32 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & Instruction);
       end Emit;
 
-      --  A symbol is the declaration's own spelling.  The kernel has one
-      --  module and no name mangling, so a second naming scheme here
-      --  would be a fact about this backend that no paragraph states.
+      --  A declared item's symbol is its source spelling.  An anonymous
+      --  routine instead receives one assembler-local name derived only from
+      --  its deterministic Unit item identity.
       function Symbol (Item : Landin.IR.Item_Id) return String;
+      function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
 
       function Symbol (Item : Landin.IR.Item_Id) return String is
          Declared : constant Landin.IR.Declaration_Id :=
            Landin.IR.Declares (Of_Unit, Item);
       begin
+         if Declared = Landin.IR.No_Declaration then
+            return ".Llandin_anonymous_"
+              & Trimmed (Landin.IR.Item_Id'Image (Item));
+         end if;
          return Landin.Source.Names.Spelling
                   (Names, Landin.Resolution.Name_Of (Meanings, Declared));
       end Symbol;
+
+      function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean
+      is
+         Declared : constant Landin.IR.Declaration_Id :=
+           Landin.IR.Declares (Of_Unit, Item);
+      begin
+         return Declared /= Landin.IR.No_Declaration
+           and then Landin.Resolution.Is_Public (Meanings, Declared);
+      end Is_Public_Item;
 
       --  Labels carry the item, because a Block_Id restarts at 1 in the
       --  next item and two blocks named `.L1` would be one label.
@@ -1913,9 +1929,7 @@ package body Landin.Backend.X86_64 is
          end Emit_Instruction;
 
       begin
-         if Landin.Resolution.Is_Public
-              (Meanings, Landin.IR.Declares (Of_Unit, Item))
-         then
+         if Is_Public_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
@@ -2424,9 +2438,7 @@ package body Landin.Backend.X86_64 is
       begin
          Place_Fields (Item, Placed, 0, Ignored);
 
-         if Landin.Resolution.Is_Public
-              (Meanings, Landin.IR.Declares (Of_Unit, Item))
-         then
+         if Is_Public_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
@@ -2687,6 +2699,12 @@ package body Landin.Backend.X86_64 is
 
       function Is_All_Zero (Item : Landin.IR.Item_Id) return Boolean is
       begin
+         if Landin.IR.Signature_Of (Of_Unit, Item)
+              /= Landin.IR.No_Signature
+         then
+            return False;
+         end if;
+
          if Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.Aggregate then
             return not Landin.IR.Has_Image (Of_Unit, Item);
          end if;
@@ -2711,9 +2729,7 @@ package body Landin.Backend.X86_64 is
          Bytes : constant String :=
            Trimmed (Landin.Targets.Byte_Count'Image (Size));
       begin
-         if Landin.Resolution.Is_Public
-              (Meanings, Landin.IR.Declares (Of_Unit, Item))
-         then
+         if Is_Public_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
@@ -2767,9 +2783,7 @@ package body Landin.Backend.X86_64 is
                 (Landin.Targets.Byte_Count (Length)
                  * Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held))));
       begin
-         if Landin.Resolution.Is_Public
-              (Meanings, Landin.IR.Declares (Of_Unit, Item))
-         then
+         if Is_Public_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 
@@ -2833,18 +2847,18 @@ package body Landin.Backend.X86_64 is
          Kind : constant Landin.Types.Scalar_Name :=
            Landin.IR.Result_Of (Of_Unit, Item);
          Held : constant Held_Size := Size_Of (Kind, Facts);
-         --  A negative value is written as one rather than as the pattern
-         --  it becomes, because the assembler is the thing that knows how
-         --  wide the store is and both spellings assemble the same bytes.
-         --  The checker has already refused a fold this type cannot hold.
+         --  A function datum is a static relocation to its verified routine
+         --  target.  Every other scalar is the folded number the assembler
+         --  encodes at this width.
          Written : constant String :=
-           Trimmed (Landin.Types.Folded'Image (Folded (Item)));
+           (if Landin.IR.Signature_Of (Of_Unit, Item)
+                 /= Landin.IR.No_Signature
+            then Symbol (Landin.IR.Function_Target (Of_Unit, Item))
+            else Trimmed (Landin.Types.Folded'Image (Folded (Item))));
          Bytes : constant String :=
            Trimmed (Positive'Image (Landin.Targets.Bytes (Held)));
       begin
-         if Landin.Resolution.Is_Public
-              (Meanings, Landin.IR.Declares (Of_Unit, Item))
-         then
+         if Is_Public_Item (Item) then
             Put (Character'Val (9) & ".globl " & Symbol (Item));
          end if;
 

@@ -19,6 +19,7 @@ package body Landin.Syntax is
             when If_Statement             => 1,
             when Match_Statement          => 1,
             when Call                     => 1,
+            when Anonymous_Function       => 2,
             when Error_Expression         => 0,
             when Name_Reference           => 0,
             --  The one slot is what it selects from; the name it selects

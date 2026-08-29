@@ -961,9 +961,12 @@ package body Landin.Stages.Checking.Flow is
             return;
          end if;
 
-         --  `lenof name` asks the name's fixed-array type for a constant;
-         --  it neither reads nor reaches the array's storage.
-         if Syn.Kind (Of_Tree, Node) = Syn.Len_Of then
+         --  `lenof name` asks only for a type constant.  Forming an
+         --  anonymous function likewise forms one static code address; its
+         --  separately checked no-capture body reads nothing in this flow.
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.Len_Of | Syn.Anonymous_Function
+         then
             return;
          end if;
 

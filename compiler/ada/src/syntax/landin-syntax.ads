@@ -103,7 +103,9 @@ package Landin.Syntax is
       Match_Statement,
       --  A call is a statement as well as an expression [1810].
       Call,
-      --  Expressions [1820].
+      --  Expressions [1820].  [1010]'s anonymous function carries the same
+      --  signature/body slots as a declaration but declares no module name.
+      Anonymous_Function,
       Error_Expression,
       Name_Reference,
       --  [0420]'s member selection, of which the kernel enables one
@@ -460,27 +462,32 @@ package Landin.Syntax is
    function Body_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id)
-                           in Function_Declaration | If_Arm | Match_Arm,
+                           in Function_Declaration | Anonymous_Function
+                              | If_Arm | Match_Arm,
           Post => Contains (Of_Tree, Body_Of'Result);
 
-   --  `returns` [1800].  No_Node is `-> none`, and a function declaration
-   --  with no return has no expression body for one to fill.  A written
-   --  Function_Type carries the same signature positions without a body.
+   --  `returns` [1800].  No_Node is `-> none`, and a declared or anonymous
+   --  function with no return has no expression body for one to fill.  A
+   --  written Function_Type carries the same signature positions without a
+   --  body.
    function Return_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                            in Function_Declaration | Function_Type;
+                            in Function_Declaration | Anonymous_Function
+                               | Function_Type;
 
    function Parameter_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                            in Function_Declaration | Function_Type;
+                            in Function_Declaration | Anonymous_Function
+                               | Function_Type;
 
    function Nth_Parameter
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id)
-                             in Function_Declaration | Function_Type
+                             in Function_Declaration | Anonymous_Function
+                                | Function_Type
                   and then Index <= Parameter_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Parameter'Result);
 

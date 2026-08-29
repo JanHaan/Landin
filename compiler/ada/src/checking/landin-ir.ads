@@ -368,14 +368,16 @@ package Landin.IR is
    No_Signature : constant Signature_Id := 0;
 
    --  D117's target-neutral callable shape.  Aggregate bodies are nominal
-   --  source identities and arrays retain only their length and scalar
-   --  element.  A backend may derive a carrier convention from these facts;
-   --  no register, byte width or target offset is represented here.
+   --  source identities, arrays retain only their length and scalar element,
+   --  and a function-valued position refers to another structural descriptor.
+   --  A backend may derive a carrier convention from these facts; no register,
+   --  byte width or target offset is represented here.
    type Signature_Part is record
       Kind    : Landin.Types.Type_Kind := Landin.Types.No_Value;
       Aggregate_Body : Declaration_Id  := No_Declaration;
       Length  : Element_Total          := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
+      Signature : Signature_Id         := No_Signature;
    end record;
 
    type Signature_Part_Array is
@@ -472,9 +474,8 @@ package Landin.IR is
    function Holds (Of_Unit : Unit; Id : Item_Id) return Boolean
      is (Id /= No_Item and then Natural (Id) <= Item_Count (Of_Unit));
 
-   --  One item per module declaration, in the order the declarations
-   --  were recorded, which R1.50 made the order the sources were added
-   --  and then the order the declarations were written.
+   --  One item per module declaration in resolution order, followed by
+   --  D118's anonymous routine items in deterministic source/post-order.
    --
    --  Result is [1800]'s returns for a Routine -- one of [1790]'s eleven,
    --  or Landin.Types.No_Value for `-> none` -- and the declared type for
@@ -492,10 +493,12 @@ package Landin.IR is
       Result   : Landin.Types.Type_Kind;
       Site     : Landin.Provenance.Origin) return Item_Id
      with Pre  => Is_Prepared (Into)
-                  and then Declares /= No_Declaration
-                  and then Natural (Declares)
-                           <= Declaration_Limit (Into)
-                  and then Item_For (Into, Declares) = No_Item
+                  and then (Declares /= No_Declaration or else Kind = Routine)
+                  and then (Declares = No_Declaration
+                            or else (Natural (Declares)
+                                       <= Declaration_Limit (Into)
+                                     and then Item_For (Into, Declares)
+                                                = No_Item))
                   and then (Result in Landin.Types.Scalar_Name
                             or else (Kind = Routine
                                      and then Result
@@ -509,16 +512,19 @@ package Landin.IR is
                   and then Landin.Provenance.Is_Known (Site),
           Post => Item_Count (Into) = Item_Count (Into)'Old + 1
                   and then Holds (Into, Add_Item'Result)
-                  and then Item_For (Into, Declares) = Add_Item'Result
+                  and then (Declares = No_Declaration
+                            or else Item_For (Into, Declares)
+                                      = Add_Item'Result)
                   and then Kind_Of (Into, Add_Item'Result) = Kind
                   and then Result_Of (Into, Add_Item'Result) = Result;
 
    function Kind_Of (Of_Unit : Unit; Id : Item_Id) return Item_Kind
      with Pre => Holds (Of_Unit, Id);
 
+   --  No_Declaration for an anonymous function routine.  Such routines are
+   --  still deterministic Unit items and receive backend-local symbols.
    function Declares (Of_Unit : Unit; Id : Item_Id) return Declaration_Id
-     with Pre  => Holds (Of_Unit, Id),
-          Post => Declares'Result /= No_Declaration;
+     with Pre => Holds (Of_Unit, Id);
 
    function Result_Of (Of_Unit : Unit; Id : Item_Id)
      return Landin.Types.Type_Kind
@@ -535,10 +541,28 @@ package Landin.IR is
    procedure Set_Signature
      (Into : in out Unit; Item : Item_Id; Signature : Signature_Id)
      with Pre  => Holds (Into, Item)
-                  and then Kind_Of (Into, Item) = Routine
                   and then Holds (Into, Signature)
-                  and then Signature_Of (Into, Item) = No_Signature,
+                  and then Signature_Of (Into, Item) = No_Signature
+                  and then (Kind_Of (Into, Item) = Routine
+                            or else Result_Of (Into, Item)
+                                      = Landin.Types.Usize),
           Post => Signature_Of (Into, Item) = Signature;
+
+   --  A function-valued datum has one static code-address image.  The target
+   --  is explicit neutral IR rather than a folded integer or a target
+   --  relocation spelling.  A routine never has one.
+   procedure Set_Function_Target
+     (Into : in out Unit; Item : Item_Id; Target : Item_Id)
+     with Pre  => Holds (Into, Item)
+                  and then Kind_Of (Into, Item) = Datum
+                  and then Result_Of (Into, Item) = Landin.Types.Usize
+                  and then Signature_Of (Into, Item) /= No_Signature
+                  and then Holds (Into, Target)
+                  and then Function_Target (Into, Item) = No_Item,
+          Post => Function_Target (Into, Item) = Target;
+
+   function Function_Target (Of_Unit : Unit; Item : Item_Id) return Item_Id
+     with Pre => Holds (Of_Unit, Item);
 
    --  Which item stands for a declaration, so a call and a module read
    --  cost one index.  No_Item for a declaration that is not a module
@@ -1242,10 +1266,13 @@ package Landin.IR is
       Item     : Item_Id;
       Of_Type  : Landin.Types.Scalar_Name;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Signature : Signature_Id := No_Signature) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Kind_Of (Into, Item) = Routine
-                  and then Declares /= No_Declaration
+                  and then (Signature = No_Signature
+                            or else (Holds (Into, Signature)
+                                     and then Of_Type = Landin.Types.Usize))
                   and then Landin.Provenance.Is_Known (Site),
           Post => Parameter_Count (Into, Item)
                     = Parameter_Count (Into, Item)'Old + 1
@@ -1459,15 +1486,16 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item, Value);
 
    --  No_Signature for ordinary values.  A Function_Address introduces a
-   --  descriptor and a Load carries the descriptor of its slot, so an
-   --  indirect call can be verified without naming a concrete routine.
+   --  descriptor; slot and datum loads preserve one; and a function-valued
+   --  call result exposes its descriptor's nested result.  An indirect call
+   --  can therefore be verified without naming a concrete routine.
    function Signature_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
      with Pre => Holds (Of_Unit, Item, Value);
 
-   --  The descriptor a direct or indirect call consumes.  This is not the
-   --  signature of the value produced by the call: the enabled written
-   --  function type is not yet a result type.
+   --  The descriptor a direct or indirect call consumes.  This is distinct
+   --  from Signature_Of on a function-valued call result, which answers the
+   --  nested result descriptor.
    function Call_Signature
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
      with Pre => Holds (Of_Unit, Item, Value)
@@ -2451,6 +2479,7 @@ private
       Declaration : Declaration_Id            := No_Declaration;
       Result      : Landin.Types.Type_Kind    := Landin.Types.Not_Typed;
       Signature   : Signature_Id              := No_Signature;
+      Function_Image : Item_Id                := No_Item;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
       Slots       : Run;

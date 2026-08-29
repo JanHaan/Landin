@@ -270,6 +270,11 @@ package body Landin.Checking is
                      A.Aggregate_Body = B.Aggregate_Body,
                   when Landin.Types.Fixed_Array =>
                      A.Length = B.Length and then A.Element = B.Element,
+                  when Landin.Types.Function_Value =>
+                     Holds (Of_Table, A.Signature)
+                     and then Holds (Of_Table, B.Signature)
+                     and then Signatures_Agree
+                       (Of_Table, A.Signature, B.Signature),
                   when others => False));
    begin
       if Signature_Parameter_Count (Of_Table, Left)
