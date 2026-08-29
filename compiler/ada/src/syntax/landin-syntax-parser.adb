@@ -51,12 +51,14 @@ package body Landin.Syntax.Parser is
    ------------------------------------------------------------------
    --  The words the tour spells and the kernel does not reserve
    --
-   --  [1760] reserves seventeen words, and none of them is `loop`,
-   --  `match`, `while`, `for`, `defer`, `undo`, `try`, `fail`, `break` or
-   --  `continue`.  Every one of those lexes as an ordinary identifier, so
+   --  [1760] reserves twenty-two words, and none of them is `loop`,
+   --  `while`, `for`, `undo`, `try`, `fail`, `break` or `continue`.
+   --  Every one of those lexes as an ordinary identifier, so
    --  the scan cannot refuse it and only the parser can: at a statement
    --  position, an identifier that is one of these is the construct the
-   --  tour describes and not a name someone forgot a colon after.
+   --  tour describes and not a name someone forgot a colon after. Enabled
+   --  contextual words such as `match`, `begin` and `defer` are recognised
+   --  separately and therefore do not belong in this refusal table.
    --
    --  This is the other half of what Landin.Tokens.Construct does for the
    --  deferred signs, and it is derived rather than guessed: check.py
@@ -66,7 +68,7 @@ package body Landin.Syntax.Parser is
 
    type Refused_Word is
      (Word_None,
-      Word_Loop, Word_While, Word_For, Word_Defer,
+      Word_Loop, Word_While, Word_For,
       Word_Undo, Word_Try, Word_Fail, Word_Break, Word_Continue,
       Word_Distinct);
 
@@ -77,7 +79,6 @@ package body Landin.Syntax.Parser is
             when Word_Loop     => "loop",
             when Word_While    => "while",
             when Word_For      => "for",
-            when Word_Defer    => "defer",
             when Word_Undo     => "undo",
             when Word_Try      => "try",
             when Word_Fail     => "fail",
@@ -90,7 +91,6 @@ package body Landin.Syntax.Parser is
             when Word_Loop     => Syn.Loop_Statement,
             when Word_While    => Syn.While_Statement,
             when Word_For      => Syn.For_Statement,
-            when Word_Defer    => Syn.Defer_Statement,
             when Word_Undo     => Syn.Undo_Statement,
             when Word_Try      => Syn.Try_Expression,
             when Word_Fail     => Syn.Fail_Statement,
@@ -200,6 +200,9 @@ package body Landin.Syntax.Parser is
 
             Begin_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "begin");
+
+            Defer_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "defer");
 
             Scalar_Id : constant array (Scalar_Name)
               of Landin.Source.Names.Name_Id :=
@@ -2168,6 +2171,11 @@ package body Landin.Syntax.Parser is
             function Parse_Body (Context : Frame) return Node_Id is
             begin
                if Context.Returns then
+                  if Peek = Tok.Identifier and then Named_Here = Defer_Id
+                  then
+                     return Parse_Block (Context);
+                  end if;
+
                   --  Control forms overlap statements and expressions.  A
                   --  sole one is [1800]'s expression body; when another
                   --  statement follows, it seeds the ordinary statement
@@ -2549,7 +2557,8 @@ package body Landin.Syntax.Parser is
                      return False;
                   end if;
 
-                  return Word_At_Hand /= Word_None
+                  return Named_Here = Defer_Id
+                    or else Word_At_Hand /= Word_None
                     or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                     or else After_Selectors = Tok.Equal;
                end Clearly_A_Statement;
@@ -2773,7 +2782,61 @@ package body Landin.Syntax.Parser is
                         Join (Start, After_Previous));
 
                   when Tok.Identifier =>
-                     if Named_Here = Match_Id then
+                     if Named_Here = Defer_Id then
+                        declare
+                           At_Defer : constant Landin.Source.Span := Here;
+                           Call_Node : Node_Id := No_Node;
+                        begin
+                           Advance;
+
+                           if Peek = Tok.Identifier then
+                              declare
+                                 At_Name : constant Landin.Source.Span := Here;
+                                 Named   : constant
+                                   Landin.Source.Names.Name_Id := Named_Here;
+                              begin
+                                 Advance;
+                                 Call_Node := Parse_Call (At_Name, Named);
+                              end;
+                           else
+                              Complain
+                                (Item    => Syn.Expression_Expected,
+                                 Where   => (if Peek = Tok.End_Of_Input
+                                             then After_Previous else Here),
+                                 Message => "`defer` registers a call here",
+                                 Note    => "[1100]: the call is evaluated"
+                                            & " when its block is left",
+                                 Related => At_Defer,
+                                 Because => "the defer");
+                              Call_Node := Add (Error_Expression, Point);
+                           end if;
+
+                           if Kind (Result, Call_Node) /= Call then
+                              if Kind (Result, Call_Node)
+                                   /= Error_Expression
+                              then
+                                 Complain
+                                   (Item    => Syn.Expression_Expected,
+                                    Where   => Where (Result, Call_Node),
+                                    Message => "`defer` registers a call,"
+                                               & " not a constructed value",
+                                    Note    => "[1100]: write the call that"
+                                               & " runs when the block ends",
+                                    Related => At_Defer,
+                                    Because => "the defer");
+                              end if;
+                              return Add
+                                (Error_Statement, At_Defer,
+                                 Join (Start, After_Previous), [Call_Node]);
+                           end if;
+
+                           return Add
+                             (Of_Kind  => Defer_Statement,
+                              At_Token => At_Defer,
+                              Extent   => Join (Start, After_Previous),
+                              Children => [Call_Node]);
+                        end;
+                     elsif Named_Here = Match_Id then
                         return Parse_Match (Context);
                      elsif Named_Here = Begin_Id then
                         return Parse_Bare_Block (Context);
@@ -3150,12 +3213,15 @@ package body Landin.Syntax.Parser is
                                   | Tok.Kw_Public
                           or else
                             (Peek = Tok.Identifier
-                             and then Named_Here not in Match_Id | Begin_Id
                              and then
-                               (Word_At_Hand /= Word_None
-                                or else Ahead (1)
-                                  in Tok.Colon | Tok.Colon_Equal
-                                or else After_Selectors = Tok.Equal));
+                               (Named_Here = Defer_Id
+                                or else
+                                  (Named_Here not in Match_Id | Begin_Id
+                                   and then
+                                     (Word_At_Hand /= Word_None
+                                      or else Ahead (1)
+                                        in Tok.Colon | Tok.Colon_Equal
+                                      or else After_Selectors = Tok.Equal))));
                      begin
                         if Pre.Begins_Expression (Peek)
                           and then not Is_Statement

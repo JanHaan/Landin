@@ -103,6 +103,10 @@ package Landin.Syntax is
       Increment,
       Decrement,
       Discard,
+      --  [1100].  Its one child is the call registered at this source
+      --  position and evaluated only when an applicable edge leaves the
+      --  lexical block.
+      Defer_Statement,
       Return_Statement,
       --  [1050], D124: the same nodes stand in statement and expression
       --  positions.  A control expression carries its answer in the final
@@ -458,6 +462,14 @@ package Landin.Syntax is
                  and then Kind (Of_Tree, Id)
                           in Binding | Destructuring_Binding | Assignment
                              | Discard | Field_Value;
+
+   --  [1100]'s call.  This is deliberately not Value_Of: reaching a defer
+   --  statement registers syntax and evaluates no value at that point.
+   function Deferred_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Defer_Statement,
+          Post => Contains (Of_Tree, Deferred_Call'Result)
+                  and then Kind (Of_Tree, Deferred_Call'Result) = Call;
 
    --  `place` [1810], the one an assignment writes or an increment steps,
    --  and what a selection [1820] selects from.

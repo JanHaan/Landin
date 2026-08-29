@@ -53,6 +53,7 @@ replaced.
 | `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Checking` | what type every node and declaration has, including nominal aggregate identity, structural fixed-array and anonymous result shapes, aggregate element identity, recursive first-class target-neutral function signatures with ordered result runs, and scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout | decide a rule, or ask the host for a width |
+| `Landin.Cleanup` | target-neutral exit kinds and the defer/future-undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
 | `Landin.IR` | the target-neutral instructions: items, slots, blocks and values; recursive callable signature descriptors with ordered result runs on declared or anonymous routines, static function datums, code addresses, function-value slots and calls; scalar, compact fixed-array, unfolded variant, anonymous result and recursively nested ordinary shapes; a fixed array's element shape; folded aggregate images and compact payload segments; and arbitrary-depth neutral paths through contextual, variant and indexed-element operations, starting at a base part or at whole array storage | hold a scope tree, name a machine, ask a width, or hold an offset, register or padding byte |
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including descriptor/carrier, multiple-result slot and static function-image agreement, valid neutral subobject paths and target-aware fit of static images | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
@@ -76,8 +77,8 @@ replaced.
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
 | `Landin.Stages.Resolution` | the order the trees are walked in | own the resolution table, or a code |
 | `Landin.Stages.Checking` | the three type passes and checking-stage diagnostic order | own a table, a code, or a width |
-| `Landin.Stages.Checking.Flow` | definite assignment and explicit fallthrough/return-compatible edge facts | decide a type, believe a condition, or lower a value |
-| `Landin.Stages.Lowering` | the walk that builds and verifies the IR, including caller-owned scalar and shaped control joins, and refusing to run on a refused program | own the Unit, work out a scope, derive target layout, or raise a diagnostic |
+| `Landin.Stages.Checking.Flow` | definite assignment, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
+| `Landin.Stages.Lowering` | the walk that builds and verifies the IR, including caller-owned scalar and shaped control joins plus reverse-order cleanup calls on selected exits, and refusing to run on a refused program | own the Unit, work out a scope, derive target layout, or raise a diagnostic |
 | `Landin.Driver` | argument and `--emit` classification, pipeline orchestration, output/toolchain selection and the result | implement a language rule |
 | `Refine` | printing and the exit status | contain a decision |
 
@@ -190,10 +191,10 @@ on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
 
 The `Runtime` fixture class compiles programs, links them, runs them on the
 target and checks their statuses. The Linux gate therefore proves the scalar
-arithmetic and non-loop expression-valued control-flow kernel, early returns
-and source order, six-argument and recursive calls, folded module values, fixed
-arrays, ordinary structs and their target-derived module and frame layouts on
-the hardware the backend emits for. A host without the target toolchain fails
+arithmetic and non-loop expression-valued control-flow kernel, early returns,
+lexical deferred cleanup and source order, register/stack and recursive calls,
+folded module values, fixed arrays, ordinary structs and their target-derived
+module and frame layouts on the hardware the backend emits for. A host without the target toolchain fails
 rather than silently skipping that evidence. The active
 R2 items own extensions to the semantic and representation core; later target
 and ABI work remains with the roadmap items that name it.

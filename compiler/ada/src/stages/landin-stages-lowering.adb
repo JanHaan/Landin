@@ -1,4 +1,7 @@
+with Ada.Containers.Vectors;
+
 with Landin.Checking;
+with Landin.Cleanup;
 with Landin.IR;
 with Landin.IR.Verifier;
 with Landin.Provenance;
@@ -12,6 +15,7 @@ with Landin.Types;
 package body Landin.Stages.Lowering is
 
    package Syn renames Landin.Syntax;
+   package Cleanup renames Landin.Cleanup;
    package Res renames Landin.Resolution;
    package Ty  renames Landin.Types;
    package IR  renames Landin.IR;
@@ -243,6 +247,21 @@ package body Landin.Stages.Lowering is
       Filling : IR.Item_Id  := IR.No_Item;
       Current : IR.Block_Id := IR.No_Block;
       Active_Result : IR.Slot_Id := IR.No_Slot;
+
+      type Cleanup_Entry is record
+         Kind   : Cleanup.Cleanup_Kind := Cleanup.Deferred_Call;
+         Call   : Syn.Node_Id := Syn.No_Node;
+         Scope  : Res.Scope_Id := Res.No_Scope;
+         Active : Boolean := True;
+      end record;
+
+      package Cleanup_Entries is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Cleanup_Entry);
+
+      package Cleanup_Indexes is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Positive);
+
+      Cleanup_Stack : Cleanup_Entries.Vector;
 
       function Site_Of (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Landin.Provenance.Origin
@@ -478,6 +497,19 @@ package body Landin.Stages.Lowering is
       procedure Leave_With
         (Result : IR.Slot_Id; Site : Landin.Provenance.Origin);
 
+      procedure Lower_Cleanup_Call
+        (Of_Tree : Syn.Tree; Action : Cleanup_Entry);
+
+      procedure Emit_Cleanups
+        (Of_Tree : Syn.Tree;
+         First   : Natural;
+         On_Exit : Cleanup.Exit_Kind);
+
+      procedure Leave_Through_Cleanups
+        (Of_Tree : Syn.Tree;
+         Result  : IR.Slot_Id;
+         Site    : Landin.Provenance.Origin);
+
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name
       is
@@ -527,6 +559,91 @@ package body Landin.Stages.Lowering is
          IR.Leave_Block (Unit.all, Filling);
          Current := IR.No_Block;
       end Leave_With;
+
+      --  Evaluate and discard one registered call now.  Aggregate results
+      --  still receive caller-owned shaped storage through completion; a
+      --  scalar, function or no-value result needs no extra IR operation.
+      procedure Lower_Cleanup_Call
+        (Of_Tree : Syn.Tree; Action : Cleanup_Entry)
+      is
+         Held : constant Ty.Type_Kind := Type_At (Of_Tree, Action.Call);
+      begin
+         if Held in Ty.Aggregate | Ty.Fixed_Array then
+            declare
+               Temporary : constant IR.Slot_Id :=
+                 Add_Value_Temporary (Of_Tree, Action.Call);
+               Ignored : constant IR.Value_Id :=
+                 Lower_Call
+                   (Of_Tree, Action.Call, Action.Scope,
+                    Destination => Temporary);
+            begin
+               pragma Unreferenced (Ignored);
+            end;
+         else
+            declare
+               Ignored : constant IR.Value_Id :=
+                 Lower_Call (Of_Tree, Action.Call, Action.Scope);
+            begin
+               pragma Unreferenced (Ignored);
+            end;
+         end if;
+      end Lower_Cleanup_Call;
+
+      procedure Emit_Cleanups
+        (Of_Tree : Syn.Tree;
+         First   : Natural;
+         On_Exit : Cleanup.Exit_Kind)
+      is
+         Disabled : Cleanup_Indexes.Vector;
+         Last : constant Natural := Natural (Cleanup_Stack.Length);
+      begin
+         if First = 0 or else First > Last then
+            return;
+         end if;
+
+         for Position in reverse Positive (First) .. Positive (Last) loop
+            exit when Current = IR.No_Block;
+
+            declare
+               Action : Cleanup_Entry := Cleanup_Stack (Position);
+            begin
+               if Action.Active
+                 and then Cleanup.Applies (Action.Kind, On_Exit)
+               then
+                  --  Pop-before-run semantics: if evaluating this call
+                  --  returns from inside a control-valued argument, that
+                  --  return sees only the still-pending cleanup entries.
+                  Action.Active := False;
+                  Cleanup_Stack.Replace_Element (Position, Action);
+                  Disabled.Append (Position);
+                  Lower_Cleanup_Call (Of_Tree, Action);
+               end if;
+            end;
+         end loop;
+
+         --  Lowering subsequently visits sibling control edges over the
+         --  same syntax.  Restore the compile-time entries after this edge;
+         --  the generated runtime path has already consumed its calls.
+         for Position of Disabled loop
+            declare
+               Action : Cleanup_Entry := Cleanup_Stack (Position);
+            begin
+               Action.Active := True;
+               Cleanup_Stack.Replace_Element (Position, Action);
+            end;
+         end loop;
+      end Emit_Cleanups;
+
+      procedure Leave_Through_Cleanups
+        (Of_Tree : Syn.Tree;
+         Result  : IR.Slot_Id;
+         Site    : Landin.Provenance.Origin) is
+      begin
+         Emit_Cleanups (Of_Tree, 1, Cleanup.Successful_Return);
+         if Current /= IR.No_Block then
+            Leave_With (Result, Site);
+         end if;
+      end Leave_Through_Cleanups;
 
       function Fresh
         (Of_Tree : Syn.Tree;
@@ -3346,6 +3463,7 @@ package body Landin.Stages.Lowering is
            Syn.Statement_Count (Of_Tree, Block);
          Has_Value : constant Boolean :=
            Syn.Block_Value (Of_Tree, Block) /= Syn.No_Node;
+         Cleanup_Base : constant Natural := Natural (Cleanup_Stack.Length);
       begin
          for Which in
            1 .. Last_Statement + (if Has_Value then 1 else 0)
@@ -5381,10 +5499,22 @@ package body Landin.Stages.Lowering is
                            or else Current = IR.No_Block);
                      end;
 
+                  when Syn.Defer_Statement =>
+                     --  Registration emits nothing and evaluates nothing.
+                     --  The call syntax and its lexical scope are retained
+                     --  until an applicable edge leaves this block.
+                     Cleanup_Stack.Append
+                       (Cleanup_Entry'
+                          (Kind   => Cleanup.Deferred_Call,
+                           Call   => Syn.Deferred_Call (Of_Tree, Stmt),
+                           Scope  => Scope,
+                           Active => True));
+
                   when Syn.Return_Statement =>
                      if Syn.Condition_Of (Of_Tree, Stmt) = Syn.No_Node
                      then
-                        Leave_With (Result, Site);
+                        Leave_Through_Cleanups
+                          (Of_Tree, Result, Site);
                      else
                         --  [1810]: only an exit carries `when`, so the
                         --  flow below it is reachable and the guard is a
@@ -5409,7 +5539,8 @@ package body Landin.Stages.Lowering is
                                  Current := IR.No_Block;
 
                                  Open (Goes);
-                                 Leave_With (Result, Site);
+                                 Leave_Through_Cleanups
+                                   (Of_Tree, Result, Site);
 
                                  Open (Stays);
                               end;
@@ -5432,6 +5563,19 @@ package body Landin.Stages.Lowering is
                   end case;
                end if;
             end;
+         end loop;
+
+         if Current /= IR.No_Block then
+            --  A block's final expression has already filled its consumer's
+            --  join storage.  Now leave this lexical frame in reverse
+            --  registration order before a surrounding control merge.
+            Emit_Cleanups
+              (Of_Tree, Cleanup_Base + 1,
+               Cleanup.Normal_Fallthrough);
+         end if;
+
+         while Natural (Cleanup_Stack.Length) > Cleanup_Base loop
+            Cleanup_Stack.Delete_Last;
          end loop;
       end Lower_Statements;
 
@@ -5471,6 +5615,8 @@ package body Landin.Stages.Lowering is
             then Anonymous_Item (Of_Tree, Node)
             else IR.Item_For (Unit.all, Owner));
          Slots := No_Slots;
+         pragma Assert (Cleanup_Stack.Is_Empty);
+         Cleanup_Stack.Clear;
 
          --  D106's first internal parameter is an unspellable pointer to
          --  caller-owned result storage.  Source parameters follow it through
@@ -5609,6 +5755,7 @@ package body Landin.Stages.Lowering is
 
          Filling := IR.No_Item;
          Active_Result := IR.No_Slot;
+         pragma Assert (Cleanup_Stack.Is_Empty);
       end Lower_Routine;
 
       ------------------------------------------------------------

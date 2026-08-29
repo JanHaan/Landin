@@ -3263,6 +3263,146 @@ package body Landin.Tests.Checking_Suite is
          Accepted => False);
    end Control_Edges_Merge_Only_Fallthrough;
 
+   --  [1100] registers syntax rather than an evaluated value, but ordinary
+   --  call checking still fixes the complete direct or indirect signature
+   --  and any stored result shape where the statement is written.
+   procedure Deferred_Calls_Are_Typed_At_Registration
+     (Item : in out Landin.Testing.Context);
+
+   procedure Deferred_Calls_Are_Typed_At_Registration
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+      None_Calls, Array_Calls : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "defer-types.ldn",
+         "sink: (value: i32) -> none = _ = value end sink" & LF
+         & "make_row: () -> (result: [2]i32) =" & LF
+         & "    result = [19, 23]" & LF
+         & "end make_row" & LF
+         & "use: () -> none =" & LF
+         & "    callback := sink" & LF
+         & "    defer callback(42)" & LF
+         & "    defer make_row()" & LF
+         & "end use" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "direct stored-result and indirect deferred calls are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Defer_Statement
+            then
+               declare
+                  Call : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Deferred_Call (Of_Tree.all, Node);
+               begin
+                  case Landin.Checking.Type_Of
+                    (Types.all, Of_Tree.all, Call)
+                  is
+                     when Landin.Types.No_Value =>
+                        None_Calls := None_Calls + 1;
+                     when Landin.Types.Fixed_Array =>
+                        Array_Calls := Array_Calls + 1;
+                        Landin.Testing.Check
+                          (Item,
+                           Landin.Checking.Array_Length
+                             (Types.all, Of_Tree.all, Call) = 2
+                           and then Landin.Checking.Array_Element
+                             (Types.all, Of_Tree.all, Call)
+                               = Landin.Types.I32,
+                           "the deferred aggregate result keeps its shape");
+                     when others =>
+                        Landin.Testing.Fail
+                          (Item, "a deferred call lost its checked result");
+                  end case;
+               end;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, None_Calls, 1, "the indirect no-value call was typed");
+      Landin.Testing.Check_Equal
+        (Item, Array_Calls, 1, "the direct array call was typed");
+   end Deferred_Calls_Are_Typed_At_Registration;
+
+   --  Definite assignment is asked where a registered call executes.  The
+   --  accepted program assigns after registration and even fills its named
+   --  result while evaluating a cleanup argument; the rejected one has an
+   --  earlier guarded-return edge on which that same argument is unassigned.
+   procedure Deferred_Reads_Use_Each_Exit_State
+     (Item : in out Landin.Testing.Context);
+
+   procedure Deferred_Reads_Use_Each_Exit_State
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Text : String; Accepted : Boolean);
+
+      procedure Check_Source (Text : String; Accepted : Boolean) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "defer-flow.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 3, "the flow checker ran");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) /= Accepted,
+            "deferred reads use assignment facts at their execution edge");
+      end Check_Source;
+
+      Sink : constant String :=
+        "sink: (value: i32) -> none = _ = value end sink" & LF;
+   begin
+      Check_Source
+        (Sink
+         & "f: () -> (result: i32) =" & LF
+         & "    mut local: i32" & LF
+         & "    defer sink(local)" & LF
+         & "    defer sink(begin result = 42 result end)" & LF
+         & "    local = 42" & LF
+         & "    return" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        (Sink
+         & "f: (leave: bool) -> (result: i32) =" & LF
+         & "    mut local: i32" & LF
+         & "    defer sink(local)" & LF
+         & "    result = 0" & LF
+         & "    return when leave" & LF
+         & "    local = 42" & LF
+         & "end f" & LF,
+         Accepted => False);
+   end Deferred_Reads_Use_Each_Exit_State;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -3373,6 +3513,12 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "control edges merge only fallthrough",
          Control_Edges_Merge_Only_Fallthrough'Access);
+      Landin.Testing.Register
+        (Into, "checking", "deferred calls are typed at registration",
+         Deferred_Calls_Are_Typed_At_Registration'Access);
+      Landin.Testing.Register
+        (Into, "checking", "deferred reads use each exit state",
+         Deferred_Reads_Use_Each_Exit_State'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);

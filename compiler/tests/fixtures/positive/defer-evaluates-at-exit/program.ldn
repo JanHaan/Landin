@@ -1,0 +1,17 @@
+sink: (value: i32) -> none =
+    _ = value
+end sink
+
+fills_return: () -> (result: i32) =
+    defer sink(begin
+        result = 42
+        result
+    end)
+    return
+end fills_return
+
+assigned_later: () -> none =
+    mut local: i32
+    defer sink(local)
+    local = 42
+end assigned_later

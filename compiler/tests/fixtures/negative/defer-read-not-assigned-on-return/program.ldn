@@ -1,0 +1,11 @@
+sink: (value: i32) -> none =
+    _ = value
+end sink
+
+f: (leave: bool) -> (result: i32) =
+    mut local: i32
+    defer sink(local)
+    result = 0
+    return when leave
+    local = 42
+end f

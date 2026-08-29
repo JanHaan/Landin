@@ -1,0 +1,6 @@
+class: runtime
+summary: deferred direct and indirect calls evaluate stack and aggregate arguments at cleanup time
+program: main.ldn
+status: 42
+constructs: 0060, 0410, 0520, 0670, 0710, 0750, 0870, 1000, 1100, 1800, 1810, 1910, 1920
+targets: linux-x86-64

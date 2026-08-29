@@ -39,8 +39,8 @@ produces nothing of its own. Every other rule reads the tokens that remain,
 and a quoted word or sign in one of them stands for the single token
 spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
-enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin' and
-'match' remain
+enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
+'match' and 'defer' remain
 ordinary names everywhere their contextual productions do not meet them.
 A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
@@ -267,7 +267,8 @@ named_return ::= identifier ":" type
 body        ::= block
 block       ::= statement* | value_statement* expression
 value_statement ::= binding | destructuring_binding | assignment
-                  | increment | discard | call | "return" "when" expression
+                  | increment | discard | call | defer
+                  | "return" "when" expression
                   | if | match | bare_block
 destructuring_binding ::= "(" destructured_field
                           ("," destructured_field)* ")" ":=" expression
@@ -292,6 +293,10 @@ returning none has nothing to bind and [1020] wants a result
 discarded on purpose rather than by omission. A call whose result
 is dropped that way is the one place the kernel accepts an
 expression standing alone.
+`defer` registers one call when its statement is reached and evaluates the
+callee and arguments only on the applicable exits from its lexical block
+[1100]. It is a statement rather than an expression and so cannot supply a
+block's final value.
 A match is D77's exhaustive tag selection. Its subject is one directly
 selected variant part and each case arm carries one statement or one
 expression; a bare `begin` block makes a multi-statement arm. D78 extends the
@@ -305,10 +310,11 @@ written is [1900]'s and not this rule's: a field is writable when
 the binding it belongs to is.
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
-              | discard | call | return | if | match | bare_block
+              | discard | call | defer | return | if | match | bare_block
 assignment  ::= place "=" expression
 increment   ::= ("inc" | "dec") place
 discard     ::= "_" "=" expression
+defer       ::= "defer" call
 return      ::= "return" ("when" expression)?
 if          ::= "if" expression "then" block
                 ("elsif" expression "then" block)*
@@ -6864,3 +6870,71 @@ result-slot cases and x86-64 aggregate copies; `positive/multiple-named-returns`
 `control-result-field-name-mismatch`;
 the generated lexical and IR records; and `runtime/multiple-named-returns` on
 Linux x86-64.
+
+### D129 — A cleanup is selected by the edge that leaves its lexical block
+
+**The tour said** that `defer` runs at the end of its block in reverse order,
+that its call is evaluated where it runs rather than where it was written, and
+that `undo` is the same machinery selected only by failure [1100] [1110]. It
+did not say whether a final block value precedes cleanup, how an early return
+crosses nested blocks, which definite-assignment state the delayed reads use,
+or what neutral control fact distinguishes a future failure from a trap.
+
+**Chosen:** reaching `defer call(...)` registers that call in the current
+lexical block and performs no part of it. The callee and every argument are
+evaluated in [0410]'s source order only when the entry runs, so an indirect
+callee and a named place observe their values at that later point. Resolution
+is not delayed: the call's names bind in [1840]'s source-ordered scope where
+the statement is written, and a later declaration is not visible backwards.
+
+Each active block owns a cleanup frame. On ordinary fallthrough its optional
+final expression first fills D125's consumer-owned value storage, then that
+frame's reached entries run in reverse registration order, and only then does
+the edge reach its surrounding join. A successful `return` runs every reached
+entry from the innermost active frame outward, reverse within each frame,
+before D116's final result copy or scalar leave. Thus a defer written after a
+guarded return is absent from the guard's taken edge, while an inner arm or
+bare-block defer runs before an outer one. An entry is removed before its call
+runs: if a control expression in that call returns, the still-pending entries
+run exactly once and the entry already in progress is not entered again.
+
+Definite assignment is checked at those execution points, not at registration.
+A value may therefore be assigned after the defer and before every applicable
+exit, and a cleanup argument may itself assign one or more named results before
+the successful return completes. Conversely, one earlier return edge on which
+a delayed read is unassigned is refused even when the normal end assigns it.
+
+The neutral selector has five edge kinds: ordinary fallthrough, successful
+return, failure propagation, structured transfer, and trap stop. A deferred
+call applies to every language edge that unwinds a block and never to a trap;
+a failure cleanup applies only to failure propagation. The latter is the
+substrate for [1110], not its implementation: `undo` remains refused by name
+until R2.30's declared-error work supplies `fail` and propagation edges, and
+R4.10 still owns the loop transfers. No trap unwinds, whether it occurs in the
+body, in a final expression, or while a cleanup call is running.
+
+Cleanup has no target-specific IR form. Once selected, a call lowers through
+the existing direct or indirect convention, including register and stack
+arguments. Fixed-array and enabled aggregate arguments retain their ordinary
+by-value transport, and a discarded aggregate result receives one caller-owned
+shaped temporary through completion. The verifier consequently sees only
+ordinary calls, storage and terminators; the backend owns neither a cleanup
+stack nor unwind policy.
+
+**The alternative:** capture the callee and arguments when the statement is
+reached, which is Go's useful rule but contradicts [1100]'s explicit late read;
+or introduce a runtime cleanup stack and target-aware unwind instruction.
+Capturing changes which value a mutable place denotes and can consume it too
+early. A runtime stack makes registration observable work, duplicates the
+lexical control graph already known to lowering, and would force freestanding
+targets to carry unwind machinery for traps the language says do not unwind.
+Both were declined.
+
+**Pinned by** `positive/defer-evaluates-at-exit`,
+`negative/defer-cannot-see-later-local`,
+`negative/defer-read-not-assigned-on-return`,
+`negative/defer-needs-call`, `negative/undo-remains-refused`,
+`runtime/defer-cleanups-follow-control-edges`,
+`runtime/defer-call-shapes`, and `runtime/defer-does-not-unwind-traps` on Linux
+x86-64, together with the parser, checker/flow, IR policy, lowering/verifier and
+x86 backend public-seam cases and the generated IR record.

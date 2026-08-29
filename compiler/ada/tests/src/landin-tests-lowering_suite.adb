@@ -5069,6 +5069,81 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end All_Return_Controls_Create_No_Join_Block;
 
+   --  [1100]'s stack disappears during lowering: each selected exit contains
+   --  ordinary target-neutral calls in reverse registration order.  The
+   --  inner block falls through before the outer explicit return, and the
+   --  verifier must see no new cleanup instruction or exceptional edge.
+   procedure Deferred_Exits_Become_Ordinary_Reverse_Calls
+     (Item : in out Landin.Testing.Context);
+
+   procedure Deferred_Exits_Become_Ordinary_Reverse_Calls
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "mark: (value: i32) -> none = _ = value end mark" & LF
+         & "f: () -> (result: i32) =" & LF
+         & "    defer mark(1)" & LF
+         & "    begin" & LF
+         & "        defer mark(2)" & LF
+         & "    end" & LF
+         & "    result = 42" & LF
+         & "    return" & LF
+         & "end f" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "nested fallthrough and return cleanups are lowered");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Routine : constant IR.Item_Id := 2;
+         Calls : Natural := 0;
+         Values : array (1 .. 2) of Landin.Types.Magnitude := [others => 0];
+      begin
+         for Which in 1 .. IR.Value_Count (Unit, Routine) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Which);
+            begin
+               if IR.Op_Of (Unit, Routine, Value) = IR.Call
+                 and then IR.Callee_Of (Unit, Routine, Value) = 1
+               then
+                  Calls := Calls + 1;
+                  if Calls <= Values'Last
+                    and then IR.Operand_Count (Unit, Routine, Value) = 1
+                  then
+                     declare
+                        Argument : constant IR.Value_Id :=
+                          IR.Nth_Operand (Unit, Routine, Value, 1);
+                     begin
+                        if IR.Op_Of (Unit, Routine, Argument) = IR.Number then
+                           Values (Calls) :=
+                             IR.Number_Of (Unit, Routine, Argument);
+                        end if;
+                     end;
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check_Equal
+           (Item, Calls, 2, "both lexical cleanups become direct calls");
+         Landin.Testing.Check
+           (Item, Values = [2, 1],
+            "the inner fallthrough call precedes the outer return call");
+         Check_Terminators (Item, Unit, "deferred cleanup calls");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts cleanup lowered as ordinary calls");
+      end;
+   end Deferred_Exits_Become_Ordinary_Reverse_Calls;
+
    ------------------------------------------------------------------
    --  The recorded artefact
    ------------------------------------------------------------------
@@ -5612,6 +5687,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "all-return controls create no join block",
          All_Return_Controls_Create_No_Join_Block'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "deferred exits become ordinary reverse calls",
+         Deferred_Exits_Become_Ordinary_Reverse_Calls'Access);
       Landin.Testing.Register
         (Into, "lowering", "a struct literal becomes ordered field writes",
          A_Struct_Literal_Becomes_Ordered_Field_Writes'Access);
