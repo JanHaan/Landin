@@ -140,8 +140,9 @@ constructed temporaries retain compact case and payload shapes across the copy;
 a complete depth-one ordinary child and its literal construction retain their
 nested field runs as well. Struct and fixed-array results use a hidden
 destination pointing to caller-owned shaped storage and copy from an independent
-named-result slot
-on leave. Further aggregate arguments and result contexts remain absent;
+named-result slot on leave. Matching calls can fill typed locals, direct
+assignments and named returns without an aggregate SSA value. Further aggregate
+arguments and result contexts remain absent;
 R4.40 later completes C ABI classification.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and

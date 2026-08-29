@@ -3453,7 +3453,20 @@ package body Landin.Stages.Lowering is
                            Destination : constant IR.Storage :=
                              Storage_For (Of_Tree, Named);
                         begin
-                           if Syn.Kind (Of_Tree, From) = Syn.Struct_Literal
+                           if Syn.Kind (Of_Tree, From) = Syn.Call then
+                              pragma Assert
+                                (Parent_Field = 0
+                                 and then Destination.Kind in IR.Frame_Slot);
+                              declare
+                                 Ignored : constant IR.Value_Id :=
+                                   Lower_Call
+                                     (Of_Tree, From, Scope,
+                                      Destination => Destination.Slot);
+                              begin
+                                 pragma Unreferenced (Ignored);
+                              end;
+                           elsif Syn.Kind (Of_Tree, From)
+                                   = Syn.Struct_Literal
                            then
                               Write_Struct_Literal
                                 (From,
@@ -3548,11 +3561,26 @@ package body Landin.Stages.Lowering is
                            Destination : constant IR.Storage :=
                              Storage_For (Of_Tree, Named);
                         begin
-                           --  D49--D53/D65 and D90 share one field-qualified
-                           --  lowering rule for each contextual array value.
-                           Write_Array_Value
-                             (Value, Destination, Field,
-                              Nested_Field => Child);
+                           if Syn.Kind (Of_Tree, Value) = Syn.Call then
+                              pragma Assert
+                                (Field = 0 and then Child = 0
+                                 and then Destination.Kind in IR.Frame_Slot);
+                              declare
+                                 Ignored : constant IR.Value_Id :=
+                                   Lower_Call
+                                     (Of_Tree, Value, Scope,
+                                      Destination => Destination.Slot);
+                              begin
+                                 pragma Unreferenced (Ignored);
+                              end;
+                           else
+                              --  D49--D53/D65 and D90 share one
+                              --  field-qualified lowering rule for each
+                              --  contextual array value.
+                              Write_Array_Value
+                                (Value, Destination, Field,
+                                 Nested_Field => Child);
+                           end if;
                         end;
                      else
                         declare
@@ -3790,15 +3818,26 @@ package body Landin.Stages.Lowering is
             --  says it opens no scope, so its block is the signature's.
             Open (Fresh (Of_Tree, Runs, Signature));
 
-            declare
-               Value : constant IR.Value_Id :=
-                 Lower_Expression (Of_Tree, Runs, Signature);
-            begin
-               if Result /= IR.No_Slot then
-                  IR.Emit_Store
-                    (Unit.all, Filling, Result, Value, Site);
-               end if;
-            end;
+            if Gives_Type in Ty.Aggregate | Ty.Fixed_Array then
+               pragma Assert (Syn.Kind (Of_Tree, Runs) = Syn.Call);
+               declare
+                  Ignored : constant IR.Value_Id :=
+                    Lower_Call
+                      (Of_Tree, Runs, Signature, Destination => Result);
+               begin
+                  pragma Unreferenced (Ignored);
+               end;
+            else
+               declare
+                  Value : constant IR.Value_Id :=
+                    Lower_Expression (Of_Tree, Runs, Signature);
+               begin
+                  if Result /= IR.No_Slot then
+                     IR.Emit_Store
+                       (Unit.all, Filling, Result, Value, Site);
+                  end if;
+               end;
+            end if;
 
             Leave_With (Result, Site);
          end if;
