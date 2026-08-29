@@ -1611,7 +1611,7 @@ h3 := open_file(path) else (e)
         not_found: create(path)
         _:         fail e
     end match
-end open_file
+end
 ```
 
 The else clause yields a value, or transfers control out of
@@ -1623,8 +1623,9 @@ It does not assign to the binding it is initialising, which
 would need a rule about writing an immutable binding inside
 its own initialiser.
 The success and recovery paths may carry any enabled result shape: scalar,
-atom, function, fixed array, or struct through its ordinary caller-owned
-storage. A bound error name has the call's complete atom set and is visible
+atom, function, fixed array, struct, or anonymous multiple-result aggregate
+through its ordinary caller-owned storage. A bound error name has the call's
+complete atom set and is visible
 only inside its recovery block. An exhaustive atom `match` may name every atom
 or end with one `_` arm for those left over.
 

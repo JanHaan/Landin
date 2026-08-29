@@ -1018,6 +1018,13 @@ package body Landin.Stages.Lowering is
                   Length => 1,
                   Signature => Signature_For (Part.Signature),
                   others => <>);
+            when Ty.Atom_Value =>
+               return
+                 (Kind => IR.Scalar_Field_Shape,
+                  Element => Ty.U32,
+                  Length => 1,
+                  Atoms => Atom_Set_For (Part.Atoms),
+                  others => <>);
             when Ty.Aggregate =>
                return Neutral_Body (Part.Aggregate_Body);
             when Ty.Fixed_Array =>

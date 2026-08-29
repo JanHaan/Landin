@@ -255,6 +255,12 @@ package body Landin.IR.Verifier is
          Field  : Part_Position;
          Nested : Path_Step_Array) return Signature_Id;
 
+      function Scalar_Field_Atoms
+        (Item   : Item_Id;
+         Place  : Storage;
+         Field  : Part_Position;
+         Nested : Path_Step_Array) return Atom_Set_Id;
+
       --  D121: an array's element may be an aggregate, so what an array
       --  shape answers is the element's shape and not a scalar name.
       function Shape_Of
@@ -388,6 +394,33 @@ package body Landin.IR.Verifier is
          end case;
          return Shape_At (Of_Unit, Root, Nested).Signature;
       end Scalar_Field_Signature;
+
+      function Scalar_Field_Atoms
+        (Item   : Item_Id;
+         Place  : Storage;
+         Field  : Part_Position;
+         Nested : Path_Step_Array) return Atom_Set_Id
+      is
+         Root : Field_Shape;
+      begin
+         case Place.Kind is
+            when Module_Datum =>
+               if Result_Of (Of_Unit, Place.Datum)
+                    = Landin.Types.Fixed_Array
+               then
+                  return No_Atom_Set;
+               end if;
+               Root := Nth_Field_Shape
+                 (Of_Unit, Place.Datum, Positive (Field));
+            when Frame_Slot =>
+               if Is_Array (Of_Unit, Item, Place.Slot) then
+                  return No_Atom_Set;
+               end if;
+               Root := Nth_Slot_Field_Shape
+                 (Of_Unit, Item, Place.Slot, Positive (Field));
+         end case;
+         return Shape_At (Of_Unit, Root, Nested).Atoms;
+      end Scalar_Field_Atoms;
 
       function Shape_Of
         (Item    : Item_Id;
@@ -816,11 +849,20 @@ package body Landin.IR.Verifier is
               or else Shape.Cases /= 0
               or else Shape.Payloads_First /= 0
               or else
-                (if Shape.Signature = No_Signature
-                 then False
-                 else Shape.Element /= Landin.Types.Usize
-                   or else not Holds (Of_Unit, Shape.Signature));
-         elsif Shape.Signature /= No_Signature then
+                (Shape.Signature /= No_Signature
+                 and then
+                   (Shape.Atoms /= No_Atom_Set
+                    or else Shape.Element /= Landin.Types.Usize
+                    or else not Holds (Of_Unit, Shape.Signature)))
+              or else
+                (Shape.Atoms /= No_Atom_Set
+                 and then
+                   (Shape.Signature /= No_Signature
+                    or else Shape.Element /= Landin.Types.U32
+                    or else not Holds (Of_Unit, Shape.Atoms)));
+         elsif Shape.Signature /= No_Signature
+           or else Shape.Atoms /= No_Atom_Set
+         then
             return True;
          elsif Shape.Kind = Array_Field_Shape then
             --  D121: an aggregate element is one run of exactly one shape.
@@ -2209,6 +2251,14 @@ package body Landin.IR.Verifier is
                                              Actual : constant Signature_Id :=
                                                Signature_Of
                                                  (Of_Unit, Id, V);
+                                             Expected_Atoms : constant
+                                               Atom_Set_Id :=
+                                               Scalar_Field_Atoms
+                                                 (Id,
+                                                  (Kind => Frame_Slot,
+                                                   Slot => Cell),
+                                                  Field_Of (Of_Unit, Id, V),
+                                                  Path_Of (Of_Unit, Id, V));
                                           begin
                                              if (Expected = No_Signature)
                                                   /= (Actual = No_Signature)
@@ -2224,6 +2274,16 @@ package body Landin.IR.Verifier is
                                              then
                                                 return
                                                   (Kind => Signature_Mismatch,
+                                                   Item => Id, Block => Block,
+                                                   Value => V);
+                                             elsif not Atom_Metadata_Agrees
+                                               (Expected_Atoms,
+                                                Atom_Set_Of
+                                                  (Of_Unit, Id, V))
+                                             then
+                                                return
+                                                  (Kind =>
+                                                     Atom_Metadata_Disagrees,
                                                    Item => Id, Block => Block,
                                                    Value => V);
                                              end if;
@@ -2302,6 +2362,14 @@ package body Landin.IR.Verifier is
                                              Actual : constant Signature_Id :=
                                                Signature_Of
                                                  (Of_Unit, Id, V);
+                                             Expected_Atoms : constant
+                                               Atom_Set_Id :=
+                                               Scalar_Field_Atoms
+                                                 (Id,
+                                                  (Kind => Module_Datum,
+                                                   Datum => D),
+                                                  Field_Of (Of_Unit, Id, V),
+                                                  Path_Of (Of_Unit, Id, V));
                                           begin
                                              if (Expected = No_Signature)
                                                   /= (Actual = No_Signature)
@@ -2317,6 +2385,16 @@ package body Landin.IR.Verifier is
                                              then
                                                 return
                                                   (Kind => Signature_Mismatch,
+                                                   Item => Id, Block => Block,
+                                                   Value => V);
+                                             elsif not Atom_Metadata_Agrees
+                                               (Expected_Atoms,
+                                                Atom_Set_Of
+                                                  (Of_Unit, Id, V))
+                                             then
+                                                return
+                                                  (Kind =>
+                                                     Atom_Metadata_Disagrees,
                                                    Item => Id, Block => Block,
                                                    Value => V);
                                              end if;
@@ -3279,6 +3357,15 @@ package body Landin.IR.Verifier is
                                       Signature_Of
                                         (Of_Unit, Id,
                                          Nth_Operand (Of_Unit, Id, V, 1));
+                                    Expected_Atoms : constant Atom_Set_Id :=
+                                      Scalar_Field_Atoms
+                                        (Id, Place,
+                                         Field_Of (Of_Unit, Id, V),
+                                         Path_Of (Of_Unit, Id, V));
+                                    Actual_Atoms : constant Atom_Set_Id :=
+                                      Atom_Set_Of
+                                        (Of_Unit, Id,
+                                         Nth_Operand (Of_Unit, Id, V, 1));
                                  begin
                                     if (Expected = No_Signature)
                                          /= (Actual = No_Signature)
@@ -3292,6 +3379,13 @@ package body Landin.IR.Verifier is
                                        return
                                          (Kind =>
                                             Function_Value_Signature_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    elsif not Atom_Metadata_Is_Subset
+                                      (Actual_Atoms, Expected_Atoms)
+                                    then
+                                       return
+                                         (Kind => Atom_Metadata_Disagrees,
                                           Item => Id, Block => Block,
                                           Value => V);
                                     end if;
