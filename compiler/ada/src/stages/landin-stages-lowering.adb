@@ -204,10 +204,12 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
 
       function Lower_Call
-        (Of_Tree      : Syn.Tree;
-         Node         : Syn.Node_Id;
-         Scope        : Res.Scope_Id;
-         Destination  : IR.Slot_Id := IR.No_Slot) return IR.Value_Id;
+        (Of_Tree          : Syn.Tree;
+         Node             : Syn.Node_Id;
+         Scope            : Res.Scope_Id;
+         Destination      : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Child : Natural := 0) return IR.Value_Id;
 
       function Lower_Short_Circuit
         (Of_Tree : Syn.Tree;
@@ -644,10 +646,12 @@ package body Landin.Stages.Lowering is
       ------------------------------------------------------------
 
       function Lower_Call
-        (Of_Tree      : Syn.Tree;
-         Node         : Syn.Node_Id;
-         Scope        : Res.Scope_Id;
-         Destination  : IR.Slot_Id := IR.No_Slot) return IR.Value_Id
+        (Of_Tree          : Syn.Tree;
+         Node             : Syn.Node_Id;
+         Scope            : Res.Scope_Id;
+         Destination      : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Child : Natural := 0) return IR.Value_Id
       is
          Site : constant Landin.Provenance.Origin :=
            Site_Of (Of_Tree, Node);
@@ -1400,7 +1404,9 @@ package body Landin.Stages.Lowering is
             pragma Assert (Destination /= IR.No_Slot);
             Hidden := IR.Emit_Storage_Address
               (Unit.all, Filling,
-               (Kind => IR.Frame_Slot, Slot => Destination), Site);
+               (Kind => IR.Frame_Slot, Slot => Destination), Site,
+               Field => Destination_Field,
+               Nested_Field => Destination_Child);
          end if;
 
          Made :=
@@ -3455,13 +3461,13 @@ package body Landin.Stages.Lowering is
                         begin
                            if Syn.Kind (Of_Tree, From) = Syn.Call then
                               pragma Assert
-                                (Parent_Field = 0
-                                 and then Destination.Kind in IR.Frame_Slot);
+                                (Destination.Kind in IR.Frame_Slot);
                               declare
                                  Ignored : constant IR.Value_Id :=
                                    Lower_Call
                                      (Of_Tree, From, Scope,
-                                      Destination => Destination.Slot);
+                                      Destination => Destination.Slot,
+                                      Destination_Field => Parent_Field);
                               begin
                                  pragma Unreferenced (Ignored);
                               end;
@@ -3563,13 +3569,14 @@ package body Landin.Stages.Lowering is
                         begin
                            if Syn.Kind (Of_Tree, Value) = Syn.Call then
                               pragma Assert
-                                (Field = 0 and then Child = 0
-                                 and then Destination.Kind in IR.Frame_Slot);
+                                (Destination.Kind in IR.Frame_Slot);
                               declare
                                  Ignored : constant IR.Value_Id :=
                                    Lower_Call
                                      (Of_Tree, Value, Scope,
-                                      Destination => Destination.Slot);
+                                      Destination => Destination.Slot,
+                                      Destination_Field => Field,
+                                      Destination_Child => Child);
                               begin
                                  pragma Unreferenced (Ignored);
                               end;

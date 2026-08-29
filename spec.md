@@ -6045,3 +6045,30 @@ observable named-return place and all source evaluation order.
 the generated token and IR records; and the forwarding paths in
 `runtime/struct-returns-cross-calls` and `runtime/array-returns-cross-calls` on
 Linux x86-64.
+
+### D109 — Aggregate calls may return directly into field storage
+
+**The tour said** that field and nested-element assignments are places [1900].
+D88--D90 preserve their declaration-order identities, while D108 initially
+required an aggregate call's destination to be a whole slot.
+
+**Chosen:** a matching struct result may fill a depth-one ordinary-child field,
+and a matching fixed-array result may fill a direct array field or one array
+leaf inside that child. The hidden `Storage_Address` carries destination parent
+and child identities exactly as aggregate arguments do. The backend derives
+the selected target address before the call; the callee remains unaware that
+its result storage is a subobject.
+
+Definite assignment records the complete child or array fact after the call.
+No target offset, byte extent or source-level pointer enters checked IR.
+
+**Why destination qualification belongs on the address:** copying first into a
+temporary and then into the field would be correct but would add an avoidable
+whole aggregate copy. Passing a qualified opaque destination preserves the
+same by-value result semantics because the callee writes only its independent
+named result until the leave copy.
+
+**Pinned by** the checker, flow, lowering, verifier and backend public seams;
+the generated token and IR records; `runtime/struct-returns-cross-calls`,
+`runtime/array-returns-cross-calls` and `runtime/nested-storage-arguments` on
+Linux x86-64.
