@@ -1,0 +1,20 @@
+inner: type = struct
+    value: i32
+    row: [2]i32
+end inner
+
+outer: type = struct
+    prefix: u8
+    nested: inner
+    suffix: u16
+end outer
+
+inspect: (child: inner, row: [2]i32) -> (result: i32) =
+    result = child.value + child.row[0] + child.row[1] + row[0] + row[1]
+end inspect
+
+public main: () -> (code: i32) =
+    mut state: outer = zeroed
+    state.nested = (value: 5, row: [6, 7])
+    code = inspect(state.nested, state.nested.row)
+end main

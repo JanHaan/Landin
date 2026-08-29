@@ -131,7 +131,8 @@ scalar convention passes six arguments in registers and every later one in an
 aligned run of eight-byte stack slots, so `L0503`'s former register-only limit
 is retired. A flat ordinary-struct or fixed-array argument occupies one such
 position as an internal address and is copied into independent shaped callee
-storage before the body runs. Further aggregate arguments and aggregate
+storage before the body runs; a direct field or depth-one child path preserves
+its neutral field identities on that address. Further aggregate arguments and aggregate
 returns remain absent; R4.40 later completes C ABI classification.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and

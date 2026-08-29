@@ -209,7 +209,19 @@ package body Landin.IR.Dump is
 
             when Storage_Address =>
                return Lead & " storage "
-                 & Endpoint (Destination_Of (Of_Unit, Item, Value));
+                 & Endpoint (Destination_Of (Of_Unit, Item, Value))
+                 & (if Element_Field_Of (Of_Unit, Item, Value) = 0
+                    then ""
+                    else " field "
+                      & Trimmed
+                          (Natural'Image
+                             (Element_Field_Of (Of_Unit, Item, Value))))
+                 & (if Nested_Field_Of (Of_Unit, Item, Value) = 0
+                    then ""
+                    else " nested "
+                      & Trimmed
+                          (Natural'Image
+                             (Nested_Field_Of (Of_Unit, Item, Value))));
 
             when Load_Datum | Store_Datum =>
                declare

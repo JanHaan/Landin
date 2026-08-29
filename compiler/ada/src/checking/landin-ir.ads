@@ -1429,7 +1429,7 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Field | Store_Field
+                          in Storage_Address | Load_Field | Store_Field
                              | Load_Element | Store_Element
                              | Copy_Array | Clear_Array | Fill_Array;
 
@@ -1446,7 +1446,7 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Load_Element | Store_Element
+                          in Storage_Address | Load_Element | Store_Element
                              | Copy_Array | Copy_Variant
                              | Clear_Array | Fill_Array
                              | Load_Variant_Tag
@@ -1968,10 +1968,12 @@ package Landin.IR is
    --  complete storage; only the backend derives an address.  The result is
    --  represented as usize internally but cannot be formed by Landin source.
    function Emit_Storage_Address
-     (Into : in out Unit;
-      Item  : Item_Id;
-      Place : Storage;
-      Site  : Landin.Provenance.Origin) return Value_Id
+     (Into        : in out Unit;
+      Item        : Item_Id;
+      Place       : Storage;
+      Site        : Landin.Provenance.Origin;
+      Field       : Natural := 0;
+      Nested_Field : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then (case Place.Kind is
                                when Module_Datum => Holds (Into, Place.Datum),

@@ -1649,11 +1649,23 @@ package body Landin.Stages.Checking is
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
                if Wants in Ty.Aggregate | Ty.Fixed_Array
-                 and then Syn.Kind (Of_Tree, Argument) = Syn.Name_Reference
+                 and then Syn.Kind (Of_Tree, Argument)
+                            in Syn.Name_Reference | Syn.Member_Selection
+                 and then
+                   (Syn.Kind (Of_Tree, Argument) = Syn.Name_Reference
+                    or else Wants = Ty.Fixed_Array
+                    or else Syn.Kind
+                      (Of_Tree, Syn.Target_Of (Of_Tree, Argument))
+                        = Syn.Name_Reference)
                then
                   declare
                      Got : constant Ty.Type_Kind :=
-                       Selected_From (Of_Tree, Argument);
+                       (if Wants = Ty.Fixed_Array
+                           and then Syn.Kind (Of_Tree, Argument)
+                                      = Syn.Member_Selection
+                        then (if Admit_Array_Field (Of_Tree, Argument)
+                              then Ty.Fixed_Array else Ty.Ill_Typed)
+                        else Selected_From (Of_Tree, Argument));
                      Expected : constant Res.Declaration_Id :=
                        Landin.Checking.Body_Of
                          (Types.all, Their_Tree.all,

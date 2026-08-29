@@ -227,6 +227,7 @@ package body Landin.Tests.Verifier_Suite is
       Datum_Load_Names_A_Routine,
       Datum_Load_Names_An_Aggregate,
       Storage_Address_Names_A_Scalar,
+      Storage_Address_Nested_Field_Beyond_The_Child,
       Field_Beyond_The_Aggregate,
       Nested_Field_Beyond_The_Child,
       Nested_Element_Beyond_The_Child,
@@ -323,6 +324,7 @@ package body Landin.Tests.Verifier_Suite is
       elsif Harm in Nested_Field_Beyond_The_Child
                     | Nested_Element_Beyond_The_Child
                     | Nested_Array_Copy_Source_Beyond_The_Child
+                    | Storage_Address_Nested_Field_Beyond_The_Child
       then
          IR.Add_Field
            (Unit, G,
@@ -589,6 +591,15 @@ package body Landin.Tests.Verifier_Suite is
          when Storage_Address_Names_A_Scalar =>
             N := IR.Emit_Storage_Address
               (Unit, A, (Kind => IR.Module_Datum, Datum => D), Site);
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         when Storage_Address_Nested_Field_Beyond_The_Child =>
+            N := IR.Emit_Storage_Address
+              (Unit, A, (Kind => IR.Module_Datum, Datum => G), Site,
+               Field => 1, Nested_Field => 2);
             pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -1105,6 +1116,8 @@ package body Landin.Tests.Verifier_Suite is
           V.Aggregate_Datum_Is_Not_A_Value),
          (Storage_Address_Names_A_Scalar,
           V.Storage_Address_Is_Not_An_Aggregate),
+         (Storage_Address_Nested_Field_Beyond_The_Child,
+          V.Element_Field_Is_Not_An_Array),
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
          (Nested_Field_Beyond_The_Child, V.Field_Is_Not_A_Scalar),
          (Nested_Element_Beyond_The_Child,

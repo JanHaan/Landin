@@ -1876,8 +1876,13 @@ all aggregate returns remain deferred.
 
 The ninth increment applies that one-position transport and defensive callee
 copy to direct fixed-array storage names. Length and scalar element identity
-stay on the parameter slot; literals, nested fields and other array expressions
-remain contextual rather than becoming general argument values.
+stay on the parameter slot; literals and other array expressions remain
+contextual rather than becoming general argument values.
+
+The tenth increment carries the existing contextual source paths across that
+boundary: a depth-one ordinary child, direct array field or nested child array
+leaf may supply a matching aggregate parameter. Parent and child identities
+stay neutral until the backend derives the selected target address.
 
 Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
