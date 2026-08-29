@@ -3697,6 +3697,7 @@ package body Landin.Tests.Lowering_Suite is
                is
                   when IR.Frame_Slot => Slot_Clear := True;
                   when IR.Module_Datum => Datum_Clear := True;
+                  when IR.Runtime_Address => null;
                end case;
             end if;
          end loop;
@@ -4484,6 +4485,7 @@ package body Landin.Tests.Lowering_Suite is
                   case Destination.Kind is
                      when IR.Frame_Slot => Slot_Clear := True;
                      when IR.Module_Datum => Datum_Clear := True;
+                     when IR.Runtime_Address => null;
                   end case;
                end;
             end if;

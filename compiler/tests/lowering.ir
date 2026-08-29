@@ -591,6 +591,67 @@ item 1 ROUTINE f result bool signature 1 params 2 slots 4 blocks 1 values 8
     6 STORE slot 3 <- 5
     7 LOAD bool slot 3
     8 LEAVE <- 7
+file positive/computed-whole-array-elements/program.ldn
+unit signatures 2 items 4
+signature 1 (usize) -> none
+signature 2 (usize) -> i32
+item 1 DATUM cells result array params 0 slots 0 blocks 1 values 1
+  elements 3 of struct (i32,i32)
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM origin result struct params 0 slots 0 blocks 1 values 1
+  field 1 i32
+  field 2 i32
+  image 1 2
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 ROUTINE whole result none signature 1 params 1 slots 7 blocks 1 values 21
+  slot 1 at usize param 1
+  slot 2 - usize
+  slot 3 - usize
+  slot 4 - usize
+  slot 5 - usize
+  slot 6 - aggregate fields i32 i32
+  slot 7 - usize
+  block 1 scope 3 BLOCK length 21
+    1 LOAD usize slot 1
+    2 STORAGE_ADDRESS usize storage datum 1 cells <- 1
+    3 STORE slot 2 <- 2
+    4 STORAGE_ADDRESS usize storage datum 2 origin
+    5 STORE slot 3 <- 4
+    6 COPY_ARRAY from address slot 3 to address slot 2
+    7 LOAD usize slot 1
+    8 STORE slot 4 <- 7
+    9 NUMBER usize 1
+    10 LOAD usize slot 4
+    11 ADD usize <- 10 9
+    12 STORAGE_ADDRESS usize storage datum 1 cells <- 11
+    13 STORE slot 5 <- 12
+    14 NUMBER i32 3
+    15 STORE_FIELD slot 6 field 1 <- 14
+    16 NUMBER i32 4
+    17 STORE_FIELD slot 6 field 2 <- 16
+    18 STORAGE_ADDRESS usize storage slot 6
+    19 STORE slot 7 <- 18
+    20 COPY_ARRAY from address slot 7 to address slot 5
+    21 LEAVE
+item 4 ROUTINE taken result i32 signature 2 params 1 slots 5 blocks 1 values 10
+  slot 1 at usize param 1
+  slot 2 r i32 return
+  slot 3 piece aggregate fields i32 i32
+  slot 4 - usize
+  slot 5 - usize
+  block 1 scope 5 BLOCK length 10
+    1 LOAD usize slot 1
+    2 STORAGE_ADDRESS usize storage datum 1 cells <- 1
+    3 STORE slot 4 <- 2
+    4 STORAGE_ADDRESS usize storage slot 3
+    5 STORE slot 5 <- 4
+    6 COPY_ARRAY from address slot 4 to address slot 5
+    7 LOAD_FIELD i32 slot 3 field 1
+    8 STORE slot 2 <- 7
+    9 LOAD i32 slot 2
+    10 LEAVE <- 9
 file positive/control-expression-values/program.ldn
 unit signatures 5 items 5
 signature 1 (bool) -> i32
@@ -5323,6 +5384,73 @@ item 6 ROUTINE read result none signature 1 params 0 slots 3 blocks 19 values 52
   block 19 scope 12 BLOCK length 2
     50 LOAD_FIELD u8 datum 5 bare field 3
     51 JUMP target 16
+file positive/variant-part-at-a-computed-index/program.ldn
+unit signatures 2 items 3
+signature 1 (usize) -> none
+signature 2 (usize) -> i32
+item 1 DATUM rows result array params 0 slots 0 blocks 1 values 1
+  elements 2 of struct (variant u8 cases2 () (i32,i32))
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 ROUTINE written result none signature 1 params 1 slots 4 blocks 1 values 13
+  slot 1 at usize param 1
+  slot 2 - usize
+  slot 3 - aggregate fields variant u8 cases2 () (i32,i32)
+  slot 4 - usize
+  block 1 scope 3 BLOCK length 13
+    1 LOAD usize slot 1
+    2 STORAGE_ADDRESS usize storage datum 1 rows <- 1
+    3 STORE slot 2 <- 2
+    4 STORAGE_ADDRESS usize storage slot 3
+    5 STORE slot 4 <- 4
+    6 COPY_ARRAY from address slot 2 to address slot 4
+    7 SELECT_VARIANT destination slot 3 field 1 case 2
+    8 NUMBER i32 1
+    9 STORE_VARIANT_FIELD destination slot 3 field 1 case 2 payload field 1 <- 8
+    10 NUMBER i32 2
+    11 STORE_VARIANT_FIELD destination slot 3 field 1 case 2 payload field 2 <- 10
+    12 COPY_ARRAY from address slot 4 to address slot 2
+    13 LEAVE
+item 3 ROUTINE matched result i32 signature 2 params 1 slots 7 blocks 5 values 27
+  slot 1 at usize param 1
+  slot 2 r i32 return
+  slot 3 - u8
+  slot 4 - usize
+  slot 5 - aggregate fields variant u8 cases2 () (i32,i32)
+  slot 6 - usize
+  slot 7 - i32
+  block 1 scope 5 BLOCK length 14
+    1 NUMBER i32 0
+    2 STORE slot 2 <- 1
+    3 LOAD usize slot 1
+    4 STORAGE_ADDRESS usize storage datum 1 rows <- 3
+    5 STORE slot 4 <- 4
+    6 STORAGE_ADDRESS usize storage slot 5
+    7 STORE slot 6 <- 6
+    8 COPY_ARRAY from address slot 4 to address slot 6
+    9 LOAD_VARIANT_TAG u8 from slot 5 field 1
+    10 STORE slot 3 <- 9
+    11 LOAD u8 slot 3
+    12 NUMBER u8 0
+    13 EQUAL_TO bool <- 11 12
+    14 BRANCH target 2 alternative 3 <- 13
+  block 2 scope 6 BLOCK length 3
+    15 NUMBER i32 1
+    16 STORE slot 2 <- 15
+    17 JUMP target 4
+  block 3 scope 5 BLOCK length 1
+    18 JUMP target 5
+  block 4 scope 5 BLOCK length 2
+    26 LOAD i32 slot 2
+    27 LEAVE <- 26
+  block 5 scope 7 BLOCK length 7
+    19 LOAD_VARIANT_FIELD i32 from slot 5 field 1 case 2 payload field 1
+    20 STORE slot 7 <- 19
+    21 LOAD_VARIANT_FIELD i32 from slot 5 field 1 case 2 payload field 2
+    22 LOAD i32 slot 7
+    23 ADD i32 <- 22 21
+    24 STORE slot 2 <- 23
+    25 JUMP target 4
 file positive/variant-part-measured/program.ldn
 unit signatures 0 items 1
 item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1

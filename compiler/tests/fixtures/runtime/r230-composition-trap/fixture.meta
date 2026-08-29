@@ -1,0 +1,6 @@
+class: runtime
+summary: a computed aggregate trap evaluates neither deferred nor undo function-field stack calls registered around it
+constructs: 0410, 0520, 0670, 0920, 0990, 1000, 1100, 1110, 1810, 1920, 1950, 1960
+program: main.ldn
+traps: yes
+targets: linux-x86-64

@@ -80,6 +80,10 @@ package body Landin.IR.Verifier is
                & " storage and not a value yet",
             when Storage_Address_Is_Not_An_Aggregate =>
                "an internal aggregate address names non-aggregate storage",
+            when Runtime_Address_Is_Not_Valid =>
+               "a runtime storage endpoint names no checked address slot",
+            when Address_Value_Disagrees =>
+               "a checked address slot is filled by another shape or value",
             when Field_Out_Of_Range =>
                "a field load names a field the aggregate does not have",
             when Field_Is_Not_A_Scalar =>
@@ -178,7 +182,7 @@ package body Landin.IR.Verifier is
             when Constant_Kind => 0,
             --  [0370] carries a type and not an operand.
             when Measure_Size | Measure_Align => 0,
-            when Load | Storage_Address => 0,
+            when Load => 0,
             when Load_Datum    => 0,
             when Load_Field    => 0,
             when Store_Field   => 1,
@@ -194,7 +198,8 @@ package body Landin.IR.Verifier is
             when Unary_Kind    => 1,
             when Binary_Kind   => 2,
             when Failure_Test  => 1,
-            when Function_Address | Call | Indirect_Call => 0,
+            when Storage_Address | Function_Address | Call
+               | Indirect_Call => 0,
             when Jump          => 0,
             when Branch        => 1,
             when Leave         => 0,
@@ -348,6 +353,37 @@ package body Landin.IR.Verifier is
                   then Slot_Array_Element_Shape (Of_Unit, Item, Place.Slot)
                   else Nth_Slot_Field_Shape
                     (Of_Unit, Item, Place.Slot, Positive (Field)));
+
+            when Runtime_Address =>
+               if not Holds (Of_Unit, Item, Place.Address)
+                 or else not Is_Address (Of_Unit, Item, Place.Address)
+               then
+                  return Runtime_Address_Is_Not_Valid;
+               end if;
+               Shape := Address_Shape (Of_Unit, Item, Place.Address);
+               if Shape.Kind = Array_Field_Shape then
+                  if Element_Total (Field) > Shape.Length then
+                     return Field_Out_Of_Range;
+                  end if;
+                  Shape := Array_Element_Shape (Of_Unit, Shape);
+               elsif Shape.Kind = Aggregate_Field_Shape then
+                  if Natural (Field) > Aggregate_Field_Count
+                    (Of_Unit, Shape)
+                  then
+                     return Field_Out_Of_Range;
+                  end if;
+                  Shape := Nth_Aggregate_Field
+                    (Of_Unit, Shape, Positive (Field));
+               else
+                  return Field_Out_Of_Range;
+               end if;
+               if Nested'Length = 0 then
+                  if Shape.Kind /= Scalar_Field_Shape then
+                     return Field_Is_Not_A_Scalar;
+                  end if;
+                  Element := Shape.Element;
+                  return Nothing_Wrong;
+               end if;
          end case;
 
          --  D118: however many steps the path has, the walk is one
@@ -392,6 +428,17 @@ package body Landin.IR.Verifier is
                     (Of_Unit, Item, Place.Slot)
                   else Nth_Slot_Field_Shape
                     (Of_Unit, Item, Place.Slot, Positive (Field)));
+            when Runtime_Address =>
+               Root :=
+                 (if Address_Shape (Of_Unit, Item, Place.Address).Kind
+                       = Array_Field_Shape
+                  then Array_Element_Shape
+                    (Of_Unit, Address_Shape
+                       (Of_Unit, Item, Place.Address))
+                  else Nth_Aggregate_Field
+                    (Of_Unit,
+                     Address_Shape (Of_Unit, Item, Place.Address),
+                     Positive (Field)));
          end case;
          return Shape_At (Of_Unit, Root, Nested).Signature;
       end Scalar_Field_Signature;
@@ -419,6 +466,17 @@ package body Landin.IR.Verifier is
                     (Of_Unit, Item, Place.Slot)
                   else Nth_Slot_Field_Shape
                     (Of_Unit, Item, Place.Slot, Positive (Field)));
+            when Runtime_Address =>
+               Root :=
+                 (if Address_Shape (Of_Unit, Item, Place.Address).Kind
+                       = Array_Field_Shape
+                  then Array_Element_Shape
+                    (Of_Unit, Address_Shape
+                       (Of_Unit, Item, Place.Address))
+                  else Nth_Aggregate_Field
+                    (Of_Unit,
+                     Address_Shape (Of_Unit, Item, Place.Address),
+                     Positive (Field)));
          end case;
          return Shape_At (Of_Unit, Root, Nested).Atoms;
       end Scalar_Field_Atoms;
@@ -578,6 +636,39 @@ package body Landin.IR.Verifier is
                      end if;
                   end;
                end if;
+
+            when Runtime_Address =>
+               if not Holds (Of_Unit, Item, Place.Address)
+                 or else not Is_Address (Of_Unit, Item, Place.Address)
+               then
+                  return Runtime_Address_Is_Not_Valid;
+               end if;
+               declare
+                  Shape : Field_Shape :=
+                    Address_Shape (Of_Unit, Item, Place.Address);
+               begin
+                  if Field > 0 then
+                     if Shape.Kind /= Aggregate_Field_Shape
+                       or else Field > Aggregate_Field_Count
+                         (Of_Unit, Shape)
+                     then
+                        return Element_Field_Out_Of_Range;
+                     end if;
+                     Shape := Nth_Aggregate_Field
+                       (Of_Unit, Shape, Positive (Field));
+                  end if;
+                  if Shape.Kind = Aggregate_Field_Shape
+                    and then Aggregate_Field
+                  then
+                     Element := Shape;
+                     Length := 1;
+                  elsif Shape.Kind = Array_Field_Shape then
+                     Element := Array_Element_Shape (Of_Unit, Shape);
+                     Length := Shape.Length;
+                  else
+                     return Element_Field_Is_Not_An_Array;
+                  end if;
+               end;
          end case;
 
          return Nothing_Wrong;
@@ -670,6 +761,30 @@ package body Landin.IR.Verifier is
                Shape := Nth_Slot_Field_Shape
                  (Of_Unit, Item, Place.Slot, Positive (Field));
                return True;
+
+            when Runtime_Address =>
+               if not Holds (Of_Unit, Item, Place.Address)
+                 or else not Is_Address (Of_Unit, Item, Place.Address)
+               then
+                  return False;
+               end if;
+               Shape := Address_Shape (Of_Unit, Item, Place.Address);
+               if Field = 0 then
+                  return True;
+               elsif Shape.Kind = Array_Field_Shape then
+                  if Element_Total (Field) > Shape.Length then
+                     return False;
+                  end if;
+                  Shape := Array_Element_Shape (Of_Unit, Shape);
+                  return True;
+               elsif Shape.Kind /= Aggregate_Field_Shape
+                 or else Field > Aggregate_Field_Count (Of_Unit, Shape)
+               then
+                  return False;
+               end if;
+               Shape := Nth_Aggregate_Field
+                 (Of_Unit, Shape, Positive (Field));
+               return True;
          end case;
       end Root_Shape_Of;
 
@@ -684,7 +799,12 @@ package body Landin.IR.Verifier is
                          = Landin.Types.Aggregate,
             when Frame_Slot =>
               Holds (Of_Unit, Item, Place.Slot)
-              and then Is_Aggregate (Of_Unit, Item, Place.Slot));
+              and then Is_Aggregate (Of_Unit, Item, Place.Slot),
+            when Runtime_Address =>
+              Holds (Of_Unit, Item, Place.Address)
+              and then Is_Address (Of_Unit, Item, Place.Address)
+              and then Address_Shape (Of_Unit, Item, Place.Address).Kind
+                = Aggregate_Field_Shape);
 
       function Is_Whole_Array
         (Item : Item_Id; Place : Storage) return Boolean
@@ -697,7 +817,12 @@ package body Landin.IR.Verifier is
                          = Landin.Types.Fixed_Array,
             when Frame_Slot =>
               Holds (Of_Unit, Item, Place.Slot)
-              and then Is_Array (Of_Unit, Item, Place.Slot));
+              and then Is_Array (Of_Unit, Item, Place.Slot),
+            when Runtime_Address =>
+              Holds (Of_Unit, Item, Place.Address)
+              and then Is_Address (Of_Unit, Item, Place.Address)
+              and then Address_Shape (Of_Unit, Item, Place.Address).Kind
+                = Array_Field_Shape);
 
       --  D91 recognised one whole child at the base field; D119 lets the
       --  path go on before the part it reaches has to be one.  The base
@@ -730,6 +855,103 @@ package body Landin.IR.Verifier is
                       = Aggregate_Field_Shape;
       end Is_Whole_Aggregate_Field;
 
+      function Stored_Shape_Agrees
+        (Item     : Item_Id;
+         Place    : Storage;
+         Field    : Natural;
+         Nested   : Path_Step_Array;
+         Expected : Field_Shape) return Boolean;
+
+      function Stored_Shape_Agrees
+        (Item     : Item_Id;
+         Place    : Storage;
+         Field    : Natural;
+         Nested   : Path_Step_Array;
+         Expected : Field_Shape) return Boolean
+      is
+         Reached : Field_Shape;
+      begin
+         if Field > 0 or else Nested'Length > 0 then
+            if not Root_Shape_Of (Item, Place, Field, Reached)
+              or else not Path_Is_Valid (Of_Unit, Reached, Nested)
+            then
+               return False;
+            end if;
+            return Same_Shape
+              (Of_Unit, Shape_At (Of_Unit, Reached, Nested), Expected);
+         end if;
+
+         case Place.Kind is
+            when Runtime_Address =>
+               return Holds (Of_Unit, Item, Place.Address)
+                 and then Is_Address (Of_Unit, Item, Place.Address)
+                 and then Same_Shape
+                   (Of_Unit,
+                    Address_Shape (Of_Unit, Item, Place.Address), Expected);
+
+            when Module_Datum =>
+               if not Holds (Of_Unit, Place.Datum)
+                 or else Kind_Of (Of_Unit, Place.Datum) /= Datum
+               then
+                  return False;
+               elsif Result_Of (Of_Unit, Place.Datum)
+                       = Landin.Types.Fixed_Array
+               then
+                  return Same_Shape
+                    (Of_Unit, Whole_Array_Shape (Of_Unit, Place.Datum),
+                     Expected);
+               elsif Result_Of (Of_Unit, Place.Datum)
+                       /= Landin.Types.Aggregate
+                 or else Expected.Kind /= Aggregate_Field_Shape
+                 or else Field_Count (Of_Unit, Place.Datum)
+                           /= Aggregate_Field_Count (Of_Unit, Expected)
+               then
+                  return False;
+               end if;
+               for Position in 1 .. Field_Count (Of_Unit, Place.Datum) loop
+                  if not Same_Shape
+                    (Of_Unit,
+                     Nth_Field_Shape (Of_Unit, Place.Datum, Position),
+                     Nth_Aggregate_Field
+                       (Of_Unit, Expected, Position))
+                  then
+                     return False;
+                  end if;
+               end loop;
+               return True;
+
+            when Frame_Slot =>
+               if not Holds (Of_Unit, Item, Place.Slot) then
+                  return False;
+               elsif Is_Array (Of_Unit, Item, Place.Slot) then
+                  return Same_Shape
+                    (Of_Unit,
+                     Whole_Slot_Array_Shape
+                       (Of_Unit, Item, Place.Slot), Expected);
+               elsif not Is_Aggregate (Of_Unit, Item, Place.Slot)
+                 or else Expected.Kind /= Aggregate_Field_Shape
+                 or else Slot_Field_Count (Of_Unit, Item, Place.Slot)
+                           /= Aggregate_Field_Count (Of_Unit, Expected)
+               then
+                  return False;
+               end if;
+               for Position in
+                 1 .. Slot_Field_Count (Of_Unit, Item, Place.Slot)
+               loop
+                  if not Same_Shape
+                    (Of_Unit,
+                     Nth_Slot_Field_Shape
+                       (Of_Unit, Item, Place.Slot, Position),
+                     Nth_Aggregate_Field
+                       (Of_Unit, Expected, Position))
+                  then
+                     return False;
+                  end if;
+               end loop;
+               return True;
+         end case;
+      end Stored_Shape_Agrees;
+
       --  D76's two operations share one release-safe shape gate.  Storage,
       --  top-level field, variant kind, case run and optional payload field
       --  are proved in that order before any accessor reads the next layer.
@@ -761,7 +983,13 @@ package body Landin.IR.Verifier is
                   when Frame_Slot =>
                     (if Holds (Of_Unit, Item, Place.Slot)
                      then Variant_Field_Out_Of_Range
-                     else Slot_Out_Of_Range));
+                     else Slot_Out_Of_Range),
+                  when Runtime_Address =>
+                    (if Holds (Of_Unit, Item, Place.Address)
+                       and then Is_Address
+                         (Of_Unit, Item, Place.Address)
+                     then Variant_Field_Out_Of_Range
+                     else Runtime_Address_Is_Not_Valid));
          end if;
 
          --  D126: the variant part may sit below that base field, and the
@@ -1506,6 +1734,20 @@ package body Landin.IR.Verifier is
             end if;
 
             for Slot in 1 .. Slot_Count (Of_Unit, Id) loop
+               if Is_Address (Of_Unit, Id, Slot_Id (Slot))
+                 and then
+                   (Is_Aggregate (Of_Unit, Id, Slot_Id (Slot))
+                    or else Is_Array (Of_Unit, Id, Slot_Id (Slot))
+                    or else Type_Of (Of_Unit, Id, Slot_Id (Slot))
+                              /= Landin.Types.Usize
+                    or else Field_Shape_Is_Malformed
+                      (Address_Shape (Of_Unit, Id, Slot_Id (Slot)),
+                       Aggregate_Allowed => True))
+               then
+                  return (Kind => Runtime_Address_Is_Not_Valid,
+                          Item => Id, others => <>);
+               end if;
+
                if Is_Aggregate (Of_Unit, Id, Slot_Id (Slot)) then
                   for Field in
                     1 .. Slot_Field_Count (Of_Unit, Id, Slot_Id (Slot))
@@ -2564,6 +2806,12 @@ package body Landin.IR.Verifier is
                                  if Is_Datum then
                                     Bad :=
                                       Storage_Address_Is_Not_An_Aggregate;
+                                 elsif Storage_Address_Has_Index
+                                   (Of_Unit, Id, V)
+                                 then
+                                    Bad := Shape_Of
+                                      (Id, Place, Field, Element, Length,
+                                       Nested => Nested);
                                  elsif Field = 0 then
                                     if not Is_Whole_Aggregate (Id, Place)
                                       and then not Is_Whole_Array (Id, Place)
@@ -2571,9 +2819,8 @@ package body Landin.IR.Verifier is
                                        Bad :=
                                          Storage_Address_Is_Not_An_Aggregate;
                                     end if;
-                                 elsif Nested'Length = 0
-                                   and then Is_Whole_Aggregate_Field
-                                     (Id, Place, Field)
+                                 elsif Is_Whole_Aggregate_Field
+                                   (Id, Place, Field, Nested)
                                  then
                                     null;
                                  else
@@ -3342,6 +3589,10 @@ package body Landin.IR.Verifier is
                                  when Indirect_Call =>
                                     Signature_Carrier_Count
                                       (Call_Signature (Of_Unit, Id, V)) + 1,
+                                 when Storage_Address =>
+                                    (if Storage_Address_Has_Index
+                                       (Of_Unit, Id, V)
+                                     then 1 else 0),
                                  when Leave =>
                                     (if Result_Of (Of_Unit, Id)
                                         in Landin.Types.Scalar_Name
@@ -3499,6 +3750,16 @@ package body Landin.IR.Verifier is
                                  return (Kind => Result_Disagrees,
                                          Item => Id, Block => Block,
                                          Value => V);
+                              elsif Storage_Address_Has_Index
+                                (Of_Unit, Id, V)
+                                and then Result_Of
+                                  (Of_Unit, Id,
+                                   Nth_Operand (Of_Unit, Id, V, 1))
+                                    /= Landin.Types.Usize
+                              then
+                                 return (Kind => Element_Index_Is_Not_Usize,
+                                         Item => Id, Block => Block,
+                                         Value => V);
                               end if;
 
                            when Measure_Size | Measure_Align =>
@@ -3538,6 +3799,63 @@ package body Landin.IR.Verifier is
                                  S : constant Slot_Id :=
                                    Slot_Of (Of_Unit, Id, V);
                               begin
+                                 if Is_Address (Of_Unit, Id, S) then
+                                    declare
+                                       Source : constant Value_Id :=
+                                         Nth_Operand (Of_Unit, Id, V, 1);
+                                       Element : Field_Shape;
+                                       Length : Element_Total;
+                                       Bad : Fault_Kind;
+                                    begin
+                                       if Op_Of (Of_Unit, Id, Source)
+                                            /= Storage_Address
+                                       then
+                                          return
+                                            (Kind => Address_Value_Disagrees,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                       if Storage_Address_Has_Index
+                                         (Of_Unit, Id, Source)
+                                       then
+                                          Bad := Shape_Of
+                                            (Id,
+                                             Destination_Of
+                                               (Of_Unit, Id, Source),
+                                             Element_Field_Of
+                                               (Of_Unit, Id, Source),
+                                             Element, Length,
+                                             Nested => Path_Of
+                                               (Of_Unit, Id, Source));
+                                          if Bad /= Nothing_Wrong
+                                            or else not Same_Shape
+                                              (Of_Unit, Element,
+                                               Address_Shape
+                                                 (Of_Unit, Id, S))
+                                          then
+                                             return
+                                               (Kind =>
+                                                  Address_Value_Disagrees,
+                                                Item => Id, Block => Block,
+                                                Value => V);
+                                          end if;
+                                       elsif not Stored_Shape_Agrees
+                                         (Id,
+                                          Destination_Of
+                                            (Of_Unit, Id, Source),
+                                          Element_Field_Of
+                                            (Of_Unit, Id, Source),
+                                          Path_Of (Of_Unit, Id, Source),
+                                          Address_Shape (Of_Unit, Id, S))
+                                       then
+                                          return
+                                            (Kind => Address_Value_Disagrees,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    end;
+                                 end if;
+
                                  if Type_Of (Of_Unit, Id, S)
                                     /= Result_Of
                                          (Of_Unit, Id,

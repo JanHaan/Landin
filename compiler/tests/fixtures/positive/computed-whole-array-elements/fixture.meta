@@ -1,0 +1,5 @@
+class: positive
+summary: a whole aggregate array element at a computed index is a contextual value and place
+constructs: 0520, 0670, 0750, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64
