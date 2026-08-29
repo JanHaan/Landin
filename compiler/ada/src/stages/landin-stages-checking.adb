@@ -10430,11 +10430,14 @@ package body Landin.Stages.Checking is
                      Signature : constant Landin.Checking.Signature_Id :=
                        Signature_For_Call (Of_Tree, Node);
                   begin
-                     if Signature /= Landin.Checking.No_Signature then
+                     if Signature /= Landin.Checking.No_Signature
+                       and then Landin.Checking.Signature_Result_Count
+                         (Types.all, Signature) = 1
+                     then
                         Include_Set
                           (Into, Caller,
-                           Landin.Checking.Signature_Result
-                             (Types.all, Signature).Atoms);
+                           Landin.Checking.Nth_Signature_Result
+                             (Types.all, Signature, 1).Atoms);
                      end if;
                   end;
 

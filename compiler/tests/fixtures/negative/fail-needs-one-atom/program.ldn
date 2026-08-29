@@ -1,0 +1,10 @@
+bad: atom
+
+pair: () -> (first: i32, second: i32) =
+    first = 1
+    second = 2
+end pair
+
+f: () -> none ! ... =
+    fail pair()
+end f
