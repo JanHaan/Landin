@@ -73,10 +73,6 @@ package body Landin.Stages.Checking is
         (Positive range 1 .. Positive'Max
            (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
              [others => False];
-      Generic_Struct_Expansion : array
-        (Positive range 1 .. Positive'Max
-           (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
-             [others => False];
       Template_Checked : array
         (Positive range 1 .. Positive'Max
            (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
@@ -90,6 +86,11 @@ package body Landin.Stages.Checking is
         Landin.Provenance.No_Origin;
       Active_Struct_Field : Landin.Provenance.Origin :=
         Landin.Provenance.No_Origin;
+
+      --  D137 separates an identity mention from a by-value edge.  Function
+      --  signatures and type-actual keys need only the former; a field,
+      --  payload or array element needs the latter even at length zero.
+      type Type_Requirement is (Identity_Only, Value_Layout);
 
       type Type_Descriptor is record
          Kind    : Ty.Type_Kind := Ty.Ill_Typed;
@@ -430,7 +431,9 @@ package body Landin.Stages.Checking is
          Written    : Syn.Node_Id;
          Actuals    : Formal_Actual_Array;
          Application : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin) return Type_Descriptor;
+           Landin.Provenance.No_Origin;
+         Requirement : Type_Requirement := Value_Layout)
+         return Type_Descriptor;
 
       function Actual_For
         (Descriptor : Type_Descriptor) return Landin.Checking.Actual_Key;
@@ -895,7 +898,9 @@ package body Landin.Stages.Checking is
          Written    : Syn.Node_Id;
          Actuals    : Formal_Actual_Array;
          Application : Landin.Provenance.Origin :=
-           Landin.Provenance.No_Origin) return Type_Descriptor
+           Landin.Provenance.No_Origin;
+         Requirement : Type_Requirement := Value_Layout)
+         return Type_Descriptor
       is
          function Invalid return Type_Descriptor
            is ((Kind => Ty.Ill_Typed, others => <>));
@@ -940,7 +945,7 @@ package body Landin.Stages.Checking is
             declare
                Element : constant Type_Descriptor := Normalized_Type
                  (Of_Tree, Syn.Element_Of (Of_Tree, Written), Actuals,
-                  Application);
+                  Application, Requirement);
                Folded_Value : Ty.Folded;
                Value : Ty.Magnitude := 0;
                Is_Fixed : Boolean;
@@ -989,30 +994,33 @@ package body Landin.Stages.Checking is
                end if;
 
                Value := Ty.Magnitude (Folded_Value);
-               declare
-                  Element_Bytes : constant Ty.Magnitude :=
-                    (if Element.Kind = Ty.Aggregate
-                     then Ty.Magnitude
-                       (Landin.Checking.Layout_Size
-                          (Types.all, Element.Nominal))
-                     else Ty.Magnitude
-                       (Landin.Targets.Bytes
-                          (Ty.Storage_Size
-                             (Ty.Scalar_Name (Element.Kind), Facts))));
-                  Maximum_Bytes : constant Ty.Magnitude := Ty.Magnitude
-                    (Landin.Targets.Maximum_Object_Size (Facts));
-               begin
-                  if Element_Bytes /= 0
-                    and then Value > Maximum_Bytes / Element_Bytes
-                  then
-                     Report_Fixed_Bound_Range
-                       (Of_Tree, Syn.Bound_Of (Of_Tree, Written), Application,
-                        "this array is larger than the target can address",
-                        "D18: an array's byte extent must fit the target's"
-                        & " usize");
-                     return Invalid;
-                  end if;
-               end;
+               if Requirement = Value_Layout then
+                  declare
+                     Element_Bytes : constant Ty.Magnitude :=
+                       (if Element.Kind = Ty.Aggregate
+                        then Ty.Magnitude
+                          (Landin.Checking.Layout_Size
+                             (Types.all, Element.Nominal))
+                        else Ty.Magnitude
+                          (Landin.Targets.Bytes
+                             (Ty.Storage_Size
+                                (Ty.Scalar_Name (Element.Kind), Facts))));
+                     Maximum_Bytes : constant Ty.Magnitude := Ty.Magnitude
+                       (Landin.Targets.Maximum_Object_Size (Facts));
+                  begin
+                     if Element_Bytes /= 0
+                       and then Value > Maximum_Bytes / Element_Bytes
+                     then
+                        Report_Fixed_Bound_Range
+                          (Of_Tree, Syn.Bound_Of (Of_Tree, Written),
+                           Application,
+                           "this array is larger than the target can address",
+                           "D18: an array's byte extent must fit the target's"
+                           & " usize");
+                        return Invalid;
+                     end if;
+                  end;
+               end if;
 
                return (Kind    => Ty.Fixed_Array,
                        Length  => Landin.Checking.Element_Count (Value),
@@ -1059,7 +1067,7 @@ package body Landin.Stages.Checking is
                is
                   Descriptor : constant Type_Descriptor := Normalized_Type
                     (Of_Tree, Syn.Declared_Type (Of_Tree, Node), Actuals,
-                     Application);
+                     Application, Identity_Only);
                begin
                   if Descriptor.Kind = Ty.Undecided then
                      Concrete := False;
@@ -1096,7 +1104,7 @@ package body Landin.Stages.Checking is
                   declare
                      Error_Type : constant Type_Descriptor := Normalized_Type
                        (Of_Tree, Syn.Error_Set_Of (Of_Tree, Written), Actuals,
-                        Application);
+                        Application, Identity_Only);
                   begin
                      if Error_Type.Kind = Ty.Atom_Value then
                         Errors := Error_Type.Atoms;
@@ -1296,49 +1304,50 @@ package body Landin.Stages.Checking is
                      return Invalid;
                   end if;
 
-                  if Generic_Expansion (Positive (Means)) then
-                     declare
-                        Recursive_Value : Boolean :=
-                          Syn.Kind
-                            (Template.all,
-                             Syn.Declared_Type (Template.all, Declaration))
-                            = Syn.Struct_Body;
-                     begin
-                        for Id in Generic_Struct_Expansion'Range loop
-                           Recursive_Value := Recursive_Value
-                             or else Generic_Struct_Expansion (Id);
-                        end loop;
-
-                        if Recursive_Value then
-                           Bad.Report
-                             (Item    => Bad.Recursive_Nominal_Value,
-                              Source  => This_Application.Source,
-                              Where   => This_Application.Where,
-                              Message => "this nominal instance would contain"
-                                         & " itself by value",
-                              Note    => "D137: a finite nominal value layout"
-                                         & " cannot include itself by value",
-                              Related =>
-                                (if Landin.Provenance.Is_Known (Application)
-                                 then Syn.Origin (Of_Tree, Written)
-                                 else Syn.Origin
-                                   (Template.all,
-                                    Syn.Declared_Type
-                                      (Template.all, Declaration))),
-                              Because => "the recursive template field type",
-                              Into    => Found);
-                        else
-                           Bad.Report
-                             (Item    => Bad.Cyclic_Type_Alias,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Written),
-                              Message => "this parameterized type alias"
-                                         & " eventually applies itself",
-                              Note    => "[1350]: a type alias expansion must"
-                                         & " reach a concrete type",
-                              Into    => Found);
-                        end if;
-                     end;
+                  if Generic_Expansion (Positive (Means))
+                    and then
+                      (Syn.Kind
+                         (Template.all,
+                          Syn.Declared_Type (Template.all, Declaration))
+                           /= Syn.Struct_Body
+                       or else Requirement = Value_Layout)
+                  then
+                     if Syn.Kind
+                       (Template.all,
+                        Syn.Declared_Type (Template.all, Declaration))
+                          = Syn.Struct_Body
+                     then
+                        Bad.Report
+                          (Item    => Bad.Recursive_Nominal_Value,
+                           Source  => This_Application.Source,
+                           Where   => This_Application.Where,
+                           Message => "this nominal instance would contain"
+                                      & " itself by value",
+                           Note    => "D137: a finite nominal value layout"
+                                      & " cannot include itself by value",
+                           Related =>
+                             (if Landin.Provenance.Is_Known (Application)
+                              then Syn.Origin (Of_Tree, Written)
+                              else Syn.Origin
+                                (Template.all,
+                                 Syn.Declared_Type
+                                   (Template.all, Declaration))),
+                           Because => "the recursive template field type",
+                           Into    => Found);
+                     else
+                        --  Being reached while a struct layout is active does
+                        --  not turn an alias expansion that reaches no type
+                        --  into a nominal by-value edge.
+                        Bad.Report
+                          (Item    => Bad.Cyclic_Type_Alias,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Written),
+                           Message => "this parameterized type alias"
+                                      & " eventually applies itself",
+                           Note    => "[1350]: a type alias expansion must"
+                                      & " reach a concrete type",
+                           Into    => Found);
+                     end if;
                      for Id in Generic_Expansion'Range loop
                         if Generic_Expansion (Id) then
                            Template_Invalid (Id) := True;
@@ -1381,7 +1390,8 @@ package body Landin.Stages.Checking is
                               Require_Type_Actual
                                 (Argument,
                                  Normalized_Type
-                                   (Of_Tree, Argument, Actuals, Application),
+                                   (Of_Tree, Argument, Actuals,
+                                    This_Application, Identity_Only),
                                  Bound (Index).Value);
                               Good := Good and then Bound (Index).Value.Kind
                                 /= Ty.Ill_Typed;
@@ -1416,7 +1426,8 @@ package body Landin.Stages.Checking is
                                      (Template.all,
                                       Syn.Declared_Type
                                         (Template.all, Formal_Node),
-                                      Bound, This_Application);
+                                      Bound, This_Application,
+                                      Identity_Only);
                               begin
                                  if not Is_Fixed
                                    or else Expected.Kind = Ty.Ill_Typed
@@ -1486,6 +1497,8 @@ package body Landin.Stages.Checking is
                            declare
                               Concrete : Boolean := True;
                               Valid : Boolean;
+                              Was_Expanding : constant Boolean :=
+                                Generic_Expansion (Positive (Means));
                            begin
                               for Each of Bound loop
                                  if Res.Sort_Of (Meanings.all, Each.Formal)
@@ -1500,17 +1513,18 @@ package body Landin.Stages.Checking is
                               end loop;
 
                               Generic_Expansion (Positive (Means)) := True;
-                              Generic_Struct_Expansion
-                                (Positive (Means)) := True;
 
                               if not Concrete then
-                                 Build_Struct_Instance
-                                   (Template.all, Struct_Node,
-                                    Landin.Checking.No_Nominal_Type, Bound,
-                                    This_Application, Valid);
-                                 Generic_Struct_Expansion
-                                   (Positive (Means)) := False;
-                                 Generic_Expansion (Positive (Means)) := False;
+                                 if Requirement = Identity_Only then
+                                    Valid := True;
+                                 else
+                                    Build_Struct_Instance
+                                      (Template.all, Struct_Node,
+                                       Landin.Checking.No_Nominal_Type, Bound,
+                                       This_Application, Valid);
+                                 end if;
+                                 Generic_Expansion (Positive (Means)) :=
+                                   Was_Expanding;
                                  return
                                    (if Valid
                                     then (Kind => Ty.Undecided, others => <>)
@@ -1542,48 +1556,60 @@ package body Landin.Stages.Checking is
                                           .Intern_Nominal_Instance
                                             (Types.all, Means, Key);
                                  begin
-                                    case Landin.Checking.Instance_State_Of
-                                      (Types.all, Instance)
-                                    is
-                                       when Landin.Checking.Instance_Unseen =>
-                                          Landin.Checking.Begin_Instance
-                                            (Types.all, Instance);
-                                          Build_Struct_Instance
-                                            (Template.all, Struct_Node,
-                                             Instance, Bound, This_Application,
-                                             Valid);
-                                       when Landin.Checking.Instance_Building
-                                       =>
-                                          Bad.Report
-                                            (Item    =>
-                                               Bad.Recursive_Nominal_Value,
-                                             Source  =>
-                                               This_Application.Source,
-                                             Where   =>
-                                               This_Application.Where,
-                                             Message => "this nominal"
-                                                & " instance would contain"
-                                                & " itself by value",
-                                             Note    => "D137: a finite"
-                                                & " nominal value layout"
-                                                & " cannot include itself"
-                                                & " by value",
-                                             Related => Syn.Origin
-                                               (Template.all, Struct_Node),
-                                             Because => "the recursive"
-                                                & " template body",
-                                             Into    => Found);
-                                          Valid := False;
-                                       when Landin.Checking.Instance_Ready =>
-                                          Valid := True;
-                                       when Landin.Checking.Instance_Invalid =>
-                                          Valid := False;
-                                    end case;
+                                    if Requirement = Identity_Only then
+                                       Valid := True;
+                                    else
+                                       case Landin.Checking.Instance_State_Of
+                                         (Types.all, Instance)
+                                       is
+                                          when Landin.Checking.Instance_Unseen
+                                          =>
+                                             Landin.Checking.Begin_Instance
+                                               (Types.all, Instance);
+                                             Build_Struct_Instance
+                                               (Template.all, Struct_Node,
+                                                Instance, Bound,
+                                                This_Application, Valid);
+                                          when
+                                            Landin.Checking.Instance_Building
+                                          =>
+                                             Bad.Report
+                                               (Item    =>
+                                                  Bad.Recursive_Nominal_Value,
+                                                Source  =>
+                                                  This_Application.Source,
+                                                Where   =>
+                                                  This_Application.Where,
+                                                Message => "this nominal"
+                                                   & " instance would contain"
+                                                   & " itself by value",
+                                                Note    => "D137: a finite"
+                                                   & " nominal value layout"
+                                                   & " cannot include itself"
+                                                   & " by value",
+                                                Related => Syn.Origin
+                                                  (Template.all, Struct_Node),
+                                                Because => "the recursive"
+                                                   & " template body",
+                                                Into    => Found);
+                                             Valid := False;
+                                          when Landin.Checking.Instance_Ready
+                                          =>
+                                             Valid := True;
+                                          when
+                                            Landin.Checking.Instance_Invalid
+                                          =>
+                                             Landin.Checking.Retry_Instance
+                                               (Types.all, Instance);
+                                             Build_Struct_Instance
+                                               (Template.all, Struct_Node,
+                                                Instance, Bound,
+                                                This_Application, Valid);
+                                       end case;
+                                    end if;
 
-                                    Generic_Struct_Expansion
-                                      (Positive (Means)) := False;
                                     Generic_Expansion
-                                      (Positive (Means)) := False;
+                                      (Positive (Means)) := Was_Expanding;
                                     if not Valid then
                                        if Landin.Checking.Instance_State_Of
                                          (Types.all, Instance)
@@ -1608,7 +1634,7 @@ package body Landin.Stages.Checking is
                               Result : constant Type_Descriptor :=
                                 Normalized_Type
                                   (Template.all, Struct_Node, Bound,
-                                   This_Application);
+                                   This_Application, Requirement);
                            begin
                               Generic_Expansion (Positive (Means)) := False;
                               if Result.Kind = Ty.Ill_Typed then
@@ -2041,12 +2067,10 @@ package body Landin.Stages.Checking is
                   declare
                      Valid : Boolean;
                   begin
-                     Generic_Struct_Expansion (Positive (Id)) := True;
                      Build_Struct_Instance
                        (Of_Tree.all, Struct_Node,
                         Landin.Checking.No_Nominal_Type, Bound,
                         Landin.Provenance.No_Origin, Valid);
-                     Generic_Struct_Expansion (Positive (Id)) := False;
                      Generic_Expansion (Positive (Id)) := False;
                      if not Valid then
                         Template_Invalid (Positive (Id)) := True;

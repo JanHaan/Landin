@@ -1,0 +1,4 @@
+node: type (item: type) = struct
+    children: [0]node(item)
+end node
+bad: node(u8)

@@ -1,0 +1,7 @@
+node: type (item: type) = struct
+    kind: variant
+        leaf |
+        next: (value: node(item))
+    end kind
+end node
+bad: node(u8)

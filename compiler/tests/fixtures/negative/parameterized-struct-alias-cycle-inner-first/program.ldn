@@ -1,0 +1,5 @@
+looping: type (item: type) = looping(item)
+holder: type (item: type) = struct
+    value: looping(item)
+end holder
+good: holder(u8) = zeroed

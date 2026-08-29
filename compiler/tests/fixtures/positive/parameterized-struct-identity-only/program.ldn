@@ -1,0 +1,17 @@
+function_node: type (item: type) = struct
+    visit: (value: function_node(item)) -> none
+end function_node
+ignore: (value: function_node(u8)) -> none =
+end ignore
+function_good: function_node(u8) = (visit: ignore)
+phantom_node: type (item: type) = struct
+    marker: phantom(phantom_node(item))
+end phantom_node
+phantom: type (item: type) = struct
+    marker: u8
+end phantom
+phantom_good: phantom_node(u8) = zeroed
+huge: type (fixed count: u64) = struct
+    bytes: [count]u64
+end huge
+huge_is_only_an_actual: phantom(huge(18446744073709551615)) = zeroed

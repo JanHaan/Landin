@@ -3405,6 +3405,28 @@ item 1 DATUM sample result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/parameterized-struct-identity-only/program.ldn
+unit signatures 2 items 4
+signature 1 (struct function_node) -> none
+signature 2 (struct function_node) -> none
+item 1 ROUTINE ignore result none signature 1 params 1 slots 1 blocks 1 values 1
+  slot 1 value aggregate fields usize signature 2 param 1
+  block 1 scope 4 BLOCK length 1
+    1 LEAVE
+item 2 DATUM function_good result struct params 0 slots 0 blocks 1 values 1
+  field 1 usize signature 2
+  image 0
+  field 1 function target 1
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM phantom_good result struct params 0 slots 0 blocks 1 values 1
+  field 1 struct (u8)
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM huge_is_only_an_actual result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/parameterized-struct-instances/program.ldn
 unit signatures 2 items 11
 signature 1 (u8) -> u8

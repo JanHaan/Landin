@@ -7532,9 +7532,14 @@ instances, structural function signatures and mathematical fixed magnitudes
 are the only key forms. Equal keys reuse one identity. A different actual or
 template remains a different nominal type even when every field, byte of
 layout, and used formal is otherwise equal. Identity is target-independent.
+Normalizing a nominal identity for a function-signature part or type-actual key
+does not request that identity's layout. Only a substituted by-value field,
+payload or nominal array element does, including an element of a zero-length
+array.
 
 The checker substitutes the tuple while walking the source body and builds one
-layout for that canonical instance against the selected target. Scalar,
+layout for that canonical instance against the selected target when a value
+site requires it. Scalar,
 function, fixed-array, ordinary-child and existing variant payload shapes use
 the same field descriptors and contextual value paths as a nonparameterized
 struct. The body and formal nodes receive no instantiated answer, no synthetic
@@ -7546,7 +7551,10 @@ Every template is first walked symbolically. Free names, decidable fixed-formal
 and field-shape errors, duplicate fields and cases, and unconditional by-value
 recursion are therefore rejected even when no instance is requested. A truly
 actual-dependent failure is primary at each application and relates the field
-or expression in the template. Fixed actuals remain integer literals or
+or expression in the template. An invalid layout state stores no application
+provenance: a repeated use of the same canonical key re-evaluates the bounded
+body walk so it receives its own primary while retaining one identity and
+tuple. Fixed actuals remain integer literals or
 forwarded fixed formals. Parameterized atom unions, generic routines and
 constraints, deduction and fixed conditional declarations remain deferred.
 
@@ -7567,7 +7575,9 @@ or leak compile-time binders into runtime representation. All were declined.
 
 **Pinned by** the checking, lowering and verifier public-seam cases;
 `positive/parameterized-struct-basic`,
-`positive/parameterized-struct-instances`; the `negative/parameterized-struct-*`
-and `negative/nominal-struct-recursive-layout` fixtures; the generated IR and
+`positive/parameterized-struct-instances` and
+`positive/parameterized-struct-identity-only`; the
+`negative/parameterized-struct-*` and
+`negative/nominal-struct-recursive-layout` fixtures; the generated IR and
 diagnostic catalogue; and `runtime/parameterized-struct-values` on Linux
 x86-64.

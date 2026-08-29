@@ -11,11 +11,26 @@ row: type (item: type, fixed count: u32) = struct
     end state
 end row
 
+phantom: type (item: type) = struct
+    marker: u8
+end phantom
+
+recursive: type (item: type) = struct
+    visit: (value: recursive(item)) -> none
+    marker: phantom(recursive(item))
+end recursive
+
+ignore: (value: recursive(i32)) -> none =
+end ignore
+
 module_box: box(i32) = (value: 2)
 module_row: row(i32, 3) = (
     values: [3, 4, 5],
     child: (value: 6),
     state: empty)
+module_recursive: recursive(i32) = (
+    visit: ignore,
+    marker: (marker: 10))
 
 make: (value: i32) -> (result: box(i32)) =
     result = (value: value)
@@ -49,6 +64,10 @@ public main: () -> (code: i32) =
         empty: payload = 0
         full(item): payload = item.value
     end match
-    code = module_box.value + take(local.child)
-           + local.values[1] + payload + 16
+    if module_recursive.marker.marker == 10 then
+        code = module_box.value + take(local.child)
+               + local.values[1] + payload + 16
+    else
+        code = 1
+    end if
 end main

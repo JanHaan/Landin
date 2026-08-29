@@ -86,9 +86,8 @@ package Landin.Checking is
    --  Callers may compare identities and retrieve identities held by a table,
    --  but cannot construct one from an integer.  The enabled
    --  nonparameterized struct is the canonical empty-actual instance of its
-   --  template declaration; R2.40 extends the same table with normalized
-   --  ordered actual tuples without yet checking parameterized struct
-   --  applications.
+   --  template declaration; D137 extends the same table with normalized
+   --  ordered actual tuples for concrete parameterized struct applications.
    package Nominal_Identities is
       type Id is private;
 
@@ -653,8 +652,8 @@ package Landin.Checking is
                   and then Template_Of
                     (Into, Intern_Nominal_Instance'Result) = Template;
 
-   --  The imminent generic-struct checker can reconstruct a formal binding
-   --  tuple from only its canonical nominal identity.  Traversal is bounded
+   --  The generic-struct checker can reconstruct a formal binding tuple from
+   --  only its canonical nominal identity.  Traversal is bounded
    --  by the stored count and returns the same opaque keys accepted above.
    function Instance_Actual_Count
      (Of_Table : Table; Id : Nominal_Type_Id) return Natural
@@ -670,9 +669,10 @@ package Landin.Checking is
 
    --  Instance construction and target-dependent layout share one state
    --  slot.  Interning alone leaves a new instance Unseen.  Building is the
-   --  recursion guard for a later parameterized body; Ready and Invalid are
-   --  terminal for this compilation and target.  None of these states is
-   --  part of the interning key.
+   --  recursion guard for a parameterized body; Ready retains the completed
+   --  layout. Invalid retains no application provenance and may transition
+   --  back to Building so each use replays its dependent failure. None of
+   --  these states is part of the interning key.
    type Instance_State is
      (Instance_Unseen, Instance_Building, Instance_Ready, Instance_Invalid);
 
@@ -691,6 +691,16 @@ package Landin.Checking is
      with Pre  => Holds (Into, Id)
                   and then Instance_State_Of (Into, Id) = Instance_Building,
           Post => Instance_State_Of (Into, Id) = Instance_Invalid;
+
+   --  Invalid records a target-layout attempt, not a failure owned by the
+   --  canonical identity.  D137 requires an actual-dependent diagnostic at
+   --  every application, so the stage may replay that bounded body walk
+   --  while retaining this same interned identity and actual tuple.
+   procedure Retry_Instance
+     (Into : in out Table; Id : Nominal_Type_Id)
+     with Pre  => Holds (Into, Id)
+                  and then Instance_State_Of (Into, Id) = Instance_Invalid,
+          Post => Instance_State_Of (Into, Id) = Instance_Building;
 
    --  A call with two or more named returns has an anonymous structural
    --  aggregate shape.  This side table carries the source signature whose

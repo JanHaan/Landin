@@ -521,6 +521,13 @@ package body Landin.Checking is
         (Nominal_Identities.Position (Into, Id)).State := Instance_Invalid;
    end Invalidate_Instance;
 
+   procedure Retry_Instance
+     (Into : in out Table; Id : Nominal_Type_Id) is
+   begin
+      Into.Layouts
+        (Nominal_Identities.Position (Into, Id)).State := Instance_Building;
+   end Retry_Instance;
+
    function Nominal_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
