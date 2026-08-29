@@ -60,13 +60,13 @@ place where an unbounded one would be the wrong shape. Overflow is
 not an error: past the limit it counts and stops storing, since
 the twentieth message helps nobody.
 ```landin
-public bounded: type (N: fixed u32) = struct
+public bounded: type (fixed N: u32) = struct
     notes:   [N]entry
     stored:  usize
     dropped: usize
 end bounded
 
-bounded_note: (inout d: bounded(N), N: fixed u32,
+bounded_note: (inout d: bounded(N), fixed N: u32,
                where: text.position, kind: severity, what: utf8)
                -> none =
     if d.stored < N then
@@ -77,7 +77,7 @@ bounded_note: (inout d: bounded(N), N: fixed u32,
     end if
 end bounded_note
 
-bounded_failed: (d: bounded(N), N: fixed u32) -> (yes: bool) =
+bounded_failed: (d: bounded(N), fixed N: u32) -> (yes: bool) =
     yes = false
     for i in 0..<d.stored do
         if d.notes[i].kind == error then
@@ -97,7 +97,7 @@ public new_log: (fixed N: u32) -> (d: bounded(N)) =
     d = (notes: [of blank], stored: 0, dropped: 0)
 end new_log
 
-(N: fixed u32) bounded(N) is log (note: bounded_note,
+(fixed N: u32) bounded(N) is log (note: bounded_note,
                                   failed: bounded_failed)
 
 ```

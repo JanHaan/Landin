@@ -537,12 +537,65 @@ package body Landin.Stages.Resolution is
                begin
                   case Syn.Kind (Of_Tree.all, Node) is
                      when Syn.Type_Declaration =>
-                        --  Every module name exists before any type position
-                        --  is read, because [1840]'s module scope is a set.
-                        Resolve
-                          (Of_Tree.all,
-                           Syn.Declared_Type (Of_Tree.all, Node),
-                           Landin.Resolution.Program_Scope);
+                        --  D135: formals belong to this declaration, not to
+                        --  the module.  Collect every one before resolving
+                        --  any declared fixed-formal type or the alias RHS,
+                        --  so their order has no visibility meaning.
+                        if Syn.Type_Formal_Count (Of_Tree.all, Node) = 0 then
+                           Resolve
+                             (Of_Tree.all,
+                              Syn.Declared_Type (Of_Tree.all, Node),
+                              Landin.Resolution.Program_Scope);
+                        else
+                           declare
+                              Formal_Scope : constant
+                                Landin.Resolution.Scope_Id :=
+                                  Landin.Resolution.Open_Scope
+                                    (Meanings.all,
+                                     Landin.Resolution.Type_Declaration,
+                                     Landin.Resolution.Program_Scope);
+                           begin
+                              Landin.Resolution.Record_Scope
+                                (Meanings.all, Of_Tree.all, Node,
+                                 Formal_Scope);
+
+                              for Which in 1 .. Syn.Type_Formal_Count
+                                (Of_Tree.all, Node)
+                              loop
+                                 Declare_One
+                                   (Of_Tree.all,
+                                    Syn.Nth_Type_Formal
+                                      (Of_Tree.all, Node, Which),
+                                    Formal_Scope,
+                                    Resolve_Declared => False);
+                              end loop;
+
+                              for Which in 1 .. Syn.Type_Formal_Count
+                                (Of_Tree.all, Node)
+                              loop
+                                 declare
+                                    Formal : constant Syn.Node_Id :=
+                                      Syn.Nth_Type_Formal
+                                        (Of_Tree.all, Node, Which);
+                                 begin
+                                    if Syn.Kind (Of_Tree.all, Formal)
+                                         = Syn.Fixed_Formal
+                                    then
+                                       Resolve
+                                         (Of_Tree.all,
+                                          Syn.Declared_Type
+                                            (Of_Tree.all, Formal),
+                                          Formal_Scope);
+                                    end if;
+                                 end;
+                              end loop;
+
+                              Resolve
+                                (Of_Tree.all,
+                                 Syn.Declared_Type (Of_Tree.all, Node),
+                                 Formal_Scope);
+                           end;
+                        end if;
 
                      when Syn.Binding =>
                         --  Both halves are read only after every module name

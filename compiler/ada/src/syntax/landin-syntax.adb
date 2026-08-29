@@ -9,7 +9,8 @@ package body Landin.Syntax is
             when Error_Declaration        => 0,
             when Function_Declaration     => 3,
             when Atom_Declaration         => 0,
-            --  The one slot is the type it names [1795].
+            --  The first slot is the type it names [1795]; D135's
+            --  type/fixed formals trail it.
             when Type_Declaration         => 1,
             when Binding                  => 2,
             when Destructuring_Binding    => 1,
@@ -45,6 +46,8 @@ package body Landin.Syntax is
             when Field_Value              => 1,
             when Error_Type | Type_Name
                | Type_Reference           => 0,
+            --  The applied alias, then its positional argument run.
+            when Type_Application         => 1,
             when Atom_Union_Type          => 0,
             when Inferred_Error_Set        => 0,
             --  The bound and the element type.
@@ -58,7 +61,9 @@ package body Landin.Syntax is
             when Variant_Part
                | Variant_Case | Match_Binding
                | Destructured_Name | Result_Wildcard => 0,
-            when Parameter | Named_Return | Destructured_Field => 1,
+            when Fixed_Formal | Parameter | Named_Return
+               | Destructured_Field => 1,
+            when Type_Formal => 0,
             when If_Arm | Match_Arm       => 2,
             when Return_List              => 0,
             when Recovery_Clause           => 1,
@@ -143,6 +148,13 @@ package body Landin.Syntax is
 
    function Declared_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
+
+   function Type_Formal_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Type_Formal
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
 
    function Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
@@ -296,6 +308,16 @@ package body Landin.Syntax is
      is (Nth_Item (Of_Tree, Id, Index));
 
    function Nth_Argument
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
+
+   function Applied_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Type_Argument_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Type_Argument
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
 

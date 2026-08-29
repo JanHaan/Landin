@@ -13302,16 +13302,16 @@ file negative/assignment-to-an-immutable-binding/program.ldn tokens 17
   6 8 ->
   9 13 none
   14 15 =
-  20 25 fixed
-  25 26 :
-  27 30 u32
-  31 32 =
-  33 34 1
-  39 44 fixed
-  45 46 =
-  47 48 2
-  49 52 end
-  53 54 f
+  20 28 constant
+  28 29 :
+  30 33 u32
+  34 35 =
+  36 37 1
+  42 50 constant
+  51 52 =
+  53 54 2
+  55 58 end
+  59 60 f
 file negative/atom-assignment-not-subset/program.ldn tokens 40
   0 1 a
   1 2 ,

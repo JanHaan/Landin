@@ -2130,7 +2130,7 @@ a parameter may be used in the type of one that comes
 before it, exactly as declarations inside a module may.
 The compiler collects the names first and resolves the
 types afterwards, so
-  report: (inout d: sink(N), N: fixed u32, ...)
+  report: (inout d: sink(N), fixed N: u32, ...)
 is as good as putting N first, and at the call site N is
 deduced from whatever argument pins it down.
 Concept entries are reached through the type parameter, so

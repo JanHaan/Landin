@@ -935,6 +935,24 @@ package body Landin.Stages.Checking is
             Means : constant Res.Declaration_Id :=
               Res.Bound_To (Meanings.all, Of_Tree, Written);
          begin
+            if Res.Sort_Of (Meanings.all, Means) = Res.Type_Parameter then
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                    = Ty.Undecided
+               then
+                  Landin.Checking.Note (Types.all, Of_Tree, Written,
+                                        Ty.Ill_Typed);
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Written),
+                     Message => "this type formal's substitution is not"
+                                & " enabled yet",
+                     Refused => Bad.Type_Formal_Substitution,
+                     Into    => Found);
+               end if;
+               return Ty.Ill_Typed;
+            end if;
+
             if Res.Sort_Of (Meanings.all, Means)
                  not in Res.Module_Type | Res.Module_Atom
             then
@@ -4418,8 +4436,10 @@ package body Landin.Stages.Checking is
                   --  An atom declaration is a value and a type, but it is
                   --  identity rather than storage and cannot be written.
                   when Res.Module_Atom => False,
-                  --  [1795] names a type, and a type is not a place.
-                  when Res.Module_Type | Res.Case_Name => False,
+                  --  [1795] names a type, and a type is not a place.  D135
+                  --  formals are compile-time binders, never storage.
+                  when Res.Module_Type | Res.Case_Name
+                     | Res.Type_Parameter | Res.Fixed_Parameter => False,
                   when Res.Error_Binding => False,
                   when Res.Pattern_Binding =>
                      Syn.Is_Mutable (Their_Tree.all, Their_Node),
@@ -11913,6 +11933,14 @@ package body Landin.Stages.Checking is
                begin
                   pragma Unreferenced (Written);
                end;
+            elsif Res.Sort_Of (Meanings.all, Id)
+                    in Res.Type_Parameter | Res.Fixed_Parameter
+            then
+               --  D135 retains these binders for substitution, but this
+               --  increment has no compile-time type/value carrier yet.
+               --  Marking them prevents Declared_As from asking a type
+               --  formal for its deliberately absent declared type.
+               Landin.Checking.Settle (Types.all, Id, Ty.Not_Typed);
             elsif Res.Sort_Of (Meanings.all, Id) = Res.Case_Name then
                --  D74 gives a case a declaration identity so forward uses,
                --  duplicates and module collisions have ordinary name

@@ -81,12 +81,14 @@ package Landin.Resolution is
    No_Declaration : constant Declaration_Id :=
      Landin.Provenance.No_Declaration;
 
-   --  [1840]'s three, and no others.  The module is one scope for the whole
-   --  compilation, because a file is a set of declarations and there are no
-   --  modules until [1410]'s directories arrive; the signature holds the
-   --  parameters and the named return; a block is a statement run, which is
-   --  a function's body, an arm of an `if`, or an `else`.
-   type Scope_Sort is (Program, Signature, Block);
+   --  [1840]'s program, signature and block scopes, plus D135's type
+   --  declaration scope.  The module is one scope for the whole compilation,
+   --  because a file is a set of declarations and there are no modules until
+   --  [1410]'s directories arrive; the signature holds parameters and named
+   --  returns; a type declaration holds its formals; and a block is a
+   --  statement run, which is a function's body, an arm of an `if`, or an
+   --  `else`.
+   type Scope_Sort is (Program, Signature, Type_Declaration, Block);
 
    --  Visible and an ordinary integer, the same bargain Node_Id and
    --  Declaration_Id already struck: a caller can invent one, which is
@@ -105,8 +107,8 @@ package Landin.Resolution is
    --  scope it is in.
    type Declaration_Sort is
      (Module_Function, Module_Atom, Module_Type, Module_Binding, Case_Name,
-      Parameter, Named_Return, Local_Binding, Pattern_Binding,
-      Result_Binding, Error_Binding);
+      Type_Parameter, Fixed_Parameter, Parameter, Named_Return,
+      Local_Binding, Pattern_Binding, Result_Binding, Error_Binding);
 
    --  The kinds of node that declare a name.  Not Has_Name: that answers
    --  for a Name_Reference and a Type_Name too, and neither declares
@@ -115,6 +117,8 @@ package Landin.Resolution is
      is (Of_Kind in Landin.Syntax.Function_Declaration
                     | Landin.Syntax.Atom_Declaration
                     | Landin.Syntax.Type_Declaration
+                    | Landin.Syntax.Type_Formal
+                    | Landin.Syntax.Fixed_Formal
                     | Landin.Syntax.Binding
                     | Landin.Syntax.Parameter
                     | Landin.Syntax.Named_Return
