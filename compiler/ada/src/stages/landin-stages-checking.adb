@@ -167,6 +167,9 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Synthesise_Binary
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
+      function Signatures_Agree
+        (Left, Right : Res.Declaration_Id) return Boolean;
+
       function Check_Call
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -1632,6 +1635,83 @@ package body Landin.Stages.Checking is
 
          return (if Comparing then Ty.Bool else Decided);
       end Synthesise_Binary;
+
+      function Signatures_Agree
+        (Left, Right : Res.Declaration_Id) return Boolean
+      is
+         Left_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Left));
+         Right_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Right));
+         Left_Node : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Left);
+         Right_Node : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Right);
+
+         function Same_Declaration_Type
+           (Left_Tree, Right_Tree : Syn.Tree;
+            Left_Node, Right_Node : Syn.Node_Id) return Boolean;
+
+         function Same_Declaration_Type
+           (Left_Tree, Right_Tree : Syn.Tree;
+            Left_Node, Right_Node : Syn.Node_Id) return Boolean
+         is
+            Left_Id : constant Res.Declaration_Id :=
+              Declaration_At (Syn.Source_Of (Left_Tree), Left_Node);
+            Right_Id : constant Res.Declaration_Id :=
+              Declaration_At (Syn.Source_Of (Right_Tree), Right_Node);
+            Left_Type : constant Ty.Type_Kind :=
+              Landin.Checking.Type_Of (Types.all, Left_Id);
+            Right_Type : constant Ty.Type_Kind :=
+              Landin.Checking.Type_Of (Types.all, Right_Id);
+         begin
+            if Left_Type /= Right_Type then
+               return False;
+            elsif Left_Type = Ty.Aggregate then
+               return Landin.Checking.Body_Of (Types.all, Left_Id)
+                 = Landin.Checking.Body_Of (Types.all, Right_Id);
+            elsif Left_Type = Ty.Fixed_Array then
+               return Landin.Checking.Array_Length (Types.all, Left_Id)
+                        = Landin.Checking.Array_Length (Types.all, Right_Id)
+                 and then Landin.Checking.Array_Element (Types.all, Left_Id)
+                        = Landin.Checking.Array_Element (Types.all, Right_Id);
+            end if;
+            return True;
+         end Same_Declaration_Type;
+      begin
+         if Syn.Parameter_Count (Left_Tree.all, Left_Node)
+              /= Syn.Parameter_Count (Right_Tree.all, Right_Node)
+         then
+            return False;
+         end if;
+
+         for Position in 1 .. Syn.Parameter_Count
+           (Left_Tree.all, Left_Node)
+         loop
+            if not Same_Declaration_Type
+              (Left_Tree.all, Right_Tree.all,
+               Syn.Nth_Parameter (Left_Tree.all, Left_Node, Position),
+               Syn.Nth_Parameter (Right_Tree.all, Right_Node, Position))
+            then
+               return False;
+            end if;
+         end loop;
+
+         declare
+            Left_Result : constant Syn.Node_Id :=
+              Syn.Return_Of (Left_Tree.all, Left_Node);
+            Right_Result : constant Syn.Node_Id :=
+              Syn.Return_Of (Right_Tree.all, Right_Node);
+         begin
+            if (Left_Result = Syn.No_Node) /= (Right_Result = Syn.No_Node)
+            then
+               return False;
+            end if;
+            return Left_Result = Syn.No_Node
+              or else Same_Declaration_Type
+                (Left_Tree.all, Right_Tree.all, Left_Result, Right_Result);
+         end;
+      end Signatures_Agree;
 
       --  [1920]: a call names every parameter exactly once and in order,
       --  each argument has its parameter's type, and the call has the type
@@ -5351,6 +5431,42 @@ package body Landin.Stages.Checking is
                         end;
                      end if;
 
+                     return;
+                  end if;
+
+                  if Wants = Ty.Function_Value then
+                     declare
+                        Got : constant Ty.Type_Kind :=
+                          Synthesise (Of_Tree, Value);
+                        Place_Id : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Of_Tree, Place);
+                     begin
+                        if Got = Ty.Function_Value
+                          and then not Signatures_Agree
+                            (Landin.Checking.Body_Of (Types.all, Place_Id),
+                             Landin.Checking.Body_Of
+                               (Types.all, Of_Tree, Value))
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this function has a different"
+                                         & " signature",
+                              Note    => "[1000]: function values have the"
+                                         & " signature written by their type",
+                              Related => Syn.Origin (Of_Tree, Place),
+                              Because => "the function place written here",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        elsif Got /= Ty.Function_Value then
+                           Require
+                             (Of_Tree, Value, Wants,
+                              Syn.Origin (Of_Tree, Place),
+                              "the place written here");
+                        end if;
+                     end;
                      return;
                   end if;
 

@@ -1960,8 +1960,12 @@ caller storage across repeated calls.
 
 The twenty-eighth increment makes a direct function name an inferred local code
 address and calls it indirectly. Verified IR retains the source signature as
-type evidence while the backend calls the runtime address; mutable replacement
-and the existing scalar/aggregate ABI paths share that convention.
+type evidence while the backend calls the runtime address.
+
+The twenty-ninth increment checks mutable replacement for complete signature
+equality and proves indirect aggregate results plus register/stack arguments
+reuse the direct internal convention without counting the code address as a
+source parameter.
 
 Written function types, function parameters and anonymous functions remain in
 this item. Further aggregate arguments and result contexts remain here too; R4.40 later supplies

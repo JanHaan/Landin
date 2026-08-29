@@ -149,8 +149,9 @@ to completion in a shaped temporary before explicit discard. Further aggregate
 arguments and result contexts remain absent;
 R4.40 later completes C ABI classification. An inferred local function value
 is represented by a target code address and called through verified
-`Indirect_Call` IR; written function types and function parameters remain
-absent.
+`Indirect_Call` IR. Mutable replacement requires the same complete signature,
+and indirect calls share aggregate-result and stack-argument conventions;
+written function types and function parameters remain absent.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver

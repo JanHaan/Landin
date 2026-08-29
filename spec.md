@@ -6174,3 +6174,25 @@ that the runtime target is statically known.
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/function-value-type-mismatch`; the generated token and IR records;
 and `runtime/inferred-function-values` on Linux x86-64.
+
+### D114 — Indirect calls share the complete internal convention
+
+**The tour said** that a function value has its signature as its ordinary type
+[1000]. Replacing an inferred function binding therefore requires equal
+parameter and result shapes, not merely another code address.
+
+**Chosen:** mutable inferred function values may be replaced only by a function
+with the same parameter count, declaration-order parameter types and result
+type. Nominal struct bodies and fixed-array shapes participate in that equality.
+An indirect call uses the complete direct-call convention: hidden aggregate
+result destination first, then source parameters across the six-register and
+stack run. The runtime code-address operand is verifier metadata and is not a
+source ABI parameter.
+
+**Why signature equality is checked before runtime:** a code address carries no
+machine-readable Landin signature. Delaying disagreement until the call would
+turn a deterministic type error into register and storage corruption.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/function-value-signature-mismatch`; the generated token and IR
+records; and `runtime/indirect-function-abi` on Linux x86-64.
