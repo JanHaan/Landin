@@ -4,6 +4,15 @@ pair: type = struct
     right: i32
 end pair
 
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+score: (value: point) -> (result: i32) =
+    result = value.x + value.y
+end score
+
 inspect: (a: i32, first: pair, c: i32, d: i32, e: i32, f: i32, second: pair, h: i32) -> (result: i32) =
     result = a + first.left + first.row[0] + first.row[1] + first.right + c + d + e + f + second.left + second.row[0] + second.row[1] + second.right + h
 end inspect
@@ -18,4 +27,6 @@ public main: () -> (code: i32) =
     second.row = [12, 13]
     second.right = 8
     code = inspect(1, first, 4, 5, 6, 0, second, 9)
+           + score((x: 10, y: 11))
+           + score(point(y: 1, of zeroed))
 end main

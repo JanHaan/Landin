@@ -5784,3 +5784,31 @@ semantics without changing the ABI carrier or callee copy.
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/array-repetition-argument-shape-mismatch`; the generated token and IR
 records; and `runtime/array-arguments-cross-calls` on Linux x86-64.
+
+### D100 — A scalar-field struct literal may fill an argument temporary
+
+**The tour said** that labelled struct construction evaluates fields in source
+order [0410], omitted fields may use `of zeroed` [0700], and ordinary structs
+are nominal [0710]. D97 supplied the shaped caller temporary for an entirely
+zero aggregate but not for labelled construction.
+
+**Chosen:** a bare or correctly nominal construction may appear directly where
+a flat ordinary-struct parameter has scalar fields only. Labels are checked
+against the parameter's nominal body, evaluated and stored in source order;
+`of zeroed` writes zero or false to omitted fields in declaration order. The
+caller then transports the complete temporary through D94's existing address
+convention and the callee copies it by value.
+
+Structs with fixed-array, ordinary-child or variant fields remain outside this
+literal-argument slice; their labels require additional contextual leaf
+materialization. The temporary itself retains declaration-order scalar shapes,
+never target offsets or padding.
+
+**Why scalar fields first:** it exercises nominal contextual construction and
+caller-side evaluation order without duplicating D65/D76's array and variant
+leaf machinery inside call lowering. Those shapes remain valid storage
+arguments by D94/D96; only direct literal construction is narrower.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/struct-literal-argument-nominal-mismatch`; the generated token and IR
+records; and `runtime/struct-arguments-cross-calls` on Linux x86-64.

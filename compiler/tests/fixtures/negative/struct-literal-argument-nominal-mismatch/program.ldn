@@ -1,0 +1,14 @@
+point: type = struct
+    x: i32
+end point
+
+other: type = struct
+    x: i32
+end other
+
+consume: (value: point) -> none =
+end consume
+
+bad: () -> none =
+    consume(other(x: 1))
+end bad
