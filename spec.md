@@ -5989,8 +5989,9 @@ one-position internal convention without either error.
 
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
 `negative/struct-return-unassigned` and `negative/variant-return-unassigned`;
-the generated token and IR records; and `runtime/struct-returns-cross-calls` on
-Linux x86-64.
+the generated token and IR records; and `runtime/struct-returns-cross-calls`,
+`runtime/variant-returns-cross-calls` and
+`runtime/nested-struct-returns-cross-calls` on Linux x86-64.
 
 ### D107 — Fixed arrays use the same caller-owned result convention
 

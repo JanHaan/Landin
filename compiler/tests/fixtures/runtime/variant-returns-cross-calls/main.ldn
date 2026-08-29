@@ -1,0 +1,32 @@
+choice: type = struct
+    prefix: i32
+    kind: variant
+        leaf |
+        number: (value: i32) |
+        pair: (left: i32, right: i32)
+    end kind
+end choice
+
+make: (paired: bool) -> (result: choice) =
+    result = zeroed
+    if paired then
+        result.kind = pair(left: 19, right: 23)
+    else
+        result.kind = number(value: 7)
+    end if
+end make
+
+inspect: (value: choice) -> (result: i32) =
+    match value.kind
+        leaf: result = 0
+        number(v): result = v
+        pair(left, right): result = left + right
+    end match
+end inspect
+
+public main: () -> (code: i32) =
+    mut selected := make(true)
+    mut other := make(false)
+    other.kind = leaf
+    code = inspect(selected)
+end main
