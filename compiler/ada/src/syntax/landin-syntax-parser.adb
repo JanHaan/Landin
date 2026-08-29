@@ -1694,21 +1694,12 @@ package body Landin.Syntax.Parser is
                      Related => At_Name,
                      Because => "declared here")
                then
-                  --  [1795]: a name, or [0670]'s block form.  This
-                  --  increment admits formals only on aliases; generic
-                  --  structs remain a later R2.40 increment.
+                  --  [1795] permits a name, or [0670]'s block form, after
+                  --  either a bare declaration or D135's formal list.  The
+                  --  latter carries syntax and resolution only in this slice;
+                  --  checking decides its later nominal meaning.
                   if Peek = Tok.Kw_Struct then
-                     if not Formals.Is_Empty then
-                        Type_Refused := True;
-                        Refuse
-                          (Item    => Syn.Struct_Type,
-                           Where   => Here,
-                           Message => "a parameterized struct type is not"
-                                      & " enabled yet");
-                        Resync_Declaration;
-                     else
-                        Aliased_Type := Parse_Struct_Body (Named, At_Name);
-                     end if;
+                     Aliased_Type := Parse_Struct_Body (Named, At_Name);
                   else
                      Aliased_Type := Parse_Type (False, At_Name);
 
@@ -1720,8 +1711,8 @@ package body Landin.Syntax.Parser is
                        and then Peek = Tok.Bar
                        and then not Formals.Is_Empty
                      then
-                        --  D135 enables parameterized aliases only.  An atom
-                        --  union is a separate declaration alternative in
+                        --  D135 admits a parameterized alias or struct.  An
+                        --  atom union is a separate declaration alternative in
                         --  [1795], not a `type` body, so retaining an
                         --  Atom_Union_Type here would accept syntax the
                         --  grammar excludes.

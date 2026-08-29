@@ -2285,10 +2285,15 @@ written
 onto a template node. Fixed actuals in type applications remain literals or
 forwarded formals for this slice.
 
-The next increments extend the same substitution layer to parameterised nominal
-instance identities, generic routine instances and exact deduction from
-ordinary argument types, then fixed conditional declaration lists. Deduction
-does not use return context,
+A frontend-only increment now also admits a parameterised struct body after a
+type declaration's formals and resolves those formals in the same collected
+declaration scope as an alias. It deliberately stops before checking,
+instantiating or lowering that nominal family.
+
+The next semantic increments extend the same substitution layer to
+parameterised nominal instance identities, generic routine instances and exact
+deduction from ordinary argument types, then fixed conditional declaration
+lists. Deduction does not use return context,
 constraint lookup or arithmetic inversion. Parameterised nominal types and
 generic routines receive identities derived from a template and normalised
 actual tuple rather than reusing one source declaration identity for unequal
