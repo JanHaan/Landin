@@ -4016,6 +4016,7 @@ package body Landin.Tests.Lowering_Suite is
          & "    row: [2]i32 = [4, 5]" & LF
          & "    answer = take(1, value) + take_array(row)" & LF
          & "             + take(0, zeroed) + take_array(zeroed)" & LF
+         & "             + take_array([6, 7])" & LF
          & "end use" & LF
          & "take_array: (value: [2]i32) -> (answer: i32) =" & LF
          & "    answer = value[0] + value[1]" & LF
@@ -4063,7 +4064,7 @@ package body Landin.Tests.Lowering_Suite is
          end loop;
          Landin.Testing.Check
            (Item,
-            Addresses = 4 and then Calls = 4 and then Clears = 2,
+            Addresses = 5 and then Calls = 5 and then Clears = 2,
             "zeroed arguments use cleared caller temporaries and addresses");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,

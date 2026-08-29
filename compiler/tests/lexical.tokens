@@ -9246,6 +9246,41 @@ file negative/array-initializer-length-mismatch/program.ldn tokens 24
   62 68 source
   69 72 end
   73 74 f
+file negative/array-literal-argument-shape-mismatch/program.ldn tokens 34
+  0 7 consume
+  7 8 :
+  9 10 (
+  10 15 value
+  15 16 :
+  17 18 [
+  18 19 2
+  19 20 ]
+  20 23 i32
+  23 24 )
+  25 27 ->
+  28 32 none
+  33 34 =
+  35 38 end
+  39 46 consume
+  48 51 bad
+  51 52 :
+  53 54 (
+  54 55 )
+  56 58 ->
+  59 63 none
+  64 65 =
+  70 77 consume
+  77 78 (
+  78 79 [
+  79 80 1
+  80 81 ,
+  82 83 2
+  83 84 ,
+  85 86 3
+  86 87 ]
+  87 88 )
+  89 92 end
+  93 96 bad
 file negative/array-literal-assignment-element-mismatch/program.ldn tokens 23
   0 1 f
   1 2 :
