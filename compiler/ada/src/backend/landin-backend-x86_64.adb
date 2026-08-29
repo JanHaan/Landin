@@ -9,10 +9,12 @@ package body Landin.Backend.X86_64 is
 
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
+   use type Landin.IR.Atom_Set_Id;
    use type Landin.IR.Declaration_Id;
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Opcode;
    use type Landin.IR.Signature_Id;
+   use type Landin.IR.Slot_Id;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Field_Shape_Kind;
@@ -27,6 +29,55 @@ package body Landin.Backend.X86_64 is
    --  same reason.
    function Trimmed (Value : String) return String
      is (Ada.Strings.Fixed.Trim (Value, Ada.Strings.Both));
+
+   --  A source atom identity is neutral.  Linux x86-64 gives atoms dense,
+   --  nonzero u32 codes in declaration-identity order; zero stays available
+   --  for the successful half of R2.30's failing-call carrier.
+   function Atom_Code
+     (Of_Unit : Landin.IR.Unit;
+      Identity : Landin.IR.Declaration_Id) return Positive;
+
+   function Atom_Code
+     (Of_Unit : Landin.IR.Unit;
+      Identity : Landin.IR.Declaration_Id) return Positive
+   is
+      Result : Natural := 0;
+
+      function Is_Atom
+        (Candidate : Landin.IR.Declaration_Id) return Boolean;
+
+      function Is_Atom
+        (Candidate : Landin.IR.Declaration_Id) return Boolean
+      is
+      begin
+         for Set_Index in 1 .. Landin.IR.Atom_Set_Count (Of_Unit) loop
+            declare
+               Set_Id : constant Landin.IR.Atom_Set_Id :=
+                 Landin.IR.Atom_Set_Id (Set_Index);
+            begin
+               for Index in 1 .. Landin.IR.Atom_Count (Of_Unit, Set_Id) loop
+                  if Landin.IR.Nth_Atom (Of_Unit, Set_Id, Index)
+                    = Candidate
+                  then
+                     return True;
+                  end if;
+               end loop;
+            end;
+         end loop;
+         return False;
+      end Is_Atom;
+   begin
+      for Candidate in Landin.IR.Declaration_Id'(1) .. Identity loop
+         if Is_Atom (Candidate) then
+            Result := Result + 1;
+         end if;
+      end loop;
+      if Result = 0 then
+         raise Landin.Compiler_Defect with
+           "an atom instruction names no atom-set member";
+      end if;
+      return Positive (Result);
+   end Atom_Code;
 
    subtype Held_Size is Landin.Targets.Scalar_Size
      range Landin.Targets.Byte_1 .. Landin.Targets.Byte_8;
@@ -924,6 +975,17 @@ package body Landin.Backend.X86_64 is
                         & (if Landin.IR.Truth_Of (Of_Unit, Item, Value)
                            then "1" else "0")
                         & ", " & Value_Cell (Value));
+
+               when Landin.IR.Atom =>
+                  Emit
+                    ("movl $"
+                     & Trimmed
+                         (Positive'Image
+                            (Atom_Code
+                               (Of_Unit,
+                                Landin.IR.Atom_Of
+                                  (Of_Unit, Item, Value))))
+                     & ", " & Value_Cell (Value));
 
                when Landin.IR.Storage_Address =>
                   Storage_Address
@@ -1859,6 +1921,11 @@ package body Landin.Backend.X86_64 is
                      Emit ("movb %al, " & Value_Cell (Value));
                   end;
 
+               when Landin.IR.Failure_Test =>
+                  Emit ("cmpl $0, " & Value_Cell (Operand (1)));
+                  Emit ("setne %al");
+                  Emit ("movb %al, " & Value_Cell (Value));
+
                when Landin.IR.Function_Address =>
                   Emit
                     ("leaq "
@@ -1935,6 +2002,16 @@ package body Landin.Backend.X86_64 is
                         Emit ("call *" & Value_Cell (Operand (1)));
                      else
                         Emit ("call " & Symbol (Callee));
+                     end if;
+
+                     if Landin.IR.Failure_Slot_Of
+                          (Of_Unit, Item, Value) /= Landin.IR.No_Slot
+                     then
+                        Emit
+                          ("movl %r10d, "
+                           & Slot_Cell
+                               (Landin.IR.Failure_Slot_Of
+                                  (Of_Unit, Item, Value)));
                      end if;
 
                      if Stack_Bytes > 0 then
@@ -2018,6 +2095,18 @@ package body Landin.Backend.X86_64 is
                      end;
                   end if;
 
+                  if Landin.IR.Signature_Of (Of_Unit, Item)
+                       /= Landin.IR.No_Signature
+                    and then Landin.IR.Signature_Errors
+                      (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+                        /= Landin.IR.No_Atom_Set
+                  then
+                     Emit ("xorl %r10d, %r10d");
+                  end if;
+                  Emit_Epilogue;
+
+               when Landin.IR.Fail =>
+                  Emit ("movl " & Value_Cell (Operand (1)) & ", %r10d");
                   Emit_Epilogue;
             end case;
          end Emit_Instruction;
@@ -2280,6 +2369,14 @@ package body Landin.Backend.X86_64 is
                           (if Landin.IR.Truth_Of (Of_Unit, Item, Value)
                            then 1 else 0);
 
+                     when Landin.IR.Atom =>
+                        Held (Natural (Value)) :=
+                          Landin.Types.Folded
+                            (Atom_Code
+                               (Of_Unit,
+                                Landin.IR.Atom_Of
+                                  (Of_Unit, Item, Value)));
+
                      --  [0370] in a module value, folded here for the
                      --  same reason the shifts are: it needs a target.
                      when Landin.IR.Measure_Size
@@ -2455,7 +2552,8 @@ package body Landin.Backend.X86_64 is
                      when Landin.IR.Leave =>
                         Answer := Of_Value (Operand_Of (Value, 1));
 
-                     when Landin.IR.Function_Address | Landin.IR.Call
+                     when Landin.IR.Failure_Test
+                        | Landin.IR.Function_Address | Landin.IR.Call
                         | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
                         | Landin.IR.Store_Datum
                         | Landin.IR.Load_Field | Landin.IR.Store_Field
@@ -2467,7 +2565,8 @@ package body Landin.Backend.X86_64 is
                         | Landin.IR.Load_Variant_Field
                         | Landin.IR.Select_Variant
                         | Landin.IR.Store_Variant_Field
-                        | Landin.IR.Jump | Landin.IR.Branch =>
+                        | Landin.IR.Jump | Landin.IR.Branch
+                        | Landin.IR.Fail =>
                         --  [1940] admits none of these in a module value,
                         --  and [1830] refuses a call there by name.
                         raise Compiler_Defect

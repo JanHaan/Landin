@@ -1,0 +1,30 @@
+one, two, three, four, five, six, seven, eight: atom
+all_atoms: type = one | two | three | four | five | six | seven | eight
+
+mut module_choice: all_atoms = one
+
+choose: (last: bool) -> (result: all_atoms) =
+    result = if last then eight else one end if
+end choose
+
+eighth: (a: all_atoms, b: all_atoms, c: all_atoms, d: all_atoms,
+         e: all_atoms, f: all_atoms, g: all_atoms, h: all_atoms)
+         -> (result: all_atoms) =
+    result = h
+end eighth
+
+public main: () -> (code: i32) =
+    mut local: all_atoms = choose(true)
+    local = eighth(one, two, three, four, five, six, seven, local)
+    module_choice = local
+    code = match module_choice
+        one: 1
+        two: 2
+        three: 3
+        four: 4
+        five: 5
+        six: 6
+        seven: 7
+        eight: 42
+    end match
+end main

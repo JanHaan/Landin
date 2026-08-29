@@ -55,6 +55,8 @@ package Landin.IR.Verifier is
       Unprepared_Unit,
       Item_Runs_Overlap,
       Operand_Runs_Overlap,
+      Atom_Set_Runs_Overlap,
+      Atom_Set_Malformed,
       Signature_Runs_Overlap,
       Signature_Part_Malformed,
       --  An item.
@@ -77,6 +79,8 @@ package Landin.IR.Verifier is
       Signature_Out_Of_Range,
       Routine_Signature_Disagrees,
       Function_Value_Signature_Disagrees,
+      Atom_Metadata_Disagrees,
+      Atom_Identity_Not_In_Set,
       Field_Shape_Malformed,
       Condition_Is_Not_A_Bool,
       --  Places [1900] and module values [1940].
@@ -123,8 +127,10 @@ package Landin.IR.Verifier is
       --  Calls [1920].
       Callee_Is_Not_A_Routine,
       Call_Inside_A_Datum,
+      Call_Failure_Slot_Disagrees,
       --  Leaving.
-      Leave_Disagrees_With_Item);
+      Leave_Disagrees_With_Item,
+      Fail_Disagrees_With_Signature);
 
    --  Where it went wrong, in as much detail as the rule has.  A field
    --  that the rule does not speak about is left at its no-value.

@@ -1,0 +1,6 @@
+class: negative
+summary: a concrete error clause names at least one atom
+constructs: 0940
+program: program.ldn
+codes: L0100
+targets: linux-x86-64, synthetic-32

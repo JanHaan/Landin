@@ -7,7 +7,8 @@ package body Landin.Syntax is
      is (case Of_Kind is
             when Program                  => 0,
             when Error_Declaration        => 0,
-            when Function_Declaration     => 2,
+            when Function_Declaration     => 3,
+            when Atom_Declaration         => 0,
             --  The one slot is the type it names [1795].
             when Type_Declaration         => 1,
             when Binding                  => 2,
@@ -18,11 +19,13 @@ package body Landin.Syntax is
             when Discard                  => 1,
             when Defer_Statement          => 1,
             when Return_Statement         => 1,
+            when Fail_Statement           => 2,
             when If_Statement             => 1,
             when Match_Statement          => 1,
             when Bare_Block               => 1,
             when Call                     => 1,
-            when Anonymous_Function       => 2,
+            when Try_Expression            => 1,
+            when Anonymous_Function       => 3,
             when Error_Expression         => 0,
             when Name_Reference           => 0,
             --  The one slot is what it selects from; the name it selects
@@ -42,10 +45,12 @@ package body Landin.Syntax is
             when Field_Value              => 1,
             when Error_Type | Type_Name
                | Type_Reference           => 0,
+            when Atom_Union_Type          => 0,
+            when Inferred_Error_Set        => 0,
             --  The bound and the element type.
             when Array_Type               => 2,
-            --  The named return list, or No_Node; parameters trail it.
-            when Function_Type            => 1,
+            --  The named return list and error set; parameters trail them.
+            when Function_Type            => 2,
             --  A struct body's fields are its trailing run; a field's
             --  one slot is its type.
             when Struct_Body              => 0,
@@ -56,6 +61,7 @@ package body Landin.Syntax is
             when Parameter | Named_Return | Destructured_Field => 1,
             when If_Arm | Match_Arm       => 2,
             when Return_List              => 0,
+            when Recovery_Clause           => 1,
             --  The fixed slot is [1080]'s optional final expression; the
             --  trailing run remains [1810]'s source-ordered statements.
             when Block                    => 1);
@@ -162,14 +168,19 @@ package body Landin.Syntax is
      is (Slot (Of_Tree, Id, 1));
 
    function Condition_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
-     is (Slot (Of_Tree, Id, 1));
+     is (Slot (Of_Tree, Id,
+          (if Kind (Of_Tree, Id) = Fail_Statement then 2 else 1)));
 
    --  A function's return list is slot 1 and an arm's condition is slot 1, so
    --  both put what they run in slot 2.  A bare block has only the body in
    --  slot 1.  These positions are a private layout detail.
    function Body_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
-     is (Slot (Of_Tree, Id,
-          (if Kind (Of_Tree, Id) = Bare_Block then 1 else 2)));
+     is (Slot
+           (Of_Tree, Id,
+            (case Kind (Of_Tree, Id) is
+                when Function_Declaration | Anonymous_Function => 3,
+                when Bare_Block => 1,
+                when others => 2)));
 
    function Returns_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
@@ -181,6 +192,12 @@ package body Landin.Syntax is
    function Nth_Return
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Returns_Of (Of_Tree, Id), Index));
+
+   function Error_Set_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 2));
+
+   function Recovery_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Element (Of_Tree, Id).Recovery);
 
    function Parameter_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      is (Run_Length (Of_Tree, Id));
@@ -273,6 +290,14 @@ package body Landin.Syntax is
      is (Nth_Item (Of_Tree, Id, Index));
 
    function Nth_Argument
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     is (Nth_Item (Of_Tree, Id, Index));
+
+   function Atom_Member_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     is (Run_Length (Of_Tree, Id));
+
+   function Nth_Atom_Member
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
 

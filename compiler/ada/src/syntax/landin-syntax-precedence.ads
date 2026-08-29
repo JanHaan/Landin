@@ -143,6 +143,7 @@ package Landin.Syntax.Precedence is
                             | Landin.Tokens.Left_Paren
                             | Landin.Tokens.Left_Bracket
                             | Landin.Tokens.Kw_If
+                            | Landin.Tokens.Kw_Try
                             | Landin.Tokens.Kw_Sizeof
                             | Landin.Tokens.Kw_Alignof
          or else Is_Prefix (Of_Kind));
@@ -154,7 +155,8 @@ package Landin.Syntax.Precedence is
      is (Of_Kind in Landin.Tokens.Kw_Mut | Landin.Tokens.Identifier
                     | Landin.Tokens.Kw_Inc | Landin.Tokens.Kw_Dec
                     | Landin.Tokens.Underscore | Landin.Tokens.Left_Paren
-                    | Landin.Tokens.Kw_Return | Landin.Tokens.Kw_If);
+                    | Landin.Tokens.Kw_Return | Landin.Tokens.Kw_Fail
+                    | Landin.Tokens.Kw_Try | Landin.Tokens.Kw_If);
 
    --  `declaration ::= "public"? (binding | function)` [1740].
    function Begins_Declaration (Of_Kind : Landin.Tokens.Token_Kind)

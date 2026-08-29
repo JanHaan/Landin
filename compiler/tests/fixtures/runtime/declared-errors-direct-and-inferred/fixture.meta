@@ -1,0 +1,6 @@
+class: runtime
+summary: direct calls, recovery, fail, try and recursive private inference preserve every current result shape
+constructs: 0940, 0960, 0970, 1000, 1030, 1080, 1210
+program: main.ldn
+status: 42
+targets: linux-x86-64

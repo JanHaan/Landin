@@ -1,0 +1,6 @@
+class: negative
+summary: every fail atom belongs to the function's declared error set
+constructs: 0940, 0970
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, synthetic-32

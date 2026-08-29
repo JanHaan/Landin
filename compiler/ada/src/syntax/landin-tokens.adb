@@ -61,10 +61,8 @@ package body Landin.Tokens is
 
    function Construct (Of_Kind : Deferred_Kind) return Construct_Reference is
      (case Of_Kind is
-         when Bang              => "[0940]",   --  the error channel
          when Dot_Dot           => "[0360]",   --  ranges
          when Dot_Dot_Less      => "[0360]",   --  a narrowed range
-         when Dot_Dot_Dot       => "[0960]",   --  plus what callees fail with
          when Compound_Assign   => "[0390]",   --  x += 1 says x = x + 1
          when Character_Literal => "[0250]",
          when Float_Literal     => "[0210]",

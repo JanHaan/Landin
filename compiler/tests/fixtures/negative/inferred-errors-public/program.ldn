@@ -1,0 +1,5 @@
+bad: atom
+
+public f: () -> none ! ... =
+    fail bad
+end f

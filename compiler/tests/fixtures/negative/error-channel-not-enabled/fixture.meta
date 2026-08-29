@@ -1,6 +1,0 @@
-class: negative
-summary: [1830] the declared error set is [0940] and not enabled
-constructs: 1830, 0940
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0010

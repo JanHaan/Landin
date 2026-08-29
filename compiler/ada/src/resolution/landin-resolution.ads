@@ -104,21 +104,24 @@ package Landin.Resolution is
    --  used by [1740] and by [1810], and which of the two it is, is which
    --  scope it is in.
    type Declaration_Sort is
-     (Module_Function, Module_Type, Module_Binding, Case_Name, Parameter,
-      Named_Return, Local_Binding, Pattern_Binding, Result_Binding);
+     (Module_Function, Module_Atom, Module_Type, Module_Binding, Case_Name,
+      Parameter, Named_Return, Local_Binding, Pattern_Binding,
+      Result_Binding, Error_Binding);
 
    --  The kinds of node that declare a name.  Not Has_Name: that answers
    --  for a Name_Reference and a Type_Name too, and neither declares
    --  anything.
    function Declares (Of_Kind : Landin.Syntax.Node_Kind) return Boolean
      is (Of_Kind in Landin.Syntax.Function_Declaration
+                    | Landin.Syntax.Atom_Declaration
                     | Landin.Syntax.Type_Declaration
                     | Landin.Syntax.Binding
                     | Landin.Syntax.Parameter
                     | Landin.Syntax.Named_Return
                     | Landin.Syntax.Variant_Case
                     | Landin.Syntax.Match_Binding
-                    | Landin.Syntax.Destructured_Name);
+                    | Landin.Syntax.Destructured_Name
+                    | Landin.Syntax.Recovery_Clause);
 
    type Table is tagged limited private;
 

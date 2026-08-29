@@ -175,6 +175,10 @@ package Landin.IR is
    type Opcode is
      (Number,
       Truth,
+      --  [0630]'s target-neutral identity.  The instruction carries the
+      --  declaration that minted it; a backend alone chooses the carrier
+      --  bit pattern used for that identity.
+      Atom,
       --  A slot read and written.  A slot is the only thing that
       --  crosses a block boundary; see the header.
       Load,
@@ -256,6 +260,10 @@ package Landin.IR is
       Less_Or_Equal,
       Greater_Than,
       Greater_Or_Equal,
+      --  The success test for [0940]'s orthogonal call outcome.  This is
+      --  semantic IR: only a backend knows which carrier pattern means no
+      --  error (Linux x86-64 uses zero).
+      Failure_Test,
       --  [0870]: a routine's target-neutral code identity and D117
       --  signature descriptor, lowered to one target code address.
       Function_Address,
@@ -271,9 +279,12 @@ package Landin.IR is
       --  datum it carries the value the datum has.
       Jump,
       Branch,
-      Leave);
+      Leave,
+      --  [0940]'s orthogonal failure exit.  Its one operand is an atom
+      --  identity; no successful result is carried on this edge.
+      Fail);
 
-   subtype Constant_Kind is Opcode range Number .. Truth;
+   subtype Constant_Kind is Opcode range Number .. Atom;
 
    subtype Unary_Kind is Opcode range Negation .. Logical_Not;
 
@@ -283,7 +294,7 @@ package Landin.IR is
 
    subtype Binary_Kind is Opcode range Multiply .. Greater_Or_Equal;
 
-   subtype Terminator_Kind is Opcode range Jump .. Leave;
+   subtype Terminator_Kind is Opcode range Jump .. Fail;
 
    --  Which opcodes never define a value.  A Call is not one of them: it
    --  defines a value exactly when its callee has a result [1920], so the
@@ -311,6 +322,7 @@ package Landin.IR is
    type Block_Id is range 0 .. Integer'Last;
    type Value_Id is range 0 .. Integer'Last;
    type Signature_Id is range 0 .. Integer'Last;
+   type Atom_Set_Id is range 0 .. Integer'Last;
 
    --  One target-neutral aggregate field shape.  D44 needs the scalar form,
    --  D45 adds the compact fixed-scalar-array form for measurement, D46
@@ -369,6 +381,10 @@ package Landin.IR is
    No_Block : constant Block_Id := 0;
    No_Value : constant Value_Id := 0;
    No_Signature : constant Signature_Id := 0;
+   No_Atom_Set : constant Atom_Set_Id := 0;
+
+   type Atom_Array is array (Positive range <>) of Declaration_Id;
+   No_Atoms : constant Atom_Array (1 .. 0) := [];
 
    --  D117/D128's target-neutral callable shape.  Parameter and result runs
    --  contain these parts; aggregate bodies are nominal source identities,
@@ -382,6 +398,8 @@ package Landin.IR is
       Length  : Element_Total          := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Signature : Signature_Id         := No_Signature;
+      --  Nonzero only when Kind is the u32 carrier for [0630]/[0640].
+      Atoms   : Atom_Set_Id             := No_Atom_Set;
    end record;
 
    type Signature_Part_Array is
@@ -433,8 +451,39 @@ package Landin.IR is
      with Pre => Is_Prepared (Of_Unit);
 
    ------------------------------------------------------------------
-   --  Signatures
+   --  Atom sets and signatures
    ------------------------------------------------------------------
+
+   function Atom_Set_Count (Of_Unit : Unit) return Natural;
+
+   function Holds (Of_Unit : Unit; Id : Atom_Set_Id) return Boolean
+     is (Id /= No_Atom_Set
+         and then Natural (Id) <= Atom_Set_Count (Of_Unit));
+
+   function Add_Atom_Set
+     (Into : in out Unit; Atoms : Atom_Array) return Atom_Set_Id
+     with Pre  => Is_Prepared (Into) and then Atoms'Length > 0,
+          Post => Atom_Set_Count (Into) = Atom_Set_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Atom_Set'Result);
+
+   function Atom_Count
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id) return Natural
+     with Pre => Holds (Of_Unit, Set_Id);
+
+   function Nth_Atom
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id; Index : Positive)
+      return Declaration_Id
+     with Pre => Holds (Of_Unit, Set_Id)
+                 and then Index <= Atom_Count (Of_Unit, Set_Id);
+
+   function Contains_Atom
+     (Of_Unit : Unit; Set_Id : Atom_Set_Id; Atom : Declaration_Id)
+      return Boolean
+     with Pre => Holds (Of_Unit, Set_Id);
+
+   function Atom_Sets_Agree
+     (Of_Unit : Unit; Left, Right : Atom_Set_Id) return Boolean
+     with Pre => Holds (Of_Unit, Left) and then Holds (Of_Unit, Right);
 
    function Signature_Count (Of_Unit : Unit) return Natural;
 
@@ -445,16 +494,22 @@ package Landin.IR is
    function Add_Signature_With_Results
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
-      Results    : Signature_Part_Array) return Signature_Id
-     with Pre  => Is_Prepared (Into),
+      Results    : Signature_Part_Array;
+      Errors     : Atom_Set_Id := No_Atom_Set) return Signature_Id
+     with Pre  => Is_Prepared (Into)
+                  and then (Errors = No_Atom_Set
+                            or else Holds (Into, Errors)),
           Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
                   and then Holds (Into, Add_Signature_With_Results'Result);
 
    function Add_Signature
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
-      Result     : Signature_Part) return Signature_Id
-     with Pre  => Is_Prepared (Into),
+      Result     : Signature_Part;
+      Errors     : Atom_Set_Id := No_Atom_Set) return Signature_Id
+     with Pre  => Is_Prepared (Into)
+                  and then (Errors = No_Atom_Set
+                            or else Holds (Into, Errors)),
           Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
                   and then Holds (Into, Add_Signature'Result);
 
@@ -484,6 +539,10 @@ package Landin.IR is
      (Of_Unit : Unit; Signature : Signature_Id) return Signature_Part
      with Pre => Holds (Of_Unit, Signature)
                  and then Signature_Result_Count (Of_Unit, Signature) <= 1;
+
+   function Signature_Errors
+     (Of_Unit : Unit; Signature : Signature_Id) return Atom_Set_Id
+     with Pre => Holds (Of_Unit, Signature);
 
    function Signatures_Agree
      (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
@@ -561,6 +620,17 @@ package Landin.IR is
    function Signature_Of (Of_Unit : Unit; Item : Item_Id)
       return Signature_Id
      with Pre => Holds (Of_Unit, Item);
+
+   function Atom_Set_Of (Of_Unit : Unit; Item : Item_Id) return Atom_Set_Id
+     with Pre => Holds (Of_Unit, Item);
+
+   procedure Set_Atom_Set
+     (Into : in out Unit; Item : Item_Id; Atoms : Atom_Set_Id)
+     with Pre  => Holds (Into, Item)
+                  and then Holds (Into, Atoms)
+                  and then Result_Of (Into, Item) = Landin.Types.U32
+                  and then Atom_Set_Of (Into, Item) = No_Atom_Set,
+          Post => Atom_Set_Of (Into, Item) = Atoms;
 
    procedure Set_Signature
      (Into : in out Unit; Item : Item_Id; Signature : Signature_Id)
@@ -1114,12 +1184,18 @@ package Landin.IR is
       Of_Type  : Landin.Types.Scalar_Name;
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin;
-      Signature : Signature_Id := No_Signature) return Slot_Id
+      Signature : Signature_Id := No_Signature;
+      Atoms     : Atom_Set_Id := No_Atom_Set) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then (Signature = No_Signature
                             or else Holds (Into, Signature))
                   and then (Signature = No_Signature
                             or else Of_Type = Landin.Types.Usize)
+                  and then (Atoms = No_Atom_Set
+                            or else (Holds (Into, Atoms)
+                                     and then Of_Type = Landin.Types.U32))
+                  and then not (Signature /= No_Signature
+                                and then Atoms /= No_Atom_Set)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Slot_Count (Into, Item)
                     = Slot_Count (Into, Item)'Old + 1
@@ -1306,12 +1382,18 @@ package Landin.IR is
       Of_Type  : Landin.Types.Scalar_Name;
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin;
-      Signature : Signature_Id := No_Signature) return Slot_Id
+      Signature : Signature_Id := No_Signature;
+      Atoms     : Atom_Set_Id := No_Atom_Set) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Kind_Of (Into, Item) = Routine
                   and then (Signature = No_Signature
                             or else (Holds (Into, Signature)
                                      and then Of_Type = Landin.Types.Usize))
+                  and then (Atoms = No_Atom_Set
+                            or else (Holds (Into, Atoms)
+                                     and then Of_Type = Landin.Types.U32))
+                  and then not (Signature /= No_Signature
+                                and then Atoms /= No_Atom_Set)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Parameter_Count (Into, Item)
                     = Parameter_Count (Into, Item)'Old + 1
@@ -1404,6 +1486,11 @@ package Landin.IR is
 
    function Signature_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Signature_Id
+     with Pre => Holds (Of_Unit, Item)
+                 and then Holds (Of_Unit, Item, Slot);
+
+   function Atom_Set_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Atom_Set_Id
      with Pre => Holds (Of_Unit, Item)
                  and then Holds (Of_Unit, Item, Slot);
 
@@ -1533,11 +1620,27 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
      with Pre => Holds (Of_Unit, Item, Value);
 
+   function Atom_Set_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Atom_Set_Id
+     with Pre => Holds (Of_Unit, Item, Value);
+
+   function Atom_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Declaration_Id
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Atom;
+
    --  The descriptor a direct or indirect call consumes.  This is distinct
    --  from Signature_Of on a function-valued call result, which answers the
    --  nested result descriptor.
    function Call_Signature
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                            in Call | Indirect_Call;
+
+   function Failure_Slot_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Slot_Id
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                             in Call | Indirect_Call;
@@ -2004,6 +2107,18 @@ package Landin.IR is
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted (Into, Item, Emit_Truth'Result, Truth);
 
+   function Emit_Atom
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Identity : Declaration_Id;
+      Atoms   : Atom_Set_Id;
+      Site    : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Identity /= No_Declaration
+                  and then Holds (Into, Atoms)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted (Into, Item, Emit_Atom'Result, Atom);
+
    function Emit_Load
      (Into : in out Unit;
       Item : Item_Id;
@@ -2362,6 +2477,17 @@ package Landin.IR is
    --  right, and every instruction that computes one is already above
    --  this one in the block, so the run below is only the order [1920]
    --  names the parameters in.
+   function Emit_Failure_Test
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Error : Value_Id;
+      Site  : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Error)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Failure_Test'Result, Failure_Test);
+
    function Emit_Function_Address
      (Into  : in out Unit;
       Item  : Item_Id;
@@ -2377,24 +2503,30 @@ package Landin.IR is
       Item   : Item_Id;
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Failure : Slot_Id := No_Slot) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Callee)
                   and then (Result in Landin.Types.Scalar_Name
                             or else Result = Landin.Types.No_Value)
+                  and then (Failure = No_Slot
+                            or else Holds (Into, Item, Failure))
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted (Into, Item, Emit_Call'Result, Call);
 
    function Emit_Indirect_Call
-     (Into     : in out Unit;
-      Item     : Item_Id;
+     (Into      : in out Unit;
+      Item      : Item_Id;
       Signature : Signature_Id;
-      Result   : Landin.Types.Type_Kind;
-      Site     : Landin.Provenance.Origin) return Value_Id
+      Result    : Landin.Types.Type_Kind;
+      Site      : Landin.Provenance.Origin;
+      Failure   : Slot_Id := No_Slot) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Signature)
                   and then (Result in Landin.Types.Scalar_Name
                             or else Result = Landin.Types.No_Value)
+                  and then (Failure = No_Slot
+                            or else Holds (Into, Item, Failure))
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted
                     (Into, Item, Emit_Indirect_Call'Result, Indirect_Call);
@@ -2445,6 +2577,15 @@ package Landin.IR is
                            or else Holds (Into, Item, Value))
                  and then Landin.Provenance.Is_Known (Site);
 
+   procedure Emit_Fail
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Error : Value_Id;
+      Site  : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Error)
+                 and then Landin.Provenance.Is_Known (Site);
+
    --  A block of this item is open, which is the only state an Emit is
    --  allowed in: an instruction that belongs to no block is an
    --  instruction nothing can reach and nothing can print.
@@ -2493,6 +2634,8 @@ private
       Slot        : Slot_Id                   := No_Slot;
       Named       : Item_Id                   := No_Item;
       Signature   : Signature_Id              := No_Signature;
+      Atom_Set    : Atom_Set_Id               := No_Atom_Set;
+      Atom_Identity : Declaration_Id           := No_Declaration;
       Source      : Storage                   := (others => <>);
       Source_Field : Natural                  := 0;
       Source_Nested : Run;
@@ -2530,6 +2673,7 @@ private
       Element_Run : Natural                  := 0;
       Length      : Element_Total             := 0;
       Signature   : Signature_Id              := No_Signature;
+      Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Declaration : Declaration_Id            := No_Declaration;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
@@ -2549,6 +2693,7 @@ private
       Declaration : Declaration_Id            := No_Declaration;
       Result      : Landin.Types.Type_Kind    := Landin.Types.Not_Typed;
       Signature   : Signature_Id              := No_Signature;
+      Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Function_Image : Item_Id                := No_Item;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
@@ -2592,12 +2737,25 @@ private
    package Value_Ref_Vectors is new Ada.Containers.Vectors
       (Index_Type => Positive, Element_Type => Value_Id);
 
+   package Atom_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Declaration_Id,
+      "="          => Landin.Provenance."=");
+
+   type Atom_Set_Record is record
+      Members : Run;
+   end record;
+
+   package Atom_Set_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Atom_Set_Record);
+
    package Signature_Part_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Signature_Part);
 
    type Signature_Record is record
       Parameters : Run;
       Results    : Run;
+      Errors     : Atom_Set_Id := No_Atom_Set;
    end record;
 
    package Signature_Vectors is new Ada.Containers.Vectors
@@ -2635,6 +2793,8 @@ private
       Blocks     : Block_Vectors.Vector;
       Code       : Code_Vectors.Vector;
       Operands   : Value_Ref_Vectors.Vector;
+      Atom_Sets  : Atom_Set_Vectors.Vector;
+      Atoms      : Atom_Vectors.Vector;
       Signatures : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
       Fields     : Field_Shape_Vectors.Vector;

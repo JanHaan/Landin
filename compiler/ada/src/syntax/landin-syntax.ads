@@ -86,6 +86,9 @@ package Landin.Syntax is
       --  Below: declarations [1740].
       Error_Declaration,
       Function_Declaration,
+      --  [0630].  One declaration introduces the atom's value and its
+      --  singleton type together; it has no initializer or storage.
+      Atom_Declaration,
       --  [1795].  A declaration and not a binding: what it names is a
       --  type rather than a value, and [1790]'s `mut` and `:=` forms
       --  have nothing to say about one.
@@ -108,6 +111,9 @@ package Landin.Syntax is
       --  lexical block.
       Defer_Statement,
       Return_Statement,
+      --  [0970]'s second early exit.  Its first slot is the atom and its
+      --  second the optional `when` condition.
+      Fail_Statement,
       --  [1050], D124: the same nodes stand in statement and expression
       --  positions.  A control expression carries its answer in the final
       --  expression of each child Block.  Checking decides whether the
@@ -119,8 +125,11 @@ package Landin.Syntax is
       --  the lexical scope and the value-bearing fallthrough edge remain
       --  distinct nodes.
       Bare_Block,
-      --  A call is a statement as well as an expression [1810].
+      --  A call is a statement as well as an expression [1810].  Its second
+      --  fixed slot is an optional Recovery_Clause; arguments follow it.
       Call,
+      --  [0960]'s explicit propagation expression.
+      Try_Expression,
       --  Expressions [1820].  [1010]'s anonymous function carries the same
       --  signature/body slots as a declaration but declares no module name.
       Anonymous_Function,
@@ -202,6 +211,12 @@ package Landin.Syntax is
       --  the kernel predeclares because those are known to the parser and
       --  this one is a name only resolution can answer for.
       Type_Reference,
+      --  [0640]'s nonempty union of atom types.  Its trailing run is the
+      --  referenced atom or atom-union names in written order; checking
+      --  turns that run into a set, so order is not type identity.
+      Atom_Union_Type,
+      --  `! ...` on a private function before inference has finalized it.
+      Inferred_Error_Set,
       --  [0520]'s array, whose length is part of it.  Two slots: the
       --  bound, which is [1770]'s integer literal, and the element type.
       Array_Type,
@@ -236,6 +251,8 @@ package Landin.Syntax is
       Destructured_Name,
       Result_Wildcard,
       Return_List,
+      --  [1030]'s optional error name and recovery body.
+      Recovery_Clause,
       Block);
 
    --  The bands overlap where the grammar reuses a rule in two places, and
@@ -272,11 +289,11 @@ package Landin.Syntax is
    --  what makes R1.50 a scan for one kind rather than a walk looking for
    --  identifiers in seven positions.
    function Has_Name (Of_Kind : Node_Kind) return Boolean
-     is (Of_Kind in Function_Declaration | Binding | Parameter
-                    | Named_Return | Name_Reference | Type_Name
+     is (Of_Kind in Function_Declaration | Atom_Declaration | Binding
+                    | Parameter | Named_Return | Name_Reference | Type_Name
                     | Type_Declaration | Type_Reference | Field
                     | Variant_Part | Variant_Case | Destructured_Field
-                    | Destructured_Name | Match_Binding
+                    | Destructured_Name | Recovery_Clause | Match_Binding
                     | Member_Selection | Field_Value);
 
    ------------------------------------------------------------------
@@ -383,7 +400,8 @@ package Landin.Syntax is
    function Is_Public (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                          in Function_Declaration | Binding;
+                          in Function_Declaration | Atom_Declaration
+                             | Binding;
 
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
@@ -461,7 +479,7 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                           in Binding | Destructuring_Binding | Assignment
-                             | Discard | Field_Value;
+                             | Discard | Field_Value | Fail_Statement;
 
    --  [1100]'s call.  This is deliberately not Value_Of: reaching a defer
    --  statement registers syntax and evaluates no value at that point.
@@ -490,7 +508,7 @@ package Landin.Syntax is
    function Condition_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                          in If_Arm | Return_Statement;
+                          in If_Arm | Return_Statement | Fail_Statement;
 
    --  What a function, branch, match arm or bare block runs.  A Block for a
    --  statement body, and
@@ -530,6 +548,18 @@ package Landin.Syntax is
           Post => Contains (Of_Tree, Nth_Return'Result)
                   and then Kind (Of_Tree, Nth_Return'Result) = Named_Return;
 
+   --  The optional declared error set after `!`; No_Node is infallible.
+   function Error_Set_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                            in Function_Declaration | Anonymous_Function
+                               | Function_Type;
+
+   --  A call's optional [1030] clause; No_Node when none was written.
+   function Recovery_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Call;
+
    function Parameter_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
@@ -548,7 +578,8 @@ package Landin.Syntax is
    --  `else` [1810].  No_Node when the branch has none.
    function Else_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
-                 and then Kind (Of_Tree, Id) = If_Statement;
+                 and then Kind (Of_Tree, Id)
+                   in If_Statement | Recovery_Clause;
 
    function Arm_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre  => Contains (Of_Tree, Id)
@@ -660,6 +691,20 @@ package Landin.Syntax is
                   and then Index <= Argument_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Argument'Result);
 
+   function Atom_Member_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Atom_Union_Type;
+
+   function Nth_Atom_Member
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Atom_Union_Type
+                  and then Index <= Atom_Member_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Atom_Member'Result)
+                  and then Kind (Of_Tree, Nth_Atom_Member'Result)
+                             = Type_Reference;
+
    function Element_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
@@ -710,7 +755,8 @@ package Landin.Syntax is
 
    function Operand_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
-                  and then Kind (Of_Tree, Id) in Unary_Kind,
+                  and then Kind (Of_Tree, Id)
+                           in Unary_Kind | Try_Expression,
           Post => Contains (Of_Tree, Operand_Of'Result);
 
    --  The type [0370] is asked about.  A type and not an expression, which
@@ -807,6 +853,7 @@ private
       Sound      : Boolean := True;
       Exported   : Boolean := False;
       Mutable    : Boolean := False;
+      Recovery   : Node_Id := No_Node;
    end record;
 
    package Node_Vectors is new Ada.Containers.Vectors
