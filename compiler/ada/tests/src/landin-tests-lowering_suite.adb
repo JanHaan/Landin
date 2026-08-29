@@ -4067,6 +4067,68 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Aggregate_Arguments_Carry_Storage_Identity;
 
+   --  D96 keeps the outer and child declaration-order identities on an
+   --  address carrier, just as D90 keeps them on compact array operations.
+   procedure Nested_Arguments_Carry_Both_Identities
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nested_Arguments_Carry_Both_Identities
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "inner: type = struct" & LF
+         & "    value: i32" & LF
+         & "    row: [2]i32" & LF
+         & "end inner" & LF
+         & "outer: type = struct" & LF
+         & "    prefix: u8" & LF
+         & "    nested: inner" & LF
+         & "end outer" & LF
+         & "take: (child: inner, row: [2]i32) -> none =" & LF
+         & "end take" & LF
+         & "use: () -> none =" & LF
+         & "    mut state: outer = zeroed" & LF
+         & "    take(state.nested, state.nested.row)" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "nested aggregate argument paths are accepted");
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Child, Row : Natural := 0;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, 2) loop
+            declare
+               Value : constant IR.Value_Id := IR.Value_Id (Position);
+            begin
+               if IR.Op_Of (Unit, 2, Value) = IR.Storage_Address
+                 and then IR.Element_Field_Of (Unit, 2, Value) = 2
+               then
+                  if IR.Nested_Field_Of (Unit, 2, Value) = 0 then
+                     Child := Child + 1;
+                  elsif IR.Nested_Field_Of (Unit, 2, Value) = 2 then
+                     Row := Row + 1;
+                  end if;
+               end if;
+            end;
+         end loop;
+         Landin.Testing.Check
+           (Item, Child = 1 and then Row = 1,
+            "child and array arguments retain both path identities");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts nested storage-address carriers");
+      end;
+   end Nested_Arguments_Carry_Both_Identities;
+
    --  D75 gives D74's target-neutral carrier to both module and frame
    --  storage.  The zero image remains one whole-storage clear, not one
    --  instruction per tag, payload field, or padding byte.
@@ -5063,6 +5125,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "aggregate arguments carry storage identity",
          Aggregate_Arguments_Carry_Storage_Identity'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "nested arguments carry both identities",
+         Nested_Arguments_Carry_Both_Identities'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "variant storage carries cases and one clear",
