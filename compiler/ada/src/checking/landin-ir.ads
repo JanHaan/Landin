@@ -403,8 +403,9 @@ package Landin.IR is
    --  means by it "what a call to a `-> none` function hands back".
    --
    --  A Datum may also be [0670]'s aggregate, whose fields are added
-   --  below, or [0520]'s array, whose shape is set below.  A Routine may
-   --  not: passing or returning one is an ABI rule and its own slice.
+   --  below, or [0520]'s array, whose shape is set below.  D106 also lets a
+   --  Routine name an aggregate result; its shape belongs to Result_Slot and
+   --  one internal Usize parameter carries the caller-owned destination.
    function Add_Item
      (Into     : in out Unit;
       Kind     : Item_Kind;
@@ -419,7 +420,8 @@ package Landin.IR is
                   and then (Result in Landin.Types.Scalar_Name
                             or else (Kind = Routine
                                      and then Result
-                                              = Landin.Types.No_Value)
+                                              in Landin.Types.No_Value
+                                                 | Landin.Types.Aggregate)
                             or else (Kind = Datum
                                      and then Result
                                               in Landin.Types.Aggregate
@@ -1158,8 +1160,11 @@ package Landin.IR is
                   and then Kind_Of (Into, Item) = Routine
                   and then Holds (Into, Item, Slot)
                   and then Result_Slot (Into, Item) = No_Slot
-                  and then Type_Of (Into, Item, Slot)
-                           = Result_Of (Into, Item),
+                  and then
+                    (if Result_Of (Into, Item) = Landin.Types.Aggregate
+                     then Is_Aggregate (Into, Item, Slot)
+                     else Type_Of (Into, Item, Slot)
+                            = Result_Of (Into, Item)),
           Post => Result_Slot (Into, Item) = Slot;
 
    function Result_Slot (Of_Unit : Unit; Item : Item_Id) return Slot_Id
