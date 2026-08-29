@@ -136,7 +136,8 @@ its neutral field identities on that address, contextual `zeroed` clears a
 fresh shaped caller temporary, array literals or repetitions fill one in
 source order with compact suffix fills, and flat struct construction fills one
 by nominal scalar, fixed-array or variant labels. Variant-bearing storage and
-constructed temporaries retain compact case and payload shapes across the copy.
+constructed temporaries retain compact case and payload shapes across the copy;
+a complete depth-one ordinary child retains its nested field run as well.
 Further aggregate arguments
 and aggregate returns remain absent; R4.40 later completes C ABI classification.
 

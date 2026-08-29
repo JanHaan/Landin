@@ -1,0 +1,21 @@
+inner: type = struct
+    value: i32
+    other: i32
+end inner
+
+outer: type = struct
+    prefix: i32
+    nested: inner
+    suffix: i32
+end outer
+
+consume: (value: outer) -> none =
+end consume
+
+bad: () -> none =
+    mut state: outer
+    state.prefix = 0
+    state.nested.value = 1
+    state.suffix = 0
+    consume(state)
+end bad

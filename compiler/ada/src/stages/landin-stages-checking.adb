@@ -901,8 +901,7 @@ package body Landin.Stages.Checking is
             --  rule this slice does not have.
             Is_Aggregate_Parameter : constant Boolean :=
               Held = Ty.Aggregate
-              and then Syn.Kind (Of_Tree, Node) = Syn.Parameter
-              and then not Aggregate_Bearing;
+              and then Syn.Kind (Of_Tree, Node) = Syn.Parameter;
             Is_Array_Parameter : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Parameter;
@@ -1166,6 +1165,7 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
               and then not Is_Struct_Zeroed_Init
+              and then not Is_Aggregate_Parameter
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
