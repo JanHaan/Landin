@@ -89,9 +89,7 @@ package Landin.Diagnostics.Syntactic is
    --  Without this table the compiler would say that `loop` is a name that
    --  needs a `:` after it, which is true and useless.
    type Refused_Construct is
-     (Try_Expression,
-      Fail_Statement,
-      Declared_Type,
+     (Declared_Type,
       Float_Type,
       Text_Type,
       Parameter_Convention,
@@ -120,8 +118,6 @@ package Landin.Diagnostics.Syntactic is
    function Construct (Item : Refused_Construct)
      return Landin.Tokens.Construct_Reference
      is (case Item is
-            when Try_Expression       => "[0960]",
-            when Fail_Statement       => "[0970]",
             when Declared_Type        => "[0120]",
             when Float_Type           => "[0170]",
             when Text_Type            => "[0600]",
@@ -170,11 +166,8 @@ private
      is (case Item is
             --  R2.20 implements the types a program declares.
             when Declared_Type        => "R2.20",
-            --  R2.30 implements non-loop control flow, declared errors and
-            --  multiple returns.  R4.10 owns the remaining hosted loop
-            --  surface, including its transfers.
-            when Try_Expression
-               | Fail_Statement       => "R2.30",
+            --  R4.10 owns the remaining hosted loop surface, including
+            --  its transfers.
             when Loop_Statement
                | While_Statement
                | For_Statement

@@ -1634,12 +1634,13 @@ package body Landin.Stages.Checking is
                     /= Ty.Ill_Typed
                then
                   Bad.Report
-                    (Item    => Bad.Unsupported_Use,
+                    (Item    => Bad.Not_Known_At_Compile_Time,
                      Source  => Syn.Source_Of (Of_Tree),
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "a module function value needs an initial"
                                 & " function address",
-                     Refused => Bad.Function_Value,
+                     Note    => "[1940]: a function address has no implicit"
+                                & " all-zero module image",
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Written);
                end if;
@@ -1720,11 +1721,7 @@ package body Landin.Stages.Checking is
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "a nonzero value of a nested-struct type is"
                                 & " not enabled yet",
-                     Refused =>
-                       (if Syn.Kind (Of_Tree, Node)
-                              in Syn.Parameter | Syn.Named_Return
-                        then Bad.Struct_ABI
-                        else Bad.Struct_Value),
+                     Refused => Bad.Struct_Value,
                      Into    => Found);
                end if;
                return Ty.Ill_Typed;
@@ -1752,11 +1749,7 @@ package body Landin.Stages.Checking is
                      Where   => Syn.Where (Of_Tree, Node),
                      Message => "this value of a variant-bearing struct is"
                                 & " not enabled yet",
-                     Refused =>
-                       (if Syn.Kind (Of_Tree, Node)
-                              in Syn.Parameter | Syn.Named_Return
-                        then Bad.Struct_ABI
-                        else Bad.Variant_Value),
+                     Refused => Bad.Variant_Value,
                      Into    => Found);
                end if;
                return Ty.Ill_Typed;
@@ -1788,10 +1781,7 @@ package body Landin.Stages.Checking is
                         else "a value of a struct type is not enabled"
                              & " yet"),
                      Refused =>
-                       (if Syn.Kind (Of_Tree, Node)
-                              in Syn.Parameter | Syn.Named_Return
-                        then Bad.Struct_ABI
-                        elsif Refuses_A_Computed_Element (Of_Tree, Node)
+                       (if Refuses_A_Computed_Element (Of_Tree, Node)
                         then Bad.Whole_Element_Aggregate
                         else Bad.Struct_Value),
                      Into    => Found);
@@ -4397,12 +4387,14 @@ package body Landin.Stages.Checking is
                     or else Signature = Landin.Checking.No_Signature
                   then
                      Bad.Report
-                       (Item    => Bad.Unsupported_Use,
+                       (Item    => Bad.Type_Mismatch,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Callee),
                         Message => "this value is not a function, so this"
                                    & " is not a call",
-                        Refused => Bad.Call_Of_A_Binding,
+                        Note    => "[1920]: a callee has a function type",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this call",
                         Into    => Found);
                      return Kept (Ty.Ill_Typed);
                   end if;
