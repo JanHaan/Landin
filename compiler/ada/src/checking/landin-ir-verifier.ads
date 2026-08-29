@@ -55,6 +55,8 @@ package Landin.IR.Verifier is
       Unprepared_Unit,
       Item_Runs_Overlap,
       Operand_Runs_Overlap,
+      Signature_Runs_Overlap,
+      Signature_Part_Malformed,
       --  An item.
       Item_Without_A_Block,
       Item_Still_Building,
@@ -72,6 +74,9 @@ package Landin.IR.Verifier is
       Operand_Defines_Nothing,
       Operands_Disagree,
       Result_Disagrees,
+      Signature_Out_Of_Range,
+      Routine_Signature_Disagrees,
+      Function_Value_Signature_Disagrees,
       Field_Shape_Malformed,
       Condition_Is_Not_A_Bool,
       --  Places [1900] and module values [1940].

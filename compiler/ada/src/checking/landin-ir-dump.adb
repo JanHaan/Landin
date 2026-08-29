@@ -60,6 +60,17 @@ package body Landin.IR.Dump is
         is (if Holds (Of_Unit, Id)
             then Named (Declares (Of_Unit, Id)) else "-");
 
+      function Signature_Part_Text (Part : Signature_Part) return String
+        is (case Part.Kind is
+               when Landin.Types.No_Value => "none",
+               when Landin.Types.Scalar_Name => Shown (Part.Kind),
+               when Landin.Types.Aggregate =>
+                  "struct " & Named (Part.Aggregate_Body),
+               when Landin.Types.Fixed_Array =>
+                  "[" & Trimmed (Element_Total'Image (Part.Length)) & "]"
+                  & Landin.Types.Spelling (Part.Element),
+               when others => "invalid");
+
       --  D74/D75 use one target-neutral shape spelling for measurement,
       --  datum and slot runs.  Variant payloads are depth-one leaves, so
       --  their case runs can be rendered without inventing target offsets.
@@ -400,14 +411,36 @@ package body Landin.IR.Dump is
                   return Lead & " fields" & Unbounded.To_String (Fields);
                end;
 
+            when Function_Address =>
+               declare
+                  C : constant Item_Id := Callee_Of (Of_Unit, Item, Value);
+               begin
+                  return Lead & " target " & Trimmed (Item_Id'Image (C))
+                    & " " & Item_Named (C) & " signature "
+                    & Trimmed
+                        (Signature_Id'Image
+                           (Signature_Of (Of_Unit, Item, Value)));
+               end;
+
             when Call =>
                declare
                   C : constant Item_Id := Callee_Of (Of_Unit, Item, Value);
                begin
                   return Lead & " callee " & Trimmed (Item_Id'Image (C))
                          & " " & Item_Named (C)
+                         & " signature "
+                         & Trimmed
+                             (Signature_Id'Image
+                                (Call_Signature (Of_Unit, Item, Value)))
                          & Operands (Item, Value);
                end;
+
+            when Indirect_Call =>
+               return Lead & " signature "
+                 & Trimmed
+                     (Signature_Id'Image
+                        (Call_Signature (Of_Unit, Item, Value)))
+                 & Operands (Item, Value);
 
             when Jump =>
                return Lead & " target "
@@ -432,7 +465,31 @@ package body Landin.IR.Dump is
       end Rendered;
 
    begin
-      Put ("unit items " & Trimmed (Natural'Image (Item_Count (Of_Unit))));
+      Put
+        ("unit signatures "
+         & Trimmed (Natural'Image (Signature_Count (Of_Unit)))
+         & " items " & Trimmed (Natural'Image (Item_Count (Of_Unit))));
+
+      for Which in 1 .. Signature_Count (Of_Unit) loop
+         declare
+            Id : constant Signature_Id := Signature_Id (Which);
+            Parameters : Unbounded.Unbounded_String;
+         begin
+            for Index in 1 .. Signature_Parameter_Count (Of_Unit, Id) loop
+               if Index > 1 then
+                  Unbounded.Append (Parameters, ", ");
+               end if;
+               Unbounded.Append
+                 (Parameters,
+                  Signature_Part_Text
+                    (Nth_Signature_Parameter (Of_Unit, Id, Index)));
+            end loop;
+            Put
+              ("signature " & Trimmed (Signature_Id'Image (Id))
+               & " (" & Unbounded.To_String (Parameters) & ") -> "
+               & Signature_Part_Text (Signature_Result (Of_Unit, Id)));
+         end;
+      end loop;
 
       for Which in 1 .. Item_Count (Of_Unit) loop
          declare
@@ -445,6 +502,11 @@ package body Landin.IR.Dump is
                  & " " & Item_Kind'Image (Kind_Of (Of_Unit, Id))
                  & " " & Item_Named (Id)
                  & " result " & Shown (Result_Of (Of_Unit, Id))
+                 & (if Signature_Of (Of_Unit, Id) = No_Signature then ""
+                    else " signature "
+                      & Trimmed
+                          (Signature_Id'Image
+                             (Signature_Of (Of_Unit, Id))))
                  & " params "
                  & Trimmed (Natural'Image (Parameter_Count (Of_Unit, Id)))
                  & " slots "
@@ -727,6 +789,12 @@ package body Landin.IR.Dump is
                              & Unbounded.To_String (Fields)
                         else Landin.Types.Spelling
                                (Type_Of (Of_Unit, Id, Slot)))
+                     & (if Signature_Of (Of_Unit, Id, Slot) = No_Signature
+                        then ""
+                        else " signature "
+                          & Trimmed
+                              (Signature_Id'Image
+                                 (Signature_Of (Of_Unit, Id, Slot))))
                      & Unbounded.To_String (Marks));
                end;
             end loop;

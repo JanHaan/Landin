@@ -50,6 +50,84 @@ package body Landin.IR is
       Into.Ready := True;
    end Prepare;
 
+   ------------------------------------------------------------------
+   --  Signatures
+   ------------------------------------------------------------------
+
+   function Signature_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Signatures.Length));
+
+   function Add_Signature
+     (Into       : in out Unit;
+      Parameters : Signature_Part_Array;
+      Result     : Signature_Part) return Signature_Id
+   is
+      Made : Signature_Record :=
+        (Parameters => (First => 0, Count => 0), Result => Result);
+   begin
+      if Parameters'Length > 0 then
+         Made.Parameters.First := Natural (Into.Signature_Parts.Length);
+         for Part of Parameters loop
+            Into.Signature_Parts.Append (Part);
+            Made.Parameters.Count := Made.Parameters.Count + 1;
+         end loop;
+      end if;
+      Into.Signatures.Append (Made);
+      return Signature_Id (Into.Signatures.Last_Index);
+   end Add_Signature;
+
+   function Signature_Parameter_Count
+     (Of_Unit : Unit; Signature : Signature_Id) return Natural
+     is (Of_Unit.Signatures (Positive (Signature)).Parameters.Count);
+
+   function Nth_Signature_Parameter
+     (Of_Unit : Unit; Signature : Signature_Id; Index : Positive)
+      return Signature_Part
+   is
+      Parameters : constant Run :=
+        Of_Unit.Signatures (Positive (Signature)).Parameters;
+   begin
+      return Of_Unit.Signature_Parts (Parameters.First + Index);
+   end Nth_Signature_Parameter;
+
+   function Signature_Result
+     (Of_Unit : Unit; Signature : Signature_Id) return Signature_Part
+     is (Of_Unit.Signatures (Positive (Signature)).Result);
+
+   function Signatures_Agree
+     (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
+   is
+      function Parts_Agree (A, B : Signature_Part) return Boolean
+        is (A.Kind = B.Kind
+            and then
+              (case A.Kind is
+                  when Landin.Types.No_Value => True,
+                  when Landin.Types.Scalar_Name => True,
+                  when Landin.Types.Aggregate =>
+                     A.Aggregate_Body = B.Aggregate_Body,
+                  when Landin.Types.Fixed_Array =>
+                     A.Length = B.Length and then A.Element = B.Element,
+                  when others => False));
+   begin
+      if Signature_Parameter_Count (Of_Unit, Left)
+           /= Signature_Parameter_Count (Of_Unit, Right)
+        or else not Parts_Agree
+          (Signature_Result (Of_Unit, Left),
+           Signature_Result (Of_Unit, Right))
+      then
+         return False;
+      end if;
+      for Index in 1 .. Signature_Parameter_Count (Of_Unit, Left) loop
+         if not Parts_Agree
+           (Nth_Signature_Parameter (Of_Unit, Left, Index),
+            Nth_Signature_Parameter (Of_Unit, Right, Index))
+         then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Signatures_Agree;
+
    function Add_Item
      (Into     : in out Unit;
       Kind     : Item_Kind;
@@ -99,6 +177,19 @@ package body Landin.IR is
    function Origin_Of (Of_Unit : Unit; Id : Item_Id)
      return Landin.Provenance.Origin
      is (Element (Of_Unit, Id).Site);
+
+   function Signature_Of (Of_Unit : Unit; Item : Item_Id)
+      return Signature_Id
+     is (Element (Of_Unit, Item).Signature);
+
+   procedure Set_Signature
+     (Into : in out Unit; Item : Item_Id; Signature : Signature_Id)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Signature := Signature;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Signature;
 
    function Item_For (Of_Unit : Unit; Declared : Declaration_Id)
      return Item_Id
@@ -208,13 +299,15 @@ package body Landin.IR is
       Item     : Item_Id;
       Of_Type  : Landin.Types.Scalar_Name;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Signature : Signature_Id := No_Signature) return Slot_Id
    is
       Held : Item_Record := Element (Into, Item);
    begin
       Open_Run (Held.Slots, Natural (Into.Slots.Length));
       Into.Slots.Append
         (Slot_Record'(Of_Type     => Of_Type,
+                      Signature   => Signature,
                       Declaration => Declares,
                       Site        => Site,
                       others      => <>));
@@ -723,6 +816,10 @@ package body Landin.IR is
      return Landin.Types.Scalar_Name
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Of_Type);
 
+   function Signature_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Signature_Id
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Signature);
+
    function Declares
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
      return Declaration_Id
@@ -834,6 +931,16 @@ package body Landin.IR is
    function Result_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Type_Kind
      is (Held (Of_Unit, Item, Value).Result);
+
+   function Signature_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
+     is (if Op_Of (Of_Unit, Item, Value) in Function_Address | Load
+         then Held (Of_Unit, Item, Value).Signature
+         else No_Signature);
+
+   function Call_Signature
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
+     is (Held (Of_Unit, Item, Value).Signature);
 
    function Origin_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Provenance.Origin
@@ -1200,6 +1307,7 @@ package body Landin.IR is
                          Result => Type_Of (Into, Item, Slot),
                          Site   => Site,
                          Slot   => Slot,
+                         Signature => Signature_Of (Into, Item, Slot),
                          others => <>)));
 
    procedure Emit_Store
@@ -1795,6 +1903,7 @@ package body Landin.IR is
                          Result => Landin.Types.Usize,
                          Site => Site,
                          Named => Target,
+                         Signature => Signature_Of (Into, Target),
                          others => <>)));
 
    function Emit_Call
@@ -1802,15 +1911,30 @@ package body Landin.IR is
       Item   : Item_Id;
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
-      Site   : Landin.Provenance.Origin;
-      Indirect : Boolean := False) return Value_Id
+      Site   : Landin.Provenance.Origin) return Value_Id
      is (Append
            (Into, Item,
-            Instruction'(Op        =>
-                           (if Indirect then Indirect_Call else Call),
+            Instruction'(Op        => Call,
                          Result    => Result,
                          Site      => Site,
                          Named     => Callee,
+                         Signature => Signature_Of (Into, Callee),
+                         First_Arg => 0,
+                         Args      => 0,
+                         others    => <>)));
+
+   function Emit_Indirect_Call
+     (Into      : in out Unit;
+      Item      : Item_Id;
+      Signature : Signature_Id;
+      Result    : Landin.Types.Type_Kind;
+      Site      : Landin.Provenance.Origin) return Value_Id
+     is (Append
+           (Into, Item,
+            Instruction'(Op        => Indirect_Call,
+                         Result    => Result,
+                         Site      => Site,
+                         Signature => Signature,
                          First_Arg => 0,
                          Args      => 0,
                          others    => <>)));

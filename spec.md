@@ -172,11 +172,14 @@ line_comment  ::= "--" (any byte except line_end)*
 A binding names one thing, and says how much it may change.
 The full form, the inferred form and the mutable form are [0040],
 [0050] and [0060]; a binding with no value must be assigned before
-it is read [0080]. The kernel's types are the eleven scalar names, fixed arrays,
-and what [1795] declares from them: aliases, named ordinary structs and D74's
-named variant-bearing structs. Enabled runtime leaves are scalar or fixed
-array; D86/D87 additionally compose one named ordinary struct field for
-measurement and zeroable storage while retaining its nonzero-value boundary.
+it is read [0080]. The kernel's types are the eleven scalar names, fixed
+arrays, D117's one infallible function type, and what [1795] declares from
+them: aliases, named ordinary structs and D74's named variant-bearing structs.
+Enabled runtime leaves are scalar or fixed array; D86/D87 additionally compose
+one named ordinary struct field for measurement and zeroable storage while
+retaining its nonzero-value boundary. A function type is written with [1800]'s
+signature syntax. Its parameter and return names describe positions and
+declare nothing; only a function declaration opens [1840]'s signature scope.
 The other TYPES YOU DECLARE
 remain deferred. A type position holds a declared name either way, since
 [1760] makes the eleven ordinary declared names the kernel
@@ -186,13 +189,14 @@ An array [0520] is a type position too, and its length is part
 of it: the bound is [1770]'s integer, written in whatever base,
 and the element is a type like any other.
 ```landin-grammar
-binding     ::= "mut"? identifier ":" type ("=" expression)?
-              | "mut"? identifier ":=" expression
-type        ::= array_type | scalar_name | identifier
-array_type  ::= "[" integer "]" type
-scalar_name ::= "u8" | "u16" | "u32" | "u64"
-              | "i8" | "i16" | "i32" | "i64"
-              | "usize" | "isize" | "bool"
+binding       ::= "mut"? identifier ":" type ("=" expression)?
+                | "mut"? identifier ":=" expression
+type          ::= function_type | array_type | scalar_name | identifier
+function_type ::= signature
+array_type    ::= "[" integer "]" type
+scalar_name   ::= "u8" | "u16" | "u32" | "u64"
+                | "i8" | "i16" | "i32" | "i64"
+                | "usize" | "isize" | "bool"
 
 ```
 
@@ -206,8 +210,8 @@ declaration gives an existing type another name and the two are
 one type everywhere. A struct body [0670] has no existing type
 to alias and introduces the nominal type [0710] whose identity
 is this declaration; an alias of that name keeps the same
-identity. Every alias chain has to reach a scalar type or a
-struct body. A chain that comes back to an alias in the chain
+identity. Every alias chain has to reach a scalar type, fixed array, function
+type or struct body. A chain that comes back to an alias in the chain
 reaches no type and is refused at that declaration.
 A type name is an ordinary declared name [1760], so one
 declaration per name per scope [1850] and a name that names
@@ -234,6 +238,10 @@ conventions [0900], multiple returns [0920], 'escaping' [0780],
 generic parameters [1290] and anonymous functions [1010] are all
 described in this tour and are not enabled yet: the kernel takes
 values in and hands one value or none back.
+A function type reuses this `signature` production but has no body. The
+enabled form is infallible: declared atom-set errors remain later R2.30 work.
+Its labels are type description only and do not declare parameters or a named
+return.
 A body is statements, or it is the one expression that fills the
 return. One token past a leading name decides between them: ':'
 opens a binding and '=' an assignment, and anything else means the
@@ -372,7 +380,7 @@ an inner scope means nothing until the inner ones are named.
 | scope | what it holds |
 |---|---|
 | module | every file compiled together. There is one, until [1410]'s directories arrive. |
-| signature | a function's parameters and its named return [1800]. The named return is a place the body assigns [0930], so it is declared here and not in the body, and a parameter and a return may not share a name. |
+| signature | a function declaration's parameters and its named return [1800]. The named return is a place the body assigns [0930], so it is declared here and not in the body, and a parameter and a return may not share a name. A written function type opens no scope and its labels declare nothing. |
 | body | what a function runs, and one for each arm of an `if` and for its `else` [1810]. A statement run is a block and a block is what scopes [1090], so a name declared in one arm is not visible in another and not after the branch closes. |
 
 [1800]'s expression body opens no scope, because an expression
@@ -430,6 +438,11 @@ does not say two names are one type.
 u128 and i128 [0150], the packed widths [0730] and the
 floats [0170] are described in this tour and are not enabled
 yet.
+Fixed arrays hold their declaration-order elements [0520], and ordinary or
+variant-bearing structs hold the fields their nominal declaration gives them
+[0710] [0750]. A function type holds a target code address with the complete
+parameter and result signature [0870] [1000]. The signature, not the address,
+decides which values may be stored together and how a call is checked.
 
 ### [1880] Where a literal's type comes from, and what a context is
 
@@ -507,7 +520,12 @@ kernel has, two may be written and two may not.
 | an immutable binding | may not: [0040] makes it immutable and [0450] says it protects the value it holds |
 | a parameter | may not: the unmarked convention is [0900]'s 'in', which is the promise not to change the value |
 
-A function is not a place at all.
+A function declaration is not a place. A local binding holding a function
+value is an ordinary place: an immutable one may be called but not replaced,
+and a mutable one may be replaced only by a value with the same complete
+signature. D117 enables explicit function-typed local storage and D113's
+inferred local storage. Function-typed module storage, struct fields,
+parameters and named returns remain refused by name [1830].
 The value's type is the place's type [0310], and the report
 names the place as well as the value, because which of the
 two is wrong is the reader's to decide.
@@ -547,10 +565,12 @@ A call of a function returning none has no type. It is a
 statement [1810] and nothing else: nothing binds it, no
 argument is one, and [1930] cannot discard it, because there
 is no result there to discard.
-A callee is a function. A name bound to a binding is not
-one, and a function's own name anywhere but in front of the
-'(' is a value of a function type [1000], which [1790]'s
-'type' rule does not spell: [1830] refuses it and names it.
+A callee is a function. It may be a declared function or a local binding whose
+value has a function type; the latter call uses the stored code address. A
+function's own name away from a call is a value of its function type [1000].
+All three positions retain one complete signature, and parameter labels are
+not part of signature agreement: parameter order and type, plus result type,
+are. A binding of any other type is not a function.
 A scalar type name in front of the '(' is [0700]'s
 conversion, which [0310] describes and this grammar omits,
 so [1830] refuses that by name too. It is not a misspelling
@@ -6155,21 +6175,23 @@ signature when a local uses `:=`.
 
 **Chosen:** a local may infer a function value from a direct function name,
 store that value, replace a mutable binding with another function value, and
-call the binding indirectly. The inferred binding retains the original
-signature declaration as its checking identity. Neutral IR materializes a
-`Function_Address` naming a routine item and `Indirect_Call` names that same
-signature while taking the runtime code address as its first operand. The
-Linux backend emits RIP-relative address formation and `call *address`.
+call the binding indirectly. The inferred binding retains a first-class
+signature descriptor as its checking identity, independently of the concrete
+routine that first supplied it. Neutral IR materializes a `Function_Address`
+naming a routine item and carrying its descriptor; `Indirect_Call` carries a
+structurally agreeing descriptor, names no callee item, and takes the runtime
+code address as its first operand. The Linux backend emits RIP-relative address
+formation and `call *address`.
 
 Arguments, scalar or aggregate results, stack positions and hidden aggregate
 result destinations otherwise use the existing internal convention unchanged.
-Written function types, function parameters and anonymous functions remain
-later slices.
+D117 adds one written infallible function type. Function parameters and
+anonymous functions remain later slices.
 
 **Why the indirect instruction retains a signature:** a runtime address alone
 cannot tell the verifier how many operands or what result convention the call
-uses. Naming the source signature is target-neutral type evidence, not a claim
-that the runtime target is statically known.
+uses. Naming a semantic descriptor is target-neutral type evidence, not a
+claim that the runtime target is statically known.
 
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/function-value-type-mismatch`; the generated token and IR records;
@@ -6181,9 +6203,10 @@ and `runtime/inferred-function-values` on Linux x86-64.
 [1000]. Replacing an inferred function binding therefore requires equal
 parameter and result shapes, not merely another code address.
 
-**Chosen:** mutable inferred function values may be replaced only by a function
-with the same parameter count, declaration-order parameter types and result
-type. Nominal struct bodies and fixed-array shapes participate in that equality.
+**Chosen:** mutable function values may be replaced only by a function with the
+same parameter count, declaration-order parameter types and result type.
+Nominal struct bodies and fixed-array shapes participate in that equality;
+parameter and result labels do not.
 An indirect call uses the complete direct-call convention: hidden aggregate
 result destination first, then source parameters across the six-register and
 stack run. The runtime code-address operand is verifier metadata and is not a
@@ -6236,3 +6259,43 @@ boundary.
 
 **Pinned by** `negative/aggregate-call-result-missing-at-early-exit` and
 `runtime/aggregate-results-across-early-exits` on Linux x86-64.
+
+### D117 — A function value carries a signature, not a possible callee
+
+**The tour said** that a function type is an ordinary type, written like its
+signature, and that a function value is a code address [0870] [1000]. It did
+not say whether the labels are declarations, how a stored address retains its
+type, or which written storage context opens the implementation slice.
+
+**Chosen:** [1800]'s infallible signature is one written function type. Its
+parameter and result labels describe positions and declare nothing. It may be
+named by a type declaration and used for explicitly typed local storage; the
+local may be called indirectly and, when mutable, replaced by any function
+whose complete signature agrees. Function-typed module storage, struct fields,
+parameters and results, declared-error signatures and anonymous functions
+remain later slices.
+
+Every declared function, written function type and inferred function value
+receives a first-class target-neutral signature descriptor. Agreement compares
+parameter count and declaration-order types plus the result type; labels and
+source sites do not participate. Scalar identity, nominal aggregate identity
+and fixed-array length and scalar element identity do. The verified IR carries
+the same semantic descriptor on routines, code-address values, function-value
+slots and direct or indirect calls. An `Indirect_Call` names no concrete
+routine: its address operand and descriptor must agree, and the descriptor
+alone decides the carrier count and result convention.
+
+**Why not keep the first function declaration as type evidence:** a written
+type need not have one possible target, and a mutable local may successively
+hold several. Treating the first callee item as the type makes an incidental
+initializer an authority over later checking and prevents malformed IR from
+expressing the actual disagreement. A code address alone has no type metadata;
+target widths, registers and offsets would make the alternative descriptor an
+ABI record rather than a language signature.
+
+**Pinned by** the parser, checker, type, lowering, IR, verifier and x86-64
+backend seams; malformed signature and indirect-call cases in the verifier
+suite; `negative/written-function-signature-mismatch`; the generated lexical
+and IR records through `positive/written-function-values`; and
+`runtime/written-function-values` together with the existing
+inferred-function-value runtime cases on Linux x86-64.

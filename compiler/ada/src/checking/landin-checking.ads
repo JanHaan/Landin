@@ -33,17 +33,13 @@
 --  types wait on each other, and without a mark that is a stack overflow
 --  rather than a diagnostic.
 --
---  A declaration's type is the type of the VALUE its name denotes, and a
---  function name denotes no value the kernel can spell.  A function is an
---  ordinary value of a function type [1000] and [1010] binds one to a
---  name, but [1790]'s `type` rule spells no function type, so a function's
---  name anywhere but in front of a `(` is a construct this grammar omits
---  and [1920] has [1830] refuse it by name.  A Function_Declaration
---  therefore settles as Not_Typed, and `x := f` is refused by reading that
---  rather than by a special case -- but it is refused as a construct that
---  is not enabled yet, never as a name that has no type.  A call's type is its
---  callee's named return, read through the per-node run of the callee's own
---  tree; `-> none` is No_Value.
+--  A declaration's type is the type of the VALUE its name denotes.  D113
+--  makes a function name and an inferred local Function_Value; D117 adds a
+--  written function type for explicit local storage.  Type_Kind says that
+--  category and this table carries the complete signature descriptor beside
+--  each relevant node and declaration.  It never substitutes the declaration
+--  of one possible callee for that type evidence.  A call's type is its
+--  descriptor's named result; `-> none` is No_Value.
 --
 --  Nothing here holds a diagnostic and nothing here decides a rule.  A
 --  mismatch is two type values that are not equal; the codes belong to
@@ -205,6 +201,112 @@ package Landin.Checking is
    --  target.  Its range holds every enabled target's `usize`; D18 applies
    --  the particular target's byte-extent limit before one is recorded.
    type Element_Count is range 0 .. 2 ** 64 - 1;
+
+   ------------------------------------------------------------------
+   --  Function signatures
+   ------------------------------------------------------------------
+
+   --  D117: a function value carries a signature descriptor, never the
+   --  declaration of one routine that happened to supply it.  The identity
+   --  is dense within one compilation.  Each part retains only language
+   --  type identity: a scalar name, [0710]'s nominal aggregate body, or
+   --  D17's array shape.  No width, offset, register or target byte appears
+   --  here.
+   type Signature_Id is range 0 .. Integer'Last;
+   No_Signature : constant Signature_Id := 0;
+
+   type Signature_Part is record
+      Kind    : Landin.Types.Type_Kind := Landin.Types.No_Value;
+      Aggregate_Body : Declaration_Id  := No_Declaration;
+      Length  : Element_Count          := 0;
+      Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
+      Site    : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+   end record;
+
+   type Signature_Part_Array is
+     array (Positive range <>) of Signature_Part;
+
+   No_Signature_Parts : constant Signature_Part_Array (1 .. 0) := [];
+
+   function Signature_Count (Of_Table : Table) return Natural
+     with Pre => Is_Prepared (Of_Table);
+
+   function Holds (Of_Table : Table; Id : Signature_Id) return Boolean
+     is (Is_Prepared (Of_Table)
+         and then Id /= No_Signature
+         and then Natural (Id) <= Signature_Count (Of_Table));
+
+   function Add_Signature
+     (Into       : in out Table;
+      Parameters : Signature_Part_Array;
+      Result     : Signature_Part;
+      Site       : Landin.Provenance.Origin) return Signature_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Signature'Result);
+
+   function Signature_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Signature_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Signature_Of
+     (Of_Table : Table; Id : Declaration_Id) return Signature_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Natural (Id) <= Declaration_Limit (Of_Table);
+
+   procedure Note_Signature
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Signature : Signature_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Signature),
+          Post => Signature_Of (Into, Of_Tree, Node) = Signature;
+
+   procedure Note_Signature
+     (Into      : in out Table;
+      Id        : Declaration_Id;
+      Signature : Signature_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Id /= No_Declaration
+                  and then Natural (Id) <= Declaration_Limit (Into)
+                  and then Holds (Into, Signature),
+          Post => Signature_Of (Into, Id) = Signature;
+
+   function Signature_Parameter_Count
+     (Of_Table : Table; Signature : Signature_Id) return Natural
+     with Pre => Holds (Of_Table, Signature);
+
+   function Nth_Signature_Parameter
+     (Of_Table : Table; Signature : Signature_Id; Index : Positive)
+      return Signature_Part
+     with Pre => Holds (Of_Table, Signature)
+                 and then Index <= Signature_Parameter_Count
+                                     (Of_Table, Signature);
+
+   function Signature_Result
+     (Of_Table : Table; Signature : Signature_Id) return Signature_Part
+     with Pre => Holds (Of_Table, Signature);
+
+   function Signature_Origin
+     (Of_Table : Table; Signature : Signature_Id)
+      return Landin.Provenance.Origin
+     with Pre => Holds (Of_Table, Signature);
+
+   --  Descriptor identity is deliberately not equality: a written type and
+   --  a declaration may describe the same signature at different source
+   --  sites.  Agreement ignores those sites and compares only language type
+   --  identity.
+   function Signatures_Agree
+     (Of_Table : Table; Left, Right : Signature_Id) return Boolean
+     with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
 
    --  Field order is declaration order [0750].  D45 adds one compact
    --  fixed-array leaf, D74 an unfolded variant part, and D86 a
@@ -605,6 +707,12 @@ private
       Element_Type => Landin.Provenance.Declaration_Id,
       "="          => Landin.Provenance."=");
 
+   package Signature_Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Signature_Id);
+
+   package Signature_Part_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Signature_Part);
+
    package Offset_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Landin.Targets.Byte_Count,
@@ -632,6 +740,15 @@ private
      (Index_Type   => Positive,
       Element_Type => Case_Run);
 
+   type Signature_Record is record
+      Parameters : Run;
+      Result     : Signature_Part;
+      Site       : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+   end record;
+
+   package Signature_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Signature_Record);
+
    type Aggregate_Layout is record
       Ready  : Boolean := False;
       --  Payload shapes share Field_Shapes but have no top-level offset.
@@ -656,6 +773,7 @@ private
       --  it is, and [0710] makes two aggregates one type exactly when
       --  they came from one declaration.
       Node_Bodies  : Body_Vectors.Vector;
+      Node_Signatures : Signature_Id_Vectors.Vector;
       --  Which field a selection node names, in the same run.
       Node_Fields  : Index_Vectors.Vector;
       Node_Shapes  : Shape_Vectors.Vector;
@@ -663,6 +781,9 @@ private
       Runs         : Run_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
       Bodies       : Body_Vectors.Vector;
+      Declaration_Signatures : Signature_Id_Vectors.Vector;
+      Signatures   : Signature_Vectors.Vector;
+      Signature_Parts : Signature_Part_Vectors.Vector;
       Layouts      : Layout_Vectors.Vector;
       Field_Offsets : Offset_Vectors.Vector;
       Field_Shapes : Field_Shape_Vectors.Vector;

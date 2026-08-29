@@ -14,6 +14,10 @@ package body Landin.IR.Verifier is
                & " run says they are",
             when Operand_Runs_Overlap =>
                "a call's operands are not where its run says they are",
+            when Signature_Runs_Overlap =>
+               "a signature's parameters are not where its run says they are",
+            when Signature_Part_Malformed =>
+               "a signature carries a malformed target-neutral type part",
             when Item_Without_A_Block =>
                "an item has no block, so it describes nothing",
             when Item_Still_Building  =>
@@ -42,6 +46,12 @@ package body Landin.IR.Verifier is
                "two operands of one operator do not have one type",
             when Result_Disagrees     =>
                "an instruction's result is not the type its operands give",
+            when Signature_Out_Of_Range =>
+               "a callable value names a signature the unit does not have",
+            when Routine_Signature_Disagrees =>
+               "a routine's slots disagree with its signature descriptor",
+            when Function_Value_Signature_Disagrees =>
+               "a function value disagrees with its slot or call signature",
             when Field_Shape_Malformed =>
                "an aggregate's scalar field has a length other than one",
             when Condition_Is_Not_A_Bool =>
@@ -205,6 +215,8 @@ package body Landin.IR.Verifier is
         Aggregate_Field_Image_Value_Does_Not_Fit;
       Field_Pattern_Fault : constant Fault_Kind :=
         Aggregate_Field_Image_Pattern_Not_Canonical;
+      Signature_Mismatch : constant Fault_Kind :=
+        Function_Value_Signature_Disagrees;
 
       function Variant_Shape_Of
         (Item          : Item_Id;
@@ -626,6 +638,16 @@ package body Landin.IR.Verifier is
         (Shape : Field_Shape; Aggregate_Allowed : Boolean := False)
         return Boolean;
 
+      function Signature_Part_Is_Malformed
+        (Part : Signature_Part; Result_Part : Boolean) return Boolean;
+
+      function Signature_Carrier_Count
+        (Signature : Signature_Id) return Natural;
+
+      function Part_Agrees_With_Slot
+        (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
+         return Boolean;
+
       function Field_Shape_Is_Malformed
         (Shape : Field_Shape; Aggregate_Allowed : Boolean := False)
         return Boolean
@@ -711,10 +733,106 @@ package body Landin.IR.Verifier is
          return False;
       end Field_Shape_Is_Malformed;
 
+      function Signature_Part_Is_Malformed
+        (Part : Signature_Part; Result_Part : Boolean) return Boolean
+      is
+      begin
+         case Part.Kind is
+            when Landin.Types.No_Value =>
+               return not Result_Part
+                 or else Part.Aggregate_Body /= No_Declaration
+                 or else Part.Length /= 0;
+            when Landin.Types.Scalar_Name =>
+               return Part.Aggregate_Body /= No_Declaration
+                 or else Part.Length /= 0;
+            when Landin.Types.Aggregate =>
+               return Part.Aggregate_Body = No_Declaration
+                 or else Natural (Part.Aggregate_Body)
+                           > Declaration_Limit (Of_Unit)
+                 or else Part.Length /= 0;
+            when Landin.Types.Fixed_Array =>
+               return Part.Aggregate_Body /= No_Declaration;
+            when others =>
+               return True;
+         end case;
+      end Signature_Part_Is_Malformed;
+
+      function Signature_Carrier_Count
+        (Signature : Signature_Id) return Natural
+        is (Signature_Parameter_Count (Of_Unit, Signature)
+            + (if Signature_Result (Of_Unit, Signature).Kind
+                    in Landin.Types.Aggregate | Landin.Types.Fixed_Array
+               then 1 else 0));
+
+      function Part_Agrees_With_Slot
+        (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
+         return Boolean
+        is (case Part.Kind is
+               when Landin.Types.Scalar_Name =>
+                  not Is_Aggregate (Of_Unit, Item, Slot)
+                  and then not Is_Array (Of_Unit, Item, Slot)
+                  and then Type_Of (Of_Unit, Item, Slot) = Part.Kind,
+               when Landin.Types.Aggregate =>
+                  Is_Aggregate (Of_Unit, Item, Slot),
+               when Landin.Types.Fixed_Array =>
+                  Is_Array (Of_Unit, Item, Slot)
+                  and then Slot_Array_Length (Of_Unit, Item, Slot)
+                             = Part.Length
+                  and then Slot_Array_Element (Of_Unit, Item, Slot)
+                             = Part.Element,
+               when others => False);
+
    begin
       if not Is_Prepared (Of_Unit) then
          return (Kind => Unprepared_Unit, others => <>);
       end if;
+
+      --  D117's descriptors partition one parameter vector.  Validate the
+      --  runs and every semantic part before an item or instruction asks a
+      --  descriptor any question.
+      declare
+         Parts : Natural := 0;
+      begin
+         for Which in 1 .. Signature_Count (Of_Unit) loop
+            declare
+               Held : constant Signature_Record :=
+                 Of_Unit.Signatures (Which);
+            begin
+               if Held.Parameters.Count /= 0
+                 and then Held.Parameters.First /= Parts
+               then
+                  return (Kind => Signature_Runs_Overlap, others => <>);
+               end if;
+               if Held.Parameters.First >
+                    Natural (Of_Unit.Signature_Parts.Length)
+                 or else Held.Parameters.Count
+                    > Natural (Of_Unit.Signature_Parts.Length)
+                        - Held.Parameters.First
+               then
+                  return (Kind => Signature_Runs_Overlap, others => <>);
+               end if;
+               for Index in 1 .. Held.Parameters.Count loop
+                  if Signature_Part_Is_Malformed
+                    (Of_Unit.Signature_Parts
+                       (Held.Parameters.First + Index),
+                     Result_Part => False)
+                  then
+                     return
+                       (Kind => Signature_Part_Malformed, others => <>);
+                  end if;
+               end loop;
+               if Signature_Part_Is_Malformed
+                    (Held.Result, Result_Part => True)
+               then
+                  return (Kind => Signature_Part_Malformed, others => <>);
+               end if;
+               Parts := Parts + Held.Parameters.Count;
+            end;
+         end loop;
+         if Parts /= Natural (Of_Unit.Signature_Parts.Length) then
+            return (Kind => Signature_Runs_Overlap, others => <>);
+         end if;
+      end;
 
       --  First, and before anything indexes a run.  A base that is wrong
       --  makes Nth_Value raise Constraint_Error, so a later rule would
@@ -935,7 +1053,109 @@ package body Landin.IR.Verifier is
                      end;
                   end loop;
                end if;
+
+               declare
+                  Signature : constant Signature_Id :=
+                    Signature_Of (Of_Unit, Id, Slot_Id (Slot));
+               begin
+                  if Signature /= No_Signature
+                    and then
+                      (not Holds (Of_Unit, Signature)
+                       or else Is_Aggregate
+                         (Of_Unit, Id, Slot_Id (Slot))
+                       or else Is_Array (Of_Unit, Id, Slot_Id (Slot))
+                       or else Type_Of (Of_Unit, Id, Slot_Id (Slot))
+                                 /= Landin.Types.Usize)
+                  then
+                     return
+                       (Kind =>
+                          (if Holds (Of_Unit, Signature)
+                           then Function_Value_Signature_Disagrees
+                           else Signature_Out_Of_Range),
+                        Item => Id, others => <>);
+                  end if;
+               end;
             end loop;
+
+            if Kind_Of (Of_Unit, Id) = Routine
+              and then Signature_Of (Of_Unit, Id) /= No_Signature
+            then
+               declare
+                  Signature : constant Signature_Id :=
+                    Signature_Of (Of_Unit, Id);
+               begin
+                  if not Holds (Of_Unit, Signature) then
+                     return (Kind => Signature_Out_Of_Range,
+                             Item => Id, others => <>);
+                  end if;
+
+                  declare
+                     Result : constant Signature_Part :=
+                       Signature_Result (Of_Unit, Signature);
+                     Hidden : constant Natural :=
+                       (if Result.Kind in Landin.Types.Aggregate
+                                             | Landin.Types.Fixed_Array
+                        then 1 else 0);
+                  begin
+                     if Result_Of (Of_Unit, Id) /= Result.Kind
+                       or else Parameter_Count (Of_Unit, Id)
+                                 /= Signature_Carrier_Count (Signature)
+                     then
+                        return (Kind => Routine_Signature_Disagrees,
+                                Item => Id, others => <>);
+                     end if;
+
+                     if (Result.Kind = Landin.Types.No_Value
+                         and then Result_Slot (Of_Unit, Id) /= No_Slot)
+                       or else
+                         (Result.Kind /= Landin.Types.No_Value
+                          and then
+                            (not Holds
+                               (Of_Unit, Id, Result_Slot (Of_Unit, Id))
+                             or else not Part_Agrees_With_Slot
+                               (Id, Result,
+                                Result_Slot (Of_Unit, Id))))
+                     then
+                        return (Kind => Routine_Signature_Disagrees,
+                                Item => Id, others => <>);
+                     end if;
+
+                     if Hidden = 1 then
+                        declare
+                           Slot : constant Slot_Id :=
+                             Nth_Parameter (Of_Unit, Id, 1);
+                        begin
+                           if Is_Aggregate (Of_Unit, Id, Slot)
+                             or else Is_Array (Of_Unit, Id, Slot)
+                             or else Type_Of (Of_Unit, Id, Slot)
+                                       /= Landin.Types.Usize
+                           then
+                              return
+                                (Kind => Routine_Signature_Disagrees,
+                                 Item => Id, others => <>);
+                           end if;
+                        end;
+                     end if;
+
+                     for Index in
+                       1 .. Signature_Parameter_Count
+                              (Of_Unit, Signature)
+                     loop
+                        if not Part_Agrees_With_Slot
+                          (Id,
+                           Nth_Signature_Parameter
+                             (Of_Unit, Signature, Index),
+                           Nth_Parameter
+                             (Of_Unit, Id, Index + Hidden))
+                        then
+                           return
+                             (Kind => Routine_Signature_Disagrees,
+                              Item => Id, others => <>);
+                        end if;
+                     end loop;
+                  end;
+               end;
+            end if;
          end;
       end loop;
 
@@ -1916,17 +2136,12 @@ package body Landin.IR.Verifier is
                                  end if;
                               end;
 
-                           when Call =>
-                              --  [1940]: a module value is not a call.
-                              if Is_Datum then
-                                 return (Kind => Call_Inside_A_Datum,
-                                         Item => Id, Block => Block,
-                                         Value => V);
-                              end if;
-
+                           when Function_Address =>
                               declare
                                  C : constant Item_Id :=
                                    Callee_Of (Of_Unit, Id, V);
+                                 Signature : constant Signature_Id :=
+                                   Signature_Of (Of_Unit, Id, V);
                               begin
                                  if not Holds (Of_Unit, C)
                                    or else Kind_Of (Of_Unit, C) /= Routine
@@ -1935,6 +2150,79 @@ package body Landin.IR.Verifier is
                                       (Kind => Callee_Is_Not_A_Routine,
                                        Item => Id, Block => Block,
                                        Value => V);
+                                 elsif not Holds (Of_Unit, Signature) then
+                                    return
+                                      (Kind => Signature_Out_Of_Range,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 elsif Signature_Of (Of_Unit, C)
+                                         = No_Signature
+                                   or else not Signatures_Agree
+                                     (Of_Unit, Signature,
+                                      Signature_Of (Of_Unit, C))
+                                 then
+                                    return
+                                      (Kind =>
+                                         Function_Value_Signature_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+                              end;
+
+                           when Call | Indirect_Call =>
+                              --  [1940]: a module value is not a call.
+                              if Is_Datum then
+                                 return (Kind => Call_Inside_A_Datum,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                              declare
+                                 Signature : constant Signature_Id :=
+                                   Call_Signature (Of_Unit, Id, V);
+                              begin
+                                 if Op = Call then
+                                    declare
+                                       C : constant Item_Id :=
+                                         Callee_Of (Of_Unit, Id, V);
+                                    begin
+                                       if not Holds (Of_Unit, C)
+                                         or else Kind_Of (Of_Unit, C)
+                                                   /= Routine
+                                       then
+                                          return
+                                            (Kind => Callee_Is_Not_A_Routine,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    end;
+                                 end if;
+
+                                 if not Holds (Of_Unit, Signature) then
+                                    return
+                                      (Kind => Signature_Out_Of_Range,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+
+                                 if Op = Call then
+                                    declare
+                                       C : constant Item_Id :=
+                                         Callee_Of (Of_Unit, Id, V);
+                                    begin
+                                       if Signature_Of (Of_Unit, C)
+                                            = No_Signature
+                                         or else not Signatures_Agree
+                                           (Of_Unit, Signature,
+                                            Signature_Of (Of_Unit, C))
+                                       then
+                                          return
+                                            (Kind =>
+                                               Routine_Signature_Disagrees,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    end;
                                  end if;
                               end;
 
@@ -1990,13 +2278,11 @@ package body Landin.IR.Verifier is
                            Expect : constant Natural :=
                              (case Op is
                                  when Call =>
-                                    Parameter_Count
-                                      (Of_Unit,
-                                       Callee_Of (Of_Unit, Id, V)),
+                                    Signature_Carrier_Count
+                                      (Call_Signature (Of_Unit, Id, V)),
                                  when Indirect_Call =>
-                                    Parameter_Count
-                                      (Of_Unit,
-                                       Callee_Of (Of_Unit, Id, V)) + 1,
+                                    Signature_Carrier_Count
+                                      (Call_Signature (Of_Unit, Id, V)) + 1,
                                  when Leave =>
                                     (if Result_Of (Of_Unit, Id)
                                         in Landin.Types.Scalar_Name
@@ -2148,6 +2434,34 @@ package body Landin.IR.Verifier is
                                        Item => Id, Block => Block,
                                        Value => V);
                                  end if;
+
+                                 declare
+                                    Slot_Signature : constant Signature_Id :=
+                                      Signature_Of (Of_Unit, Id, S);
+                                    Value_Signature : constant Signature_Id :=
+                                      Signature_Of
+                                        (Of_Unit, Id,
+                                         Nth_Operand
+                                           (Of_Unit, Id, V, 1));
+                                 begin
+                                    if (Slot_Signature = No_Signature)
+                                         /= (Value_Signature = No_Signature)
+                                      or else
+                                        (Slot_Signature /= No_Signature
+                                         and then
+                                           (not Holds
+                                              (Of_Unit, Value_Signature)
+                                            or else not Signatures_Agree
+                                              (Of_Unit, Slot_Signature,
+                                               Value_Signature)))
+                                    then
+                                       return
+                                         (Kind =>
+                                            Function_Value_Signature_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
 
                                  --  [1900]: a parameter may not be
                                  --  written, because the unmarked
@@ -2373,23 +2687,32 @@ package body Landin.IR.Verifier is
 
                            when Call | Indirect_Call =>
                               declare
-                                 C : constant Item_Id :=
-                                   Callee_Of (Of_Unit, Id, V);
+                                 Signature : constant Signature_Id :=
+                                   Call_Signature (Of_Unit, Id, V);
+                                 Declared_Result : constant Signature_Part :=
+                                   Signature_Result (Of_Unit, Signature);
+                                 Indirect : constant Boolean :=
+                                   Op = Indirect_Call;
+                                 Hidden : constant Natural :=
+                                   (if Declared_Result.Kind in
+                                          Landin.Types.Aggregate
+                                            | Landin.Types.Fixed_Array
+                                    then 1 else 0);
+                                 Offset : constant Natural :=
+                                   (if Indirect then 1 else 0);
                               begin
-                                 if (if Result_Of (Of_Unit, C)
-                                          in Landin.Types.Aggregate
-                                             | Landin.Types.Fixed_Array
+                                 if (if Hidden = 1
                                      then Result_Of (Of_Unit, Id, V)
                                             /= Landin.Types.No_Value
                                      else Result_Of (Of_Unit, Id, V)
-                                            /= Result_Of (Of_Unit, C))
+                                            /= Declared_Result.Kind)
                                  then
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,
                                             Value => V);
                                  end if;
 
-                                 if Op = Indirect_Call
+                                 if Indirect
                                    and then Result_Of
                                      (Of_Unit, Id,
                                       Nth_Operand (Of_Unit, Id, V, 1))
@@ -2400,30 +2723,63 @@ package body Landin.IR.Verifier is
                                             Value => V);
                                  end if;
 
+                                 if Indirect then
+                                    declare
+                                       Address : constant Value_Id :=
+                                         Nth_Operand (Of_Unit, Id, V, 1);
+                                       Address_Signature : constant
+                                         Signature_Id :=
+                                           Signature_Of
+                                             (Of_Unit, Id, Address);
+                                    begin
+                                       if not Holds
+                                         (Of_Unit, Address_Signature)
+                                         or else not Signatures_Agree
+                                           (Of_Unit, Signature,
+                                            Address_Signature)
+                                       then
+                                          return
+                                            (Kind => Signature_Mismatch,
+                                             Item => Id, Block => Block,
+                                             Value => V);
+                                       end if;
+                                    end;
+                                 end if;
+
+                                 if Hidden = 1
+                                   and then Result_Of
+                                     (Of_Unit, Id,
+                                      Nth_Operand
+                                        (Of_Unit, Id, V, Offset + 1))
+                                       /= Landin.Types.Usize
+                                 then
+                                    return (Kind => Operands_Disagree,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+
                                  --  [1920]: each argument has its
                                  --  parameter's type, in order.
                                  for P in
-                                   1 .. Parameter_Count (Of_Unit, C)
+                                   1 .. Signature_Parameter_Count
+                                          (Of_Unit, Signature)
                                  loop
                                     declare
-                                       Parameter : constant Slot_Id :=
-                                         Nth_Parameter (Of_Unit, C, P);
+                                       Parameter : constant Signature_Part :=
+                                         Nth_Signature_Parameter
+                                           (Of_Unit, Signature, P);
                                        Argument : constant Value_Id :=
                                          Nth_Operand
                                            (Of_Unit, Id, V,
-                                            P + (if Op = Indirect_Call
-                                                 then 1 else 0));
+                                            P + Offset + Hidden);
                                        Agrees : constant Boolean :=
-                                         (if Is_Aggregate
-                                               (Of_Unit, C, Parameter)
-                                             or else Is_Array
-                                               (Of_Unit, C, Parameter)
+                                         (if Parameter.Kind in
+                                               Landin.Types.Aggregate
+                                                 | Landin.Types.Fixed_Array
                                           then Result_Of
                                                  (Of_Unit, Id, Argument)
                                                  = Landin.Types.Usize
-                                          else Type_Of
-                                                 (Of_Unit, C, Parameter)
-                                               = Result_Of
+                                          else Parameter.Kind = Result_Of
                                                    (Of_Unit, Id, Argument));
                                     begin
                                        if not Agrees then

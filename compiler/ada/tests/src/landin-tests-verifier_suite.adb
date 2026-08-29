@@ -281,7 +281,9 @@ package body Landin.Tests.Verifier_Suite is
       Array_Fill_Field_First_Is_Outside_Array,
       Array_Fill_Inside_A_Datum,
       Condition_Is_A_Number,
+      Function_Signature_Part_Is_Malformed,
       Call_Missing_An_Argument,
+      Indirect_Call_Uses_A_Different_Signature,
       Unreachable_Block,
       Leave_Of_The_Wrong_Type);
 
@@ -298,7 +300,32 @@ package body Landin.Tests.Verifier_Suite is
       B, C : IR.Block_Id;
       N, M : IR.Value_Id;
    begin
+      if Harm = Function_Signature_Part_Is_Malformed then
+         declare
+            Ignored : constant IR.Signature_Id :=
+              IR.Add_Signature
+                (Unit,
+                 [(Kind => Landin.Types.Function_Value, others => <>)],
+                 (Kind => Landin.Types.U32, others => <>));
+         begin
+            pragma Unreferenced (Ignored);
+         end;
+      end if;
+
       A := IR.Add_Item (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+      if Harm in Call_Missing_An_Argument
+                   | Indirect_Call_Uses_A_Different_Signature
+      then
+         declare
+            Signature : constant IR.Signature_Id :=
+              IR.Add_Signature
+                (Unit,
+                 [(Kind => Landin.Types.U32, others => <>)],
+                 (Kind => Landin.Types.U32, others => <>));
+         begin
+            IR.Set_Signature (Unit, A, Signature);
+         end;
+      end if;
       --  E precedes the deliberately blockless helper datums so the
       --  datum-copy case reaches the instruction it is about first.
       E := IR.Add_Item
@@ -1040,6 +1067,11 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
+         when Function_Signature_Part_Is_Malformed =>
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
          when Call_Missing_An_Argument =>
             --  A takes one parameter, and this call gives it none.
             N := IR.Emit_Call (Unit, A, A, Landin.Types.U32, Site);
@@ -1047,6 +1079,22 @@ package body Landin.Tests.Verifier_Suite is
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
+
+         when Indirect_Call_Uses_A_Different_Signature =>
+            declare
+               Other : constant IR.Signature_Id :=
+                 IR.Add_Signature
+                   (Unit, IR.No_Signature_Parts,
+                    (Kind => Landin.Types.U32, others => <>));
+            begin
+               N := IR.Emit_Function_Address (Unit, A, A, Site);
+               M := IR.Emit_Indirect_Call
+                 (Unit, A, Other, Landin.Types.U32, Site);
+               IR.Add_Argument (Unit, A, M, N);
+               N := IR.Emit_Load (Unit, A, S, Site);
+               IR.Emit_Leave (Unit, A, N, Site);
+               IR.Leave_Block (Unit, A);
+            end;
 
          when Unreachable_Block =>
             C := IR.Add_Block
@@ -1204,7 +1252,11 @@ package body Landin.Tests.Verifier_Suite is
           V.Array_Fill_First_Out_Of_Range),
          (Array_Fill_Inside_A_Datum, V.Array_Fill_Inside_A_Datum),
          (Condition_Is_A_Number,      V.Condition_Is_Not_A_Bool),
+         (Function_Signature_Part_Is_Malformed,
+          V.Signature_Part_Malformed),
          (Call_Missing_An_Argument,   V.Wrong_Operand_Count),
+         (Indirect_Call_Uses_A_Different_Signature,
+          V.Function_Value_Signature_Disagrees),
          (Unreachable_Block,          V.Block_Unreachable),
          (Leave_Of_The_Wrong_Type,    V.Leave_Disagrees_With_Item)];
    begin
