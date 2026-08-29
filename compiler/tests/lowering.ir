@@ -3399,6 +3399,16 @@ item 1 DATUM a result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 1
     2 LEAVE <- 1
+file positive/ordinary-struct-function-signature-alias-first/program.ldn
+unit signatures 0 items 0
+file positive/ordinary-struct-function-signature-alias-last/program.ldn
+unit signatures 0 items 0
+file positive/ordinary-struct-function-signature-recursion/program.ldn
+unit signatures 0 items 0
+file positive/ordinary-struct-mutual-function-signatures-left-first/program.ldn
+unit signatures 0 items 0
+file positive/ordinary-struct-mutual-function-signatures-right-first/program.ldn
+unit signatures 0 items 0
 file positive/parameterized-struct-basic/program.ldn
 unit signatures 0 items 1
 item 1 DATUM sample result struct params 0 slots 0 blocks 1 values 1
@@ -3507,6 +3517,17 @@ item 3 DATUM row result struct params 0 slots 0 blocks 1 values 1
   field 1 [2]struct (u8)
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/parameterized-struct-signature-value-layout/program.ldn
+unit signatures 1 items 1
+signature 1 (struct cell) -> struct cell
+item 1 ROUTINE pass result struct signature 1 params 2 slots 3 blocks 1 values 3
+  slot 1 pass usize param 1
+  slot 2 value aggregate fields u8 param 2
+  slot 3 result aggregate fields u8 return
+  block 1 scope 4 BLOCK length 3
+    1 LOAD_FIELD u8 slot 2 field 1
+    2 STORE_FIELD slot 3 field 1 <- 1
+    3 LEAVE
 file positive/parameterized-type-alias-fixed-array/program.ldn
 unit signatures 0 items 1
 item 1 DATUM direct result array params 0 slots 0 blocks 1 values 1

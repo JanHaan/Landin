@@ -945,7 +945,10 @@ actual tuple, including an actual the current field list does not use. Aliases
 of actuals do not create a second identity; changing an actual or the template
 does, even when the resulting fields and layout are equal. A mention in a
 function signature or as another template's type actual needs that identity but
-does not place its value inline. If the receiving template later uses that
+does not place its value inline. The same is true for an ordinary struct that
+names itself, an alias of itself, or another ordinary struct in a function
+parameter or result: each function field remains one pointer carrier, so even a
+mutual signature-only cycle has finite layout. If the receiving template later uses that
 actual as a field, payload or nominal array element, its layout is materialized
 there, recursively through nested nominal and nominal-array actuals. A
 zero-length array still validates that element edge. Target widths, offsets and

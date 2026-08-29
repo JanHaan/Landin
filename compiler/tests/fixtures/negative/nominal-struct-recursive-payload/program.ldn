@@ -1,0 +1,6 @@
+node: type = struct
+    kind: variant
+        leaf |
+        next: (value: node)
+    end kind
+end node

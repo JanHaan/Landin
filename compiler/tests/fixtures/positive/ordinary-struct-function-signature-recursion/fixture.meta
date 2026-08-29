@@ -1,0 +1,5 @@
+class: positive
+summary: an ordinary struct may refer to itself in a function result signature without a value-layout edge
+constructs: 0670, 0710, 1000, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

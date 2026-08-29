@@ -2293,9 +2293,12 @@ out identically. Every enabled concrete identity may be a type actual, while
 the substituted field or payload position decides its legality. Fixed formals
 substitute bounds. Symbolic validation checks unused templates, and L0313
 distinguishes impossible by-value nominal recursion from L0307 alias expansion.
-Function-signature and type-actual normalization request identity only; fields,
-payloads and nominal array elements request value layout, including at zero
-length. During unused-template validation a nonconcrete nominal or
+Function-signature and type-actual normalization request identity only; the
+same requirement now resolves an ordinary struct's preallocated empty-actual
+identity through ordinary aliases for parameter, result and nested signature
+positions. Self and declaration-order-permuted mutual signature cycles therefore
+lay out only their pointer carriers. Fields, payloads and nominal array elements
+request value layout, including at zero length. During unused-template validation a nonconcrete nominal or
 nominal-array identity retains a transient symbolic template/binding
 obligation; a used-formal value site follows it through nested wrappers and
 reports a return to an active obligation as L0313, while phantom and function
@@ -2330,9 +2333,10 @@ fixed layout changes, every enabled substituted field family, contextual value
 transport, target overflow, malformed unused templates, declaration-order
 independence, identity-only recursive signature and phantom nesting, lazy
 nested nominal and nominal-array value promotion, repeated same-key application
-provenance, alias-cycle classification and nominal recursion including unused
-order-permuted, mutual and multi-wrapper symbolic formal paths plus a
-zero-length array edge. Direct and expression-folded zero
+provenance, alias-cycle classification, ordinary self/alias/mutual
+signature-only cycles in both declaration orders, and nominal recursion
+including unused order-permuted, mutual and multi-wrapper symbolic formal paths
+plus direct field, payload and zero-length array edges. Direct and expression-folded zero
 lengths and a syntactically valid rejected call in an
 array bound remain covered; no user code executes during compilation.
 

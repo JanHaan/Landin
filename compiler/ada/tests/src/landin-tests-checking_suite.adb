@@ -1339,6 +1339,9 @@ package body Landin.Tests.Checking_Suite is
    --  fixed-array descriptor as direct syntax.  Template bodies and formals
    --  remain compile-time syntax: no answer from either application is
    --  written back onto them.
+   procedure Ordinary_Function_Signatures_Use_Identity_Only
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
      (Item : in out Landin.Testing.Context);
 
@@ -1359,6 +1362,119 @@ package body Landin.Tests.Checking_Suite is
 
    procedure Fixed_Bound_Arithmetic_And_Applications_Are_Bounded
      (Item : in out Landin.Testing.Context);
+
+   procedure Ordinary_Function_Signatures_Use_Identity_Only
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "ordinary-signature-recursion.ldn",
+         "alias: type = node" & LF
+         & "again: type = alias" & LF
+         & "node: type = struct" & LF
+         & "    direct: (value: node) -> (result: node)" & LF
+         & "    through: (value: again) -> (result: alias)" & LF
+         & "end node" & LF
+         & "left: type = struct" & LF
+         & "    exchange: (value: right) -> (result: right)" & LF
+         & "end left" & LF
+         & "right: type = struct" & LF
+         & "    exchange: (value: left) -> (result: left)" & LF
+         & "end right" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check
+        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+         "ordinary self, alias and mutual signature recursion is accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id;
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id
+         is
+            Node : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, Position);
+         begin
+            for Id in Landin.Provenance.Declaration_Id'(1)
+              .. Landin.Provenance.Declaration_Id
+                   (Landin.Resolution.Declaration_Count (Meanings.all))
+            loop
+               if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                 and then Landin.Resolution.Node_Of (Meanings.all, Id) = Node
+               then
+                  return Id;
+               end if;
+            end loop;
+            return Landin.Provenance.No_Declaration;
+         end Declaration_At;
+
+         Node_Id : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (3));
+         Left_Id : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (4));
+         Right_Id : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (5));
+         Direct : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Field_Shape_Of
+             (Types.all, Node_Id, 1).Signature;
+         Through : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Field_Shape_Of
+             (Types.all, Node_Id, 2).Signature;
+         Left_Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Field_Shape_Of
+             (Types.all, Left_Id, 1).Signature;
+         Right_Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Field_Shape_Of
+             (Types.all, Right_Id, 1).Signature;
+      begin
+         Landin.Testing.Check
+           (Item, Landin.Checking.Has_Layout (Types.all, Node_Id)
+             and then Landin.Checking.Has_Layout (Types.all, Left_Id)
+             and then Landin.Checking.Has_Layout (Types.all, Right_Id)
+             and then Landin.Checking.Nominal_Of
+               (Types.all, Declaration_At (1)) = Node_Id
+             and then Landin.Checking.Nominal_Of
+               (Types.all, Declaration_At (2)) = Node_Id,
+            "signature identity lookup preserves layouts and aliases");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Nth_Signature_Parameter
+              (Types.all, Direct, 1).Nominal = Node_Id
+             and then Landin.Checking.Nth_Signature_Result
+               (Types.all, Direct, 1).Nominal = Node_Id
+             and then Landin.Checking.Nth_Signature_Parameter
+               (Types.all, Through, 1).Nominal = Node_Id
+             and then Landin.Checking.Nth_Signature_Result
+               (Types.all, Through, 1).Nominal = Node_Id,
+            "self parameters and results retain one nominal identity");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Nth_Signature_Parameter
+              (Types.all, Left_Signature, 1).Nominal = Right_Id
+             and then Landin.Checking.Nth_Signature_Result
+               (Types.all, Left_Signature, 1).Nominal = Right_Id
+             and then Landin.Checking.Nth_Signature_Parameter
+               (Types.all, Right_Signature, 1).Nominal = Left_Id
+             and then Landin.Checking.Nth_Signature_Result
+               (Types.all, Right_Signature, 1).Nominal = Left_Id,
+            "mutual signature references retain both finite identities");
+      end;
+   end Ordinary_Function_Signatures_Use_Identity_Only;
 
    procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
      (Item : in out Landin.Testing.Context)
@@ -5517,6 +5633,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "nominal instances intern normalized actuals",
          Nominal_Instances_Intern_Normalized_Actuals'Access);
+      Landin.Testing.Register
+        (Into, "checking", "ordinary signatures use nominal identity only",
+         Ordinary_Function_Signatures_Use_Identity_Only'Access);
       Landin.Testing.Register
         (Into, "checking", "parameterized aliases normalize descriptors",
          Parameterized_Aliases_Normalize_To_Existing_Descriptors'Access);

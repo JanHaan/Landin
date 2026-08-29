@@ -447,9 +447,10 @@ package body Landin.Stages.Checking is
       --  was declared from.  D15 makes that an alias, so following it is
       --  the whole of what a type declaration means.
       function Type_At
-        (Of_Tree        : Syn.Tree;
-         Written        : Syn.Node_Id;
-         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
+        (Of_Tree         : Syn.Tree;
+         Written         : Syn.Node_Id;
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration;
+         Requirement     : Type_Requirement := Value_Layout)
          return Ty.Type_Kind;
 
       --  D135 substitutes only while expanding an application.  The result
@@ -2505,23 +2506,89 @@ package body Landin.Stages.Checking is
       end Validate_Template;
 
       function Type_At
-        (Of_Tree        : Syn.Tree;
-         Written        : Syn.Node_Id;
-         For_Declaration : Res.Declaration_Id := Res.No_Declaration)
-         return Ty.Type_Kind is
+        (Of_Tree         : Syn.Tree;
+         Written         : Syn.Node_Id;
+         For_Declaration : Res.Declaration_Id := Res.No_Declaration;
+         Requirement     : Type_Requirement := Value_Layout)
+         return Ty.Type_Kind
+      is
+         Identity_Seen : array
+           (Positive range 1 .. Positive'Max
+              (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
+                [others => False];
+
+         --  An ordinary struct's empty-actual identity is allocated before
+         --  settlement.  Signature parts may follow only ordinary aliases to
+         --  that identity without asking Settled_Type for a by-value layout.
+         function Identity_Nominal
+           (Id : Res.Declaration_Id)
+            return Landin.Checking.Nominal_Type_Id;
+
+         function Identity_Nominal
+           (Id : Res.Declaration_Id)
+            return Landin.Checking.Nominal_Type_Id
+         is
+            Target_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Id));
+            Declaration : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Id);
+            Declared : constant Syn.Node_Id :=
+              Syn.Declared_Type (Target_Tree.all, Declaration);
+         begin
+            if Res.Sort_Of (Meanings.all, Id) /= Res.Module_Type
+              or else Identity_Seen (Positive (Id))
+              or else Syn.Type_Formal_Count
+                (Target_Tree.all, Declaration) /= 0
+            then
+               return Landin.Checking.No_Nominal_Type;
+            end if;
+            Identity_Seen (Positive (Id)) := True;
+
+            if Syn.Kind (Target_Tree.all, Declared) = Syn.Struct_Body then
+               return Landin.Checking.Empty_Nominal_Instance (Types.all, Id);
+            elsif Syn.Kind (Target_Tree.all, Declared) = Syn.Type_Reference
+              and then Res.Verdict_Of
+                (Meanings.all, Target_Tree.all, Declared) = Res.Bound
+            then
+               return Identity_Nominal
+                 (Res.Bound_To (Meanings.all, Target_Tree.all, Declared));
+            end if;
+            return Landin.Checking.No_Nominal_Type;
+         end Identity_Nominal;
       begin
          if Syn.Kind (Of_Tree, Written) = Syn.Type_Application then
             if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                  /= Ty.Undecided
+              and then
+                (Requirement = Identity_Only
+                 or else Landin.Checking.Type_Of
+                   (Types.all, Of_Tree, Written) = Ty.Ill_Typed)
             then
                return Landin.Checking.Type_Of (Types.all, Of_Tree, Written);
             end if;
 
+            --  An identity-only application may have already recorded its
+            --  canonical nominal descriptor for a signature part.  A later
+            --  ABI or other by-value use must replay normalization so it
+            --  materializes that instance's layout; the node's cached kind
+            --  alone cannot say that this requirement was met.
+
             declare
                Result : constant Type_Descriptor := Normalized_Type
                  (Of_Tree, Written,
-                  Formal_Actual_Array'(1 .. 0 => (others => <>)));
+                  Formal_Actual_Array'(1 .. 0 => (others => <>)),
+                  Requirement => Requirement);
             begin
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                    /= Ty.Undecided
+               then
+                  --  Identity-only normalization already recorded this
+                  --  source type.  The replay above exists solely to fulfill
+                  --  the later layout requirement, so it must not overwrite
+                  --  that immutable node answer or its descriptor.
+                  return Result.Kind;
+               end if;
+
                Landin.Checking.Note (Types.all, Of_Tree, Written, Result.Kind);
                case Result.Kind is
                   when Ty.Fixed_Array =>
@@ -2958,7 +3025,8 @@ package body Landin.Stages.Checking is
                  Syn.Bound_Of (Of_Tree, Written);
                Element : constant Syn.Node_Id :=
                  Syn.Element_Of (Of_Tree, Written);
-               Held : constant Ty.Type_Kind := Type_At (Of_Tree, Element);
+               Held : constant Ty.Type_Kind := Type_At
+                 (Of_Tree, Element, Requirement => Requirement);
                --  D121: [0520]'s element may be an ordinary struct.  Its
                --  extent is that struct's own already-computed layout, so
                --  the only thing an array adds is the repetition.  D127
@@ -2970,8 +3038,10 @@ package body Landin.Stages.Checking is
                   else Landin.Checking.No_Nominal_Type);
                Aggregate_Element : constant Boolean :=
                  Element_Nominal /= Landin.Checking.No_Nominal_Type
-                 and then Landin.Checking.Has_Layout
-                   (Types.all, Element_Nominal);
+                 and then
+                   (Requirement = Identity_Only
+                    or else Landin.Checking.Has_Layout
+                      (Types.all, Element_Nominal));
                Length : Landin.Checking.Element_Count := 0;
             begin
                if Held not in Ty.Scalar_Name
@@ -3018,32 +3088,37 @@ package body Landin.Stages.Checking is
                   declare
                      Value : constant Ty.Magnitude :=
                        Ty.Magnitude (Folded_Value);
-                     Element_Bytes : constant Ty.Magnitude :=
-                       (if Aggregate_Element
-                        then Ty.Magnitude
-                          (Landin.Checking.Layout_Size
-                             (Types.all, Element_Nominal))
-                        else Ty.Magnitude
-                          (Landin.Targets.Bytes
-                             (Ty.Storage_Size
-                                (Ty.Scalar_Name (Held), Facts))));
-                     Maximum_Bytes : constant Ty.Magnitude :=
-                       Ty.Magnitude
-                         (Landin.Targets.Maximum_Object_Size (Facts));
                   begin
-                     if Element_Bytes /= 0
-                       and then Value > Maximum_Bytes / Element_Bytes
-                     then
-                        Bad.Report
-                          (Item    => Bad.Literal_Out_Of_Range,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Bound),
-                           Message => "this array is larger than the target"
-                                      & " can address",
-                           Note    => "D18: an array's byte extent must fit"
-                                      & " the target's usize",
-                           Into    => Found);
-                        return Ty.Ill_Typed;
+                     if Requirement = Value_Layout then
+                        declare
+                           Element_Bytes : constant Ty.Magnitude :=
+                             (if Aggregate_Element
+                              then Ty.Magnitude
+                                (Landin.Checking.Layout_Size
+                                   (Types.all, Element_Nominal))
+                              else Ty.Magnitude
+                                (Landin.Targets.Bytes
+                                   (Ty.Storage_Size
+                                      (Ty.Scalar_Name (Held), Facts))));
+                           Maximum_Bytes : constant Ty.Magnitude :=
+                             Ty.Magnitude
+                               (Landin.Targets.Maximum_Object_Size (Facts));
+                        begin
+                           if Element_Bytes /= 0
+                             and then Value > Maximum_Bytes / Element_Bytes
+                           then
+                              Bad.Report
+                                (Item    => Bad.Literal_Out_Of_Range,
+                                 Source  => Syn.Source_Of (Of_Tree),
+                                 Where   => Syn.Where (Of_Tree, Bound),
+                                 Message => "this array is larger than the"
+                                            & " target can address",
+                                 Note    => "D18: an array's byte extent must"
+                                            & " fit the target's usize",
+                                 Into    => Found);
+                              return Ty.Ill_Typed;
+                           end if;
+                        end;
                      end if;
 
                      Length := Landin.Checking.Element_Count (Value);
@@ -3192,6 +3267,27 @@ package body Landin.Stages.Checking is
                return Ty.Ill_Typed;
             end if;
 
+            if Requirement = Identity_Only
+              and then Res.Sort_Of (Meanings.all, Means) = Res.Module_Type
+            then
+               declare
+                  Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                    Identity_Nominal (Means);
+               begin
+                  if Nominal /= Landin.Checking.No_Nominal_Type then
+                     if Landin.Checking.Type_Of
+                       (Types.all, Of_Tree, Written) = Ty.Undecided
+                     then
+                        Landin.Checking.Note
+                          (Types.all, Of_Tree, Written, Ty.Aggregate);
+                     end if;
+                     Landin.Checking.Note_Nominal
+                       (Types.all, Of_Tree, Written, Nominal);
+                     return Ty.Aggregate;
+                  end if;
+               end;
+            end if;
+
             declare
                Held : constant Ty.Type_Kind := Settled_Type (Means);
             begin
@@ -3254,7 +3350,8 @@ package body Landin.Stages.Checking is
          is
             Written : constant Syn.Node_Id :=
               Syn.Declared_Type (Of_Tree, Declared);
-            Held : constant Ty.Type_Kind := Type_At (Of_Tree, Written);
+            Held : constant Ty.Type_Kind := Type_At
+              (Of_Tree, Written, Requirement => Identity_Only);
             Part : Landin.Checking.Signature_Part :=
               (Kind => Held,
                Name => Syn.Name (Of_Tree, Declared),
@@ -14117,6 +14214,21 @@ package body Landin.Stages.Checking is
             else Syn.Origin
               (Of_Tree, Syn.Returns_Of (Of_Tree, Node)));
       begin
+         --  The signature first records identity-only parts so recursive
+         --  function types do not form by-value edges.  Parameters and
+         --  results become ABI carriers only with this routine body, so now
+         --  request their layouts before checking or lowering can use them.
+         for Which in 1 .. Syn.Parameter_Count (Of_Tree, Node) loop
+            declare
+               Parameter : constant Syn.Node_Id :=
+                 Syn.Nth_Parameter (Of_Tree, Node, Which);
+               Held : constant Ty.Type_Kind :=
+                 Declared_As_Node (Of_Tree, Parameter);
+            begin
+               pragma Unreferenced (Held);
+            end;
+         end loop;
+
          --  Ensure every return declaration is settled even when the
          --  anonymous structural aggregate, rather than one return, is the
          --  body's surrounding result context.
