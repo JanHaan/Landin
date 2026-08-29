@@ -102,7 +102,7 @@
 0860   tour        -                                  What this does not catch
 0870   tour        accepted emitted executed refused  A function is a value of a function type
 0880   tour        accepted emitted executed refused  A single-expression body still takes an end
-0890   tour        accepted emitted                   Nothing returned
+0890   tour        accepted emitted executed          Nothing returned
 0900   tour        accepted emitted executed refused refused-by-name Three parameter conventions
 0910   tour        -                                  sink takes a place
 0920   tour        accepted emitted executed refused  Multiple named returns
@@ -119,7 +119,7 @@
 1030   tour        accepted emitted executed refused  Handling
 1040   tour        -                                  A caller parameter is filled in by the compiler with the
 1050   tour        accepted emitted executed refused  Branch
-1060   tour        accepted emitted                   Every construct has a one-line form
+1060   tour        accepted emitted executed          Every construct has a one-line form
 1070   tour        -                                  A declaration is allowed in a condition
 1080   tour        accepted emitted executed refused  A block has the value of its last expression
 1090   tour        accepted emitted executed          Bare block, for scoping

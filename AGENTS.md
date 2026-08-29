@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Repository state
 
 Landin is a language specification with a working Ada bootstrap compiler. R0,
-R1 and R2.20 are complete and R2.30 is active. `refine` scans and parses every
+R1, R2.20 and R2.30 are complete. `refine` scans and parses every
 `.ldn` file it is given, resolves the files as one module, checks every type
 and definite assignment, lowers accepted functions into verified
 target-neutral IR, emits Linux x86-64 assembly, and can invoke a
@@ -58,9 +58,9 @@ python3 check.py prototype-2-parser.md
 nix develop
 ```
 
-Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and since R1.80 — when `refine` began emitting executable instructions — it has been the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches https://www.701.dev by being pushed, not by anyone running `scripts/site.sh --publish`.
+Pushing runs `.build.yml` on x86-64 hardware at builds.sr.ht: that job is the authoritative Linux gate, and it builds from clean in debug and release. A local pass is not a substitute for it, and since R1.80 — when `refine` began emitting executable instructions — it has been the only environment that runs them on the hardware they were emitted for. Its last task renders and publishes the reading copies, from `main` only: a documentation change reaches <https://www.701.dev> by being pushed, not by anyone running `scripts/site.sh --publish`.
 
-A push also submits two non-gates. `.builds/nix.yml` checks the `nix develop` shell and skips itself unless the push touched a file that shell is made of. `.builds/github-mirror.yml` copies the canonical git.sr.ht branches and tags to https://github.com/JanHaan/Landin with the existing repository SSH secret. Neither carries authority. All three manifests are submitted because builds.sr.ht looks for `.build.yml` and `.builds/*.yml` alike. Adding a fourth would need a reason — four manifests per push is the limit, beyond which builds.sr.ht chooses at random.
+A push also submits two non-gates. `.builds/nix.yml` checks the `nix develop` shell and skips itself unless the push touched a file that shell is made of. `.builds/github-mirror.yml` copies the canonical git.sr.ht branches and tags to <https://github.com/JanHaan/Landin> with the existing repository SSH secret. Neither carries authority. All three manifests are submitted because builds.sr.ht looks for `.build.yml` and `.builds/*.yml` alike. Adding a fourth would need a reason — four manifests per push is the limit, beyond which builds.sr.ht chooses at random.
 
 `check.py` uses only the Python standard library and changes to its own directory, so it can also be invoked by absolute path from elsewhere. It is a heuristic invariant checker, not a parser, compiler, formatter, or semantic test suite. Run the full command after documentation changes; targeted checking of an absolute `tour.md` path does not run all citation checks.
 
@@ -112,7 +112,7 @@ in a table.
 
 `R§n` and `H§n` citations preserved in the roadmap refer to an external design archive; the tracked repository does not depend on that archive.
 
-Every document above is also published as a reading copy at https://www.701.dev, rendered by `docs/site/render_html.py`. The text files are the sources; the pages are generated and never edited by hand.
+Every document above is also published as a reading copy at <https://www.701.dev>, rendered by `docs/site/render_html.py`. The text files are the sources; the pages are generated and never edited by hand.
 
 The mark lives in `assets/`, not in the site renderer. `assets/icon.svg` is
 the drawing — `701` as a path, so no renderer needs Futura — and

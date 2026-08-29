@@ -1842,7 +1842,7 @@ matrix make that evidence reproducible.
 
 ### R2.30 — Implement functions, control flow and declared errors
 
-Status: active
+Status: complete
 Depends on: R2.20, R1.70, R1.80
 
 Implement full function values, named returns, non-loop control-flow
