@@ -6122,3 +6122,25 @@ observed; the language and verifier do not depend on that optimization.
 `negative/returned-struct-argument-nominal-mismatch`; the generated token and
 IR records; and the nested calls in `runtime/struct-returns-cross-calls` and
 `runtime/array-returns-cross-calls` on Linux x86-64.
+
+### D112 — Discarding an aggregate call still gives its result a lifetime
+
+**The tour said** that discarding a result is explicit [1020] [1930]. A scalar
+call can simply leave its produced IR value unused, but D106 requires valid
+storage through the aggregate callee's leave copy.
+
+**Chosen:** `_ = call()` for a struct or fixed-array result allocates a fresh
+shaped caller temporary, supplies it as the hidden destination, completes the
+call and then drops the storage. No field is read and no aggregate IR value is
+created. Calls returning `none` remain invalid discard sources because they
+produce no result at all.
+
+**Why not omit the hidden destination:** the callee's writes and argument
+evaluation are observable even when the returned value is not. Running a
+different result convention only for discard would change the call rather than
+throw away its result.
+
+**Pinned by** the checker, lowering, verifier and backend public seams; the
+generated token and IR records; and the explicit discards in
+`runtime/struct-returns-cross-calls` and `runtime/array-returns-cross-calls` on
+Linux x86-64.
