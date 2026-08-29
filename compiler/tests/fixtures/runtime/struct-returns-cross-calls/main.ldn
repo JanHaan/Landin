@@ -3,6 +3,10 @@ pair: type = struct
     right: i32
 end pair
 
+holder: type = struct
+    value: pair
+end holder
+
 make: (left: i32, right: i32) -> (result: pair) =
     result = (left: left, right: right)
 end make
@@ -13,5 +17,8 @@ public main: () -> (code: i32) =
     mut answer: pair = forward()
     mut other: pair = make(1, 2)
     other.left = 40
+    mut storage: holder = zeroed
+    storage.value = make(10, 11)
     code = answer.left + answer.right
+           + storage.value.left + storage.value.right
 end main

@@ -5154,6 +5154,7 @@ package body Landin.Stages.Checking is
                if Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                     in Syn.Zeroed_Literal | Syn.Array_Literal
                        | Syn.Array_Repetition | Syn.Mixed_Array_Repetition
+                       | Syn.Call
                  or else Is_Direct_Array_Name
                    (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                  or else Syn.Kind

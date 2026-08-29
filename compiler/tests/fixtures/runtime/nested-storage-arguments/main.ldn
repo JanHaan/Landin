@@ -18,9 +18,15 @@ inspect_outer: (value: outer) -> (result: i32) =
              + value.nested.row[0] + value.nested.row[1]
 end inspect_outer
 
+make_row: () -> (result: [2]i32) =
+    result = [8, 9]
+end make_row
+
 public main: () -> (code: i32) =
     mut state: outer = zeroed
     state.nested = (value: 5, row: [6, 7])
+    mut returned: outer = zeroed
+    returned.nested.row = make_row()
     code = inspect(state.nested, state.nested.row)
            + inspect(zeroed, zeroed)
            + inspect_outer(state) + inspect_outer(zeroed)
@@ -29,4 +35,5 @@ public main: () -> (code: i32) =
                             suffix: 0))
            + inspect_outer((nested: state.nested, of zeroed))
            + inspect_outer((nested: zeroed, of zeroed))
+           + inspect_outer(returned)
 end main
