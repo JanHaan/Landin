@@ -1,0 +1,4 @@
+direct: type = [0]u8
+folded: type = [4 - 4]u16
+mut first: direct
+mut second: folded

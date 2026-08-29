@@ -1,5 +1,5 @@
 class: negative
-summary: local and module zero-count inference waits for the empty-array decision
+summary: local and module zero-count repetition cannot infer an element shape even though explicit zero-length types are accepted
 constructs: 0040, 0050, 0530, 0560, 1740, 1810
 program: program.ldn
 codes: L0304, L0304

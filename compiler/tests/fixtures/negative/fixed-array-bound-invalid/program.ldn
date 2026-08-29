@@ -1,0 +1,6 @@
+negative: type = [1 - 2]u8
+zero_divisor: type = [8 / (3 - 3)]u8
+zero_remainder: type = [8 % 0]u8
+overflow: type = [18446744073709551615 + 1]u8
+boolean: type = [1 < 2]u8
+width_dependent: type = [1 << 2]u8

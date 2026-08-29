@@ -1,0 +1,6 @@
+class: negative
+summary: D136 rejects runtime storage and a syntactically valid user call in a bound without executing the call body
+constructs: 0290, 0520, 1350, 1790, 1795, 1800, 1820
+program: program.ldn
+codes: L0305, L0305
+targets: linux-x86-64, macos-arm64

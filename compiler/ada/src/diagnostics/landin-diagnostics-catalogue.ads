@@ -170,7 +170,8 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Error,
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
-            when Literal_Out_Of_Range .. Variant_Case_Not_Matched => Error,
+            when Literal_Out_Of_Range
+               .. Variant_Case_Not_Matched => Error,
             when No_Toolchain .. Frame_Not_Addressable => Error);
 
    --  Argument_Not_In_A_Register retired at R2.30: the internal scalar
@@ -195,7 +196,8 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => Live,
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
-            when Literal_Out_Of_Range .. Variant_Case_Not_Matched => Live,
+            when Literal_Out_Of_Range
+               .. Variant_Case_Not_Matched => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable => Live);
@@ -265,8 +267,8 @@ package Landin.Diagnostics.Catalogue is
             when Unsupported_Use       =>
                "[1920]: a name used in a way the kernel does not enable",
             when Not_Known_At_Compile_Time =>
-               "[1940]: a module value the compiler cannot know when it"
-               & " reads it",
+               "[1940]/D136: a value required before runtime that the"
+               & " compiler's closed fold cannot produce",
             when Impossible_Operand    =>
                "[1950]: an operand the operation cannot take, where the"
                & " compiler knows it",
@@ -321,7 +323,8 @@ package Landin.Diagnostics.Catalogue is
             when Name_Expected .. Nesting_Too_Deep => True,
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
-            when Literal_Out_Of_Range .. Variant_Case_Not_Matched => True,
+            when Literal_Out_Of_Range
+               .. Variant_Case_Not_Matched => True,
             --  None of the three is about a place in a file.  Two are
             --  the host failing to finish an accepted program, and the
             --  third is a declaration the module never made, which has
@@ -350,14 +353,16 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
             --  Every one of these points at something a program wrote.
-            when Literal_Out_Of_Range .. Variant_Case_Not_Matched =>
+            when Literal_Out_Of_Range
+               .. Variant_Case_Not_Matched =>
                True,
             when No_Toolchain .. Frame_Not_Addressable => False);
 
-   --  How many secondary labels the diagnostic must carry. An unterminated
-   --  block comment needs one: the end of the file is where it was noticed
-   --  and the opener is where it went wrong, and a reader looks at both.
-   function Required_Secondaries (Of_Code : Code_Name) return Natural
+   --  The admitted secondary-label interval. Every code except L0300 and
+   --  L0306 has one exact count. Those two semantic rules point only at the
+   --  direct defect when it is written there, but a substitution-dependent
+   --  occurrence is primary at the application and may relate the template.
+   function Minimum_Secondaries (Of_Code : Code_Name) return Natural
      is (case Of_Code is
             when Unterminated_Comment  => 1,
             when Unterminated_Literal  => 1,
@@ -381,9 +386,11 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Name       => 0,
             --  A mismatch is only readable next to the place that stated
             --  the requirement, and an unwritable place next to its
-            --  declaration.  A literal out of range has no second place:
-            --  the type it did not fit is named in the sentence, because
-            --  a defaulted literal [0200] has no annotation to point at.
+            --  declaration. A direct literal or fold out of range has no
+            --  second place: the type it did not fit is named in the
+            --  sentence, because a defaulted literal [0200] has no
+            --  annotation to point at. Maximum_Secondaries admits the
+            --  template expression for a substitution-dependent fold.
             when Type_Mismatch         => 1,
             when Immutable_Target      => 1,
             when Not_Definitely_Assigned => 1,
@@ -392,11 +399,17 @@ package Landin.Diagnostics.Catalogue is
             when Literal_Out_Of_Range  => 0,
             when Unsupported_Use       => 0,
             when Not_Known_At_Compile_Time => 0,
-            --  The operand is written down and is the only place to
+            --  A direct operand is written down and is the only place to
             --  point at: [1950] says the report names it and not the
-            --  operator, so there is no second place to carry.
+            --  operator. Maximum_Secondaries admits the template operand
+            --  when an application is the primary place.
             when Impossible_Operand    => 0,
             when others                => 0);
+
+   function Maximum_Secondaries (Of_Code : Code_Name) return Natural
+     is (case Of_Code is
+            when Literal_Out_Of_Range | Impossible_Operand => 1,
+            when others => Minimum_Secondaries (Of_Code));
 
    --  How many notes. [1830] promises a diagnostic that names the construct
    --  and says which work enables it, which is two facts and so two notes.

@@ -1,0 +1,5 @@
+class: positive
+summary: D136 accepts direct and expression-folded zero bounds as D17's canonical zero-element shape
+constructs: 0290, 0520, 1790, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

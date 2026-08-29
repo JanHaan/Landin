@@ -225,8 +225,9 @@ package Landin.Syntax is
       Atom_Union_Type,
       --  `! ...` on a private function before inference has finalized it.
       Inferred_Error_Set,
-      --  [0520]'s array, whose length is part of it.  Two slots: the
-      --  bound, which is [1770]'s integer literal, and the element type.
+      --  [0520]'s array, whose length is part of it.  Two slots: D136's
+      --  fixed bound expression and the element type.  The syntax retains
+      --  the expression; no instantiated answer is written back here.
       Array_Type,
       --  D117's written infallible function type.  Its first slot is the
       --  named Return_List, or No_Node for `none`; its trailing run is the
@@ -870,6 +871,7 @@ package Landin.Syntax is
    --  type of one element.  The length is a node and not a number here for
    --  Landin.Syntax's own reason: what a literal means is [1880]'s and the
    --  span it was written at is what a report about it points to.
+   --  D136's fixed expression between an array type's brackets.
    function Bound_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) = Array_Type,

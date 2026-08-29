@@ -1,5 +1,5 @@
 class: negative
-summary: repetition requires a nonzero contextual array length without deciding zero-length types
+summary: repetition requires a nonzero contextual length even though D136 accepts zero-length fixed-array types
 constructs: 0040, 0520, 0560, 1740, 1810
 program: program.ldn
 codes: L0304, L0304

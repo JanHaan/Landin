@@ -1190,7 +1190,8 @@ package body Landin.Tests.Parser_Suite is
       Id      : constant Landin.Source.Source_Id :=
         Sources.Add
           ("aliases.ldn",
-           "bytes: type (t: type, fixed n: u32) = [n]t" & ASCII.LF
+           "bytes: type (t: type, fixed n: u32) = [n * 2]t" & ASCII.LF
+           & "direct: type = [64 * 1024]u8" & ASCII.LF
            & "four: type = bytes(u8, 4)" & ASCII.LF);
    begin
       Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
@@ -1207,9 +1208,14 @@ package body Landin.Tests.Parser_Suite is
            Landin.Syntax.Nth_Type_Formal (Parsed, Bytes, 2);
          Alias_Body : constant Landin.Syntax.Node_Id :=
            Landin.Syntax.Declared_Type (Parsed, Bytes);
-         Application : constant Landin.Syntax.Node_Id :=
+         Bound : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Bound_Of (Parsed, Alias_Body);
+         Direct : constant Landin.Syntax.Node_Id :=
            Landin.Syntax.Declared_Type
              (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2));
+         Application : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 3));
       begin
          Landin.Testing.Check_Equal
            (Item, Landin.Diagnostics.Count (Found), 0,
@@ -1231,13 +1237,25 @@ package body Landin.Tests.Parser_Suite is
            (Item,
             Landin.Syntax.Kind (Parsed, Alias_Body)
               = Landin.Syntax.Array_Type
+             and then Landin.Syntax.Kind (Parsed, Bound)
+                        = Landin.Syntax.Multiply
              and then Landin.Syntax.Kind
-               (Parsed, Landin.Syntax.Bound_Of (Parsed, Alias_Body))
+               (Parsed, Landin.Syntax.Left_Of (Parsed, Bound))
                   = Landin.Syntax.Name_Reference
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Right_Of (Parsed, Bound))
+                  = Landin.Syntax.Integer_Literal
              and then Landin.Syntax.Kind
                (Parsed, Landin.Syntax.Element_Of (Parsed, Alias_Body))
                   = Landin.Syntax.Type_Reference,
-            "the alias body retains fixed and type formal uses");
+            "the alias body retains its fixed expression and type formal");
+         Landin.Testing.Check
+           (Item, Landin.Syntax.Kind (Parsed, Direct)
+                    = Landin.Syntax.Array_Type
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Bound_Of (Parsed, Direct))
+                  = Landin.Syntax.Multiply,
+            "a concrete arithmetic bound is parsed as an expression");
          Landin.Testing.Check
            (Item, Landin.Syntax.Kind (Parsed, Application)
                     = Landin.Syntax.Type_Application
@@ -1268,6 +1286,47 @@ package body Landin.Tests.Parser_Suite is
            (Item, Held and then Nodes > 0
              and then Unbounded.To_String (Codes) = "L0010",
             "fixed function parameters remain refused");
+      end;
+
+      declare
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+         Found   : Landin.Diagnostics.Diagnostic_List;
+         Id      : constant Landin.Source.Source_Id :=
+           Sources.Add
+             ("bound-recovery.ldn", "bad: type = [1 + ]u8" & ASCII.LF);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Diagnostics.Lexical.Report (Stream, Found);
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+            Declaration : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Declaration (Parsed, 1);
+            Array_Node : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Declared_Type (Parsed, Declaration);
+            Bound_Node : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Bound_Of (Parsed, Array_Node);
+         begin
+            Landin.Testing.Check
+              (Item, Landin.Diagnostics.Count (Found) = 1
+                and then Landin.Diagnostics.Code
+                  (Landin.Diagnostics.Get (Found, 1)) = "L0102",
+               "a missing bound operand has one expression report");
+            Landin.Testing.Check
+              (Item, Landin.Syntax.Kind (Parsed, Array_Node)
+                       = Landin.Syntax.Array_Type
+                and then Landin.Syntax.Kind (Parsed, Bound_Node)
+                           = Landin.Syntax.Add
+                and then Landin.Syntax.Kind
+                  (Parsed, Landin.Syntax.Right_Of (Parsed, Bound_Node))
+                           = Landin.Syntax.Error_Expression
+                and then Landin.Syntax.Kind
+                  (Parsed, Landin.Syntax.Element_Of (Parsed, Array_Node))
+                           = Landin.Syntax.Type_Name,
+               "the array closer and valid element survive bound recovery");
+         end;
       end;
    end Parameterized_Type_Aliases_Are_Parsed;
 

@@ -2270,10 +2270,25 @@ validation rejects invalid free names, decidable formal or result kind errors,
 and unconditional expansion cycles even when a template is unused. Constraints
 remain R2.60's work.
 
-The next increments extend the same substitution layer to a closed fixed
-expression fold, parameterised nominal instance identities, generic routine
-instances and exact deduction from ordinary argument types, then fixed
-conditional declaration lists. Deduction does not use return context,
+D136's next increment now gives fixed-array bounds one closed fixed-expression
+fold. Direct bounds such as `[64 * 1024]u8` and alias-template bounds such as
+`[n * 2]t` use the same evaluator over integer literals, fixed formals and the
+target-independent non-wrapping arithmetic operators. Calls and runtime names
+are rejected without execution; impossible operands, negative answers and
+overflow are distinct diagnostics. D136 explicitly accepts source `[0]T` and
+any admitted bound expression that folds to zero as D17's canonical
+zero-element shape; empty literals and zero-length repetition remain separate.
+When a failure depends on substituted actuals, its primary is the application
+and its related label is the template expression. The result remains D17's
+canonical count, D18 still checks target extent, and no instantiation answer is
+written
+onto a template node. Fixed actuals in type applications remain literals or
+forwarded formals for this slice.
+
+The next increments extend the same substitution layer to parameterised nominal
+instance identities, generic routine instances and exact deduction from
+ordinary argument types, then fixed conditional declaration lists. Deduction
+does not use return context,
 constraint lookup or arithmetic inversion. Parameterised nominal types and
 generic routines receive identities derived from a template and normalised
 actual tuple rather than reusing one source declaration identity for unequal
@@ -2281,7 +2296,10 @@ instances. No correctness step executes a user routine. R2.70 remains the
 owner of shared generic evidence and R4.50 the owner of choosing
 specialisation as an optimisation.
 
-Exit evidence: generic shape fixtures and negative non-fixed cases pass; no
+Exit evidence: generic shape and fixed-expression fixtures, including direct
+and expression-folded zero lengths and a syntactically valid rejected call in
+an array bound, pass; nested unconditional template defects are declaration-
+order independent while dependent failures retain application provenance; no
 user code executes during compilation.
 
 ### R2.50 — Implement references and local lifetime checks

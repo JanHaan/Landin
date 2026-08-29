@@ -1,0 +1,5 @@
+class: positive
+summary: D136 folds a concrete target-independent fixed expression into D17's canonical array count
+constructs: 0290, 0520, 1790, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

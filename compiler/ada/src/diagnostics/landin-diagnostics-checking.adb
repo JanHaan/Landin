@@ -48,7 +48,8 @@ package body Landin.Diagnostics.Checking is
       --  built, for Landin.Diagnostics.Lexical's reason: a code whose
       --  occurrences do not carry what it promises is worse than none.
       if Rows.Required_Notes (Named) /= Note_Count (Built)
-        or else Rows.Required_Secondaries (Named) /= Label_Count (Built)
+        or else Label_Count (Built) < Rows.Minimum_Secondaries (Named)
+        or else Label_Count (Built) > Rows.Maximum_Secondaries (Named)
       then
          raise Compiler_Defect
            with "the catalogue row for " & Text
