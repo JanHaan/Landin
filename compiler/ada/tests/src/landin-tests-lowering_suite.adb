@@ -1049,6 +1049,73 @@ package body Landin.Tests.Lowering_Suite is
 
    ------------------------------------------------------------------
 
+   procedure Parameterized_Structs_Lower_As_Concrete_Nominals
+     (Item : in out Landin.Testing.Context);
+
+   procedure Parameterized_Structs_Lower_As_Concrete_Nominals
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "box: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end box" & LF
+         & "small: box(u8)" & LF
+         & "wide: box(u16)" & LF
+         & "convert: (arg: box(u8)) -> (result: box(u16)) =" & LF
+         & "    result = zeroed" & LF
+         & "end convert" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Small : constant IR.Nominal_Type_Id :=
+           IR.Nth_Nominal_Type (Unit, 1);
+         Wide : constant IR.Nominal_Type_Id :=
+           IR.Nth_Nominal_Type (Unit, 2);
+         Small_Field : constant IR.Field_Shape :=
+           IR.Nth_Field_Shape (Unit, 1, 1);
+         Wide_Field : constant IR.Field_Shape :=
+           IR.Nth_Field_Shape (Unit, 2, 1);
+         Routine : constant IR.Item_Id := 3;
+         Parameter : constant IR.Slot_Id :=
+           IR.Nth_Parameter (Unit, Routine, 2);
+         Result : constant IR.Slot_Id := IR.Result_Slot (Unit, Routine);
+      begin
+         Landin.Testing.Check
+           (Item, IR.Nominal_Type_Count (Unit) = 2
+             and then Small /= Wide
+             and then IR.Template_Of (Unit, Small)
+                        = IR.Template_Of (Unit, Wide),
+            "two actual tuples map to distinct IR identities for one"
+            & " template");
+         Landin.Testing.Check
+           (Item, IR.Item_Count (Unit) = 3
+             and then Small_Field.Kind = IR.Scalar_Field_Shape
+             and then Small_Field.Element = Landin.Types.U8
+             and then Wide_Field.Kind = IR.Scalar_Field_Shape
+             and then Wide_Field.Element = Landin.Types.U16,
+            "only concrete datums carry their instantiated field shapes");
+         Landin.Testing.Check
+           (Item, IR.Nominal_Of (Unit, 1) = Small
+             and then IR.Nominal_Of (Unit, 2) = Wide
+             and then IR.Nominal_Of (Unit, Routine, Parameter) = Small
+             and then IR.Nominal_Of (Unit, Routine, Result) = Wide,
+            "storage and ABI metadata retain concrete nominal identities");
+         Check_Terminators (Item, Unit, "parameterized nominal lowering");
+      end;
+   end Parameterized_Structs_Lower_As_Concrete_Nominals;
+
+   ------------------------------------------------------------------
+
    procedure Nominal_Identity_Maps_Through_The_Public_IR_Seam
      (Item : in out Landin.Testing.Context);
 
@@ -5857,6 +5924,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "parameterized aliases lower as arrays",
          Parameterized_Aliases_Lower_As_Ordinary_Arrays'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "parameterized structs lower as nominals",
+         Parameterized_Structs_Lower_As_Concrete_Nominals'Access);
       Landin.Testing.Register
         (Into, "lowering", "nominal identity maps through public IR",
          Nominal_Identity_Maps_Through_The_Public_IR_Seam'Access);

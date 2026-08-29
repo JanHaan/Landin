@@ -1,0 +1,4 @@
+box: type (item: type) = struct
+    value: item
+end box
+bad: box

@@ -1,6 +1,0 @@
-class: negative
-summary: a parameterized struct is parsed and resolved but waits for nominal instance checking
-constructs: 0670, 1350, 1795
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0304

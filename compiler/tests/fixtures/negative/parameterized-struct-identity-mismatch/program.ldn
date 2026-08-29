@@ -1,0 +1,14 @@
+phantom: type (item: type) = struct
+    marker: u8
+end phantom
+other: type (item: type) = struct
+    marker: u8
+end other
+fixed_phantom: type (fixed count: u8) = struct
+    marker: u8
+end fixed_phantom
+left: phantom(u8) = zeroed
+wrong_actual: phantom(i8) = left
+wrong_template: other(u8) = left
+fixed_left: fixed_phantom(1) = zeroed
+wrong_fixed: fixed_phantom(2) = fixed_left

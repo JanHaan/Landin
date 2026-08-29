@@ -1342,6 +1342,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
      (Item : in out Landin.Testing.Context);
 
+   procedure Parameterized_Structs_Intern_And_Lay_Out_Instances
+     (Item : in out Landin.Testing.Context);
+
    procedure Invalid_Parameterized_Templates_Are_Checked_When_Unused
      (Item : in out Landin.Testing.Context);
 
@@ -1503,6 +1506,140 @@ package body Landin.Tests.Checking_Suite is
             "every formal was retained only for compile-time substitution");
       end;
    end Parameterized_Aliases_Normalize_To_Existing_Descriptors;
+
+   procedure Parameterized_Structs_Intern_And_Lay_Out_Instances
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "parameterized-structs.ldn",
+         "byte: type = u8" & LF
+         & "box: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end box" & LF
+         & "first: box(u8)" & LF
+         & "same: box(byte)" & LF
+         & "different: box(i8)" & LF
+         & "other: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end other" & LF
+         & "other_first: other(u8)" & LF
+         & "packet: type (item: type, fixed count: u8) = struct" & LF
+         & "    data: [count]item" & LF
+         & "end packet" & LF
+         & "short: packet(u16, 2)" & LF
+         & "long: packet(u16, 4)" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check
+        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+         "the checker materializes every applied nominal instance");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+
+         function Declaration_For (Node : Landin.Syntax.Node_Id)
+           return Landin.Provenance.Declaration_Id;
+
+         function Declaration_For (Node : Landin.Syntax.Node_Id)
+           return Landin.Provenance.Declaration_Id is
+         begin
+            for Id in Landin.Provenance.Declaration_Id'(1)
+              .. Landin.Provenance.Declaration_Id
+                   (Landin.Resolution.Declaration_Count (Meanings.all))
+            loop
+               if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                 and then Landin.Resolution.Node_Of (Meanings.all, Id) = Node
+               then
+                  return Id;
+               end if;
+            end loop;
+            return Landin.Provenance.No_Declaration;
+         end Declaration_For;
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id
+         is (Declaration_For
+               (Landin.Syntax.Nth_Declaration (Of_Tree.all, Position)));
+
+         Box : constant Landin.Provenance.Declaration_Id :=
+           Declaration_At (2);
+         First : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (3));
+         Same : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (4));
+         Different : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (5));
+         Other_First : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (7));
+         Short : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (9));
+         Long : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (10));
+         Template : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Of_Tree.all, 2);
+         Template_Body : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type (Of_Tree.all, Template);
+         Formal : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Type_Formal (Of_Tree.all, Template, 1);
+         Formal_Id : constant Landin.Provenance.Declaration_Id :=
+           Declaration_For (Formal);
+      begin
+         Landin.Testing.Check
+           (Item, First = Same and then First /= Different
+             and then First /= Other_First,
+            "normalized aliases reuse a key while actuals and templates"
+            & " remain nominally distinct");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Nominal_Type_Count (Types.all) = 5
+             and then Landin.Checking.Template_Of (Types.all, First) = Box
+             and then Landin.Checking.Instance_Actual_Count
+               (Types.all, First) = 1
+             and then Landin.Checking.Type_Form_Of
+               (Landin.Checking.Nth_Instance_Actual
+                  (Types.all, First, 1))
+                    = Landin.Checking.Scalar_Actual_Type
+             and then Landin.Checking.Scalar_Of
+               (Types.all, Landin.Checking.Nth_Instance_Actual
+                  (Types.all, First, 1)) = Landin.Types.U8,
+            "only concrete instances retain their complete normalized"
+            & " tuples");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Has_Layout (Types.all, Short)
+             and then Landin.Checking.Has_Layout (Types.all, Long)
+             and then Natural
+               (Landin.Checking.Layout_Size (Types.all, Short)) = 4
+             and then Natural
+               (Landin.Checking.Layout_Size (Types.all, Long)) = 8,
+            "fixed substitution builds one target layout for each key");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Type_Of
+              (Types.all, Of_Tree.all, Template_Body)
+                = Landin.Types.Undecided
+             and then Landin.Checking.Type_Of
+               (Types.all, Of_Tree.all,
+                Landin.Syntax.Declared_Type (Of_Tree.all,
+                  Landin.Syntax.Nth_Field
+                    (Of_Tree.all, Template_Body, 1)))
+                  = Landin.Types.Undecided
+             and then Landin.Checking.Type_Of (Types.all, Formal_Id)
+                        = Landin.Types.Not_Typed,
+            "template bodies, fields and formals retain no instance answer");
+      end;
+   end Parameterized_Structs_Intern_And_Lay_Out_Instances;
 
    procedure Invalid_Parameterized_Templates_Are_Checked_When_Unused
      (Item : in out Landin.Testing.Context)
@@ -4935,6 +5072,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "parameterized aliases normalize descriptors",
          Parameterized_Aliases_Normalize_To_Existing_Descriptors'Access);
+      Landin.Testing.Register
+        (Into, "checking", "parameterized structs intern and lay out",
+         Parameterized_Structs_Intern_And_Lay_Out_Instances'Access);
       Landin.Testing.Register
         (Into, "checking", "invalid unused templates are checked",
          Invalid_Parameterized_Templates_Are_Checked_When_Unused'Access);

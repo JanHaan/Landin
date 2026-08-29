@@ -1,0 +1,5 @@
+box: type (item: type, fixed count: u8) = struct
+    value: item
+    bytes: [count]u8
+end box
+bad: box(u8)

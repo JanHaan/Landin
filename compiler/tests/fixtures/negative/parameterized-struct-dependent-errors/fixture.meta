@@ -1,0 +1,6 @@
+class: negative
+summary: substitution-dependent field failures are reported at each distinct application
+constructs: 0520, 0640, 0670, 1350, 1795, 1800
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0304, L0304

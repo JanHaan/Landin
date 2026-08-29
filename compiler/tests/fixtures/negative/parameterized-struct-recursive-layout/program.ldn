@@ -1,0 +1,3 @@
+node: type (item: type) = struct
+    next: node(item)
+end node

@@ -1,0 +1,45 @@
+problem: atom
+problems: type = problem
+byte: type = u8
+
+cell: type (item: type) = struct
+    value: item
+end cell
+
+packet: type (item: type, fixed count: u32) = struct
+    tag: item
+    data: [count]item
+end packet
+
+choice: type (item: type) = struct
+    state: variant
+        empty |
+        full: (value: item)
+    end state
+end choice
+
+nested: type (item: type) = struct
+    one: cell(item)
+    many: [2]cell(item)
+    selected: choice(item)
+end nested
+
+callback: type (item: type) = struct
+    apply: (value: item) -> (result: item)
+end callback
+
+phantom: type (item: type) = struct
+    marker: u8
+end phantom
+
+same: packet(u8, 4) = zeroed
+alias_same: packet(byte, 4) = same
+grown: packet(u8, 8) = zeroed
+inside: nested(u8) = zeroed
+selected: choice(u8) = zeroed
+atom_key: phantom(problems) = zeroed
+array_key: phantom([4]u16) = zeroed
+nominal_key: phantom(cell(u8)) = zeroed
+function_key: phantom((value: u8) -> (result: u8)) = zeroed
+identity: (value: u8) -> (result: u8) = result = value end identity
+callback_value: callback(u8) = (apply: identity)

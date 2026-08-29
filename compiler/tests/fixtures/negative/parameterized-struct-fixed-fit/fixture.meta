@@ -1,0 +1,6 @@
+class: negative
+summary: a fixed actual fits the substituted formal integer type
+constructs: 0520, 0670, 1350, 1790, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0304
