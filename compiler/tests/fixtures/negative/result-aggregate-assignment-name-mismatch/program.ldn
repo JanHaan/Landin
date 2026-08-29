@@ -1,0 +1,12 @@
+first: () -> (left: i32, right: i32) =
+    left = 1
+    right = 2
+end first
+second: () -> (one: i32, two: i32) =
+    one = 1
+    two = 2
+end second
+bad: () -> none =
+    mut value := first()
+    value = second()
+end bad

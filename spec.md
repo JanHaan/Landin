@@ -6858,7 +6858,9 @@ result-slot cases and x86-64 aggregate copies; `positive/multiple-named-returns`
 `negative/function-type-return-name-duplicate`,
 `multiple-return-name-duplicate`, `multiple-return-unassigned`,
 `multiple-result-function-signature-mismatch`,
-`result-destructure-duplicate-field`, `result-destructure-needs-multiple`,
-`result-destructure-unknown-field` and `control-result-field-name-mismatch`;
+`result-aggregate-assignment-name-mismatch`,
+`result-destructure-duplicate-field`, `result-destructure-local-name-duplicate`,
+`result-destructure-needs-multiple`, `result-destructure-unknown-field` and
+`control-result-field-name-mismatch`;
 the generated lexical and IR records; and `runtime/multiple-named-returns` on
 Linux x86-64.

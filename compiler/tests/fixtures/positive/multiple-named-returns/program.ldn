@@ -26,6 +26,7 @@ use: () -> (result: i32) =
     (rem: residue, quot, _) := divide(10, 3)
     rich := bundle(4)
     (callback: action) := bundle(5)
+    (record: kept, callback: _) := bundle(6)
     result = whole.quot + whole.rem + quot + residue
-             + rich.numbers[1] + rich.record.left + action(6)
+             + rich.numbers[1] + rich.record.left + kept.right + action(6)
 end use
