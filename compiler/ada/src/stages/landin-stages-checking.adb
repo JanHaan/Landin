@@ -29,6 +29,8 @@ package body Landin.Stages.Checking is
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
    use type Landin.Checking.Progress;
+   use type Landin.Checking.Actual_Kind;
+   use type Landin.Checking.Array_Element_Form;
    use type Landin.Checking.Atom_Set_Id;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Error_Set_Form;
@@ -437,6 +439,15 @@ package body Landin.Stages.Checking is
 
       function Actual_For
         (Descriptor : Type_Descriptor) return Landin.Checking.Actual_Key;
+
+      function Descriptor_For
+        (Actual : Landin.Checking.Actual_Key) return Type_Descriptor;
+
+      function Require_Value_Layout
+        (Descriptor  : Type_Descriptor;
+         Of_Tree     : Syn.Tree;
+         At_Node     : Syn.Node_Id;
+         Application : Landin.Provenance.Origin) return Type_Descriptor;
 
       procedure Build_Struct_Instance
         (Of_Tree     : Syn.Tree;
@@ -893,6 +904,254 @@ package body Landin.Stages.Checking is
          end case;
       end Actual_For;
 
+      function Descriptor_For
+        (Actual : Landin.Checking.Actual_Key) return Type_Descriptor is
+      begin
+         if Landin.Checking.Actual_Kind_Of (Actual)
+              = Landin.Checking.Fixed_Actual_Kind
+         then
+            raise Landin.Compiler_Defect with
+              "a fixed actual was requested as a type descriptor";
+         end if;
+
+         case Landin.Checking.Type_Form_Of (Actual) is
+            when Landin.Checking.Scalar_Actual_Type =>
+               return
+                 (Kind => Landin.Checking.Scalar_Of (Types.all, Actual),
+                  others => <>);
+            when Landin.Checking.Atom_Set_Actual_Type =>
+               return
+                 (Kind  => Ty.Atom_Value,
+                  Atoms => Landin.Checking.Atom_Set_Of (Types.all, Actual),
+                  others => <>);
+            when Landin.Checking.Fixed_Array_Actual_Type =>
+               if Landin.Checking.Array_Element_Form_Of
+                 (Types.all, Actual) = Landin.Checking.Scalar_Array_Element
+               then
+                  return
+                    (Kind    => Ty.Fixed_Array,
+                     Length  => Landin.Checking.Array_Length_Of
+                       (Types.all, Actual),
+                     Element => Landin.Checking.Array_Scalar_Element_Of
+                       (Types.all, Actual),
+                     others  => <>);
+               end if;
+               return
+                 (Kind            => Ty.Fixed_Array,
+                  Length          => Landin.Checking.Array_Length_Of
+                    (Types.all, Actual),
+                  Element         => Ty.U8,
+                  Element_Nominal =>
+                    Landin.Checking.Array_Nominal_Element_Of
+                      (Types.all, Actual),
+                  others          => <>);
+            when Landin.Checking.Nominal_Actual_Type =>
+               return
+                 (Kind    => Ty.Aggregate,
+                  Nominal => Landin.Checking.Nominal_Of (Types.all, Actual),
+                  others  => <>);
+            when Landin.Checking.Function_Actual_Type =>
+               return
+                 (Kind      => Ty.Function_Value,
+                  Signature => Landin.Checking.Function_Signature_Of
+                    (Types.all, Actual),
+                  others    => <>);
+         end case;
+      end Descriptor_For;
+
+      function Require_Value_Layout
+        (Descriptor  : Type_Descriptor;
+         Of_Tree     : Syn.Tree;
+         At_Node     : Syn.Node_Id;
+         Application : Landin.Provenance.Origin) return Type_Descriptor
+      is
+         function Invalid return Type_Descriptor
+           is ((Kind => Ty.Ill_Typed, others => <>));
+
+         procedure Ensure_Nominal
+           (Instance : Landin.Checking.Nominal_Type_Id;
+            Valid    : out Boolean);
+
+         procedure Report_Recursion
+           (Template_Tree : Syn.Tree; Struct_Node : Syn.Node_Id);
+
+         procedure Report_Recursion
+           (Template_Tree : Syn.Tree; Struct_Node : Syn.Node_Id) is
+         begin
+            if Landin.Provenance.Is_Known (Application) then
+               Bad.Report
+                 (Item    => Bad.Recursive_Nominal_Value,
+                  Source  => Application.Source,
+                  Where   => Application.Where,
+                  Message => "this nominal instance would contain itself"
+                             & " by value",
+                  Note    => "D137: identity-only mentions do not request"
+                             & " layout, but this substituted value site does",
+                  Related => Syn.Origin (Of_Tree, At_Node),
+                  Because => "the substituted by-value use",
+                  Into    => Found);
+            else
+               Bad.Report
+                 (Item    => Bad.Recursive_Nominal_Value,
+                  Source  => Syn.Source_Of (Template_Tree),
+                  Where   => Syn.Where (Template_Tree, Struct_Node),
+                  Message => "this nominal instance would contain itself"
+                             & " by value",
+                  Note    => "D137: a finite nominal value layout cannot"
+                             & " include itself by value",
+                  Into    => Found);
+            end if;
+         end Report_Recursion;
+
+         procedure Ensure_Nominal
+           (Instance : Landin.Checking.Nominal_Type_Id;
+            Valid    : out Boolean)
+         is
+            Template_Id : constant Res.Declaration_Id :=
+              Landin.Checking.Template_Of (Types.all, Instance);
+            Template_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Template_Id));
+            Declaration : constant Syn.Node_Id :=
+              Res.Node_Of (Meanings.all, Template_Id);
+            Struct_Node : constant Syn.Node_Id :=
+              Syn.Declared_Type (Template_Tree.all, Declaration);
+            Count : constant Natural :=
+              Landin.Checking.Instance_Actual_Count (Types.all, Instance);
+            Bound : Formal_Actual_Array (1 .. Count) :=
+              [others => (others => <>)];
+            Was_Expanding : constant Boolean :=
+              Generic_Expansion (Positive (Template_Id));
+         begin
+            pragma Assert
+              (Syn.Kind (Template_Tree.all, Struct_Node) = Syn.Struct_Body
+               and then Syn.Type_Formal_Count
+                 (Template_Tree.all, Declaration) = Count);
+
+            if Landin.Checking.Instance_State_Of (Types.all, Instance)
+                 = Landin.Checking.Instance_Ready
+            then
+               Valid := True;
+               return;
+            elsif Landin.Checking.Instance_State_Of (Types.all, Instance)
+                 = Landin.Checking.Instance_Building
+              or else Was_Expanding
+            then
+               Report_Recursion (Template_Tree.all, Struct_Node);
+               Valid := False;
+               return;
+            end if;
+
+            for Index in Bound'Range loop
+               declare
+                  Formal_Node : constant Syn.Node_Id :=
+                    Syn.Nth_Type_Formal
+                      (Template_Tree.all, Declaration, Index);
+                  Actual : constant Landin.Checking.Actual_Key :=
+                    Landin.Checking.Nth_Instance_Actual
+                      (Types.all, Instance, Index);
+               begin
+                  Bound (Index).Formal := Declaration_At
+                    (Syn.Source_Of (Template_Tree.all), Formal_Node);
+                  if Landin.Checking.Actual_Kind_Of (Actual)
+                       = Landin.Checking.Type_Actual_Kind
+                  then
+                     Bound (Index).Value := Descriptor_For (Actual);
+                  else
+                     Bound (Index).Fixed :=
+                       Landin.Checking.Fixed_Magnitude_Of (Actual);
+                     Bound (Index).Fixed_Known := True;
+                  end if;
+               end;
+            end loop;
+
+            if Landin.Checking.Instance_State_Of (Types.all, Instance)
+                 = Landin.Checking.Instance_Unseen
+            then
+               Landin.Checking.Begin_Instance (Types.all, Instance);
+            else
+               Landin.Checking.Retry_Instance (Types.all, Instance);
+            end if;
+
+            Generic_Expansion (Positive (Template_Id)) := True;
+            Build_Struct_Instance
+              (Template_Tree.all, Struct_Node, Instance, Bound,
+               Application, Valid);
+            Generic_Expansion (Positive (Template_Id)) := Was_Expanding;
+
+            if not Valid
+              and then Landin.Checking.Instance_State_Of
+                (Types.all, Instance) = Landin.Checking.Instance_Building
+            then
+               Landin.Checking.Invalidate_Instance (Types.all, Instance);
+            end if;
+         end Ensure_Nominal;
+
+         Result : Type_Descriptor := Descriptor;
+         Valid  : Boolean := True;
+      begin
+         if Descriptor.Kind = Ty.Aggregate then
+            Ensure_Nominal (Descriptor.Nominal, Valid);
+         elsif Descriptor.Kind = Ty.Fixed_Array then
+            if Descriptor.Element_Nominal
+              /= Landin.Checking.No_Nominal_Type
+            then
+               Ensure_Nominal (Descriptor.Element_Nominal, Valid);
+            end if;
+
+            if Valid then
+               declare
+                  Element_Bytes : constant Ty.Magnitude :=
+                    (if Descriptor.Element_Nominal
+                           /= Landin.Checking.No_Nominal_Type
+                     then Ty.Magnitude
+                       (Landin.Checking.Layout_Size
+                          (Types.all, Descriptor.Element_Nominal))
+                     else Ty.Magnitude
+                       (Landin.Targets.Bytes
+                          (Ty.Storage_Size (Descriptor.Element, Facts))));
+                  Maximum_Bytes : constant Ty.Magnitude := Ty.Magnitude
+                    (Landin.Targets.Maximum_Object_Size (Facts));
+                  Length : constant Ty.Magnitude :=
+                    Ty.Magnitude (Descriptor.Length);
+               begin
+                  if Element_Bytes /= 0
+                    and then Length > Maximum_Bytes / Element_Bytes
+                  then
+                     if Landin.Provenance.Is_Known (Application) then
+                        Bad.Report
+                          (Item    => Bad.Literal_Out_Of_Range,
+                           Source  => Application.Source,
+                           Where   => Application.Where,
+                           Message => "this substituted array is larger than"
+                                      & " the target can address",
+                           Note    => "D18: an array's byte extent must fit"
+                                      & " the target's usize",
+                           Related => Syn.Origin (Of_Tree, At_Node),
+                           Because => "the substituted by-value use",
+                           Into    => Found);
+                     else
+                        Bad.Report
+                          (Item    => Bad.Literal_Out_Of_Range,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, At_Node),
+                           Message => "this array is larger than the target"
+                                      & " can address",
+                           Note    => "D18: an array's byte extent must fit"
+                                      & " the target's usize",
+                           Into    => Found);
+                     end if;
+                     Valid := False;
+                  end if;
+               end;
+            end if;
+         end if;
+
+         if not Valid then
+            Result := Invalid;
+         end if;
+         return Result;
+      end Require_Value_Layout;
+
       function Normalized_Type
         (Of_Tree    : Syn.Tree;
          Written    : Syn.Node_Id;
@@ -1149,6 +1408,10 @@ package body Landin.Stages.Checking is
                then
                   for Each of Actuals loop
                      if Each.Formal = Means then
+                        if Requirement = Value_Layout then
+                           return Require_Value_Layout
+                             (Each.Value, Of_Tree, Written, Application);
+                        end if;
                         return Each.Value;
                      end if;
                   end loop;

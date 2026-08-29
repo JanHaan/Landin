@@ -1,0 +1,6 @@
+class: negative
+summary: a nominal-array actual materializes its element and checks target extent only at a substituted value use
+constructs: 0520, 0670, 0710, 1350, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0300

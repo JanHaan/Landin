@@ -2295,8 +2295,11 @@ substitute bounds. Symbolic validation checks unused templates, and L0313
 distinguishes impossible by-value nominal recursion from L0307 alias expansion.
 Function-signature and type-actual normalization request identity only; fields,
 payloads and nominal array elements request value layout, including at zero
-length. Each canonical identity receives one selected-target layout when such a
-site requires it, without AST mutation or a synthetic declaration. An invalid
+length. A formal used at such a site lazily reconstructs the interned binding
+and recursively promotes nested nominal and nominal-array actuals, reporting a
+building identity as L0313 and applying D18 only there. Each canonical identity
+receives one selected-target layout when such a site requires it, without AST
+mutation or a synthetic declaration. An invalid
 layout is re-evaluated at another use of the same key so every dependent failure
 retains its own application primary without duplicating identity. Existing
 contextual aggregate storage,
@@ -2319,9 +2322,10 @@ checking, lowering and verifier seams pass. Positive, negative and runtime
 fixtures cover canonical reuse, alias normalization, unequal phantom actuals,
 fixed layout changes, every enabled substituted field family, contextual value
 transport, target overflow, malformed unused templates, declaration-order
-independence, identity-only recursive signature and phantom nesting, repeated
-same-key application provenance, alias-cycle classification and nominal
-recursion including a zero-length array edge. Direct and expression-folded zero
+independence, identity-only recursive signature and phantom nesting, lazy
+nested nominal and nominal-array value promotion, repeated same-key application
+provenance, alias-cycle classification and nominal recursion including an
+indirect formal and a zero-length array edge. Direct and expression-folded zero
 lengths and a syntactically valid rejected call in an
 array bound remain covered; no user code executes during compilation.
 
