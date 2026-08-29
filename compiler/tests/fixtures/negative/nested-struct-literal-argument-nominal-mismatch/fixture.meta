@@ -1,0 +1,6 @@
+class: negative
+summary: an ordinary-child literal argument preserves the child's nominal type
+constructs: 0670, 0710, 0750, 1920
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

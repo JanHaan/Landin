@@ -1,0 +1,18 @@
+left: type = struct
+    value: i32
+end left
+
+right: type = struct
+    value: i32
+end right
+
+outer: type = struct
+    nested: left
+end outer
+
+consume: (value: outer) -> none =
+end consume
+
+bad: () -> none =
+    consume((nested: right(value: 1)))
+end bad

@@ -1919,6 +1919,10 @@ The eighteenth increment admits a complete struct parameter containing one
 ordinary child. Its compact child field run remains nested in the parameter
 slot, and definite assignment requires that whole child before transport.
 
+The nineteenth increment constructs an ordinary child inside an outer literal
+argument. Bare or matching nominal literals, zero images and direct storage
+copies retain parent/child identities in the shaped caller temporary.
+
 Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
