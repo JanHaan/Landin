@@ -671,9 +671,9 @@ package body Landin.IR is
      (Into     : in out Unit;
       Item     : Item_Id;
       Fields   : Landin.Types.Folded_Array;
-      Images   : Aggregate_Field_Image_Array;
-      Payloads : Aggregate_Field_Image_Array;
-      Elements : Landin.Types.Folded_Array)
+      Images      : Aggregate_Field_Image_Array;
+      Descendants : Aggregate_Field_Image_Array;
+      Elements    : Landin.Types.Folded_Array)
    is
       Held : Item_Record := Element (Into, Item);
    begin
@@ -693,8 +693,8 @@ package body Landin.IR is
          Into.Aggregate_Images.Append (Images (Field));
          Held.Aggregate_Images.Count := Held.Aggregate_Images.Count + 1;
       end loop;
-      for Payload in Payloads'Range loop
-         Into.Aggregate_Images.Append (Payloads (Payload));
+      for Child in Descendants'Range loop
+         Into.Aggregate_Images.Append (Descendants (Child));
          Held.Aggregate_Images.Count := Held.Aggregate_Images.Count + 1;
       end loop;
       Held.Has_Image := True;
@@ -705,11 +705,44 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id) return Natural
      is (Element (Of_Unit, Item).Aggregate_Images.Count);
 
+   function Nth_Image_Descriptor
+     (Of_Unit : Unit; Item : Item_Id; Position : Positive)
+      return Aggregate_Field_Image
+     is (Of_Unit.Aggregate_Images
+           (Element (Of_Unit, Item).Aggregate_Images.First + Position));
+
    function Field_Image_Of
      (Of_Unit : Unit; Item : Item_Id; Field : Positive)
       return Aggregate_Field_Image
-     is (Of_Unit.Aggregate_Images
-           (Element (Of_Unit, Item).Aggregate_Images.First + Field));
+     is (Nth_Image_Descriptor (Of_Unit, Item, Field));
+
+   function Descendant_Image_Of
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Parent  : Aggregate_Field_Image;
+      Position : Positive) return Aggregate_Field_Image
+     is (Nth_Image_Descriptor
+           (Of_Unit, Item,
+            Field_Count (Of_Unit, Item) + Parent.Offset + Position));
+
+   function Nth_Aggregate_Image_Element
+     (Of_Unit : Unit; Item : Item_Id; Position : Part_Position)
+      return Landin.Types.Folded
+     is (Of_Unit.Images
+           (Element (Of_Unit, Item).Image.First
+            + Field_Count (Of_Unit, Item)
+            + Positive (Position)));
+
+   function Nth_Descriptor_Element
+     (Of_Unit : Unit;
+      Item    : Item_Id;
+      Image   : Aggregate_Field_Image;
+      Position : Part_Position) return Landin.Types.Folded
+     is (Of_Unit.Images
+           (Element (Of_Unit, Item).Image.First
+            + Field_Count (Of_Unit, Item)
+            + Image.Offset
+            + Positive (Position)));
 
    function Nth_Field_Element
      (Of_Unit : Unit;
@@ -720,11 +753,8 @@ package body Landin.IR is
       Image : constant Aggregate_Field_Image :=
         Field_Image_Of (Of_Unit, Item, Field);
    begin
-      return Of_Unit.Images
-        (Element (Of_Unit, Item).Image.First
-         + Field_Count (Of_Unit, Item)
-         + Image.Offset
-         + Positive (Position));
+      return Nth_Descriptor_Element
+        (Of_Unit, Item, Image, Position);
    end Nth_Field_Element;
 
    function Variant_Payload_Image_Of
@@ -736,9 +766,8 @@ package body Landin.IR is
       Image : constant Aggregate_Field_Image :=
         Field_Image_Of (Of_Unit, Item, Field);
    begin
-      return Field_Image_Of
-        (Of_Unit, Item,
-         Field_Count (Of_Unit, Item) + Image.Offset + Payload);
+      return Descendant_Image_Of
+        (Of_Unit, Item, Image, Payload);
    end Variant_Payload_Image_Of;
 
    function Nth_Variant_Field_Element
@@ -751,11 +780,8 @@ package body Landin.IR is
       Image : constant Aggregate_Field_Image :=
         Variant_Payload_Image_Of (Of_Unit, Item, Field, Payload);
    begin
-      return Of_Unit.Images
-        (Element (Of_Unit, Item).Image.First
-         + Field_Count (Of_Unit, Item)
-         + Image.Offset
-         + Positive (Position));
+      return Nth_Descriptor_Element
+        (Of_Unit, Item, Image, Position);
    end Nth_Variant_Field_Element;
 
    function Nth_Field_Image

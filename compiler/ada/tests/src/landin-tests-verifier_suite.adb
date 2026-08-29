@@ -1786,6 +1786,28 @@ package body Landin.Tests.Verifier_Suite is
          IR.Emit_Leave (Unit, Datum, IR.No_Value, Site);
          IR.Leave_Block (Unit, Datum);
       end Finish;
+
+      procedure Add_Nested_Usize_Field
+        (Unit : in out IR.Unit; Datum : IR.Item_Id);
+
+      procedure Add_Nested_Usize_Field
+        (Unit : in out IR.Unit; Datum : IR.Item_Id)
+      is
+      begin
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind           => IR.Aggregate_Field_Shape,
+             Element        => Landin.Types.Bool,
+             Length         => 1,
+             Cases          => 1,
+             Payloads_First => 1,
+             others         => <>),
+            IR.No_Case_Runs,
+            [(Kind    => IR.Scalar_Field_Shape,
+              Element => Landin.Types.Usize,
+              Length  => 1,
+              others  => <>)]);
+      end Add_Nested_Usize_Field;
    begin
       declare
          Work : Landin.Stages.Compilation :=
@@ -1810,6 +1832,96 @@ package body Landin.Tests.Verifier_Suite is
            (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
             V.Aggregate_Image_Length_Disagrees,
             "an aggregate image shorter than its field run is refused");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         Add_Nested_Usize_Field (Unit, Datum);
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Nested,
+                     Offset => 0, Count => 1, Value => 0,
+                     others => <>)),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Absent,
+                     Offset => 0, Count => 0, Value => 2 ** 32,
+                     others => <>)),
+            Landin.Types.Folded_Array'(1 .. 0 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Synthetic_32),
+            V.Aggregate_Field_Image_Value_Does_Not_Fit,
+            "a nested usize fold follows the 32-bit target");
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Nothing_Wrong,
+            "the same recursive fold fits the 64-bit target");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         Add_Nested_Usize_Field (Unit, Datum);
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Nested,
+                     Offset => 0, Count => 0, Value => 0,
+                     others => <>)),
+            Landin.Types.Folded_Array'(1 .. 0 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Field_Image_Length_Disagrees,
+            "a nested descriptor must name every direct child");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Datum : IR.Item_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         Add_Nested_Usize_Field (Unit, Datum);
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Nested,
+                     Offset => 1, Count => 1, Value => 0,
+                     others => <>)),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Absent,
+                     Offset => 0, Count => 0, Value => 1,
+                     others => <>)),
+            Landin.Types.Folded_Array'(1 .. 0 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
+            V.Aggregate_Image_On_Aggregate_Field,
+            "a recursive descriptor offset cannot skip or point backward");
       end;
 
       declare
@@ -2361,6 +2473,65 @@ package body Landin.Tests.Verifier_Suite is
            (Item, V.Check (Unit),
             V.Function_Value_Signature_Disagrees,
             "a function-field relocation retains its signature");
+      end;
+
+      --  D132 keeps D131's relocation checks at every recursive descriptor
+      --  depth rather than treating a nested function as a folded integer.
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Expected, Other : IR.Signature_Id;
+         Target, Datum : IR.Item_Id;
+         Parameter : IR.Slot_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Expected := IR.Add_Signature
+           (Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.No_Value, others => <>));
+         Other := IR.Add_Signature
+           (Unit,
+            [(Kind => Landin.Types.I32, others => <>)],
+            (Kind => Landin.Types.No_Value, others => <>));
+         Target := IR.Add_Item
+           (Unit, IR.Routine, IR.No_Declaration,
+            Landin.Types.No_Value, Site);
+         IR.Set_Signature (Unit, Target, Other);
+         Parameter := IR.Add_Parameter
+           (Unit, Target, Landin.Types.I32, 1, Site);
+         pragma Unreferenced (Parameter);
+         Finish (Unit, Target, Site);
+
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind           => IR.Aggregate_Field_Shape,
+             Element        => Landin.Types.Bool,
+             Length         => 1,
+             Cases          => 1,
+             Payloads_First => 1,
+             others         => <>),
+            IR.No_Case_Runs,
+            [(Kind      => IR.Scalar_Field_Shape,
+              Element   => Landin.Types.Usize,
+              Length    => 1,
+              Signature => Expected,
+              others    => <>)]);
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Form => IR.Nested, Count => 1, others => <>)),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Target => Target, others => <>)),
+            Landin.Types.Folded_Array'(1 .. 0 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit),
+            V.Function_Value_Signature_Disagrees,
+            "a nested function relocation retains its signature");
       end;
    end Malformed_Aggregate_Images_Are_Rejected;
 

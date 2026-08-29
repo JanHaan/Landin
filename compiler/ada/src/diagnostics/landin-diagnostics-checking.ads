@@ -117,10 +117,6 @@ package Landin.Diagnostics.Checking is
       --  storage and a zero image, and D76 admits contextual case writes;
       --  a general variant value remains refused.
       Variant_Value,
-      --  [1940] folds a module value rather than copying one, and D67's
-      --  folded image run has no carrier for a child's own image.  The
-      --  same construction inside a function is admitted.
-      Nested_Module_Image,
       --  D127 makes a whole element at a known position a value and a
       --  place, because a known position is an identity like a field.  At
       --  a computed index it is neither: reaching one whole would need an
@@ -145,7 +141,6 @@ package Landin.Diagnostics.Checking is
             when Struct_Value
                | Struct_ABI         => "[0670]",
             when Variant_Value      => "[0680]",
-            when Nested_Module_Image => "[1940]",
             when Whole_Element_Aggregate => "[0520]",
             when Array_Value        => "[0520]",
             when Array_Element      => "[0520]",
@@ -208,7 +203,6 @@ private
                | Float_Type
                | Text_Type         => "R4.10",
             when Struct_ABI
-               | Nested_Module_Image
                | Whole_Element_Aggregate => "R2.30",
             when Struct_Value
                | Variant_Value

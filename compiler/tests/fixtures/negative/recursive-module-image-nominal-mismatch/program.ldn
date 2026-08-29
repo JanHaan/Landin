@@ -1,0 +1,14 @@
+point: type = struct
+    x: i32
+end point
+
+mark: type = struct
+    x: i32
+end mark
+
+holder: type = struct
+    child: point
+end holder
+
+wrong: mark = mark(x: 1)
+image: holder = holder(child: wrong)

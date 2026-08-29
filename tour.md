@@ -920,6 +920,15 @@ pair: (quot: i32, rem: i32) = divide(10, 3)
 -- named: point_pair = divide(10, 3)     -- no, that is named
 ```
 
+At module scope that context forms a static image rather than running a
+constructor before the entry point [1460]. The image follows ordinary child
+fields and ordinary-struct variant payloads recursively. It still keeps every
+nominal boundary: a matching construction, `zeroed`, or a copied module image
+supplies the child, and a same-shaped different struct does not. Forward image
+references and aliases are allowed; a chain that returns to itself has no
+value. Widths, offsets and padding are not part of that folded source image —
+they follow the selected target's field layout [0750].
+
 ### [0720] 'of' fills every field the literal did not name
 
 'of' fills every field the literal did not name, which is

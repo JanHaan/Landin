@@ -6781,6 +6781,15 @@ package body Landin.Stages.Lowering is
          Where : array (Numbered) of Image_State := [others => Unseen];
          Made  : array (Numbered) of Boolean := [others => False];
 
+         package Descriptor_Vectors is new Ada.Containers.Vectors
+           (Index_Type   => Positive,
+            Element_Type => IR.Aggregate_Field_Image,
+            "="          => IR."=");
+         package Fold_Vectors is new Ada.Containers.Vectors
+           (Index_Type   => Positive,
+            Element_Type => Ty.Folded,
+            "="          => Ty."=");
+
          --  Every [1820] operator [1940] admits over literals, so a
          --  bool comparison, a bitwise expression, a shift or a wrapping
          --  arithmetic operator produces the same image bytes here that
@@ -7621,6 +7630,732 @@ package body Landin.Stages.Lowering is
             Cursor := Cursor + Image.Count;
          end Copy_Field_Descriptor;
 
+         --  D132 recursively carries a written ordinary-child image in the
+         --  same item-owned descriptor and fold runs D67/D81 already use.
+         --  A Nested descriptor points to one contiguous direct-child run;
+         --  those children may point farther into the run in turn.  Every
+         --  offset below is therefore a descriptor or fold index, never a
+         --  target byte position.
+         procedure Set_Recursive_Image_From_Struct_Literal
+           (Id      : Res.Declaration_Id;
+            Of_Tree : Syn.Tree;
+            Literal : Syn.Node_Id);
+
+         procedure Set_Recursive_Image_From_Struct_Literal
+           (Id      : Res.Declaration_Id;
+            Of_Tree : Syn.Tree;
+            Literal : Syn.Node_Id)
+         is
+            Item : constant IR.Item_Id := IR.Item_For (Unit.all, Id);
+            Top_Count : constant Natural := IR.Field_Count (Unit.all, Item);
+            Values : Ty.Folded_Array (1 .. Top_Count) := [others => 0];
+            Descriptors : Descriptor_Vectors.Vector;
+            Elements : Fold_Vectors.Vector;
+
+            function Element_Cursor return Natural
+              is (Natural (Elements.Length));
+
+            function Descendant_Cursor return Natural
+              is (Natural (Descriptors.Length) - Top_Count);
+
+            procedure Put
+              (Position : Positive; Image : IR.Aggregate_Field_Image);
+
+            function Reserve_Children
+              (Position : Positive;
+               Form     : IR.Field_Image_Form;
+               Count    : Positive;
+               Value    : Ty.Folded := 0) return Positive;
+
+            procedure Build_Field
+              (Shape     : IR.Field_Shape;
+               Given     : Syn.Node_Id;
+               Position  : Positive;
+               Top_Field : Natural := 0);
+
+            procedure Clone_Field
+              (Source_Item  : IR.Item_Id;
+               Shape        : IR.Field_Shape;
+               Source_Image : IR.Aggregate_Field_Image;
+               Position     : Positive);
+
+            procedure Clone_Array
+              (Source_Item  : IR.Item_Id;
+               Source_Image : IR.Aggregate_Field_Image;
+               Position     : Positive);
+
+            procedure Clone_Aggregate_Root
+              (Source_Item : IR.Item_Id;
+               Position    : Positive);
+
+            procedure Copy_Aggregate_Value
+              (Given    : Syn.Node_Id;
+               Position : Positive);
+
+            procedure Build_Array
+              (Shape    : IR.Field_Shape;
+               Given    : Syn.Node_Id;
+               Position : Positive);
+
+            procedure Build_Aggregate
+              (Shape    : IR.Field_Shape;
+               Given    : Syn.Node_Id;
+               Position : Positive);
+
+            procedure Build_Variant
+              (Shape    : IR.Field_Shape;
+               Given    : Syn.Node_Id;
+               Position : Positive);
+
+            procedure Put
+              (Position : Positive; Image : IR.Aggregate_Field_Image)
+            is
+            begin
+               Descriptors.Replace_Element (Position, Image);
+            end Put;
+
+            function Reserve_Children
+              (Position : Positive;
+               Form     : IR.Field_Image_Form;
+               Count    : Positive;
+               Value    : Ty.Folded := 0) return Positive
+            is
+               Offset : constant Natural := Descendant_Cursor;
+            begin
+               Put
+                 (Position,
+                  (Form   => Form,
+                   Offset => Offset,
+                   Count  => Count,
+                   Value  => Value,
+                   others => <>));
+               for Child in 1 .. Count loop
+                  Descriptors.Append
+                    (IR.Aggregate_Field_Image'(others => <>));
+               end loop;
+               return Positive (Top_Count + Offset + 1);
+            end Reserve_Children;
+
+            procedure Clone_Array
+              (Source_Item  : IR.Item_Id;
+               Source_Image : IR.Aggregate_Field_Image;
+               Position     : Positive)
+            is
+               Image : IR.Aggregate_Field_Image := Source_Image;
+            begin
+               Image.Offset := Element_Cursor;
+               Put (Position, Image);
+               if Image.Form in IR.Finite | IR.Hybrid then
+                  for Element in 1 .. Image.Count loop
+                     Elements.Append
+                       (IR.Nth_Descriptor_Element
+                          (Unit.all, Source_Item, Source_Image,
+                           IR.Part_Position (Element)));
+                  end loop;
+               end if;
+            end Clone_Array;
+
+            procedure Clone_Field
+              (Source_Item  : IR.Item_Id;
+               Shape        : IR.Field_Shape;
+               Source_Image : IR.Aggregate_Field_Image;
+               Position     : Positive)
+            is
+            begin
+               case Shape.Kind is
+                  when IR.Scalar_Field_Shape =>
+                     Put
+                       (Position,
+                        (Form   => IR.Absent,
+                         Offset => Element_Cursor,
+                         Count  => 0,
+                         Value  => Source_Image.Value,
+                         Target => Source_Image.Target));
+
+                  when IR.Array_Field_Shape =>
+                     Clone_Array
+                       (Source_Item, Source_Image, Position);
+
+                  when IR.Aggregate_Field_Shape =>
+                     if Source_Image.Form = IR.Absent then
+                        Put
+                          (Position,
+                           (Form   => IR.Absent,
+                            Offset => Descendant_Cursor,
+                            Count  => 0,
+                            Value  => 0,
+                            others => <>));
+                     elsif Source_Image.Form = IR.Nested then
+                        declare
+                           Count : constant Natural :=
+                             IR.Aggregate_Field_Count (Unit.all, Shape);
+                           First : constant Positive :=
+                             Reserve_Children
+                               (Position, IR.Nested, Positive (Count));
+                        begin
+                           if Source_Image.Count /= Count then
+                              raise Landin.Compiler_Defect with
+                                "a verified nested module image changed"
+                                & " child count during lowering";
+                           end if;
+                           for Child in 1 .. Count loop
+                              Clone_Field
+                                (Source_Item,
+                                 IR.Nth_Aggregate_Field
+                                   (Unit.all, Shape, Child),
+                                 IR.Descendant_Image_Of
+                                   (Unit.all, Source_Item, Source_Image,
+                                    Child),
+                                 First + Child - 1);
+                           end loop;
+                        end;
+                     else
+                        raise Landin.Compiler_Defect with
+                          "a non-nested descriptor reached an ordinary"
+                          & " child module image";
+                     end if;
+
+                  when IR.Variant_Field_Shape =>
+                     if Source_Image.Form = IR.Absent then
+                        Put
+                          (Position,
+                           (Form   => IR.Absent,
+                            Offset => Descendant_Cursor,
+                            Count  => 0,
+                            Value  => 0,
+                            others => <>));
+                     elsif Source_Image.Form = IR.Selected then
+                        declare
+                           Selected : constant Positive :=
+                             Positive (Source_Image.Value);
+                           Count : constant Natural :=
+                             IR.Variant_Case_Field_Count
+                               (Unit.all, Shape, Selected);
+                           First : constant Positive :=
+                             Reserve_Children
+                               (Position, IR.Selected, Positive (Count),
+                                Source_Image.Value);
+                        begin
+                           if Source_Image.Count /= Count then
+                              raise Landin.Compiler_Defect with
+                                "a verified selected module image changed"
+                                & " payload count during lowering";
+                           end if;
+                           for Payload in 1 .. Count loop
+                              Clone_Field
+                                (Source_Item,
+                                 IR.Nth_Variant_Case_Field
+                                   (Unit.all, Shape, Selected, Payload),
+                                 IR.Descendant_Image_Of
+                                   (Unit.all, Source_Item, Source_Image,
+                                    Payload),
+                                 First + Payload - 1);
+                           end loop;
+                        end;
+                     else
+                        raise Landin.Compiler_Defect with
+                          "a non-selected descriptor reached a variant"
+                          & " module image";
+                     end if;
+               end case;
+            end Clone_Field;
+
+            procedure Clone_Aggregate_Root
+              (Source_Item : IR.Item_Id;
+               Position    : Positive)
+            is
+            begin
+               if not IR.Has_Image (Unit.all, Source_Item) then
+                  Put
+                    (Position,
+                     (Form   => IR.Absent,
+                      Offset => Descendant_Cursor,
+                      Count  => 0,
+                      Value  => 0,
+                      others => <>));
+                  return;
+               end if;
+
+               declare
+                  Count : constant Natural :=
+                    IR.Field_Count (Unit.all, Source_Item);
+                  First : constant Positive :=
+                    Reserve_Children
+                      (Position, IR.Nested, Positive (Count));
+               begin
+                  for Field in 1 .. Count loop
+                     declare
+                        Shape : constant IR.Field_Shape :=
+                          IR.Nth_Field_Shape
+                            (Unit.all, Source_Item, Field);
+                        Target : constant Positive := First + Field - 1;
+                     begin
+                        if Shape.Kind = IR.Scalar_Field_Shape then
+                           declare
+                              Image : constant IR.Aggregate_Field_Image :=
+                                IR.Field_Image_Of
+                                  (Unit.all, Source_Item, Field);
+                           begin
+                              Put
+                                (Target,
+                                 (Form   => IR.Absent,
+                                  Offset => Element_Cursor,
+                                  Count  => 0,
+                                  Value  => IR.Nth_Field_Image
+                                    (Unit.all, Source_Item, Field),
+                                  Target => Image.Target));
+                           end;
+                        else
+                           Clone_Field
+                             (Source_Item, Shape,
+                              IR.Field_Image_Of
+                                (Unit.all, Source_Item, Field),
+                              Target);
+                        end if;
+                     end;
+                  end loop;
+               end;
+            end Clone_Aggregate_Root;
+
+            procedure Copy_Aggregate_Value
+              (Given    : Syn.Node_Id;
+               Position : Positive)
+            is
+               Source_Id : Res.Declaration_Id := Res.No_Declaration;
+               Source_Field : Natural := 0;
+            begin
+               if Syn.Kind (Of_Tree, Given) = Syn.Name_Reference then
+                  Source_Id := Res.Bound_To
+                    (Meanings.all, Of_Tree, Given);
+               elsif Syn.Kind (Of_Tree, Given) = Syn.Member_Selection then
+                  Source_Id := Res.Bound_To
+                    (Meanings.all, Of_Tree,
+                     Syn.Target_Of (Of_Tree, Given));
+                  Source_Field := Landin.Checking.Field_Index
+                    (Types.all, Of_Tree, Given);
+               else
+                  raise Landin.Compiler_Defect with
+                    "a non-storage ordinary-child image reached lowering";
+               end if;
+
+               Resolve_Image (Source_Id);
+               if not Made (Source_Id) then
+                  Put
+                    (Position,
+                     (Form   => IR.Absent,
+                      Offset => Descendant_Cursor,
+                      Count  => 0,
+                      Value  => 0,
+                      others => <>));
+                  return;
+               end if;
+
+               declare
+                  Source_Item : constant IR.Item_Id :=
+                    IR.Item_For (Unit.all, Source_Id);
+               begin
+                  if Source_Field = 0 then
+                     Clone_Aggregate_Root (Source_Item, Position);
+                  else
+                     declare
+                        Shape : constant IR.Field_Shape :=
+                          IR.Nth_Field_Shape
+                            (Unit.all, Source_Item, Source_Field);
+                     begin
+                        Clone_Field
+                          (Source_Item, Shape,
+                           IR.Field_Image_Of
+                             (Unit.all, Source_Item, Source_Field),
+                           Position);
+                     end;
+                  end if;
+               end;
+            end Copy_Aggregate_Value;
+
+            procedure Build_Array
+              (Shape    : IR.Field_Shape;
+               Given    : Syn.Node_Id;
+               Position : Positive)
+            is
+               Image : IR.Aggregate_Field_Image :=
+                 (Form   => IR.Absent,
+                  Offset => Element_Cursor,
+                  Count  => 0,
+                  Value  => 0,
+                  others => <>);
+               Held : Ty.Folded;
+               Known : Boolean;
+            begin
+               if Given = Syn.No_Node
+                 or else Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal
+               then
+                  Put (Position, Image);
+                  return;
+               end if;
+
+               case Syn.Kind (Of_Tree, Given) is
+                  when Syn.Array_Literal | Syn.Mixed_Array_Repetition =>
+                     Image.Form :=
+                       (if Syn.Kind (Of_Tree, Given) = Syn.Array_Literal
+                        then IR.Finite else IR.Hybrid);
+                     Image.Count := Syn.Element_Count (Of_Tree, Given);
+                     Put (Position, Image);
+                     for Element in 1 .. Image.Count loop
+                        Fold_Constant
+                          (Of_Tree,
+                           Syn.Nth_Element (Of_Tree, Given, Element),
+                           Held, Known);
+                        if not Known then
+                           raise Landin.Compiler_Defect with
+                             "a checked nested array image did not fold";
+                        end if;
+                        Elements.Append (Held);
+                     end loop;
+                     if Image.Form = IR.Hybrid then
+                        Fold_Constant
+                          (Of_Tree, Syn.Repeated_Element (Of_Tree, Given),
+                           Held, Known);
+                        if not Known then
+                           raise Landin.Compiler_Defect with
+                             "a checked nested hybrid suffix did not fold";
+                        end if;
+                        Image.Value := Held;
+                        Put (Position, Image);
+                     end if;
+
+                  when Syn.Array_Repetition =>
+                     Fold_Constant
+                       (Of_Tree, Syn.Repeated_Element (Of_Tree, Given),
+                        Held, Known);
+                     if not Known then
+                        raise Landin.Compiler_Defect with
+                          "a checked nested repetition did not fold";
+                     end if;
+                     if Held /= 0 then
+                        Image.Form := IR.Repeated;
+                        Image.Value := Held;
+                     end if;
+                     Put (Position, Image);
+
+                  when Syn.Name_Reference =>
+                     declare
+                        Source_Id : constant Res.Declaration_Id :=
+                          Res.Bound_To (Meanings.all, Of_Tree, Given);
+                     begin
+                        Resolve_Image (Source_Id);
+                        if Made (Source_Id) then
+                           declare
+                              Source_Item : constant IR.Item_Id :=
+                                IR.Item_For (Unit.all, Source_Id);
+                           begin
+                              if IR.Is_Repeated_Image
+                                (Unit.all, Source_Item)
+                              then
+                                 Image.Form :=
+                                   (if IR.Image_Prefix_Length
+                                        (Unit.all, Source_Item) = 0
+                                    then IR.Repeated else IR.Hybrid);
+                                 Image.Value := IR.Repeated_Image_Value
+                                   (Unit.all, Source_Item);
+                                 Image.Count := Natural
+                                   (IR.Image_Prefix_Length
+                                      (Unit.all, Source_Item));
+                              else
+                                 Image.Form := IR.Finite;
+                                 Image.Count := Natural
+                                   (IR.Image_Length
+                                      (Unit.all, Source_Item));
+                              end if;
+                              Put (Position, Image);
+                              for Element in 1 .. Image.Count loop
+                                 Elements.Append
+                                   (IR.Nth_Image
+                                      (Unit.all, Source_Item,
+                                       IR.Part_Position (Element)));
+                              end loop;
+                           end;
+                        else
+                           Put (Position, Image);
+                        end if;
+                     end;
+
+                  when Syn.Member_Selection =>
+                     declare
+                        Source_Id : constant Res.Declaration_Id :=
+                          Res.Bound_To
+                            (Meanings.all, Of_Tree,
+                             Syn.Target_Of (Of_Tree, Given));
+                     begin
+                        Resolve_Image (Source_Id);
+                        if Made (Source_Id) then
+                           declare
+                              Source_Item : constant IR.Item_Id :=
+                                IR.Item_For (Unit.all, Source_Id);
+                              Source_Image : constant
+                                IR.Aggregate_Field_Image :=
+                                  IR.Field_Image_Of
+                                    (Unit.all, Source_Item,
+                                     Positive
+                                       (Landin.Checking.Field_Index
+                                          (Types.all, Of_Tree, Given)));
+                           begin
+                              Clone_Array
+                                (Source_Item, Source_Image, Position);
+                           end;
+                        else
+                           Put (Position, Image);
+                        end if;
+                     end;
+
+                  when others =>
+                     raise Landin.Compiler_Defect with
+                       "an unsupported nested array image reached lowering";
+               end case;
+               pragma Assert (Shape.Kind = IR.Array_Field_Shape);
+            end Build_Array;
+
+            procedure Build_Aggregate
+              (Shape    : IR.Field_Shape;
+               Given    : Syn.Node_Id;
+               Position : Positive)
+            is
+            begin
+               if Given = Syn.No_Node
+                 or else Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal
+               then
+                  Put
+                    (Position,
+                     (Form   => IR.Absent,
+                      Offset => Descendant_Cursor,
+                      Count  => 0,
+                      Value  => 0,
+                      others => <>));
+               elsif Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
+                  declare
+                     Count : constant Natural :=
+                       IR.Aggregate_Field_Count (Unit.all, Shape);
+                     First : constant Positive :=
+                       Reserve_Children
+                         (Position, IR.Nested, Positive (Count));
+                     type Node_Array is
+                       array (Positive range <>) of Syn.Node_Id;
+                     Nodes : Node_Array (1 .. Count) :=
+                       [others => Syn.No_Node];
+                  begin
+                     for Written in
+                       1 .. Syn.Field_Value_Count (Of_Tree, Given)
+                     loop
+                        declare
+                           Label : constant Syn.Node_Id :=
+                             Syn.Nth_Field_Value
+                               (Of_Tree, Given, Written);
+                        begin
+                           Nodes
+                             (Positive
+                                (Landin.Checking.Field_Index
+                                   (Types.all, Of_Tree, Label))) :=
+                                     Syn.Value_Of (Of_Tree, Label);
+                        end;
+                     end loop;
+                     for Child in 1 .. Count loop
+                        Build_Field
+                          (IR.Nth_Aggregate_Field
+                             (Unit.all, Shape, Child),
+                           Nodes (Child), First + Child - 1);
+                     end loop;
+                  end;
+               else
+                  Copy_Aggregate_Value (Given, Position);
+               end if;
+            end Build_Aggregate;
+
+            procedure Build_Variant
+              (Shape    : IR.Field_Shape;
+               Given    : Syn.Node_Id;
+               Position : Positive)
+            is
+            begin
+               if Given = Syn.No_Node
+                 or else Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal
+               then
+                  Put
+                    (Position,
+                     (Form   => IR.Absent,
+                      Offset => Descendant_Cursor,
+                      Count  => 0,
+                      Value  => 0,
+                      others => <>));
+                  return;
+               end if;
+
+               declare
+                  Selected : constant Positive := Positive
+                    (Landin.Checking.Field_Index
+                       (Types.all, Of_Tree, Given));
+                  Count : constant Natural :=
+                    IR.Variant_Case_Field_Count
+                      (Unit.all, Shape, Selected);
+               begin
+                  if Count = 0 then
+                     Put
+                       (Position,
+                        (Form   => IR.Selected,
+                         Offset => Descendant_Cursor,
+                         Count  => 0,
+                         Value  => Ty.Folded (Selected),
+                         others => <>));
+                     return;
+                  end if;
+
+                  declare
+                     First : constant Positive :=
+                       Reserve_Children
+                         (Position, IR.Selected, Positive (Count),
+                          Ty.Folded (Selected));
+                     type Node_Array is
+                       array (Positive range <>) of Syn.Node_Id;
+                     Nodes : Node_Array (1 .. Count) :=
+                       [others => Syn.No_Node];
+                  begin
+                     if Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
+                        for Written in
+                          1 .. Syn.Field_Value_Count (Of_Tree, Given)
+                        loop
+                           declare
+                              Label : constant Syn.Node_Id :=
+                                Syn.Nth_Field_Value
+                                  (Of_Tree, Given, Written);
+                           begin
+                              Nodes
+                                (Positive
+                                   (Landin.Checking.Field_Index
+                                      (Types.all, Of_Tree, Label))) :=
+                                        Syn.Value_Of (Of_Tree, Label);
+                           end;
+                        end loop;
+                     end if;
+                     for Payload in 1 .. Count loop
+                        Build_Field
+                          (IR.Nth_Variant_Case_Field
+                             (Unit.all, Shape, Selected, Payload),
+                           Nodes (Payload), First + Payload - 1);
+                     end loop;
+                  end;
+               end;
+            end Build_Variant;
+
+            procedure Build_Field
+              (Shape     : IR.Field_Shape;
+               Given     : Syn.Node_Id;
+               Position  : Positive;
+               Top_Field : Natural := 0)
+            is
+               Held : Ty.Folded := 0;
+               Known : Boolean := True;
+               Target : IR.Item_Id := IR.No_Item;
+            begin
+               case Shape.Kind is
+                  when IR.Scalar_Field_Shape =>
+                     if Shape.Signature /= IR.No_Signature then
+                        if Given = Syn.No_Node
+                          or else Syn.Kind (Of_Tree, Given)
+                                    = Syn.Zeroed_Literal
+                        then
+                           raise Landin.Compiler_Defect with
+                             "a function-valued nested image has no target";
+                        end if;
+                        Target := Static_Field_Target (Of_Tree, Given);
+                     elsif Given /= Syn.No_Node
+                       and then Syn.Kind (Of_Tree, Given)
+                                  /= Syn.Zeroed_Literal
+                     then
+                        Fold_Constant (Of_Tree, Given, Held, Known);
+                        if not Known then
+                           raise Landin.Compiler_Defect with
+                             "a checked nested scalar image did not fold";
+                        end if;
+                     end if;
+                     Put
+                       (Position,
+                        (Form   => IR.Absent,
+                         Offset => Element_Cursor,
+                         Count  => 0,
+                         Value  =>
+                           (if Top_Field = 0 then Held else 0),
+                         Target => Target));
+                     if Top_Field /= 0 then
+                        Values (Top_Field) := Held;
+                     end if;
+
+                  when IR.Array_Field_Shape =>
+                     Build_Array (Shape, Given, Position);
+
+                  when IR.Aggregate_Field_Shape =>
+                     Build_Aggregate (Shape, Given, Position);
+
+                  when IR.Variant_Field_Shape =>
+                     Build_Variant (Shape, Given, Position);
+               end case;
+            end Build_Field;
+         begin
+            for Field in 1 .. Top_Count loop
+               Descriptors.Append
+                 (IR.Aggregate_Field_Image'(others => <>));
+            end loop;
+
+            declare
+               type Node_Array is array (Positive range <>) of Syn.Node_Id;
+               Nodes : Node_Array (1 .. Top_Count) :=
+                 [others => Syn.No_Node];
+            begin
+               for Written in
+                 1 .. Syn.Field_Value_Count (Of_Tree, Literal)
+               loop
+                  declare
+                     Label : constant Syn.Node_Id :=
+                       Syn.Nth_Field_Value (Of_Tree, Literal, Written);
+                  begin
+                     Nodes
+                       (Positive
+                          (Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Label))) :=
+                               Syn.Value_Of (Of_Tree, Label);
+                  end;
+               end loop;
+
+               for Field in 1 .. Top_Count loop
+                  Build_Field
+                    (IR.Nth_Field_Shape (Unit.all, Item, Field),
+                     Nodes (Field), Field, Top_Field => Field);
+               end loop;
+            end;
+
+            declare
+               Descendant_Count : constant Natural := Descendant_Cursor;
+               Element_Count : constant Natural := Element_Cursor;
+               Images : IR.Aggregate_Field_Image_Array (1 .. Top_Count) :=
+                 [others => (others => <>)];
+               Descendants : IR.Aggregate_Field_Image_Array
+                 (1 .. Descendant_Count) := [others => (others => <>)];
+               Folds : Ty.Folded_Array (1 .. Element_Count) :=
+                 [others => 0];
+            begin
+               for Field in Images'Range loop
+                  Images (Field) := Descriptors (Field);
+               end loop;
+               for Child in Descendants'Range loop
+                  Descendants (Child) :=
+                    Descriptors (Top_Count + Child);
+               end loop;
+               for Element in Folds'Range loop
+                  Folds (Element) := Elements (Element);
+               end loop;
+               IR.Set_Aggregate_Image
+                 (Unit.all, Item, Values, Images, Descendants, Folds);
+               Made (Id) := True;
+            end;
+         end Set_Recursive_Image_From_Struct_Literal;
+
          procedure Set_Image_From_Struct_Literal
            (Id      : Res.Declaration_Id;
             Of_Tree : Syn.Tree;
@@ -7637,7 +8372,54 @@ package body Landin.Stages.Lowering is
             Nodes : Node_Array (1 .. Count) := [others => Syn.No_Node];
             Element_Count : Natural := 0;
             Payload_Count : Natural := 0;
+
+            function Contains_Aggregate
+              (Shape : IR.Field_Shape) return Boolean;
+
+            function Contains_Aggregate
+              (Shape : IR.Field_Shape) return Boolean
+            is
+            begin
+               if Shape.Kind = IR.Aggregate_Field_Shape then
+                  return True;
+               elsif Shape.Kind = IR.Variant_Field_Shape then
+                  for Variant_Case in 1 .. Shape.Cases loop
+                     for Payload in
+                       1 .. IR.Variant_Case_Field_Count
+                              (Unit.all, Shape, Variant_Case)
+                     loop
+                        if Contains_Aggregate
+                          (IR.Nth_Variant_Case_Field
+                             (Unit.all, Shape, Variant_Case, Payload))
+                        then
+                           return True;
+                        end if;
+                     end loop;
+                  end loop;
+               end if;
+               return False;
+            end Contains_Aggregate;
+
+            function Needs_Recursive_Image return Boolean;
+
+            function Needs_Recursive_Image return Boolean is
+            begin
+               for Field in 1 .. Count loop
+                  if Contains_Aggregate
+                    (IR.Nth_Field_Shape (Unit.all, Item, Field))
+                  then
+                     return True;
+                  end if;
+               end loop;
+               return False;
+            end Needs_Recursive_Image;
          begin
+            if Needs_Recursive_Image then
+               Set_Recursive_Image_From_Struct_Literal
+                 (Id, Of_Tree, Literal);
+               return;
+            end if;
+
             for Position in
               1 .. Syn.Field_Value_Count (Of_Tree, Literal)
             loop
@@ -8333,9 +9115,9 @@ package body Landin.Stages.Lowering is
                      end;
                      Made (Id) := True;
 
-                  when IR.Selected =>
+                  when IR.Selected | IR.Nested =>
                      raise Landin.Compiler_Defect with
-                       "a selected variant field was used as an array image";
+                       "a non-array field was used as an array image";
                end case;
             end;
          end Set_Image_From_Struct_Field;
@@ -8354,6 +9136,64 @@ package body Landin.Stages.Lowering is
               IR.Image_Length (Unit.all, Source_Item);
          begin
             if IR.Result_Of (Unit.all, Source_Item) = Ty.Aggregate then
+               declare
+                  Recursive : Boolean := False;
+               begin
+                  for Position in
+                    1 .. IR.Aggregate_Field_Image_Count
+                           (Unit.all, Source_Item)
+                  loop
+                     Recursive := Recursive
+                       or else IR.Nth_Image_Descriptor
+                         (Unit.all, Source_Item, Position).Form = IR.Nested;
+                  end loop;
+
+                  if Recursive then
+                     declare
+                        Fields : constant Natural :=
+                          IR.Field_Count (Unit.all, Source_Item);
+                        Descriptor_Count : constant Natural :=
+                          IR.Aggregate_Field_Image_Count
+                            (Unit.all, Source_Item);
+                        Child_Count : constant Natural :=
+                          Descriptor_Count - Fields;
+                        Element_Count : constant Natural := Natural
+                          (Length - IR.Element_Total (Fields));
+                        Values : Ty.Folded_Array (1 .. Fields) :=
+                          [others => 0];
+                        Images : IR.Aggregate_Field_Image_Array
+                          (1 .. Fields) := [others => (others => <>)];
+                        Children : IR.Aggregate_Field_Image_Array
+                          (1 .. Child_Count) := [others => (others => <>)];
+                        Elements : Ty.Folded_Array
+                          (1 .. Element_Count) := [others => 0];
+                     begin
+                        for Field in Values'Range loop
+                           Values (Field) := IR.Nth_Field_Image
+                             (Unit.all, Source_Item, Field);
+                           Images (Field) := IR.Nth_Image_Descriptor
+                             (Unit.all, Source_Item, Field);
+                        end loop;
+                        for Child in Children'Range loop
+                           Children (Child) := IR.Nth_Image_Descriptor
+                             (Unit.all, Source_Item, Fields + Child);
+                        end loop;
+                        for Element in Elements'Range loop
+                           Elements (Element) :=
+                             IR.Nth_Aggregate_Image_Element
+                               (Unit.all, Source_Item,
+                                IR.Part_Position (Element));
+                        end loop;
+                        IR.Set_Aggregate_Image
+                          (Unit.all,
+                           IR.Item_For (Unit.all, Destination), Values,
+                           Images, Children, Elements);
+                        Made (Destination) := True;
+                     end;
+                     return;
+                  end if;
+               end;
+
                declare
                   Fields : constant Natural :=
                     IR.Field_Count (Unit.all, Source_Item);

@@ -143,8 +143,9 @@ package body Landin.IR.Verifier is
                "an aggregate datum's image carries a value the field type"
                & " cannot hold on this target",
             when Aggregate_Image_On_Array_Field =>
-               "an aggregate datum's first image form carries a nonzero"
-               & " value for a fixed-array field",
+               "an aggregate datum carries a malformed fixed-array image",
+            when Aggregate_Image_On_Aggregate_Field =>
+               "an aggregate datum carries a malformed nested field image",
             when Aggregate_Image_On_Variant_Field =>
                "an aggregate datum carries a malformed selected variant"
                & " image",
@@ -814,6 +815,12 @@ package body Landin.IR.Verifier is
          Budget : Natural := 0)
         return Boolean;
 
+      function Shape_Contains_Aggregate
+        (Shape : Field_Shape) return Boolean;
+
+      function Item_Image_Contains_Aggregate
+        (Item : Item_Id) return Boolean;
+
       function Signature_Part_Is_Malformed
         (Part : Signature_Part) return Boolean;
 
@@ -950,6 +957,49 @@ package body Landin.IR.Verifier is
 
          return False;
       end Field_Shape_Is_Malformed;
+
+      function Shape_Contains_Aggregate
+        (Shape : Field_Shape) return Boolean
+      is
+      begin
+         if Shape.Kind = Aggregate_Field_Shape then
+            return True;
+         elsif Shape.Kind = Array_Field_Shape
+           and then Array_Element_Is_Aggregate (Of_Unit, Shape)
+         then
+            return Shape_Contains_Aggregate
+              (Array_Element_Shape (Of_Unit, Shape));
+         elsif Shape.Kind = Variant_Field_Shape then
+            for Variant_Case in 1 .. Shape.Cases loop
+               for Payload in
+                 1 .. Variant_Case_Field_Count
+                        (Of_Unit, Shape, Variant_Case)
+               loop
+                  if Shape_Contains_Aggregate
+                    (Nth_Variant_Case_Field
+                       (Of_Unit, Shape, Variant_Case, Payload))
+                  then
+                     return True;
+                  end if;
+               end loop;
+            end loop;
+         end if;
+         return False;
+      end Shape_Contains_Aggregate;
+
+      function Item_Image_Contains_Aggregate
+        (Item : Item_Id) return Boolean
+      is
+      begin
+         for Field in 1 .. Field_Count (Of_Unit, Item) loop
+            if Shape_Contains_Aggregate
+              (Nth_Field_Shape (Of_Unit, Item, Field))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Item_Image_Contains_Aggregate;
 
       function Signature_Part_Is_Malformed
         (Part : Signature_Part) return Boolean
@@ -1768,12 +1818,311 @@ package body Landin.IR.Verifier is
                        Item => Id, others => <>);
             end if;
 
+            --  D132 uses one recursively indexed descriptor run when an
+            --  ordinary child occurs anywhere in the shape.  Selected and
+            --  Nested reserve contiguous direct-child groups and those
+            --  children may reserve later groups in turn.  Fold offsets and
+            --  descriptor offsets are checked independently before either
+            --  accessor is used, so a malformed recursive image is an IR
+            --  fault in release builds rather than a failed contract.
             if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
               and then Has_Image (Of_Unit, Id)
               and then Image_Length (Of_Unit, Id)
                        >= Element_Total (Field_Count (Of_Unit, Id))
               and then Aggregate_Field_Image_Count (Of_Unit, Id)
                        >= Field_Count (Of_Unit, Id)
+              and then Item_Image_Contains_Aggregate (Id)
+            then
+               declare
+                  Top_Count : constant Natural := Field_Count (Of_Unit, Id);
+                  Element_Count : constant Natural := Natural
+                    (Image_Length (Of_Unit, Id)
+                     - Element_Total (Top_Count));
+                  Descendant_Count : constant Natural :=
+                    Aggregate_Field_Image_Count (Of_Unit, Id) - Top_Count;
+                  Expected_Elements : Natural := 0;
+                  Expected_Descendants : Natural := 0;
+
+                  function Fits
+                    (Held : Landin.Types.Folded;
+                     Element : Landin.Types.Scalar_Name) return Boolean;
+
+                  function Check_Field_Image
+                    (Shape    : Field_Shape;
+                     Image    : Aggregate_Field_Image;
+                     Flat     : Landin.Types.Folded;
+                     Top      : Boolean) return Fault_Kind;
+
+                  function Fits
+                    (Held : Landin.Types.Folded;
+                     Element : Landin.Types.Scalar_Name) return Boolean
+                  is (if Element = Landin.Types.Bool
+                      then Held in 0 .. 1
+                      else Landin.Types.Holds
+                        (Held, Landin.Types.Integer_Name (Element), Facts));
+
+                  function Check_Field_Image
+                    (Shape    : Field_Shape;
+                     Image    : Aggregate_Field_Image;
+                     Flat     : Landin.Types.Folded;
+                     Top      : Boolean) return Fault_Kind
+                  is
+                     Scalar_Value : constant Landin.Types.Folded :=
+                       (if Top then Flat else Image.Value);
+                  begin
+                     case Shape.Kind is
+                        when Scalar_Field_Shape =>
+                           if Image.Offset /= Expected_Elements
+                             or else Image.Form /= Absent
+                             or else Image.Count /= 0
+                             or else (Top and then Image.Value /= 0)
+                           then
+                              return Aggregate_Field_Image_On_Scalar_Field;
+                           elsif Shape.Signature /= No_Signature
+                             and then
+                               (Scalar_Value /= 0
+                                or else not Image_Target_Agrees
+                                  (Shape, Image.Target))
+                           then
+                              return Function_Value_Signature_Disagrees;
+                           elsif Shape.Signature = No_Signature
+                             and then Image.Target /= No_Item
+                           then
+                              return Function_Value_Signature_Disagrees;
+                           elsif Check_Image
+                             and then Shape.Signature = No_Signature
+                             and then not Fits (Scalar_Value, Shape.Element)
+                           then
+                              return
+                                (if Top
+                                 then Aggregate_Image_Value_Does_Not_Fit
+                                 else
+                                   Aggregate_Field_Image_Value_Does_Not_Fit);
+                           end if;
+                           return Nothing_Wrong;
+
+                        when Array_Field_Shape =>
+                           if Image.Offset /= Expected_Elements
+                             or else (Top and then Flat /= 0)
+                             or else Image.Target /= No_Item
+                             or else Expected_Elements > Element_Count
+                             or else Image.Count
+                               > Element_Count - Expected_Elements
+                           then
+                              return Aggregate_Field_Image_Length_Disagrees;
+                           end if;
+
+                           if Array_Element_Is_Aggregate (Of_Unit, Shape) then
+                              if Image.Form /= Absent
+                                or else Image.Count /= 0
+                                or else Image.Value /= 0
+                              then
+                                 return Aggregate_Image_On_Array_Field;
+                              end if;
+                              return Nothing_Wrong;
+                           end if;
+
+                           case Image.Form is
+                              when Absent =>
+                                 if Image.Count /= 0 or else Image.Value /= 0
+                                 then
+                                    return Field_Pattern_Fault;
+                                 end if;
+                              when Finite =>
+                                 if Element_Total (Image.Count) /= Shape.Length
+                                   or else Image.Value /= 0
+                                 then
+                                    return Field_Length_Fault;
+                                 end if;
+                              when Repeated =>
+                                 if Image.Count /= 0 or else Image.Value = 0
+                                 then
+                                    return Field_Pattern_Fault;
+                                 end if;
+                              when Hybrid =>
+                                 if Image.Count = 0
+                                   or else Element_Total (Image.Count)
+                                             >= Shape.Length
+                                 then
+                                    return Field_Pattern_Fault;
+                                 end if;
+                              when Selected | Nested =>
+                                 return Aggregate_Image_On_Array_Field;
+                           end case;
+
+                           if Check_Image then
+                              if Image.Form in Finite | Hybrid then
+                                 for Position in 1 .. Image.Count loop
+                                    if not Fits
+                                      (Nth_Descriptor_Element
+                                         (Of_Unit, Id, Image,
+                                          Part_Position (Position)),
+                                       Shape.Element)
+                                    then
+                                       return Field_Value_Fault;
+                                    end if;
+                                 end loop;
+                              end if;
+                              if Image.Form in Repeated | Hybrid
+                                and then not Fits
+                                  (Image.Value, Shape.Element)
+                              then
+                                 return Field_Value_Fault;
+                              end if;
+                           end if;
+                           Expected_Elements :=
+                             Expected_Elements + Image.Count;
+                           return Nothing_Wrong;
+
+                        when Aggregate_Field_Shape =>
+                           if Image.Offset /= Expected_Descendants
+                             or else (Top and then Flat /= 0)
+                             or else Image.Value /= 0
+                             or else Image.Target /= No_Item
+                           then
+                              return Aggregate_Image_On_Aggregate_Field;
+                           elsif Image.Form = Absent then
+                              if Image.Count /= 0 then
+                                 return Aggregate_Image_On_Aggregate_Field;
+                              end if;
+                              return Nothing_Wrong;
+                           elsif Image.Form /= Nested
+                           then
+                              return Aggregate_Image_On_Aggregate_Field;
+                           end if;
+
+                           declare
+                              Count : constant Natural :=
+                                Aggregate_Field_Count (Of_Unit, Shape);
+                              First : constant Natural :=
+                                Expected_Descendants;
+                           begin
+                              if Image.Count /= Count
+                                or else Count
+                                  > Descendant_Count - Expected_Descendants
+                              then
+                                 return
+                                   Aggregate_Field_Image_Length_Disagrees;
+                              end if;
+                              Expected_Descendants :=
+                                Expected_Descendants + Count;
+                              for Child in 1 .. Count loop
+                                 declare
+                                    Child_Image : constant
+                                      Aggregate_Field_Image :=
+                                        Nth_Image_Descriptor
+                                          (Of_Unit, Id,
+                                           Top_Count + First + Child);
+                                    Fault : constant Fault_Kind :=
+                                      Check_Field_Image
+                                        (Nth_Aggregate_Field
+                                           (Of_Unit, Shape, Child),
+                                         Child_Image, Child_Image.Value,
+                                         False);
+                                 begin
+                                    if Fault /= Nothing_Wrong then
+                                       return Fault;
+                                    end if;
+                                 end;
+                              end loop;
+                           end;
+                           return Nothing_Wrong;
+
+                        when Variant_Field_Shape =>
+                           if Image.Offset /= Expected_Descendants
+                             or else (Top and then Flat /= 0)
+                             or else Image.Target /= No_Item
+                           then
+                              return Aggregate_Image_On_Variant_Field;
+                           elsif Image.Form = Absent then
+                              if Image.Count /= 0 or else Image.Value /= 0
+                              then
+                                 return Aggregate_Image_On_Variant_Field;
+                              end if;
+                              return Nothing_Wrong;
+                           elsif Image.Form /= Selected
+                             or else Image.Value < 1
+                             or else Image.Value
+                               > Landin.Types.Folded (Shape.Cases)
+                           then
+                              return Aggregate_Image_On_Variant_Field;
+                           end if;
+
+                           declare
+                              Selected : constant Positive :=
+                                Positive (Image.Value);
+                              Count : constant Natural :=
+                                Variant_Case_Field_Count
+                                  (Of_Unit, Shape, Selected);
+                              First : constant Natural :=
+                                Expected_Descendants;
+                           begin
+                              if not Variant_Case_Run_Is_Valid
+                                (Of_Unit, Shape, Selected)
+                                or else Image.Count /= Count
+                                or else Count
+                                  > Descendant_Count - Expected_Descendants
+                              then
+                                 return Aggregate_Image_On_Variant_Field;
+                              end if;
+                              Expected_Descendants :=
+                                Expected_Descendants + Count;
+                              for Payload in 1 .. Count loop
+                                 declare
+                                    Payload_Image : constant
+                                      Aggregate_Field_Image :=
+                                        Nth_Image_Descriptor
+                                          (Of_Unit, Id,
+                                           Top_Count + First + Payload);
+                                    Fault : constant Fault_Kind :=
+                                      Check_Field_Image
+                                        (Nth_Variant_Case_Field
+                                           (Of_Unit, Shape, Selected,
+                                            Payload),
+                                         Payload_Image,
+                                         Payload_Image.Value, False);
+                                 begin
+                                    if Fault /= Nothing_Wrong then
+                                       return Fault;
+                                    end if;
+                                 end;
+                              end loop;
+                           end;
+                           return Nothing_Wrong;
+                     end case;
+                  end Check_Field_Image;
+               begin
+                  for Field in 1 .. Top_Count loop
+                     declare
+                        Fault : constant Fault_Kind :=
+                          Check_Field_Image
+                            (Nth_Field_Shape (Of_Unit, Id, Field),
+                             Field_Image_Of (Of_Unit, Id, Field),
+                             Nth_Field_Image (Of_Unit, Id, Field), True);
+                     begin
+                        if Fault /= Nothing_Wrong then
+                           return (Kind => Fault, Item => Id, others => <>);
+                        end if;
+                     end;
+                  end loop;
+
+                  if Expected_Elements /= Element_Count
+                    or else Expected_Descendants /= Descendant_Count
+                  then
+                     return
+                       (Kind => Aggregate_Field_Image_Length_Disagrees,
+                        Item => Id, others => <>);
+                  end if;
+               end;
+            end if;
+
+            if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate
+              and then Has_Image (Of_Unit, Id)
+              and then Image_Length (Of_Unit, Id)
+                       >= Element_Total (Field_Count (Of_Unit, Id))
+              and then Aggregate_Field_Image_Count (Of_Unit, Id)
+                       >= Field_Count (Of_Unit, Id)
+              and then not Item_Image_Contains_Aggregate (Id)
             then
                declare
                   Expected : Natural := 0;
@@ -1954,7 +2303,7 @@ package body Landin.IR.Verifier is
                                                      Field_Pattern_Fault,
                                                    Item => Id, others => <>);
                                              end if;
-                                          when Selected =>
+                                          when Selected | Nested =>
                                              return
                                                (Kind => Variant_Fault,
                                                 Item => Id, others => <>);
@@ -2100,7 +2449,7 @@ package body Landin.IR.Verifier is
                                       (Kind => Field_Pattern_Fault,
                                        Item => Id, others => <>);
                                  end if;
-                              when Selected =>
+                              when Selected | Nested =>
                                  return
                                    (Kind => Aggregate_Image_On_Variant_Field,
                                     Item => Id, others => <>);

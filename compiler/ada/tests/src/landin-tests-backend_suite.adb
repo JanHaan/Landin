@@ -1476,6 +1476,104 @@ package body Landin.Tests.Backend_Suite is
       end;
    end A_Module_Struct_Literal_Becomes_Data_Image;
 
+   --  D132 replays every nested child and aggregate payload placement after
+   --  target selection.  The one neutral descriptor tree therefore emits
+   --  different usize widths and padding on the 32- and 64-bit facts.
+   procedure A_Recursive_Module_Image_Follows_Its_Target
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Recursive_Module_Image_Follows_Its_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Source : constant String :=
+        "word: type = struct" & LF
+        & "    value: usize" & LF
+        & "    code: u8" & LF
+        & "end word" & LF
+        & "packet: type = struct" & LF
+        & "    head: u8" & LF
+        & "    child: word" & LF
+        & "    tail: u16" & LF
+        & "end packet" & LF
+        & "choice: type = struct" & LF
+        & "    kind: variant" & LF
+        & "        empty |" & LF
+        & "        carry: (data: packet)" & LF
+        & "    end kind" & LF
+        & "end choice" & LF
+        & "image: choice = choice(kind: carry(data: packet(head: 11,"
+        & " child: word(value: 42, code: 7), tail: 13)))" & LF
+        & "copy: choice = image" & LF;
+   begin
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Synthetic_32);
+         Ran : Natural;
+         Expected : constant String :=
+           "image:" & LF
+           & HT & ".byte 1" & LF
+           & HT & ".zero 3" & LF
+           & HT & ".byte 11" & LF
+           & HT & ".zero 3" & LF
+           & HT & ".long 42" & LF
+           & HT & ".byte 7" & LF
+           & HT & ".zero 3" & LF
+           & HT & ".word 13" & LF
+           & HT & ".zero 2" & LF
+           & HT & ".size image, 20" & LF;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, Expected),
+               "the recursive image follows 32-bit placement");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text, "copy:" & LF & HT & ".byte 1" & LF)
+               and then Contains (Text, HT & ".size copy, 20" & LF),
+               "the copied descriptor tree emits a second 32-bit object");
+         end;
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Ran : Natural;
+         Expected : constant String :=
+           "image:" & LF
+           & HT & ".byte 1" & LF
+           & HT & ".zero 7" & LF
+           & HT & ".byte 11" & LF
+           & HT & ".zero 7" & LF
+           & HT & ".quad 42" & LF
+           & HT & ".byte 7" & LF
+           & HT & ".zero 7" & LF
+           & HT & ".word 13" & LF
+           & HT & ".zero 6" & LF
+           & HT & ".size image, 40" & LF;
+      begin
+         Lower (Work, Source, Ran);
+         Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+         declare
+            Text : constant String := Emitted (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Contains (Text, Expected),
+               "the same recursive image follows 64-bit placement");
+            Landin.Testing.Check
+              (Item,
+               Contains
+                 (Text, "copy:" & LF & HT & ".byte 1" & LF)
+               and then Contains (Text, HT & ".size copy, 40" & LF),
+               "the copied descriptor tree emits a second 64-bit object");
+         end;
+      end;
+   end A_Recursive_Module_Image_Follows_Its_Target;
+
    --  [0750] puts each field at its own offset, and a selection reaches
    --  one by adding that many bytes to the datum's name.  The first field
    --  needs no displacement at all, which is what says the offset is the
@@ -4868,6 +4966,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a module struct literal becomes data image",
          A_Module_Struct_Literal_Becomes_Data_Image'Access);
+      Landin.Testing.Register
+        (Into, "backend", "a recursive module image follows its target",
+         A_Recursive_Module_Image_Follows_Its_Target'Access);
       Landin.Testing.Register
         (Into, "backend", "a field is read at its own offset",
          A_Field_Is_Read_At_Its_Own_Offset'Access);

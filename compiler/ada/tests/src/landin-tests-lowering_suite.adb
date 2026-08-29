@@ -2362,6 +2362,85 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end A_Module_Struct_Literal_Records_And_Copies_Its_Image;
 
+   --  D132 keeps ordinary-child and ordinary-payload images as recursively
+   --  indexed descriptor runs.  Scalar folds stay source values while every
+   --  descriptor offset names another descriptor or fold, never target bytes.
+   procedure A_Recursive_Module_Image_Carries_Descriptors
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Recursive_Module_Image_Carries_Descriptors
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "word: type = struct" & LF
+         & "    value: usize" & LF
+         & "    code: u8" & LF
+         & "end word" & LF
+         & "packet: type = struct" & LF
+         & "    head: u8" & LF
+         & "    child: word" & LF
+         & "    tail: u16" & LF
+         & "end packet" & LF
+         & "choice: type = struct" & LF
+         & "    kind: variant" & LF
+         & "        empty |" & LF
+         & "        carry: (data: packet)" & LF
+         & "    end kind" & LF
+         & "end choice" & LF
+         & "source: word = word(value: 42, code: 7)" & LF
+         & "packet_image: packet = packet(head: 11, child: source,"
+         & " tail: 13)" & LF
+         & "selected: choice = choice(kind: carry(data: packet_image))"
+         & LF
+         & "copy: choice = selected" & LF,
+         Ran);
+
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "recursive module images are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check
+           (Item,
+            IR.Has_Image (Unit, 2)
+            and then IR.Aggregate_Field_Image_Count (Unit, 2) = 5
+            and then IR.Field_Image_Of (Unit, 2, 2).Form = IR.Nested
+            and then IR.Field_Image_Of (Unit, 2, 2).Offset = 0
+            and then IR.Field_Image_Of (Unit, 2, 2).Count = 2
+            and then IR.Nth_Image_Descriptor (Unit, 2, 4).Value = 42
+            and then IR.Nth_Image_Descriptor (Unit, 2, 5).Value = 7,
+            "an ordinary child points at its declaration-order descriptors");
+
+         for Datum in IR.Item_Id range 3 .. 4 loop
+            Landin.Testing.Check
+              (Item,
+               IR.Has_Image (Unit, Datum)
+               and then IR.Aggregate_Field_Image_Count (Unit, Datum) = 7
+               and then IR.Field_Image_Of
+                 (Unit, Datum, 1).Form = IR.Selected
+               and then IR.Field_Image_Of (Unit, Datum, 1).Offset = 0
+               and then IR.Nth_Image_Descriptor
+                 (Unit, Datum, 2).Form = IR.Nested
+               and then IR.Nth_Image_Descriptor
+                 (Unit, Datum, 2).Offset = 1
+               and then IR.Nth_Image_Descriptor
+                 (Unit, Datum, 4).Form = IR.Nested
+               and then IR.Nth_Image_Descriptor
+                 (Unit, Datum, 6).Value = 42
+               and then IR.Nth_Image_Descriptor
+                 (Unit, Datum, 7).Value = 7,
+               "aggregate payload descriptors recurse and copy unchanged");
+         end loop;
+      end;
+   end A_Recursive_Module_Image_Carries_Descriptors;
+
    --  D34: a repetition folds one scalar and carries that one pattern through
    --  direct-name chains, regardless of the target-sized declared extent.  A
    --  zero pattern remains the absent image used for loader-zeroed storage.
@@ -5573,6 +5652,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "a module struct literal records and copies its image",
          A_Module_Struct_Literal_Records_And_Copies_Its_Image'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "a recursive module image carries descriptors",
+         A_Recursive_Module_Image_Carries_Descriptors'Access);
       Landin.Testing.Register
         (Into, "lowering", "module repetition images stay compact",
          Module_Repetition_Images_Stay_Compact'Access);

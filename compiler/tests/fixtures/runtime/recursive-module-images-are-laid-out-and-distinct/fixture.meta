@@ -1,0 +1,6 @@
+class: runtime
+summary: recursive ordinary-child and ordinary-payload module images preserve function relocations, target layout and distinct storage
+constructs: 0420, 0520, 0670, 0680, 0700, 0710, 0750, 0870, 1000, 1210, 1220, 1460, 1920, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

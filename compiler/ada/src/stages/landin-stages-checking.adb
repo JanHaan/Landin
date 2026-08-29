@@ -1703,6 +1703,8 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
               and then not Is_Struct_Zeroed_Init
+              and then not Is_Struct_Literal_Init
+              and then not Is_Direct_Struct_Init
               and then not Is_Struct_Call_Init
               and then not Is_Aggregate_Parameter
               and then not Is_Aggregate_Return
@@ -4740,9 +4742,8 @@ package body Landin.Stages.Checking is
          --  D120: a payload field of ordinary struct type takes the same
          --  contextual values a labelled ordinary child does -- `zeroed`,
          --  a matching literal or nominal construction, and a copy from
-         --  storage of the same nominal type.  A module image of one is
-         --  still refused, for the reason a module image of an ordinary
-         --  child is.
+         --  storage of the same nominal type.  D132 recursively folds those
+         --  same forms when the destination is a module image.
          procedure Check_Aggregate_Payload
            (Label : Syn.Node_Id;
             Given : Syn.Node_Id;
@@ -4778,19 +4779,6 @@ package body Landin.Stages.Checking is
             Expected : constant Res.Declaration_Id := Shape.Aggregate_Body;
             Got : Ty.Type_Kind;
          begin
-            if Static_Image then
-               Bad.Report
-                 (Item    => Bad.Unsupported_Use,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Given),
-                  Message => "a module variant image cannot yet contain an"
-                             & " ordinary-struct payload value",
-                  Refused => Bad.Nested_Module_Image,
-                  Into    => Found);
-               Landin.Checking.Refuse (Types.all, Of_Tree, Given);
-               return;
-            end if;
-
             if Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal then
                Check_Aggregate_Zeroed
                  (Of_Tree, Given, Expected,
@@ -4804,16 +4792,44 @@ package body Landin.Stages.Checking is
                      "this ordinary-struct payload field")
                then
                   Check_Struct_Literal
-                    (Of_Tree, Given, Expected, Static_Image => False);
+                    (Of_Tree, Given, Expected,
+                     Static_Image => Static_Image);
                end if;
                return;
-            elsif Is_Direct_Binding_Name (Of_Tree, Given)
-              or else Is_Aggregate_Alias_Name (Of_Tree, Given)
-              or else Syn.Kind (Of_Tree, Given) = Syn.Member_Selection
+            elsif Static_Image
+              and then
+                ((Syn.Kind (Of_Tree, Given) = Syn.Name_Reference
+                  and then Res.Verdict_Of
+                    (Meanings.all, Of_Tree, Given) = Res.Bound
+                  and then Res.Sort_Of
+                    (Meanings.all,
+                     Res.Bound_To (Meanings.all, Of_Tree, Given))
+                      = Res.Module_Binding)
+                 or else Is_Direct_Module_Field (Of_Tree, Given))
+            then
+               Got := Selected_From (Of_Tree, Given);
+            elsif not Static_Image
+              and then
+                (Is_Direct_Binding_Name (Of_Tree, Given)
+                 or else Is_Aggregate_Alias_Name (Of_Tree, Given)
+                 or else Syn.Kind (Of_Tree, Given) = Syn.Member_Selection)
             then
                Got := Selected_From (Of_Tree, Given);
             else
                Got := Synthesise (Of_Tree, Given);
+               if Static_Image and then Got /= Ty.Ill_Typed then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Given),
+                     Message => "a module ordinary-struct payload takes"
+                                & " `zeroed`, a static construction, or a"
+                                & " module struct or direct child image",
+                     Refused => Bad.Struct_Value,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Given);
+                  return;
+               end if;
             end if;
 
             if Got = Ty.Aggregate
@@ -5473,19 +5489,6 @@ package body Landin.Stages.Checking is
                 (Types.all, Wrote, Which).Aggregate_Body;
             Got : Ty.Type_Kind;
          begin
-            if Static_Image then
-               Bad.Report
-                 (Item    => Bad.Unsupported_Use,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Value),
-                  Message => "a module struct image cannot yet contain an"
-                             & " ordinary-child field value",
-                  Refused => Bad.Nested_Module_Image,
-                  Into    => Found);
-               Landin.Checking.Refuse (Types.all, Of_Tree, Value);
-               return;
-            end if;
-
             if Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
                Check_Aggregate_Zeroed
                  (Of_Tree, Value, Expected,
@@ -5499,16 +5502,44 @@ package body Landin.Stages.Checking is
                      "this ordinary-child field")
                then
                   Check_Struct_Literal
-                    (Of_Tree, Value, Expected, Static_Image => False);
+                    (Of_Tree, Value, Expected,
+                     Static_Image => Static_Image);
                end if;
                return;
-            elsif Is_Direct_Binding_Name (Of_Tree, Value)
-              or else Is_Aggregate_Alias_Name (Of_Tree, Value)
-              or else Syn.Kind (Of_Tree, Value) = Syn.Member_Selection
+            elsif Static_Image
+              and then
+                ((Syn.Kind (Of_Tree, Value) = Syn.Name_Reference
+                  and then Res.Verdict_Of
+                    (Meanings.all, Of_Tree, Value) = Res.Bound
+                  and then Res.Sort_Of
+                    (Meanings.all,
+                     Res.Bound_To (Meanings.all, Of_Tree, Value))
+                      = Res.Module_Binding)
+                 or else Is_Direct_Module_Field (Of_Tree, Value))
+            then
+               Got := Selected_From (Of_Tree, Value);
+            elsif not Static_Image
+              and then
+                (Is_Direct_Binding_Name (Of_Tree, Value)
+                 or else Is_Aggregate_Alias_Name (Of_Tree, Value)
+                 or else Syn.Kind (Of_Tree, Value) = Syn.Member_Selection)
             then
                Got := Selected_From (Of_Tree, Value);
             else
                Got := Synthesise (Of_Tree, Value);
+               if Static_Image and then Got /= Ty.Ill_Typed then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Value),
+                     Message => "a module ordinary-child field takes"
+                                & " `zeroed`, a static construction, or a"
+                                & " module struct or direct child image",
+                     Refused => Bad.Struct_Value,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+                  return;
+               end if;
             end if;
 
             if Got = Ty.Aggregate
@@ -9088,7 +9119,391 @@ package body Landin.Stages.Checking is
 
       function Validate_Module_Image
         (Id : Res.Declaration_Id) return Boolean;
+
+      function Validate_Recursive_Struct_Image
+        (Of_Tree : Syn.Tree;
+         Wrote   : Res.Declaration_Id;
+         Literal : Syn.Node_Id) return Boolean;
+
+      function Body_Image_Contains_Aggregate
+        (Wrote : Res.Declaration_Id) return Boolean;
+
       procedure Validate_Module_Images;
+
+      function Body_Image_Contains_Aggregate
+        (Wrote : Res.Declaration_Id) return Boolean
+      is
+      begin
+         for Field in
+           1 .. Landin.Checking.Layout_Field_Count (Types.all, Wrote)
+         loop
+            declare
+               Shape : constant Landin.Checking.Field_Shape :=
+                 Landin.Checking.Field_Shape_Of
+                   (Types.all, Wrote, Field);
+            begin
+               if Shape.Kind = Landin.Checking.Aggregate_Field then
+                  return True;
+               elsif Shape.Kind = Landin.Checking.Variant_Field then
+                  for Variant_Case in 1 .. Shape.Cases loop
+                     for Payload in
+                       1 .. Landin.Checking.Variant_Case_Field_Count
+                              (Types.all, Wrote, Field, Variant_Case)
+                     loop
+                        if Landin.Checking.Nth_Variant_Case_Field
+                          (Types.all, Wrote, Field, Variant_Case,
+                           Payload).Kind
+                             = Landin.Checking.Aggregate_Field
+                        then
+                           return True;
+                        end if;
+                     end loop;
+                  end loop;
+               end if;
+            end;
+         end loop;
+         return False;
+      end Body_Image_Contains_Aggregate;
+
+      function Validate_Recursive_Struct_Image
+        (Of_Tree : Syn.Tree;
+         Wrote   : Res.Declaration_Id;
+         Literal : Syn.Node_Id) return Boolean
+      is
+         function Validate_Aggregate_Value
+           (Given : Syn.Node_Id;
+            Expected : Res.Declaration_Id) return Boolean;
+
+         function Selected_Case
+           (Given : Syn.Node_Id;
+            Field : Positive) return Natural;
+
+         function Selected_Case
+           (Given : Syn.Node_Id;
+            Field : Positive) return Natural
+         is
+            Body_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Res.Source_Of (Meanings.all, Wrote));
+            Body_Node : constant Syn.Node_Id := Syn.Declared_Type
+              (Body_Tree.all, Res.Node_Of (Meanings.all, Wrote));
+            Part : constant Syn.Node_Id :=
+              Syn.Nth_Field (Body_Tree.all, Body_Node, Field);
+            Nominal : constant Syn.Node_Id :=
+              (if Syn.Kind (Of_Tree, Given) = Syn.Name_Reference
+               then Given else Syn.Constructed_Type (Of_Tree, Given));
+            Means : constant Res.Declaration_Id :=
+              (if Nominal /= Syn.No_Node
+                 and then Res.Verdict_Of
+                   (Meanings.all, Of_Tree, Nominal) = Res.Bound
+               then Res.Bound_To (Meanings.all, Of_Tree, Nominal)
+               else Res.No_Declaration);
+         begin
+            if Means = Res.No_Declaration
+              or else Res.Sort_Of (Meanings.all, Means) /= Res.Case_Name
+            then
+               return 0;
+            end if;
+            for Candidate in 1 .. Syn.Case_Count (Body_Tree.all, Part) loop
+               if Res.Source_Of (Meanings.all, Means)
+                    = Syn.Source_Of (Body_Tree.all)
+                 and then Res.Node_Of (Meanings.all, Means)
+                    = Syn.Nth_Case (Body_Tree.all, Part, Candidate)
+               then
+                  return Candidate;
+               end if;
+            end loop;
+            return 0;
+         end Selected_Case;
+
+         function Validate_Aggregate_Value
+           (Given : Syn.Node_Id;
+            Expected : Res.Declaration_Id) return Boolean
+         is
+         begin
+            if Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal then
+               return True;
+            elsif Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
+               return Validate_Recursive_Struct_Image
+                 (Of_Tree, Expected, Given);
+            elsif Syn.Kind (Of_Tree, Given) = Syn.Name_Reference
+              and then Res.Verdict_Of (Meanings.all, Of_Tree, Given)
+                         = Res.Bound
+            then
+               declare
+                  Source_Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Given);
+               begin
+                  return Res.Sort_Of (Meanings.all, Source_Id)
+                           = Res.Module_Binding
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Source_Id) = Ty.Aggregate
+                    and then Landin.Checking.Body_Of
+                      (Types.all, Source_Id) = Expected
+                    and then Validate_Module_Image (Source_Id);
+               end;
+            elsif Is_Direct_Module_Field (Of_Tree, Given) then
+               declare
+                  Root : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Given);
+                  Source_Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Root);
+                  Source_Body : constant Res.Declaration_Id :=
+                    Landin.Checking.Body_Of (Types.all, Source_Id);
+                  Which : constant Natural :=
+                    (if Source_Body = Res.No_Declaration
+                     then 0
+                     else Field_At
+                       (Source_Body, Syn.Name (Of_Tree, Given)));
+               begin
+                  return Source_Body /= Res.No_Declaration
+                    and then Landin.Checking.Has_Layout
+                      (Types.all, Source_Body)
+                    and then Which /= 0
+                    and then Landin.Checking.Field_Kind_Of
+                      (Types.all, Source_Body, Which)
+                        = Landin.Checking.Aggregate_Field
+                    and then Landin.Checking.Field_Shape_Of
+                      (Types.all, Source_Body, Which).Aggregate_Body
+                        = Expected
+                    and then Validate_Module_Image (Source_Id);
+               end;
+            end if;
+            return False;
+         end Validate_Aggregate_Value;
+
+         Reaches : Boolean := True;
+      begin
+         for Position in
+           1 .. Syn.Field_Value_Count (Of_Tree, Literal)
+         loop
+            declare
+               Label : constant Syn.Node_Id :=
+                 Syn.Nth_Field_Value (Of_Tree, Literal, Position);
+               Given : constant Syn.Node_Id :=
+                 Syn.Value_Of (Of_Tree, Label);
+               Which : constant Natural :=
+                 Field_At (Wrote, Syn.Name (Of_Tree, Label));
+            begin
+               if Which = 0 then
+                  Reaches := False;
+               else
+                  declare
+                     Shape : constant Landin.Checking.Field_Shape :=
+                       Landin.Checking.Field_Shape_Of
+                         (Types.all, Wrote, Which);
+                  begin
+                     case Shape.Kind is
+                        when Landin.Checking.Scalar_Field =>
+                           null;
+
+                        when Landin.Checking.Fixed_Array_Field =>
+                           if Syn.Kind (Of_Tree, Given)
+                                = Syn.Name_Reference
+                             and then Res.Verdict_Of
+                               (Meanings.all, Of_Tree, Given) = Res.Bound
+                           then
+                              declare
+                                 Source_Id : constant Res.Declaration_Id :=
+                                   Res.Bound_To
+                                     (Meanings.all, Of_Tree, Given);
+                              begin
+                                 if Res.Sort_Of (Meanings.all, Source_Id)
+                                      = Res.Module_Binding
+                                   and then Landin.Checking.Type_Of
+                                     (Types.all, Source_Id) = Ty.Fixed_Array
+                                   and then Landin.Checking.Array_Length
+                                     (Types.all, Source_Id) = Shape.Length
+                                   and then Landin.Checking.Array_Element
+                                     (Types.all, Source_Id) = Shape.Element
+                                 then
+                                    Reaches := Validate_Module_Image
+                                      (Source_Id) and then Reaches;
+                                 else
+                                    Reaches := False;
+                                 end if;
+                              end;
+                           elsif Syn.Kind (Of_Tree, Given)
+                                   = Syn.Member_Selection
+                           then
+                              declare
+                                 Root : constant Syn.Node_Id :=
+                                   Syn.Target_Of (Of_Tree, Given);
+                              begin
+                                 if Is_Module_Array_Field
+                                   (Of_Tree, Given, Shape.Length,
+                                    Shape.Element)
+                                 then
+                                    Reaches := Validate_Module_Image
+                                      (Res.Bound_To
+                                         (Meanings.all, Of_Tree, Root))
+                                      and then Reaches;
+                                 else
+                                    Reaches := False;
+                                 end if;
+                              end;
+                           end if;
+
+                        when Landin.Checking.Aggregate_Field =>
+                           Reaches := Validate_Aggregate_Value
+                             (Given, Shape.Aggregate_Body)
+                             and then Reaches;
+
+                        when Landin.Checking.Variant_Field =>
+                           declare
+                              Selected : constant Natural :=
+                                Selected_Case (Given, Positive (Which));
+                           begin
+                              if Selected = 0 then
+                                 Reaches := False;
+                              elsif Syn.Kind (Of_Tree, Given)
+                                      = Syn.Struct_Literal
+                              then
+                                 for Payload_Position in
+                                   1 .. Syn.Field_Value_Count
+                                          (Of_Tree, Given)
+                                 loop
+                                    declare
+                                       Payload_Label : constant Syn.Node_Id :=
+                                         Syn.Nth_Field_Value
+                                           (Of_Tree, Given,
+                                            Payload_Position);
+                                       Payload : Natural := 0;
+                                       Given_Payload : constant Syn.Node_Id :=
+                                         Syn.Value_Of
+                                           (Of_Tree, Payload_Label);
+                                       Body_Tree : constant not null access
+                                         constant Syn.Tree := Tree_For
+                                           (Res.Source_Of
+                                              (Meanings.all, Wrote));
+                                       Body_Node : constant Syn.Node_Id :=
+                                         Syn.Declared_Type
+                                           (Body_Tree.all,
+                                            Res.Node_Of
+                                              (Meanings.all, Wrote));
+                                       Part : constant Syn.Node_Id :=
+                                         Syn.Nth_Field
+                                           (Body_Tree.all, Body_Node,
+                                            Positive (Which));
+                                       Case_Node : constant Syn.Node_Id :=
+                                         Syn.Nth_Case
+                                           (Body_Tree.all, Part, Selected);
+                                    begin
+                                       for Candidate in
+                                         1 .. Syn.Payload_Field_Count
+                                                (Body_Tree.all, Case_Node)
+                                       loop
+                                          if Syn.Name
+                                               (Of_Tree, Payload_Label)
+                                            = Syn.Name
+                                                (Body_Tree.all,
+                                                 Syn.Nth_Payload_Field
+                                                   (Body_Tree.all,
+                                                    Case_Node, Candidate))
+                                          then
+                                             Payload := Candidate;
+                                             exit;
+                                          end if;
+                                       end loop;
+                                       if Payload = 0 then
+                                          Reaches := False;
+                                       else
+                                          declare
+                                             Payload_Shape : constant
+                                               Landin.Checking.Field_Shape :=
+                                                 Landin.Checking
+                                                   .Nth_Variant_Case_Field
+                                                   (Types.all, Wrote,
+                                                    Positive (Which),
+                                                    Positive (Selected),
+                                                    Positive (Payload));
+                                          begin
+                                             if Payload_Shape.Kind =
+                                                  Landin.Checking
+                                                    .Aggregate_Field
+                                             then
+                                                Reaches :=
+                                                  Validate_Aggregate_Value
+                                                    (Given_Payload,
+                                                     Payload_Shape
+                                                       .Aggregate_Body)
+                                                  and then Reaches;
+                                             elsif Payload_Shape.Kind =
+                                                Landin.Checking
+                                                  .Fixed_Array_Field
+                                               and then Syn.Kind
+                                                 (Of_Tree, Given_Payload)
+                                                   = Syn.Name_Reference
+                                               and then Res.Verdict_Of
+                                                 (Meanings.all, Of_Tree,
+                                                  Given_Payload) = Res.Bound
+                                             then
+                                                declare
+                                                   Source_Id : constant
+                                                     Res.Declaration_Id :=
+                                                       Res.Bound_To
+                                                         (Meanings.all,
+                                                          Of_Tree,
+                                                          Given_Payload);
+                                                begin
+                                                   if Res.Sort_Of
+                                                     (Meanings.all, Source_Id)
+                                                       = Res.Module_Binding
+                                                     and then Landin.Checking
+                                                       .Type_Of
+                                                       (Types.all, Source_Id)
+                                                         = Ty.Fixed_Array
+                                                     and then Landin.Checking
+                                                       .Array_Length
+                                                       (Types.all, Source_Id)
+                                                         = Payload_Shape.Length
+                                                     and then Landin.Checking
+                                                       .Array_Element
+                                                       (Types.all, Source_Id)
+                                                         = Payload_Shape
+                                                             .Element
+                                                   then
+                                                      Reaches :=
+                                                        Validate_Module_Image
+                                                          (Source_Id)
+                                                        and then Reaches;
+                                                   else
+                                                      Reaches := False;
+                                                   end if;
+                                                end;
+                                             elsif Payload_Shape.Kind =
+                                                Landin.Checking
+                                                  .Fixed_Array_Field
+                                               and then Syn.Kind
+                                                 (Of_Tree, Given_Payload)
+                                                   = Syn.Member_Selection
+                                               and then Is_Module_Array_Field
+                                                 (Of_Tree, Given_Payload,
+                                                  Payload_Shape.Length,
+                                                  Payload_Shape.Element)
+                                             then
+                                                Reaches :=
+                                                  Validate_Module_Image
+                                                    (Res.Bound_To
+                                                       (Meanings.all,
+                                                        Of_Tree,
+                                                        Syn.Target_Of
+                                                          (Of_Tree,
+                                                           Given_Payload)))
+                                                  and then Reaches;
+                                             end if;
+                                          end;
+                                       end if;
+                                    end;
+                                 end loop;
+                              end if;
+                           end;
+                     end case;
+                  end;
+               end if;
+            end;
+         end loop;
+         return Reaches;
+      end Validate_Recursive_Struct_Image;
 
       function Validate_Module_Image
         (Id : Res.Declaration_Id) return Boolean
@@ -9162,6 +9577,14 @@ package body Landin.Stages.Checking is
                then
                   Image_States (Id) := Invalid;
                   return False;
+               end if;
+
+               if Body_Image_Contains_Aggregate (Wrote) then
+                  Reaches_Image := Validate_Recursive_Struct_Image
+                    (Of_Tree.all, Wrote, Value);
+                  Image_States (Id) :=
+                    (if Reaches_Image then Valid else Invalid);
+                  return Reaches_Image;
                end if;
 
                for Position in
@@ -10209,6 +10632,20 @@ package body Landin.Stages.Checking is
          procedure Check_Image_Scalar
            (Each : Syn.Node_Id; Element : Ty.Scalar_Name);
 
+         procedure Check_Array_Image
+           (Given : Syn.Node_Id; Element : Ty.Scalar_Name);
+
+         procedure Check_Struct_Image
+           (Literal : Syn.Node_Id; Wrote : Res.Declaration_Id);
+
+         procedure Check_Variant_Image
+           (Value : Syn.Node_Id;
+            Wrote : Res.Declaration_Id;
+            Field : Positive);
+
+         function Body_Contains_Aggregate
+           (Wrote : Res.Declaration_Id) return Boolean;
+
          procedure Check_Image_Scalar
            (Each : Syn.Node_Id; Element : Ty.Scalar_Name)
          is
@@ -10255,13 +10692,164 @@ package body Landin.Stages.Checking is
                      Message => "this image value works out to "
                                 & Written (Element_Held) & ", and no "
                                 & Shown (Element) & " holds it",
-                     Note    => "D24/D34/D35/D66: every module image value"
-                                & " has to fit its contextual scalar type",
+                     Note    => "D24/D34/D35/D66/D132: every module image"
+                                & " value has to fit its contextual scalar"
+                                & " type",
                      Into    => Found);
                   Landin.Checking.Refuse (Types.all, Of_Tree, Each);
                end if;
             end if;
          end Check_Image_Scalar;
+
+         procedure Check_Array_Image
+           (Given : Syn.Node_Id; Element : Ty.Scalar_Name)
+         is
+         begin
+            if Element not in Ty.Integer_Name then
+               return;
+            elsif Syn.Kind (Of_Tree, Given) = Syn.Array_Repetition then
+               Check_Image_Scalar
+                 (Syn.Repeated_Element (Of_Tree, Given), Element);
+            elsif Syn.Kind (Of_Tree, Given)
+                    in Syn.Array_Literal | Syn.Mixed_Array_Repetition
+            then
+               for Position in 1 .. Syn.Element_Count (Of_Tree, Given) loop
+                  Check_Image_Scalar
+                    (Syn.Nth_Element (Of_Tree, Given, Position), Element);
+               end loop;
+               if Syn.Kind (Of_Tree, Given)
+                    = Syn.Mixed_Array_Repetition
+               then
+                  Check_Image_Scalar
+                    (Syn.Repeated_Element (Of_Tree, Given), Element);
+               end if;
+            end if;
+         end Check_Array_Image;
+
+         procedure Check_Variant_Image
+           (Value : Syn.Node_Id;
+            Wrote : Res.Declaration_Id;
+            Field : Positive)
+         is
+         begin
+            if Syn.Kind (Of_Tree, Value) /= Syn.Struct_Literal then
+               return;
+            end if;
+
+            declare
+               Selected : constant Positive := Positive
+                 (Landin.Checking.Field_Index (Types.all, Of_Tree, Value));
+            begin
+               for Position in
+                 1 .. Syn.Field_Value_Count (Of_Tree, Value)
+               loop
+                  declare
+                     Label : constant Syn.Node_Id :=
+                       Syn.Nth_Field_Value (Of_Tree, Value, Position);
+                     Payload : constant Positive := Positive
+                       (Landin.Checking.Field_Index
+                          (Types.all, Of_Tree, Label));
+                     Given : constant Syn.Node_Id :=
+                       Syn.Value_Of (Of_Tree, Label);
+                     Shape : constant Landin.Checking.Field_Shape :=
+                       Landin.Checking.Nth_Variant_Case_Field
+                         (Types.all, Wrote, Field, Selected, Payload);
+                  begin
+                     case Shape.Kind is
+                        when Landin.Checking.Scalar_Field =>
+                           if Shape.Element in Ty.Integer_Name then
+                              Check_Image_Scalar (Given, Shape.Element);
+                           end if;
+                        when Landin.Checking.Fixed_Array_Field =>
+                           Check_Array_Image (Given, Shape.Element);
+                        when Landin.Checking.Aggregate_Field =>
+                           if Syn.Kind (Of_Tree, Given)
+                                = Syn.Struct_Literal
+                           then
+                              Check_Struct_Image
+                                (Given, Shape.Aggregate_Body);
+                           end if;
+                        when Landin.Checking.Variant_Field =>
+                           raise Landin.Compiler_Defect with
+                             "a nested variant payload reached image folding";
+                     end case;
+                  end;
+               end loop;
+            end;
+         end Check_Variant_Image;
+
+         procedure Check_Struct_Image
+           (Literal : Syn.Node_Id; Wrote : Res.Declaration_Id)
+         is
+         begin
+            for Position in
+              1 .. Syn.Field_Value_Count (Of_Tree, Literal)
+            loop
+               declare
+                  Field : constant Syn.Node_Id :=
+                    Syn.Nth_Field_Value (Of_Tree, Literal, Position);
+                  Which : constant Positive := Positive
+                    (Landin.Checking.Field_Index
+                       (Types.all, Of_Tree, Field));
+                  Given : constant Syn.Node_Id :=
+                    Syn.Value_Of (Of_Tree, Field);
+                  Shape : constant Landin.Checking.Field_Shape :=
+                    Landin.Checking.Field_Shape_Of
+                      (Types.all, Wrote, Which);
+               begin
+                  case Shape.Kind is
+                     when Landin.Checking.Scalar_Field =>
+                        if Shape.Element in Ty.Integer_Name then
+                           Check_Image_Scalar (Given, Shape.Element);
+                        end if;
+                     when Landin.Checking.Fixed_Array_Field =>
+                        Check_Array_Image (Given, Shape.Element);
+                     when Landin.Checking.Aggregate_Field =>
+                        if Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
+                           Check_Struct_Image
+                             (Given, Shape.Aggregate_Body);
+                        end if;
+                     when Landin.Checking.Variant_Field =>
+                        Check_Variant_Image (Given, Wrote, Which);
+                  end case;
+               end;
+            end loop;
+         end Check_Struct_Image;
+
+         function Body_Contains_Aggregate
+           (Wrote : Res.Declaration_Id) return Boolean
+         is
+         begin
+            for Field in
+              1 .. Landin.Checking.Layout_Field_Count (Types.all, Wrote)
+            loop
+               declare
+                  Shape : constant Landin.Checking.Field_Shape :=
+                    Landin.Checking.Field_Shape_Of
+                      (Types.all, Wrote, Field);
+               begin
+                  if Shape.Kind = Landin.Checking.Aggregate_Field then
+                     return True;
+                  elsif Shape.Kind = Landin.Checking.Variant_Field then
+                     for Variant_Case in 1 .. Shape.Cases loop
+                        for Payload in
+                          1 .. Landin.Checking.Variant_Case_Field_Count
+                                 (Types.all, Wrote, Field, Variant_Case)
+                        loop
+                           if Landin.Checking.Nth_Variant_Case_Field
+                             (Types.all, Wrote, Field, Variant_Case,
+                              Payload).Kind
+                                = Landin.Checking.Aggregate_Field
+                           then
+                              return True;
+                           end if;
+                        end loop;
+                     end loop;
+                  end if;
+               end;
+            end loop;
+            return False;
+         end Body_Contains_Aggregate;
       begin
          if Value = Syn.No_Node then
             return;
@@ -10327,6 +10915,11 @@ package body Landin.Stages.Checking is
                Wrote : constant Res.Declaration_Id :=
                  Landin.Checking.Body_Of (Types.all, Of_Tree, Value);
             begin
+               if Body_Contains_Aggregate (Wrote) then
+                  Check_Struct_Image (Value, Wrote);
+                  return;
+               end if;
+
                for Position in
                  1 .. Syn.Field_Value_Count (Of_Tree, Value)
                loop

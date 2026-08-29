@@ -2023,15 +2023,17 @@ The thirty-fifth increment gives a whole ordinary child the assignment forms
 it has at depth one, at any depth: `zeroed`, a matching literal or nominal
 construction, a storage copy, an explicitly typed local initializer and local
 inference. A nominal construction whose body has an ordinary child is
-admitted. A module binding's static image containing a child value remains
-refused, because [1940] folds an image rather than copying it.
+admitted. A module binding's static image containing a child value remained
+refused at this increment because [1940] folds an image rather than copying it;
+the forty-eighth increment closes that carrier.
 
 The thirty-sixth increment gives a variant case payload field an ordinary
 struct type, with the contextual values a labelled child takes and a match
 alias that names the whole struct. A payload struct holding a variant part of
-its own stays refused, and so does a module image containing one: [1940] folds
-an image rather than copying it, and D67's folded run has no carrier for a
-child's own image. Both refusals name this item.
+its own stays refused. A module image containing an ordinary payload remained
+refused at this increment because [1940] folds an image rather than copying it,
+and D67's folded run had no carrier for a child's own image; the forty-eighth
+increment supplies that carrier.
 
 The thirty-seventh increment gives a fixed array an ordinary struct element.
 Layout is that struct's padded extent repeated; whole storage is zeroed and
@@ -2146,19 +2148,36 @@ function address. Linux runtime evidence crosses direct declarations and
 indirect field calls, module mutation, computed indexes, failing signatures and
 caller-owned aggregate storage.
 
+The forty-eighth increment recursively extends folded aggregate images over
+ordinary children and ordinary-struct variant payloads. One `Nested`
+descriptor points into the item-owned declaration-order descriptor run; nested
+children and selected payloads may point farther into that run, while scalar,
+function-relocation and compact-array images retain their leaf forms. Neither
+run carries a target offset, width or padding byte. Static constructions,
+direct image names and directly selected ordinary children preserve nominal
+identity, forward references, aliases, distinct storage and the existing
+single-owner image cycle diagnostic. The release-build verifier rejects
+malformed recursive counts, offsets, forms, partitions, routine targets and
+target-range folds. The backend alone replays the neutral shapes into
+synthetic-32 and Linux x86-64 widths, internal gaps, inactive variant tails and
+aggregate tail padding. Linux runtime evidence mutates copied nested and
+payload storage independently.
+
+`undo` remains the outstanding R2.30 increment. It reuses D129's lexical exit
+selector and the failure edges delivered by D130; until that increment lands,
+the spelling remains refused by name and this item remains active.
+
 Further aggregate arguments and result contexts remain here too; R4.40 later
 supplies complete C ABI classification rather than owning this internal
 convention.
 
-D118--D127 have closed the nested-ordinary forms R2.20 left contextual:
-whole nested field selection, construction and copy, deeper recursive
-composition, aggregate variant payloads, D17's fixed arrays whose element
-is an aggregate, a variant part anywhere a struct may sit, and a whole array
-element at a known position. They reuse R2.20's neutral shape provenance
-rather than reopening its target layout. What they leave for a later
-increment of this item, refused by name and pointing here: a module image
-containing an ordinary-child or ordinary-payload value, which [1940] folds
-rather than copies.
+D118--D127 close the nested-ordinary forms R2.20 left contextual: whole
+nested field selection, construction and copy, deeper recursive composition,
+aggregate variant payloads, D17's fixed arrays whose element is an aggregate,
+a variant part anywhere a struct may sit, and a whole array element at a known
+position. D132 closes their remaining static-image boundary for ordinary-child
+and ordinary-payload values while preserving R2.20's neutral shape provenance
+and leaving target layout in the backend.
 
 Error atoms remain identity without payload. This item does not invent a
 second error mechanism without executable pressure: R3.50's hosted I/O and
@@ -2176,8 +2195,11 @@ expression-valued non-loop controls, lexical reverse-order deferred cleanup,
 late direct and indirect cleanup arguments, more arguments than the
 register-only stopgap accepted and every enabled control-flow exit path.
 Malformed IR also proves
-that a runtime address, nested descriptor or static routine target cannot
-substitute for its neutral signature descriptor.
+that a runtime address, malformed recursive image descriptor or static routine
+target cannot substitute for its neutral descriptor. Recursive module image
+evidence covers forward aliases and cycles, ordinary children and ordinary
+variant payloads, distinct runtime storage, and both 32- and 64-bit target
+layout facts.
 
 ### R2.40 — Implement fixed parameters and compile-time substitution
 
