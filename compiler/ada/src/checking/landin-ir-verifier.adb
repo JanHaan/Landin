@@ -2363,8 +2363,12 @@ package body Landin.IR.Verifier is
                                  C : constant Item_Id :=
                                    Callee_Of (Of_Unit, Id, V);
                               begin
-                                 if Result_Of (Of_Unit, Id, V)
-                                    /= Result_Of (Of_Unit, C)
+                                 if (if Result_Of (Of_Unit, C)
+                                          = Landin.Types.Aggregate
+                                     then Result_Of (Of_Unit, Id, V)
+                                            /= Landin.Types.No_Value
+                                     else Result_Of (Of_Unit, Id, V)
+                                            /= Result_Of (Of_Unit, C))
                                  then
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,

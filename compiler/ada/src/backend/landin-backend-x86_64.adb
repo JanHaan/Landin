@@ -1723,6 +1723,32 @@ package body Landin.Backend.X86_64 is
                               & Value_Cell (Operand (1)) & ", "
                               & Accumulator (Held));
                      end;
+                  elsif Result = Landin.Types.Aggregate then
+                     declare
+                        Return_Address : constant Landin.IR.Slot_Id :=
+                          Landin.IR.Nth_Parameter (Of_Unit, Item, 1);
+                        Return_Value : constant Landin.IR.Slot_Id :=
+                          Landin.IR.Result_Slot (Of_Unit, Item);
+                        Bytes : constant Landin.Targets.Byte_Count :=
+                          Whole_Clear_Extent
+                            ((Kind => Landin.IR.Frame_Slot,
+                              Slot => Return_Value), 0, 0);
+                     begin
+                        Emit ("movq " & Slot_Cell (Return_Address)
+                              & ", %rdi");
+                        Storage_Address
+                          ((Kind => Landin.IR.Frame_Slot,
+                            Slot => Return_Value), 0, "%rsi");
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Bytes))
+                           & ", %rcx");
+                        Emit ("cld");
+                        Emit ("rep movsb");
+                        Emit ("movq " & Slot_Cell (Return_Address)
+                              & ", %rax");
+                     end;
                   end if;
 
                   Emit_Epilogue;

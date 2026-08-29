@@ -4696,7 +4696,7 @@ public seams; `positive/variant-part-measured`;
 `negative/variant-part-empty`; `negative/variant-case-duplicate`;
 `negative/variant-payload-struct-field-not-enabled`;
 `negative/variant-case-value-not-enabled`;
-`negative/variant-return-not-enabled`; the generated construct, token, IR and
+`negative/variant-return-unassigned`; the generated construct, token, IR and
 target-layout records; the backend seam against both target descriptions; and
 `runtime/variant-part-measurements-answer-for-the-target` on Linux x86-64.
 
@@ -5958,3 +5958,36 @@ call.
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/nested-struct-literal-argument-nominal-mismatch`; the generated token
 and IR records; and `runtime/nested-storage-arguments` on Linux x86-64.
+
+### D106 — Aggregate results return into caller-owned storage
+
+**The tour said** that a function's named return is an ordinary place [0930]
+and every call evaluates arguments before entering the callee [1920]. D94
+established one-position by-value aggregate arguments, but no result convention
+made a returned struct's lifetime independent of the callee frame.
+
+**Chosen:** a function with an ordinary, variant-bearing or depth-one nested
+struct result receives one unspellable internal `usize` parameter naming
+caller-owned result storage. It precedes all source parameters in the existing
+register/stack run. The callee keeps its named result in an independently
+shaped local slot and, at every successful leave, copies the complete
+source-target-derived padded extent to that address. A typed local initializer
+may supply a matching aggregate-returning call as its value.
+
+The checked IR item retains `Aggregate` as the declared result and keeps the
+complete neutral shape on its result slot. The call instruction itself has no
+aggregate value: its first operand is an opaque `Storage_Address` for the
+already-shaped destination, followed by source arguments. The verifier checks
+that operand against the hidden scalar parameter. Target offsets, padding and
+byte extent enter only when the backend emits the final copy.
+
+**Why not return a pointer to callee storage:** that pointer would escape a dead
+frame and would turn by-value semantics into an alias. Returning fields in
+registers would instead require target ABI classification in neutral IR and
+pre-empt R4.40. Caller storage preserves value lifetime and the established
+one-position internal convention without either error.
+
+**Pinned by** the checker, flow, lowering, verifier and backend public seams;
+`negative/struct-return-unassigned` and `negative/variant-return-unassigned`;
+the generated token and IR records; and `runtime/struct-returns-cross-calls` on
+Linux x86-64.

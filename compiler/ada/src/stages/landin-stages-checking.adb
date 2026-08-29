@@ -902,6 +902,9 @@ package body Landin.Stages.Checking is
             Is_Aggregate_Parameter : constant Boolean :=
               Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) = Syn.Parameter;
+            Is_Aggregate_Return : constant Boolean :=
+              Held = Ty.Aggregate
+              and then Syn.Kind (Of_Tree, Node) = Syn.Named_Return;
             Is_Array_Parameter : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Parameter;
@@ -1022,6 +1025,14 @@ package body Landin.Stages.Checking is
                        Syn.Target_Of
                          (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
                         = Res.Bound))
+              and then Landin.Checking.Body_Of
+                (Types.all, Of_Tree, Written) /= Res.No_Declaration;
+            Is_Struct_Call_Init : constant Boolean :=
+              Held = Ty.Aggregate
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Call
               and then Landin.Checking.Body_Of
                 (Types.all, Of_Tree, Written) /= Res.No_Declaration;
             --  D57/D59: the written local or module struct supplies [0540]'s
@@ -1165,7 +1176,9 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
               and then not Is_Struct_Zeroed_Init
+              and then not Is_Struct_Call_Init
               and then not Is_Aggregate_Parameter
+              and then not Is_Aggregate_Return
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1195,7 +1208,9 @@ package body Landin.Stages.Checking is
               and then not Is_Struct_Zeroed_Init
               and then not Is_Struct_Literal_Init
               and then not Is_Direct_Struct_Init
+              and then not Is_Struct_Call_Init
               and then not Is_Aggregate_Parameter
+              and then not Is_Aggregate_Return
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1222,9 +1237,11 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
               and then not Is_Zeroed_State
               and then not Is_Direct_Struct_Init
+              and then not Is_Struct_Call_Init
               and then not Is_Struct_Zeroed_Init
               and then not Is_Struct_Literal_Init
               and then not Is_Aggregate_Parameter
+              and then not Is_Aggregate_Return
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1832,7 +1849,19 @@ package body Landin.Stages.Checking is
             return Ty.No_Value;
          end if;
 
-         return Declared_As_Node (Their_Tree.all, Result);
+         declare
+            Gives : constant Ty.Type_Kind :=
+              Declared_As_Node (Their_Tree.all, Result);
+         begin
+            if Gives = Ty.Aggregate then
+               Landin.Checking.Note_Body
+                 (Types.all, Of_Tree, Node,
+                  Landin.Checking.Body_Of
+                    (Types.all, Their_Tree.all,
+                     Syn.Declared_Type (Their_Tree.all, Result)));
+            end if;
+            return Gives;
+         end;
       end Check_Call;
 
       --  [1950]'s third row.  An index the compiler knows is refused when

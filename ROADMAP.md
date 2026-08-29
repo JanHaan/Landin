@@ -1923,7 +1923,12 @@ The nineteenth increment constructs an ordinary child inside an outer literal
 argument. Bare or matching nominal literals, zero images and direct storage
 copies retain parent/child identities in the shaped caller temporary.
 
-Further aggregate arguments and returns remain in this item; R4.40 later supplies
+The twentieth increment adds aggregate results. One hidden internal parameter
+names caller-owned shaped storage; the callee keeps an independent named-result
+slot and copies its complete target-derived extent on leave. Calls therefore
+carry no aggregate IR value and do not expose target ABI classification.
+
+Further aggregate arguments and result contexts remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
 left contextual: whole nested field selection, construction and copy, deeper recursive

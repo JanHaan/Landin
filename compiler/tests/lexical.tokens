@@ -18498,7 +18498,7 @@ file negative/struct-not-enabled/program.ldn tokens 13
   24 25 :
   26 29 i32
   29 30 )
-file negative/struct-return-not-enabled/program.ldn tokens 23
+file negative/struct-return-unassigned/program.ldn tokens 23
   0 5 point
   5 6 :
   7 11 type
@@ -18509,19 +18509,19 @@ file negative/struct-return-not-enabled/program.ldn tokens 23
   28 31 i32
   32 35 end
   36 41 point
-  170 171 g
-  171 172 :
-  173 174 (
-  174 175 )
-  176 178 ->
-  179 180 (
-  180 185 there
-  185 186 :
-  187 192 point
-  192 193 )
-  194 195 =
-  196 199 end
-  200 201 g
+  43 44 g
+  44 45 :
+  46 47 (
+  47 48 )
+  49 51 ->
+  52 53 (
+  53 58 there
+  58 59 :
+  60 65 point
+  65 66 )
+  67 68 =
+  69 72 end
+  73 74 g
 file negative/struct-state-read-as-a-value/program.ldn tokens 26
   0 8 counters
   8 9 :
@@ -20693,7 +20693,7 @@ file negative/variant-payload-struct-field-not-enabled/program.ldn tokens 29
   124 128 kind
   129 132 end
   133 138 outer
-file negative/variant-return-not-enabled/program.ldn tokens 34
+file negative/variant-return-unassigned/program.ldn tokens 34
   0 6 choice
   6 7 :
   8 12 type
