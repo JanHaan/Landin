@@ -10624,12 +10624,14 @@ package body Landin.Stages.Checking is
                              Syn.Tree :=
                                Tree_For
                                  (Res.Source_Of
-             (Meanings.all, Template_Declaration (Wrote)));
+                                    (Meanings.all,
+                                     Template_Declaration (Wrote)));
                            Body_Node : constant Syn.Node_Id :=
                              Syn.Declared_Type
                                (Body_Tree.all,
                                 Res.Node_Of
-               (Meanings.all, Template_Declaration (Wrote)));
+                                  (Meanings.all,
+                                   Template_Declaration (Wrote)));
                            Part : constant Syn.Node_Id :=
                              Syn.Nth_Field
                                (Body_Tree.all, Body_Node,

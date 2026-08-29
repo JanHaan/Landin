@@ -54,4 +54,21 @@ package Landin.IR.Testing_Support is
 
    function Image_Byte_Count (Of_Unit : Unit) return Natural;
 
+   --  Corrupts root metadata without exposing a nominal constructor.  The
+   --  supplied identity is either one obtained from the public unit registry
+   --  or No_Nominal_Type; out-of-range identities remain unconstructible.
+   procedure Overwrite_Item_Nominal
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Nominal : Nominal_Type_Id)
+     with Pre => Holds (Into, Item);
+
+   procedure Overwrite_Slot_Nominal
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Slot   : Slot_Id;
+      Nominal : Nominal_Type_Id)
+     with Pre => Holds (Into, Item)
+                 and then Holds (Into, Item, Slot);
+
 end Landin.IR.Testing_Support;

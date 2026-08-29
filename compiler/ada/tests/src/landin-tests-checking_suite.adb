@@ -203,6 +203,16 @@ package body Landin.Tests.Checking_Suite is
             Landin.Checking.Nominal_Of (Types.all, Of_Tree.all, Alias_Type)
               = Point_Type,
             "the type-reference node carries the identity into later stages");
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Nominal_Identities.Nth (Types.all, 3)
+              = Landin.Checking.No_Nominal_Type,
+            "enumeration cannot construct an identity outside the table");
+         Landin.Testing.Check
+           (Item,
+            not Landin.Checking.Has_Layout
+              (Types.all, Landin.Checking.No_Nominal_Type),
+            "Has_Layout safely rejects an identity the table does not hold");
       end;
    end Declarations_Give_Structs_Their_Identity;
 
