@@ -2,5 +2,5 @@ wrapper: type (item: type) = struct
     value: item
 end wrapper
 node: type (item: type) = struct
-    next: wrapper(node(item))
+    next: wrapper([0]node(item))
 end node

@@ -2309,7 +2309,11 @@ no user routine runs, each canonical nominal instance gets the target layout of
 its substituted fields when a value site requires one, and neither the template
 nor its formals acquire per-instance runtime state. Repeating an application
 whose substituted layout fails repeats that application-local diagnostic; it
-does not create a second nominal identity.
+does not create a second nominal identity. Before any application exists, the
+same walk keeps transient symbolic nominal obligations long enough to see a
+used formal pass one recursively by value through another template. A phantom
+formal or function-signature mention does not promote that obligation, and no
+symbolic walk guesses an actual or annotates the template.
 
 ### [1360] Allocation is an ordinary concept
 

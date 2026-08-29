@@ -1,5 +1,5 @@
 class: negative
-summary: symbolic validation rejects unused recursion through another template's used formal
+summary: symbolic used-formal obligations reject mutually recursive unused templates
 constructs: 0670, 0710, 1350, 1795
 program: program.ldn
 targets: linux-x86-64, macos-arm64

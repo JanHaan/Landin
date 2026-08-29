@@ -1,6 +1,6 @@
-wrapper: type (item: type) = struct
-    value: item
-end wrapper
 node: type (item: type) = struct
     next: wrapper(node(item))
 end node
+wrapper: type (item: type) = struct
+    value: item
+end wrapper

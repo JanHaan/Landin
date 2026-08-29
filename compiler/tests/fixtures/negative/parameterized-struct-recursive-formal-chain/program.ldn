@@ -1,0 +1,9 @@
+one: type (item: type) = struct
+    value: item
+end one
+two: type (item: type) = struct
+    value: one(item)
+end two
+node: type (item: type) = struct
+    next: two(node(item))
+end node
