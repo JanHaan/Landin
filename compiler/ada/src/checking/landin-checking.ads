@@ -85,8 +85,8 @@ package Landin.Checking is
    --  Callers may compare identities and retrieve identities held by a table,
    --  but cannot construct one from an integer.  The enabled
    --  nonparameterized struct is the canonical empty-actual instance of its
-   --  template declaration; later R2.40 increments extend the same table
-   --  with normalized actual tuples.
+   --  template declaration; R2.40 extends the same table with normalized
+   --  ordered actual tuples without enabling parameterized struct syntax.
    package Nominal_Identities is
       type Id is private;
 
@@ -512,6 +512,96 @@ package Landin.Checking is
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean
      with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
 
+   --  R2.40's nominal key is one source template plus an ordered tuple of
+   --  normalized actuals.  The tuple deliberately has no source names,
+   --  aliases, formal types, target widths or layout facts.  A fixed actual
+   --  is its checked mathematical magnitude; the template implies the
+   --  formal type.  Type actuals reuse the canonical descriptors this table
+   --  already owns, so atom sets and function signatures remain structural.
+   --
+   --  Actual_Key is opaque so a caller cannot put a declaration spelling or
+   --  a target fact into an identity.  These constructors are the complete
+   --  currently enabled concrete type surface.  Fixed arrays have exactly
+   --  the two element families the language currently accepts: scalar and
+   --  nominal aggregate.
+   type Actual_Key is private;
+   type Actual_Tuple is private;
+
+   function Empty_Actuals return Actual_Tuple;
+
+   procedure Append_Actual
+     (Into : in out Actual_Tuple; Actual : Actual_Key);
+
+   function Scalar_Type_Actual
+     (Scalar : Landin.Types.Scalar_Name) return Actual_Key;
+
+   function Atom_Set_Type_Actual
+     (Of_Table : Table; Atoms : Atom_Set_Id) return Actual_Key
+     with Pre => Holds (Of_Table, Atoms);
+
+   function Fixed_Array_Type_Actual
+     (Length  : Element_Count;
+      Element : Landin.Types.Scalar_Name) return Actual_Key;
+
+   function Fixed_Array_Type_Actual
+     (Of_Table : Table;
+      Length   : Element_Count;
+      Element  : Nominal_Type_Id) return Actual_Key
+     with Pre => Holds (Of_Table, Element);
+
+   function Nominal_Type_Actual
+     (Of_Table : Table; Nominal : Nominal_Type_Id) return Actual_Key
+     with Pre => Holds (Of_Table, Nominal);
+
+   function Function_Type_Actual
+     (Of_Table : Table; Signature : Signature_Id) return Actual_Key
+     with Pre => Holds (Of_Table, Signature)
+                 and then Signature_Error_Form (Of_Table, Signature)
+                            /= Inferred;
+
+   function Fixed_Actual (Value : Landin.Types.Magnitude) return Actual_Key;
+
+   --  Whether every descriptor referenced by an opaque key or tuple belongs
+   --  to this table.  Scalar and fixed keys hold in every prepared table.
+   function Holds (Of_Table : Table; Key : Actual_Key) return Boolean;
+   function Holds (Of_Table : Table; Actuals : Actual_Tuple) return Boolean;
+
+   function Intern_Nominal_Instance
+     (Into    : in out Table;
+      Template : Declaration_Id;
+      Actuals : Actual_Tuple) return Nominal_Type_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Template /= No_Declaration
+                  and then Natural (Template) <= Declaration_Limit (Into)
+                  and then Holds (Into, Actuals),
+          Post => Holds (Into, Intern_Nominal_Instance'Result)
+                  and then Template_Of
+                    (Into, Intern_Nominal_Instance'Result) = Template;
+
+   --  Instance construction and target-dependent layout share one state
+   --  slot.  Interning alone leaves a new instance Unseen.  Building is the
+   --  recursion guard for a later parameterized body; Ready and Invalid are
+   --  terminal for this compilation and target.  None of these states is
+   --  part of the interning key.
+   type Instance_State is
+     (Instance_Unseen, Instance_Building, Instance_Ready, Instance_Invalid);
+
+   function Instance_State_Of
+     (Of_Table : Table; Id : Nominal_Type_Id) return Instance_State
+     with Pre => Holds (Of_Table, Id);
+
+   procedure Begin_Instance
+     (Into : in out Table; Id : Nominal_Type_Id)
+     with Pre  => Holds (Into, Id)
+                  and then Instance_State_Of (Into, Id) = Instance_Unseen,
+          Post => Instance_State_Of (Into, Id) = Instance_Building;
+
+   procedure Invalidate_Instance
+     (Into : in out Table; Id : Nominal_Type_Id)
+     with Pre  => Holds (Into, Id)
+                  and then Instance_State_Of (Into, Id) = Instance_Building,
+          Post => Instance_State_Of (Into, Id) = Instance_Invalid;
+
    --  A call with two or more named returns has an anonymous structural
    --  aggregate shape.  This side table carries the source signature whose
    --  result run names and types are that shape; ordinary nominal aggregates
@@ -623,8 +713,12 @@ package Landin.Checking is
       Payloads : Field_Shape_Array := No_Field_Shapes)
      with Pre  => Is_Prepared (Into)
                   and then Holds (Into, Id)
-                  and then not Has_Layout (Into, Id),
+                  and then Instance_State_Of (Into, Id)
+                             in Instance_Unseen | Instance_Building,
           Post => Has_Layout (Into, Id) = Fits
+                  and then Instance_State_Of (Into, Id)
+                             = (if Fits then Instance_Ready
+                                else Instance_Invalid)
                   and then (if Fits then Layout_Field_Count (Into, Id)
                                          = Fields'Length);
 
@@ -1021,6 +1115,32 @@ private
       Element_Type => Declaration_Id,
       "="          => Landin.Provenance."=");
 
+   type Actual_Form is (Type_Argument, Fixed_Argument);
+   type Actual_Type_Form is
+     (Scalar_Identity,
+      Atom_Set_Identity,
+      Fixed_Array_Identity,
+      Nominal_Identity,
+      Function_Identity);
+
+   type Actual_Key is record
+      Form      : Actual_Form := Type_Argument;
+      Type_Form : Actual_Type_Form := Scalar_Identity;
+      Scalar    : Landin.Types.Scalar_Name := Landin.Types.Bool;
+      Atoms     : Atom_Set_Id := No_Atom_Set;
+      Length    : Element_Count := 0;
+      Nominal   : Nominal_Type_Id := No_Nominal_Type;
+      Signature : Signature_Id := No_Signature;
+      Value     : Landin.Types.Magnitude := 0;
+   end record;
+
+   package Actual_Key_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Actual_Key);
+
+   type Actual_Tuple is record
+      Members : Actual_Key_Vectors.Vector;
+   end record;
+
    package Atom_Set_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Atom_Set_Id);
 
@@ -1084,7 +1204,7 @@ private
      (Index_Type => Positive, Element_Type => Signature_Record);
 
    type Aggregate_Layout is record
-      Ready  : Boolean := False;
+      State  : Instance_State := Instance_Unseen;
       --  Payload shapes share Field_Shapes but have no top-level offset.
       --  Keep the two run starts distinct once a variant contributes those
       --  extra shapes between ordinary aggregate layouts.
@@ -1116,6 +1236,8 @@ private
       Declaration_Nominals : Nominal_Id_Vectors.Vector;
       Empty_Nominals : Nominal_Id_Vectors.Vector;
       Nominal_Templates : Nominal_Template_Vectors.Vector;
+      Nominal_Actual_Runs : Run_Vectors.Vector;
+      Nominal_Actuals : Actual_Key_Vectors.Vector;
       Declaration_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Atom_Sets    : Atom_Set_Vectors.Vector;
       Atoms        : Atom_Vectors.Vector;

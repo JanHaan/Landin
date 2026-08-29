@@ -27,6 +27,205 @@ package body Landin.Checking is
    use type Landin.Source.Names.Name_Id;
    use type Landin.Syntax.Node_Kind;
    use type Landin.Targets.Byte_Count;
+   use type Landin.Types.Magnitude;
+
+   ------------------------------------------------------------------
+   --  Nominal instance keys
+   ------------------------------------------------------------------
+
+   function Empty_Actuals return Actual_Tuple
+     is (Members => Actual_Key_Vectors.Empty_Vector);
+
+   procedure Append_Actual
+     (Into : in out Actual_Tuple; Actual : Actual_Key) is
+   begin
+      Into.Members.Append (Actual);
+   end Append_Actual;
+
+   function Scalar_Type_Actual
+     (Scalar : Landin.Types.Scalar_Name) return Actual_Key
+     is (Form => Type_Argument, Type_Form => Scalar_Identity,
+         Scalar => Scalar, others => <>);
+
+   function Atom_Set_Type_Actual
+     (Of_Table : Table; Atoms : Atom_Set_Id) return Actual_Key is
+      pragma Unreferenced (Of_Table);
+   begin
+      return
+        (Form => Type_Argument, Type_Form => Atom_Set_Identity,
+         Atoms => Atoms, others => <>);
+   end Atom_Set_Type_Actual;
+
+   function Fixed_Array_Type_Actual
+     (Length  : Element_Count;
+      Element : Landin.Types.Scalar_Name) return Actual_Key
+     is (Form => Type_Argument, Type_Form => Fixed_Array_Identity,
+         Length => Length, Scalar => Element, others => <>);
+
+   function Fixed_Array_Type_Actual
+     (Of_Table : Table;
+      Length   : Element_Count;
+      Element  : Nominal_Type_Id) return Actual_Key is
+      pragma Unreferenced (Of_Table);
+   begin
+      return
+        (Form => Type_Argument, Type_Form => Fixed_Array_Identity,
+         Length => Length, Nominal => Element, others => <>);
+   end Fixed_Array_Type_Actual;
+
+   function Nominal_Type_Actual
+     (Of_Table : Table; Nominal : Nominal_Type_Id) return Actual_Key is
+      pragma Unreferenced (Of_Table);
+   begin
+      return
+        (Form => Type_Argument, Type_Form => Nominal_Identity,
+         Nominal => Nominal, others => <>);
+   end Nominal_Type_Actual;
+
+   function Function_Type_Actual
+     (Of_Table : Table; Signature : Signature_Id) return Actual_Key is
+      pragma Unreferenced (Of_Table);
+   begin
+      return
+        (Form => Type_Argument, Type_Form => Function_Identity,
+         Signature => Signature, others => <>);
+   end Function_Type_Actual;
+
+   function Fixed_Actual (Value : Landin.Types.Magnitude) return Actual_Key
+     is (Form => Fixed_Argument, Value => Value, others => <>);
+
+   function Holds (Of_Table : Table; Key : Actual_Key) return Boolean is
+   begin
+      if not Is_Prepared (Of_Table) then
+         return False;
+      elsif Key.Form = Fixed_Argument then
+         return True;
+      end if;
+
+      case Key.Type_Form is
+         when Scalar_Identity =>
+            return True;
+         when Atom_Set_Identity =>
+            return Holds (Of_Table, Key.Atoms);
+         when Fixed_Array_Identity =>
+            return Key.Nominal = No_Nominal_Type
+              or else Holds (Of_Table, Key.Nominal);
+         when Nominal_Identity =>
+            return Holds (Of_Table, Key.Nominal);
+         when Function_Identity =>
+            return Holds (Of_Table, Key.Signature)
+              and then Signature_Error_Form (Of_Table, Key.Signature)
+                           /= Inferred;
+      end case;
+   end Holds;
+
+   function Holds (Of_Table : Table; Actuals : Actual_Tuple) return Boolean is
+   begin
+      for Actual of Actuals.Members loop
+         if not Holds (Of_Table, Actual) then
+            return False;
+         end if;
+      end loop;
+      return Is_Prepared (Of_Table);
+   end Holds;
+
+   function Actuals_Agree
+     (Of_Table : Table; Left, Right : Actual_Key) return Boolean;
+
+   function Actuals_Agree
+     (Of_Table : Table; Left, Right : Actual_Key) return Boolean is
+   begin
+      if Left.Form /= Right.Form then
+         return False;
+      elsif Left.Form = Fixed_Argument then
+         return Left.Value = Right.Value;
+      elsif Left.Type_Form /= Right.Type_Form then
+         return False;
+      end if;
+
+      case Left.Type_Form is
+         when Scalar_Identity =>
+            return Left.Scalar = Right.Scalar;
+         when Atom_Set_Identity =>
+            return Atom_Sets_Agree (Of_Table, Left.Atoms, Right.Atoms);
+         when Fixed_Array_Identity =>
+            if Left.Length /= Right.Length
+              or else (Left.Nominal = No_Nominal_Type)
+                        /= (Right.Nominal = No_Nominal_Type)
+            then
+               return False;
+            elsif Left.Nominal = No_Nominal_Type then
+               return Left.Scalar = Right.Scalar;
+            else
+               return Left.Nominal = Right.Nominal;
+            end if;
+         when Nominal_Identity =>
+            return Left.Nominal = Right.Nominal;
+         when Function_Identity =>
+            return Signatures_Agree
+              (Of_Table, Left.Signature, Right.Signature);
+      end case;
+   end Actuals_Agree;
+
+   function Intern
+     (Into     : in out Table;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple) return Nominal_Type_Id;
+
+   function Intern
+     (Into     : in out Table;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple) return Nominal_Type_Id
+   is
+   begin
+      for Position in 1 .. Natural (Into.Nominal_Templates.Length) loop
+         if Into.Nominal_Templates (Position) = Template
+           and then Into.Nominal_Actual_Runs (Position).Count
+                      = Natural (Actuals.Members.Length)
+         then
+            declare
+               Members : constant Run := Into.Nominal_Actual_Runs (Position);
+               Same    : Boolean := True;
+            begin
+               for Index in 1 .. Members.Count loop
+                  if not Actuals_Agree
+                    (Into,
+                     Into.Nominal_Actuals (Members.First + Index),
+                     Actuals.Members (Index))
+                  then
+                     Same := False;
+                     exit;
+                  end if;
+               end loop;
+               if Same then
+                  return Nominal_Identities.Nth (Into, Position);
+               end if;
+            end;
+         end if;
+      end loop;
+
+      declare
+         Members : Run :=
+           (First => Natural (Into.Nominal_Actuals.Length), Count => 0);
+      begin
+         for Actual of Actuals.Members loop
+            Into.Nominal_Actuals.Append (Actual);
+            Members.Count := Members.Count + 1;
+         end loop;
+         Into.Nominal_Templates.Append (Template);
+         Into.Nominal_Actual_Runs.Append (Members);
+         Into.Layouts.Append (Aggregate_Layout'(others => <>));
+      end;
+
+      return Nominal_Identities.Nth
+        (Into, Into.Nominal_Templates.Last_Index);
+   end Intern;
+
+   function Intern_Nominal_Instance
+     (Into     : in out Table;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple) return Nominal_Type_Id
+     is (Intern (Into, Template, Actuals));
 
    ------------------------------------------------------------------
    --  Building
@@ -119,12 +318,9 @@ package body Landin.Checking is
               and then Landin.Syntax.Kind (Of_Tree.all, Written)
                            = Landin.Syntax.Struct_Body
             then
-               Into.Nominal_Templates.Append (Id);
-               Into.Layouts.Append (Aggregate_Layout'(others => <>));
                declare
                   Made : constant Nominal_Type_Id :=
-                    Nominal_Identities.Nth
-                      (Into, Into.Nominal_Templates.Last_Index);
+                    Intern (Into, Id, Empty_Actuals);
                begin
                   Into.Empty_Nominals (Positive (Id)) := Made;
                   Into.Declaration_Nominals (Positive (Id)) := Made;
@@ -198,6 +394,25 @@ package body Landin.Checking is
      (Of_Table : Table; Template : Declaration_Id) return Nominal_Type_Id
      is (if Template = No_Declaration then No_Nominal_Type
          else Of_Table.Empty_Nominals (Positive (Template)));
+
+   function Instance_State_Of
+     (Of_Table : Table; Id : Nominal_Type_Id) return Instance_State
+     is (Of_Table.Layouts
+           (Nominal_Identities.Position (Of_Table, Id)).State);
+
+   procedure Begin_Instance
+     (Into : in out Table; Id : Nominal_Type_Id) is
+   begin
+      Into.Layouts
+        (Nominal_Identities.Position (Into, Id)).State := Instance_Building;
+   end Begin_Instance;
+
+   procedure Invalidate_Instance
+     (Into : in out Table; Id : Nominal_Type_Id) is
+   begin
+      Into.Layouts
+        (Nominal_Identities.Position (Into, Id)).State := Instance_Invalid;
+   end Invalidate_Instance;
 
    function Nominal_Of
      (Of_Table : Table;
@@ -681,7 +896,8 @@ package body Landin.Checking is
      return Boolean
      is (Holds (Of_Table, Id)
          and then Of_Table.Layouts
-           (Nominal_Identities.Position (Of_Table, Id)).Ready);
+           (Nominal_Identities.Position (Of_Table, Id)).State
+                     = Instance_Ready);
 
    function Layout_Field_Count (Of_Table : Table; Id : Nominal_Type_Id)
      return Natural
@@ -697,8 +913,20 @@ package body Landin.Checking is
       Cases : Case_Run_Array := No_Case_Runs;
       Payloads : Field_Shape_Array := No_Field_Shapes)
    is
-      Built : Aggregate_Layout;
+      Built : Aggregate_Layout :=
+        (State => Instance_Building, others => <>);
       Layout_Possible : Boolean := True;
+
+      procedure Reject;
+
+      procedure Reject is
+      begin
+         if Instance_State_Of (Into, Id) = Instance_Unseen then
+            Begin_Instance (Into, Id);
+         end if;
+         Invalidate_Instance (Into, Id);
+         Fits := False;
+      end Reject;
 
       procedure Extent_Of
         (Field     : Field_Shape;
@@ -836,6 +1064,10 @@ package body Landin.Checking is
          end if;
       end Extent_Of;
    begin
+      if Instance_State_Of (Into, Id) = Instance_Unseen then
+         Begin_Instance (Into, Id);
+      end if;
+
       --  First prove the complete padded value fits this target.  D18 proves
       --  each array leaf fits alone; the containing struct still may not.
       for Field in Fields'Range loop
@@ -846,14 +1078,14 @@ package body Landin.Checking is
          begin
             Extent_Of (Fields (Field), Size, Alignment);
             if not Layout_Possible then
-               Fits := False;
+               Reject;
                return;
             end if;
             if not Landin.Targets.Can_Place
                      (Built.Placed, Size, Alignment,
                       Landin.Targets.Maximum_Object_Size (Facts))
             then
-               Fits := False;
+               Reject;
                return;
             end if;
             Landin.Targets.Place
@@ -894,7 +1126,7 @@ package body Landin.Checking is
             begin
                Extent_Of (Fields (Field), Size, Alignment);
                if not Layout_Possible then
-                  Fits := False;
+                  Reject;
                   return;
                end if;
                Landin.Targets.Place
@@ -909,7 +1141,7 @@ package body Landin.Checking is
          end loop;
       end;
 
-      Built.Ready := True;
+      Built.State := Instance_Ready;
       Into.Layouts (Nominal_Identities.Position (Into, Id)) := Built;
       Fits := True;
    end Lay_Out;
