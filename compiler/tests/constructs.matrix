@@ -65,7 +65,7 @@
 0490   tour        -                                  Pointers are a system tool
 0500   tour        -                                  Three operations sit between pointers and slices
 0510   tour        -                                  slice_from is where uninitialised storage is smuggled in
-0520   tour        accepted emitted executed refused refused-by-name Array: a value
+0520   tour        accepted emitted executed refused  Array: a value
 0530   tour        accepted emitted executed refused  The length may be inferred from the literal
 0540   tour        accepted emitted executed refused  zeroed is the all-bits-zero image of a type
 0550   tour        -                                  The first of those two properties is also a concept

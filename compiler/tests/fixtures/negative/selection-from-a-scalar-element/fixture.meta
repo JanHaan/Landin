@@ -1,0 +1,6 @@
+class: negative
+summary: [1820] derives a selection after an index, and the checker refuses one whose element is a scalar and has no field
+constructs: 0520, 0670, 1820
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

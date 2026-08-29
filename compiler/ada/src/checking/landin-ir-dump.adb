@@ -83,8 +83,10 @@ package body Landin.IR.Dump is
             when Scalar_Field_Shape =>
                return Landin.Types.Spelling (Shape.Element);
             when Array_Field_Shape =>
+               --  D121: the element may be an ordinary struct, and then it
+               --  is spelt by the same one spelling every shape is.
                return "[" & Trimmed (Element_Total'Image (Shape.Length))
-                 & "]" & Landin.Types.Spelling (Shape.Element);
+                 & "]" & Shape_Text (Array_Element_Shape (Of_Unit, Shape));
             when Aggregate_Field_Shape =>
                Unbounded.Append (Result, "struct (");
                for Field in 1 .. Aggregate_Field_Count
@@ -210,6 +212,27 @@ package body Landin.IR.Dump is
             return Unbounded.To_String (Text);
          end Path_Qualifier;
 
+         --  D121's run inside an indexed element.  Without it a recorded
+         --  run could not tell `a[i].x` from `a[i].y`.
+         function Below_Qualifier return String;
+
+         function Below_Qualifier return String is
+            Path : constant Path_Step_Array :=
+              (if Op_Of (Of_Unit, Item, Value)
+                    in Load_Element | Store_Element
+               then Element_Path_Of (Of_Unit, Item, Value)
+               else No_Path_Steps);
+            Text : Unbounded.Unbounded_String;
+         begin
+            for Step of Path loop
+               Unbounded.Append
+                 (Text,
+                  " inside "
+                  & Trimmed (Part_Position'Image (Step.Field)));
+            end loop;
+            return Unbounded.To_String (Text);
+         end Below_Qualifier;
+
          function Source_Path_Qualifier return String;
 
          function Source_Path_Qualifier return String is
@@ -292,6 +315,7 @@ package body Landin.IR.Dump is
                                         (Of_Unit, Item, Value))))
                          & Variant_Qualifier
                          & Path_Qualifier
+                         & Below_Qualifier
                          & Operands (Item, Value);
                end if;
 
@@ -309,6 +333,7 @@ package body Landin.IR.Dump is
                                         (Of_Unit, Item, Value))))
                          & Variant_Qualifier
                          & Path_Qualifier
+                         & Below_Qualifier
                          & Operands (Item, Value);
                end;
 
@@ -583,7 +608,7 @@ package body Landin.IR.Dump is
                     & Trimmed (Element_Total'Image
                                  (Array_Length (Of_Unit, Id)))
                     & " of "
-                    & Landin.Types.Spelling (Array_Element (Of_Unit, Id)));
+                    & Shape_Text (Array_Element_Shape (Of_Unit, Id)));
 
                --  D24: an initial image is the source-order run of folded
                --  values.  An array datum with no image is D10's zero and
@@ -841,8 +866,9 @@ package body Landin.IR.Dump is
                                  (Element_Total'Image
                                     (Slot_Array_Length (Of_Unit, Id, Slot)))
                              & " of "
-                             & Landin.Types.Spelling
-                                 (Slot_Array_Element (Of_Unit, Id, Slot))
+                             & Shape_Text
+                                 (Slot_Array_Element_Shape
+                                    (Of_Unit, Id, Slot))
                         elsif Is_Aggregate (Of_Unit, Id, Slot)
                         then "aggregate fields"
                              & Unbounded.To_String (Fields)

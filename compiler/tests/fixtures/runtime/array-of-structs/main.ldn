@@ -1,0 +1,55 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+grid: type = struct
+    cells: [2]point
+    tail: i32
+end grid
+
+mut state: grid
+mut cells: [3]point = zeroed
+
+elements: () -> (result: i32) =
+    mut room: [3]point
+    room = zeroed
+    room[0].x = 1
+    room[1].x = 2
+    room[2].x = 4
+    room[2].y = 6
+    result = room[0].x + room[1].x + room[2].x + room[2].y
+             + room[0].y + room[1].y
+end elements
+
+fields: () -> (result: i32) =
+    mut local: grid
+    local = zeroed
+    local.cells[0].x = 3
+    local.cells[1].y = 5
+    local.tail = 7
+    state = local
+    result = state.cells[0].x + state.cells[1].y + state.tail
+             + state.cells[0].y + state.cells[1].x
+end fields
+
+copies: () -> (result: i32) =
+    mut room: [3]point
+    room = zeroed
+    room[1].y = 12
+    cells = room
+    result = cells[1].y + cells[0].x + cells[2].y
+end copies
+
+computed: (at: usize) -> (result: i32) =
+    mut room: [3]point
+    room = zeroed
+    room[0].x = 1
+    room[1].x = 2
+    room[2].x = 3
+    result = room[at].x
+end computed
+
+public main: () -> (code: i32) =
+    code = elements() + fields() + copies() + computed(1)
+end main

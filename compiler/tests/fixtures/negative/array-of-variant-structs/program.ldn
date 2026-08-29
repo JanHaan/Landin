@@ -1,0 +1,8 @@
+tagged: type = struct
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u8)
+    end kind
+end tagged
+
+mut rows: [2]tagged

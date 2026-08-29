@@ -358,6 +358,13 @@ package body Landin.Backend.X86_64 is
             Nested        : Landin.IR.Path_Step_Array :=
               Landin.IR.No_Path_Steps)
             return Landin.IR.Element_Total;
+         function Element_Shape_Of
+           (Place         : Landin.IR.Storage;
+            Field         : Natural;
+            Which         : Natural := 0;
+            Payload_Field : Natural := 0;
+            Nested        : Landin.IR.Path_Step_Array :=
+              Landin.IR.No_Path_Steps) return Landin.IR.Field_Shape;
          function Array_Element_Of
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -366,6 +373,13 @@ package body Landin.Backend.X86_64 is
             Nested        : Landin.IR.Path_Step_Array :=
               Landin.IR.No_Path_Steps)
             return Landin.Types.Scalar_Name;
+         function Element_Bytes_Of
+           (Place         : Landin.IR.Storage;
+            Field         : Natural;
+            Which         : Natural := 0;
+            Payload_Field : Natural := 0;
+            Nested        : Landin.IR.Path_Step_Array :=
+              Landin.IR.No_Path_Steps) return Landin.Targets.Byte_Count;
          procedure Storage_Address
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -382,6 +396,7 @@ package body Landin.Backend.X86_64 is
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
             return Landin.IR.Field_Shape;
+
          function Path_Offset
            (Shape : Landin.IR.Field_Shape;
             Path  : Landin.IR.Path_Step_Array)
@@ -422,6 +437,54 @@ package body Landin.Backend.X86_64 is
                         Positive (Field)).Length));
          end Array_Length_Of;
 
+         --  D121: the shape of one element of the array an operation
+         --  reaches.  A scalar element answers as itself, so every caller
+         --  that only wants a width still gets one.
+         function Element_Shape_Of
+           (Place         : Landin.IR.Storage;
+            Field         : Natural;
+            Which         : Natural := 0;
+            Payload_Field : Natural := 0;
+            Nested        : Landin.IR.Path_Step_Array :=
+              Landin.IR.No_Path_Steps) return Landin.IR.Field_Shape
+         is
+         begin
+            if Nested'Length > 0 then
+               return Landin.IR.Array_Element_Shape
+                 (Of_Unit,
+                  Landin.IR.Shape_At
+                    (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
+                     Nested));
+            end if;
+            if Payload_Field > 0 then
+               return Landin.IR.Array_Element_Shape
+                 (Of_Unit,
+                  Landin.IR.Nth_Variant_Case_Field
+                    (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
+                     Positive (Which), Positive (Payload_Field)));
+            end if;
+            case Place.Kind is
+               when Landin.IR.Module_Datum =>
+                  if Field = 0 then
+                     return Landin.IR.Array_Element_Shape
+                       (Of_Unit, Place.Datum);
+                  end if;
+                  return Landin.IR.Array_Element_Shape
+                    (Of_Unit,
+                     Landin.IR.Nth_Field_Shape
+                       (Of_Unit, Place.Datum, Positive (Field)));
+               when Landin.IR.Frame_Slot =>
+                  if Field = 0 then
+                     return Landin.IR.Slot_Array_Element_Shape
+                       (Of_Unit, Item, Place.Slot);
+                  end if;
+                  return Landin.IR.Array_Element_Shape
+                    (Of_Unit,
+                     Landin.IR.Nth_Slot_Field_Shape
+                       (Of_Unit, Item, Place.Slot, Positive (Field)));
+            end case;
+         end Element_Shape_Of;
+
          function Array_Element_Of
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -429,33 +492,27 @@ package body Landin.Backend.X86_64 is
             Payload_Field : Natural := 0;
             Nested        : Landin.IR.Path_Step_Array :=
               Landin.IR.No_Path_Steps) return Landin.Types.Scalar_Name
+         is (Element_Shape_Of
+               (Place, Field, Which, Payload_Field, Nested).Element);
+
+         --  How many target bytes one element takes.
+         function Element_Bytes_Of
+           (Place         : Landin.IR.Storage;
+            Field         : Natural;
+            Which         : Natural := 0;
+            Payload_Field : Natural := 0;
+            Nested        : Landin.IR.Path_Step_Array :=
+              Landin.IR.No_Path_Steps) return Landin.Targets.Byte_Count
          is
+            Shape : constant Landin.IR.Field_Shape :=
+              Element_Shape_Of (Place, Field, Which, Payload_Field, Nested);
+            Size : Landin.Targets.Byte_Count;
+            Alignment : Landin.Targets.Byte_Alignment;
          begin
-            if Nested'Length > 0 then
-               return Landin.IR.Shape_At
-                 (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
-                  Nested).Element;
-            end if;
-            if Payload_Field > 0 then
-               return Landin.IR.Nth_Variant_Case_Field
-                 (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
-                  Positive (Which), Positive (Payload_Field)).Element;
-            end if;
-            return
-              (case Place.Kind is
-                  when Landin.IR.Module_Datum =>
-                    (if Field = 0
-                     then Landin.IR.Array_Element (Of_Unit, Place.Datum)
-                     else Landin.IR.Nth_Field_Shape
-                       (Of_Unit, Place.Datum, Positive (Field)).Element),
-                  when Landin.IR.Frame_Slot =>
-                    (if Field = 0
-                     then Landin.IR.Slot_Array_Element
-                       (Of_Unit, Item, Place.Slot)
-                     else Landin.IR.Nth_Slot_Field_Shape
-                       (Of_Unit, Item, Place.Slot,
-                        Positive (Field)).Element));
-         end Array_Element_Of;
+            Landin.Backend.Field_Extent
+              (Of_Unit, Shape, Facts, Size, Alignment);
+            return Size;
+         end Element_Bytes_Of;
 
          procedure Storage_Address
            (Place         : Landin.IR.Storage;
@@ -592,11 +649,7 @@ package body Landin.Backend.X86_64 is
                  Landin.Targets.Byte_Count
                    (Array_Length_Of
                       (Place, Field, Nested => Nested))
-                 * Landin.Targets.Byte_Count
-                     (Landin.Targets.Bytes
-                        (Size_Of
-                           (Array_Element_Of
-                              (Place, Field, Nested => Nested), Facts)));
+                 * Element_Bytes_Of (Place, Field, Nested => Nested);
             end if;
 
             case Place.Kind is
@@ -987,13 +1040,8 @@ package body Landin.Backend.X86_64 is
                        Landin.Targets.Byte_Count
                          (Array_Length_Of
                             (Source, Source_Field, Nested => Source_Nested))
-                       * Landin.Targets.Byte_Count
-                           (Landin.Targets.Bytes
-                              (Size_Of
-                                 (Array_Element_Of
-                                    (Source, Source_Field,
-                                     Nested => Source_Nested),
-                                  Facts)));
+                       * Element_Bytes_Of
+                           (Source, Source_Field, Nested => Source_Nested);
                   begin
                      Storage_Address
                        (Destination, Destination_Field, "%rdi",
@@ -1305,9 +1353,20 @@ package body Landin.Backend.X86_64 is
                      Length : constant Landin.IR.Element_Total :=
                        Array_Length_Of
                          (Place, Field, Which, Payload_Field, Nested);
-                     Kind : constant Landin.Types.Scalar_Name :=
-                       Array_Element_Of
+                     Element : constant Landin.IR.Field_Shape :=
+                       Element_Shape_Of
                          (Place, Field, Which, Payload_Field, Nested);
+                     Stride : constant Landin.Targets.Byte_Count :=
+                       Element_Bytes_Of
+                         (Place, Field, Which, Payload_Field, Nested);
+                     --  D121: the element may be an aggregate, and then
+                     --  what the operation loads is a leaf inside it.
+                     Below : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Element_Path_Of (Of_Unit, Item, Value);
+                     Kind : constant Landin.Types.Scalar_Name :=
+                       Landin.IR.Shape_At (Of_Unit, Element, Below).Element;
+                     Inside : constant Landin.Targets.Byte_Count :=
+                       Path_Offset (Element, Below);
                      Held : constant Held_Size := Size_Of (Kind, Facts);
                      Safe : constant String := Value_Label (Value) & "_index";
                   begin
@@ -1320,18 +1379,39 @@ package body Landin.Backend.X86_64 is
                      Emit ("jb " & Safe);
                      Emit ("ud2");
                      Put (Safe & ":");
-                     Emit
-                       ("imulq $"
-                        & Trimmed
-                            (Natural'Image (Landin.Targets.Bytes (Held)))
-                        & ", %rax, %rax");
+                     --  An `imul` immediate is a signed 32-bit field, and
+                     --  D121's element may be wider than one, so a stride
+                     --  that does not fit is formed in a register first.
+                     if Stride <= 2 ** 31 - 1 then
+                        Emit
+                          ("imulq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Stride))
+                           & ", %rax, %rax");
+                     else
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Stride))
+                           & ", %rdx");
+                        Emit ("imulq %rdx, %rax");
+                     end if;
 
                      --  Storage_Address first derives the top-level field
                      --  and D84's selected payload offset; only after the
-                     --  bounds check above is the scaled index added.
+                     --  bounds check above is the scaled index added, and
+                     --  only then the run inside the element.
                      Storage_Address
                        (Place, Field, "%rcx", Which, Payload_Field, Nested);
                      Emit ("addq %rax, %rcx");
+                     if Inside > 0 then
+                        Emit
+                          ("movabsq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Inside))
+                           & ", %rdx");
+                        Emit ("addq %rdx, %rcx");
+                     end if;
 
                      if Op = Landin.IR.Load_Element then
                         Carry (Held, "(%rcx)", Value_Cell (Value));
@@ -2652,15 +2732,18 @@ package body Landin.Backend.X86_64 is
       procedure Emit_Array_Datum (Item : Landin.IR.Item_Id) is
          Length : constant Landin.IR.Element_Total :=
            Landin.IR.Array_Length (Of_Unit, Item);
-         Held : constant Held_Size :=
-           Size_Of (Landin.IR.Array_Element (Of_Unit, Item), Facts);
+         --  D121: the element may be an ordinary struct, whose extent and
+         --  alignment are its own padded layout.
+         Size : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment;
       begin
+         Landin.Backend.Field_Extent
+           (Of_Unit, Landin.IR.Array_Element_Shape (Of_Unit, Item),
+            Facts, Size, Alignment);
          Emit_Reserved
            (Item,
-            Landin.Targets.Byte_Count (Length)
-            * Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held)),
-            (if Length = 0 then 1
-             else Landin.Targets.Alignment_Of (Facts, Held)));
+            Landin.Targets.Byte_Count (Length) * Size,
+            (if Length = 0 then 1 else Alignment));
       end Emit_Array_Datum;
 
       --  D24/D34: an array datum with an image.  Each literal element becomes

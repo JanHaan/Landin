@@ -339,8 +339,19 @@ package body Landin.Checking is
             Size := Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held));
             Alignment := Landin.Targets.Alignment_Of (Facts, Held);
          elsif Field.Kind = Fixed_Array_Field then
-            Array_Extent
-              (Field.Length, Field.Element, Facts, Size, Alignment);
+            if Field.Aggregate_Body /= No_Declaration then
+               if not Contains (Into, Field.Aggregate_Body)
+                 or else not Has_Layout (Into, Field.Aggregate_Body)
+               then
+                  raise Landin.Compiler_Defect with
+                    "an aggregate array element has no laid-out body";
+               end if;
+               Array_Extent
+                 (Into, Field.Length, Field.Aggregate_Body, Size, Alignment);
+            else
+               Array_Extent
+                 (Field.Length, Field.Element, Facts, Size, Alignment);
+            end if;
          elsif Field.Kind = Aggregate_Field then
             if Field.Aggregate_Body = No_Declaration
               or else not Contains (Into, Field.Aggregate_Body)
@@ -699,8 +710,23 @@ package body Landin.Checking is
       Element : Landin.Types.Scalar_Name) is
    begin
       Into.Node_Shapes (Slot (Into, Of_Tree, Node)) :=
-        Array_Shape'(Length => Length, Element => Element);
+        Array_Shape'(Length => Length, Element => Element, others => <>);
    end Note_Array;
+
+   function Array_Element_Body
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Declaration_Id
+     is (Of_Table.Node_Shapes (Slot (Of_Table, Of_Tree, Node)).Element_Body);
+
+   procedure Note_Array_Element_Body
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Wrote   : Declaration_Id) is
+   begin
+      Into.Node_Shapes (Slot (Into, Of_Tree, Node)).Element_Body := Wrote;
+   end Note_Array_Element_Body;
 
    function Array_Length
      (Of_Table : Table; Id : Declaration_Id) return Element_Count
@@ -718,8 +744,20 @@ package body Landin.Checking is
       Element : Landin.Types.Scalar_Name) is
    begin
       Into.Shapes (Natural (Id)) :=
-        Array_Shape'(Length => Length, Element => Element);
+        Array_Shape'(Length => Length, Element => Element, others => <>);
    end Note_Array;
+
+   function Array_Element_Body
+     (Of_Table : Table; Id : Declaration_Id) return Declaration_Id
+     is (Of_Table.Shapes (Natural (Id)).Element_Body);
+
+   procedure Note_Array_Element_Body
+     (Into  : in out Table;
+      Id    : Declaration_Id;
+      Wrote : Declaration_Id) is
+   begin
+      Into.Shapes (Natural (Id)).Element_Body := Wrote;
+   end Note_Array_Element_Body;
 
    procedure Array_Extent
      (Length    : Element_Count;
@@ -737,6 +775,22 @@ package body Landin.Checking is
       Size :=
         Landin.Targets.Byte_Count (Length)
         * Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held));
+   end Array_Extent;
+
+   procedure Array_Extent
+     (Of_Table  : Table;
+      Length    : Element_Count;
+      Element   : Declaration_Id;
+      Size      : out Landin.Targets.Byte_Count;
+      Alignment : out Landin.Targets.Byte_Alignment)
+   is
+      Held : constant Landin.Targets.Byte_Count :=
+        Layout_Size (Of_Table, Element);
+   begin
+      Alignment :=
+        (if Length = 0 then 1
+         else Layout_Alignment (Of_Table, Element));
+      Size := Landin.Targets.Byte_Count (Length) * Held;
    end Array_Extent;
 
    procedure Note
