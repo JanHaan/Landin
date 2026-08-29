@@ -57,6 +57,7 @@
 --  compilation's own Landin.Targets.Target_Facts.
 
 private with Ada.Containers.Vectors;
+private with System;
 
 with Landin.Provenance;
 with Landin.Resolution;
@@ -520,12 +521,24 @@ package Landin.Checking is
    --  already owns, so atom sets and function signatures remain structural.
    --
    --  Actual_Key is opaque so a caller cannot put a declaration spelling or
-   --  a target fact into an identity.  These constructors are the complete
-   --  currently enabled concrete type surface.  Fixed arrays have exactly
-   --  the two element families the language currently accepts: scalar and
-   --  nominal aggregate.
+   --  a target fact into an identity.  Descriptor-bearing keys are bound to
+   --  the one limited Table whose IDs they hold; equal numeric IDs from a
+   --  second compilation do not hold here.  Scalar identities, scalar arrays
+   --  and fixed magnitudes carry no table-owned descriptor and remain
+   --  portable between tables.  These constructors are the complete
+   --  currently enabled concrete type surface.
    type Actual_Key is private;
    type Actual_Tuple is private;
+
+   type Actual_Kind is (Type_Actual_Kind, Fixed_Actual_Kind);
+   type Actual_Type_Form is
+     (Scalar_Actual_Type,
+      Atom_Set_Actual_Type,
+      Fixed_Array_Actual_Type,
+      Nominal_Actual_Type,
+      Function_Actual_Type);
+   type Array_Element_Form is
+     (Scalar_Array_Element, Nominal_Array_Element);
 
    function Empty_Actuals return Actual_Tuple;
 
@@ -566,6 +579,67 @@ package Landin.Checking is
    function Holds (Of_Table : Table; Key : Actual_Key) return Boolean;
    function Holds (Of_Table : Table; Actuals : Actual_Tuple) return Boolean;
 
+   function Actual_Kind_Of (Key : Actual_Key) return Actual_Kind;
+
+   function Type_Form_Of (Key : Actual_Key) return Actual_Type_Form
+     with Pre => Actual_Kind_Of (Key) = Type_Actual_Kind;
+
+   function Scalar_Of
+     (Of_Table : Table; Key : Actual_Key) return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Scalar_Actual_Type;
+
+   function Atom_Set_Of
+     (Of_Table : Table; Key : Actual_Key) return Atom_Set_Id
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Atom_Set_Actual_Type;
+
+   function Array_Length_Of
+     (Of_Table : Table; Key : Actual_Key) return Element_Count
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Fixed_Array_Actual_Type;
+
+   function Array_Element_Form_Of
+     (Of_Table : Table; Key : Actual_Key) return Array_Element_Form
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Fixed_Array_Actual_Type;
+
+   function Array_Scalar_Element_Of
+     (Of_Table : Table; Key : Actual_Key) return Landin.Types.Scalar_Name
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Fixed_Array_Actual_Type
+                 and then Array_Element_Form_Of (Of_Table, Key)
+                            = Scalar_Array_Element;
+
+   function Array_Nominal_Element_Of
+     (Of_Table : Table; Key : Actual_Key) return Nominal_Type_Id
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Fixed_Array_Actual_Type
+                 and then Array_Element_Form_Of (Of_Table, Key)
+                            = Nominal_Array_Element;
+
+   function Nominal_Of
+     (Of_Table : Table; Key : Actual_Key) return Nominal_Type_Id
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Nominal_Actual_Type;
+
+   function Function_Signature_Of
+     (Of_Table : Table; Key : Actual_Key) return Signature_Id
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Function_Actual_Type;
+
+   function Fixed_Magnitude_Of
+     (Key : Actual_Key) return Landin.Types.Magnitude
+     with Pre => Actual_Kind_Of (Key) = Fixed_Actual_Kind;
+
    function Intern_Nominal_Instance
      (Into    : in out Table;
       Template : Declaration_Id;
@@ -577,6 +651,21 @@ package Landin.Checking is
           Post => Holds (Into, Intern_Nominal_Instance'Result)
                   and then Template_Of
                     (Into, Intern_Nominal_Instance'Result) = Template;
+
+   --  The imminent generic-struct checker can reconstruct a formal binding
+   --  tuple from only its canonical nominal identity.  Traversal is bounded
+   --  by the stored count and returns the same opaque keys accepted above.
+   function Instance_Actual_Count
+     (Of_Table : Table; Id : Nominal_Type_Id) return Natural
+     with Pre => Holds (Of_Table, Id);
+
+   function Nth_Instance_Actual
+     (Of_Table : Table;
+      Id       : Nominal_Type_Id;
+      Position : Positive) return Actual_Key
+     with Pre  => Holds (Of_Table, Id)
+                  and then Position <= Instance_Actual_Count (Of_Table, Id),
+          Post => Holds (Of_Table, Nth_Instance_Actual'Result);
 
    --  Instance construction and target-dependent layout share one state
    --  slot.  Interning alone leaves a new instance Unseen.  Building is the
@@ -1115,17 +1204,10 @@ private
       Element_Type => Declaration_Id,
       "="          => Landin.Provenance."=");
 
-   type Actual_Form is (Type_Argument, Fixed_Argument);
-   type Actual_Type_Form is
-     (Scalar_Identity,
-      Atom_Set_Identity,
-      Fixed_Array_Identity,
-      Nominal_Identity,
-      Function_Identity);
-
    type Actual_Key is record
-      Form      : Actual_Form := Type_Argument;
-      Type_Form : Actual_Type_Form := Scalar_Identity;
+      Kind      : Actual_Kind := Type_Actual_Kind;
+      Type_Form : Actual_Type_Form := Scalar_Actual_Type;
+      Owner     : System.Address := System.Null_Address;
       Scalar    : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Atoms     : Atom_Set_Id := No_Atom_Set;
       Length    : Element_Count := 0;
