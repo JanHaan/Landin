@@ -1,0 +1,7 @@
+f: () -> (result: i32) =
+    result = begin
+        hidden: i32 = 42
+        hidden
+    end
+    result = hidden
+end f

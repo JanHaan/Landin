@@ -1,0 +1,5 @@
+class: negative
+summary: a binding declared in a bare value block is not visible after it
+program: program.ldn
+codes: L0201
+constructs: 0050, 1080, 1810, 1840, 1860

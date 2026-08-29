@@ -1,0 +1,5 @@
+class: negative
+summary: a value-producing if must cover its untaken edge
+program: program.ldn
+codes: L0301
+constructs: 1050, 1080, 1800, 1810, 1910

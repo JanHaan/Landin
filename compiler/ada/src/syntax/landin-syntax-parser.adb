@@ -30,7 +30,8 @@ package body Landin.Syntax.Parser is
         | Tok.End_Of_Input => True,
       others => False];
 
-   --  `body ::= statement*` and the arms of `if` [1810].  The closers are
+   --  `block ::= statement* | value_statement* expression` [1800].  The
+   --  closers are
    --  in it deliberately: a broken statement must resume at the next
    --  branch or at the body's `end` rather than run past it.
    Statement_Anchor : constant Tok.Kind_Set :=
@@ -167,6 +168,10 @@ package body Landin.Syntax.Parser is
 
             Depth     : Natural := 0;
             Nest_Root : Landin.Source.Span := Landin.Source.Empty_Span;
+            --  Expression parsing is shared by module values and function
+            --  bodies.  Control expressions may contain `return`, whose
+            --  parser diagnostic points back to the active signature.
+            Active_Frame : Frame;
 
             --  Set by Parse_Type when it refused a construct rather than
             --  failing to read one.  A binding whose type is a construct
@@ -192,6 +197,9 @@ package body Landin.Syntax.Parser is
 
             Match_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "match");
+
+            Begin_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "begin");
 
             Scalar_Id : constant array (Scalar_Name)
               of Landin.Source.Names.Name_Id :=
@@ -310,10 +318,13 @@ package body Landin.Syntax.Parser is
             function Parse_Place return Node_Id;
             function Parse_Body (Context : Frame) return Node_Id;
             function Parse_Block
-              (Context : Frame; Seed : Node_Id := No_Node) return Node_Id;
+              (Context     : Frame;
+               Seed        : Node_Id := No_Node;
+               Allow_Value : Boolean := False) return Node_Id;
             function Parse_Statement (Context : Frame) return Node_Id;
             function Parse_If (Context : Frame) return Node_Id;
             function Parse_Match (Context : Frame) return Node_Id;
+            function Parse_Bare_Block (Context : Frame) return Node_Id;
             function Parse_Expression
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id;
             function Parse_Expression_From
@@ -1937,16 +1948,102 @@ package body Landin.Syntax.Parser is
                end;
             end Parse_Returns;
 
-            --  body ::= statement* | expression                   [1800]
+            --  body ::= block                                     [1800]
             --
             --  One token past a leading name decides, and the one shape
             --  that needs more is `identifier "("`: a call is a statement
             --  as well as an expression [1810], so the token *after* the
             --  call decides which this one is -- and the node is the same
             --  either way, so nothing is re-parsed to find out.
+            --  A source consisting only of a control form remains ambiguous
+            --  after its closing words: the old statement and the new value
+            --  form have the same token boundary.  A final expression in any
+            --  arm settles it as a value.  This is also used while building
+            --  nested blocks, so a statement `if` is never accidentally put
+            --  in the Block's value position merely because it meets a
+            --  closer.
+            function Control_Offers_Value
+              (Control : Node_Id) return Boolean;
+
+            function Control_Offers_Value
+              (Control : Node_Id) return Boolean
+            is
+            begin
+               case Kind (Result, Control) is
+                  when If_Statement =>
+                     for Index in 1 .. Arm_Count (Result, Control) loop
+                        if Block_Value
+                             (Result,
+                              Body_Of
+                                (Result,
+                                 Nth_Arm (Result, Control, Index)))
+                           /= No_Node
+                        then
+                           return True;
+                        end if;
+                     end loop;
+
+                     return Else_Body (Result, Control) /= No_Node
+                       and then Block_Value
+                         (Result, Else_Body (Result, Control)) /= No_Node;
+
+                  when Match_Statement =>
+                     for Index in 1 .. Match_Arm_Count
+                       (Result, Control)
+                     loop
+                        if Block_Value
+                             (Result,
+                              Body_Of
+                                (Result,
+                                 Nth_Match_Arm
+                                   (Result, Control, Index)))
+                           /= No_Node
+                        then
+                           return True;
+                        end if;
+                     end loop;
+
+                     return False;
+
+                  when Bare_Block =>
+                     return Block_Value
+                       (Result, Body_Of (Result, Control)) /= No_Node;
+
+                  when others =>
+                     return False;
+               end case;
+            end Control_Offers_Value;
+
             function Parse_Body (Context : Frame) return Node_Id is
             begin
                if Context.Returns then
+                  --  Control forms overlap statements and expressions.  A
+                  --  sole one is [1800]'s expression body; when another
+                  --  statement follows, it seeds the ordinary statement
+                  --  block just as the call-shaped ambiguity below does.
+                  if Peek = Tok.Kw_If
+                    or else
+                      (Peek = Tok.Identifier
+                       and then Named_Here in Match_Id | Begin_Id)
+                  then
+                     declare
+                        Control : constant Node_Id := Parse_Expression;
+                     begin
+                        if Peek = Tok.Kw_End
+                          and then Control_Offers_Value (Control)
+                        then
+                           return Control;
+                        elsif Kind (Result, Control)
+                                in If_Statement | Match_Statement
+                                   | Bare_Block
+                        then
+                           return Parse_Block (Context, Seed => Control);
+                        else
+                           return Control;
+                        end if;
+                     end;
+                  end if;
+
                   --  [1800]'s expression body takes any expression, so
                   --  this asks the same question [1820]'s first set does
                   --  rather than keeping a second list beside it: a token
@@ -1954,7 +2051,7 @@ package body Landin.Syntax.Parser is
                   --  one here.  A name is the case below, where it may
                   --  instead begin a binding or an assignment.
                   if Pre.Begins_Expression (Peek)
-                    and then Peek /= Tok.Identifier
+                    and then Peek not in Tok.Identifier | Tok.Kw_If
                   then
                      return Parse_Expression;
                   end if;
@@ -1965,7 +2062,6 @@ package body Landin.Syntax.Parser is
                   --  body [1800] offers instead of a block.
                   if Peek = Tok.Identifier
                     and then Word_At_Hand = Word_None
-                    and then Named_Here /= Match_Id
                     and then Ahead (1) not in Tok.Colon | Tok.Colon_Equal
                     and then After_Selectors /= Tok.Equal
                   then
@@ -2095,7 +2191,9 @@ package body Landin.Syntax.Parser is
                      Related => At_Name,
                      Because => "declared here")
                then
+                  Active_Frame := Context;
                   Body_Node := Parse_Body (Context);
+                  Active_Frame := (others => <>);
                else
                   Body_Node := Add (Error_Statement, After_Previous);
                end if;
@@ -2260,23 +2358,90 @@ package body Landin.Syntax.Parser is
             ------------------------------------------------------------
 
             function Parse_Block
-              (Context : Frame; Seed : Node_Id := No_Node) return Node_Id
+              (Context     : Frame;
+               Seed        : Node_Id := No_Node;
+               Allow_Value : Boolean := False) return Node_Id
             is
                Start : constant Landin.Source.Span := Point;
                Items : Slot_Vectors.Vector;
+               Value : Node_Id := No_Node;
+
+               function At_Closer return Boolean;
+               function Clearly_A_Statement return Boolean;
+
+               function At_Closer return Boolean
+                 is (Peek in Tok.End_Of_Input | Tok.Kw_End
+                                 | Tok.Kw_Elsif | Tok.Kw_Else);
+
+               --  A name beginning a declaration or assignment is not the
+               --  final expression [1080].  Every other expression first
+               --  is read as an expression.  Calls and control constructs
+               --  overlap Statement_Kind; when more source follows in the
+               --  block they remain statements, and at the closer they are
+               --  the block value.  This is the same ambiguity Parse_Body
+               --  already resolves for a direct call, made local to every
+               --  value-bearing block.
+               function Clearly_A_Statement return Boolean is
+               begin
+                  if Peek in Tok.Kw_Mut | Tok.Kw_Inc | Tok.Kw_Dec
+                             | Tok.Underscore | Tok.Kw_Return
+                             | Tok.Kw_Public
+                  then
+                     return True;
+                  end if;
+
+                  if Peek /= Tok.Identifier then
+                     return False;
+                  end if;
+
+                  return Word_At_Hand /= Word_None
+                    or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
+                    or else After_Selectors = Tok.Equal;
+               end Clearly_A_Statement;
             begin
                if Seed /= No_Node then
                   Items.Append (Seed);
                end if;
 
                loop
-                  exit when Peek in Tok.End_Of_Input | Tok.Kw_End
-                                    | Tok.Kw_Elsif | Tok.Kw_Else;
+                  exit when At_Closer;
 
                   declare
                      Before : constant Tok.Token_Index := Index;
                   begin
-                     if Peek not in Tok.Kernel_Kind
+                     if Allow_Value
+                       and then Pre.Begins_Expression (Peek)
+                       and then not Clearly_A_Statement
+                     then
+                        declare
+                           Candidate : constant Node_Id := Parse_Expression;
+                        begin
+                           if At_Closer
+                             and then Kind (Result, Candidate)
+                                      in If_Statement | Match_Statement
+                                         | Bare_Block
+                             and then not Control_Offers_Value (Candidate)
+                           then
+                              Items.Append (Candidate);
+                              exit;
+                           elsif At_Closer then
+                              Value := Candidate;
+                              exit;
+                           elsif Kind (Result, Candidate)
+                                   in If_Statement | Match_Statement
+                                      | Bare_Block | Call
+                           then
+                              Items.Append (Candidate);
+                           else
+                              --  No separator can turn an ordinary
+                              --  expression into a statement.  Leave the
+                              --  following token to the enclosing closer's
+                              --  diagnostic instead of swallowing it.
+                              Value := Candidate;
+                              exit;
+                           end if;
+                        end;
+                     elsif Peek not in Tok.Kernel_Kind
                        and then Ahead (1) not in Tok.Colon
                                   | Tok.Colon_Equal | Tok.Equal
                      then
@@ -2299,7 +2464,8 @@ package body Landin.Syntax.Parser is
                               Note    => "[1810]: a statement is a"
                                          & " binding, an assignment, an"
                                          & " `inc` or `dec`, a discard, a"
-                                         & " call, a `return` or an `if`",
+                                         & " call, a `return` or a"
+                                         & " control expression",
                               Gate    => False);
                         end;
                      end if;
@@ -2307,16 +2473,20 @@ package body Landin.Syntax.Parser is
                      if Index = Before then
                         raise Compiler_Defect
                           with "the parser did not advance over a"
-                               & " statement";
+                               & " block item";
                      end if;
                   end;
                end loop;
 
-               return Add
-                 (Of_Kind  => Block,
-                  At_Token => Start,
-                  Extent   => Join (Start, After_Previous),
-                  Children => To_List (Items));
+               declare
+                  Head : constant Slot_List (1 .. 1) := [Value];
+               begin
+                  return Add
+                    (Of_Kind  => Block,
+                     At_Token => Start,
+                     Extent   => Join (Start, After_Previous),
+                     Children => Head & To_List (Items));
+               end;
             end Parse_Block;
 
             function Parse_Statement (Context : Frame) return Node_Id is
@@ -2439,6 +2609,8 @@ package body Landin.Syntax.Parser is
                   when Tok.Identifier =>
                      if Named_Here = Match_Id then
                         return Parse_Match (Context);
+                     elsif Named_Here = Begin_Id then
+                        return Parse_Bare_Block (Context);
                      end if;
 
                      declare
@@ -2555,9 +2727,9 @@ package body Landin.Syntax.Parser is
                end case;
             end Parse_Statement;
 
-            --  if ::= "if" expression "then" statement*
-            --         ("elsif" expression "then" statement*)*
-            --         ("else" statement*)? "end" "if"             [1810]
+            --  if ::= "if" expression "then" block
+            --         ("elsif" expression "then" block)*
+            --         ("else" block)? "end" "if"                  [1810]
             function Parse_If (Context : Frame) return Node_Id is
                At_If     : constant Landin.Source.Span := Here;
                Arms      : Slot_Vectors.Vector;
@@ -2585,12 +2757,12 @@ package body Landin.Syntax.Parser is
                        (Wanted  => Tok.Kw_Then,
                         Message => "a branch's condition is followed by"
                                    & " `then`",
-                        Note    => "[1810]: if expression `then`"
-                                   & " statement*",
+                        Note    => "[1810]: if expression `then` block",
                         Related => At_If,
                         Because => "this branch");
                      pragma Unreferenced (Kept);
-                     Arm_Body := Parse_Block (Context);
+                     Arm_Body := Parse_Block
+                       (Context, Allow_Value => True);
                      Arms.Append
                        (Add (Of_Kind  => If_Arm,
                              At_Token => At_Arm,
@@ -2603,7 +2775,8 @@ package body Landin.Syntax.Parser is
 
                if Peek = Tok.Kw_Else then
                   Advance;
-                  Else_Node := Parse_Block (Context);
+                  Else_Node := Parse_Block
+                    (Context, Allow_Value => True);
                end if;
 
                Depth := Depth - 1;
@@ -2636,15 +2809,66 @@ package body Landin.Syntax.Parser is
                end;
             end Parse_If;
 
+            --  bare_block ::= "begin" block "end"              [1080]
+            --
+            --  `begin` remains contextual like `match`: it is an ordinary
+            --  identifier everywhere except the expression/statement first
+            --  position that gives this production its shape.  The Block
+            --  owns the lexical scope; this wrapper owns the expression.
+            function Parse_Bare_Block (Context : Frame) return Node_Id is
+               At_Begin : constant Landin.Source.Span := Here;
+               Runs     : Node_Id;
+            begin
+               if Too_Deep (At_Begin) then
+                  Advance;
+                  Resync_Statement;
+                  return Add
+                    (Error_Expression, At_Begin,
+                     Join (At_Begin, After_Previous));
+               end if;
+
+               Depth := Depth + 1;
+               Advance;
+               Runs := Parse_Block (Context, Allow_Value => True);
+               Depth := Depth - 1;
+
+               --  Do not steal the two-word closer of an enclosing control
+               --  construct when this block's own `end` is missing.
+               if Peek = Tok.Kw_End
+                 and then Ahead (1) /= Tok.Kw_If
+                 and then not
+                   (Ahead (1) = Tok.Identifier
+                    and then Named_Ahead (1) = Match_Id)
+               then
+                  Advance;
+               else
+                  Complain
+                    (Item    => Syn.Unclosed_Construct,
+                     Where   => After_Previous,
+                     Message => "this bare block is never closed",
+                     Note    => "[1080]: a bare block closes with `end`",
+                     Related => At_Begin,
+                     Because => "opened here",
+                     Gate    => False);
+               end if;
+
+               return Add
+                 (Of_Kind  => Bare_Block,
+                  At_Token => At_Begin,
+                  Extent   => Join (At_Begin, After_Previous),
+                  Children => [Runs]);
+            end Parse_Bare_Block;
+
             --  match ::= "match" expression match_arm+ "end" "match"
             --  match_arm ::= identifier ("(" match_binding
-            --                ("," match_binding)* ")")? ":" statement
+            --                ("," match_binding)* ")")?
+            --                ":" (statement | expression)
             --  match_binding ::= "inout"? identifier                D78
             --
-            --  One statement per arm is the first executable boundary and
-            --  is deliberately independent of indentation.  An `if` may be
-            --  that statement when an arm needs a statement block.  D78's
-            --  bindings are positional aliases for that case's payload.
+            --  One statement or expression per arm is the executable
+            --  boundary and is deliberately independent of indentation.  A
+            --  bare block carries a multi-statement value.  D78's bindings
+            --  are positional aliases for that case's payload.
             function Parse_Match (Context : Frame) return Node_Id is
                At_Match : constant Landin.Source.Span := Here;
                Subject  : Node_Id;
@@ -2673,7 +2897,7 @@ package body Landin.Syntax.Parser is
                         Where   => Here,
                         Message => "a match arm begins with a case name",
                         Note    => "D77: match expression case `:`"
-                                   & " statement `end match`");
+                                   & " arm `end match`");
                      Resync_Statement;
                      exit;
                   end if;
@@ -2682,7 +2906,7 @@ package body Landin.Syntax.Parser is
                      At_Case : constant Landin.Source.Span := Here;
                      Named   : constant Landin.Source.Names.Name_Id :=
                        Named_Here;
-                     Pattern, Runs, Statement : Node_Id;
+                     Pattern, Runs : Node_Id;
                      Bindings : Slot_Vectors.Vector;
                      Kept : Boolean;
                   begin
@@ -2750,12 +2974,51 @@ package body Landin.Syntax.Parser is
                         Because => "this case");
                      pragma Unreferenced (Kept);
 
-                     Statement := Parse_Statement (Context);
-                     Runs := Add
-                       (Of_Kind  => Block,
-                        At_Token => At_Case,
-                        Extent   => Join (At_Case, After_Previous),
-                        Children => [Statement]);
+                     declare
+                        Value      : Node_Id := No_Node;
+                        Statement  : Node_Id := No_Node;
+                        Body_Items : Slot_Vectors.Vector;
+                        Is_Statement : constant Boolean :=
+                          Peek in Tok.Kw_Mut | Tok.Kw_Inc | Tok.Kw_Dec
+                                  | Tok.Underscore | Tok.Kw_Return
+                                  | Tok.Kw_Public
+                          or else
+                            (Peek = Tok.Identifier
+                             and then Named_Here not in Match_Id | Begin_Id
+                             and then
+                               (Word_At_Hand /= Word_None
+                                or else Ahead (1)
+                                  in Tok.Colon | Tok.Colon_Equal
+                                or else After_Selectors = Tok.Equal));
+                     begin
+                        if Pre.Begins_Expression (Peek)
+                          and then not Is_Statement
+                        then
+                           Value := Parse_Expression;
+
+                           if Kind (Result, Value)
+                                in If_Statement | Match_Statement
+                                   | Bare_Block
+                             and then not Control_Offers_Value (Value)
+                           then
+                              Body_Items.Append (Value);
+                              Value := No_Node;
+                           end if;
+                        else
+                           Statement := Parse_Statement (Context);
+                           Body_Items.Append (Statement);
+                        end if;
+
+                        declare
+                           Head : constant Slot_List (1 .. 1) := [Value];
+                        begin
+                           Runs := Add
+                             (Of_Kind  => Block,
+                              At_Token => At_Case,
+                              Extent   => Join (At_Case, After_Previous),
+                              Children => Head & To_List (Body_Items));
+                        end;
+                     end;
                      Arms.Append
                        (Add (Of_Kind  => Match_Arm,
                              At_Token => At_Case,
@@ -2794,7 +3057,8 @@ package body Landin.Syntax.Parser is
                           At_Token => At_Match,
                           Children =>
                             [Add (Error_Expression, At_Match),
-                             Add (Block, At_Match)]));
+                             Add (Block, At_Match,
+                                  Children => [No_Node])]));
                end if;
 
                declare
@@ -2948,6 +3212,20 @@ package body Landin.Syntax.Parser is
                   Mark_Reported;
                   Advance;
                   return Add (Error_Expression, At_Item);
+               end if;
+
+               --  D124 moves the existing control nodes into the expression
+               --  band.  `if` is reserved; `match` and `begin` are
+               --  contextual identifiers and are intercepted before the
+               --  ordinary name/call path below.
+               if Peek = Tok.Kw_If then
+                  return Parse_If (Active_Frame);
+               elsif Peek = Tok.Identifier and then Named_Here = Match_Id
+               then
+                  return Parse_Match (Active_Frame);
+               elsif Peek = Tok.Identifier and then Named_Here = Begin_Id
+               then
+                  return Parse_Bare_Block (Active_Frame);
                end if;
 
                --  [0520]'s literal is one or more expressions in source

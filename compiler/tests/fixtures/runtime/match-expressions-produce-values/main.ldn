@@ -1,0 +1,43 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+choice: type = struct
+    prefix: i32
+    kind: variant
+        empty |
+        one: (value: i32) |
+        two: (left: i32, right: i32)
+    end kind
+end choice
+
+choose_pair: (item: choice) -> (result: pair) =
+    match item.kind
+        empty: pair(left: item.prefix, right: 0)
+        one(value): begin
+            adjusted: i32 = value + item.prefix
+            pair(left: adjusted, right: 0)
+        end
+        two(left, right): pair(left: left, right: right)
+    end match
+end choose_pair
+
+choose_scalar: (item: choice) -> (result: i32) =
+    match item.kind
+        empty: item.prefix
+        one(value): value + item.prefix
+        two(left, right): left + right
+    end match
+end choose_scalar
+
+public main: () -> (code: i32) =
+    item: choice = choice(prefix: 2, kind: two(left: 19, right: 23))
+    result := choose_pair(item)
+    code = result.left + result.right
+    if code == 42 and choose_scalar(item) == 42 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

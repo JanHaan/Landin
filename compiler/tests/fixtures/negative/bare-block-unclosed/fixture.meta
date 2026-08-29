@@ -1,0 +1,5 @@
+class: negative
+summary: a bare begin block and its function both report an omitted closer
+program: program.ldn
+codes: L0104, L0104
+constructs: 1080, 1800, 1820

@@ -1571,6 +1571,12 @@ and loops are expressions wherever one is wanted.
 Rust needs a semicolon to decide whether the last line
 is the value; here discarding is already explicit with
 '_ =', so a bare expression at the end is unambiguous.
+Every reachable edge that falls through supplies that last expression with one
+complete type and shape. An edge that leaves by return, fail, break or continue
+supplies no value and needs no placeholder. Only fallthrough edges join their
+definite-assignment facts; an edge that has already left cannot prove a read on
+a surviving sibling. Statements and the final expression run in source order,
+after an `if` condition or `match` subject and only in the selected arm.
 ```landin
     sign := if x > 0 then 1 else -1 end if
 
@@ -1583,7 +1589,8 @@ is the value; here discarding is already explicit with
 
 ### [1090] Bare block, for scoping
 
-Bare block, for scoping.
+Bare block, for scoping. Without a label it is simply `begin ... end`; a label
+names the block for the later control transfers that need one.
 ```landin
     scope: begin
         tmp := x * 2

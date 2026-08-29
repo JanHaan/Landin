@@ -1,0 +1,7 @@
+f: (condition: bool) -> (result: i32) =
+    if condition then
+        return
+    else
+        42
+    end if
+end f

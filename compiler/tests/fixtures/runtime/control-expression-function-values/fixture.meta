@@ -1,0 +1,6 @@
+class: runtime
+summary: function-valued controls retain recursive signatures across results, locals and arguments
+constructs: 0050, 0060, 0870, 0880, 0900, 0930, 1000, 1010, 1050, 1080, 1800, 1810, 1840, 1900, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64

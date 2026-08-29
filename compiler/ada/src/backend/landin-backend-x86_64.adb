@@ -573,7 +573,7 @@ package body Landin.Backend.X86_64 is
             end case;
 
             --  The base field first, then the case this operation
-            --  selected, then D117's path below whichever of the two it
+            --  selected, then D118's path below whichever of the two it
             --  reached.  The order is the order the source composed the
             --  selections in, and each addend is derived here.
             if Payload_Field > 0 then
@@ -702,7 +702,7 @@ package body Landin.Backend.X86_64 is
                  Landin.IR.Nth_Slot_Field_Shape
                    (Of_Unit, Item, Place.Slot, Field));
 
-         --  How far into one field the whole of D117's path reaches.  Each
+         --  How far into one field the whole of D118's path reaches.  Each
          --  ordinary step replays [0750]'s placement over the run the step
          --  before it reached; each selected-case step adds the payload
          --  offset the same tag-first rule gives.  The identities come from

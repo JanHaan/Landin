@@ -2034,6 +2034,30 @@ routine symbols.
 
 Function-valued struct fields and declared-error function types remain in this
 item.
+
+The thirty-ninth increment replaces the flow checker's Boolean exit summary
+with explicit fallthrough and return-compatible edge facts. Only continuing
+states participate in definite-assignment joins; guarded and unconditional
+returns retain their distinct consequences, including when nested inside an
+index or another expression whose later actions must not run.
+
+The fortieth increment enables expression-valued `if`, exhaustive `match`, and
+bare `begin` blocks. Every reachable fallthrough block supplies one scalar,
+function-value, fixed-array or currently enabled aggregate shape, while a
+returning edge needs no placeholder and still proves its named result.
+Arm-local and bare-block scopes, contextual inference, malformed closers and
+missing-value/type diagnostics are pinned through parser, resolver, checker
+and flow cases.
+
+The forty-first increment carries those values through caller-owned neutral
+join storage. Scalar and function-value joins use unnamed slots, with function
+signatures retained on code-address carriers; stored shapes retain their array
+extent or nominal field run in one consumer-owned destination across bindings,
+assignments, arguments, returns and explicit discards. The verifier sees
+ordinary shaped storage and control edges, the x86 backend alone derives frame
+offsets and copy extents, and runtime cases cover scalar, function-value,
+fixed-array, ordinary-struct, variant-match, early-exit and source-order paths.
+
 Further aggregate arguments and result contexts remain here too; R4.40 later
 supplies complete C ABI classification rather than owning this internal
 convention.
@@ -2057,9 +2081,10 @@ does not.
 Exit evidence: ABI tests cover ordinary and failing calls, aggregate values,
 inferred and explicitly typed indirect calls, function-valued parameters and
 results, static and mutable module addresses, no-capture anonymous routines,
-more arguments than the register-only stopgap accepted and every control-flow
-exit path. Malformed IR also proves that a runtime address, nested descriptor or
-static routine target cannot substitute for its neutral signature descriptor.
+expression-valued non-loop controls, more arguments than the register-only
+stopgap accepted and every control-flow exit path. Malformed IR also proves
+that a runtime address, nested descriptor or static routine target cannot
+substitute for its neutral signature descriptor.
 
 ### R2.40 — Implement fixed parameters and compile-time substitution
 Status: planned

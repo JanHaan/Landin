@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 104 with evidence, 94 with neither.
+#  198 constructs, 105 with evidence, 93 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -121,7 +121,7 @@
 1050   tour        accepted emitted executed refused  Branch
 1060   tour        accepted emitted                   Every construct has a one-line form
 1070   tour        -                                  A declaration is allowed in a condition
-1080   tour        -                                  A block has the value of its last expression
+1080   tour        accepted emitted executed refused  A block has the value of its last expression
 1090   tour        -                                  Bare block, for scoping
 1100   tour        refused-by-name                    defer runs at the end of its block, in reverse order
 1110   tour        refused-by-name                    undo is the same machinery under a condition

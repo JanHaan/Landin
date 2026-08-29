@@ -76,10 +76,12 @@ only the kernel the compiler implements today:
 - [merge sort](fixtures/runtime/merge-sort/main.ldn) divides recursively and
   merges through a second fixed array.
 
-The kernel does not have loops or aggregate parameters yet, so the examples
-deliberately use recursion and module-level arrays.  Their inputs use the
-static array literals the current R2.20 implementation already accepts.  On
-Linux x86-64, compile one from the repository root with:
+The kernel still does not have loops, so these examples deliberately use
+recursion and module-level arrays. R2.30 now also accepts internal aggregate
+parameters and results plus expression-valued `if`, exhaustive `match`, and
+bare `begin` blocks; their dedicated fixtures exercise caller-owned scalar,
+fixed-array and struct join storage. On Linux x86-64, compile one of the
+recursive examples from the repository root with:
 
 ```sh
 refine --target=linux-x86-64 --emit=exe \
