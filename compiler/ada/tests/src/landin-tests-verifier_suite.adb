@@ -277,6 +277,137 @@ package body Landin.Tests.Verifier_Suite is
       end;
    end Same_Layout_Nominals_Do_Not_Agree_In_Signatures;
 
+   procedure Nominal_Aggregate_Routine_Metadata_Is_Checked
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nominal_Aggregate_Routine_Metadata_Is_Checked
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+
+      procedure Finish_Routine
+        (Unit : in out IR.Unit; Routine : IR.Item_Id);
+
+      procedure Finish_Routine
+        (Unit : in out IR.Unit; Routine : IR.Item_Id)
+      is
+         Block : constant IR.Block_Id :=
+           IR.Add_Block
+             (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+      begin
+         IR.Enter (Unit, Routine, Block);
+         IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+         IR.Leave_Block (Unit, Routine);
+      end Finish_Routine;
+   begin
+      Ready (Work, Site);
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+      begin
+         --  Exact regression: the signature and result slot say Left while
+         --  the routine item says Right.  Equal field trees cannot reconcile
+         --  the two nominal identities.
+         declare
+            Unit : IR.Unit;
+            Left, Right : IR.Nominal_Type_Id;
+            Signature : IR.Signature_Id;
+            Routine : IR.Item_Id;
+            Hidden, Result : IR.Slot_Id;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Left := IR.Add_Nominal_Type (Unit, 3);
+            Right := IR.Add_Nominal_Type (Unit, 4);
+            Signature := IR.Add_Signature
+              (Unit, IR.No_Signature_Parts,
+               (Kind => Landin.Types.Aggregate,
+                Nominal => Left, others => <>));
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.Aggregate, Site, Right);
+            IR.Set_Signature (Unit, Routine, Signature);
+            Hidden := IR.Add_Parameter
+              (Unit, Routine, Landin.Types.Usize, 1, Site);
+            pragma Unreferenced (Hidden);
+            Result := IR.Add_Aggregate_Slot
+              (Unit, Routine, 2, Site, Left);
+            IR.Add_Slot_Field
+              (Unit, Routine, Result, Landin.Types.U32);
+            IR.Set_Result_Slot (Unit, Routine, Result);
+            Finish_Routine (Unit, Routine);
+
+            Expect
+              (Item, V.Check (Unit), V.Routine_Signature_Disagrees,
+               "a Right routine cannot carry a Left result signature"
+               & " and slot");
+         end;
+
+         declare
+            Unit : IR.Unit;
+            Nominal : IR.Nominal_Type_Id;
+            Signature : IR.Signature_Id;
+            Routine : IR.Item_Id;
+            Hidden, Result : IR.Slot_Id;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Nominal := IR.Add_Nominal_Type (Unit, 3);
+            Signature := IR.Add_Signature
+              (Unit, IR.No_Signature_Parts,
+               (Kind => Landin.Types.Aggregate,
+                Nominal => Nominal, others => <>));
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.Aggregate, Site, Nominal);
+            IR.Set_Signature (Unit, Routine, Signature);
+            Hidden := IR.Add_Parameter
+              (Unit, Routine, Landin.Types.Usize, 1, Site);
+            pragma Unreferenced (Hidden);
+            Result := IR.Add_Aggregate_Slot
+              (Unit, Routine, 2, Site, Nominal);
+            IR.Add_Slot_Field
+              (Unit, Routine, Result, Landin.Types.U32);
+            IR.Set_Result_Slot (Unit, Routine, Result);
+            Finish_Routine (Unit, Routine);
+
+            Expect
+              (Item, V.Check (Unit), V.Nothing_Wrong,
+               "one nominal aggregate result agrees across its routine,"
+               & " signature and slot");
+         end;
+
+         declare
+            Unit : IR.Unit;
+            Signature : IR.Signature_Id;
+            Routine : IR.Item_Id;
+            Hidden, Result : IR.Slot_Id;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Signature := IR.Add_Signature_With_Results
+              (Unit, IR.No_Signature_Parts,
+               [(Kind => Landin.Types.U32, others => <>),
+                (Kind => Landin.Types.Bool, others => <>)]);
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 1, Landin.Types.Aggregate, Site);
+            IR.Set_Signature (Unit, Routine, Signature);
+            Hidden := IR.Add_Parameter
+              (Unit, Routine, Landin.Types.Usize, 1, Site);
+            pragma Unreferenced (Hidden);
+            Result := IR.Add_Aggregate_Slot
+              (Unit, Routine, IR.No_Declaration, Site);
+            IR.Add_Slot_Field
+              (Unit, Routine, Result, Landin.Types.U32);
+            IR.Add_Slot_Field
+              (Unit, Routine, Result, Landin.Types.Bool);
+            IR.Set_Result_Slot (Unit, Routine, Result);
+            Finish_Routine (Unit, Routine);
+
+            Expect
+              (Item, V.Check (Unit), V.Nothing_Wrong,
+               "an anonymous multiple-result aggregate remains structural");
+         end;
+      end;
+   end Nominal_Aggregate_Routine_Metadata_Is_Checked;
+
    procedure Nominal_Root_Metadata_Is_Checked
      (Item : in out Landin.Testing.Context);
 
@@ -3360,6 +3491,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "same-layout nominals disagree",
          Same_Layout_Nominals_Do_Not_Agree_In_Signatures'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "nominal aggregate routine metadata is checked",
+         Nominal_Aggregate_Routine_Metadata_Is_Checked'Access);
       Landin.Testing.Register
         (Into, "verifier", "nominal root metadata is checked",
          Nominal_Root_Metadata_Is_Checked'Access);
