@@ -5698,3 +5698,32 @@ does not create an aggregate expression value.
 **Pinned by** the checker, lowering, malformed-IR verifier and backend public
 seams; `negative/nested-storage-argument-unassigned`; the generated token and
 IR records; and `runtime/nested-storage-arguments` on Linux x86-64.
+
+### D97 — `zeroed` may directly fill an aggregate argument temporary
+
+**The tour said** that `zeroed` takes its type from context [0540]. D94/D95
+provided shaped by-value parameter storage, but required the caller to name
+existing storage even when the all-zero value needed no source object.
+
+**Chosen:** `zeroed` may appear directly where a flat ordinary-struct or
+fixed-array parameter supplies its complete type. The caller allocates a fresh
+shaped temporary, clears its complete target-derived extent with the existing
+compact clear operation, and passes its `Storage_Address` through the same
+one-position internal convention. The callee still performs the ordinary
+by-value copy before its body runs.
+
+The temporary and clear are target-neutral in verified IR: an ordinary struct
+carries its field shapes and an array carries length and scalar element. Only
+the backend derives padding, widths and byte extent. `zeroed` does not become a
+general aggregate expression, and nested or variant-bearing parameter types
+remain outside this rule.
+
+**Why retain both temporary and callee copy:** special-casing an all-zero ABI
+argument would create a second convention and would make its behavior depend
+on whether the caller wrote equivalent named zero storage. Materializing the
+contextual value through existing storage keeps argument order, register/stack
+placement and by-value independence identical.
+
+**Pinned by** the checker, lowering, verifier and backend public seams; the
+generated token and IR records; and `runtime/nested-storage-arguments` on
+Linux x86-64.

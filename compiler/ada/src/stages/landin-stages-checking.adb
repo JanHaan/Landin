@@ -1649,6 +1649,30 @@ package body Landin.Stages.Checking is
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
                if Wants in Ty.Aggregate | Ty.Fixed_Array
+                 and then Syn.Kind (Of_Tree, Argument) = Syn.Zeroed_Literal
+               then
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Argument, Wants);
+                  if Wants = Ty.Aggregate then
+                     Landin.Checking.Note_Body
+                       (Types.all, Of_Tree, Argument,
+                        Landin.Checking.Body_Of
+                          (Types.all, Their_Tree.all,
+                           Syn.Declared_Type
+                             (Their_Tree.all, Parameter)));
+                  else
+                     Landin.Checking.Note_Array
+                       (Types.all, Of_Tree, Argument,
+                        Landin.Checking.Array_Length
+                          (Types.all, Their_Tree.all,
+                           Syn.Declared_Type
+                             (Their_Tree.all, Parameter)),
+                        Landin.Checking.Array_Element
+                          (Types.all, Their_Tree.all,
+                           Syn.Declared_Type
+                             (Their_Tree.all, Parameter)));
+                  end if;
+               elsif Wants in Ty.Aggregate | Ty.Fixed_Array
                  and then Syn.Kind (Of_Tree, Argument)
                             in Syn.Name_Reference | Syn.Member_Selection
                  and then
