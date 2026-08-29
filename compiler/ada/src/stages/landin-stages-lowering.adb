@@ -3697,14 +3697,64 @@ package body Landin.Stages.Lowering is
 
                   when Syn.Discard =>
                      --  [1930]: the value is thrown away, which is an
-                     --  unused value and needs no opcode to say so.
+                     --  unused scalar value and needs no opcode to say so.
+                     --  D112 still gives a returned aggregate temporary
+                     --  lifetime through the call before discarding it.
                      declare
-                        Ignored : constant IR.Value_Id :=
-                          Lower_Expression
-                            (Of_Tree, Syn.Value_Of (Of_Tree, Stmt),
-                             Scope);
+                        Value : constant Syn.Node_Id :=
+                          Syn.Value_Of (Of_Tree, Stmt);
                      begin
-                        pragma Assert (Ignored /= IR.No_Value);
+                        if Type_At (Of_Tree, Value)
+                             in Ty.Aggregate | Ty.Fixed_Array
+                        then
+                           pragma Assert
+                             (Syn.Kind (Of_Tree, Value) = Syn.Call);
+                           declare
+                              Temporary : IR.Slot_Id;
+                              Ignored : IR.Value_Id;
+                           begin
+                              if Type_At (Of_Tree, Value) = Ty.Aggregate then
+                                 declare
+                                    Wrote : constant Res.Declaration_Id :=
+                                      Landin.Checking.Body_Of
+                                        (Types.all, Of_Tree, Value);
+                                 begin
+                                    Temporary := IR.Add_Aggregate_Slot
+                                      (Unit.all, Filling,
+                                       Res.No_Declaration,
+                                       Site_Of (Of_Tree, Value));
+                                    for Field in
+                                      1 .. Landin.Checking.Layout_Field_Count
+                                             (Types.all, Wrote)
+                                    loop
+                                       Add_Stored_Field
+                                         (Wrote, Field, Slot => Temporary);
+                                    end loop;
+                                 end;
+                              else
+                                 Temporary := IR.Add_Array_Slot
+                                   (Unit.all, Filling,
+                                    Landin.Checking.Array_Element
+                                      (Types.all, Of_Tree, Value),
+                                    IR.Element_Total
+                                      (Landin.Checking.Array_Length
+                                         (Types.all, Of_Tree, Value)),
+                                    Res.No_Declaration,
+                                    Site_Of (Of_Tree, Value));
+                              end if;
+                              Ignored := Lower_Call
+                                (Of_Tree, Value, Scope,
+                                 Destination => Temporary);
+                              pragma Unreferenced (Ignored);
+                           end;
+                        else
+                           declare
+                              Ignored : constant IR.Value_Id :=
+                                Lower_Expression (Of_Tree, Value, Scope);
+                           begin
+                              pragma Assert (Ignored /= IR.No_Value);
+                           end;
+                        end if;
                      end;
 
                   when Syn.Call =>

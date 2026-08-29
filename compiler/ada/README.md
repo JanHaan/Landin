@@ -143,8 +143,9 @@ destination pointing to caller-owned shaped storage and copy from an independent
 named-result slot on leave. Matching calls can fill typed locals, direct or
 field-qualified assignments, and named returns without an aggregate SSA value;
 a local can infer that returned nominal body or array shape as well. Calls can
-also feed returned storage directly into a matching aggregate argument. Further
-aggregate arguments and result contexts remain absent;
+also feed returned storage directly into a matching aggregate argument, or run
+to completion in a shaped temporary before explicit discard. Further aggregate
+arguments and result contexts remain absent;
 R4.40 later completes C ABI classification.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
