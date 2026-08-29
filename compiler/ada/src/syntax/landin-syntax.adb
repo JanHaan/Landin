@@ -18,6 +18,7 @@ package body Landin.Syntax is
             when Return_Statement         => 1,
             when If_Statement             => 1,
             when Match_Statement          => 1,
+            when Bare_Block               => 1,
             when Call                     => 1,
             when Anonymous_Function       => 2,
             when Error_Expression         => 0,
@@ -51,7 +52,9 @@ package body Landin.Syntax is
                | Variant_Case | Match_Binding => 0,
             when Parameter | Named_Return => 1,
             when If_Arm | Match_Arm       => 2,
-            when Block                    => 0);
+            --  The fixed slot is [1080]'s optional final expression; the
+            --  trailing run remains [1810]'s source-ordered statements.
+            when Block                    => 1);
 
    function Element (Of_Tree : Tree; Id : Node_Id) return Node
      is (Of_Tree.Items (Positive (Id)));
@@ -155,10 +158,11 @@ package body Landin.Syntax is
      is (Slot (Of_Tree, Id, 1));
 
    --  A function's return is slot 1 and an arm's condition is slot 1, so
-   --  both put what they run in slot 2.  That is a coincidence the layout
-   --  table above is allowed to have and callers never see.
+   --  both put what they run in slot 2.  A bare block has only the body in
+   --  slot 1.  These positions are a private layout detail.
    function Body_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
-     is (Slot (Of_Tree, Id, 2));
+     is (Slot (Of_Tree, Id,
+          (if Kind (Of_Tree, Id) = Bare_Block then 1 else 2)));
 
    function Return_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
@@ -207,6 +211,9 @@ package body Landin.Syntax is
    function Nth_Statement
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      is (Nth_Item (Of_Tree, Id, Index));
+
+   function Block_Value (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
 
    function Callee_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));

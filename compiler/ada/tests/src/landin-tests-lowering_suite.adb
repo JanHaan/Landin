@@ -39,6 +39,7 @@ package body Landin.Tests.Lowering_Suite is
    use type IR.Field_Image_Form;
 
    use type IR.Block_Id;
+   use type IR.Declaration_Id;
    use type IR.Element_Total;
    use type IR.Item_Id;
    use type IR.Item_Kind;
@@ -46,6 +47,7 @@ package body Landin.Tests.Lowering_Suite is
    use type Landin.Platform.Write_Status;
    use type Landin.Testing.Fixtures.Fixture_Class;
    use type IR.Opcode;
+   use type IR.Signature_Id;
    use type IR.Slot_Id;
    use type IR.Part_Position;
    use type IR.Value_Id;
@@ -56,7 +58,7 @@ package body Landin.Tests.Lowering_Suite is
    use type Landin.Types.Type_Kind;
    use type IR.Path_Step_Array;
 
-   --  D117: the path one depth-one child identity spells, so a case can
+   --  D118: the path one depth-one child identity spells, so a case can
    --  ask for it without writing the run out at every comparison.
    function Below (Child : Natural) return IR.Path_Step_Array
      is (if Child = 0 then IR.No_Path_Steps
@@ -4817,6 +4819,187 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end An_Internal_Empty_Array_Has_Identity_Measurements;
 
+   --  D125 makes the enclosing operation own the storage through which a
+   --  control value crosses its join.  Scalar and function storage stay in
+   --  scalar IR slots, the latter retaining its signature; arrays and
+   --  aggregates retain their complete target-neutral shape.
+   procedure Control_Values_Use_Caller_Owned_Join_Slots
+     (Item : in out Landin.Testing.Context);
+
+   procedure Control_Values_Use_Caller_Owned_Join_Slots
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "pair: type = struct" & LF
+         & "    left: i32" & LF
+         & "    right: i32" & LF
+         & "end pair" & LF
+         & "choice: type = struct" & LF
+         & "    kind: variant" & LF
+         & "        left |" & LF
+         & "        right" & LF
+         & "    end kind" & LF
+         & "end choice" & LF
+         & "take_pair: (value: pair) -> (result: i32) =" & LF
+         & "    result = value.left + value.right" & LF
+         & "end take_pair" & LF
+         & "take_row: (value: [2]i32) -> (result: i32) =" & LF
+         & "    result = value[0] + value[1]" & LF
+         & "end take_row" & LF
+         & "take_int: (value: i32) -> (result: i32) =" & LF
+         & "    result = value" & LF
+         & "end take_int" & LF
+         & "unary: type = (value: i32) -> (result: i32)" & LF
+         & "identity: (value: i32) -> (result: i32) =" & LF
+         & "    result = value" & LF
+         & "end identity" & LF
+         & "take_function: (candidate: unary) -> (result: i32) =" & LF
+         & "    result = candidate(42)" & LF
+         & "end take_function" & LF
+         & "use: (flag: bool, selected: choice) -> (result: i32) =" & LF
+         & "    result = take_pair(if flag then" & LF
+         & "        pair(left: 19, right: 23)" & LF
+         & "    else" & LF
+         & "        pair(left: 21, right: 21)" & LF
+         & "    end if)" & LF
+         & "    + take_row(begin" & LF
+         & "        if flag then [19, 23] else [21, 21] end if" & LF
+         & "    end)" & LF
+         & "    + take_int(match selected.kind" & LF
+         & "        left: if flag then 19 else 21 end if" & LF
+         & "        right: 23" & LF
+         & "    end match)" & LF
+         & "    + take_function(" & LF
+         & "        if flag then take_int else identity end if)" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "scalar, function and stored control values are lowered");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Use_Item : constant IR.Item_Id := 6;
+         Scalar_Joins    : Natural := 0;
+         Function_Joins  : Natural := 0;
+         Aggregate_Joins : Natural := 0;
+         Array_Joins     : Natural := 0;
+         Aggregate_Shape : Boolean := False;
+         Array_Shape     : Boolean := False;
+      begin
+         for Which in 1 .. IR.Slot_Count (Unit, Use_Item) loop
+            declare
+               Slot : constant IR.Slot_Id := IR.Slot_Id (Which);
+            begin
+               if IR.Declares (Unit, Use_Item, Slot) = IR.No_Declaration then
+                  if IR.Is_Aggregate (Unit, Use_Item, Slot) then
+                     Aggregate_Joins := Aggregate_Joins + 1;
+                     Aggregate_Shape :=
+                       IR.Slot_Field_Count (Unit, Use_Item, Slot) = 2;
+                  elsif IR.Is_Array (Unit, Use_Item, Slot) then
+                     Array_Joins := Array_Joins + 1;
+                     Array_Shape :=
+                       IR.Slot_Array_Element (Unit, Use_Item, Slot)
+                           = Landin.Types.I32
+                       and then IR.Slot_Array_Length
+                         (Unit, Use_Item, Slot) = 2;
+                  elsif IR.Type_Of (Unit, Use_Item, Slot)
+                          = Landin.Types.Usize
+                    and then IR.Signature_Of (Unit, Use_Item, Slot)
+                               /= IR.No_Signature
+                  then
+                     Function_Joins := Function_Joins + 1;
+                  elsif IR.Type_Of (Unit, Use_Item, Slot)
+                          = Landin.Types.I32
+                  then
+                     Scalar_Joins := Scalar_Joins + 1;
+                  end if;
+               end if;
+            end;
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            Scalar_Joins >= 1
+              and then Function_Joins = 1
+              and then Aggregate_Joins = 1
+              and then Array_Joins = 1,
+            "every value shape gets unnamed caller-owned join storage");
+         Landin.Testing.Check
+           (Item, Aggregate_Shape and then Array_Shape,
+            "stored joins retain aggregate fields and fixed-array extent");
+         Check_Terminators (Item, Unit, "control expression values");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts caller-owned control joins");
+      end;
+   end Control_Values_Use_Caller_Owned_Join_Slots;
+
+   --  A final call overlaps the parser's statement and value shapes.  Once
+   --  checking learns that it returns none, every control form must preserve
+   --  the statement path instead of asking that call for a joined value.
+   procedure Statement_Controls_Keep_Final_None_Calls
+     (Item : in out Landin.Testing.Context);
+
+   procedure Statement_Controls_Keep_Final_None_Calls
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "choice: type = struct" & LF
+         & "    kind: variant" & LF
+         & "        left |" & LF
+         & "        right" & LF
+         & "    end kind" & LF
+         & "end choice" & LF
+         & "step: () -> none =" & LF
+         & "end step" & LF
+         & "use: (flag: bool, selected: choice) -> none =" & LF
+         & "    if flag then step() else step() end if" & LF
+         & "    match selected.kind" & LF
+         & "        left: step()" & LF
+         & "        right: step()" & LF
+         & "    end match" & LF
+         & "    begin" & LF
+         & "        step()" & LF
+         & "    end" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "final none calls remain statements in every control form");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Calls : Natural := 0;
+      begin
+         for Which in 1 .. IR.Value_Count (Unit, 2) loop
+            if IR.Op_Of (Unit, 2, IR.Value_Id (Which)) = IR.Call then
+               Calls := Calls + 1;
+            end if;
+         end loop;
+         Landin.Testing.Check_Equal
+           (Item, Calls, 5, "every selected final call is lowered normally");
+         Check_Terminators (Item, Unit, "statement control final calls");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts statement controls with final none calls");
+      end;
+   end Statement_Controls_Keep_Final_None_Calls;
+
    ------------------------------------------------------------------
    --  The recorded artefact
    ------------------------------------------------------------------
@@ -5351,6 +5534,12 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "an internal empty array has identity measurements",
          An_Internal_Empty_Array_Has_Identity_Measurements'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "control values use caller-owned join slots",
+         Control_Values_Use_Caller_Owned_Join_Slots'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "statement controls keep final none calls",
+         Statement_Controls_Keep_Final_None_Calls'Access);
       Landin.Testing.Register
         (Into, "lowering", "a struct literal becomes ordered field writes",
          A_Struct_Literal_Becomes_Ordered_Field_Writes'Access);

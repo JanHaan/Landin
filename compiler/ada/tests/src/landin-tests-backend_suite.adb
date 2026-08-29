@@ -257,10 +257,10 @@ package body Landin.Tests.Backend_Suite is
            (Item, Contains (Text, HT & "cmpb $0, "),
             "a bool is tested as the one byte it occupies");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "jne .L1_3"),
+           (Item, Contains (Text, HT & "jne .L1_2"),
             "the taken edge is the branch's target");
          Landin.Testing.Check
-           (Item, Contains (Text, HT & "jmp .L1_4"),
+           (Item, Contains (Text, HT & "jmp .L1_3"),
             "the other edge is spelt and not fallen through to");
          Landin.Testing.Check
            (Item, Contains (Text, ".L1_5:"),
@@ -4521,6 +4521,67 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Unsigned_And_Bool_Comparisons_Use_Their_Conditions;
 
+   --  D125 leaves aggregate join storage in neutral IR.  The x86 backend
+   --  lays that one cell out once, makes both arms fill it, and passes its
+   --  address only after both edges have reached the join.
+   procedure An_Aggregate_Control_Join_Passes_One_Caller_Cell
+     (Item : in out Landin.Testing.Context);
+
+   procedure An_Aggregate_Control_Join_Passes_One_Caller_Cell
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "pair: type = struct" & LF
+         & "    left: i32" & LF
+         & "    right: i32" & LF
+         & "end pair" & LF
+         & "take: (value: pair) -> (result: i32) =" & LF
+         & "    result = value.left + value.right" & LF
+         & "end take" & LF
+         & "use: (flag: bool) -> (result: i32) =" & LF
+         & "    result = take(if flag then" & LF
+         & "        pair(left: 19, right: 23)" & LF
+         & "    else" & LF
+         & "        pair(left: 21, right: 21)" & LF
+         & "    end if)" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      declare
+         Whole : constant String := Emitted (Work);
+         Use_At : constant Positive :=
+           Positive (Index (Whole, "use:" & LF));
+         Text : constant String := Whole (Use_At .. Whole'Last);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Text, HT & "movl %eax, -16(%rbp)" & LF) = 2
+              and then Occurrences
+                (Text, HT & "movl %eax, -12(%rbp)" & LF) = 2,
+            "both arms fill the same two-field caller cell");
+         Landin.Testing.Check
+           (Item,
+            Occurrences (Text, HT & "jmp .L2_4" & LF) = 2
+              and then Contains
+                (Text,
+                 ".L2_4:" & LF
+                 & HT & "leaq -16(%rbp), %rax" & LF),
+            "both control edges join before the caller forms its address");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, HT & "call take" & LF)
+              and then Contains (Whole, HT & "movabsq $8, %rcx" & LF)
+              and then Occurrences (Whole, HT & "rep movsb" & LF) = 1,
+            "the callee copies the joined cell at target-derived extent");
+      end;
+   end An_Aggregate_Control_Join_Passes_One_Caller_Cell;
+
    ------------------------------------------------------------------
    --  The frame
    ------------------------------------------------------------------
@@ -4637,6 +4698,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a branch names both of its edges",
          A_Branch_Names_Both_Of_Its_Edges'Access);
+      Landin.Testing.Register
+        (Into, "backend", "an aggregate control join passes one caller cell",
+         An_Aggregate_Control_Join_Passes_One_Caller_Cell'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned add uses carry to trap",
          Unsigned_Add_Uses_Carry_To_Trap'Access);

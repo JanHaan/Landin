@@ -25,7 +25,7 @@ package body Landin.Tests.Verifier_Suite is
 
    package IR renames Landin.IR;
 
-   --  D117: the path one depth-one child identity spells, so a malformed
+   --  D118: the path one depth-one child identity spells, so a malformed
    --  case can name a step without writing the run out each time.
    function Below (Child : Natural) return IR.Path_Step_Array
      is (if Child = 0 then IR.No_Path_Steps
@@ -704,7 +704,7 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
 
-         --  D117 lets a path have more than one step, so it also has to
+         --  D118 lets a path have more than one step, so it also has to
          --  refuse one that keeps going below a leaf that has no run.
          when Path_Step_Below_A_Scalar_Leaf =>
             N := IR.Emit_Load_Field

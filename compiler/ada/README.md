@@ -76,8 +76,8 @@ replaced.
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
 | `Landin.Stages.Resolution` | the order the trees are walked in | own the resolution table, or a code |
 | `Landin.Stages.Checking` | the three type passes and checking-stage diagnostic order | own a table, a code, or a width |
-| `Landin.Stages.Checking.Flow` | definite assignment and control-flow fact merging | decide a type or lower a value |
-| `Landin.Stages.Lowering` | the walk that builds and verifies the IR, and refusing to run on a refused program | own the Unit, work out a scope, or raise a diagnostic |
+| `Landin.Stages.Checking.Flow` | definite assignment and explicit fallthrough/return-compatible edge facts | decide a type, believe a condition, or lower a value |
+| `Landin.Stages.Lowering` | the walk that builds and verifies the IR, including caller-owned scalar and shaped control joins, and refusing to run on a refused program | own the Unit, work out a scope, derive target layout, or raise a diagnostic |
 | `Landin.Driver` | argument and `--emit` classification, pipeline orchestration, output/toolchain selection and the result | implement a language rule |
 | `Refine` | printing and the exit status | contain a decision |
 
@@ -117,7 +117,8 @@ what owns the pipeline.
 
 `Landin.Backend` lays out a routine's frame and
 `Landin.Backend.X86_64` emits assembly for every operation in the enabled
-kernel: scalar constants and arithmetic, control flow and calls; module and
+kernel: scalar constants and arithmetic, expression-valued non-loop control
+flow and calls; module and
 local fixed-array indexing, copying, clearing and filling; and depth-one
 ordinary structs with scalar or fixed-array fields, whole copies and clears,
 compact folded module images, unfolded variant fields with contextual
@@ -145,19 +146,27 @@ depth-one nested struct shapes. Matching calls can fill typed locals, direct or
 field-qualified assignments, and named returns without an aggregate SSA value;
 a local can infer that returned nominal body or array shape as well. Calls can
 also feed returned storage directly into a matching aggregate argument, or run
-to completion in a shaped temporary before explicit discard. Further aggregate
-arguments and result contexts remain absent;
-R4.40 later completes C ABI classification. Inferred and explicitly typed local or module function values are represented
-by target code addresses and called through verified `Indirect_Call` IR. A
-first-class recursive neutral descriptor, not a concrete callee item, carries
-each complete signature through checking, routine and static-datum items,
-address values, slots and calls. Mutable replacement requires an agreeing
-signature; function-valued parameters and named results occupy one ordinary
-code-address carrier and share aggregate-result and stack-argument conventions.
-Static module chains resolve to one declared or anonymous routine address and
-have no implicit zero image. A no-capture anonymous function sees the module
-and its own signature/body declarations, lowers to a deterministic routine item
-and receives a backend-local symbol. Function-valued struct fields remain
+to completion in a shaped temporary before explicit discard. An `if`,
+exhaustive `match`, or bare `begin` block can produce a scalar, fixed-array or
+currently enabled aggregate value, or a function value with its recursive
+signature. Explicit fallthrough and return facts make only continuing arms
+fill one consumer-owned neutral join slot; returning arms use the ordinary
+named-result exit, and no condition is believed. A typed binding, assignment
+or return supplies storage directly, while an argument or discard owns a fresh
+shaped temporary. Beyond those control-expression consumers, further aggregate
+arguments and result contexts remain absent; R4.40 later completes C ABI
+classification. Inferred and explicitly typed local or module function values
+are represented by target code addresses and called through verified
+`Indirect_Call` IR. A first-class recursive neutral descriptor, not a concrete
+callee item, carries each complete signature through checking, routine and
+static-datum items, address values, slots and calls. Mutable replacement
+requires an agreeing signature; function-valued parameters and named results
+occupy one ordinary code-address carrier and share aggregate-result and
+stack-argument conventions. Static module chains resolve to one declared or
+anonymous routine address and have no implicit zero image. A no-capture
+anonymous function sees the module and its own signature/body declarations,
+lowers to a deterministic routine item and receives a backend-local symbol.
+Function-valued struct fields remain
 absent. Completion into
 an aggregate destination contributes an ordinary whole-place flow fact, so
 branch joins and guarded-return edges require no call-specific exception. Each
@@ -176,10 +185,11 @@ on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
 
 The `Runtime` fixture class compiles programs, links them, runs them on the
 target and checks their statuses. The Linux gate therefore proves the scalar
-arithmetic and control-flow kernel, six-argument and recursive calls, folded
-module values, fixed arrays, ordinary structs and their target-derived module
-and frame layouts on the hardware the backend emits for. A host without the
-target toolchain fails rather than silently skipping that evidence. The active
+arithmetic and non-loop expression-valued control-flow kernel, early returns
+and source order, six-argument and recursive calls, folded module values, fixed
+arrays, ordinary structs and their target-derived module and frame layouts on
+the hardware the backend emits for. A host without the target toolchain fails
+rather than silently skipping that evidence. The active
 R2 items own extensions to the semantic and representation core; later target
 and ABI work remains with the roadmap items that name it.
 

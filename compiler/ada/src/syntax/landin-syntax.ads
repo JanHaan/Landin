@@ -99,8 +99,17 @@ package Landin.Syntax is
       Decrement,
       Discard,
       Return_Statement,
+      --  [1050], D124: the same nodes stand in statement and expression
+      --  positions.  A control expression carries its answer in the final
+      --  expression of each child Block.  Checking decides whether the
+      --  surrounding position consumes it, since final calls and nested
+      --  controls overlap statement syntax.
       If_Statement,
       Match_Statement,
+      --  [1080]'s unlabelled `begin` block.  Its one child is a Block, so
+      --  the lexical scope and the value-bearing fallthrough edge remain
+      --  distinct nodes.
+      Bare_Block,
       --  A call is a statement as well as an expression [1810].
       Call,
       --  Expressions [1820].  [1010]'s anonymous function carries the same
@@ -219,7 +228,7 @@ package Landin.Syntax is
 
    subtype Statement_Kind is Node_Kind range Binding .. Call;
 
-   subtype Expression_Kind is Node_Kind range Call .. Logical_Or;
+   subtype Expression_Kind is Node_Kind range If_Statement .. Logical_Or;
 
    subtype Type_Reference_Kind is Node_Kind
      range Error_Type .. Function_Type;
@@ -455,7 +464,8 @@ package Landin.Syntax is
                  and then Kind (Of_Tree, Id)
                           in If_Arm | Return_Statement;
 
-   --  What a function or a branch runs.  A Block for a statement body, and
+   --  What a function, branch, match arm or bare block runs.  A Block for a
+   --  statement body, and
    --  the expression itself for [1800]'s expression form -- two different
    --  things that this deliberately does not flatten into one.  An arm's is
    --  always a Block.
@@ -463,7 +473,7 @@ package Landin.Syntax is
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id)
                            in Function_Declaration | Anonymous_Function
-                              | If_Arm | Match_Arm,
+                              | If_Arm | Match_Arm | Bare_Block,
           Post => Contains (Of_Tree, Body_Of'Result);
 
    --  `returns` [1800].  No_Node is `-> none`, and a declared or anonymous
@@ -554,6 +564,13 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Block
                   and then Index <= Statement_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Statement'Result);
+
+   --  [1080]: the value-producing expression on a Block's fallthrough
+   --  edge.  No_Node means the block has statements only; it is valid for
+   --  an expression arm only when every reachable edge returns first.
+   function Block_Value (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Block;
 
    --  `call ::= identifier "(" arguments? ")"` [1820].  The callee is a
    --  Name_Reference and not a field, so every use of a name is one kind of

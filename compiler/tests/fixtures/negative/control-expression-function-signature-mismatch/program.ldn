@@ -1,0 +1,8 @@
+unary: type = (value: i32) -> (result: i32)
+
+good: (value: i32) -> (result: i32) = value end good
+wrong: (value: bool) -> (result: i32) = if value then 1 else 0 end if end wrong
+
+choose: (left: bool) -> (result: unary) =
+    if left then good else wrong end if
+end choose

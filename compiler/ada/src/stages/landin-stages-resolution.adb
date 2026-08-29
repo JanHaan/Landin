@@ -64,6 +64,11 @@ package body Landin.Stages.Resolution is
       procedure Resolve_Anonymous
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
 
+      procedure Walk_Scoped_Block
+        (Of_Tree : Syn.Tree;
+         Block   : Syn.Node_Id;
+         Parent  : Landin.Resolution.Scope_Id);
+
       --  [1850]: one scope gives one name to one thing.  The first
       --  declaration keeps the name, so every reference binds to one thing
       --  and one duplicate is one report rather than a second entry every
@@ -183,6 +188,74 @@ package body Landin.Stages.Resolution is
             return;
          end if;
 
+         --  D124: control forms can now occur anywhere an expression can.
+         --  Their conditions and subjects use the surrounding scope, while
+         --  every answer block owns the same sibling scope it did when the
+         --  form could only be a statement.  Keep that rule here, in the
+         --  general expression walk, rather than at one statement caller.
+         case Syn.Kind (Of_Tree, Node) is
+            when Syn.If_Statement =>
+               for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
+                  declare
+                     This : constant Syn.Node_Id :=
+                       Syn.Nth_Arm (Of_Tree, Node, Arm);
+                  begin
+                     Resolve
+                       (Of_Tree, Syn.Condition_Of (Of_Tree, This), Inside);
+                     Walk_Scoped_Block
+                       (Of_Tree, Syn.Body_Of (Of_Tree, This), Inside);
+                  end;
+               end loop;
+
+               if Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node then
+                  Walk_Scoped_Block
+                    (Of_Tree, Syn.Else_Body (Of_Tree, Node), Inside);
+               end if;
+               return;
+
+            when Syn.Match_Statement =>
+               Resolve
+                 (Of_Tree, Syn.Match_Subject (Of_Tree, Node), Inside);
+
+               for Arm in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+                  declare
+                     This : constant Syn.Node_Id :=
+                       Syn.Nth_Match_Arm (Of_Tree, Node, Arm);
+                     Runs : constant Syn.Node_Id :=
+                       Syn.Body_Of (Of_Tree, This);
+                     Arm_Scope : constant Landin.Resolution.Scope_Id :=
+                       Landin.Resolution.Open_Scope
+                         (Meanings.all, Landin.Resolution.Block, Inside);
+                  begin
+                     Resolve
+                       (Of_Tree, Syn.Match_Pattern (Of_Tree, This), Inside);
+                     Landin.Resolution.Record_Scope
+                       (Meanings.all, Of_Tree, Runs, Arm_Scope);
+
+                     for Binding in
+                       1 .. Syn.Match_Binding_Count (Of_Tree, This)
+                     loop
+                        Declare_One
+                          (Of_Tree,
+                           Syn.Nth_Match_Binding
+                             (Of_Tree, This, Binding),
+                           Arm_Scope);
+                     end loop;
+
+                     Walk_Block (Of_Tree, Runs, Arm_Scope);
+                  end;
+               end loop;
+               return;
+
+            when Syn.Bare_Block =>
+               Walk_Scoped_Block
+                 (Of_Tree, Syn.Body_Of (Of_Tree, Node), Inside);
+               return;
+
+            when others =>
+               null;
+         end case;
+
          --  One of the eleven the kernel predeclares, which the parser
          --  already recognised: there is no declaration to find.
          if Syn.Kind (Of_Tree, Node) = Syn.Type_Name then
@@ -254,96 +327,31 @@ package body Landin.Stages.Resolution is
                               Inside);
                      Declare_One (Of_Tree, Item, Inside);
 
-                  when Syn.If_Statement =>
-                     --  Each arm and the else are their own scope [1840],
-                     --  and siblings: a name declared in one arm is not
-                     --  visible in another.
-                     for Arm in 1 .. Syn.Arm_Count (Of_Tree, Item) loop
-                        declare
-                           This : constant Syn.Node_Id :=
-                             Syn.Nth_Arm (Of_Tree, Item, Arm);
-                        begin
-                           Resolve
-                             (Of_Tree,
-                              Syn.Condition_Of (Of_Tree, This), Inside);
-
-                           declare
-                              Runs : constant Syn.Node_Id :=
-                                Syn.Body_Of (Of_Tree, This);
-                              Arm_Scope : constant
-                                Landin.Resolution.Scope_Id :=
-                                  Landin.Resolution.Open_Scope
-                                    (Meanings.all,
-                                     Landin.Resolution.Block, Inside);
-                           begin
-                              Landin.Resolution.Record_Scope
-                                (Meanings.all, Of_Tree, Runs, Arm_Scope);
-                              Walk_Block (Of_Tree, Runs, Arm_Scope);
-                           end;
-                        end;
-                     end loop;
-
-                     if Syn.Else_Body (Of_Tree, Item) /= Syn.No_Node then
-                        declare
-                           Runs : constant Syn.Node_Id :=
-                             Syn.Else_Body (Of_Tree, Item);
-                           Otherwise : constant
-                             Landin.Resolution.Scope_Id :=
-                               Landin.Resolution.Open_Scope
-                                 (Meanings.all,
-                                  Landin.Resolution.Block, Inside);
-                        begin
-                           Landin.Resolution.Record_Scope
-                             (Meanings.all, Of_Tree, Runs, Otherwise);
-                           Walk_Block (Of_Tree, Runs, Otherwise);
-                        end;
-                     end if;
-
-                  when Syn.Match_Statement =>
-                     --  D77: the subject is read in the surrounding scope.
-                     --  Each arm is a sibling scope.  D78 declares its
-                     --  payload aliases there before walking the body, so
-                     --  neither aliases nor locals cross into another arm.
-                     Resolve
-                       (Of_Tree, Syn.Match_Subject (Of_Tree, Item), Inside);
-
-                     for Arm in 1 .. Syn.Match_Arm_Count (Of_Tree, Item)
-                     loop
-                        declare
-                           This : constant Syn.Node_Id :=
-                             Syn.Nth_Match_Arm (Of_Tree, Item, Arm);
-                           Runs : constant Syn.Node_Id :=
-                             Syn.Body_Of (Of_Tree, This);
-                           Arm_Scope : constant
-                             Landin.Resolution.Scope_Id :=
-                               Landin.Resolution.Open_Scope
-                                 (Meanings.all,
-                                  Landin.Resolution.Block, Inside);
-                        begin
-                           Resolve
-                             (Of_Tree,
-                              Syn.Match_Pattern (Of_Tree, This), Inside);
-                           Landin.Resolution.Record_Scope
-                             (Meanings.all, Of_Tree, Runs, Arm_Scope);
-                           for Binding in
-                             1 .. Syn.Match_Binding_Count (Of_Tree, This)
-                           loop
-                              Declare_One
-                                (Of_Tree,
-                                 Syn.Nth_Match_Binding
-                                   (Of_Tree, This, Binding),
-                                 Arm_Scope);
-                           end loop;
-                           Walk_Block (Of_Tree, Runs, Arm_Scope);
-                        end;
-                     end loop;
-
                   when others =>
                      Resolve (Of_Tree, Item, Inside);
                end case;
             end;
          end loop;
+
+         --  A value is evaluated after every preceding statement, so all
+         --  declarations in the block are visible to it and none escape
+         --  with it into a sibling arm.
+         Resolve (Of_Tree, Syn.Block_Value (Of_Tree, Block), Inside);
       end Walk_Block;
+
+      procedure Walk_Scoped_Block
+        (Of_Tree : Syn.Tree;
+         Block   : Syn.Node_Id;
+         Parent  : Landin.Resolution.Scope_Id)
+      is
+         Scope : constant Landin.Resolution.Scope_Id :=
+           Landin.Resolution.Open_Scope
+             (Meanings.all, Landin.Resolution.Block, Parent);
+      begin
+         Landin.Resolution.Record_Scope
+           (Meanings.all, Of_Tree, Block, Scope);
+         Walk_Block (Of_Tree, Block, Scope);
+      end Walk_Scoped_Block;
 
    begin
       Landin.Resolution.Prepare (Meanings.all, Trees.all);

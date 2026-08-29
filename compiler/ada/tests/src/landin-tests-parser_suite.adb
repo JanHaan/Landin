@@ -545,6 +545,99 @@ package body Landin.Tests.Parser_Suite is
    end Match_Statements_Are_Parsed;
 
    ------------------------------------------------------------------
+   --  D124: control forms in expression positions
+   ------------------------------------------------------------------
+
+   procedure Control_Expressions_Are_Parsed
+     (Item : in out Landin.Testing.Context);
+
+   procedure Control_Expressions_Are_Parsed
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("control-values.ldn",
+           "f: (condition: bool, subject: u8) -> (result: i32) =" & ASCII.LF
+           & "  if condition then" & ASCII.LF
+           & "    begin" & ASCII.LF
+           & "      local: i32 = 19" & ASCII.LF
+           & "      local + 23" & ASCII.LF
+           & "    end" & ASCII.LF
+           & "  else" & ASCII.LF
+           & "    match subject" & ASCII.LF
+           & "      left: 42" & ASCII.LF
+           & "      right: 21 + 21" & ASCII.LF
+           & "    end match" & ASCII.LF
+           & "  end if" & ASCII.LF
+           & "end f" & ASCII.LF);
+      Controls : Natural := 0;
+      Values   : Natural := 0;
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "if, match and bare begin values parse cleanly");
+
+         for Node in Landin.Syntax.Node_Id'(1)
+                     .. Landin.Syntax.Last_Node (Parsed)
+         loop
+            if Landin.Syntax.Kind (Parsed, Node)
+                 in Landin.Syntax.If_Statement
+                    | Landin.Syntax.Match_Statement
+                    | Landin.Syntax.Bare_Block
+            then
+               Controls := Controls + 1;
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Syntax.Kind (Parsed, Node)
+                    in Landin.Syntax.Expression_Kind,
+                  "each control form is in the expression band");
+            elsif Landin.Syntax.Kind (Parsed, Node) = Landin.Syntax.Block
+              and then Landin.Syntax.Block_Value (Parsed, Node)
+                         /= Landin.Syntax.No_Node
+            then
+               Values := Values + 1;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Controls, 3, "one if, match and bare block were built");
+      Landin.Testing.Check_Equal
+        (Item, Values, 5,
+         "both if arms, both match arms and the bare block keep values");
+
+      declare
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse
+           ("f: () -> (result: i32) =" & ASCII.LF
+            & "  begin" & ASCII.LF
+            & "    42" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Nodes > 0,
+            "an unclosed bare block still yields a sound tree");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Codes), "L0104, L0104",
+            "the bare block and function each retain their missing closer");
+      end;
+   end Control_Expressions_Are_Parsed;
+
+   ------------------------------------------------------------------
    --  Recovery, on input nothing derives
    ------------------------------------------------------------------
 
@@ -935,6 +1028,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "parses tag-only match statements",
          Match_Statements_Are_Parsed'Access);
+      Landin.Testing.Register
+        (Into, "parser", "parses non-loop control expression values",
+         Control_Expressions_Are_Parsed'Access);
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
          Survives_Every_Truncation'Access);

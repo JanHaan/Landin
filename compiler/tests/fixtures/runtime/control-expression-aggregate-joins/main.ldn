@@ -1,0 +1,81 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+cell: type = struct
+    value: i32
+end cell
+
+choose_pair: (take_left: bool, leave_early: bool) -> (result: pair) =
+    if leave_early then
+        result = pair(left: 40, right: 2)
+        return
+    else
+        if take_left then
+            pair(left: 19, right: 23)
+        else
+            begin
+                value: i32 = 21
+                pair(left: value, right: value)
+            end
+        end if
+    end if
+end choose_pair
+
+choose_row: (take_left: bool) -> (result: [3]i32) =
+    if take_left then
+        [19, 20, 3]
+    else
+        begin
+            value: i32 = 14
+            [value, value, value]
+        end
+    end if
+end choose_row
+
+score_pair: (value: pair) -> (result: i32) =
+    result = value.left + value.right
+end score_pair
+
+score_row: (value: [3]i32) -> (result: i32) =
+    result = value[0] + value[1] + value[2]
+end score_row
+
+public main: () -> (code: i32) =
+    mut left_cells: [2]cell = zeroed
+    mut right_cells: [2]cell = zeroed
+    left_cells[0].value = 19
+    left_cells[1].value = 23
+    right_cells[0].value = 21
+    right_cells[1].value = 21
+    mut cells: [2]cell = zeroed
+    cells = if true then left_cells else right_cells end if
+
+    mut stored: pair = zeroed
+    stored = if false then
+        pair(left: 1, right: 1)
+    else
+        choose_pair(false, false)
+    end if
+    _ = if true then choose_row(true) else choose_row(false) end if
+    code = score_pair(stored)
+    if code == 42
+      and score_pair(if true then
+          choose_pair(true, false)
+      else
+          pair(left: 1, right: 1)
+      end if) == 42
+      and score_row(if false then
+          [1, 1, 1]
+      else
+          choose_row(false)
+      end if) == 42
+      and score_pair(choose_pair(false, true)) == 42
+      and cells[0].value + cells[1].value == 42
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

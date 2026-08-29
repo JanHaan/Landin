@@ -1212,6 +1212,86 @@ package body Landin.Tests.IR_Suite is
       end;
    end A_Slot_Element_Reaches_The_Frame;
 
+   --  D125 uses storage, not a block-local pseudo-value, to carry one answer
+   --  from mutually exclusive control edges into their join.
+   procedure A_Control_Join_Crosses_Through_Caller_Storage
+     (Item : in out Landin.Testing.Context);
+
+   procedure A_Control_Join_Crosses_Through_Caller_Storage
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Frontend_Over (Work, Site);
+
+      declare
+         Unit : Landin.IR.Unit;
+         Routine : Landin.IR.Item_Id;
+         Result, Join_Value : Landin.IR.Slot_Id;
+         First, Left, Right, Join : Landin.IR.Block_Id;
+         Test, Number, Answer : Landin.IR.Value_Id;
+      begin
+         Landin.IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Routine := Landin.IR.Add_Item
+           (Unit, Landin.IR.Routine, 1, Landin.Types.U32, Site);
+         Result := Landin.IR.Add_Slot
+           (Unit, Routine, Landin.Types.U32, 2, Site);
+         Landin.IR.Set_Result_Slot (Unit, Routine, Result);
+         Join_Value := Landin.IR.Add_Slot
+           (Unit, Routine, Landin.Types.U32,
+            Landin.IR.No_Declaration, Site);
+         First := Landin.IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         Left := Landin.IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         Right := Landin.IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         Join := Landin.IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+
+         Landin.IR.Enter (Unit, Routine, First);
+         Test := Landin.IR.Emit_Truth (Unit, Routine, True, Site);
+         Landin.IR.Emit_Branch
+           (Unit, Routine, Test, Left, Right, Site);
+         Landin.IR.Leave_Block (Unit, Routine);
+
+         Landin.IR.Enter (Unit, Routine, Left);
+         Number := Landin.IR.Emit_Number
+           (Unit, Routine, Landin.Types.U32, 19, False, Site);
+         Landin.IR.Emit_Store
+           (Unit, Routine, Join_Value, Number, Site);
+         Landin.IR.Emit_Jump (Unit, Routine, Join, Site);
+         Landin.IR.Leave_Block (Unit, Routine);
+
+         Landin.IR.Enter (Unit, Routine, Right);
+         Number := Landin.IR.Emit_Number
+           (Unit, Routine, Landin.Types.U32, 23, False, Site);
+         Landin.IR.Emit_Store
+           (Unit, Routine, Join_Value, Number, Site);
+         Landin.IR.Emit_Jump (Unit, Routine, Join, Site);
+         Landin.IR.Leave_Block (Unit, Routine);
+
+         Landin.IR.Enter (Unit, Routine, Join);
+         Answer := Landin.IR.Emit_Load
+           (Unit, Routine, Join_Value, Site);
+         Landin.IR.Emit_Store (Unit, Routine, Result, Answer, Site);
+         Answer := Landin.IR.Emit_Load (Unit, Routine, Result, Site);
+         Landin.IR.Emit_Leave (Unit, Routine, Answer, Site);
+         Landin.IR.Leave_Block (Unit, Routine);
+
+         Landin.Testing.Check_Equal
+           (Item, Landin.IR.Slot_Count (Unit, Routine), 2,
+            "the named result and one unnamed join slot own storage");
+         Landin.Testing.Check
+           (Item,
+            Landin.IR.Verifier.Check (Unit).Kind
+              = Landin.IR.Verifier.Nothing_Wrong,
+            "the verifier accepts values joined only through a slot");
+      end;
+   end A_Control_Join_Crosses_Through_Caller_Storage;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1250,6 +1330,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "a slot element reaches the frame",
          A_Slot_Element_Reaches_The_Frame'Access);
+      Landin.Testing.Register
+        (Into, "ir", "a control join crosses through caller storage",
+         A_Control_Join_Crosses_Through_Caller_Storage'Access);
    end Register;
 
 end Landin.Tests.IR_Suite;

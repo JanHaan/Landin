@@ -189,7 +189,7 @@ package body Landin.IR.Dump is
                         (Of_Unit, Item, Value)));
          end Variant_Qualifier;
 
-         --  D117's subobject path.  One step still reads as the `nested`
+         --  D118's subobject path.  One step still reads as the `nested`
          --  the parent/child pair spelt, and a further step is another
          --  one, so a recorded run says which part of which child an
          --  operation reached rather than only that it reached one.
@@ -528,7 +528,7 @@ package body Landin.IR.Dump is
                              (Alternative_Of (Of_Unit, Item, Value)))
                       & Operands (Item, Value);
 
-            --  Which field, and since D117 which part below it.  Without
+            --  Which field, and since D118 which part below it.  Without
             --  both, a recorded run cannot tell `a.b.c` from `a.b.d`, and
             --  a fixture over deeper storage would assert nothing.
             when Load_Field | Store_Field =>

@@ -344,7 +344,7 @@ package Landin.IR is
    --  reached so far; Case_Index is zero when that run is an ordinary
    --  field run and the one-based source-order case when the step before
    --  it named a variant part.  D88--D90 needed exactly one step below a
-   --  parent field and spelt it as a second scalar; D117 makes the same
+   --  parent field and spelt it as a second scalar; D118 makes the same
    --  thing a run, because [0420] composes `a.b.c.d` with no depth of its
    --  own and a pair cannot say what a third selection reached.  A step
    --  is an identity and never a target offset: how far into the parent
@@ -1580,7 +1580,7 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Copy_Array | Copy_Variant;
 
-   --  D90's fixed-array field below Source_Field_Of, generalised by D117
+   --  D90's fixed-array field below Source_Field_Of, generalised by D118
    --  into a run of steps.  An empty path keeps D20/D50's direct source.
    function Source_Path_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
@@ -1636,7 +1636,7 @@ package Landin.IR is
                           in Load_Field | Store_Field;
 
    --  D88's scalar field, or D89/D90's fixed-array field, below the base
-   --  field above -- and, since D117, however many further selections
+   --  field above -- and, since D118, however many further selections
    --  [0420] composed to reach the part the operation names.  An empty
    --  path keeps the direct operation.  Each step is an identity inside
    --  the run the step before it reached, never a target offset.
@@ -2107,7 +2107,7 @@ package Landin.IR is
    --  [1810].  Field zero names an Add_Array_Slot shape; D48's positive
    --  field names a compact fixed-array leaf of an aggregate slot, and D89's
    --  Nested names that leaf inside the field's ordinary child, and
-   --  since D117 may go on naming a part of it.
+   --  since D118 may go on naming a part of it.
    function Emit_Load_Slot_Element
      (Into   : in out Unit;
       Item   : Item_Id;
@@ -2571,7 +2571,7 @@ private
       Measurement_Fields : Field_Shape_Vectors.Vector;
       Variant_Fields : Field_Shape_Vectors.Vector;
       Variant_Cases : Case_Run_Vectors.Vector;
-      --  D117's subobject-path steps, every instruction's run laid end
+      --  D118's subobject-path steps, every instruction's run laid end
       --  to end here for the reason a node's children are: an
       --  instruction is a fixed-size record and a path is not.
       Paths       : Path_Step_Vectors.Vector;

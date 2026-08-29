@@ -1,0 +1,11 @@
+f: (condition: bool) -> (result: i32) =
+    mut local: i32
+    _ = if condition then
+        local = 42
+        result = 0
+        return
+    else
+        0
+    end if
+    result = local
+end f

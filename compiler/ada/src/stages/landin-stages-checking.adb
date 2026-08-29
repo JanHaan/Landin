@@ -172,7 +172,7 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Admit_Array_Field
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-      --  D117/D118: whether a selection chain [0420] starts at a bound
+      --  D118/D119: whether a selection chain [0420] starts at a bound
       --  name.  The depth is the source's; nothing here fixes one.
       function Selects_From_A_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
@@ -187,6 +187,34 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Signatures_Agree
         (Left, Right : Landin.Checking.Signature_Id) return Boolean;
+
+      --  D124: a control expression is checked against one complete result
+      --  shape.  Scalar kind alone is enough for a scalar; arrays carry D17's
+      --  structural identity, aggregates carry [0710]'s nominal body and
+      --  D123's function values carry their recursive signature.  Keeping
+      --  this target-neutral is what lets lowering choose storage without
+      --  importing a backend layout into checking.
+      type Value_Context is record
+         Kind         : Ty.Type_Kind := Ty.Undecided;
+         Nominal      : Res.Declaration_Id := Res.No_Declaration;
+         Length       : Landin.Checking.Element_Count := 0;
+         Element      : Ty.Scalar_Name := Ty.Bool;
+         Element_Body : Res.Declaration_Id := Res.No_Declaration;
+         Signature    : Landin.Checking.Signature_Id :=
+           Landin.Checking.No_Signature;
+      end record;
+
+      No_Value_Context : constant Value_Context := (others => <>);
+
+      procedure Check_Contextual_Value
+        (Of_Tree      : Syn.Tree;
+         Node         : Syn.Node_Id;
+         Expected     : Value_Context;
+         Site         : Landin.Provenance.Origin;
+         Because      : String;
+         Static_Image : Boolean := False);
+      function Synthesise_Control
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
 
       function Check_Call
         (Of_Tree : Syn.Tree;
@@ -225,7 +253,13 @@ package body Landin.Stages.Checking is
          Field   : Positive;
          Static_Image : Boolean := False);
       procedure Check_Match
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Returns : Ty.Type_Kind;
+         Expected : Value_Context := No_Value_Context;
+         Value_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin;
+         Value_Because : String := "");
       procedure Check_Mixed_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
@@ -247,7 +281,13 @@ package body Landin.Stages.Checking is
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Block
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Returns : Ty.Type_Kind;
+         Expected : Value_Context := No_Value_Context;
+         Value_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin;
+         Value_Because : String := "");
       procedure Check_Routine_Body
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
       procedure Check_Operands
@@ -417,7 +457,7 @@ package body Landin.Stages.Checking is
                             (Types.all, Of_Tree,
                              Syn.Declared_Type (Of_Tree, Each));
                      begin
-                        --  D118 drops D86's depth limit: a child holding
+                        --  D119 drops D86's depth limit: a child holding
                         --  a child is laid out the same way, because the
                         --  extent of a field is the child's own layout and
                         --  the path that reaches through it is a run.
@@ -444,7 +484,7 @@ package body Landin.Stages.Checking is
                   if Held = Ty.Aggregate
                     and then Into.Kind /= Landin.Checking.Aggregate_Field
                   then
-                     --  D118/D120 admit an ordinary child and an ordinary
+                     --  D119/D121 admit an ordinary child and an ordinary
                      --  payload; what is left is a struct that has a
                      --  variant part of its own.
                      Bad.Report
@@ -1735,6 +1775,16 @@ package body Landin.Stages.Checking is
             return;
          end if;
 
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+           and then Wanted in Ty.Scalar_Name
+         then
+            Check_Contextual_Value
+              (Of_Tree, Node, (Kind => Wanted, others => <>),
+               Site, Because);
+            return;
+         end if;
+
          Got := Synthesise (Of_Tree, Node);
 
          if not Decidable (Wanted) or else not Decidable (Got) then
@@ -1910,7 +1960,31 @@ package body Landin.Stages.Checking is
                Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
-               if Wants = Ty.Function_Value then
+               if Wants in Ty.Aggregate | Ty.Fixed_Array | Ty.Function_Value
+                 and then Syn.Kind (Of_Tree, Argument)
+                            in Syn.If_Statement | Syn.Match_Statement
+                               | Syn.Bare_Block
+               then
+                  declare
+                     Expected : Value_Context := (Kind => Wants, others => <>);
+                  begin
+                     case Wants is
+                        when Ty.Aggregate =>
+                           Expected.Nominal := Parameter.Aggregate_Body;
+                        when Ty.Fixed_Array =>
+                           Expected.Length := Parameter.Length;
+                           Expected.Element := Parameter.Element;
+                           Expected.Element_Body := Parameter.Aggregate_Body;
+                        when Ty.Function_Value =>
+                           Expected.Signature := Parameter.Signature;
+                        when others =>
+                           raise Landin.Compiler_Defect;
+                     end case;
+                     Check_Contextual_Value
+                       (Of_Tree, Argument, Expected, Parameter.Site,
+                        "this parameter");
+                  end;
+               elsif Wants = Ty.Function_Value then
                   declare
                      Got : constant Ty.Type_Kind :=
                        Synthesise (Of_Tree, Argument);
@@ -2760,6 +2834,9 @@ package body Landin.Stages.Checking is
          end if;
 
          case Syn.Kind (Of_Tree, Node) is
+            when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block =>
+               return Kept (Synthesise_Control (Of_Tree, Node));
+
             when Syn.Integer_Literal =>
                return Kept (Ty.Untyped_Integer);
 
@@ -3103,9 +3180,23 @@ package body Landin.Stages.Checking is
                   --  untyped literal receives that context rather than
                   --  [0200]'s context-free default.
                   declare
-                     Got : constant Ty.Type_Kind :=
-                       Synthesise (Of_Tree, Where);
+                     Got : Ty.Type_Kind;
                   begin
+                     if Syn.Kind (Of_Tree, Where)
+                          in Syn.If_Statement | Syn.Match_Statement
+                             | Syn.Bare_Block
+                     then
+                        Check_Contextual_Value
+                          (Of_Tree, Where,
+                           (Kind => Ty.Usize, others => <>),
+                           Syn.Origin (Of_Tree, From),
+                           "the array indexed here");
+                        Got := Landin.Checking.Type_Of
+                          (Types.all, Of_Tree, Where);
+                     else
+                        Got := Synthesise (Of_Tree, Where);
+                     end if;
+
                      if Got = Ty.Untyped_Integer then
                         Commit_To (Of_Tree, Where, Ty.Usize);
                      elsif Decidable (Got) and then Got /= Ty.Usize then
@@ -5004,7 +5095,13 @@ package body Landin.Stages.Checking is
       --  part.  Case identity comes from resolution, while declaration
       --  order supplies the tag number shared with D76 and lowering.
       procedure Check_Match
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind)
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Returns : Ty.Type_Kind;
+         Expected : Value_Context := No_Value_Context;
+         Value_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin;
+         Value_Because : String := "")
       is
          Subject : constant Syn.Node_Id := Syn.Match_Subject (Of_Tree, Node);
 
@@ -5234,7 +5331,8 @@ package body Landin.Stages.Checking is
                   end if;
 
                   Check_Block
-                    (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns);
+                    (Of_Tree, Syn.Body_Of (Of_Tree, Arm), Returns,
+                     Expected, Value_Site, Value_Because);
                end;
             end loop;
 
@@ -5370,7 +5468,21 @@ package body Landin.Stages.Checking is
                         Written : constant Syn.Node_Id :=
                           Syn.Declared_Type (Of_Tree, Node);
                      begin
-                        if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
+                        if Syn.Kind (Of_Tree, Value)
+                             in Syn.If_Statement | Syn.Match_Statement
+                                | Syn.Bare_Block
+                        then
+                           Check_Contextual_Value
+                             (Of_Tree, Value,
+                              (Kind    => Ty.Aggregate,
+                               Nominal => Landin.Checking.Body_Of
+                                 (Types.all, Of_Tree, Written),
+                               others  => <>),
+                              Syn.Origin (Of_Tree, Node),
+                              "the type declared here",
+                              Static_Image =>
+                                not Is_Local_Binding (Of_Tree, Node));
+                        elsif Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
                         then
                            declare
                               Expected : constant Res.Declaration_Id :=
@@ -5444,7 +5556,26 @@ package body Landin.Stages.Checking is
                         Written : constant Syn.Node_Id :=
                           Syn.Declared_Type (Of_Tree, Node);
                      begin
-                        if Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
+                        if Syn.Kind (Of_Tree, Value)
+                             in Syn.If_Statement | Syn.Match_Statement
+                                | Syn.Bare_Block
+                        then
+                           Check_Contextual_Value
+                             (Of_Tree, Value,
+                              (Kind    => Ty.Fixed_Array,
+                               Length  => Landin.Checking.Array_Length
+                                 (Types.all, Of_Tree, Written),
+                               Element => Landin.Checking.Array_Element
+                                 (Types.all, Of_Tree, Written),
+                               Element_Body =>
+                                 Landin.Checking.Array_Element_Body
+                                   (Types.all, Of_Tree, Written),
+                               others  => <>),
+                              Syn.Origin (Of_Tree, Node),
+                              "the type declared here",
+                              Static_Image =>
+                                not Is_Local_Binding (Of_Tree, Node));
+                        elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
                         then
                            --  D27: this contextual literal denotes the absent
                            --  static image.  Its written array type supplies
@@ -5551,36 +5682,56 @@ package body Landin.Stages.Checking is
                      end;
                   elsif Wants = Ty.Function_Value then
                      declare
-                        Got : constant Ty.Type_Kind :=
-                          Synthesise (Of_Tree, Value);
                         Written : constant Syn.Node_Id :=
                           Syn.Declared_Type (Of_Tree, Node);
+                        Expected : constant Landin.Checking.Signature_Id :=
+                          Landin.Checking.Signature_Of
+                            (Types.all, Of_Tree, Written);
                      begin
-                        if Got = Ty.Function_Value
-                          and then not Signatures_Agree
-                            (Landin.Checking.Signature_Of
-                               (Types.all, Of_Tree, Written),
-                             Landin.Checking.Signature_Of
-                               (Types.all, Of_Tree, Value))
+                        if Syn.Kind (Of_Tree, Value)
+                             in Syn.If_Statement | Syn.Match_Statement
+                                | Syn.Bare_Block
                         then
-                           Bad.Report
-                             (Item    => Bad.Type_Mismatch,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Value),
-                              Message => "this function has a different"
-                                         & " signature",
-                              Note    => "[1000]: function values have the"
-                                         & " signature written by their type",
-                              Related => Syn.Origin (Of_Tree, Written),
-                              Because => "the function type written here",
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Value);
-                        elsif Got /= Ty.Function_Value then
-                           Require
-                             (Of_Tree, Value, Wants,
+                           Check_Contextual_Value
+                             (Of_Tree, Value,
+                              (Kind      => Ty.Function_Value,
+                               Signature => Expected,
+                               others    => <>),
                               Syn.Origin (Of_Tree, Written),
                               "the function type written here");
+                        else
+                           declare
+                              Got : constant Ty.Type_Kind :=
+                                Synthesise (Of_Tree, Value);
+                           begin
+                              if Got = Ty.Function_Value
+                                and then not Signatures_Agree
+                                  (Expected,
+                                   Landin.Checking.Signature_Of
+                                     (Types.all, Of_Tree, Value))
+                              then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "this function has a"
+                                               & " different signature",
+                                    Note    => "[1000]: function values"
+                                               & " have the signature"
+                                               & " written by their type",
+                                    Related => Syn.Origin (Of_Tree, Written),
+                                    Because =>
+                                      "the function type written here",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Value);
+                              elsif Got /= Ty.Function_Value then
+                                 Require
+                                   (Of_Tree, Value, Wants,
+                                    Syn.Origin (Of_Tree, Written),
+                                    "the function type written here");
+                              end if;
+                           end;
                         end if;
                      end;
                   elsif Wants in Ty.Scalar_Name
@@ -5711,7 +5862,19 @@ package body Landin.Stages.Checking is
                   end if;
 
                   if Wants = Ty.Aggregate then
-                     if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
+                     if Syn.Kind (Of_Tree, Value)
+                          in Syn.If_Statement | Syn.Match_Statement
+                             | Syn.Bare_Block
+                     then
+                        Check_Contextual_Value
+                          (Of_Tree, Value,
+                           (Kind    => Ty.Aggregate,
+                            Nominal => Landin.Checking.Body_Of
+                              (Types.all, Of_Tree, Place),
+                            others  => <>),
+                           Syn.Origin (Of_Tree, Place),
+                           "the place written here");
+                     elsif Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
                         declare
                            Expected : constant Res.Declaration_Id :=
                              Landin.Checking.Body_Of
@@ -5789,6 +5952,23 @@ package body Landin.Stages.Checking is
                   --  general value.
                   if Wants = Ty.Fixed_Array then
                      if Syn.Kind (Of_Tree, Value)
+                          in Syn.If_Statement | Syn.Match_Statement
+                             | Syn.Bare_Block
+                     then
+                        Check_Contextual_Value
+                          (Of_Tree, Value,
+                           (Kind    => Ty.Fixed_Array,
+                            Length  => Landin.Checking.Array_Length
+                              (Types.all, Of_Tree, Place),
+                            Element => Landin.Checking.Array_Element
+                              (Types.all, Of_Tree, Place),
+                            Element_Body =>
+                              Landin.Checking.Array_Element_Body
+                                (Types.all, Of_Tree, Place),
+                            others  => <>),
+                           Syn.Origin (Of_Tree, Place),
+                           "the place written here");
+                     elsif Syn.Kind (Of_Tree, Value)
                           = Syn.Mixed_Array_Repetition
                      then
                         --  D37 gives this contextual mixed form the complete
@@ -5875,36 +6055,56 @@ package body Landin.Stages.Checking is
 
                   if Wants = Ty.Function_Value then
                      declare
-                        Got : constant Ty.Type_Kind :=
-                          Synthesise (Of_Tree, Value);
                         Place_Id : constant Res.Declaration_Id :=
                           Res.Bound_To (Meanings.all, Of_Tree, Place);
+                        Expected : constant Landin.Checking.Signature_Id :=
+                          Landin.Checking.Signature_Of
+                            (Types.all, Place_Id);
                      begin
-                        if Got = Ty.Function_Value
-                          and then not Signatures_Agree
-                            (Landin.Checking.Signature_Of
-                               (Types.all, Place_Id),
-                             Landin.Checking.Signature_Of
-                               (Types.all, Of_Tree, Value))
+                        if Syn.Kind (Of_Tree, Value)
+                             in Syn.If_Statement | Syn.Match_Statement
+                                | Syn.Bare_Block
                         then
-                           Bad.Report
-                             (Item    => Bad.Type_Mismatch,
-                              Source  => Syn.Source_Of (Of_Tree),
-                              Where   => Syn.Where (Of_Tree, Value),
-                              Message => "this function has a different"
-                                         & " signature",
-                              Note    => "[1000]: function values have the"
-                                         & " signature written by their type",
-                              Related => Syn.Origin (Of_Tree, Place),
-                              Because => "the function place written here",
-                              Into    => Found);
-                           Landin.Checking.Refuse
-                             (Types.all, Of_Tree, Value);
-                        elsif Got /= Ty.Function_Value then
-                           Require
-                             (Of_Tree, Value, Wants,
+                           Check_Contextual_Value
+                             (Of_Tree, Value,
+                              (Kind      => Ty.Function_Value,
+                               Signature => Expected,
+                               others    => <>),
                               Syn.Origin (Of_Tree, Place),
-                              "the place written here");
+                              "the function place written here");
+                        else
+                           declare
+                              Got : constant Ty.Type_Kind :=
+                                Synthesise (Of_Tree, Value);
+                           begin
+                              if Got = Ty.Function_Value
+                                and then not Signatures_Agree
+                                  (Expected,
+                                   Landin.Checking.Signature_Of
+                                     (Types.all, Of_Tree, Value))
+                              then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Value),
+                                    Message => "this function has a"
+                                               & " different signature",
+                                    Note    => "[1000]: function values"
+                                               & " have the signature"
+                                               & " written by their type",
+                                    Related => Syn.Origin (Of_Tree, Place),
+                                    Because =>
+                                      "the function place written here",
+                                    Into    => Found);
+                                 Landin.Checking.Refuse
+                                   (Types.all, Of_Tree, Value);
+                              elsif Got /= Ty.Function_Value then
+                                 Require
+                                   (Of_Tree, Value, Wants,
+                                    Syn.Origin (Of_Tree, Place),
+                                    "the place written here");
+                              end if;
+                           end;
                         end if;
                      end;
                      return;
@@ -5993,6 +6193,10 @@ package body Landin.Stages.Checking is
             when Syn.Match_Statement =>
                Check_Match (Of_Tree, Node, Returns);
 
+            when Syn.Bare_Block =>
+               Check_Block
+                 (Of_Tree, Syn.Body_Of (Of_Tree, Node), Returns);
+
             when Syn.Call =>
                --  [1920]: a call standing alone is a statement, and one
                --  that hands a value back is [1020]'s omitted discard --
@@ -6010,13 +6214,440 @@ package body Landin.Stages.Checking is
       end Check_Statement;
 
       procedure Check_Block
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind) is
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Returns : Ty.Type_Kind;
+         Expected : Value_Context := No_Value_Context;
+         Value_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin;
+         Value_Because : String := "")
+      is
       begin
          for Index in 1 .. Syn.Statement_Count (Of_Tree, Node) loop
             Check_Statement
               (Of_Tree, Syn.Nth_Statement (Of_Tree, Node, Index), Returns);
          end loop;
+
+         if Expected.Kind /= Ty.Undecided
+           and then Syn.Block_Value (Of_Tree, Node) /= Syn.No_Node
+         then
+            Check_Contextual_Value
+              (Of_Tree, Syn.Block_Value (Of_Tree, Node), Expected,
+               (if Landin.Provenance.Is_Known (Value_Site)
+                then Value_Site else Syn.Origin (Of_Tree, Node)),
+               (if Value_Because /= ""
+                then Value_Because
+                else "the value produced by this control block"));
+         elsif Syn.Block_Value (Of_Tree, Node) /= Syn.No_Node then
+            --  A control form may also occupy the statement slot shared by
+            --  calls.  Its final expression is still checked even though no
+            --  surrounding context consumes the result.  Check it as a
+            --  statement here: a syntactically final call in each arm may
+            --  return none, in which case asking the control to synthesise a
+            --  joined value would stop before its conditions were checked.
+            declare
+               Value : constant Syn.Node_Id :=
+                 Syn.Block_Value (Of_Tree, Node);
+            begin
+               if Syn.Kind (Of_Tree, Value)
+                    in Syn.If_Statement | Syn.Match_Statement
+                       | Syn.Bare_Block
+               then
+                  Check_Statement (Of_Tree, Value, Returns);
+               else
+                  declare
+                     Got : constant Ty.Type_Kind :=
+                       Synthesise (Of_Tree, Value);
+                  begin
+                     if Got = Ty.Untyped_Integer then
+                        Commit_To (Of_Tree, Value, Ty.Default_Integer);
+                     end if;
+                  end;
+               end if;
+            end;
+         end if;
       end Check_Block;
+
+      --  The first syntactic answer is enough to infer a control value's
+      --  context.  Missing answers are deliberately skipped: flow decides
+      --  whether that block can fall through, and an early return is a
+      --  return-compatible edge rather than an answer of a second type.
+      function First_Control_Value
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+      function First_Control_Value
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
+      is
+      begin
+         case Syn.Kind (Of_Tree, Node) is
+            when Syn.If_Statement =>
+               for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
+                  declare
+                     Value : constant Syn.Node_Id :=
+                       Syn.Block_Value
+                         (Of_Tree,
+                          Syn.Body_Of
+                            (Of_Tree, Syn.Nth_Arm (Of_Tree, Node, Arm)));
+                  begin
+                     if Value /= Syn.No_Node then
+                        return Value;
+                     end if;
+                  end;
+               end loop;
+
+               if Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node then
+                  return Syn.Block_Value
+                    (Of_Tree, Syn.Else_Body (Of_Tree, Node));
+               end if;
+               return Syn.No_Node;
+
+            when Syn.Match_Statement =>
+               for Arm in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+                  declare
+                     Value : constant Syn.Node_Id :=
+                       Syn.Block_Value
+                         (Of_Tree,
+                          Syn.Body_Of
+                            (Of_Tree,
+                             Syn.Nth_Match_Arm (Of_Tree, Node, Arm)));
+                  begin
+                     if Value /= Syn.No_Node then
+                        return Value;
+                     end if;
+                  end;
+               end loop;
+               return Syn.No_Node;
+
+            when Syn.Bare_Block =>
+               return Syn.Block_Value
+                 (Of_Tree, Syn.Body_Of (Of_Tree, Node));
+
+            when others =>
+               return Syn.No_Node;
+         end case;
+      end First_Control_Value;
+
+      procedure Note_Context
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Expected : Value_Context);
+
+      procedure Note_Context
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Expected : Value_Context)
+      is
+      begin
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+              = Ty.Undecided
+         then
+            Landin.Checking.Note
+              (Types.all, Of_Tree, Node, Expected.Kind);
+            if Expected.Kind = Ty.Aggregate then
+               Landin.Checking.Note_Body
+                 (Types.all, Of_Tree, Node, Expected.Nominal);
+            elsif Expected.Kind = Ty.Fixed_Array then
+               Landin.Checking.Note_Array
+                 (Types.all, Of_Tree, Node,
+                  Expected.Length, Expected.Element);
+               Landin.Checking.Note_Array_Element_Body
+                 (Types.all, Of_Tree, Node, Expected.Element_Body);
+            elsif Expected.Kind = Ty.Function_Value then
+               Landin.Checking.Note_Signature
+                 (Types.all, Of_Tree, Node, Expected.Signature);
+            end if;
+         end if;
+      end Note_Context;
+
+      procedure Context_Mismatch
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Expected : Value_Context;
+         Site    : Landin.Provenance.Origin;
+         Because : String);
+
+      procedure Context_Mismatch
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Expected : Value_Context;
+         Site    : Landin.Provenance.Origin;
+         Because : String)
+      is
+      begin
+         Bad.Report
+           (Item    => Bad.Type_Mismatch,
+            Source  => Syn.Source_Of (Of_Tree),
+            Where   => Syn.Where (Of_Tree, Node),
+            Message => "this does not have the " & Shown (Expected.Kind)
+                       & " shape required here",
+            Note    => "D124: every fallthrough answer of a control"
+                       & " expression has one complete type and shape",
+            Related => Site,
+            Because => Because,
+            Into    => Found);
+         Landin.Checking.Refuse (Types.all, Of_Tree, Node);
+      end Context_Mismatch;
+
+      procedure Check_Contextual_Value
+        (Of_Tree      : Syn.Tree;
+         Node         : Syn.Node_Id;
+         Expected     : Value_Context;
+         Site         : Landin.Provenance.Origin;
+         Because      : String;
+         Static_Image : Boolean := False)
+      is
+      begin
+         if Node = Syn.No_Node then
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node)
+              in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+         then
+            Note_Context (Of_Tree, Node, Expected);
+
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.If_Statement =>
+                  for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
+                     declare
+                        This : constant Syn.Node_Id :=
+                          Syn.Nth_Arm (Of_Tree, Node, Arm);
+                     begin
+                        Require
+                          (Of_Tree, Syn.Condition_Of (Of_Tree, This), Ty.Bool,
+                           Syn.Origin (Of_Tree, This),
+                           "the condition of this branch");
+                        Check_Block
+                          (Of_Tree, Syn.Body_Of (Of_Tree, This),
+                           Ty.Not_Typed, Expected, Site, Because);
+                     end;
+                  end loop;
+
+                  if Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node then
+                     Check_Block
+                       (Of_Tree, Syn.Else_Body (Of_Tree, Node),
+                        Ty.Not_Typed, Expected, Site, Because);
+                  end if;
+
+               when Syn.Match_Statement =>
+                  Check_Match
+                    (Of_Tree, Node, Ty.Not_Typed, Expected, Site, Because);
+
+               when Syn.Bare_Block =>
+                  Check_Block
+                    (Of_Tree, Syn.Body_Of (Of_Tree, Node),
+                     Ty.Not_Typed, Expected, Site, Because);
+
+               when others =>
+                  raise Landin.Compiler_Defect;
+            end case;
+            return;
+         end if;
+
+         case Expected.Kind is
+            when Ty.Aggregate =>
+               if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
+                  if Construction_Agrees
+                       (Of_Tree, Node, Expected.Nominal, Site, Because)
+                  then
+                     Check_Struct_Literal
+                       (Of_Tree, Node, Expected.Nominal, Static_Image);
+                  end if;
+                  return;
+               elsif Syn.Kind (Of_Tree, Node) = Syn.Zeroed_Literal then
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Node, Ty.Aggregate);
+                  Landin.Checking.Note_Body
+                    (Types.all, Of_Tree, Node, Expected.Nominal);
+                  return;
+               end if;
+
+               declare
+                  Got : constant Ty.Type_Kind :=
+                    (if Syn.Kind (Of_Tree, Node)
+                          in Syn.Name_Reference | Syn.Member_Selection
+                     then Selected_From (Of_Tree, Node)
+                     else Synthesise (Of_Tree, Node));
+               begin
+                  if Got /= Ty.Ill_Typed
+                    and then
+                      (Got /= Ty.Aggregate
+                       or else Landin.Checking.Body_Of
+                         (Types.all, Of_Tree, Node) /= Expected.Nominal)
+                  then
+                     Context_Mismatch
+                       (Of_Tree, Node, Expected, Site, Because);
+                  end if;
+               end;
+
+            when Ty.Fixed_Array =>
+               case Syn.Kind (Of_Tree, Node) is
+                  when Syn.Array_Literal =>
+                     Check_Array_Literal
+                       (Of_Tree, Node, Node, Expected.Length,
+                        Expected.Element, Static_Image);
+                     return;
+                  when Syn.Array_Repetition =>
+                     Check_Array_Repetition
+                       (Of_Tree, Node, Node, Expected.Length,
+                        Expected.Element, Static_Image);
+                     return;
+                  when Syn.Mixed_Array_Repetition =>
+                     Check_Mixed_Array_Repetition
+                       (Of_Tree, Node, Node, Expected.Length,
+                        Expected.Element, Static_Image);
+                     return;
+                  when Syn.Zeroed_Literal =>
+                     Landin.Checking.Note
+                       (Types.all, Of_Tree, Node, Ty.Fixed_Array);
+                     Landin.Checking.Note_Array
+                       (Types.all, Of_Tree, Node,
+                        Expected.Length, Expected.Element);
+                     Landin.Checking.Note_Array_Element_Body
+                       (Types.all, Of_Tree, Node, Expected.Element_Body);
+                     return;
+                  when others =>
+                     null;
+               end case;
+
+               declare
+                  Admitted : constant Boolean :=
+                    Syn.Kind (Of_Tree, Node) = Syn.Member_Selection
+                    and then Admit_Array_Field (Of_Tree, Node);
+                  Got : constant Ty.Type_Kind :=
+                    (if Admitted
+                          or else Syn.Kind (Of_Tree, Node)
+                                    = Syn.Name_Reference
+                     then Selected_From (Of_Tree, Node)
+                     else Synthesise (Of_Tree, Node));
+               begin
+                  if Got /= Ty.Ill_Typed
+                    and then
+                      (Got /= Ty.Fixed_Array
+                       or else Landin.Checking.Array_Length
+                         (Types.all, Of_Tree, Node) /= Expected.Length
+                       or else Landin.Checking.Array_Element
+                         (Types.all, Of_Tree, Node) /= Expected.Element
+                       or else Landin.Checking.Array_Element_Body
+                         (Types.all, Of_Tree, Node)
+                           /= Expected.Element_Body)
+                  then
+                     Context_Mismatch
+                       (Of_Tree, Node, Expected, Site, Because);
+                  end if;
+               end;
+
+            when Ty.Function_Value =>
+               declare
+                  Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Node);
+               begin
+                  if Got /= Ty.Ill_Typed
+                    and then
+                      (Got /= Ty.Function_Value
+                       or else not Signatures_Agree
+                         (Expected.Signature,
+                          Landin.Checking.Signature_Of
+                            (Types.all, Of_Tree, Node)))
+                  then
+                     Context_Mismatch
+                       (Of_Tree, Node, Expected, Site, Because);
+                  end if;
+               end;
+
+            when Ty.Scalar_Name =>
+               if Syn.Kind (Of_Tree, Node) = Syn.Zeroed_Literal then
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Node, Expected.Kind);
+               else
+                  Require
+                    (Of_Tree, Node, Expected.Kind, Site, Because);
+               end if;
+
+            when others =>
+               Require (Of_Tree, Node, Expected.Kind, Site, Because);
+         end case;
+      end Check_Contextual_Value;
+
+      function Synthesise_Control
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind
+      is
+         First : constant Syn.Node_Id := First_Control_Value (Of_Tree, Node);
+         Got   : Ty.Type_Kind;
+         Expected : Value_Context;
+      begin
+         if First = Syn.No_Node then
+            return Ty.Not_Typed;
+         end if;
+
+         if Syn.Kind (Of_Tree, First) = Syn.Array_Literal then
+            declare
+               Element_Node : constant Syn.Node_Id :=
+                 Syn.Nth_Element (Of_Tree, First, 1);
+               Element_Type : Ty.Type_Kind :=
+                 Synthesise (Of_Tree, Element_Node);
+            begin
+               if Element_Type = Ty.Untyped_Integer then
+                  Element_Type := Ty.Default_Integer;
+                  Commit_To
+                    (Of_Tree, Element_Node, Ty.Default_Integer);
+               end if;
+
+               if Element_Type not in Ty.Scalar_Name then
+                  return Ty.Ill_Typed;
+               end if;
+
+               Expected :=
+                 (Kind    => Ty.Fixed_Array,
+                  Length  => Landin.Checking.Element_Count
+                    (Syn.Element_Count (Of_Tree, First)),
+                  Element => Ty.Scalar_Name (Element_Type),
+                  others  => <>);
+            end;
+         elsif Syn.Kind (Of_Tree, First) = Syn.Struct_Literal
+           and then Syn.Constructed_Type (Of_Tree, First) /= Syn.No_Node
+         then
+            Expected :=
+              (Kind => Ty.Aggregate,
+               Nominal => Construction_Body (Of_Tree, First),
+               others => <>);
+            if Expected.Nominal = Res.No_Declaration then
+               return Ty.Ill_Typed;
+            end if;
+         else
+            Got :=
+              (if Syn.Kind (Of_Tree, First)
+                    in Syn.Name_Reference | Syn.Member_Selection
+               then Selected_From (Of_Tree, First)
+               else Synthesise (Of_Tree, First));
+
+            if Got = Ty.Untyped_Integer then
+               Got := Ty.Default_Integer;
+               Commit_To (Of_Tree, First, Ty.Default_Integer);
+            end if;
+
+            Expected.Kind := Got;
+            if Got = Ty.Aggregate then
+               Expected.Nominal := Landin.Checking.Body_Of
+                 (Types.all, Of_Tree, First);
+            elsif Got = Ty.Fixed_Array then
+               Expected.Length := Landin.Checking.Array_Length
+                 (Types.all, Of_Tree, First);
+               Expected.Element := Landin.Checking.Array_Element
+                 (Types.all, Of_Tree, First);
+               Expected.Element_Body :=
+                 Landin.Checking.Array_Element_Body
+                   (Types.all, Of_Tree, First);
+            elsif Got = Ty.Function_Value then
+               Expected.Signature := Landin.Checking.Signature_Of
+                 (Types.all, Of_Tree, First);
+            end if;
+         end if;
+
+         if not Decidable (Expected.Kind) then
+            return Ty.Ill_Typed;
+         end if;
+
+         Check_Contextual_Value
+           (Of_Tree, Node, Expected, Syn.Origin (Of_Tree, Node),
+            "the first value-producing edge");
+         return Expected.Kind;
+      end Synthesise_Control;
 
       ------------------------------------------------------------
       --  [1940]: a module value is known when the compiler reads it
@@ -6041,6 +6672,9 @@ package body Landin.Stages.Checking is
                --  Forming the code address does not execute or capture its
                --  body; the body is checked as its own routine.
                return True;
+
+            when Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block =>
+               return False;
 
             --  D31 measures the literal's syntax.  Its elements are checked
             --  for one scalar shape but are not module values to be folded.
@@ -6190,7 +6824,7 @@ package body Landin.Stages.Checking is
             Source  => Syn.Source_Of (Of_Tree),
             Where   => Syn.Where (Of_Tree, Value),
             Message => "a module value has to be one the compiler knows"
-                       & " when it reads it, and this is a call",
+                       & " when it reads it, and this needs runtime control",
             Note    => "[1940]: nothing runs before the entry point"
                        & " [1460], and there is no compile-time execution",
             Into    => Found);
@@ -6487,7 +7121,7 @@ package body Landin.Stages.Checking is
                else Ty.Ill_Typed);
             Direct_Name : constant Boolean :=
               Named_Storage and then Named_Type = Ty.Fixed_Array;
-            --  D118: a local may infer from a source however many
+            --  D120: a local may infer from a source however many
             --  selections reach it.  A module binding still takes only a
             --  direct name or one field of one, because its initializer is
             --  a folded image rather than a copy.
@@ -6521,6 +7155,9 @@ package body Landin.Stages.Checking is
             Direct_Array : constant Boolean :=
               (Direct_Name or else Direct_Field)
               and then Got = Ty.Fixed_Array;
+            Control_Source : constant Boolean :=
+              Syn.Kind (Of_Tree.all, Value)
+                in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block;
          begin
             if Got = Ty.Untyped_Integer then
                Commit_To (Of_Tree.all, Value, Ty.Default_Integer);
@@ -6529,13 +7166,18 @@ package body Landin.Stages.Checking is
             else
                if Got = Ty.Fixed_Array
                  and then (Direct_Array
-                           or else Syn.Kind (Of_Tree.all, Value) = Syn.Call)
+                           or else Syn.Kind (Of_Tree.all, Value) = Syn.Call
+                           or else Control_Source)
                then
                   Landin.Checking.Note_Array
                     (Types.all, Id,
                      Landin.Checking.Array_Length
                        (Types.all, Of_Tree.all, Value),
                      Landin.Checking.Array_Element
+                       (Types.all, Of_Tree.all, Value));
+                  Landin.Checking.Note_Array_Element_Body
+                    (Types.all, Id,
+                     Landin.Checking.Array_Element_Body
                        (Types.all, Of_Tree.all, Value));
                end if;
 
@@ -6548,7 +7190,8 @@ package body Landin.Stages.Checking is
 
                if Got = Ty.Aggregate
                  and then (Direct_Struct
-                           or else Syn.Kind (Of_Tree.all, Value) = Syn.Call)
+                           or else Syn.Kind (Of_Tree.all, Value) = Syn.Call
+                           or else Control_Source)
                then
                   --  D56/D61: an inferred aggregate has no written type node
                   --  from which Declared_As can copy [0710]'s identity.  Carry
@@ -8349,49 +8992,47 @@ package body Landin.Stages.Checking is
            (if Result = Syn.No_Node then Ty.No_Value
             else Declared_As_Node (Of_Tree, Result));
          Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Node);
+         Expected : Value_Context := (Kind => Gives, others => <>);
       begin
-         if Syn.Kind (Of_Tree, Runs) = Syn.Block then
-            Check_Block (Of_Tree, Runs, Gives);
-            Landin.Stages.Checking.Flow.Check_Function
-              (Context, Of_Tree, Node, Runs, Result, Found);
+         if Gives = Ty.Aggregate then
+            Expected.Nominal := Landin.Checking.Body_Of
+              (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
+         elsif Gives = Ty.Fixed_Array then
+            Expected.Length := Landin.Checking.Array_Length
+              (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
+            Expected.Element := Landin.Checking.Array_Element
+              (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
+            Expected.Element_Body := Landin.Checking.Array_Element_Body
+              (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
          elsif Gives = Ty.Function_Value then
-            declare
-               Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Runs);
-               Expected : constant Landin.Checking.Signature_Id :=
-                 Landin.Checking.Signature_Of
-                   (Types.all,
-                    Declaration_At (Syn.Source_Of (Of_Tree), Result));
-            begin
-               if Got = Ty.Function_Value
-                 and then not Signatures_Agree
-                   (Expected,
-                    Landin.Checking.Signature_Of (Types.all, Of_Tree, Runs))
-               then
-                  Bad.Report
-                    (Item    => Bad.Type_Mismatch,
-                     Source  => Syn.Source_Of (Of_Tree),
-                     Where   => Syn.Where (Of_Tree, Runs),
-                     Message => "this function has a different signature",
-                     Note    => "[1000]: a function value's complete"
-                                & " signature is its type",
-                     Related => Syn.Origin (Of_Tree, Result),
-                     Because => "the return this fills",
-                     Into    => Found);
-                  Landin.Checking.Refuse (Types.all, Of_Tree, Runs);
-               elsif Got /= Ty.Function_Value then
-                  Require
-                    (Of_Tree, Runs, Gives, Syn.Origin (Of_Tree, Result),
-                     "the return this fills");
-               end if;
-            end;
+            Expected.Signature := Landin.Checking.Signature_Of
+              (Types.all,
+               Declaration_At (Syn.Source_Of (Of_Tree), Result));
+         end if;
+
+         if Syn.Kind (Of_Tree, Runs) = Syn.Block then
+            if Gives = Ty.No_Value then
+               Check_Block (Of_Tree, Runs, Gives);
+            else
+               Check_Block
+                 (Of_Tree, Runs, Gives, Expected,
+                  Syn.Origin (Of_Tree, Result), "the return this fills");
+            end if;
          else
-            Require
-              (Of_Tree, Runs, Gives,
+            Check_Contextual_Value
+              (Of_Tree, Runs, Expected,
                (if Result = Syn.No_Node
                 then Syn.Origin (Of_Tree, Node)
                 else Syn.Origin (Of_Tree, Result)),
                "the return this fills");
          end if;
+
+         --  D124 extends [1910]'s edge walk through direct expression bodies
+         --  too: an expression fills the result on fallthrough, while an
+         --  early `return` inside a control value still requires the named
+         --  result to have been assigned at that edge.
+         Landin.Stages.Checking.Flow.Check_Function
+           (Context, Of_Tree, Node, Runs, Result, Found);
 
          Check_Operands (Of_Tree, Runs, Whole_Fold => False);
       end Check_Routine_Body;

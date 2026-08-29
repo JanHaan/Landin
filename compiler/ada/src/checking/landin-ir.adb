@@ -257,7 +257,7 @@ package body Landin.IR is
       end if;
    end Open_Run;
 
-   --  D117's subobject path, stored once.  An instruction keeps where its
+   --  D118's subobject path, stored once.  An instruction keeps where its
    --  run starts and how long it is; the steps themselves go end to end in
    --  one vector, as an item's values and a node's children do.  This one
    --  does not go through Open_Run: paths belong to instructions and not to
@@ -1986,7 +1986,7 @@ package body Landin.IR is
    end Slot_Element_Shape_Is_Valid;
 
    --  The array shape a slot-reaching element operation names, once its
-   --  base field and D117's path have both been followed.
+   --  base field and D118's path have both been followed.
    function Slot_Element_Shape
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Field_Shape
      is (if Element_Field_Of (Of_Unit, Item, Value) = 0

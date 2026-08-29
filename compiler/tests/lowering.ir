@@ -13,24 +13,24 @@ item 1 ROUTINE f result u32 signature 1 params 1 slots 4 blocks 5 values 17
     1 NUMBER u32 0
     2 STORE slot 2 <- 1
     3 LOAD bool slot 1
-    4 BRANCH target 3 alternative 4 <- 3
-  block 2 scope 3 BLOCK length 2
-    16 LOAD u32 slot 2
-    17 LEAVE <- 16
-  block 3 scope 4 BLOCK length 5
+    4 BRANCH target 2 alternative 3 <- 3
+  block 2 scope 4 BLOCK length 5
     5 NUMBER u32 1
     6 STORE slot 3 <- 5
     7 LOAD u32 slot 3
     8 STORE slot 2 <- 7
-    9 JUMP target 2
-  block 4 scope 3 BLOCK length 1
+    9 JUMP target 4
+  block 3 scope 3 BLOCK length 1
     10 JUMP target 5
+  block 4 scope 3 BLOCK length 2
+    16 LOAD u32 slot 2
+    17 LEAVE <- 16
   block 5 scope 5 BLOCK length 5
     11 NUMBER u32 2
     12 STORE slot 4 <- 11
     13 LOAD u32 slot 4
     14 STORE slot 2 <- 13
-    15 JUMP target 2
+    15 JUMP target 4
 file positive/array-literal-assignment/program.ldn
 unit signatures 1 items 1
 signature 1 (usize) -> u8
@@ -162,20 +162,20 @@ item 1 ROUTINE f result u32 signature 1 params 1 slots 2 blocks 5 values 11
   slot 2 r u32 return
   block 1 scope 3 BLOCK length 2
     1 LOAD bool slot 1
-    2 BRANCH target 3 alternative 4 <- 1
-  block 2 scope 3 BLOCK length 2
-    10 LOAD u32 slot 2
-    11 LEAVE <- 10
-  block 3 scope 4 BLOCK length 3
+    2 BRANCH target 2 alternative 3 <- 1
+  block 2 scope 4 BLOCK length 3
     3 NUMBER u32 1
     4 STORE slot 2 <- 3
-    5 JUMP target 2
-  block 4 scope 3 BLOCK length 1
+    5 JUMP target 4
+  block 3 scope 3 BLOCK length 1
     6 JUMP target 5
+  block 4 scope 3 BLOCK length 2
+    10 LOAD u32 slot 2
+    11 LEAVE <- 10
   block 5 scope 5 BLOCK length 3
     7 NUMBER u32 2
     8 STORE slot 2 <- 7
-    9 JUMP target 2
+    9 JUMP target 4
 file positive/assignment-to-a-mutable-binding/program.ldn
 unit signatures 1 items 1
 signature 1 () -> u32
@@ -204,13 +204,13 @@ item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 3 - i32
   block 1 scope 2 SIGNATURE length 12
     1 NUMBER i32 8
-    2 STORE slot 3 <- 1
+    2 STORE slot 2 <- 1
     3 NUMBER i32 4
-    4 LOAD i32 slot 3
+    4 LOAD i32 slot 2
     5 DIVIDE i32 <- 4 3
-    6 STORE slot 2 <- 5
+    6 STORE slot 3 <- 5
     7 NUMBER i32 2
-    8 LOAD i32 slot 2
+    8 LOAD i32 slot 3
     9 DIVIDE i32 <- 8 7
     10 STORE slot 1 <- 9
     11 LOAD i32 slot 1
@@ -224,13 +224,13 @@ item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 3 - i32
   block 1 scope 2 SIGNATURE length 12
     1 NUMBER i32 9
-    2 STORE slot 3 <- 1
+    2 STORE slot 2 <- 1
     3 NUMBER i32 4
-    4 LOAD i32 slot 3
+    4 LOAD i32 slot 2
     5 SUBTRACT i32 <- 4 3
-    6 STORE slot 2 <- 5
+    6 STORE slot 3 <- 5
     7 NUMBER i32 3
-    8 LOAD i32 slot 2
+    8 LOAD i32 slot 3
     9 SUBTRACT i32 <- 8 7
     10 STORE slot 1 <- 9
     11 LOAD i32 slot 1
@@ -321,6 +321,199 @@ item 1 ROUTINE f result bool signature 1 params 2 slots 4 blocks 1 values 8
     6 STORE slot 3 <- 5
     7 LOAD bool slot 3
     8 LEAVE <- 7
+file positive/control-expression-values/program.ldn
+unit signatures 5 items 5
+signature 1 (bool) -> i32
+signature 2 (bool) -> struct pair
+signature 3 (bool) -> [3]i32
+signature 4 (struct pair) -> i32
+signature 5 (bool) -> i32
+item 1 ROUTINE choose_scalar result i32 signature 1 params 1 slots 7 blocks 7 values 27
+  slot 1 take_left bool param 1
+  slot 2 result i32 return
+  slot 3 - i32
+  slot 4 - i32
+  slot 5 - i32
+  slot 6 value i32
+  slot 7 - i32
+  block 1 scope 2 SIGNATURE length 2
+    1 LOAD bool slot 1
+    2 BRANCH target 2 alternative 3 <- 1
+  block 2 scope 3 BLOCK length 7
+    3 NUMBER i32 19
+    4 STORE slot 4 <- 3
+    5 NUMBER i32 23
+    6 LOAD i32 slot 4
+    7 ADD i32 <- 6 5
+    8 STORE slot 3 <- 7
+    9 JUMP target 4
+  block 3 scope 2 SIGNATURE length 1
+    10 JUMP target 5
+  block 4 scope 2 SIGNATURE length 4
+    24 LOAD i32 slot 3
+    25 STORE slot 2 <- 24
+    26 LOAD i32 slot 2
+    27 LEAVE <- 26
+  block 5 scope 4 BLOCK length 1
+    11 JUMP target 6
+  block 6 scope 5 BLOCK length 9
+    12 NUMBER i32 21
+    13 STORE slot 6 <- 12
+    14 LOAD i32 slot 6
+    15 STORE slot 7 <- 14
+    16 LOAD i32 slot 6
+    17 LOAD i32 slot 7
+    18 ADD i32 <- 17 16
+    19 STORE slot 5 <- 18
+    20 JUMP target 7
+  block 7 scope 4 BLOCK length 3
+    21 LOAD i32 slot 5
+    22 STORE slot 3 <- 21
+    23 JUMP target 4
+item 2 ROUTINE choose_pair result struct signature 2 params 2 slots 3 blocks 5 values 14
+  slot 1 choose_pair usize param 1
+  slot 2 take_left bool param 2
+  slot 3 result aggregate fields i32 i32 return
+  block 1 scope 6 SIGNATURE length 2
+    1 LOAD bool slot 2
+    2 BRANCH target 2 alternative 3 <- 1
+  block 2 scope 7 BLOCK length 5
+    3 NUMBER i32 19
+    4 STORE_FIELD slot 3 field 1 <- 3
+    5 NUMBER i32 23
+    6 STORE_FIELD slot 3 field 2 <- 5
+    7 JUMP target 4
+  block 3 scope 6 SIGNATURE length 1
+    8 JUMP target 5
+  block 4 scope 6 SIGNATURE length 1
+    14 LEAVE
+  block 5 scope 8 BLOCK length 5
+    9 NUMBER i32 21
+    10 STORE_FIELD slot 3 field 1 <- 9
+    11 NUMBER i32 21
+    12 STORE_FIELD slot 3 field 2 <- 11
+    13 JUMP target 4
+item 3 ROUTINE choose_row result array signature 3 params 2 slots 3 blocks 5 values 18
+  elements 0 of bool
+  slot 1 choose_row usize param 1
+  slot 2 take_left bool param 2
+  slot 3 result elements 3 of i32 return
+  block 1 scope 9 SIGNATURE length 2
+    1 LOAD bool slot 2
+    2 BRANCH target 2 alternative 3 <- 1
+  block 2 scope 10 BLOCK length 7
+    3 NUMBER i32 19
+    4 STORE_FIELD slot 3 field 1 <- 3
+    5 NUMBER i32 20
+    6 STORE_FIELD slot 3 field 2 <- 5
+    7 NUMBER i32 3
+    8 STORE_FIELD slot 3 field 3 <- 7
+    9 JUMP target 4
+  block 3 scope 9 SIGNATURE length 1
+    10 JUMP target 5
+  block 4 scope 9 SIGNATURE length 1
+    18 LEAVE
+  block 5 scope 11 BLOCK length 7
+    11 NUMBER i32 14
+    12 STORE_FIELD slot 3 field 1 <- 11
+    13 NUMBER i32 14
+    14 STORE_FIELD slot 3 field 2 <- 13
+    15 NUMBER i32 14
+    16 STORE_FIELD slot 3 field 3 <- 15
+    17 JUMP target 4
+item 4 ROUTINE score_pair result i32 signature 4 params 1 slots 3 blocks 1 values 8
+  slot 1 value aggregate fields i32 i32 param 1
+  slot 2 result i32 return
+  slot 3 - i32
+  block 1 scope 13 BLOCK length 8
+    1 LOAD_FIELD i32 slot 1 field 1
+    2 STORE slot 3 <- 1
+    3 LOAD_FIELD i32 slot 1 field 2
+    4 LOAD i32 slot 3
+    5 ADD i32 <- 4 3
+    6 STORE slot 2 <- 5
+    7 LOAD i32 slot 2
+    8 LEAVE <- 7
+item 5 ROUTINE exercise result i32 signature 5 params 1 slots 9 blocks 13 values 57
+  slot 1 take_left bool param 1
+  slot 2 result i32 return
+  slot 3 local aggregate fields i32 i32
+  slot 4 row elements 3 of i32
+  slot 5 - elements 3 of i32
+  slot 6 - aggregate fields i32 i32
+  slot 7 - i32
+  slot 8 - aggregate fields i32 i32
+  slot 9 - i32
+  block 1 scope 15 BLOCK length 6
+    1 LOAD bool slot 1
+    2 STORAGE_ADDRESS usize storage slot 3
+    3 CALL none callee 2 choose_pair signature 2 <- 2 1
+    4 CLEAR_ARRAY destination slot 4
+    5 LOAD bool slot 1
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 16 BLOCK length 4
+    7 TRUTH bool true
+    8 STORAGE_ADDRESS usize storage slot 5
+    9 CALL none callee 3 choose_row signature 3 <- 8 7
+    10 JUMP target 4
+  block 3 scope 15 BLOCK length 1
+    11 JUMP target 5
+  block 4 scope 15 BLOCK length 3
+    19 COPY_ARRAY from slot 5 to slot 4
+    20 LOAD bool slot 1
+    21 BRANCH target 6 alternative 7 <- 20
+  block 5 scope 17 BLOCK length 7
+    12 NUMBER i32 14
+    13 STORE_FIELD slot 5 field 1 <- 12
+    14 NUMBER i32 14
+    15 STORE_FIELD slot 5 field 2 <- 14
+    16 NUMBER i32 14
+    17 STORE_FIELD slot 5 field 3 <- 16
+    18 JUMP target 4
+  block 6 scope 18 BLOCK length 4
+    22 TRUTH bool true
+    23 STORAGE_ADDRESS usize storage slot 6
+    24 CALL none callee 2 choose_pair signature 2 <- 23 22
+    25 JUMP target 8
+  block 7 scope 15 BLOCK length 1
+    26 JUMP target 9
+  block 8 scope 15 BLOCK length 5
+    32 LOAD bool slot 1
+    33 CALL i32 callee 1 choose_scalar signature 1 <- 32
+    34 STORE slot 7 <- 33
+    35 LOAD bool slot 1
+    36 BRANCH target 10 alternative 11 <- 35
+  block 9 scope 19 BLOCK length 5
+    27 LOAD_FIELD i32 slot 3 field 1
+    28 STORE_FIELD slot 6 field 1 <- 27
+    29 LOAD_FIELD i32 slot 3 field 2
+    30 STORE_FIELD slot 6 field 2 <- 29
+    31 JUMP target 8
+  block 10 scope 20 BLOCK length 5
+    37 LOAD_FIELD i32 slot 3 field 1
+    38 STORE_FIELD slot 8 field 1 <- 37
+    39 LOAD_FIELD i32 slot 3 field 2
+    40 STORE_FIELD slot 8 field 2 <- 39
+    41 JUMP target 12
+  block 11 scope 15 BLOCK length 1
+    42 JUMP target 13
+  block 12 scope 15 BLOCK length 11
+    47 STORAGE_ADDRESS usize storage slot 8
+    48 CALL i32 callee 4 score_pair signature 4 <- 47
+    49 LOAD i32 slot 7
+    50 ADD i32 <- 49 48
+    51 STORE slot 9 <- 50
+    52 LOAD_FIELD i32 slot 4 field 1
+    53 LOAD i32 slot 9
+    54 ADD i32 <- 53 52
+    55 STORE slot 2 <- 54
+    56 LOAD i32 slot 2
+    57 LEAVE <- 56
+  block 13 scope 21 BLOCK length 4
+    43 TRUTH bool false
+    44 STORAGE_ADDRESS usize storage slot 8
+    45 CALL none callee 2 choose_pair signature 2 <- 44 43
+    46 JUMP target 12
 file positive/declaration-public/program.ldn
 unit signatures 0 items 1
 item 1 DATUM limit result u32 params 0 slots 0 blocks 1 values 2
@@ -481,13 +674,13 @@ item 1 ROUTINE add3 result i32 signature 1 params 3 slots 6 blocks 1 values 12
   slot 6 - i32
   block 1 scope 2 SIGNATURE length 12
     1 LOAD i32 slot 1
-    2 STORE slot 6 <- 1
+    2 STORE slot 5 <- 1
     3 LOAD i32 slot 2
-    4 LOAD i32 slot 6
+    4 LOAD i32 slot 5
     5 ADD i32 <- 4 3
-    6 STORE slot 5 <- 5
+    6 STORE slot 6 <- 5
     7 LOAD i32 slot 3
-    8 LOAD i32 slot 5
+    8 LOAD i32 slot 6
     9 ADD i32 <- 8 7
     10 STORE slot 4 <- 9
     11 LOAD i32 slot 4
@@ -539,31 +732,31 @@ item 1 ROUTINE f result i32 signature 1 params 1 slots 4 blocks 7 values 24
     3 NUMBER i32 0
     4 LOAD i32 slot 3
     5 GREATER_THAN bool <- 4 3
-    6 BRANCH target 3 alternative 4 <- 5
-  block 2 scope 3 BLOCK length 2
-    23 LOAD i32 slot 2
-    24 LEAVE <- 23
-  block 3 scope 4 BLOCK length 3
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 4 BLOCK length 3
     7 NUMBER i32 1
     8 STORE slot 2 <- 7
-    9 JUMP target 2
-  block 4 scope 3 BLOCK length 6
+    9 JUMP target 4
+  block 3 scope 3 BLOCK length 6
     10 LOAD i32 slot 1
     11 STORE slot 4 <- 10
     12 NUMBER i32 0
     13 LOAD i32 slot 4
     14 LESS_THAN bool <- 13 12
     15 BRANCH target 5 alternative 6 <- 14
+  block 4 scope 3 BLOCK length 2
+    23 LOAD i32 slot 2
+    24 LEAVE <- 23
   block 5 scope 5 BLOCK length 3
     16 NUMBER i32 2
     17 STORE slot 2 <- 16
-    18 JUMP target 2
+    18 JUMP target 4
   block 6 scope 3 BLOCK length 1
     19 JUMP target 7
   block 7 scope 6 BLOCK length 3
     20 NUMBER i32 3
     21 STORE slot 2 <- 20
-    22 JUMP target 2
+    22 JUMP target 4
 file positive/if-one-line/program.ldn
 unit signatures 1 items 1
 signature 1 (i32) -> i32
@@ -579,16 +772,16 @@ item 1 ROUTINE f result i32 signature 1 params 1 slots 3 blocks 4 values 14
     5 NUMBER i32 0
     6 LOAD i32 slot 3
     7 GREATER_THAN bool <- 6 5
-    8 BRANCH target 3 alternative 4 <- 7
-  block 2 scope 3 BLOCK length 2
-    13 LOAD i32 slot 2
-    14 LEAVE <- 13
-  block 3 scope 4 BLOCK length 3
+    8 BRANCH target 2 alternative 3 <- 7
+  block 2 scope 4 BLOCK length 3
     9 NUMBER i32 1
     10 STORE slot 2 <- 9
-    11 JUMP target 2
-  block 4 scope 3 BLOCK length 1
-    12 JUMP target 2
+    11 JUMP target 4
+  block 3 scope 3 BLOCK length 1
+    12 JUMP target 4
+  block 4 scope 3 BLOCK length 2
+    13 LOAD i32 slot 2
+    14 LEAVE <- 13
 file positive/if-plain/program.ldn
 unit signatures 1 items 1
 signature 1 (i32) -> i32
@@ -604,16 +797,16 @@ item 1 ROUTINE f result i32 signature 1 params 1 slots 3 blocks 4 values 14
     5 NUMBER i32 0
     6 LOAD i32 slot 3
     7 GREATER_THAN bool <- 6 5
-    8 BRANCH target 3 alternative 4 <- 7
-  block 2 scope 3 BLOCK length 2
-    13 LOAD i32 slot 2
-    14 LEAVE <- 13
-  block 3 scope 4 BLOCK length 3
+    8 BRANCH target 2 alternative 3 <- 7
+  block 2 scope 4 BLOCK length 3
     9 NUMBER i32 1
     10 STORE slot 2 <- 9
-    11 JUMP target 2
-  block 4 scope 3 BLOCK length 1
-    12 JUMP target 2
+    11 JUMP target 4
+  block 3 scope 3 BLOCK length 1
+    12 JUMP target 4
+  block 4 scope 3 BLOCK length 2
+    13 LOAD i32 slot 2
+    14 LEAVE <- 13
 file positive/infallible-function-values/program.ldn
 unit signatures 6 items 8
 signature 1 (i32) -> i32
@@ -906,25 +1099,25 @@ item 2 ROUTINE from_fields result usize signature 1 params 1 slots 12 blocks 1 v
     6 COPY_ARRAY from datum 1 state field 2 to slot 8
     7 LOAD usize slot 1
     8 LOAD_ELEMENT usize slot 3 <- 7
-    9 STORE slot 12 <- 8
+    9 STORE slot 9 <- 8
     10 LOAD usize slot 1
     11 LOAD_ELEMENT usize slot 4 <- 10
-    12 LOAD usize slot 12
+    12 LOAD usize slot 9
     13 ADD usize <- 12 11
-    14 STORE slot 11 <- 13
+    14 STORE slot 10 <- 13
     15 LOAD usize slot 1
     16 LOAD_ELEMENT usize slot 6 <- 15
-    17 LOAD usize slot 11
+    17 LOAD usize slot 10
     18 ADD usize <- 17 16
-    19 STORE slot 10 <- 18
+    19 STORE slot 11 <- 18
     20 LOAD usize slot 1
     21 LOAD_ELEMENT usize slot 7 <- 20
-    22 LOAD usize slot 10
+    22 LOAD usize slot 11
     23 ADD usize <- 22 21
-    24 STORE slot 9 <- 23
+    24 STORE slot 12 <- 23
     25 LOAD usize slot 1
     26 LOAD_ELEMENT usize slot 8 <- 25
-    27 LOAD usize slot 9
+    27 LOAD usize slot 12
     28 ADD usize <- 27 26
     29 STORE slot 2 <- 28
     30 LOAD usize slot 2
@@ -1015,21 +1208,21 @@ item 1 ROUTINE read_row result u32 signature 1 params 1 slots 7 blocks 5 values 
     19 TRUTH bool false
     20 STORE_FIELD slot 7 field 2 <- 19
     21 LOAD_FIELD bool slot 7 field 1
-    22 BRANCH target 3 alternative 4 <- 21
-  block 2 scope 3 BLOCK length 2
-    31 LOAD u32 slot 2
-    32 LEAVE <- 31
-  block 3 scope 4 BLOCK length 4
+    22 BRANCH target 2 alternative 3 <- 21
+  block 2 scope 4 BLOCK length 4
     23 LOAD usize slot 1
     24 LOAD_ELEMENT u32 slot 4 <- 23
     25 STORE slot 2 <- 24
-    26 JUMP target 2
-  block 4 scope 3 BLOCK length 1
+    26 JUMP target 4
+  block 3 scope 3 BLOCK length 1
     27 JUMP target 5
+  block 4 scope 3 BLOCK length 2
+    31 LOAD u32 slot 2
+    32 LEAVE <- 31
   block 5 scope 5 BLOCK length 3
     28 NUMBER u32 0
     29 STORE slot 2 <- 28
-    30 JUMP target 2
+    30 JUMP target 4
 file positive/local-array-mixed-repetition/program.ldn
 unit signatures 1 items 1
 signature 1 (usize, u16) -> u16
@@ -1091,15 +1284,15 @@ item 1 ROUTINE f result u32 signature 1 params 2 slots 10 blocks 1 values 29
     14 FILL_ARRAY destination slot 7 first 1 <- 13
     15 LOAD usize slot 1
     16 LOAD_ELEMENT u32 slot 4 <- 15
-    17 STORE slot 10 <- 16
+    17 STORE slot 9 <- 16
     18 LOAD usize slot 1
     19 LOAD_ELEMENT u32 slot 5 <- 18
-    20 LOAD u32 slot 10
+    20 LOAD u32 slot 9
     21 ADD u32 <- 20 19
-    22 STORE slot 9 <- 21
+    22 STORE slot 10 <- 21
     23 LOAD usize slot 1
     24 LOAD_ELEMENT u32 slot 7 <- 23
-    25 LOAD u32 slot 9
+    25 LOAD u32 slot 10
     26 ADD u32 <- 25 24
     27 STORE slot 3 <- 26
     28 LOAD u32 slot 3
@@ -1160,20 +1353,20 @@ item 1 ROUTINE f result u32 signature 1 params 0 slots 3 blocks 5 values 15
     3 TRUTH bool false
     4 STORE slot 3 <- 3
     5 LOAD bool slot 3
-    6 BRANCH target 3 alternative 4 <- 5
-  block 2 scope 3 BLOCK length 2
-    14 LOAD u32 slot 1
-    15 LEAVE <- 14
-  block 3 scope 4 BLOCK length 3
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 4 BLOCK length 3
     7 NUMBER u32 1
     8 STORE slot 1 <- 7
-    9 JUMP target 2
-  block 4 scope 3 BLOCK length 1
+    9 JUMP target 4
+  block 3 scope 3 BLOCK length 1
     10 JUMP target 5
+  block 4 scope 3 BLOCK length 2
+    14 LOAD u32 slot 1
+    15 LEAVE <- 14
   block 5 scope 5 BLOCK length 3
     11 LOAD u32 slot 2
     12 STORE slot 1 <- 11
-    13 JUMP target 2
+    13 JUMP target 4
 file positive/local-shadows-a-parameter/program.ldn
 unit signatures 1 items 1
 signature 1 (u32) -> u32
@@ -1979,20 +2172,20 @@ item 5 ROUTINE observe result usize signature 1 params 0 slots 4 blocks 1 values
   block 1 scope 3 BLOCK length 20
     1 NUMBER usize 0
     2 LOAD_ELEMENT usize datum 1 first field 2 <- 1
-    3 STORE slot 4 <- 2
+    3 STORE slot 2 <- 2
     4 NUMBER usize 1
     5 LOAD_ELEMENT usize datum 2 second field 2 <- 4
-    6 LOAD usize slot 4
+    6 LOAD usize slot 2
     7 ADD usize <- 6 5
     8 STORE slot 3 <- 7
     9 NUMBER usize 0
     10 LOAD_ELEMENT usize datum 3 typed field 2 <- 9
     11 LOAD usize slot 3
     12 ADD usize <- 11 10
-    13 STORE slot 2 <- 12
+    13 STORE slot 4 <- 12
     14 NUMBER usize 1
     15 LOAD_ELEMENT usize datum 4 terminal field 2 <- 14
-    16 LOAD usize slot 2
+    16 LOAD usize slot 4
     17 ADD usize <- 16 15
     18 STORE slot 1 <- 17
     19 LOAD usize slot 1
@@ -2025,15 +2218,15 @@ item 4 ROUTINE observe result usize signature 1 params 0 slots 3 blocks 1 values
   block 1 scope 3 BLOCK length 15
     1 NUMBER usize 0
     2 LOAD_ELEMENT usize datum 1 first field 2 <- 1
-    3 STORE slot 3 <- 2
+    3 STORE slot 2 <- 2
     4 NUMBER usize 1
     5 LOAD_ELEMENT usize datum 2 second field 2 <- 4
-    6 LOAD usize slot 3
+    6 LOAD usize slot 2
     7 ADD usize <- 6 5
-    8 STORE slot 2 <- 7
+    8 STORE slot 3 <- 7
     9 NUMBER usize 0
     10 LOAD_ELEMENT usize datum 3 terminal field 2 <- 9
-    11 LOAD usize slot 2
+    11 LOAD usize slot 3
     12 ADD usize <- 11 10
     13 STORE slot 1 <- 12
     14 LOAD usize slot 1
@@ -2525,13 +2718,13 @@ item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 3 - i32
   block 1 scope 2 SIGNATURE length 12
     1 NUMBER i32 1
-    2 STORE slot 3 <- 1
+    2 STORE slot 2 <- 1
     3 NUMBER i32 2
-    4 LOAD i32 slot 3
+    4 LOAD i32 slot 2
     5 ADD i32 <- 4 3
-    6 STORE slot 2 <- 5
+    6 STORE slot 3 <- 5
     7 NUMBER i32 3
-    8 LOAD i32 slot 2
+    8 LOAD i32 slot 3
     9 MULTIPLY i32 <- 8 7
     10 STORE slot 1 <- 9
     11 LOAD i32 slot 1
@@ -2545,13 +2738,13 @@ item 1 ROUTINE f result bool signature 1 params 0 slots 3 blocks 1 values 12
   slot 3 - i32
   block 1 scope 2 SIGNATURE length 12
     1 NUMBER i32 1
-    2 STORE slot 3 <- 1
+    2 STORE slot 2 <- 1
     3 NUMBER i32 2
-    4 LOAD i32 slot 3
+    4 LOAD i32 slot 2
     5 BITWISE_OR i32 <- 4 3
-    6 STORE slot 2 <- 5
+    6 STORE slot 3 <- 5
     7 NUMBER i32 3
-    8 LOAD i32 slot 2
+    8 LOAD i32 slot 3
     9 EQUAL_TO bool <- 8 7
     10 STORE slot 1 <- 9
     11 LOAD bool slot 1
@@ -2994,21 +3187,21 @@ item 2 ROUTINE set result u32 signature 1 params 1 slots 7 blocks 5 values 33
     20 STORE_ELEMENT slot 3 field 2 <- 19 18
     21 NUMBER usize 0
     22 LOAD_ELEMENT bool slot 3 field 1 <- 21
-    23 BRANCH target 3 alternative 4 <- 22
-  block 2 scope 3 BLOCK length 2
-    32 LOAD u32 slot 2
-    33 LEAVE <- 32
-  block 3 scope 4 BLOCK length 3
+    23 BRANCH target 2 alternative 3 <- 22
+  block 2 scope 4 BLOCK length 3
     24 NUMBER u32 1
     25 STORE slot 2 <- 24
-    26 JUMP target 2
-  block 4 scope 3 BLOCK length 1
+    26 JUMP target 4
+  block 3 scope 3 BLOCK length 1
     27 JUMP target 5
+  block 4 scope 3 BLOCK length 2
+    32 LOAD u32 slot 2
+    33 LEAVE <- 32
   block 5 scope 5 BLOCK length 4
     28 NUMBER usize 0
     29 LOAD_ELEMENT u32 slot 3 field 2 <- 28
     30 STORE slot 2 <- 29
-    31 JUMP target 2
+    31 JUMP target 4
 file positive/struct-array-field-literal-assignment/program.ldn
 unit signatures 2 items 3
 signature 1 (usize) -> usize
@@ -3343,13 +3536,13 @@ item 7 ROUTINE f result none signature 1 params 0 slots 5 blocks 1 values 22
     11 NUMBER i32 10
     12 STORE_FIELD slot 3 field 2 <- 11
     13 LOAD_FIELD i32 slot 1 field 1
-    14 STORE slot 5 <- 13
+    14 STORE slot 4 <- 13
     15 LOAD_FIELD i32 slot 2 field 2
-    16 LOAD i32 slot 5
+    16 LOAD i32 slot 4
     17 ADD i32 <- 16 15
-    18 STORE slot 4 <- 17
+    18 STORE slot 5 <- 17
     19 LOAD_FIELD i32 slot 3 field 1
-    20 LOAD i32 slot 4
+    20 LOAD i32 slot 5
     21 ADD i32 <- 20 19
     22 LEAVE
 file positive/struct-literal-array-field-forms/program.ldn
@@ -3416,25 +3609,25 @@ item 3 ROUTINE write result usize signature 1 params 0 slots 8 blocks 1 values 6
     37 STORE_FIELD datum 2 state field 4 <- 36
     38 NUMBER usize 0
     39 LOAD_ELEMENT usize slot 2 field 2 <- 38
-    40 STORE slot 8 <- 39
+    40 STORE slot 5 <- 39
     41 NUMBER usize 1
     42 LOAD_ELEMENT usize slot 3 field 3 <- 41
-    43 LOAD usize slot 8
+    43 LOAD usize slot 5
     44 ADD usize <- 43 42
-    45 STORE slot 7 <- 44
+    45 STORE slot 6 <- 44
     46 NUMBER usize 2
     47 LOAD_ELEMENT usize slot 4 field 2 <- 46
-    48 LOAD usize slot 7
+    48 LOAD usize slot 6
     49 ADD usize <- 48 47
-    50 STORE slot 6 <- 49
+    50 STORE slot 7 <- 49
     51 NUMBER usize 2
     52 LOAD_ELEMENT usize slot 4 field 3 <- 51
-    53 LOAD usize slot 6
+    53 LOAD usize slot 7
     54 ADD usize <- 53 52
-    55 STORE slot 5 <- 54
+    55 STORE slot 8 <- 54
     56 NUMBER usize 0
     57 LOAD_ELEMENT usize datum 2 state field 2 <- 56
-    58 LOAD usize slot 5
+    58 LOAD usize slot 8
     59 ADD usize <- 58 57
     60 STORE slot 1 <- 59
     61 LOAD usize slot 1
@@ -3483,15 +3676,15 @@ item 2 ROUTINE read result usize signature 1 params 1 slots 6 blocks 1 values 39
     24 LOAD_FIELD u16 slot 4 field 4
     25 LOAD usize slot 1
     26 LOAD_ELEMENT usize slot 3 field 2 <- 25
-    27 STORE slot 6 <- 26
+    27 STORE slot 5 <- 26
     28 LOAD usize slot 1
     29 LOAD_ELEMENT usize slot 4 field 2 <- 28
-    30 LOAD usize slot 6
+    30 LOAD usize slot 5
     31 ADD usize <- 30 29
-    32 STORE slot 5 <- 31
+    32 STORE slot 6 <- 31
     33 LOAD usize slot 1
     34 LOAD_ELEMENT usize datum 1 state field 2 <- 33
-    35 LOAD usize slot 5
+    35 LOAD usize slot 6
     36 ADD usize <- 35 34
     37 STORE slot 2 <- 36
     38 LOAD usize slot 2
@@ -3689,8 +3882,13 @@ item 2 ROUTINE read_and_write result none signature 1 params 0 slots 6 blocks 15
     15 LOAD u8 slot 3
     16 NUMBER u8 0
     17 EQUAL_TO bool <- 15 16
-    18 BRANCH target 3 alternative 4 <- 17
-  block 2 scope 3 BLOCK length 16
+    18 BRANCH target 2 alternative 3 <- 17
+  block 2 scope 4 BLOCK length 2
+    19 NUMBER i32 0
+    20 JUMP target 4
+  block 3 scope 3 BLOCK length 1
+    21 JUMP target 5
+  block 4 scope 3 BLOCK length 16
     32 SELECT_VARIANT destination datum 1 state field 1 case 2
     33 NUMBER u16 19
     34 NUMBER usize 0
@@ -3706,39 +3904,32 @@ item 2 ROUTINE read_and_write result none signature 1 params 0 slots 6 blocks 15
     44 LOAD u8 slot 4
     45 NUMBER u8 0
     46 EQUAL_TO bool <- 44 45
-    47 BRANCH target 10 alternative 11 <- 46
-  block 3 scope 4 BLOCK length 2
-    19 NUMBER i32 0
-    20 JUMP target 2
-  block 4 scope 3 BLOCK length 1
-    21 JUMP target 5
+    47 BRANCH target 9 alternative 10 <- 46
   block 5 scope 5 BLOCK length 2
     22 TRUTH bool true
-    23 BRANCH target 7 alternative 8 <- 22
-  block 6 scope 5 BLOCK length 1
-    31 JUMP target 2
-  block 7 scope 6 BLOCK length 6
+    23 BRANCH target 6 alternative 7 <- 22
+  block 6 scope 6 BLOCK length 6
     24 NUMBER usize 3
     25 NUMBER usize 0
     26 LOAD_ELEMENT u16 slot 2 field 1 case 2 payload field 1 <- 25
     27 LOAD usize slot 1
     28 LOAD_ELEMENT u16 slot 2 field 1 case 2 payload field 1 <- 27
-    29 JUMP target 6
+    29 JUMP target 8
+  block 7 scope 5 BLOCK length 1
+    30 JUMP target 8
   block 8 scope 5 BLOCK length 1
-    30 JUMP target 6
-  block 9 scope 3 BLOCK length 1
-    71 LEAVE
-  block 10 scope 7 BLOCK length 2
+    31 JUMP target 4
+  block 9 scope 7 BLOCK length 2
     48 NUMBER i32 0
-    49 JUMP target 9
-  block 11 scope 3 BLOCK length 1
+    49 JUMP target 11
+  block 10 scope 3 BLOCK length 1
     50 JUMP target 12
+  block 11 scope 3 BLOCK length 1
+    71 LEAVE
   block 12 scope 8 BLOCK length 2
     51 TRUTH bool true
-    52 BRANCH target 14 alternative 15 <- 51
-  block 13 scope 8 BLOCK length 1
-    70 JUMP target 9
-  block 14 scope 9 BLOCK length 16
+    52 BRANCH target 13 alternative 14 <- 51
+  block 13 scope 9 BLOCK length 16
     53 NUMBER usize 0
     54 STORE slot 5 <- 53
     55 NUMBER u16 31
@@ -3754,9 +3945,11 @@ item 2 ROUTINE read_and_write result none signature 1 params 0 slots 6 blocks 15
     65 NUMBER u16 1
     66 ADD u16 <- 64 65
     67 STORE_ELEMENT datum 1 state field 1 case 2 payload field 1 <- 63 66
-    68 JUMP target 13
+    68 JUMP target 15
+  block 14 scope 8 BLOCK length 1
+    69 JUMP target 15
   block 15 scope 8 BLOCK length 1
-    69 JUMP target 13
+    70 JUMP target 11
 file positive/variant-match-exhaustive/program.ldn
 unit signatures 1 items 2
 signature 1 () -> none
@@ -3778,52 +3971,52 @@ item 2 ROUTINE match_variants result none signature 1 params 0 slots 4 blocks 13
     6 LOAD u8 slot 3
     7 NUMBER u8 0
     8 EQUAL_TO bool <- 6 7
-    9 BRANCH target 3 alternative 4 <- 8
-  block 2 scope 3 BLOCK length 7
+    9 BRANCH target 2 alternative 3 <- 8
+  block 2 scope 4 BLOCK length 3
+    10 NUMBER u8 1
+    11 STORE slot 2 <- 10
+    12 JUMP target 4
+  block 3 scope 3 BLOCK length 4
+    13 LOAD u8 slot 3
+    14 NUMBER u8 1
+    15 EQUAL_TO bool <- 13 14
+    16 BRANCH target 5 alternative 6 <- 15
+  block 4 scope 3 BLOCK length 7
     24 LOAD u8 slot 2
     25 LOAD_VARIANT_TAG u8 from datum 1 state field 1
     26 STORE slot 4 <- 25
     27 LOAD u8 slot 4
     28 NUMBER u8 0
     29 EQUAL_TO bool <- 27 28
-    30 BRANCH target 9 alternative 10 <- 29
-  block 3 scope 4 BLOCK length 3
-    10 NUMBER u8 1
-    11 STORE slot 2 <- 10
-    12 JUMP target 2
-  block 4 scope 3 BLOCK length 4
-    13 LOAD u8 slot 3
-    14 NUMBER u8 1
-    15 EQUAL_TO bool <- 13 14
-    16 BRANCH target 5 alternative 6 <- 15
+    30 BRANCH target 8 alternative 9 <- 29
   block 5 scope 5 BLOCK length 3
     17 NUMBER u8 2
     18 STORE slot 2 <- 17
-    19 JUMP target 2
+    19 JUMP target 4
   block 6 scope 3 BLOCK length 1
     20 JUMP target 7
   block 7 scope 6 BLOCK length 3
     21 NUMBER u8 3
     22 STORE slot 2 <- 21
-    23 JUMP target 2
-  block 8 scope 3 BLOCK length 1
-    42 LEAVE
-  block 9 scope 7 BLOCK length 2
+    23 JUMP target 4
+  block 8 scope 7 BLOCK length 2
     31 NUMBER i32 1
-    32 JUMP target 8
-  block 10 scope 3 BLOCK length 4
+    32 JUMP target 10
+  block 9 scope 3 BLOCK length 4
     33 LOAD u8 slot 4
     34 NUMBER u8 1
     35 EQUAL_TO bool <- 33 34
     36 BRANCH target 11 alternative 12 <- 35
+  block 10 scope 3 BLOCK length 1
+    42 LEAVE
   block 11 scope 8 BLOCK length 2
     37 NUMBER i32 2
-    38 JUMP target 8
+    38 JUMP target 10
   block 12 scope 3 BLOCK length 1
     39 JUMP target 13
   block 13 scope 9 BLOCK length 2
     40 NUMBER i32 3
-    41 JUMP target 8
+    41 JUMP target 10
 file positive/variant-match-payload-bindings/program.ldn
 unit signatures 1 items 2
 signature 1 () -> none
@@ -3848,30 +4041,28 @@ item 2 ROUTINE bind_payloads result none signature 1 params 0 slots 4 blocks 19 
     9 LOAD u8 slot 2
     10 NUMBER u8 0
     11 EQUAL_TO bool <- 9 10
-    12 BRANCH target 3 alternative 4 <- 11
-  block 2 scope 3 BLOCK length 6
+    12 BRANCH target 2 alternative 3 <- 11
+  block 2 scope 4 BLOCK length 2
+    13 NUMBER i32 0
+    14 JUMP target 4
+  block 3 scope 3 BLOCK length 4
+    15 LOAD u8 slot 2
+    16 NUMBER u8 1
+    17 EQUAL_TO bool <- 15 16
+    18 BRANCH target 5 alternative 6 <- 17
+  block 4 scope 3 BLOCK length 6
     34 LOAD_VARIANT_TAG u8 from datum 1 state field 1
     35 STORE slot 4 <- 34
     36 LOAD u8 slot 4
     37 NUMBER u8 0
     38 EQUAL_TO bool <- 36 37
-    39 BRANCH target 12 alternative 13 <- 38
-  block 3 scope 4 BLOCK length 2
-    13 NUMBER i32 0
-    14 JUMP target 2
-  block 4 scope 3 BLOCK length 4
-    15 LOAD u8 slot 2
-    16 NUMBER u8 1
-    17 EQUAL_TO bool <- 15 16
-    18 BRANCH target 5 alternative 6 <- 17
+    39 BRANCH target 11 alternative 12 <- 38
   block 5 scope 5 BLOCK length 2
     19 TRUTH bool true
-    20 BRANCH target 8 alternative 9 <- 19
+    20 BRANCH target 7 alternative 8 <- 19
   block 6 scope 3 BLOCK length 1
     31 JUMP target 10
-  block 7 scope 5 BLOCK length 1
-    30 JUMP target 2
-  block 8 scope 6 BLOCK length 8
+  block 7 scope 6 BLOCK length 8
     21 LOAD_VARIANT_FIELD u8 from slot 1 field 1 case 2 payload field 1
     22 LOAD_VARIANT_FIELD u8 from slot 1 field 1 case 2 payload field 2
     23 STORE slot 3 <- 22
@@ -3879,39 +4070,41 @@ item 2 ROUTINE bind_payloads result none signature 1 params 0 slots 4 blocks 19 
     25 LOAD u8 slot 3
     26 ADD u8 <- 25 24
     27 STORE_VARIANT_FIELD destination slot 1 field 1 case 2 payload field 2 <- 26
-    28 JUMP target 7
+    28 JUMP target 9
+  block 8 scope 5 BLOCK length 1
+    29 JUMP target 9
   block 9 scope 5 BLOCK length 1
-    29 JUMP target 7
+    30 JUMP target 4
   block 10 scope 7 BLOCK length 2
     32 NUMBER i32 0
-    33 JUMP target 2
-  block 11 scope 3 BLOCK length 1
-    57 LEAVE
-  block 12 scope 8 BLOCK length 2
+    33 JUMP target 4
+  block 11 scope 8 BLOCK length 2
     40 NUMBER i32 0
-    41 JUMP target 11
-  block 13 scope 3 BLOCK length 4
+    41 JUMP target 13
+  block 12 scope 3 BLOCK length 4
     42 LOAD u8 slot 4
     43 NUMBER u8 1
     44 EQUAL_TO bool <- 42 43
     45 BRANCH target 14 alternative 15 <- 44
+  block 13 scope 3 BLOCK length 1
+    57 LEAVE
   block 14 scope 9 BLOCK length 2
     46 TRUTH bool true
-    47 BRANCH target 17 alternative 18 <- 46
+    47 BRANCH target 16 alternative 17 <- 46
   block 15 scope 3 BLOCK length 1
     54 JUMP target 19
-  block 16 scope 9 BLOCK length 1
-    53 JUMP target 11
-  block 17 scope 10 BLOCK length 4
+  block 16 scope 10 BLOCK length 4
     48 LOAD_VARIANT_FIELD u8 from datum 1 state field 1 case 2 payload field 1
     49 LOAD_VARIANT_FIELD u8 from datum 1 state field 1 case 2 payload field 2
     50 STORE_VARIANT_FIELD destination datum 1 state field 1 case 2 payload field 2 <- 49
-    51 JUMP target 16
+    51 JUMP target 18
+  block 17 scope 9 BLOCK length 1
+    52 JUMP target 18
   block 18 scope 9 BLOCK length 1
-    52 JUMP target 16
+    53 JUMP target 13
   block 19 scope 11 BLOCK length 2
     55 NUMBER i32 0
-    56 JUMP target 11
+    56 JUMP target 13
 file positive/variant-module-array-payload-image/program.ldn
 unit signatures 1 items 4
 signature 1 () -> none
@@ -3960,32 +4153,32 @@ item 4 ROUTINE read result none signature 1 params 0 slots 2 blocks 9 values 23
     3 LOAD u8 slot 1
     4 NUMBER u8 0
     5 EQUAL_TO bool <- 3 4
-    6 BRANCH target 3 alternative 4 <- 5
-  block 2 scope 3 BLOCK length 6
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 4 BLOCK length 2
+    7 LOAD_FIELD u8 datum 2 copy field 1
+    8 JUMP target 4
+  block 3 scope 3 BLOCK length 1
+    9 JUMP target 5
+  block 4 scope 3 BLOCK length 6
     12 LOAD_VARIANT_TAG u8 from datum 3 inferred field 2
     13 STORE slot 2 <- 12
     14 LOAD u8 slot 2
     15 NUMBER u8 0
     16 EQUAL_TO bool <- 14 15
-    17 BRANCH target 7 alternative 8 <- 16
-  block 3 scope 4 BLOCK length 2
-    7 LOAD_FIELD u8 datum 2 copy field 1
-    8 JUMP target 2
-  block 4 scope 3 BLOCK length 1
-    9 JUMP target 5
+    17 BRANCH target 6 alternative 7 <- 16
   block 5 scope 5 BLOCK length 2
     10 LOAD_FIELD u8 datum 2 copy field 3
-    11 JUMP target 2
-  block 6 scope 3 BLOCK length 1
-    23 LEAVE
-  block 7 scope 6 BLOCK length 2
+    11 JUMP target 4
+  block 6 scope 6 BLOCK length 2
     18 LOAD_FIELD u8 datum 3 inferred field 1
-    19 JUMP target 6
-  block 8 scope 3 BLOCK length 1
+    19 JUMP target 8
+  block 7 scope 3 BLOCK length 1
     20 JUMP target 9
+  block 8 scope 3 BLOCK length 1
+    23 LEAVE
   block 9 scope 7 BLOCK length 2
     21 LOAD_FIELD u8 datum 3 inferred field 3
-    22 JUMP target 6
+    22 JUMP target 8
 file positive/variant-module-array-payload-image-copy/program.ldn
 unit signatures 1 items 9
 signature 1 () -> none
@@ -4080,32 +4273,32 @@ item 9 ROUTINE read result none signature 1 params 0 slots 2 blocks 9 values 23
     3 LOAD u8 slot 1
     4 NUMBER u8 0
     5 EQUAL_TO bool <- 3 4
-    6 BRANCH target 3 alternative 4 <- 5
-  block 2 scope 3 BLOCK length 6
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 4 BLOCK length 2
+    7 LOAD_FIELD u8 datum 2 copy field 1
+    8 JUMP target 4
+  block 3 scope 3 BLOCK length 1
+    9 JUMP target 5
+  block 4 scope 3 BLOCK length 6
     12 LOAD_VARIANT_TAG u8 from datum 3 inferred field 2
     13 STORE slot 2 <- 12
     14 LOAD u8 slot 2
     15 NUMBER u8 0
     16 EQUAL_TO bool <- 14 15
-    17 BRANCH target 7 alternative 8 <- 16
-  block 3 scope 4 BLOCK length 2
-    7 LOAD_FIELD u8 datum 2 copy field 1
-    8 JUMP target 2
-  block 4 scope 3 BLOCK length 1
-    9 JUMP target 5
+    17 BRANCH target 6 alternative 7 <- 16
   block 5 scope 5 BLOCK length 2
     10 LOAD_FIELD u8 datum 2 copy field 3
-    11 JUMP target 2
-  block 6 scope 3 BLOCK length 1
-    23 LEAVE
-  block 7 scope 6 BLOCK length 2
+    11 JUMP target 4
+  block 6 scope 6 BLOCK length 2
     18 LOAD_FIELD u8 datum 3 inferred field 1
-    19 JUMP target 6
-  block 8 scope 3 BLOCK length 1
+    19 JUMP target 8
+  block 7 scope 3 BLOCK length 1
     20 JUMP target 9
+  block 8 scope 3 BLOCK length 1
+    23 LEAVE
   block 9 scope 7 BLOCK length 2
     21 LOAD_FIELD u8 datum 3 inferred field 3
-    22 JUMP target 6
+    22 JUMP target 8
 file positive/variant-module-case-image/program.ldn
 unit signatures 1 items 6
 signature 1 () -> none
@@ -4160,71 +4353,71 @@ item 6 ROUTINE read result none signature 1 params 0 slots 3 blocks 19 values 52
     3 LOAD u8 slot 1
     4 NUMBER u8 0
     5 EQUAL_TO bool <- 3 4
-    6 BRANCH target 3 alternative 4 <- 5
-  block 2 scope 3 BLOCK length 6
+    6 BRANCH target 2 alternative 3 <- 5
+  block 2 scope 4 BLOCK length 2
+    7 LOAD_FIELD u8 datum 3 copy field 1
+    8 JUMP target 4
+  block 3 scope 3 BLOCK length 4
+    9 LOAD u8 slot 1
+    10 NUMBER u8 1
+    11 EQUAL_TO bool <- 9 10
+    12 BRANCH target 5 alternative 6 <- 11
+  block 4 scope 3 BLOCK length 6
     18 LOAD_VARIANT_TAG u8 from datum 4 inferred field 2
     19 STORE slot 2 <- 18
     20 LOAD u8 slot 2
     21 NUMBER u8 0
     22 EQUAL_TO bool <- 20 21
-    23 BRANCH target 9 alternative 10 <- 22
-  block 3 scope 4 BLOCK length 2
-    7 LOAD_FIELD u8 datum 3 copy field 1
-    8 JUMP target 2
-  block 4 scope 3 BLOCK length 4
-    9 LOAD u8 slot 1
-    10 NUMBER u8 1
-    11 EQUAL_TO bool <- 9 10
-    12 BRANCH target 5 alternative 6 <- 11
+    23 BRANCH target 8 alternative 9 <- 22
   block 5 scope 5 BLOCK length 2
     13 LOAD_VARIANT_FIELD u16 from datum 3 copy field 2 case 2 payload field 2
-    14 JUMP target 2
+    14 JUMP target 4
   block 6 scope 3 BLOCK length 1
     15 JUMP target 7
   block 7 scope 6 BLOCK length 2
     16 LOAD_FIELD u8 datum 3 copy field 3
-    17 JUMP target 2
-  block 8 scope 3 BLOCK length 6
+    17 JUMP target 4
+  block 8 scope 7 BLOCK length 2
+    24 LOAD_FIELD u8 datum 4 inferred field 1
+    25 JUMP target 10
+  block 9 scope 3 BLOCK length 4
+    26 LOAD u8 slot 2
+    27 NUMBER u8 1
+    28 EQUAL_TO bool <- 26 27
+    29 BRANCH target 11 alternative 12 <- 28
+  block 10 scope 3 BLOCK length 6
     35 LOAD_VARIANT_TAG u8 from datum 5 bare field 2
     36 STORE slot 3 <- 35
     37 LOAD u8 slot 3
     38 NUMBER u8 0
     39 EQUAL_TO bool <- 37 38
-    40 BRANCH target 15 alternative 16 <- 39
-  block 9 scope 7 BLOCK length 2
-    24 LOAD_FIELD u8 datum 4 inferred field 1
-    25 JUMP target 8
-  block 10 scope 3 BLOCK length 4
-    26 LOAD u8 slot 2
-    27 NUMBER u8 1
-    28 EQUAL_TO bool <- 26 27
-    29 BRANCH target 11 alternative 12 <- 28
+    40 BRANCH target 14 alternative 15 <- 39
   block 11 scope 8 BLOCK length 2
     30 LOAD_FIELD u8 datum 4 inferred field 3
-    31 JUMP target 8
+    31 JUMP target 10
   block 12 scope 3 BLOCK length 1
     32 JUMP target 13
   block 13 scope 9 BLOCK length 2
     33 LOAD_FIELD u8 datum 4 inferred field 1
-    34 JUMP target 8
-  block 14 scope 3 BLOCK length 1
-    52 LEAVE
-  block 15 scope 10 BLOCK length 2
+    34 JUMP target 10
+  block 14 scope 10 BLOCK length 2
     41 LOAD_FIELD u8 datum 5 bare field 1
-    42 JUMP target 14
-  block 16 scope 3 BLOCK length 4
+    42 JUMP target 16
+  block 15 scope 3 BLOCK length 4
     43 LOAD u8 slot 3
     44 NUMBER u8 1
     45 EQUAL_TO bool <- 43 44
     46 BRANCH target 17 alternative 18 <- 45
+  block 16 scope 3 BLOCK length 1
+    52 LEAVE
   block 17 scope 11 BLOCK length 2
     47 LOAD_FIELD u8 datum 5 bare field 3
-    48 JUMP target 14
+    48 JUMP target 16
   block 18 scope 3 BLOCK length 1
     49 JUMP target 19
   block 19 scope 12 BLOCK length 2
     50 LOAD_FIELD u8 datum 5 bare field 3
-    51 JUMP target 14
+    51 JUMP target 16
 file positive/variant-part-measured/program.ldn
 unit signatures 0 items 1
 item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1
@@ -4383,14 +4576,14 @@ item 3 ROUTINE exercise result none signature 1 params 0 slots 3 blocks 5 values
     20 LOAD u8 slot 2
     21 NUMBER u8 0
     22 EQUAL_TO bool <- 20 21
-    23 BRANCH target 3 alternative 4 <- 22
-  block 2 scope 3 BLOCK length 1
-    39 LEAVE
-  block 3 scope 4 BLOCK length 2
+    23 BRANCH target 2 alternative 3 <- 22
+  block 2 scope 4 BLOCK length 2
     24 SELECT_VARIANT destination slot 1 field 1 case 1
-    25 JUMP target 2
-  block 4 scope 3 BLOCK length 1
+    25 JUMP target 4
+  block 3 scope 3 BLOCK length 1
     26 JUMP target 5
+  block 4 scope 3 BLOCK length 1
+    39 LEAVE
   block 5 scope 5 BLOCK length 12
     27 SELECT_VARIANT destination slot 1 field 1 case 2
     28 LOAD_FIELD i32 datum 1 state field 1 case 2 nested 1 nested 1
@@ -4403,7 +4596,7 @@ item 3 ROUTINE exercise result none signature 1 params 0 slots 3 blocks 5 values
     35 LOAD i32 slot 3
     36 ADD i32 <- 35 34
     37 STORE_VARIANT_FIELD destination slot 1 field 1 case 2 payload field 2 <- 36
-    38 JUMP target 2
+    38 JUMP target 4
 file positive/variant-whole-copy/program.ldn
 unit signatures 1 items 2
 signature 1 () -> none
@@ -4468,17 +4661,17 @@ item 2 ROUTINE copy result none signature 1 params 0 slots 9 blocks 12 values 75
     42 LOAD u8 slot 6
     43 NUMBER u8 0
     44 EQUAL_TO bool <- 42 43
-    45 BRANCH target 3 alternative 4 <- 44
-  block 2 scope 3 BLOCK length 1
-    75 LEAVE
-  block 3 scope 4 BLOCK length 2
+    45 BRANCH target 2 alternative 3 <- 44
+  block 2 scope 4 BLOCK length 2
     46 NUMBER i32 1
-    47 JUMP target 2
-  block 4 scope 3 BLOCK length 4
+    47 JUMP target 4
+  block 3 scope 3 BLOCK length 4
     48 LOAD u8 slot 6
     49 NUMBER u8 1
     50 EQUAL_TO bool <- 48 49
     51 BRANCH target 5 alternative 6 <- 50
+  block 4 scope 3 BLOCK length 1
+    75 LEAVE
   block 5 scope 5 BLOCK length 7
     52 LOAD_VARIANT_FIELD u8 from slot 4 field 2 case 2 payload field 1
     53 STORE slot 8 <- 52
@@ -4486,30 +4679,30 @@ item 2 ROUTINE copy result none signature 1 params 0 slots 9 blocks 12 values 75
     55 LOAD u8 slot 8
     56 EQUAL_TO bool <- 55 54
     57 STORE slot 7 <- 56
-    58 BRANCH target 10 alternative 11 <- 56
+    58 BRANCH target 7 alternative 8 <- 56
   block 6 scope 3 BLOCK length 1
     72 JUMP target 12
-  block 7 scope 5 BLOCK length 1
-    71 JUMP target 2
-  block 8 scope 6 BLOCK length 2
-    68 LOAD_FIELD u8 slot 4 field 1
-    69 JUMP target 7
-  block 9 scope 5 BLOCK length 1
-    70 JUMP target 7
-  block 10 scope 5 BLOCK length 7
+  block 7 scope 5 BLOCK length 7
     59 LOAD_VARIANT_FIELD u16 from slot 4 field 2 case 2 payload field 2
     60 STORE slot 9 <- 59
     61 NUMBER u16 3
     62 LOAD u16 slot 9
     63 EQUAL_TO bool <- 62 61
     64 STORE slot 7 <- 63
-    65 JUMP target 11
-  block 11 scope 5 BLOCK length 2
+    65 JUMP target 8
+  block 8 scope 5 BLOCK length 2
     66 LOAD bool slot 7
-    67 BRANCH target 8 alternative 9 <- 66
+    67 BRANCH target 9 alternative 10 <- 66
+  block 9 scope 6 BLOCK length 2
+    68 LOAD_FIELD u8 slot 4 field 1
+    69 JUMP target 11
+  block 10 scope 5 BLOCK length 1
+    70 JUMP target 11
+  block 11 scope 5 BLOCK length 1
+    71 JUMP target 4
   block 12 scope 7 BLOCK length 2
     73 NUMBER i32 3
-    74 JUMP target 2
+    74 JUMP target 4
 file positive/variant-zeroed-storage/program.ldn
 unit signatures 1 items 3
 signature 1 () -> none
