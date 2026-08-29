@@ -1177,6 +1177,9 @@ package body Landin.Tests.Parser_Suite is
    procedure Parameterized_Type_Aliases_Are_Parsed
      (Item : in out Landin.Testing.Context);
 
+   procedure Parameterized_Alias_Errors_Keep_Grammar_Boundaries
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Type_Aliases_Are_Parsed
      (Item : in out Landin.Testing.Context)
    is
@@ -1268,6 +1271,71 @@ package body Landin.Tests.Parser_Suite is
       end;
    end Parameterized_Type_Aliases_Are_Parsed;
 
+   procedure Parameterized_Alias_Errors_Keep_Grammar_Boundaries
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Parse
+        (Text : String;
+         Into : out Unbounded.Unbounded_String;
+         Declarations : out Natural;
+         Second : out Landin.Syntax.Node_Kind);
+
+      procedure Parse
+        (Text : String;
+         Into : out Unbounded.Unbounded_String;
+         Declarations : out Natural;
+         Second : out Landin.Syntax.Node_Kind)
+      is
+         Sources : Landin.Source.Sets.Source_Set;
+         Names   : Landin.Source.Names.Table;
+         Stream  : Landin.Tokens.Token_Stream;
+         Found   : Landin.Diagnostics.Diagnostic_List;
+         Id      : constant Landin.Source.Source_Id :=
+           Sources.Add ("recovery.ldn", Text);
+      begin
+         Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+         Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+         declare
+            Parsed : constant Landin.Syntax.Tree :=
+              Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         begin
+            Declarations := Landin.Syntax.Declaration_Count (Parsed);
+            Second :=
+              (if Declarations >= 2
+               then Landin.Syntax.Kind
+                 (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2))
+               else Landin.Syntax.Error_Declaration);
+            Into := Unbounded.To_Unbounded_String
+              (Landin.Diagnostics.Code
+                 (Landin.Diagnostics.Get (Found, 1)));
+         end;
+      end Parse;
+
+      Code : Unbounded.Unbounded_String;
+      Declarations : Natural;
+      Second : Landin.Syntax.Node_Kind;
+   begin
+      Parse
+        ("broken: type (t: type = t" & ASCII.LF
+         & "next: type = u8" & ASCII.LF,
+         Code, Declarations, Second);
+      Landin.Testing.Check
+        (Item, Declarations = 2
+          and then Second = Landin.Syntax.Type_Declaration,
+         "a malformed formal list preserves the next declaration");
+
+      Parse
+        ("problem: atom" & ASCII.LF
+         & "bad: type (t: type) = problem | problem" & ASCII.LF,
+         Code, Declarations, Second);
+      Landin.Testing.Check
+        (Item, Declarations = 2
+          and then Second = Landin.Syntax.Type_Declaration
+          and then Unbounded.To_String (Code) = "L0010",
+         "a parameterized atom union is refused, not parsed as a union");
+   end Parameterized_Alias_Errors_Keep_Grammar_Boundaries;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1306,6 +1374,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "parses parameterized type aliases",
          Parameterized_Type_Aliases_Are_Parsed'Access);
+      Landin.Testing.Register
+        (Into, "parser", "parameterized aliases keep grammar boundaries",
+         Parameterized_Alias_Errors_Keep_Grammar_Boundaries'Access);
       Landin.Testing.Register
         (Into, "parser", "reports carry the pinned codes",
          Reports_Carry_The_Pinned_Codes'Access);

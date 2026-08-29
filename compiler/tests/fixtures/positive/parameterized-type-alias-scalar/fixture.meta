@@ -1,0 +1,5 @@
+class: positive
+summary: a saturated identity alias preserves scalar and fixed-array type actual descriptors in declarations and storage
+constructs: 0110, 0190, 0520, 1350, 1790, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

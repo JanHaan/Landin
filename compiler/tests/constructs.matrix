@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  199 constructs, 112 with evidence, 87 with neither.
+#  199 constructs, 113 with evidence, 86 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -148,7 +148,7 @@
 1320   tour        -                                  Traversal is a concept
 1330   tour        -                                  A range is not a concept
 1340   tour        -                                  Concepts compose
-1350   tour        -                                  Types take parameters through a declaration form of their
+1350   tour        accepted emitted executed refused refused-by-name Types take parameters through a declaration form of their
 1360   tour        -                                  Allocation is an ordinary concept
 1370   tour        -                                  'any C' is a value of some type satisfying concept C
 1380   tour        -                                  Building one is explicit

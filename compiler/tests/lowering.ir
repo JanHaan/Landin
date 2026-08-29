@@ -3383,6 +3383,18 @@ item 1 DATUM a result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 1
     2 LEAVE <- 1
+file positive/parameterized-type-alias-fixed-array/program.ldn
+unit signatures 0 items 1
+item 1 DATUM direct result array params 0 slots 0 blocks 1 values 1
+  elements 3 of u16
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+file positive/parameterized-type-alias-scalar/program.ldn
+unit signatures 0 items 1
+item 1 DATUM value result u8 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 NUMBER u8 7
+    2 LEAVE <- 1
 file positive/parentheses-override/program.ldn
 unit signatures 1 items 1
 signature 1 () -> i32

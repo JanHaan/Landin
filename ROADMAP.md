@@ -2254,7 +2254,11 @@ Depends on: R2.10, R1.50
 
 Implement type and fixed parameters, substitution, constant array lengths,
 deduction and fixed conditional declarations without introducing compile-time
-execution.
+execution. D135's first semantic slice now normalizes fully applied positional
+parameterized aliases to the existing scalar and fixed-array descriptors,
+including nested fixed-formal substitution; templates and formals remain
+compile-time-only. Generic functions, deduction and fixed conditional
+declarations remain in this item.
 
 Exit evidence: generic shape fixtures and negative non-fixed cases pass; no
 user code executes during compilation.

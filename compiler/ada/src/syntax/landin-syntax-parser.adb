@@ -323,7 +323,8 @@ package body Landin.Syntax.Parser is
               (Declared_At : Landin.Source.Span) return Node_Id;
             procedure Parse_Type_Formals
               (Declared_At : Landin.Source.Span;
-               Into        : in out Slot_Vectors.Vector);
+               Into        : in out Slot_Vectors.Vector;
+               Closed      : out Boolean);
             function Parse_Type_Application
               (Target : Node_Id;
                Starts : Landin.Source.Span) return Node_Id;
@@ -1572,11 +1573,13 @@ package body Landin.Syntax.Parser is
             --  reserved word so a normal declaration cannot quietly use it.
             procedure Parse_Type_Formals
               (Declared_At : Landin.Source.Span;
-               Into        : in out Slot_Vectors.Vector)
+               Into        : in out Slot_Vectors.Vector;
+               Closed      : out Boolean)
             is
                Opened : constant Landin.Source.Span := Here;
             begin
                pragma Assert (Peek = Tok.Left_Paren);
+               Closed := False;
                Advance;
 
                if Peek = Tok.Right_Paren then
@@ -1648,14 +1651,18 @@ package body Landin.Syntax.Parser is
                   Advance;
                end loop;
 
-               if not Expect
+               Closed := Expect
                  (Wanted  => Tok.Right_Paren,
                   Message => "a type declaration's formals close with `)`",
                   Note    => "D135: `(` opens the type formal list",
                   Related => Opened,
-                  Because => "opened here")
-               then
-                  Resync (Declaration_Anchor);
+                  Because => "opened here");
+               if not Closed then
+                  --  If the list ended at a declaration opener, it belongs
+                  --  to the program loop, not this failed formal list.
+                  if not Declaration_Anchor (Peek) then
+                     Resync_Declaration;
+                  end if;
                end if;
             end Parse_Type_Formals;
 
@@ -1675,16 +1682,23 @@ package body Landin.Syntax.Parser is
                  Parse_Declared_Name (Named);
                Aliased_Type : Node_Id := No_Node;
                Formals : Slot_Vectors.Vector;
+               Formals_Closed : Boolean := True;
             begin
                --  The colon and the word are what brought us here.
                Advance;
                Advance;
 
                if Peek = Tok.Left_Paren then
-                  Parse_Type_Formals (At_Name, Formals);
+                  Parse_Type_Formals (At_Name, Formals, Formals_Closed);
                end if;
 
-               if Expect
+               if not Formals_Closed then
+                  --  Parse_Type_Formals has already reported the missing
+                  --  closer.  Leave a following declaration opener untouched
+                  --  for Parse_Program rather than consuming it while looking
+                  --  for this declaration's `=` and body.
+                  Aliased_Type := Add (Error_Type, After_Previous);
+               elsif Expect
                     (Wanted  => Tok.Equal,
                      Message => "a type declaration names a type after `=`",
                      Note    => "[1795]: name `:` `type` `=` type",
@@ -1713,7 +1727,23 @@ package body Landin.Syntax.Parser is
                      --  names.  Parse_Type read the first name; only a type
                      --  declaration admits the following bars, so ordinary
                      --  expression precedence remains untouched.
-                     if not Type_Refused and then Peek = Tok.Bar then
+                     if not Type_Refused
+                       and then Peek = Tok.Bar
+                       and then not Formals.Is_Empty
+                     then
+                        --  D135 enables parameterized aliases only.  An atom
+                        --  union is a separate declaration alternative in
+                        --  [1795], not a `type` body, so retaining an
+                        --  Atom_Union_Type here would accept syntax the
+                        --  grammar excludes.
+                        Type_Refused := True;
+                        Refuse
+                          (Item    => Syn.Parameterized_Atom_Union,
+                           Where   => Here,
+                           Message => "a parameterized atom union is not"
+                                      & " enabled");
+                        Resync_Declaration;
+                     elsif not Type_Refused and then Peek = Tok.Bar then
                         declare
                            Members : Slot_Vectors.Vector;
                            Starts  : constant Landin.Source.Span :=

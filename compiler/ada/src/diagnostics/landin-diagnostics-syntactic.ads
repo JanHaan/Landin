@@ -102,6 +102,7 @@ package Landin.Diagnostics.Syntactic is
       Distinct_Type,
       Break_Statement,
       Type_Parameter,
+      Parameterized_Atom_Union,
       --  Bracketed constructs whose spelling the parser alone can tell
       --  from [1790]'s array type and [0520]'s array literal.
       Slice_Type,
@@ -131,6 +132,7 @@ package Landin.Diagnostics.Syntactic is
             when Distinct_Type        => "[0650]",
             when Break_Statement      => "[1190]",
             when Type_Parameter       => "[1290]",
+            when Parameterized_Atom_Union => "[1350]",
             when Slice_Type           => "[0570]",
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
@@ -182,7 +184,8 @@ private
                | Indexing
                | Struct_All_Of         => "R2.20",
             --  R2.40 implements type and fixed parameters.
-            when Type_Parameter       => "R2.40",
+            when Type_Parameter
+               | Parameterized_Atom_Union => "R2.40",
             --  R2.50 sources [0900] for the parameter conventions.
             when Parameter_Convention => "R2.50",
             --  R4.10 closes the hosted construct matrix.

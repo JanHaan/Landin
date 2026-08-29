@@ -1,0 +1,5 @@
+bytes: type (t: type, fixed n: u64) = [n]t
+nested: type (fixed n: integer, integer: type, t: type) = bytes(t, n)
+four: type = bytes(u8, 4)
+eight: type = nested(8, u16, u32)
+mut direct: nested(3, u8, u16)
