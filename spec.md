@@ -6094,3 +6094,31 @@ caller-owned destination and callee leave copy as an explicitly typed local.
 generated token and IR records; and the inferred locals in
 `runtime/struct-returns-cross-calls` and `runtime/array-returns-cross-calls` on
 Linux x86-64.
+
+### D111 — A returned aggregate may immediately cross an argument boundary
+
+**The tour said** that arguments evaluate left to right [0410] and each `in`
+parameter receives a value [0900]. D106's result destination and D94's argument
+carrier can therefore meet in one caller-owned temporary without exposing an
+aggregate expression to neutral IR.
+
+**Chosen:** a matching struct- or fixed-array-returning call may be supplied
+directly to an aggregate parameter. The inner call first fills a fresh shaped
+caller temporary through its hidden destination. Only after that call completes
+does the outer call transport the temporary's opaque address and perform its
+ordinary defensive callee copy. Nominal struct identity and array shape are
+checked at the source boundary.
+
+When later arguments change blocks, the temporary address uses the same saved
+scalar carrier as any earlier aggregate argument, preserving block-local IR and
+source evaluation order.
+
+**Why two copies remain semantic:** the inner return establishes a value in the
+caller and the outer `in` boundary establishes an independent callee value.
+Optimization may combine storage only after proving neither identity can be
+observed; the language and verifier do not depend on that optimization.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/returned-struct-argument-nominal-mismatch`; the generated token and
+IR records; and the nested calls in `runtime/struct-returns-cross-calls` and
+`runtime/array-returns-cross-calls` on Linux x86-64.

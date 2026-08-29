@@ -1945,6 +1945,10 @@ The twenty-fourth increment lets a local infer a returned struct's nominal
 body or a returned array's scalar shape. Its fresh inferred slot becomes the
 same hidden destination; module call inference remains forbidden.
 
+The twenty-fifth increment composes result and argument boundaries. An inner
+aggregate call fills a shaped caller temporary before the outer call transports
+its address and performs the ordinary defensive parameter copy.
+
 Further aggregate arguments and result contexts remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
