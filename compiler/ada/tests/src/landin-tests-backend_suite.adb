@@ -4582,6 +4582,62 @@ package body Landin.Tests.Backend_Suite is
       end;
    end An_Aggregate_Control_Join_Passes_One_Caller_Cell;
 
+   --  A runtime trap path stops at `ud2`; only the instruction path that
+   --  survives the checked operation reaches normal block cleanup.  The
+   --  backend receives ordinary calls from lowering and preserves their
+   --  lexical reverse order without owning unwind policy.
+   procedure Deferred_Calls_Follow_The_Normal_Path_After_Traps
+     (Item : in out Landin.Testing.Context);
+
+   procedure Deferred_Calls_Follow_The_Normal_Path_After_Traps
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "mut divisor: i32 = 0" & LF
+         & "first: () -> none = end first" & LF
+         & "second: () -> none = end second" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    defer first()" & LF
+         & "    defer second()" & LF
+         & "    code = 42 / divisor" & LF
+         & "end main" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "checked division with deferred cleanup is lowered");
+
+      declare
+         Whole : constant String := Emitted (Work);
+         Main_At : constant Positive :=
+           Positive (Index (Whole, "main:" & LF));
+         Text : constant String := Whole (Main_At .. Whole'Last);
+         Trap_At : constant Natural := Index (Text, HT & "ud2" & LF);
+         Second_At : constant Natural :=
+           Index (Text, HT & "call second" & LF);
+         First_At : constant Natural :=
+           Index (Text, HT & "call first" & LF);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Trap_At > 0 and then Second_At > Trap_At
+              and then First_At > Second_At,
+            "the trap stops before normal reverse-order cleanup calls");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "call second" & LF), 1,
+            "the later defer emits one call");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, HT & "call first" & LF), 1,
+            "the earlier defer emits one call");
+      end;
+   end Deferred_Calls_Follow_The_Normal_Path_After_Traps;
+
    ------------------------------------------------------------------
    --  The frame
    ------------------------------------------------------------------
@@ -4701,6 +4757,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "an aggregate control join passes one caller cell",
          An_Aggregate_Control_Join_Passes_One_Caller_Cell'Access);
+      Landin.Testing.Register
+        (Into, "backend", "deferred calls follow normal paths after traps",
+         Deferred_Calls_Follow_The_Normal_Path_After_Traps'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned add uses carry to trap",
          Unsigned_Add_Uses_Carry_To_Trap'Access);

@@ -1,0 +1,5 @@
+class: negative
+summary: undo remains refused until declared failure edges are implemented
+program: program.ldn
+codes: L0010
+constructs: 1110, 1830

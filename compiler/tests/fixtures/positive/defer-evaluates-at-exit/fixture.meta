@@ -1,0 +1,4 @@
+class: positive
+summary: defer registers a typed call before its arguments become definitely assigned
+program: program.ldn
+constructs: 0080, 0410, 0930, 1080, 1100, 1800, 1810, 1910, 1920

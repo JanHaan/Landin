@@ -78,9 +78,10 @@ only the kernel the compiler implements today:
 
 The kernel still does not have loops, so these examples deliberately use
 recursion and module-level arrays. R2.30 now also accepts internal aggregate
-parameters and results plus expression-valued `if`, exhaustive `match`, and
-bare `begin` blocks; their dedicated fixtures exercise caller-owned scalar,
-fixed-array and struct join storage. On Linux x86-64, compile one of the
+parameters and results, expression-valued `if`, exhaustive `match`, bare
+`begin` blocks, and lexical `defer`; their dedicated fixtures exercise
+caller-owned scalar, fixed-array and struct join storage plus reverse-order
+cleanup across normal and successful-return edges. On Linux x86-64, compile one of the
 recursive examples from the repository root with:
 
 ```sh

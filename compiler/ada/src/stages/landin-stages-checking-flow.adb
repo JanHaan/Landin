@@ -4,6 +4,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
+with Landin.Cleanup;
 with Landin.Diagnostics.Checking;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -15,6 +16,7 @@ with Landin.Types;
 package body Landin.Stages.Checking.Flow is
 
    package Bad renames Landin.Diagnostics.Checking;
+   package Cleanup renames Landin.Cleanup;
    package Unbounded renames Ada.Strings.Unbounded;
    package Res renames Landin.Resolution;
    package Syn renames Landin.Syntax;
@@ -307,6 +309,25 @@ package body Landin.Stages.Checking.Flow is
       Fallthrough_Edge : constant Edge_Facts :=
         (Falls_Through => True, Returns => False);
 
+      --  A lexical cleanup stack contains syntax, not evaluated arguments.
+      --  Reaching a defer appends its call; an applicable block edge walks
+      --  the active entries in reverse and only then evaluates each call.
+      --  Active is cleared before an entry runs so a return from one of its
+      --  arguments unwinds the still-pending entries without repeating it.
+      type Cleanup_Entry is record
+         Kind   : Cleanup.Cleanup_Kind := Cleanup.Deferred_Call;
+         Call   : Syn.Node_Id := Syn.No_Node;
+         Active : Boolean := True;
+      end record;
+
+      package Cleanup_Entries is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Cleanup_Entry);
+
+      package Cleanup_Indexes is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Positive);
+
+      Cleanup_Stack : Cleanup_Entries.Vector;
+
       --  Which declarations [1910] is about.  A parameter arrives assigned
       --  and a module binding is [1940]'s, so what is left is a local
       --  declared with no value and the named return.
@@ -345,6 +366,13 @@ package body Landin.Stages.Checking.Flow is
          State   : in out Assigned_Set;
          Edges   : out Edge_Facts;
          Needs_Value : Boolean := False);
+      procedure Flow_Cleanups
+        (Of_Tree : Syn.Tree;
+         First   : Natural;
+         On_Exit : Cleanup.Exit_Kind;
+         Result  : Res.Declaration_Id;
+         State   : in out Assigned_Set;
+         Edges   : out Edge_Facts);
       procedure Merge
         (Into   : in out Assigned_Set;
          First  : Boolean;
@@ -1600,6 +1628,61 @@ package body Landin.Stages.Checking.Flow is
          end case;
       end Flow_Expression;
 
+      procedure Flow_Cleanups
+        (Of_Tree : Syn.Tree;
+         First   : Natural;
+         On_Exit : Cleanup.Exit_Kind;
+         Result  : Res.Declaration_Id;
+         State   : in out Assigned_Set;
+         Edges   : out Edge_Facts)
+      is
+         Disabled : Cleanup_Indexes.Vector;
+         Last : constant Natural := Natural (Cleanup_Stack.Length);
+      begin
+         Edges := Fallthrough_Edge;
+         if First = 0 or else First > Last then
+            return;
+         end if;
+
+         for Position in reverse Positive (First) .. Positive (Last) loop
+            exit when not Edges.Falls_Through;
+
+            declare
+               Action : Cleanup_Entry := Cleanup_Stack (Position);
+            begin
+               if Action.Active
+                 and then Cleanup.Applies (Action.Kind, On_Exit)
+               then
+                  Action.Active := False;
+                  Cleanup_Stack.Replace_Element (Position, Action);
+                  Disabled.Append (Position);
+
+                  declare
+                     Step : Edge_Facts;
+                  begin
+                     Flow_Expression
+                       (Of_Tree, Action.Call, Result, State, Step);
+                     Edges.Returns := Edges.Returns or Step.Returns;
+                     Edges.Falls_Through := Step.Falls_Through;
+                  end;
+               end if;
+            end;
+         end loop;
+
+         --  This walk represents one possible exit.  Restore its entries so
+         --  a sibling edge through the same syntax gets its own runtime
+         --  execution.  A nested return skipped every entry this walk had
+         --  already disabled, so it cannot have added one of these indexes.
+         for Position of Disabled loop
+            declare
+               Action : Cleanup_Entry := Cleanup_Stack (Position);
+            begin
+               Action.Active := True;
+               Cleanup_Stack.Replace_Element (Position, Action);
+            end;
+         end loop;
+      end Flow_Cleanups;
+
       procedure Flow_Block
         (Of_Tree : Syn.Tree;
          Block   : Syn.Node_Id;
@@ -1609,6 +1692,7 @@ package body Landin.Stages.Checking.Flow is
          Edges   : out Edge_Facts;
          Needs_Value : Boolean := False)
       is
+         Cleanup_Base : constant Natural := Natural (Cleanup_Stack.Length);
          procedure Mark
            (Node              : Syn.Node_Id;
             Index_Was_Checked : Boolean := False);
@@ -1904,20 +1988,47 @@ package body Landin.Stages.Checking.Flow is
                      Flow_Expression
                        (Of_Tree, Item, Result, State, Step);
 
+                  when Syn.Defer_Statement =>
+                     --  Registration reads no callee or argument.  The
+                     --  syntactic call is checked against the DA state at
+                     --  each edge on which it actually runs.
+                     Cleanup_Stack.Append
+                       (Cleanup_Entry'
+                          (Kind   => Cleanup.Deferred_Call,
+                           Call   => Syn.Deferred_Call (Of_Tree, Item),
+                           Active => True));
+
                   when Syn.Return_Statement =>
                      Flow_Expression
                        (Of_Tree, Syn.Condition_Of (Of_Tree, Item), Result,
                         State, Step);
 
                      if Step.Falls_Through then
-                        Require_Returns_Assigned
-                          (Syn.Anchor (Of_Tree, Item), State,
-                           "this returns and no path that arrives assigned"
-                           & " the return");
+                        declare
+                           Cleanup_Edges : Edge_Facts;
+                           Guarded : constant Boolean :=
+                             Syn.Condition_Of (Of_Tree, Item) /= Syn.No_Node;
+                           Return_State : Assigned_Set := State;
+                        begin
+                           Flow_Cleanups
+                             (Of_Tree, 1, Cleanup.Successful_Return,
+                              Result, Return_State, Cleanup_Edges);
 
-                        Step.Returns := True;
-                        Step.Falls_Through :=
-                          Syn.Condition_Of (Of_Tree, Item) /= Syn.No_Node;
+                           --  A cleanup may assign one or more named results
+                           --  while evaluating an argument.  Check the
+                           --  original return only after every normally
+                           --  completing cleanup; a return from inside one
+                           --  checked its own edge recursively.
+                           if Cleanup_Edges.Falls_Through then
+                              Require_Returns_Assigned
+                                (Syn.Anchor (Of_Tree, Item), Return_State,
+                                 "this returns and no path that arrives"
+                                 & " assigned the return");
+                           end if;
+
+                           Step.Returns := True;
+                           Step.Falls_Through := Guarded;
+                        end;
                      end if;
 
                   when others =>
@@ -1954,6 +2065,27 @@ package body Landin.Stages.Checking.Flow is
                Because => "this control expression needs a value",
                Into    => Found);
          end if;
+
+         --  The optional final value has already been evaluated and, in
+         --  lowering, stored in its consumer-owned join before cleanup.
+         --  Only this lexical frame is left by ordinary fallthrough.  A
+         --  return raised while one of its calls is evaluated recursively
+         --  sees every still-active outer frame.
+         if Edges.Falls_Through then
+            declare
+               Cleanup_Edges : Edge_Facts;
+            begin
+               Flow_Cleanups
+                 (Of_Tree, Cleanup_Base + 1, Cleanup.Normal_Fallthrough,
+                  Result, State, Cleanup_Edges);
+               Edges.Returns := Edges.Returns or Cleanup_Edges.Returns;
+               Edges.Falls_Through := Cleanup_Edges.Falls_Through;
+            end;
+         end if;
+
+         while Natural (Cleanup_Stack.Length) > Cleanup_Base loop
+            Cleanup_Stack.Delete_Last;
+         end loop;
       end Flow_Block;
 
       Result_Id : constant Res.Declaration_Id :=

@@ -1610,14 +1610,16 @@ names the block for the later control transfers that need one.
 
 ### [1100] defer runs at the end of its block, in reverse order
 
-defer runs at the end of its block, in reverse order.
-The call is evaluated where it runs, not where it was
-written: it names places, and reads them then. So a
-defer that sinks something sinks it at the end, which
-is why the thing stays usable in between — and if a
-named place has been re-pointed by then, the defer sees
-what is there now. Registering one costs nothing and
-reserves nothing.
+defer runs when its block is left, in reverse order. That includes ordinary
+fallthrough and a successful return through the block; a trap is a stop and
+does not unwind anything. A nested block runs its own entries before an outer
+block's, and an entry is active only after control has reached its statement.
+The call is evaluated where it runs, not where it was written: it names places,
+and reads them then. So a defer that sinks something sinks it at the end, which
+is why the thing stays usable in between — and if a named place has been
+re-pointed by then, the defer sees what is there now. The block's final value is
+formed before these calls run. Registering one evaluates no callee or argument,
+costs nothing and reserves nothing.
 ```landin
     defer cleanup()
 
