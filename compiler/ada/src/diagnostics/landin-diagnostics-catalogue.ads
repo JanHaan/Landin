@@ -94,6 +94,7 @@ package Landin.Diagnostics.Catalogue is
       Field_Not_Given,
       Variant_Case_Named_Twice,
       Variant_Case_Not_Matched,
+      Recursive_Nominal_Value,
       --  The backend and its toolchain, assigned from R1.80 onwards.  None
       --  is about a frontend construct: two are the host failing to finish
       --  an accepted program, one is [1970]'s missing entry shape, one is a
@@ -149,6 +150,7 @@ package Landin.Diagnostics.Catalogue is
             when Field_Not_Given           => "L0310",
             when Variant_Case_Named_Twice  => "L0311",
             when Variant_Case_Not_Matched  => "L0312",
+            when Recursive_Nominal_Value   => "L0313",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -171,7 +173,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
             when Literal_Out_Of_Range
-               .. Variant_Case_Not_Matched => Error,
+               .. Recursive_Nominal_Value => Error,
             when No_Toolchain .. Frame_Not_Addressable => Error);
 
    --  Argument_Not_In_A_Register retired at R2.30: the internal scalar
@@ -197,7 +199,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
             when Literal_Out_Of_Range
-               .. Variant_Case_Not_Matched => Live,
+               .. Recursive_Nominal_Value => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable => Live);
@@ -284,6 +286,8 @@ package Landin.Diagnostics.Catalogue is
                "[1210]: a match names each variant case at most once",
             when Variant_Case_Not_Matched =>
                "[1210]: an exhaustive match names every variant case",
+            when Recursive_Nominal_Value =>
+               "D137: a nominal value layout cannot contain itself by value",
             when No_Toolchain          =>
                "[1550]: no assembler and linker for the target on this"
                & " host",
@@ -324,7 +328,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
             when Literal_Out_Of_Range
-               .. Variant_Case_Not_Matched => True,
+               .. Recursive_Nominal_Value => True,
             --  None of the three is about a place in a file.  Two are
             --  the host failing to finish an accepted program, and the
             --  third is a declaration the module never made, which has
@@ -354,7 +358,7 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Name       => True,
             --  Every one of these points at something a program wrote.
             when Literal_Out_Of_Range
-               .. Variant_Case_Not_Matched =>
+               .. Recursive_Nominal_Value =>
                True,
             when No_Toolchain .. Frame_Not_Addressable => False);
 
@@ -396,6 +400,7 @@ package Landin.Diagnostics.Catalogue is
             when Not_Definitely_Assigned => 1,
             when Field_Named_Twice     => 1,
             when Variant_Case_Named_Twice => 1,
+            when Recursive_Nominal_Value => 1,
             when Literal_Out_Of_Range  => 0,
             when Unsupported_Use       => 0,
             when Not_Known_At_Compile_Time => 0,
@@ -408,7 +413,8 @@ package Landin.Diagnostics.Catalogue is
 
    function Maximum_Secondaries (Of_Code : Code_Name) return Natural
      is (case Of_Code is
-            when Literal_Out_Of_Range | Impossible_Operand => 1,
+            when Literal_Out_Of_Range | Impossible_Operand
+               | Unsupported_Use => 1,
             when others => Minimum_Secondaries (Of_Code));
 
    --  How many notes. [1830] promises a diagnostic that names the construct
@@ -437,6 +443,7 @@ package Landin.Diagnostics.Catalogue is
             when Field_Not_Given       => 1,
             when Variant_Case_Named_Twice => 1,
             when Variant_Case_Not_Matched => 1,
+            when Recursive_Nominal_Value => 1,
             --  The one diagnostic here a user is stuck on rather than
             --  informed by, so it owes them the way out: which program
             --  was looked for, and how to name another.

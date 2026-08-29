@@ -1,0 +1,6 @@
+left: type (item: type) = struct
+    next: right(item)
+end left
+right: type (item: type) = struct
+    next: left(item)
+end right

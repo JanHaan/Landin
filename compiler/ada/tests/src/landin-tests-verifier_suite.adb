@@ -251,7 +251,7 @@ package body Landin.Tests.Verifier_Suite is
       begin
          IR.Prepare (Unit, Meanings.all);
          Left := IR.Add_Nominal_Type (Unit, 1);
-         Right := IR.Add_Nominal_Type (Unit, 2);
+         Right := IR.Add_Nominal_Type (Unit, 1);
          Signature := IR.Add_Signature
            (Unit,
             [1 => (Kind => Landin.Types.Aggregate,
@@ -273,7 +273,7 @@ package body Landin.Tests.Verifier_Suite is
 
          Expect
            (Item, V.Check (Unit), V.Routine_Signature_Disagrees,
-            "same-layout nominal parameters remain unequal");
+            "same-template same-layout instances remain unequal");
       end;
    end Same_Layout_Nominals_Do_Not_Agree_In_Signatures;
 

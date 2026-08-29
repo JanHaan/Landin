@@ -1,0 +1,4 @@
+bad: type (item: type) = struct
+    value: u8
+    value: item
+end bad

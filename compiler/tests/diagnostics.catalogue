@@ -41,6 +41,7 @@ L0309  Live     [0710]: a struct literal names a field at most once
 L0310  Live     [0710]: every field is named or covered by `of`
 L0311  Live     [1210]: a match names each variant case at most once
 L0312  Live     [1210]: an exhaustive match names every variant case
+L0313  Live     D137: a nominal value layout cannot contain itself by value
 L0500  Live     [1550]: no assembler and linker for the target on this host
 L0501  Live     [1550]: the platform assembler or linker refused what was emitted
 L0502  Live     [1970]: a hosted program with no `public main: () -> (code: i32)`

@@ -1,0 +1,54 @@
+box: type (item: type) = struct
+    value: item
+end box
+
+row: type (item: type, fixed count: u32) = struct
+    values: [count]item
+    child: box(item)
+    state: variant
+        empty |
+        full: (payload: box(item))
+    end state
+end row
+
+module_box: box(i32) = (value: 2)
+module_row: row(i32, 3) = (
+    values: [3, 4, 5],
+    child: (value: 6),
+    state: empty)
+
+make: (value: i32) -> (result: box(i32)) =
+    result = (value: value)
+end make
+
+take: (value: box(i32)) -> (result: i32) =
+    result = value.value
+end take
+
+choose: (flag: bool, left: box(i32), right: box(i32)) -> (result: box(i32)) =
+    result = if flag then
+        left
+    else
+        right
+    end if
+end choose
+
+public main: () -> (code: i32) =
+    mut first: box(i32) = zeroed
+    first = (value: 7)
+    copied: box(i32) = first
+    made: box(i32) = make(8)
+    joined: box(i32) = choose(true, copied, made)
+    mut local: row(i32, 3) = zeroed
+    local = module_row
+    local.values[1] = 9
+    local.child = made
+    local.state = full(payload: joined)
+    mut payload: i32 = 0
+    match local.state
+        empty: payload = 0
+        full(item): payload = item.value
+    end match
+    code = module_box.value + take(local.child)
+           + local.values[1] + payload + 16
+end main

@@ -1,0 +1,6 @@
+bad: type (item: type) = struct
+    state: variant
+        same |
+        same: (value: item)
+    end state
+end bad

@@ -1,0 +1,4 @@
+row: type (fixed count: u8) = struct
+    bytes: [count]u8
+end row
+bad: row(256)
