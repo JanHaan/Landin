@@ -1,4 +1,4 @@
 f: () -> none =
-    fixed: u32 = 1
-    fixed = 2
+    constant: u32 = 1
+    constant = 2
 end f

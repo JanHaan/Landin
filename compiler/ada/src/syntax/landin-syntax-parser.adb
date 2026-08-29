@@ -321,6 +321,12 @@ package body Landin.Syntax.Parser is
                Returns_At  : out Landin.Source.Span) return Node_Id;
             function Parse_Errors
               (Declared_At : Landin.Source.Span) return Node_Id;
+            procedure Parse_Type_Formals
+              (Declared_At : Landin.Source.Span;
+               Into        : in out Slot_Vectors.Vector);
+            function Parse_Type_Application
+              (Target : Node_Id;
+               Starts : Landin.Source.Span) return Node_Id;
             function Parse_Type
               (In_Parameter : Boolean;
                Declared_At  : Landin.Source.Span) return Node_Id;
@@ -1157,6 +1163,76 @@ package body Landin.Syntax.Parser is
                return Place;
             end Parse_Place;
 
+            --  D135's parenthesized positional application.  It is a type
+            --  production, not a call: its operands are types or fixed
+            --  integer arguments, and no expression can reach this reader.
+            function Parse_Type_Application
+              (Target : Node_Id;
+               Starts : Landin.Source.Span) return Node_Id
+            is
+               Arguments : Slot_Vectors.Vector;
+            begin
+               pragma Assert (Peek = Tok.Left_Paren);
+               Advance;
+
+               loop
+                  if Peek = Tok.Integer_Literal then
+                     declare
+                        Item : constant Tok.Token :=
+                          Tok.Token_At (From, Index);
+                     begin
+                        Arguments.Append
+                          (Add (Integer_Literal, Here,
+                                Radix     => Tok.Base (Item),
+                                Digits_At => Tok.Digit_Span (Item)));
+                     end;
+                     Advance;
+                  elsif Peek in Tok.Identifier | Tok.Left_Bracket
+                               | Tok.Left_Paren
+                  then
+                     Arguments.Append (Parse_Type (False, Starts));
+                  else
+                     Complain
+                       (Item    => Syn.Type_Expected,
+                        Where   => (if Peek = Tok.End_Of_Input
+                                    then After_Previous else Here),
+                        Message => "a type or fixed integer belongs in a"
+                                   & " type application",
+                        Note    => "D135: type arguments are positional",
+                        Related => Starts,
+                        Because => "the applied type");
+                     Arguments.Append (Add (Error_Type, After_Previous));
+                     exit;
+                  end if;
+
+                  exit when Peek /= Tok.Comma;
+                  Advance;
+               end loop;
+
+               if not Expect
+                 (Wanted  => Tok.Right_Paren,
+                  Message => "a type application's arguments close with `)`",
+                  Note    => "D135: `(` opens the positional arguments",
+                  Related => Starts,
+                  Because => "the applied type")
+               then
+                  Resync (List_Anchor);
+                  if Peek = Tok.Right_Paren then
+                     Advance;
+                  end if;
+               end if;
+
+               declare
+                  Head : constant Slot_List (1 .. 1) := [Target];
+               begin
+                  return Add
+                    (Of_Kind  => Type_Application,
+                     At_Token => Starts,
+                     Extent   => Join (Starts, After_Previous),
+                     Children => Head & To_List (Arguments));
+               end;
+            end Parse_Type_Application;
+
             --  type ::= the eleven scalar names                   [1790]
             --
             --  Not a closed set of keywords: [1760] says u32 and bool are
@@ -1326,6 +1402,11 @@ package body Landin.Syntax.Parser is
                         end;
 
                         Advance;
+                     elsif Peek = Tok.Identifier then
+                        --  D135: a fixed formal supplies an array bound.
+                        Bound := Add
+                          (Name_Reference, Here, Named => Named_Here);
+                        Advance;
                      else
                         Complain
                           (Item    => Syn.Type_Expected,
@@ -1385,8 +1466,15 @@ package body Landin.Syntax.Parser is
                      for Item in Scalar_Name loop
                         if Scalar_Id (Item) = Spelled then
                            Advance;
-                           return Add
-                             (Type_Name, At_Type, Named => Spelled);
+                           declare
+                              Base : constant Node_Id :=
+                                Add (Type_Name, At_Type, Named => Spelled);
+                           begin
+                              return
+                                (if Peek = Tok.Left_Paren
+                                 then Parse_Type_Application (Base, At_Type)
+                                 else Base);
+                           end;
                         end if;
                      end loop;
 
@@ -1395,8 +1483,15 @@ package body Landin.Syntax.Parser is
                      --  here: whether it names one is resolution's to
                      --  answer, and this stage stops guessing.
                      Advance;
-                     return Add
-                       (Type_Reference, At_Type, Named => Spelled);
+                     declare
+                        Base : constant Node_Id :=
+                          Add (Type_Reference, At_Type, Named => Spelled);
+                     begin
+                        return
+                          (if Peek = Tok.Left_Paren
+                           then Parse_Type_Application (Base, At_Type)
+                           else Base);
+                     end;
                   end;
                end if;
 
@@ -1472,6 +1567,98 @@ package body Landin.Syntax.Parser is
                   Exported => Exported);
             end Parse_Atom_Declaration;
 
+            --  D135's parameters are parsed only after a type declaration's
+            --  `type`, never after a function's leading `(`.  `fixed` is a
+            --  reserved word so a normal declaration cannot quietly use it.
+            procedure Parse_Type_Formals
+              (Declared_At : Landin.Source.Span;
+               Into        : in out Slot_Vectors.Vector)
+            is
+               Opened : constant Landin.Source.Span := Here;
+            begin
+               pragma Assert (Peek = Tok.Left_Paren);
+               Advance;
+
+               if Peek = Tok.Right_Paren then
+                  Complain
+                    (Item    => Syn.Type_Expected,
+                     Where   => After_Previous,
+                     Message => "a parameterized alias has at least one"
+                                & " formal",
+                     Note    => "D135: type_formals is a nonempty list",
+                     Related => Opened,
+                     Because => "opened here");
+               end if;
+
+               while Peek /= Tok.Right_Paren
+                 and then Peek /= Tok.End_Of_Input
+               loop
+                  declare
+                     Fixed : constant Boolean := Peek = Tok.Kw_Fixed;
+                     Starts : constant Landin.Source.Span := Here;
+                     Named : Landin.Source.Names.Name_Id;
+                     At_Name : Landin.Source.Span;
+                     Of_Type : Node_Id := No_Node;
+                  begin
+                     if Fixed then
+                        Advance;
+                     end if;
+
+                     At_Name := Parse_Declared_Name (Named);
+                     if Expect
+                       (Wanted  => Tok.Colon,
+                        Message => "a type formal names its type after `:`",
+                        Note    => "D135: a formal is `name: type` or"
+                                   & " `fixed name: type`",
+                        Related => Declared_At,
+                        Because => "the type declaration")
+                     then
+                        if Fixed then
+                           Of_Type := Parse_Type (False, At_Name);
+                        elsif Peek = Tok.Kw_Type then
+                           Advance;
+                        else
+                           Complain
+                             (Item    => Syn.Type_Expected,
+                              Where   => (if Peek = Tok.End_Of_Input
+                                          then After_Previous else Here),
+                              Message => "a type formal is declared with"
+                                         & " `type`",
+                              Note    => "D135: `name: type` declares a"
+                                         & " type formal",
+                              Related => At_Name,
+                              Because => "the formal named here");
+                           Of_Type := Add (Error_Type, After_Previous);
+                        end if;
+                     else
+                        Of_Type := Add (Error_Type, After_Previous);
+                     end if;
+
+                     Into.Append
+                       (Add
+                          (Of_Kind  =>
+                             (if Fixed then Fixed_Formal else Type_Formal),
+                           At_Token => (if Fixed then Starts else At_Name),
+                           Extent   => Join (Starts, After_Previous),
+                           Children => (if Fixed then [Of_Type] else No_Slots),
+                           Named    => Named));
+                  end;
+
+                  exit when Peek /= Tok.Comma;
+                  Advance;
+               end loop;
+
+               if not Expect
+                 (Wanted  => Tok.Right_Paren,
+                  Message => "a type declaration's formals close with `)`",
+                  Note    => "D135: `(` opens the type formal list",
+                  Related => Opened,
+                  Because => "opened here")
+               then
+                  Resync (Declaration_Anchor);
+               end if;
+            end Parse_Type_Formals;
+
             --  binding ::= "mut"? identifier ":" type ("=" expression)?
             --            | "mut"? identifier ":=" expression      [1790]
             --  `identifier ":" "type" "=" type` [1795].  The name is
@@ -1487,10 +1674,15 @@ package body Landin.Syntax.Parser is
                At_Name : constant Landin.Source.Span :=
                  Parse_Declared_Name (Named);
                Aliased_Type : Node_Id := No_Node;
+               Formals : Slot_Vectors.Vector;
             begin
                --  The colon and the word are what brought us here.
                Advance;
                Advance;
+
+               if Peek = Tok.Left_Paren then
+                  Parse_Type_Formals (At_Name, Formals);
+               end if;
 
                if Expect
                     (Wanted  => Tok.Equal,
@@ -1499,9 +1691,21 @@ package body Landin.Syntax.Parser is
                      Related => At_Name,
                      Because => "declared here")
                then
-                  --  [1795]: a name, or [0670]'s block form.
+                  --  [1795]: a name, or [0670]'s block form.  This
+                  --  increment admits formals only on aliases; generic
+                  --  structs remain a later R2.40 increment.
                   if Peek = Tok.Kw_Struct then
-                     Aliased_Type := Parse_Struct_Body (Named, At_Name);
+                     if not Formals.Is_Empty then
+                        Type_Refused := True;
+                        Refuse
+                          (Item    => Syn.Struct_Type,
+                           Where   => Here,
+                           Message => "a parameterized struct type is not"
+                                      & " enabled yet");
+                        Resync_Declaration;
+                     else
+                        Aliased_Type := Parse_Struct_Body (Named, At_Name);
+                     end if;
                   else
                      Aliased_Type := Parse_Type (False, At_Name);
 
@@ -1565,7 +1769,7 @@ package body Landin.Syntax.Parser is
                  (Of_Kind  => Type_Declaration,
                   At_Token => At_Name,
                   Extent   => Join (Start, After_Previous),
-                  Children => [1 => Aliased_Type],
+                  Children => [Aliased_Type] & To_List (Formals),
                   Named    => Named,
                   Exported => Exported);
             end Parse_Type_Declaration;
@@ -2097,6 +2301,19 @@ package body Landin.Syntax.Parser is
                At_Name   : Landin.Source.Span;
                Type_Node : Node_Id;
             begin
+               --  D135 reserves `fixed` for type declarations, but generic
+               --  function parameters remain refused.  Consume its prefix
+               --  here so the one refusal owns the complete parameter rather
+               --  than turning the reserved word into a name-error cascade.
+               if Peek = Tok.Kw_Fixed then
+                  Refuse
+                    (Item    => Syn.Type_Parameter,
+                     Where   => Here,
+                     Message => "fixed parameters are not enabled on"
+                                & " functions yet");
+                  Advance;
+               end if;
+
                --  [0900]: a convention is written before the name, so
                --  `inout x: i32` is two identifiers in a row, which
                --  `parameter ::= identifier ":" type` cannot derive.
