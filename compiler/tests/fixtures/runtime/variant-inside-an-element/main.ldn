@@ -1,0 +1,66 @@
+tagged: type = struct
+    lead: i32
+    kind: variant
+        leaf |
+        pair: (first: i32, second: i32)
+    end kind
+end tagged
+
+holder: type = struct
+    rows: [2]tagged
+    tail: i32
+end holder
+
+mut state: [2]tagged
+mut nested: holder
+
+selected: () -> (r: i32) =
+    mut local: [2]tagged
+    local = zeroed
+    local[1].lead = 1
+    local[1].kind = pair(first: 2, second: 3)
+    r = local[1].lead
+    match local[1].kind
+        leaf: r = r + 0
+        pair(first, second): r = r + first + second
+    end match
+    match local[0].kind
+        leaf: r = r + 10
+        pair(first, second): r = r + first + second
+    end match
+end selected
+
+copied: () -> (r: i32) =
+    mut local: [2]tagged
+    local = zeroed
+    state = zeroed
+    local[0].kind = pair(first: 4, second: 5)
+    state[1] = local[0]
+    r = 0
+    match state[1].kind
+        leaf: r = r + 0
+        pair(first, second): r = r + first + second
+    end match
+    match state[0].kind
+        leaf: r = r + 1
+        pair(first, second): r = r + first + second
+    end match
+end copied
+
+carried: () -> (r: i32) =
+    mut local: [2]tagged
+    local = zeroed
+    nested = zeroed
+    nested.tail = 13
+    local[1].kind = pair(first: 1, second: 2)
+    nested.rows[1] = local[1]
+    r = nested.tail
+    match nested.rows[1].kind
+        leaf: r = r + 0
+        pair(first, second): r = r + first + second
+    end match
+end carried
+
+public main: () -> (code: i32) =
+    code = selected() + copied() + carried()
+end main

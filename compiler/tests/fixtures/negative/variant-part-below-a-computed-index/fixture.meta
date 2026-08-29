@@ -1,0 +1,6 @@
+class: negative
+summary: D127 reaches a variant part inside an array element through a known index, and a computed index is a value, so the part below one is still no value or place
+constructs: 0520, 0670, 0680, 1810
+program: program.ldn
+codes: L0304, L0304
+targets: linux-x86-64, macos-arm64

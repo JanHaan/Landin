@@ -1,5 +1,5 @@
 class: negative
-summary: a leaf of an array element is a value and a place, and the whole element is neither yet
+summary: D127 admits a whole element at a known position, and a computed index is a value rather than an identity, so a whole element there is still neither a value nor a place
 constructs: 0520, 0670, 0750, 1810
 program: program.ldn
 codes: L0304, L0304, L0304

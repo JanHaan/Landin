@@ -1,0 +1,35 @@
+tagged: type = struct
+    lead: i32
+    kind: variant
+        leaf |
+        pair: (first: i32, second: i32)
+    end kind
+end tagged
+
+holder: type = struct
+    rows: [2]tagged
+    tail: i32
+end holder
+
+mut state: [2]tagged
+mut nested: holder
+
+exercise: () -> (r: i32) =
+    mut local: [2]tagged
+    local = zeroed
+    state = zeroed
+    nested = zeroed
+    local[1].lead = 1
+    local[1].kind = pair(first: 2, second: 3)
+    state[0] = local[1]
+    nested.rows[1] = local[1]
+    r = 0
+    match state[0].kind
+        leaf: r = r + 0
+        pair(first, second): r = r + first + second
+    end match
+    match nested.rows[1].kind
+        leaf: r = r + 0
+        pair(first, second): r = r + first + second
+    end match
+end exercise

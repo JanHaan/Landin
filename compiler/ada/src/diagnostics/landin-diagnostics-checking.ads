@@ -120,16 +120,11 @@ package Landin.Diagnostics.Checking is
       --  [1940] folds a module value rather than copying one, and D67's
       --  folded image run has no carrier for a child's own image.  The
       --  same construction inside a function is admitted.
-      --  D126 admits a variant part inside an ordinary child and inside a
-      --  variant payload, both of which one run reaches.  An array element
-      --  is reached by an index, which is a value rather than a step, so a
-      --  variant part inside one waits for D127's whole-element place.
-      Variant_Inside_An_Element,
       Nested_Module_Image,
-      --  D121 makes [0520]'s element an ordinary struct and every leaf of
-      --  one a value and a place.  The whole element is neither yet: an
-      --  index is a value rather than an identity, so reaching one whole
-      --  needs an address the contextual forms do not form.
+      --  D127 makes a whole element at a known position a value and a
+      --  place, because a known position is an identity like a field.  At
+      --  a computed index it is neither: reaching one whole would need an
+      --  address the contextual forms do not form.
       Whole_Element_Aggregate,
       --  [0520] declares one; a value of one waits, as a struct's did,
       --  and so does an element the kernel cannot lay out end to end.
@@ -149,8 +144,7 @@ package Landin.Diagnostics.Checking is
             when Text_Type          => "[0600]",
             when Struct_Value
                | Struct_ABI         => "[0670]",
-            when Variant_Value
-               | Variant_Inside_An_Element => "[0680]",
+            when Variant_Value      => "[0680]",
             when Nested_Module_Image => "[1940]",
             when Whole_Element_Aggregate => "[0520]",
             when Array_Value        => "[0520]",
@@ -214,7 +208,6 @@ private
                | Float_Type
                | Text_Type         => "R4.10",
             when Struct_ABI
-               | Variant_Inside_An_Element
                | Nested_Module_Image
                | Whole_Element_Aggregate => "R2.30",
             when Struct_Value
