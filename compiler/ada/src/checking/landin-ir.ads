@@ -339,8 +339,27 @@ package Landin.IR is
 
    type Case_Run_Array is array (Positive range <>) of Case_Run;
 
+   --  One step of a target-neutral subobject path.  Field is the
+   --  declaration-order position [0750] inside the run the path has
+   --  reached so far; Case_Index is zero when that run is an ordinary
+   --  field run and the one-based source-order case when the step before
+   --  it named a variant part.  D88--D90 needed exactly one step below a
+   --  parent field and spelt it as a second scalar; D117 makes the same
+   --  thing a run, because [0420] composes `a.b.c.d` with no depth of its
+   --  own and a pair cannot say what a third selection reached.  A step
+   --  is an identity and never a target offset: how far into the parent
+   --  the reached part sits is Landin.Backend's, replayed from the shapes
+   --  the steps name.
+   type Path_Step is record
+      Field      : Part_Position := 1;
+      Case_Index : Natural       := 0;
+   end record;
+
+   type Path_Step_Array is array (Positive range <>) of Path_Step;
+
    No_Field_Shapes : constant Field_Shape_Array (1 .. 0) := [];
    No_Case_Runs    : constant Case_Run_Array (1 .. 0) := [];
+   No_Path_Steps   : constant Path_Step_Array (1 .. 0) := [];
 
    No_Item  : constant Item_Id  := 0;
    No_Slot  : constant Slot_Id  := 0;
@@ -1476,10 +1495,11 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Copy_Array | Copy_Variant;
 
-   --  D90's fixed-array field inside Source_Field_Of's ordinary child.
-   --  Zero keeps D20/D50's direct source path.
-   function Source_Nested_Field_Of
-     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+   --  D90's fixed-array field below Source_Field_Of, generalised by D117
+   --  into a run of steps.  An empty path keeps D20/D50's direct source.
+   function Source_Path_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Path_Step_Array
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
 
@@ -1530,16 +1550,43 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Load_Field | Store_Field;
 
-   --  D88's scalar field, or D89/D90's fixed-array field, inside a depth-one
-   --  ordinary child. Zero keeps the direct operation; a positive identity
-   --  is declaration order inside the child and never a target offset.
-   function Nested_Field_Of
+   --  D88's scalar field, or D89/D90's fixed-array field, below the base
+   --  field above -- and, since D117, however many further selections
+   --  [0420] composed to reach the part the operation names.  An empty
+   --  path keeps the direct operation.  Each step is an identity inside
+   --  the run the step before it reached, never a target offset.
+   function Path_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Path_Step_Array
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Storage_Address | Load_Field | Store_Field
+                             | Load_Element | Store_Element
+                             | Copy_Array | Clear_Array | Fill_Array;
+
+   --  How deep that path goes, for a caller that only has to know
+   --  whether the operation is direct.
+   function Path_Depth_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
                           in Storage_Address | Load_Field | Store_Field
                              | Load_Element | Store_Element
                              | Copy_Array | Clear_Array | Fill_Array;
+
+   --  Walking one of those paths down from the shape its base field has.
+   --  Valid says every step names a part the run it indexes actually has;
+   --  Shape answers what the last step reached.  Both are shape questions
+   --  and neither asks a target anything, so the verifier, the lowering
+   --  and the backend read the same answer from the same run.
+   function Path_Is_Valid
+     (Of_Unit : Unit; Root : Field_Shape; Path : Path_Step_Array)
+      return Boolean;
+
+   function Shape_At
+     (Of_Unit : Unit; Root : Field_Shape; Path : Path_Step_Array)
+      return Field_Shape
+     with Pre => Path_Is_Valid (Of_Unit, Root, Path);
 
    --  D48's containing aggregate field for an element operation, D49's
    --  destination field for a clear, D50's destination field for a copy,
@@ -1843,7 +1890,7 @@ package Landin.IR is
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Nested_Field : Natural := 0) return Value_Id
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Datum)
                   and then Landin.Provenance.Is_Known (Site),
@@ -1857,7 +1904,7 @@ package Landin.IR is
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Nested_Field : Natural := 0) return Value_Id
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Slot)
                   and then Landin.Provenance.Is_Known (Site),
@@ -1871,7 +1918,7 @@ package Landin.IR is
       Field : Part_Position;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
-      Nested_Field : Natural := 0)
+      Nested : Path_Step_Array := No_Path_Steps)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Slot)
                  and then Holds (Into, Item, Value)
@@ -1890,7 +1937,7 @@ package Landin.IR is
       Field : Part_Position;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
-      Nested_Field : Natural := 0)
+      Nested : Path_Step_Array := No_Path_Steps)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Datum)
                  and then Holds (Into, Item, Value)
@@ -1909,7 +1956,7 @@ package Landin.IR is
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
       Field  : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
@@ -1927,7 +1974,7 @@ package Landin.IR is
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
       Field : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
@@ -1939,7 +1986,8 @@ package Landin.IR is
    --  The same element operations reaching a slot in this item's own frame
    --  [1810].  Field zero names an Add_Array_Slot shape; D48's positive
    --  field names a compact fixed-array leaf of an aggregate slot, and D89's
-   --  Nested_Field names that leaf inside the field's ordinary child.
+   --  Nested names that leaf inside the field's ordinary child, and
+   --  since D117 may go on naming a part of it.
    function Emit_Load_Slot_Element
      (Into   : in out Unit;
       Item   : Item_Id;
@@ -1948,7 +1996,7 @@ package Landin.IR is
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
       Field  : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
@@ -1967,7 +2015,7 @@ package Landin.IR is
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
       Field : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
@@ -1983,9 +2031,9 @@ package Landin.IR is
       Destination : Storage;
       Site       : Landin.Provenance.Origin;
       Source_Field : Natural := 0;
-      Source_Nested_Field : Natural := 0;
+      Source_Nested : Path_Step_Array := No_Path_Steps;
       Destination_Field : Natural := 0;
-      Destination_Nested_Field : Natural := 0;
+      Destination_Nested : Path_Step_Array := No_Path_Steps;
       Destination_Variant_Case : Natural := 0;
       Destination_Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
@@ -2007,7 +2055,7 @@ package Landin.IR is
       Destination : Storage;
       Site       : Landin.Provenance.Origin;
       Field      : Natural := 0;
-      Nested_Field : Natural := 0)
+      Nested : Path_Step_Array := No_Path_Steps)
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
 
@@ -2019,7 +2067,7 @@ package Landin.IR is
       Value       : Value_Id;
       Site        : Landin.Provenance.Origin;
       Field       : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
      with Pre => Is_Emitting (Into, Item)
@@ -2082,7 +2130,7 @@ package Landin.IR is
       Place       : Storage;
       Site        : Landin.Provenance.Origin;
       Field       : Natural := 0;
-      Nested_Field : Natural := 0) return Value_Id
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then (case Place.Kind is
                                when Module_Datum => Holds (Into, Place.Datum),
@@ -2232,6 +2280,15 @@ package Landin.IR is
 
 private
 
+   --  One run per item, end to end in one vector, which is what
+   --  Landin.Syntax does with a node's children and Landin.Resolution
+   --  and Landin.Checking with a node's meaning and its type.  First is
+   --  where entry 1 of that item sits, so a reference is one addition.
+   type Run is record
+      First : Natural := 0;
+      Count : Natural := 0;
+   end record;
+
    --  The payload fields are the union of what any one opcode needs,
    --  which is Landin.Syntax.Node's decision and for its reason: a
    --  variant part would make the element type indefinite and would fix
@@ -2249,13 +2306,13 @@ private
       Signature   : Signature_Id              := No_Signature;
       Source      : Storage                   := (others => <>);
       Source_Field : Natural                  := 0;
-      Source_Nested_Part : Natural             := 0;
+      Source_Nested : Run;
       Destination : Storage                   := (others => <>);
       Target      : Block_Id                  := No_Block;
       Alternative : Block_Id                  := No_Block;
       Number      : Landin.Types.Magnitude    := 0;
       Part        : Part_Position              := 1;
-      Nested_Part : Natural                    := 0;
+      Nested      : Run;
       Element_Field : Natural                  := 0;
       Variant_Case  : Natural                  := 0;
       Variant_Payload_Field : Natural           := 0;
@@ -2265,15 +2322,6 @@ private
       Aggregate_Measurement : Boolean          := False;
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;
-   end record;
-
-   --  One run per item, end to end in one vector, which is what
-   --  Landin.Syntax does with a node's children and Landin.Resolution
-   --  and Landin.Checking with a node's meaning and its type.  First is
-   --  where entry 1 of that item sits, so a reference is one addition.
-   type Run is record
-      First : Natural := 0;
-      Count : Natural := 0;
    end record;
 
    type Slot_Record is record
@@ -2366,6 +2414,10 @@ private
      (Index_Type   => Positive,
       Element_Type => Case_Run);
 
+   package Path_Step_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Path_Step);
+
    package Image_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Landin.Types.Folded,
@@ -2390,6 +2442,10 @@ private
       Measurement_Fields : Field_Shape_Vectors.Vector;
       Variant_Fields : Field_Shape_Vectors.Vector;
       Variant_Cases : Case_Run_Vectors.Vector;
+      --  D117's subobject-path steps, every instruction's run laid end
+      --  to end here for the reason a node's children are: an
+      --  instruction is a fixed-size record and a path is not.
+      Paths       : Path_Step_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
       --  D24: one folded scalar per array-datum position, laid end to end
       --  across items so a datum with no image contributes no bytes here.

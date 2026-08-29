@@ -40,9 +40,9 @@ item 1 ROUTINE f result u8 signature 1 params 1 slots 3 blocks 1 values 9
   slot 3 row elements 2 of u8
   block 1 scope 3 BLOCK length 9
     1 NUMBER u8 1
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 3 field 1 <- 1
     3 NUMBER u8 2
-    4 STORE_FIELD <- 3
+    4 STORE_FIELD slot 3 field 2 <- 3
     5 LOAD usize slot 1
     6 LOAD_ELEMENT u8 slot 3 <- 5
     7 STORE slot 2 <- 6
@@ -63,22 +63,22 @@ item 2 ROUTINE f result u16 signature 1 params 1 slots 5 blocks 1 values 22
   slot 5 - u16
   block 1 scope 3 BLOCK length 22
     1 LOAD u16 slot 1
-    2 STORE_FIELD <- 1
-    3 LOAD_FIELD u16
-    4 STORE_FIELD <- 3
+    2 STORE_FIELD slot 3 field 1 <- 1
+    3 LOAD_FIELD u16 datum 1 state field 1
+    4 STORE_FIELD slot 3 field 2 <- 3
     5 LOAD u16 slot 1
     6 STORE slot 4 <- 5
     7 NUMBER u16 1
     8 LOAD u16 slot 4
     9 ADD u16 <- 8 7
     10 FILL_ARRAY destination slot 3 first 3 <- 9
-    11 LOAD_FIELD u16
-    12 STORE_FIELD <- 11
-    13 LOAD_FIELD u16
+    11 LOAD_FIELD u16 slot 3 field 1
+    12 STORE_FIELD datum 1 state field 1 <- 11
+    13 LOAD_FIELD u16 slot 3 field 2
     14 FILL_ARRAY destination datum 1 state first 2 <- 13
-    15 LOAD_FIELD u16
+    15 LOAD_FIELD u16 slot 3 field 4
     16 STORE slot 5 <- 15
-    17 LOAD_FIELD u16
+    17 LOAD_FIELD u16 datum 1 state field 4
     18 LOAD u16 slot 5
     19 ADD u16 <- 18 17
     20 STORE slot 2 <- 19
@@ -741,12 +741,12 @@ item 1 ROUTINE f result none signature 1 params 0 slots 2 blocks 1 values 9
   slot 2 last i32
   block 1 scope 3 BLOCK length 9
     1 NUMBER i32 1
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 1 field 1 <- 1
     3 NUMBER i32 2
-    4 STORE_FIELD <- 3
+    4 STORE_FIELD slot 1 field 2 <- 3
     5 NUMBER i32 3
-    6 STORE_FIELD <- 5
-    7 LOAD_FIELD i32
+    6 STORE_FIELD slot 1 field 3 <- 5
+    7 LOAD_FIELD i32 slot 1 field 3
     8 STORE slot 2 <- 7
     9 LEAVE
 item 2 ROUTINE g result none signature 2 params 1 slots 3 blocks 1 values 7
@@ -755,10 +755,10 @@ item 2 ROUTINE g result none signature 2 params 1 slots 3 blocks 1 values 7
   slot 3 last u8
   block 1 scope 5 BLOCK length 7
     1 LOAD u8 slot 1
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 2 field 1 <- 1
     3 NUMBER u8 255
-    4 STORE_FIELD <- 3
-    5 LOAD_FIELD u8
+    4 STORE_FIELD slot 2 field 2 <- 3
+    5 LOAD_FIELD u8 slot 2 field 2
     6 STORE slot 3 <- 5
     7 LEAVE
 file positive/local-array-literal-initializer/program.ldn
@@ -780,20 +780,20 @@ item 1 ROUTINE read_row result u32 signature 1 params 1 slots 7 blocks 5 values 
     5 NUMBER u32 1
     6 LOAD u32 slot 5
     7 ADD u32 <- 6 5
-    8 STORE_FIELD <- 7
+    8 STORE_FIELD slot 4 field 1 <- 7
     9 NUMBER u32 2
     10 STORE slot 6 <- 9
     11 NUMBER u32 3
     12 LOAD u32 slot 6
     13 ADD u32 <- 12 11
-    14 STORE_FIELD <- 13
+    14 STORE_FIELD slot 4 field 2 <- 13
     15 LOAD u32 slot 3
-    16 STORE_FIELD <- 15
+    16 STORE_FIELD slot 4 field 3 <- 15
     17 TRUTH bool true
-    18 STORE_FIELD <- 17
+    18 STORE_FIELD slot 7 field 1 <- 17
     19 TRUTH bool false
-    20 STORE_FIELD <- 19
-    21 LOAD_FIELD bool
+    20 STORE_FIELD slot 7 field 2 <- 19
+    21 LOAD_FIELD bool slot 7 field 1
     22 BRANCH target 3 alternative 4 <- 21
   block 2 scope 3 BLOCK length 2
     31 LOAD u32 slot 2
@@ -821,13 +821,13 @@ item 1 ROUTINE f result u16 signature 1 params 2 slots 6 blocks 1 values 19
   slot 6 - u16
   block 1 scope 3 BLOCK length 19
     1 LOAD u16 slot 2
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 4 field 1 <- 1
     3 LOAD u16 slot 2
     4 STORE slot 5 <- 3
     5 NUMBER u16 1
     6 LOAD u16 slot 5
     7 ADD u16 <- 6 5
-    8 STORE_FIELD <- 7
+    8 STORE_FIELD slot 4 field 2 <- 7
     9 LOAD u16 slot 2
     10 STORE slot 6 <- 9
     11 NUMBER u16 2
@@ -991,15 +991,15 @@ item 2 ROUTINE copy result usize signature 1 params 1 slots 12 blocks 1 values 5
   slot 12 assigned aggregate fields u8 [2]usize u16
   block 1 scope 3 BLOCK length 59
     1 NUMBER u32 1
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 3 field 1 <- 1
     3 NUMBER u32 2
-    4 STORE_FIELD <- 3
-    5 LOAD_FIELD u32
-    6 STORE_FIELD <- 5
-    7 LOAD_FIELD u32
-    8 STORE_FIELD <- 7
+    4 STORE_FIELD slot 3 field 2 <- 3
+    5 LOAD_FIELD u32 slot 3 field 1
+    6 STORE_FIELD slot 4 field 1 <- 5
+    7 LOAD_FIELD u32 slot 3 field 2
+    8 STORE_FIELD slot 4 field 2 <- 7
     9 NUMBER u8 3
-    10 STORE_FIELD <- 9
+    10 STORE_FIELD slot 5 field 1 <- 9
     11 NUMBER usize 0
     12 STORE slot 6 <- 11
     13 NUMBER usize 20
@@ -1011,37 +1011,37 @@ item 2 ROUTINE copy result usize signature 1 params 1 slots 12 blocks 1 values 5
     19 LOAD usize slot 7
     20 STORE_ELEMENT slot 5 field 2 <- 19 18
     21 NUMBER u16 4
-    22 STORE_FIELD <- 21
-    23 LOAD_FIELD u8
-    24 STORE_FIELD <- 23
+    22 STORE_FIELD slot 5 field 3 <- 21
+    23 LOAD_FIELD u8 slot 5 field 1
+    24 STORE_FIELD slot 8 field 1 <- 23
     25 COPY_ARRAY from slot 5 field 2 to slot 8 field 2
-    26 LOAD_FIELD u16
-    27 STORE_FIELD <- 26
-    28 LOAD_FIELD u8
-    29 STORE_FIELD <- 28
+    26 LOAD_FIELD u16 slot 5 field 3
+    27 STORE_FIELD slot 8 field 3 <- 26
+    28 LOAD_FIELD u8 slot 8 field 1
+    29 STORE_FIELD slot 9 field 1 <- 28
     30 COPY_ARRAY from slot 8 field 2 to slot 9 field 2
-    31 LOAD_FIELD u16
-    32 STORE_FIELD <- 31
-    33 LOAD_FIELD u8
-    34 STORE_FIELD <- 33
+    31 LOAD_FIELD u16 slot 8 field 3
+    32 STORE_FIELD slot 9 field 3 <- 31
+    33 LOAD_FIELD u8 datum 1 module_source field 1
+    34 STORE_FIELD slot 10 field 1 <- 33
     35 COPY_ARRAY from datum 1 module_source field 2 to slot 10 field 2
-    36 LOAD_FIELD u16
-    37 STORE_FIELD <- 36
-    38 LOAD_FIELD u8
-    39 STORE_FIELD <- 38
+    36 LOAD_FIELD u16 datum 1 module_source field 3
+    37 STORE_FIELD slot 10 field 3 <- 36
+    38 LOAD_FIELD u8 slot 9 field 1
+    39 STORE_FIELD slot 11 field 1 <- 38
     40 COPY_ARRAY from slot 9 field 2 to slot 11 field 2
-    41 LOAD_FIELD u16
-    42 STORE_FIELD <- 41
-    43 LOAD_FIELD u8
-    44 STORE_FIELD <- 43
+    41 LOAD_FIELD u16 slot 9 field 3
+    42 STORE_FIELD slot 11 field 3 <- 41
+    43 LOAD_FIELD u8 slot 11 field 1
+    44 STORE_FIELD slot 12 field 1 <- 43
     45 COPY_ARRAY from slot 11 field 2 to slot 12 field 2
-    46 LOAD_FIELD u16
-    47 STORE_FIELD <- 46
+    46 LOAD_FIELD u16 slot 11 field 3
+    47 STORE_FIELD slot 12 field 3 <- 46
     48 CLEAR_ARRAY destination slot 8 field 2
-    49 LOAD_FIELD u32
-    50 LOAD_FIELD u32
-    51 LOAD_FIELD u8
-    52 LOAD_FIELD u16
+    49 LOAD_FIELD u32 slot 4 field 1
+    50 LOAD_FIELD u32 slot 4 field 2
+    51 LOAD_FIELD u8 slot 8 field 1
+    52 LOAD_FIELD u16 slot 9 field 3
     53 LOAD usize slot 1
     54 LOAD_ELEMENT usize slot 10 field 2 <- 53
     55 LOAD usize slot 1
@@ -1069,37 +1069,37 @@ item 2 ROUTINE copy result usize signature 1 params 1 slots 8 blocks 1 values 39
   slot 8 module_source aggregate fields u8 [2]usize u16
   block 1 scope 3 BLOCK length 39
     1 NUMBER u32 1
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 3 field 1 <- 1
     3 NUMBER u32 2
-    4 STORE_FIELD <- 3
-    5 LOAD_FIELD u32
-    6 STORE_FIELD <- 5
-    7 LOAD_FIELD u32
-    8 STORE_FIELD <- 7
+    4 STORE_FIELD slot 3 field 2 <- 3
+    5 LOAD_FIELD u32 slot 3 field 1
+    6 STORE_FIELD slot 4 field 1 <- 5
+    7 LOAD_FIELD u32 slot 3 field 2
+    8 STORE_FIELD slot 4 field 2 <- 7
     9 NUMBER u8 3
-    10 STORE_FIELD <- 9
+    10 STORE_FIELD slot 5 field 1 <- 9
     11 CLEAR_ARRAY destination slot 5 field 2
     12 NUMBER u16 4
-    13 STORE_FIELD <- 12
-    14 LOAD_FIELD u8
-    15 STORE_FIELD <- 14
+    13 STORE_FIELD slot 5 field 3 <- 12
+    14 LOAD_FIELD u8 slot 5 field 1
+    15 STORE_FIELD slot 6 field 1 <- 14
     16 COPY_ARRAY from slot 5 field 2 to slot 6 field 2
-    17 LOAD_FIELD u16
-    18 STORE_FIELD <- 17
-    19 LOAD_FIELD u8
-    20 STORE_FIELD <- 19
+    17 LOAD_FIELD u16 slot 5 field 3
+    18 STORE_FIELD slot 6 field 3 <- 17
+    19 LOAD_FIELD u8 slot 6 field 1
+    20 STORE_FIELD slot 7 field 1 <- 19
     21 COPY_ARRAY from slot 6 field 2 to slot 7 field 2
-    22 LOAD_FIELD u16
-    23 STORE_FIELD <- 22
-    24 LOAD_FIELD u8
-    25 STORE_FIELD <- 24
+    22 LOAD_FIELD u16 slot 6 field 3
+    23 STORE_FIELD slot 7 field 3 <- 22
+    24 LOAD_FIELD u8 datum 1 module_source field 1
+    25 STORE_FIELD slot 8 field 1 <- 24
     26 COPY_ARRAY from datum 1 module_source field 2 to slot 8 field 2
-    27 LOAD_FIELD u16
-    28 STORE_FIELD <- 27
-    29 LOAD_FIELD u32
-    30 LOAD_FIELD u32
-    31 LOAD_FIELD u8
-    32 LOAD_FIELD u16
+    27 LOAD_FIELD u16 datum 1 module_source field 3
+    28 STORE_FIELD slot 8 field 3 <- 27
+    29 LOAD_FIELD u32 slot 4 field 1
+    30 LOAD_FIELD u32 slot 4 field 2
+    31 LOAD_FIELD u8 slot 7 field 1
+    32 LOAD_FIELD u16 slot 7 field 3
     33 LOAD usize slot 1
     34 LOAD_ELEMENT usize slot 8 field 2 <- 33
     35 LOAD usize slot 1
@@ -1121,10 +1121,10 @@ item 1 ROUTINE read result usize signature 1 params 1 slots 6 blocks 1 values 19
     1 CLEAR_ARRAY destination slot 3
     2 CLEAR_ARRAY destination slot 4
     3 CLEAR_ARRAY destination slot 5
-    4 LOAD_FIELD u32
-    5 LOAD_FIELD u16
-    6 LOAD_FIELD u8
-    7 LOAD_FIELD u16
+    4 LOAD_FIELD u32 slot 3 field 1
+    5 LOAD_FIELD u16 slot 3 field 2
+    6 LOAD_FIELD u8 slot 4 field 1
+    7 LOAD_FIELD u16 slot 4 field 3
     8 LOAD usize slot 1
     9 LOAD_ELEMENT usize slot 5 field 2 <- 8
     10 NUMBER usize 0
@@ -1386,13 +1386,13 @@ item 2 ROUTINE set result none signature 1 params 1 slots 2 blocks 1 values 9
   slot 2 - u32
   block 1 scope 3 BLOCK length 9
     1 LOAD u32 slot 1
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD datum 1 state field 1 <- 1
     3 LOAD u32 slot 1
     4 STORE slot 2 <- 3
     5 NUMBER u32 1
     6 LOAD u32 slot 2
     7 ADD u32 <- 6 5
-    8 STORE_FIELD <- 7
+    8 STORE_FIELD datum 1 state field 2 <- 7
     9 LEAVE
 file positive/module-array-literal-forward-scalar-reference/program.ldn
 unit signatures 0 items 2
@@ -2177,10 +2177,10 @@ item 3 ROUTINE read result usize signature 1 params 1 slots 3 blocks 1 values 14
   slot 2 result usize return
   slot 3 - usize
   block 1 scope 3 BLOCK length 14
-    1 LOAD_FIELD u8
-    2 LOAD_FIELD u16
-    3 LOAD_FIELD u8
-    4 LOAD_FIELD u16
+    1 LOAD_FIELD u8 datum 1 state field 1
+    2 LOAD_FIELD u16 datum 1 state field 3
+    3 LOAD_FIELD u8 datum 2 aliased field 1
+    4 LOAD_FIELD u16 datum 2 aliased field 3
     5 LOAD usize slot 1
     6 LOAD_ELEMENT usize datum 1 state field 2 <- 5
     7 STORE slot 3 <- 6
@@ -2281,13 +2281,13 @@ item 3 ROUTINE exercise result none signature 1 params 0 slots 2 blocks 1 values
     4 CLEAR_ARRAY destination slot 1
     5 CLEAR_ARRAY destination slot 2
     6 NUMBER u16 1
-    7 STORE_FIELD <- 6
+    7 STORE_FIELD datum 1 omitted field 1 <- 6
     8 NUMBER u8 2
-    9 STORE_FIELD <- 8
+    9 STORE_FIELD datum 2 explicit field 3 <- 8
     10 NUMBER u16 3
-    11 STORE_FIELD <- 10
+    11 STORE_FIELD slot 1 field 1 <- 10
     12 NUMBER u8 4
-    13 STORE_FIELD <- 12
+    13 STORE_FIELD slot 2 field 3 <- 12
     14 LEAVE
 file positive/no-final-line-end/program.ldn
 unit signatures 0 items 1
@@ -2542,17 +2542,17 @@ item 2 DATUM row result array params 0 slots 0 blocks 1 values 1
 item 3 ROUTINE f result none signature 1 params 0 slots 0 blocks 1 values 5
   block 1 scope 3 BLOCK length 5
     1 NUMBER u32 0
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD datum 1 state field 1 <- 1
     3 NUMBER u32 0
-    4 STORE_FIELD <- 3
+    4 STORE_FIELD datum 2 row field 1 <- 3
     5 LEAVE
 item 4 ROUTINE local_field result u32 signature 2 params 0 slots 2 blocks 1 values 6
   slot 1 result u32 return
   slot 2 local aggregate fields u32
   block 1 scope 5 BLOCK length 6
     1 NUMBER u32 0
-    2 STORE_FIELD <- 1
-    3 LOAD_FIELD u32
+    2 STORE_FIELD slot 2 field 1 <- 1
+    3 LOAD_FIELD u32 slot 2 field 1
     4 STORE slot 1 <- 3
     5 LOAD u32 slot 1
     6 LEAVE <- 5
@@ -2561,8 +2561,8 @@ item 5 ROUTINE local_element result u32 signature 3 params 0 slots 2 blocks 1 va
   slot 2 local elements 1 of u32
   block 1 scope 7 BLOCK length 6
     1 NUMBER u32 0
-    2 STORE_FIELD <- 1
-    3 LOAD_FIELD u32
+    2 STORE_FIELD slot 2 field 1 <- 1
+    3 LOAD_FIELD u32 slot 2 field 1
     4 STORE slot 1 <- 3
     5 LOAD u32 slot 1
     6 LEAVE <- 5
@@ -2865,17 +2865,17 @@ item 1 ROUTINE use result none signature 1 params 0 slots 10 blocks 1 values 34
     19 LOAD usize slot 6
     20 STORE_ELEMENT slot 2 field 2 <- 19 18
     21 NUMBER u16 7
-    22 STORE_FIELD <- 21
+    22 STORE_FIELD slot 1 field 3 <- 21
     23 NUMBER u8 1
-    24 STORE_FIELD <- 23
+    24 STORE_FIELD slot 2 field 1 <- 23
     25 NUMBER usize 1
     26 STORE slot 7 <- 25
     27 LOAD usize slot 7
     28 LOAD_ELEMENT usize slot 2 field 2 <- 27
     29 STORE slot 8 <- 28
-    30 LOAD_FIELD u16
+    30 LOAD_FIELD u16 slot 1 field 3
     31 STORE slot 9 <- 30
-    32 LOAD_FIELD u8
+    32 LOAD_FIELD u8 slot 2 field 1
     33 STORE slot 10 <- 32
     34 LEAVE
 file positive/struct-array-field-module-state/program.ldn
@@ -2899,7 +2899,7 @@ item 3 ROUTINE touch result none signature 1 params 0 slots 4 blocks 1 values 15
   slot 3 at usize
   slot 4 - usize
   block 1 scope 3 BLOCK length 15
-    1 LOAD_FIELD u8
+    1 LOAD_FIELD u8 datum 1 direct field 1
     2 STORE slot 1 <- 1
     3 NUMBER usize 0
     4 LOAD_ELEMENT usize datum 1 direct field 2 <- 3
@@ -2912,7 +2912,7 @@ item 3 ROUTINE touch result none signature 1 params 0 slots 4 blocks 1 values 15
     11 LOAD usize slot 4
     12 STORE_ELEMENT datum 2 through_alias field 2 <- 11 10
     13 NUMBER u32 2
-    14 STORE_FIELD <- 13
+    14 STORE_FIELD datum 2 through_alias field 3 <- 13
     15 LEAVE
 file positive/struct-array-field-repetition-assignment/program.ldn
 unit signatures 2 items 3
@@ -2982,7 +2982,7 @@ item 2 ROUTINE copy result usize signature 1 params 1 slots 7 blocks 1 values 41
   slot 7 back aggregate fields u8 [2]usize u16
   block 1 scope 3 BLOCK length 41
     1 NUMBER u8 7
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 3 field 1 <- 1
     3 NUMBER usize 0
     4 STORE slot 4 <- 3
     5 NUMBER usize 20
@@ -2994,29 +2994,29 @@ item 2 ROUTINE copy result usize signature 1 params 1 slots 7 blocks 1 values 41
     11 LOAD usize slot 5
     12 STORE_ELEMENT slot 3 field 2 <- 11 10
     13 NUMBER u16 701
-    14 STORE_FIELD <- 13
-    15 LOAD_FIELD u8
-    16 STORE_FIELD <- 15
+    14 STORE_FIELD slot 3 field 3 <- 13
+    15 LOAD_FIELD u8 slot 3 field 1
+    16 STORE_FIELD slot 6 field 1 <- 15
     17 COPY_ARRAY from slot 3 field 2 to slot 6 field 2
-    18 LOAD_FIELD u16
-    19 STORE_FIELD <- 18
-    20 LOAD_FIELD u8
-    21 STORE_FIELD <- 20
+    18 LOAD_FIELD u16 slot 3 field 3
+    19 STORE_FIELD slot 6 field 3 <- 18
+    20 LOAD_FIELD u8 slot 6 field 1
+    21 STORE_FIELD datum 1 saved field 1 <- 20
     22 COPY_ARRAY from slot 6 field 2 to datum 1 saved field 2
-    23 LOAD_FIELD u16
-    24 STORE_FIELD <- 23
-    25 LOAD_FIELD u8
-    26 STORE_FIELD <- 25
+    23 LOAD_FIELD u16 slot 6 field 3
+    24 STORE_FIELD datum 1 saved field 3 <- 23
+    25 LOAD_FIELD u8 datum 1 saved field 1
+    26 STORE_FIELD slot 7 field 1 <- 25
     27 COPY_ARRAY from datum 1 saved field 2 to slot 7 field 2
-    28 LOAD_FIELD u16
-    29 STORE_FIELD <- 28
-    30 LOAD_FIELD u8
-    31 STORE_FIELD <- 30
+    28 LOAD_FIELD u16 datum 1 saved field 3
+    29 STORE_FIELD slot 7 field 3 <- 28
+    30 LOAD_FIELD u8 slot 7 field 1
+    31 STORE_FIELD slot 7 field 1 <- 30
     32 COPY_ARRAY from slot 7 field 2 to slot 7 field 2
-    33 LOAD_FIELD u16
-    34 STORE_FIELD <- 33
-    35 LOAD_FIELD u8
-    36 LOAD_FIELD u16
+    33 LOAD_FIELD u16 slot 7 field 3
+    34 STORE_FIELD slot 7 field 3 <- 33
+    35 LOAD_FIELD u8 slot 7 field 1
+    36 LOAD_FIELD u16 slot 7 field 3
     37 LOAD usize slot 1
     38 LOAD_ELEMENT usize slot 7 field 2 <- 37
     39 STORE slot 2 <- 38
@@ -3110,24 +3110,24 @@ item 7 ROUTINE f result none signature 1 params 0 slots 5 blocks 1 values 22
   slot 5 - i32
   block 1 scope 3 BLOCK length 22
     1 NUMBER i32 5
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 1 field 1 <- 1
     3 NUMBER i32 6
-    4 STORE_FIELD <- 3
+    4 STORE_FIELD slot 1 field 2 <- 3
     5 NUMBER i32 8
-    6 STORE_FIELD <- 5
+    6 STORE_FIELD slot 2 field 2 <- 5
     7 NUMBER i32 7
-    8 STORE_FIELD <- 7
+    8 STORE_FIELD slot 2 field 1 <- 7
     9 NUMBER i32 9
-    10 STORE_FIELD <- 9
+    10 STORE_FIELD slot 3 field 1 <- 9
     11 NUMBER i32 10
-    12 STORE_FIELD <- 11
-    13 LOAD_FIELD i32
+    12 STORE_FIELD slot 3 field 2 <- 11
+    13 LOAD_FIELD i32 slot 1 field 1
     14 STORE slot 5 <- 13
-    15 LOAD_FIELD i32
+    15 LOAD_FIELD i32 slot 2 field 2
     16 LOAD i32 slot 5
     17 ADD i32 <- 16 15
     18 STORE slot 4 <- 17
-    19 LOAD_FIELD i32
+    19 LOAD_FIELD i32 slot 3 field 1
     20 LOAD i32 slot 4
     21 ADD i32 <- 20 19
     22 LEAVE
@@ -3158,7 +3158,7 @@ item 3 ROUTINE write result usize signature 1 params 0 slots 8 blocks 1 values 6
   block 1 scope 3 BLOCK length 62
     1 CLEAR_ARRAY destination slot 2 field 3
     2 NUMBER u8 0
-    3 STORE_FIELD <- 2
+    3 STORE_FIELD slot 2 field 4 <- 2
     4 NUMBER usize 4
     5 NUMBER usize 0
     6 STORE_ELEMENT slot 2 field 2 <- 5 4
@@ -3169,15 +3169,15 @@ item 3 ROUTINE write result usize signature 1 params 0 slots 8 blocks 1 values 6
     11 NUMBER usize 2
     12 STORE_ELEMENT slot 2 field 2 <- 11 10
     13 TRUTH bool false
-    14 STORE_FIELD <- 13
+    14 STORE_FIELD slot 2 field 1 <- 13
     15 COPY_ARRAY from datum 1 words to slot 3 field 2
     16 TRUTH bool false
-    17 STORE_FIELD <- 16
+    17 STORE_FIELD slot 3 field 1 <- 16
     18 COPY_ARRAY from slot 2 field 2 to slot 3 field 3
     19 NUMBER u8 7
-    20 STORE_FIELD <- 19
+    20 STORE_FIELD slot 3 field 4 <- 19
     21 NUMBER u8 8
-    22 STORE_FIELD <- 21
+    22 STORE_FIELD slot 4 field 4 <- 21
     23 NUMBER usize 9
     24 FILL_ARRAY destination slot 4 field 2 first 1 <- 23
     25 NUMBER usize 10
@@ -3186,13 +3186,13 @@ item 3 ROUTINE write result usize signature 1 params 0 slots 8 blocks 1 values 6
     28 NUMBER usize 11
     29 FILL_ARRAY destination slot 4 field 3 first 2 <- 28
     30 TRUTH bool false
-    31 STORE_FIELD <- 30
+    31 STORE_FIELD slot 4 field 1 <- 30
     32 COPY_ARRAY from slot 3 field 2 to datum 2 state field 3
     33 TRUTH bool false
-    34 STORE_FIELD <- 33
+    34 STORE_FIELD datum 2 state field 1 <- 33
     35 CLEAR_ARRAY destination datum 2 state field 2
     36 NUMBER u8 0
-    37 STORE_FIELD <- 36
+    37 STORE_FIELD datum 2 state field 4 <- 36
     38 NUMBER usize 0
     39 LOAD_ELEMENT usize slot 2 field 2 <- 38
     40 STORE slot 8 <- 39
@@ -3237,29 +3237,29 @@ item 2 ROUTINE read result usize signature 1 params 1 slots 6 blocks 1 values 39
   slot 6 - usize
   block 1 scope 3 BLOCK length 39
     1 TRUTH bool true
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 3 field 3 <- 1
     3 NUMBER u16 5
-    4 STORE_FIELD <- 3
+    4 STORE_FIELD slot 3 field 4 <- 3
     5 NUMBER u8 3
-    6 STORE_FIELD <- 5
+    6 STORE_FIELD slot 3 field 1 <- 5
     7 CLEAR_ARRAY destination slot 3 field 2
     8 NUMBER u16 9
-    9 STORE_FIELD <- 8
+    9 STORE_FIELD slot 4 field 4 <- 8
     10 NUMBER u8 8
-    11 STORE_FIELD <- 10
+    11 STORE_FIELD slot 4 field 1 <- 10
     12 TRUTH bool true
-    13 STORE_FIELD <- 12
+    13 STORE_FIELD slot 4 field 3 <- 12
     14 CLEAR_ARRAY destination slot 4 field 2
     15 NUMBER u16 7
-    16 STORE_FIELD <- 15
+    16 STORE_FIELD datum 1 state field 4 <- 15
     17 NUMBER u8 4
-    18 STORE_FIELD <- 17
+    18 STORE_FIELD datum 1 state field 1 <- 17
     19 TRUTH bool false
-    20 STORE_FIELD <- 19
+    20 STORE_FIELD datum 1 state field 3 <- 19
     21 CLEAR_ARRAY destination datum 1 state field 2
-    22 LOAD_FIELD u8
-    23 LOAD_FIELD bool
-    24 LOAD_FIELD u16
+    22 LOAD_FIELD u8 slot 4 field 1
+    23 LOAD_FIELD bool slot 4 field 3
+    24 LOAD_FIELD u16 slot 4 field 4
     25 LOAD usize slot 1
     26 LOAD_ELEMENT usize slot 3 field 2 <- 25
     27 STORE slot 6 <- 26
@@ -3302,10 +3302,10 @@ item 2 ROUTINE read result u32 signature 1 params 1 slots 4 blocks 1 values 16
   block 1 scope 3 BLOCK length 16
     1 CLEAR_ARRAY destination datum 1 state
     2 CLEAR_ARRAY destination slot 3
-    3 LOAD_FIELD u8
-    4 LOAD_FIELD u16
-    5 LOAD_FIELD u8
-    6 LOAD_FIELD u16
+    3 LOAD_FIELD u8 datum 1 state field 1
+    4 LOAD_FIELD u16 datum 1 state field 3
+    5 LOAD_FIELD u8 slot 3 field 1
+    6 LOAD_FIELD u16 slot 3 field 3
     7 LOAD usize slot 1
     8 LOAD_ELEMENT u32 datum 1 state field 2 <- 7
     9 STORE slot 4 <- 8
@@ -3389,33 +3389,33 @@ item 2 ROUTINE construct result none signature 1 params 0 slots 3 blocks 1 value
   slot 3 inferred aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   block 1 scope 3 BLOCK length 48
     1 NUMBER u8 1
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 1 field 1 <- 1
     3 SELECT_VARIANT destination slot 1 field 2 case 1
     4 TRUTH bool false
-    5 STORE_FIELD <- 4
+    5 STORE_FIELD slot 1 field 3 <- 4
     6 NUMBER u8 2
-    7 STORE_FIELD <- 6
+    7 STORE_FIELD slot 2 field 1 <- 6
     8 SELECT_VARIANT destination slot 2 field 2 case 2
     9 NUMBER u8 3
     10 STORE_VARIANT_FIELD destination slot 2 field 2 case 2 payload field 1 <- 9
     11 NUMBER u16 4
     12 STORE_VARIANT_FIELD destination slot 2 field 2 case 2 payload field 2 <- 11
     13 TRUTH bool true
-    14 STORE_FIELD <- 13
+    14 STORE_FIELD slot 2 field 3 <- 13
     15 NUMBER u8 9
-    16 STORE_FIELD <- 15
+    16 STORE_FIELD slot 3 field 1 <- 15
     17 SELECT_VARIANT destination slot 3 field 2 case 2
     18 NUMBER u8 10
     19 STORE_VARIANT_FIELD destination slot 3 field 2 case 2 payload field 1 <- 18
     20 NUMBER u16 11
     21 STORE_VARIANT_FIELD destination slot 3 field 2 case 2 payload field 2 <- 20
     22 TRUTH bool true
-    23 STORE_FIELD <- 22
+    23 STORE_FIELD slot 3 field 3 <- 22
     24 SELECT_VARIANT destination slot 1 field 2 case 3
     25 NUMBER u8 0
-    26 STORE_FIELD <- 25
+    26 STORE_FIELD slot 1 field 1 <- 25
     27 TRUTH bool false
-    28 STORE_FIELD <- 27
+    28 STORE_FIELD slot 1 field 3 <- 27
     29 SELECT_VARIANT destination datum 1 state field 2 case 2
     30 NUMBER u8 5
     31 STORE_VARIANT_FIELD destination datum 1 state field 2 case 2 payload field 1 <- 30
@@ -3423,18 +3423,18 @@ item 2 ROUTINE construct result none signature 1 params 0 slots 3 blocks 1 value
     33 STORE_VARIANT_FIELD destination datum 1 state field 2 case 2 payload field 2 <- 32
     34 SELECT_VARIANT destination datum 1 state field 2 case 1
     35 NUMBER u8 7
-    36 STORE_FIELD <- 35
+    36 STORE_FIELD datum 1 state field 1 <- 35
     37 SELECT_VARIANT destination datum 1 state field 2 case 2
     38 NUMBER u8 8
     39 STORE_VARIANT_FIELD destination datum 1 state field 2 case 2 payload field 1 <- 38
     40 TRUTH bool false
-    41 STORE_FIELD <- 40
-    42 LOAD_FIELD u8
-    43 LOAD_FIELD bool
-    44 LOAD_FIELD u8
-    45 LOAD_FIELD bool
-    46 LOAD_FIELD u8
-    47 LOAD_FIELD bool
+    41 STORE_FIELD datum 1 state field 3 <- 40
+    42 LOAD_FIELD u8 slot 1 field 1
+    43 LOAD_FIELD bool slot 1 field 3
+    44 LOAD_FIELD u8 slot 2 field 1
+    45 LOAD_FIELD bool slot 2 field 3
+    46 LOAD_FIELD u8 slot 3 field 1
+    47 LOAD_FIELD bool slot 3 field 3
     48 LEAVE
 file positive/variant-match-array-payload-bindings/program.ldn
 unit signatures 1 items 2
@@ -3748,22 +3748,22 @@ item 4 ROUTINE read result none signature 1 params 0 slots 2 blocks 9 values 23
     16 EQUAL_TO bool <- 14 15
     17 BRANCH target 7 alternative 8 <- 16
   block 3 scope 4 BLOCK length 2
-    7 LOAD_FIELD u8
+    7 LOAD_FIELD u8 datum 2 copy field 1
     8 JUMP target 2
   block 4 scope 3 BLOCK length 1
     9 JUMP target 5
   block 5 scope 5 BLOCK length 2
-    10 LOAD_FIELD u8
+    10 LOAD_FIELD u8 datum 2 copy field 3
     11 JUMP target 2
   block 6 scope 3 BLOCK length 1
     23 LEAVE
   block 7 scope 6 BLOCK length 2
-    18 LOAD_FIELD u8
+    18 LOAD_FIELD u8 datum 3 inferred field 1
     19 JUMP target 6
   block 8 scope 3 BLOCK length 1
     20 JUMP target 9
   block 9 scope 7 BLOCK length 2
-    21 LOAD_FIELD u8
+    21 LOAD_FIELD u8 datum 3 inferred field 3
     22 JUMP target 6
 file positive/variant-module-array-payload-image-copy/program.ldn
 unit signatures 1 items 9
@@ -3868,22 +3868,22 @@ item 9 ROUTINE read result none signature 1 params 0 slots 2 blocks 9 values 23
     16 EQUAL_TO bool <- 14 15
     17 BRANCH target 7 alternative 8 <- 16
   block 3 scope 4 BLOCK length 2
-    7 LOAD_FIELD u8
+    7 LOAD_FIELD u8 datum 2 copy field 1
     8 JUMP target 2
   block 4 scope 3 BLOCK length 1
     9 JUMP target 5
   block 5 scope 5 BLOCK length 2
-    10 LOAD_FIELD u8
+    10 LOAD_FIELD u8 datum 2 copy field 3
     11 JUMP target 2
   block 6 scope 3 BLOCK length 1
     23 LEAVE
   block 7 scope 6 BLOCK length 2
-    18 LOAD_FIELD u8
+    18 LOAD_FIELD u8 datum 3 inferred field 1
     19 JUMP target 6
   block 8 scope 3 BLOCK length 1
     20 JUMP target 9
   block 9 scope 7 BLOCK length 2
-    21 LOAD_FIELD u8
+    21 LOAD_FIELD u8 datum 3 inferred field 3
     22 JUMP target 6
 file positive/variant-module-case-image/program.ldn
 unit signatures 1 items 6
@@ -3948,7 +3948,7 @@ item 6 ROUTINE read result none signature 1 params 0 slots 3 blocks 19 values 52
     22 EQUAL_TO bool <- 20 21
     23 BRANCH target 9 alternative 10 <- 22
   block 3 scope 4 BLOCK length 2
-    7 LOAD_FIELD u8
+    7 LOAD_FIELD u8 datum 3 copy field 1
     8 JUMP target 2
   block 4 scope 3 BLOCK length 4
     9 LOAD u8 slot 1
@@ -3961,7 +3961,7 @@ item 6 ROUTINE read result none signature 1 params 0 slots 3 blocks 19 values 52
   block 6 scope 3 BLOCK length 1
     15 JUMP target 7
   block 7 scope 6 BLOCK length 2
-    16 LOAD_FIELD u8
+    16 LOAD_FIELD u8 datum 3 copy field 3
     17 JUMP target 2
   block 8 scope 3 BLOCK length 6
     35 LOAD_VARIANT_TAG u8 from datum 5 bare field 2
@@ -3971,7 +3971,7 @@ item 6 ROUTINE read result none signature 1 params 0 slots 3 blocks 19 values 52
     39 EQUAL_TO bool <- 37 38
     40 BRANCH target 15 alternative 16 <- 39
   block 9 scope 7 BLOCK length 2
-    24 LOAD_FIELD u8
+    24 LOAD_FIELD u8 datum 4 inferred field 1
     25 JUMP target 8
   block 10 scope 3 BLOCK length 4
     26 LOAD u8 slot 2
@@ -3979,17 +3979,17 @@ item 6 ROUTINE read result none signature 1 params 0 slots 3 blocks 19 values 52
     28 EQUAL_TO bool <- 26 27
     29 BRANCH target 11 alternative 12 <- 28
   block 11 scope 8 BLOCK length 2
-    30 LOAD_FIELD u8
+    30 LOAD_FIELD u8 datum 4 inferred field 3
     31 JUMP target 8
   block 12 scope 3 BLOCK length 1
     32 JUMP target 13
   block 13 scope 9 BLOCK length 2
-    33 LOAD_FIELD u8
+    33 LOAD_FIELD u8 datum 4 inferred field 1
     34 JUMP target 8
   block 14 scope 3 BLOCK length 1
     52 LEAVE
   block 15 scope 10 BLOCK length 2
-    41 LOAD_FIELD u8
+    41 LOAD_FIELD u8 datum 5 bare field 1
     42 JUMP target 14
   block 16 scope 3 BLOCK length 4
     43 LOAD u8 slot 3
@@ -3997,12 +3997,12 @@ item 6 ROUTINE read result none signature 1 params 0 slots 3 blocks 19 values 52
     45 EQUAL_TO bool <- 43 44
     46 BRANCH target 17 alternative 18 <- 45
   block 17 scope 11 BLOCK length 2
-    47 LOAD_FIELD u8
+    47 LOAD_FIELD u8 datum 5 bare field 3
     48 JUMP target 14
   block 18 scope 3 BLOCK length 1
     49 JUMP target 19
   block 19 scope 12 BLOCK length 2
-    50 LOAD_FIELD u8
+    50 LOAD_FIELD u8 datum 5 bare field 3
     51 JUMP target 14
 file positive/variant-part-measured/program.ldn
 unit signatures 0 items 1
@@ -4037,11 +4037,11 @@ item 4 ROUTINE write result none signature 1 params 0 slots 3 blocks 1 values 86
   slot 3 local aggregate fields u8 variant u8 cases2 () ([3]u8,[3]u16,[3]u8,[2]bool,[3]u8,[2]u16) u8
   block 1 scope 3 BLOCK length 86
     1 NUMBER u8 29
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 1 field 1 <- 1
     3 NUMBER u8 31
-    4 STORE_FIELD <- 3
+    4 STORE_FIELD slot 1 field 2 <- 3
     5 NUMBER u8 37
-    6 STORE_FIELD <- 5
+    6 STORE_FIELD slot 1 field 3 <- 5
     7 NUMBER u16 41
     8 NUMBER usize 0
     9 STORE_ELEMENT slot 2 field 1 <- 8 7
@@ -4049,7 +4049,7 @@ item 4 ROUTINE write result none signature 1 params 0 slots 3 blocks 1 values 86
     11 NUMBER usize 1
     12 STORE_ELEMENT slot 2 field 1 <- 11 10
     13 NUMBER u8 5
-    14 STORE_FIELD <- 13
+    14 STORE_FIELD slot 3 field 1 <- 13
     15 SELECT_VARIANT destination slot 3 field 2 case 2
     16 NUMBER u8 1
     17 NUMBER usize 0
@@ -4070,7 +4070,7 @@ item 4 ROUTINE write result none signature 1 params 0 slots 3 blocks 1 values 86
     32 COPY_ARRAY from datum 1 module_values to slot 3 field 2 case 2 payload field 5
     33 COPY_ARRAY from datum 2 module_holder field 1 to slot 3 field 2 case 2 payload field 6
     34 NUMBER u8 47
-    35 STORE_FIELD <- 34
+    35 STORE_FIELD slot 3 field 3 <- 34
     36 SELECT_VARIANT destination slot 3 field 2 case 2
     37 NUMBER u8 3
     38 NUMBER usize 0
@@ -4097,7 +4097,7 @@ item 4 ROUTINE write result none signature 1 params 0 slots 3 blocks 1 values 86
     59 COPY_ARRAY from slot 1 to slot 3 field 2 case 2 payload field 5
     60 COPY_ARRAY from slot 2 field 1 to slot 3 field 2 case 2 payload field 6
     61 NUMBER u8 53
-    62 STORE_FIELD <- 61
+    62 STORE_FIELD datum 3 state field 1 <- 61
     63 SELECT_VARIANT destination datum 3 state field 2 case 2
     64 NUMBER u8 15
     65 NUMBER usize 0
@@ -4118,9 +4118,9 @@ item 4 ROUTINE write result none signature 1 params 0 slots 3 blocks 1 values 86
     80 COPY_ARRAY from datum 1 module_values to datum 3 state field 2 case 2 payload field 5
     81 COPY_ARRAY from datum 2 module_holder field 1 to datum 3 state field 2 case 2 payload field 6
     82 NUMBER u8 59
-    83 STORE_FIELD <- 82
-    84 LOAD_FIELD u8
-    85 LOAD_FIELD u8
+    83 STORE_FIELD datum 3 state field 3 <- 82
+    84 LOAD_FIELD u8 slot 3 field 1
+    85 LOAD_FIELD u8 slot 3 field 3
     86 LEAVE
 file positive/variant-whole-copy/program.ldn
 unit signatures 1 items 2
@@ -4143,44 +4143,44 @@ item 2 ROUTINE copy result none signature 1 params 0 slots 9 blocks 12 values 75
   slot 9 - u16
   block 1 scope 3 BLOCK length 45
     1 NUMBER u8 1
-    2 STORE_FIELD <- 1
+    2 STORE_FIELD slot 1 field 1 <- 1
     3 SELECT_VARIANT destination slot 1 field 2 case 2
     4 NUMBER u8 2
     5 STORE_VARIANT_FIELD destination slot 1 field 2 case 2 payload field 1 <- 4
     6 NUMBER u16 3
     7 STORE_VARIANT_FIELD destination slot 1 field 2 case 2 payload field 2 <- 6
     8 TRUTH bool true
-    9 STORE_FIELD <- 8
-    10 LOAD_FIELD u8
-    11 STORE_FIELD <- 10
+    9 STORE_FIELD slot 1 field 3 <- 8
+    10 LOAD_FIELD u8 slot 1 field 1
+    11 STORE_FIELD slot 2 field 1 <- 10
     12 COPY_VARIANT from slot 1 field 2 to slot 2 field 2
-    13 LOAD_FIELD bool
-    14 STORE_FIELD <- 13
-    15 LOAD_FIELD u8
-    16 STORE_FIELD <- 15
+    13 LOAD_FIELD bool slot 1 field 3
+    14 STORE_FIELD slot 2 field 3 <- 13
+    15 LOAD_FIELD u8 slot 2 field 1
+    16 STORE_FIELD slot 3 field 1 <- 15
     17 COPY_VARIANT from slot 2 field 2 to slot 3 field 2
-    18 LOAD_FIELD bool
-    19 STORE_FIELD <- 18
-    20 LOAD_FIELD u8
-    21 STORE_FIELD <- 20
+    18 LOAD_FIELD bool slot 2 field 3
+    19 STORE_FIELD slot 3 field 3 <- 18
+    20 LOAD_FIELD u8 slot 3 field 1
+    21 STORE_FIELD slot 4 field 1 <- 20
     22 COPY_VARIANT from slot 3 field 2 to slot 4 field 2
-    23 LOAD_FIELD bool
-    24 STORE_FIELD <- 23
-    25 LOAD_FIELD u8
-    26 STORE_FIELD <- 25
+    23 LOAD_FIELD bool slot 3 field 3
+    24 STORE_FIELD slot 4 field 3 <- 23
+    25 LOAD_FIELD u8 slot 4 field 1
+    26 STORE_FIELD datum 1 state field 1 <- 25
     27 COPY_VARIANT from slot 4 field 2 to datum 1 state field 2
-    28 LOAD_FIELD bool
-    29 STORE_FIELD <- 28
-    30 LOAD_FIELD u8
-    31 STORE_FIELD <- 30
+    28 LOAD_FIELD bool slot 4 field 3
+    29 STORE_FIELD datum 1 state field 3 <- 28
+    30 LOAD_FIELD u8 datum 1 state field 1
+    31 STORE_FIELD slot 5 field 1 <- 30
     32 COPY_VARIANT from datum 1 state field 2 to slot 5 field 2
-    33 LOAD_FIELD bool
-    34 STORE_FIELD <- 33
-    35 LOAD_FIELD u8
-    36 STORE_FIELD <- 35
+    33 LOAD_FIELD bool datum 1 state field 3
+    34 STORE_FIELD slot 5 field 3 <- 33
+    35 LOAD_FIELD u8 datum 1 state field 1
+    36 STORE_FIELD datum 1 state field 1 <- 35
     37 COPY_VARIANT from datum 1 state field 2 to datum 1 state field 2
-    38 LOAD_FIELD bool
-    39 STORE_FIELD <- 38
+    38 LOAD_FIELD bool datum 1 state field 3
+    39 STORE_FIELD datum 1 state field 3 <- 38
     40 LOAD_VARIANT_TAG u8 from slot 4 field 2
     41 STORE slot 6 <- 40
     42 LOAD u8 slot 6
@@ -4210,7 +4210,7 @@ item 2 ROUTINE copy result none signature 1 params 0 slots 9 blocks 12 values 75
   block 7 scope 5 BLOCK length 1
     71 JUMP target 2
   block 8 scope 6 BLOCK length 2
-    68 LOAD_FIELD u8
+    68 LOAD_FIELD u8 slot 4 field 1
     69 JUMP target 7
   block 9 scope 5 BLOCK length 1
     70 JUMP target 7
@@ -4250,12 +4250,12 @@ item 3 ROUTINE use_storage result none signature 1 params 0 slots 2 blocks 1 val
     1 CLEAR_ARRAY destination slot 2
     2 CLEAR_ARRAY destination slot 1
     3 CLEAR_ARRAY destination datum 2 reset
-    4 LOAD_FIELD u8
-    5 LOAD_FIELD u16
-    6 LOAD_FIELD u8
-    7 LOAD_FIELD u16
-    8 LOAD_FIELD u8
-    9 LOAD_FIELD u16
+    4 LOAD_FIELD u8 datum 1 state field 1
+    5 LOAD_FIELD u16 datum 1 state field 3
+    6 LOAD_FIELD u8 slot 1 field 1
+    7 LOAD_FIELD u16 slot 1 field 3
+    8 LOAD_FIELD u8 slot 2 field 1
+    9 LOAD_FIELD u16 slot 2 field 3
     10 LEAVE
 file positive/wrapping-operators/program.ldn
 unit signatures 1 items 1

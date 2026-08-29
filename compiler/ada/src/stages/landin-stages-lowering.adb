@@ -40,6 +40,15 @@ package body Landin.Stages.Lowering is
    use type Syn.Node_Kind;
    use type Ty.Type_Kind;
 
+   --  D117: the neutral subobject path one child identity spells.  The
+   --  contextual forms below still reach exactly one depth, so this is
+   --  where a depth-one identity becomes the run every operation carries;
+   --  zero is no step at all, which is what a direct operation has.
+   function Below (Child : Natural) return IR.Path_Step_Array
+     is (if Child = 0 then IR.No_Path_Steps
+         else [1 => (Field      => IR.Part_Position (Child),
+                     Case_Index => 0)]);
+
    overriding function Name (Item : Instance) return String is
       pragma Unreferenced (Item);
    begin
@@ -857,14 +866,16 @@ package body Landin.Stages.Lowering is
                         procedure Write_Array_Field
                           (Field         : Positive;
                            Value         : Syn.Node_Id;
-                           Nested_Field  : Natural := 0;
+                           Path          : IR.Path_Step_Array :=
+                             IR.No_Path_Steps;
                            Variant_Case  : Natural := 0;
                            Payload_Field : Natural := 0);
 
                         procedure Write_Array_Field
                           (Field         : Positive;
                            Value         : Syn.Node_Id;
-                           Nested_Field  : Natural := 0;
+                           Path          : IR.Path_Step_Array :=
+                             IR.No_Path_Steps;
                            Variant_Case  : Natural := 0;
                            Payload_Field : Natural := 0)
                         is
@@ -894,7 +905,7 @@ package body Landin.Stages.Lowering is
                                    (Unit.all, Filling, Temporary, Index, Held,
                                     Site_Of (Of_Tree, Element),
                                     Field => Field,
-                                    Nested_Field => Nested_Field,
+                                    Nested => Path,
                                     Variant_Case => Variant_Case,
                                     Variant_Payload_Field => Payload_Field);
                               end;
@@ -916,7 +927,7 @@ package body Landin.Stages.Lowering is
                                       (Of_Tree, Repeated, Scope),
                                     Site_Of (Of_Tree, Repeated),
                                     Field => Field,
-                                    Nested_Field => Nested_Field,
+                                    Nested => Path,
                                     Variant_Case => Variant_Case,
                                     Variant_Payload_Field => Payload_Field);
                               end;
@@ -927,7 +938,7 @@ package body Landin.Stages.Lowering is
                                     (Kind => IR.Frame_Slot,
                                      Slot => Temporary),
                                     Site_Of (Of_Tree, Value), Field => Field,
-                                    Nested_Field => Nested_Field);
+                                    Nested => Path);
                               end if;
                            elsif Kind not in Syn.Array_Literal then
                               declare
@@ -970,9 +981,9 @@ package body Landin.Stages.Lowering is
                                        Slot => Temporary),
                                     Site => Site_Of (Of_Tree, Value),
                                     Source_Field => Source_Field,
-                                    Source_Nested_Field => Source_Child,
+                                    Source_Nested => Below (Source_Child),
                                     Destination_Field => Field,
-                                    Destination_Nested_Field => Nested_Field,
+                                    Destination_Nested => Path,
                                     Destination_Variant_Case => Variant_Case,
                                     Destination_Variant_Payload_Field =>
                                       Payload_Field);
@@ -1133,14 +1144,16 @@ package body Landin.Stages.Lowering is
                                                             Scope),
                                                          Site_Of
                                                            (Of_Tree, Label),
-                                                         Nested_Field =>
-                                                           Child_Field);
+                                                         Nested =>
+                                                           Below
+                                                             (Child_Field));
                                                    when Landin.Checking
                                                      .Fixed_Array_Field =>
                                                       Write_Array_Field
                                                         (Field, Child_Value,
-                                                         Nested_Field =>
-                                                           Child_Field);
+                                                         Path =>
+                                                           Below
+                                                             (Child_Field));
                                                    when others =>
                                                       raise
                                                         Landin.Compiler_Defect;
@@ -1235,8 +1248,8 @@ package body Landin.Stages.Lowering is
                                                                     Part,
                                                                     Held,
                                                                     Origin,
-                                                             Nested_Field =>
-                                                               Nested);
+                                                             Nested =>
+                                                               Below (Nested));
                                                             when IR
                                                               .Frame_Slot =>
                                                                Taken := IR
@@ -1248,8 +1261,8 @@ package body Landin.Stages.Lowering is
                                                                     Part,
                                                                     Held,
                                                                     Origin,
-                                                             Nested_Field =>
-                                                               Nested);
+                                                             Nested =>
+                                                               Below (Nested));
                                                          end case;
                                                          IR
                                                        .Emit_Store_Slot_Field
@@ -1258,8 +1271,9 @@ package body Landin.Stages.Lowering is
                                                             IR.Part_Position
                                                               (Field),
                                                             Taken, Origin,
-                                                            Nested_Field =>
-                                                              Child_Field);
+                                                            Nested =>
+                                                              Below
+                                                                (Child_Field));
                                                       end;
                                                    when Landin.Checking
                                                      .Fixed_Array_Field =>
@@ -1288,12 +1302,12 @@ package body Landin.Stages.Lowering is
                                                               (Of_Tree, Value),
                                                             Source_Field =>
                                                               Part,
-                                                            Source_Nested_Field
-                                                              => Nested,
+                                                            Source_Nested =>
+                                                              Below (Nested),
                                                             Destination_Field
                                                               => Field,
-                                                       Destination_Nested_Field
-                                                         => Child_Field);
+                                                       Destination_Nested =>
+                                                         Below (Child_Field));
                                                       end;
                                                    when others =>
                                                       raise
@@ -1472,7 +1486,7 @@ package body Landin.Stages.Lowering is
                           IR.Emit_Storage_Address
                             (Unit.all, Filling, Storage_For (Of_Tree, Named),
                              Site_Of (Of_Tree, Argument),
-                             Field => Field, Nested_Field => Child);
+                             Field => Field, Nested => Below (Child));
                      end;
                   end if;
                else
@@ -1510,7 +1524,7 @@ package body Landin.Stages.Lowering is
               (Unit.all, Filling,
                (Kind => IR.Frame_Slot, Slot => Destination), Site,
                Field => Destination_Field,
-               Nested_Field => Destination_Child);
+               Nested => Below (Destination_Child));
          end if;
 
          if Indirect then
@@ -2035,7 +2049,7 @@ package body Landin.Stages.Lowering is
                                  (Of_Tree, Syn.Index_Of (Of_Tree, Node),
                                   Scope),
                                Scalar_At (Of_Tree, Node), Site,
-                               Field => Field, Nested_Field => Child);
+                               Field => Field, Nested => Below (Child));
                   end if;
 
                   if Is_Constant_Index (Of_Tree, Node)
@@ -2054,7 +2068,7 @@ package body Landin.Stages.Lowering is
                             Lower_Expression
                               (Of_Tree, Syn.Index_Of (Of_Tree, Node), Scope),
                             Scalar_At (Of_Tree, Node), Site,
-                            Field => Field, Nested_Field => Child);
+                            Field => Field, Nested => Below (Child));
                end;
 
             when Syn.Member_Selection =>
@@ -2092,14 +2106,14 @@ package body Landin.Stages.Lowering is
                               (Unit.all, Filling,
                                IR.Item_For (Unit.all, Means), Which,
                                Scalar_At (Of_Tree, Node), Site,
-                               Nested_Field => Child);
+                               Nested => Below (Child));
                   end if;
 
                   return IR.Emit_Load_Slot_Field
                            (Unit.all, Filling,
                             Slot_For (Of_Tree, Named, Means), Which,
                             Scalar_At (Of_Tree, Node), Site,
-                            Nested_Field => Child);
+                            Nested => Below (Child));
                end;
 
             when Syn.Name_Reference =>
@@ -2450,7 +2464,7 @@ package body Landin.Stages.Lowering is
                  (Value       : Syn.Node_Id;
                   Destination : IR.Storage;
                   Field       : Natural;
-                  Nested_Field : Natural := 0;
+                  Path : IR.Path_Step_Array := IR.No_Path_Steps;
                   Variant_Case : Natural := 0;
                   Variant_Payload_Field : Natural := 0);
 
@@ -2494,9 +2508,10 @@ package body Landin.Stages.Lowering is
                                         (if Source_Parent = 0
                                          then Field else Source_Parent),
                                       Held, Site,
-                                      Nested_Field =>
-                                        (if Source_Parent = 0
-                                         then 0 else Field));
+                                      Nested =>
+                                        Below
+                                          ((if Source_Parent = 0
+                                            then 0 else Field)));
                               when IR.Frame_Slot =>
                                  Taken :=
                                    IR.Emit_Load_Slot_Field
@@ -2505,9 +2520,10 @@ package body Landin.Stages.Lowering is
                                         (if Source_Parent = 0
                                          then Field else Source_Parent),
                                       Held, Site,
-                                      Nested_Field =>
-                                        (if Source_Parent = 0
-                                         then 0 else Field));
+                                      Nested =>
+                                        Below
+                                          ((if Source_Parent = 0
+                                            then 0 else Field)));
                            end case;
 
                            case Destination.Kind is
@@ -2518,9 +2534,10 @@ package body Landin.Stages.Lowering is
                                       (if Destination_Parent = 0
                                        then Field else Destination_Parent),
                                     Taken, Site,
-                                    Nested_Field =>
-                                      (if Destination_Parent = 0
-                                       then 0 else Field));
+                                    Nested =>
+                                      Below
+                                        ((if Destination_Parent = 0
+                                          then 0 else Field)));
                               when IR.Frame_Slot =>
                                  IR.Emit_Store_Slot_Field
                                    (Unit.all, Filling, Destination.Slot,
@@ -2528,9 +2545,10 @@ package body Landin.Stages.Lowering is
                                       (if Destination_Parent = 0
                                        then Field else Destination_Parent),
                                     Taken, Site,
-                                    Nested_Field =>
-                                      (if Destination_Parent = 0
-                                       then 0 else Field));
+                                    Nested =>
+                                      Below
+                                        ((if Destination_Parent = 0
+                                          then 0 else Field)));
                            end case;
                         end;
 
@@ -2543,13 +2561,15 @@ package body Landin.Stages.Lowering is
                            Source_Field =>
                              (if Source_Parent = 0
                               then Field else Source_Parent),
-                           Source_Nested_Field =>
-                             (if Source_Parent = 0 then 0 else Field),
+                           Source_Nested =>
+                             Below ((if Source_Parent = 0 then 0 else Field)),
                            Destination_Field =>
                              (if Destination_Parent = 0
                               then Field else Destination_Parent),
-                           Destination_Nested_Field =>
-                             (if Destination_Parent = 0 then 0 else Field));
+                           Destination_Nested =>
+                             Below
+                               ((if Destination_Parent = 0
+                                 then 0 else Field)));
 
                      when Landin.Checking.Aggregate_Field =>
                         raise Landin.Compiler_Defect with
@@ -2569,7 +2589,7 @@ package body Landin.Stages.Lowering is
                  (Value       : Syn.Node_Id;
                   Destination : IR.Storage;
                   Field       : Natural;
-                  Nested_Field : Natural := 0;
+                  Path : IR.Path_Step_Array := IR.No_Path_Steps;
                   Variant_Case : Natural := 0;
                   Variant_Payload_Field : Natural := 0)
                is
@@ -2605,7 +2625,7 @@ package body Landin.Stages.Lowering is
                                  IR.Emit_Store_Element
                                    (Unit.all, Filling, Destination.Datum,
                                     Index, Element, Site, Field => Field,
-                                    Nested_Field => Nested_Field,
+                                    Nested => Path,
                                     Variant_Case => Variant_Case,
                                     Variant_Payload_Field =>
                                       Variant_Payload_Field);
@@ -2613,7 +2633,7 @@ package body Landin.Stages.Lowering is
                                  IR.Emit_Store_Slot_Element
                                    (Unit.all, Filling, Destination.Slot,
                                     Index, Element, Site, Field => Field,
-                                    Nested_Field => Nested_Field,
+                                    Nested => Path,
                                     Variant_Case => Variant_Case,
                                     Variant_Payload_Field =>
                                       Variant_Payload_Field);
@@ -2682,7 +2702,7 @@ package body Landin.Stages.Lowering is
                           (Of_Tree,
                            Syn.Repeated_Element (Of_Tree, Value), Scope),
                         Site, Field => Field,
-                        Nested_Field => Nested_Field,
+                        Nested => Path,
                         Variant_Case => Variant_Case,
                         Variant_Payload_Field => Variant_Payload_Field);
                   elsif Syn.Kind (Of_Tree, Value) = Syn.Array_Repetition
@@ -2693,14 +2713,14 @@ package body Landin.Stages.Lowering is
                           (Of_Tree,
                            Syn.Repeated_Element (Of_Tree, Value), Scope),
                         Site, Field => Field,
-                        Nested_Field => Nested_Field,
+                        Nested => Path,
                         Variant_Case => Variant_Case,
                         Variant_Payload_Field => Variant_Payload_Field);
                   elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
                      if Variant_Payload_Field = 0 then
                         IR.Emit_Array_Clear
                           (Unit.all, Filling, Destination, Site,
-                           Field => Field, Nested_Field => Nested_Field);
+                           Field => Field, Nested => Path);
                      end if;
                   else
                      --  D20/D50: a whole array source is storage, optionally
@@ -2743,9 +2763,9 @@ package body Landin.Stages.Lowering is
                            Destination => Destination,
                            Site => Site,
                            Source_Field => Source_Field,
-                           Source_Nested_Field => Source_Child,
+                           Source_Nested => Below (Source_Child),
                            Destination_Field => Field,
-                           Destination_Nested_Field => Nested_Field,
+                           Destination_Nested => Path,
                            Destination_Variant_Case => Variant_Case,
                            Destination_Variant_Payload_Field =>
                              Variant_Payload_Field);
@@ -2847,8 +2867,10 @@ package body Landin.Stages.Lowering is
                                 (if Parent_Field = 0
                                  then Field else Parent_Field),
                               Value, Site,
-                              Nested_Field =>
-                                (if Parent_Field = 0 then 0 else Field));
+                              Nested =>
+                                Below
+                                  ((if Parent_Field = 0
+                                    then 0 else Field)));
                         when IR.Frame_Slot =>
                            IR.Emit_Store_Slot_Field
                              (Unit.all, Filling, Destination.Slot,
@@ -2856,8 +2878,10 @@ package body Landin.Stages.Lowering is
                                 (if Parent_Field = 0
                                  then Field else Parent_Field),
                               Value, Site,
-                              Nested_Field =>
-                                (if Parent_Field = 0 then 0 else Field));
+                              Nested =>
+                                Below
+                                  ((if Parent_Field = 0
+                                    then 0 else Field)));
                      end case;
                   end Store_Scalar;
                begin
@@ -2893,8 +2917,10 @@ package body Landin.Stages.Lowering is
                                 (Value, Destination,
                                  (if Parent_Field = 0
                                   then Field else Parent_Field),
-                                 Nested_Field =>
-                                   (if Parent_Field = 0 then 0 else Field));
+                                 Path =>
+                                   Below
+                                     ((if Parent_Field = 0
+                                       then 0 else Field)));
 
                            when Landin.Checking.Aggregate_Field =>
                               declare
@@ -2988,9 +3014,10 @@ package body Landin.Stages.Lowering is
                                     Field =>
                                       (if Parent_Field = 0
                                        then Field else Parent_Field),
-                                    Nested_Field =>
-                                      (if Parent_Field = 0
-                                       then 0 else Field));
+                                    Nested =>
+                                      Below
+                                        ((if Parent_Field = 0
+                                          then 0 else Field)));
 
                               when Landin.Checking.Aggregate_Field =>
                                  pragma Assert (Parent_Field = 0);
@@ -3112,13 +3139,13 @@ package body Landin.Stages.Lowering is
                               (Unit.all, Filling,
                                Slot_For (Of_Tree, Named, Means),
                                Index, Scalar_At (Of_Tree, Place), Site,
-                               Field => Field, Nested_Field => Child);
+                               Field => Field, Nested => Below (Child));
                   end if;
 
                   return IR.Emit_Load_Element
                            (Unit.all, Filling, IR.Item_For (Unit.all, Means),
                             Index, Scalar_At (Of_Tree, Place), Site,
-                            Field => Field, Nested_Field => Child);
+                            Field => Field, Nested => Below (Child));
                end Read_Place;
 
                procedure Write
@@ -3224,7 +3251,7 @@ package body Landin.Stages.Lowering is
                                 (Unit.all, Filling,
                                  Slot_For (Of_Tree, Named, Means),
                                  Index, Value, Site, Field => Field,
-                                 Nested_Field => Child);
+                                 Nested => Below (Child));
                            end if;
                         elsif Index = IR.No_Value then
                            IR.Emit_Store_Field
@@ -3236,7 +3263,7 @@ package body Landin.Stages.Lowering is
                              (Unit.all, Filling,
                               IR.Item_For (Unit.all, Means),
                               Index, Value, Site, Field => Field,
-                              Nested_Field => Child);
+                              Nested => Below (Child));
                         end if;
                      end;
                      return;
@@ -3265,12 +3292,12 @@ package body Landin.Stages.Lowering is
                            IR.Emit_Store_Field
                              (Unit.all, Filling,
                               IR.Item_For (Unit.all, Means), Which,
-                              Value, Site, Nested_Field => Child);
+                              Value, Site, Nested => Below (Child));
                         else
                            IR.Emit_Store_Slot_Field
                              (Unit.all, Filling,
                               Slot_For (Of_Tree, Named, Means), Which,
-                              Value, Site, Nested_Field => Child);
+                              Value, Site, Nested => Below (Child));
                         end if;
                      end;
 
@@ -3448,7 +3475,7 @@ package body Landin.Stages.Lowering is
                                          Slot => Where),
                                     Site => Site,
                                     Source_Field => Source_Field,
-                                    Source_Nested_Field => Source_Child);
+                                    Source_Nested => Below (Source_Child));
                               end;
                            end if;
                         elsif Landin.Checking.Type_Of (Types.all, Id)
@@ -3713,7 +3740,7 @@ package body Landin.Stages.Lowering is
                               --  contextual array value.
                               Write_Array_Value
                                 (Value, Destination, Field,
-                                 Nested_Field => Child);
+                                 Path => Below (Child));
                            end if;
                         end;
                      else

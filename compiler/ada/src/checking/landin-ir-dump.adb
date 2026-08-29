@@ -192,6 +192,54 @@ package body Landin.IR.Dump is
                         (Of_Unit, Item, Value)));
          end Variant_Qualifier;
 
+         --  D117's subobject path.  One step still reads as the `nested`
+         --  the parent/child pair spelt, and a further step is another
+         --  one, so a recorded run says which part of which child an
+         --  operation reached rather than only that it reached one.
+         function Path_Qualifier return String;
+
+         function Path_Qualifier return String is
+            Path : constant Path_Step_Array :=
+              Path_Of (Of_Unit, Item, Value);
+            Text : Unbounded.Unbounded_String;
+         begin
+            for Step of Path loop
+               if Step.Case_Index /= 0 then
+                  Unbounded.Append
+                    (Text,
+                     " case "
+                     & Trimmed (Natural'Image (Step.Case_Index)));
+               end if;
+               Unbounded.Append
+                 (Text,
+                  " nested "
+                  & Trimmed (Part_Position'Image (Step.Field)));
+            end loop;
+            return Unbounded.To_String (Text);
+         end Path_Qualifier;
+
+         function Source_Path_Qualifier return String;
+
+         function Source_Path_Qualifier return String is
+            Path : constant Path_Step_Array :=
+              Source_Path_Of (Of_Unit, Item, Value);
+            Text : Unbounded.Unbounded_String;
+         begin
+            for Step of Path loop
+               if Step.Case_Index /= 0 then
+                  Unbounded.Append
+                    (Text,
+                     " case "
+                     & Trimmed (Natural'Image (Step.Case_Index)));
+               end if;
+               Unbounded.Append
+                 (Text,
+                  " nested "
+                  & Trimmed (Part_Position'Image (Step.Field)));
+            end loop;
+            return Unbounded.To_String (Text);
+         end Source_Path_Qualifier;
+
          Op : constant Opcode := Op_Of (Of_Unit, Item, Value);
          Held : constant String := Shown (Result_Of (Of_Unit, Item, Value));
          Lead : constant String :=
@@ -227,12 +275,7 @@ package body Landin.IR.Dump is
                       & Trimmed
                           (Natural'Image
                              (Element_Field_Of (Of_Unit, Item, Value))))
-                 & (if Nested_Field_Of (Of_Unit, Item, Value) = 0
-                    then ""
-                    else " nested "
-                      & Trimmed
-                          (Natural'Image
-                             (Nested_Field_Of (Of_Unit, Item, Value))));
+                 & Path_Qualifier;
 
             when Load_Datum | Store_Datum =>
                declare
@@ -256,6 +299,7 @@ package body Landin.IR.Dump is
                                      (Element_Field_Of
                                         (Of_Unit, Item, Value))))
                          & Variant_Qualifier
+                         & Path_Qualifier
                          & Operands (Item, Value);
                end if;
 
@@ -272,6 +316,7 @@ package body Landin.IR.Dump is
                                      (Element_Field_Of
                                         (Of_Unit, Item, Value))))
                          & Variant_Qualifier
+                         & Path_Qualifier
                          & Operands (Item, Value);
                end;
 
@@ -284,6 +329,7 @@ package body Landin.IR.Dump is
                       & Trimmed
                           (Natural'Image
                              (Source_Field_Of (Of_Unit, Item, Value))))
+                 & Source_Path_Qualifier
                  & " to " & Endpoint (Destination_Of (Of_Unit, Item, Value))
                  & (if Element_Field_Of (Of_Unit, Item, Value) = 0
                     then ""
@@ -291,7 +337,8 @@ package body Landin.IR.Dump is
                       & Trimmed
                           (Natural'Image
                              (Element_Field_Of (Of_Unit, Item, Value))))
-                 & Variant_Qualifier;
+                 & Variant_Qualifier
+                 & Path_Qualifier;
 
             when Copy_Variant =>
                return Lead & " from "
@@ -315,7 +362,8 @@ package body Landin.IR.Dump is
                     else " field "
                       & Trimmed
                           (Natural'Image
-                             (Element_Field_Of (Of_Unit, Item, Value))));
+                             (Element_Field_Of (Of_Unit, Item, Value))))
+                 & Path_Qualifier;
 
             when Fill_Array =>
                return Lead & " destination "
@@ -327,6 +375,7 @@ package body Landin.IR.Dump is
                           (Natural'Image
                              (Element_Field_Of (Of_Unit, Item, Value))))
                  & Variant_Qualifier
+                 & Path_Qualifier
                  & " first "
                  & Trimmed
                      (Part_Position'Image
@@ -458,6 +507,24 @@ package body Landin.IR.Dump is
                           (Block_Id'Image
                              (Alternative_Of (Of_Unit, Item, Value)))
                       & Operands (Item, Value);
+
+            --  Which field, and since D117 which part below it.  Without
+            --  both, a recorded run cannot tell `a.b.c` from `a.b.d`, and
+            --  a fixture over deeper storage would assert nothing.
+            when Load_Field | Store_Field =>
+               return Lead & " "
+                 & (if Reaches_A_Slot (Of_Unit, Item, Value)
+                    then "slot "
+                      & Trimmed
+                          (Slot_Id'Image (Slot_Of (Of_Unit, Item, Value)))
+                    else Endpoint
+                           ((Kind  => Module_Datum,
+                             Datum => Datum_Of (Of_Unit, Item, Value))))
+                 & " field "
+                 & Trimmed
+                     (Part_Position'Image (Field_Of (Of_Unit, Item, Value)))
+                 & Path_Qualifier
+                 & Operands (Item, Value);
 
             when others =>
                return Lead & Operands (Item, Value);

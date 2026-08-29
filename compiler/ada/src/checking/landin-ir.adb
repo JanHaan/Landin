@@ -240,6 +240,30 @@ package body Landin.IR is
       end if;
    end Open_Run;
 
+   --  D117's subobject path, stored once.  An instruction keeps where its
+   --  run starts and how long it is; the steps themselves go end to end in
+   --  one vector, as an item's values and a node's children do.  This one
+   --  does not go through Open_Run: paths belong to instructions and not to
+   --  items, so nothing requires one item's runs to stay contiguous.
+   function Stored_Path
+     (Into : in out Unit; Path : Path_Step_Array) return Run;
+
+   function Stored_Path
+     (Into : in out Unit; Path : Path_Step_Array) return Run
+   is
+      Made : Run;
+   begin
+      if Path'Length = 0 then
+         return Made;
+      end if;
+
+      Made := (First => Natural (Into.Paths.Length), Count => Path'Length);
+      for Step of Path loop
+         Into.Paths.Append (Step);
+      end loop;
+      return Made;
+   end Stored_Path;
+
    procedure Add_Field
      (Into    : in out Unit;
       Item    : Item_Id;
@@ -974,9 +998,92 @@ package body Landin.IR is
      return Part_Position
      is (Held (Of_Unit, Item, Value).Part);
 
-   function Nested_Field_Of
+   --  One copy of the run arithmetic, shared by both paths an
+   --  instruction can carry.
+   function Steps_Of
+     (Of_Unit : Unit; Where : Run) return Path_Step_Array;
+
+   function Steps_Of
+     (Of_Unit : Unit; Where : Run) return Path_Step_Array
+   is
+      Made : Path_Step_Array (1 .. Where.Count);
+   begin
+      for Step in Made'Range loop
+         Made (Step) := Of_Unit.Paths (Where.First + Step);
+      end loop;
+      return Made;
+   end Steps_Of;
+
+   function Path_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Path_Step_Array
+     is (Steps_Of (Of_Unit, Held (Of_Unit, Item, Value).Nested));
+
+   function Path_Depth_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
-     is (Held (Of_Unit, Item, Value).Nested_Part);
+     is (Held (Of_Unit, Item, Value).Nested.Count);
+
+   function Path_Is_Valid
+     (Of_Unit : Unit; Root : Field_Shape; Path : Path_Step_Array)
+      return Boolean
+   is
+      Reached : Field_Shape := Root;
+   begin
+      for Step of Path loop
+         if Step.Case_Index = 0 then
+            if Reached.Kind /= Aggregate_Field_Shape
+              or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Reached)
+              or else Element_Total (Step.Field)
+                        > Element_Total
+                            (Aggregate_Field_Count (Of_Unit, Reached))
+            then
+               return False;
+            end if;
+            Reached :=
+              Nth_Aggregate_Field (Of_Unit, Reached, Positive (Step.Field));
+         else
+            if Reached.Kind /= Variant_Field_Shape
+              or else Step.Case_Index > Reached.Cases
+              or else Reached.Payloads_First = 0
+              or else Reached.Payloads_First
+                        > Variant_Case_Run_Count (Of_Unit)
+              or else Reached.Cases
+                        > Variant_Case_Run_Count (Of_Unit)
+                            - Reached.Payloads_First + 1
+              or else not Variant_Case_Run_Is_Valid
+                            (Of_Unit, Reached, Step.Case_Index)
+              or else Element_Total (Step.Field)
+                        > Element_Total
+                            (Variant_Case_Field_Count
+                               (Of_Unit, Reached, Step.Case_Index))
+            then
+               return False;
+            end if;
+            Reached :=
+              Nth_Variant_Case_Field
+                (Of_Unit, Reached, Step.Case_Index, Positive (Step.Field));
+         end if;
+      end loop;
+      return True;
+   end Path_Is_Valid;
+
+   function Shape_At
+     (Of_Unit : Unit; Root : Field_Shape; Path : Path_Step_Array)
+      return Field_Shape
+   is
+      Reached : Field_Shape := Root;
+   begin
+      for Step of Path loop
+         Reached :=
+           (if Step.Case_Index = 0
+            then Nth_Aggregate_Field
+                   (Of_Unit, Reached, Positive (Step.Field))
+            else Nth_Variant_Case_Field
+                   (Of_Unit, Reached, Step.Case_Index,
+                    Positive (Step.Field)));
+      end loop;
+      return Reached;
+   end Shape_At;
 
    function Element_Field_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
@@ -999,9 +1106,10 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      is (Held (Of_Unit, Item, Value).Source_Field);
 
-   function Source_Nested_Field_Of
-     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
-     is (Held (Of_Unit, Item, Value).Source_Nested_Part);
+   function Source_Path_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Path_Step_Array
+     is (Steps_Of (Of_Unit, Held (Of_Unit, Item, Value).Source_Nested));
 
    function Destination_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
@@ -1175,16 +1283,20 @@ package body Landin.IR is
       Place       : Storage;
       Site        : Landin.Provenance.Origin;
       Field       : Natural := 0;
-      Nested_Field : Natural := 0) return Value_Id
-     is (Append
-           (Into, Item,
-            Instruction'(Op            => Storage_Address,
-                         Result        => Landin.Types.Usize,
-                         Site          => Site,
-                         Destination   => Place,
-                         Element_Field => Field,
-                         Nested_Part   => Nested_Field,
-                         others        => <>)));
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+   is
+      Steps : constant Run := Stored_Path (Into, Nested);
+   begin
+      return Append
+        (Into, Item,
+         Instruction'(Op            => Storage_Address,
+                      Result        => Landin.Types.Usize,
+                      Site          => Site,
+                      Destination   => Place,
+                      Element_Field => Field,
+                      Nested        => Steps,
+                      others        => <>));
+   end Emit_Storage_Address;
 
    function Emit_Number
      (Into    : in out Unit;
@@ -1351,16 +1463,20 @@ package body Landin.IR is
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Nested_Field : Natural := 0) return Value_Id
-     is (Append
-           (Into, Item,
-            Instruction'(Op          => Load_Field,
-                         Result      => Result,
-                         Site        => Site,
-                         Named       => Datum,
-                         Part        => Field,
-                         Nested_Part => Nested_Field,
-                         others      => <>)));
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+   is
+      Steps : constant Run := Stored_Path (Into, Nested);
+   begin
+      return Append
+        (Into, Item,
+         Instruction'(Op          => Load_Field,
+                      Result      => Result,
+                      Site        => Site,
+                      Named       => Datum,
+                      Part        => Field,
+                      Nested      => Steps,
+                      others      => <>));
+   end Emit_Load_Field;
 
    function Emit_Load_Slot_Field
      (Into   : in out Unit;
@@ -1369,16 +1485,20 @@ package body Landin.IR is
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Nested_Field : Natural := 0) return Value_Id
-     is (Append
-           (Into, Item,
-            Instruction'(Op          => Load_Field,
-                         Result      => Result,
-                         Site        => Site,
-                         Slot        => Slot,
-                         Part        => Field,
-                         Nested_Part => Nested_Field,
-                         others      => <>)));
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+   is
+      Steps : constant Run := Stored_Path (Into, Nested);
+   begin
+      return Append
+        (Into, Item,
+         Instruction'(Op          => Load_Field,
+                      Result      => Result,
+                      Site        => Site,
+                      Slot        => Slot,
+                      Part        => Field,
+                      Nested      => Steps,
+                      others      => <>));
+   end Emit_Load_Slot_Field;
 
    procedure Emit_Store_Slot_Field
      (Into  : in out Unit;
@@ -1387,14 +1507,15 @@ package body Landin.IR is
       Field : Part_Position;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
-      Nested_Field : Natural := 0)
+      Nested : Path_Step_Array := No_Path_Steps)
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Made : Instruction :=
         Instruction'(Op          => Store_Field,
                      Site        => Site,
                      Slot        => Slot,
                      Part        => Field,
-                     Nested_Part => Nested_Field,
+                     Nested      => Steps,
                      others      => <>);
       Where : Value_Id;
    begin
@@ -1412,14 +1533,15 @@ package body Landin.IR is
       Field : Part_Position;
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
-      Nested_Field : Natural := 0)
+      Nested : Path_Step_Array := No_Path_Steps)
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Made : Instruction :=
         Instruction'(Op          => Store_Field,
                      Site        => Site,
                      Named       => Datum,
                      Part        => Field,
-                     Nested_Part => Nested_Field,
+                     Nested      => Steps,
                      others      => <>);
       Where : Value_Id;
    begin
@@ -1438,17 +1560,18 @@ package body Landin.IR is
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
       Field  : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0) return Value_Id
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Made : Instruction :=
         Instruction'(Op     => Load_Element,
                      Result => Result,
                      Site   => Site,
                      Named  => Datum,
                      Element_Field => Field,
-                     Nested_Part => Nested_Field,
+                     Nested      => Steps,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1467,16 +1590,17 @@ package body Landin.IR is
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
       Field : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Made : Instruction :=
         Instruction'(Op     => Store_Element,
                      Site   => Site,
                      Named  => Datum,
                      Element_Field => Field,
-                     Nested_Part => Nested_Field,
+                     Nested      => Steps,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1498,17 +1622,18 @@ package body Landin.IR is
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
       Field  : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0) return Value_Id
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Made : Instruction :=
         Instruction'(Op     => Load_Element,
                      Result => Result,
                      Site   => Site,
                      Slot   => Slot,
                      Element_Field => Field,
-                     Nested_Part => Nested_Field,
+                     Nested      => Steps,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1527,16 +1652,17 @@ package body Landin.IR is
       Value : Value_Id;
       Site  : Landin.Provenance.Origin;
       Field : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Made : Instruction :=
         Instruction'(Op     => Store_Element,
                      Site   => Site,
                      Slot   => Slot,
                      Element_Field => Field,
-                     Nested_Part => Nested_Field,
+                     Nested      => Steps,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1566,8 +1692,7 @@ package body Landin.IR is
          Cell : constant Slot_Id := Held (Of_Unit, Item, Value).Slot;
          Field : constant Natural :=
            Element_Field_Of (Of_Unit, Item, Value);
-         Nested : constant Natural :=
-           Nested_Field_Of (Of_Unit, Item, Value);
+         Path : constant Path_Step_Array := Path_Of (Of_Unit, Item, Value);
       begin
          if not Holds (Of_Unit, Item, Cell) then
             return False;
@@ -1585,35 +1710,30 @@ package body Landin.IR is
               Nth_Slot_Field_Shape
                 (Of_Unit, Item, Cell, Positive (Field));
          begin
-            if Nested = 0 then
-               return Shape.Kind = Array_Field_Shape;
-            end if;
-            return Shape.Kind = Aggregate_Field_Shape
-              and then Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
-              and then Nested <= Aggregate_Field_Count (Of_Unit, Shape)
-              and then Nth_Aggregate_Field
-                (Of_Unit, Shape, Positive (Nested)).Kind
-                  = Array_Field_Shape;
+            return Path_Is_Valid (Of_Unit, Shape, Path)
+              and then Shape_At (Of_Unit, Shape, Path).Kind
+                         = Array_Field_Shape;
          end;
       end;
    end Slot_Element_Shape_Is_Valid;
+
+   --  The shape a slot-reaching element operation names, once its base
+   --  field and D117's path have both been followed.
+   function Slot_Element_Shape
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Field_Shape
+     is (Shape_At
+           (Of_Unit,
+            Nth_Slot_Field_Shape
+              (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
+               Positive (Element_Field_Of (Of_Unit, Item, Value))),
+            Path_Of (Of_Unit, Item, Value)));
 
    function Slot_Element_Length
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Element_Total
      is (if Element_Field_Of (Of_Unit, Item, Value) = 0
          then Slot_Array_Length
                 (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
-         elsif Nested_Field_Of (Of_Unit, Item, Value) = 0
-         then Nth_Slot_Field_Shape
-                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
-                 Positive (Element_Field_Of (Of_Unit, Item, Value))).Length
-         else Nth_Aggregate_Field
-                (Of_Unit,
-                 Nth_Slot_Field_Shape
-                   (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
-                    Positive (Element_Field_Of (Of_Unit, Item, Value))),
-                 Positive
-                   (Nested_Field_Of (Of_Unit, Item, Value))).Length);
+         else Slot_Element_Shape (Of_Unit, Item, Value).Length);
 
    function Slot_Element_Type
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
@@ -1621,17 +1741,7 @@ package body Landin.IR is
      is (if Element_Field_Of (Of_Unit, Item, Value) = 0
          then Slot_Array_Element
                 (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
-         elsif Nested_Field_Of (Of_Unit, Item, Value) = 0
-         then Nth_Slot_Field_Shape
-                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
-                 Positive (Element_Field_Of (Of_Unit, Item, Value))).Element
-         else Nth_Aggregate_Field
-                (Of_Unit,
-                 Nth_Slot_Field_Shape
-                   (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
-                    Positive (Element_Field_Of (Of_Unit, Item, Value))),
-                 Positive
-                   (Nested_Field_Of (Of_Unit, Item, Value))).Element);
+         else Slot_Element_Shape (Of_Unit, Item, Value).Element);
 
    procedure Emit_Array_Copy
      (Into        : in out Unit;
@@ -1640,12 +1750,14 @@ package body Landin.IR is
       Destination : Storage;
       Site        : Landin.Provenance.Origin;
       Source_Field : Natural := 0;
-      Source_Nested_Field : Natural := 0;
+      Source_Nested : Path_Step_Array := No_Path_Steps;
       Destination_Field : Natural := 0;
-      Destination_Nested_Field : Natural := 0;
+      Destination_Nested : Path_Step_Array := No_Path_Steps;
       Destination_Variant_Case : Natural := 0;
       Destination_Variant_Payload_Field : Natural := 0)
    is
+      From : constant Run := Stored_Path (Into, Source_Nested);
+      Steps : constant Run := Stored_Path (Into, Destination_Nested);
       Where : constant Value_Id :=
         Append
           (Into, Item,
@@ -1653,10 +1765,10 @@ package body Landin.IR is
                         Site        => Site,
                         Source      => Source,
                         Source_Field => Source_Field,
-                        Source_Nested_Part => Source_Nested_Field,
+                        Source_Nested => From,
                         Destination => Destination,
                         Element_Field => Destination_Field,
-                        Nested_Part => Destination_Nested_Field,
+                        Nested      => Steps,
                         Variant_Case => Destination_Variant_Case,
                         Variant_Payload_Field =>
                           Destination_Variant_Payload_Field,
@@ -1693,8 +1805,9 @@ package body Landin.IR is
       Destination : Storage;
       Site        : Landin.Provenance.Origin;
       Field       : Natural := 0;
-      Nested_Field : Natural := 0)
+      Nested : Path_Step_Array := No_Path_Steps)
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Where : constant Value_Id :=
         Append
           (Into, Item,
@@ -1702,7 +1815,7 @@ package body Landin.IR is
                         Site        => Site,
                         Destination => Destination,
                         Element_Field => Field,
-                        Nested_Part => Nested_Field,
+                        Nested      => Steps,
                         others      => <>));
    begin
       pragma Assert (Where /= No_Value);
@@ -1716,17 +1829,18 @@ package body Landin.IR is
       Value       : Value_Id;
       Site        : Landin.Provenance.Origin;
       Field       : Natural := 0;
-      Nested_Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0)
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Made : Instruction :=
         Instruction'(Op          => Fill_Array,
                      Site        => Site,
                      Destination => Destination,
                      Part        => First,
                      Element_Field => Field,
-                     Nested_Part => Nested_Field,
+                     Nested      => Steps,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others      => <>);
