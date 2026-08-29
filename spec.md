@@ -6072,3 +6072,25 @@ named result until the leave copy.
 the generated token and IR records; `runtime/struct-returns-cross-calls`,
 `runtime/array-returns-cross-calls` and `runtime/nested-storage-arguments` on
 Linux x86-64.
+
+### D110 — A local may infer aggregate identity from a returned call
+
+**The tour said** that `:=` infers the binding's type from its initializer
+[0050]. D93 already preserves nominal child identity from storage; D106/D107
+now give a call the same neutral struct body or array shape without making its
+result an IR value.
+
+**Chosen:** a local initialized directly by an aggregate-returning call may
+infer the callee's nominal struct body or fixed-array element type and length.
+The inferred binding receives its own shaped slot, which is supplied directly
+as D106's hidden destination. Module inference from calls remains forbidden by
+[1940], because module images run no call before entry.
+
+**Why inference changes no ABI rule:** checking copies only source identity into
+the declaration, before lowering. Runtime still has exactly the same
+caller-owned destination and callee leave copy as an explicitly typed local.
+
+**Pinned by** the checker, lowering, verifier and backend public seams; the
+generated token and IR records; and the inferred locals in
+`runtime/struct-returns-cross-calls` and `runtime/array-returns-cross-calls` on
+Linux x86-64.

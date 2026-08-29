@@ -5966,7 +5966,10 @@ package body Landin.Stages.Checking is
                Landin.Checking.Settle
                  (Types.all, Id, Ty.Type_Kind (Ty.Default_Integer));
             else
-               if Got = Ty.Fixed_Array and then Direct_Array then
+               if Got = Ty.Fixed_Array
+                 and then (Direct_Array
+                           or else Syn.Kind (Of_Tree.all, Value) = Syn.Call)
+               then
                   Landin.Checking.Note_Array
                     (Types.all, Id,
                      Landin.Checking.Array_Length
@@ -5975,7 +5978,10 @@ package body Landin.Stages.Checking is
                        (Types.all, Of_Tree.all, Value));
                end if;
 
-               if Got = Ty.Aggregate and then Direct_Struct then
+               if Got = Ty.Aggregate
+                 and then (Direct_Struct
+                           or else Syn.Kind (Of_Tree.all, Value) = Syn.Call)
+               then
                   --  D56/D61: an inferred aggregate has no written type node
                   --  from which Declared_As can copy [0710]'s identity.  Carry
                   --  the source body's declaration before settling the new
