@@ -13,6 +13,10 @@ end make
 
 forward: () -> (result: pair) = make(19, 23) end forward
 
+score: (value: pair) -> (result: i32) =
+    result = value.left + value.right
+end score
+
 public main: () -> (code: i32) =
     mut answer := forward()
     mut other: pair = make(1, 2)
@@ -21,4 +25,5 @@ public main: () -> (code: i32) =
     storage.value = make(10, 11)
     code = answer.left + answer.right
            + storage.value.left + storage.value.right
+           + score(make(1, 2))
 end main

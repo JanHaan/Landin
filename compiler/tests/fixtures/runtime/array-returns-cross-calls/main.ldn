@@ -8,6 +8,10 @@ end make
 
 forward: () -> (result: [3]i32) = make() end forward
 
+score: (value: [3]i32) -> (result: i32) =
+    result = value[0] + value[1] + value[2]
+end score
+
 public main: () -> (code: i32) =
     mut answer := forward()
     mut other: [3]i32 = make()
@@ -16,4 +20,5 @@ public main: () -> (code: i32) =
     storage.row = make()
     code = answer[0] + answer[1] + answer[2]
            + storage.row[0] + storage.row[1] + storage.row[2]
+           + score(make())
 end main
