@@ -13,8 +13,8 @@ One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
-**Status: specification 0.1.0. R0, R1, R2.20 and R2.30 are complete.
-`refine` scans, parses, resolves names, checks types and definite
+**Status: specification 0.1.0. R0, R1, R2.20 and R2.30 are complete;
+R2.40 is active. `refine` scans, parses, resolves names, checks types and definite
 assignment, lowers and verifies target-neutral IR, emits Linux x86-64
 assembly, and can assemble and link a hosted executable. Runtime fixtures run
 those binaries on the native x86-64 gate. The enabled kernel includes scalars,
@@ -145,8 +145,8 @@ on macOS arm64 and passes its full suite there when the Linux target toolchain
 is present; the pinned `linux/amd64` container and x86-64 CI run the Linux
 binaries. R2.20's target-parametric aggregate and variant representation and
 R2.30's functions, control-flow expressions, lexical cleanup, declared errors
-and internal aggregate ABI are complete. The next planned R2 item is R2.40's
-fixed parameters and compile-time substitution.
+and internal aggregate ABI are complete. Active R2.40 implements fixed
+parameters and compile-time substitution.
 Language and architecture questions are resolved when the first vertical
 slice needs them.
 
