@@ -1,0 +1,5 @@
+class: negative
+summary: [1920] requires a function-valued callee rather than deferring calls through ordinary bindings
+constructs: 1000, 1920
+program: program.ldn
+codes: L0301
