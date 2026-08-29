@@ -29,4 +29,8 @@ public main: () -> (code: i32) =
     code = inspect(1, first, 4, 5, 6, 0, second, 9)
            + score((x: 10, y: 11))
            + score(point(y: 1, of zeroed))
+           + inspect(0, (left: 1, row: [2, 3], right: 4),
+                     0, 0, 0, 0, zeroed, 0)
+           + inspect(0, pair(left: 1, row: [2 of 3], right: 4),
+                     0, 0, 0, 0, zeroed, 0)
 end main
