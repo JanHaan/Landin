@@ -943,8 +943,11 @@ A named parameterized struct is nominal per fully applied instance. The
 identity is the source declaration plus its complete normalized positional
 actual tuple, including an actual the current field list does not use. Aliases
 of actuals do not create a second identity; changing an actual or the template
-does, even when the resulting fields and layout are equal. Target widths,
-offsets and padding are layout facts, not identity.
+does, even when the resulting fields and layout are equal. A mention in a
+function signature or as another template's type actual needs that identity but
+does not place its value inline. Only a field, payload or nominal array element
+requests its layout; a zero-length array still validates that element edge.
+Target widths, offsets and padding are layout facts, not identity.
 
 At module scope that context forms a static image rather than running a
 constructor before the entry point [1460]. The image follows ordinary child
@@ -2301,8 +2304,10 @@ small: type (T: type is zeroable, fixed N: u32) = struct ... end small
 The two constrained examples above still describe the complete language rather
 than today's kernel. What is enabled already uses the same substitution model:
 no user routine runs, each canonical nominal instance gets the target layout of
-its substituted fields, and neither the template nor its formals acquire
-per-instance runtime state.
+its substituted fields when a value site requires one, and neither the template
+nor its formals acquire per-instance runtime state. Repeating an application
+whose substituted layout fails repeats that application-local diagnostic; it
+does not create a second nominal identity.
 
 ### [1360] Allocation is an ordinary concept
 

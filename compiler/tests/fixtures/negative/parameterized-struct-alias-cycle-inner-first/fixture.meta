@@ -1,0 +1,6 @@
+class: negative
+summary: an alias cycle reached from a later struct template remains an alias cycle
+constructs: 0670, 1350, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0307

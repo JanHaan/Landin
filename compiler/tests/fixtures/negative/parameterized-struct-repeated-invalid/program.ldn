@@ -1,0 +1,5 @@
+huge: type (fixed count: u64) = struct
+    bytes: [count]u64
+end huge
+first: huge(18446744073709551615)
+second: huge(18446744073709551615)

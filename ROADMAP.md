@@ -2293,8 +2293,13 @@ out identically. Every enabled concrete identity may be a type actual, while
 the substituted field or payload position decides its legality. Fixed formals
 substitute bounds. Symbolic validation checks unused templates, and L0313
 distinguishes impossible by-value nominal recursion from L0307 alias expansion.
-Each canonical identity receives one selected-target layout without AST
-mutation or a synthetic declaration. Existing contextual aggregate storage,
+Function-signature and type-actual normalization request identity only; fields,
+payloads and nominal array elements request value layout, including at zero
+length. Each canonical identity receives one selected-target layout when such a
+site requires it, without AST mutation or a synthetic declaration. An invalid
+layout is re-evaluated at another use of the same key so every dependent failure
+retains its own application primary without duplicating identity. Existing
+contextual aggregate storage,
 images, construction, copies, calls, control joins, arrays, nested children and
 variants then use the ordinary nominal shape path. Templates and formals make
 no IR item, slot or ABI position.
@@ -2314,8 +2319,10 @@ checking, lowering and verifier seams pass. Positive, negative and runtime
 fixtures cover canonical reuse, alias normalization, unequal phantom actuals,
 fixed layout changes, every enabled substituted field family, contextual value
 transport, target overflow, malformed unused templates, declaration-order
-independence, application provenance and nominal recursion. Direct and
-expression-folded zero lengths and a syntactically valid rejected call in an
+independence, identity-only recursive signature and phantom nesting, repeated
+same-key application provenance, alias-cycle classification and nominal
+recursion including a zero-length array edge. Direct and expression-folded zero
+lengths and a syntactically valid rejected call in an
 array bound remain covered; no user code executes during compilation.
 
 ### R2.50 — Implement references and local lifetime checks
