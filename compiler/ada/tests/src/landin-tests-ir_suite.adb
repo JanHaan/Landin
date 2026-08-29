@@ -683,7 +683,8 @@ package body Landin.Tests.IR_Suite is
              Element        => Landin.Types.U8,
              Length         => 1,
              Cases          => 2,
-             Payloads_First => 1),
+             Payloads_First => 1,
+             others         => <>),
             Cases => [(First => 0, Count => 0),
                       (First => 1, Count => 2)],
             Payloads =>
@@ -703,7 +704,8 @@ package body Landin.Tests.IR_Suite is
              Element        => Landin.Types.U8,
              Length         => 1,
              Cases          => 2,
-             Payloads_First => 1),
+             Payloads_First => 1,
+             others         => <>),
             Cases => [(First => 0, Count => 0),
                       (First => 1, Count => 2)],
             Payloads =>

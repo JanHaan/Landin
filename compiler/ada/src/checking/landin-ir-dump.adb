@@ -567,6 +567,7 @@ package body Landin.IR.Dump is
          declare
             Id : constant Signature_Id := Signature_Id (Which);
             Parameters : Unbounded.Unbounded_String;
+            Results : Unbounded.Unbounded_String;
          begin
             for Index in 1 .. Signature_Parameter_Count (Of_Unit, Id) loop
                if Index > 1 then
@@ -577,10 +578,23 @@ package body Landin.IR.Dump is
                   Signature_Part_Text
                     (Nth_Signature_Parameter (Of_Unit, Id, Index)));
             end loop;
+            for Index in 1 .. Signature_Result_Count (Of_Unit, Id) loop
+               if Index > 1 then
+                  Unbounded.Append (Results, ", ");
+               end if;
+               Unbounded.Append
+                 (Results,
+                  Signature_Part_Text
+                    (Nth_Signature_Result (Of_Unit, Id, Index)));
+            end loop;
             Put
               ("signature " & Trimmed (Signature_Id'Image (Id))
                & " (" & Unbounded.To_String (Parameters) & ") -> "
-               & Signature_Part_Text (Signature_Result (Of_Unit, Id)));
+               & (if Signature_Result_Count (Of_Unit, Id) = 0
+                  then "none"
+                  elsif Signature_Result_Count (Of_Unit, Id) = 1
+                  then Unbounded.To_String (Results)
+                  else "(" & Unbounded.To_String (Results) & ")"));
          end;
       end loop;
 

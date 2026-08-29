@@ -1,0 +1,4 @@
+one: () -> (value: i32) = 1 end one
+bad: () -> none =
+    (value) := one()
+end bad

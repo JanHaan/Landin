@@ -1121,11 +1121,8 @@ package body Landin.Backend.X86_64 is
                          (Of_Unit, Item, Value);
 
                      Bytes : constant Landin.Targets.Byte_Count :=
-                       Landin.Targets.Byte_Count
-                         (Array_Length_Of
-                            (Source, Source_Field, Nested => Source_Nested))
-                       * Element_Bytes_Of
-                           (Source, Source_Field, Nested => Source_Nested);
+                       Whole_Clear_Extent
+                         (Source, Source_Field, Source_Nested);
                   begin
                      Storage_Address
                        (Destination, Destination_Field, "%rdi",

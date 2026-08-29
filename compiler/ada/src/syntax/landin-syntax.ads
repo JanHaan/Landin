@@ -73,8 +73,9 @@ package Landin.Syntax is
    --  that has an extent and will have a scope is a node.  If_Arm is one
    --  `if` or `elsif` and its block, so an `if` has arms and at most one
    --  else rather than a flat list whose parity has to be decoded.
-   --  Parameter and Named_Return are the two halves of a signature that
-   --  declare a name.  None of them changes the grammar; they are how the
+   --  Parameter and Named_Return are the named parts of a signature.
+   --  Return_List holds the ordered latter run.  None changes the grammar;
+   --  they are how the
    --  grammar is held.
    --
    --  Four more stand for what could not be read, one per band, so that a
@@ -90,6 +91,10 @@ package Landin.Syntax is
       --  have nothing to say about one.
       Type_Declaration,
       Binding,
+      --  [0990]'s by-name local binding of selected fields from one
+      --  anonymous result aggregate.  Its fixed slot is the source value;
+      --  its trailing run contains Destructured_Field or Result_Wildcard.
+      Destructuring_Binding,
       --  Statements [1810].  Binding is one of these too, because [1810]
       --  uses [1790]'s rule unchanged and only [1740] may put `public` on
       --  it; the bands below overlap rather than the node being doubled.
@@ -197,7 +202,7 @@ package Landin.Syntax is
       --  bound, which is [1770]'s integer literal, and the element type.
       Array_Type,
       --  D117's written infallible function type.  Its first slot is the
-      --  named return, or No_Node for `none`; its trailing run is the
+      --  named Return_List, or No_Node for `none`; its trailing run is the
       --  parameter descriptions in source order.  It has no body and its
       --  parameter names declare nothing.
       Function_Type,
@@ -219,6 +224,14 @@ package Landin.Syntax is
       If_Arm,
       Match_Arm,
       Match_Binding,
+      --  One named selection in a destructuring binding, carrying the
+      --  source result label as its own name and a Destructured_Name child.
+      --  Result_Wildcard is [0990]'s `_`, and Return_List holds [0920]'s
+      --  ordered one-or-more Named_Return nodes.
+      Destructured_Field,
+      Destructured_Name,
+      Result_Wildcard,
+      Return_List,
       Block);
 
    --  The bands overlap where the grammar reuses a rule in two places, and
@@ -226,7 +239,8 @@ package Landin.Syntax is
    subtype Declaration_Kind is Node_Kind
      range Error_Declaration .. Binding;
 
-   subtype Statement_Kind is Node_Kind range Binding .. Call;
+   subtype Statement_Kind is Node_Kind
+     range Binding .. Call;
 
    subtype Expression_Kind is Node_Kind range If_Statement .. Logical_Or;
 
@@ -257,8 +271,9 @@ package Landin.Syntax is
      is (Of_Kind in Function_Declaration | Binding | Parameter
                     | Named_Return | Name_Reference | Type_Name
                     | Type_Declaration | Type_Reference | Field
-                    | Variant_Part | Variant_Case
-                    | Match_Binding | Member_Selection | Field_Value);
+                    | Variant_Part | Variant_Case | Destructured_Field
+                    | Destructured_Name | Match_Binding
+                    | Member_Selection | Field_Value);
 
    ------------------------------------------------------------------
    --  Trees
@@ -441,7 +456,8 @@ package Landin.Syntax is
    function Value_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
-                          in Binding | Assignment | Discard | Field_Value;
+                          in Binding | Destructuring_Binding | Assignment
+                             | Discard | Field_Value;
 
    --  `place` [1810], the one an assignment writes or an increment steps,
    --  and what a selection [1820] selects from.
@@ -476,15 +492,31 @@ package Landin.Syntax is
                               | If_Arm | Match_Arm | Bare_Block,
           Post => Contains (Of_Tree, Body_Of'Result);
 
-   --  `returns` [1800].  No_Node is `-> none`, and a declared or anonymous
-   --  function with no return has no expression body for one to fill.  A
+   --  `returns` [1800].  No_Node is `-> none`; otherwise this is a
+   --  Return_List whose trailing run is [0920]'s ordered named returns.  A
    --  written Function_Type carries the same signature positions without a
    --  body.
-   function Return_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+   function Returns_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                             in Function_Declaration | Anonymous_Function
                                | Function_Type;
+
+   function Return_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                            in Function_Declaration | Anonymous_Function
+                               | Function_Type;
+
+   function Nth_Return
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id)
+                             in Function_Declaration | Anonymous_Function
+                                | Function_Type
+                  and then Index <= Return_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Return'Result)
+                  and then Kind (Of_Tree, Nth_Return'Result) = Named_Return;
 
    function Parameter_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
@@ -564,6 +596,31 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Block
                   and then Index <= Statement_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Statement'Result);
+
+   --  [0990]'s destructuring binding.  Each named field has one local child;
+   --  a Result_Wildcard has none and explicitly ignores every unbound field.
+   function Destructured_Value (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Destructuring_Binding,
+          Post => Contains (Of_Tree, Destructured_Value'Result);
+
+   function Destructured_Field_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Destructuring_Binding;
+
+   function Nth_Destructured_Field
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Destructuring_Binding
+                  and then Index <= Destructured_Field_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Destructured_Field'Result)
+                  and then Kind (Of_Tree, Nth_Destructured_Field'Result)
+                    in Destructured_Field | Result_Wildcard;
+
+   function Destructured_Local (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Destructured_Field;
 
    --  [1080]: the value-producing expression on a Block's fallthrough
    --  edge.  No_Node means the block has statements only; it is valid for

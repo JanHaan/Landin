@@ -234,19 +234,20 @@ A function is a value with a body, and its returns are named.
 '=' opens the body and 'end' closes it [0870]; a body that is one
 expression still takes an end, and the expression fills the named
 return [0880]; every named return must be assigned before the
-function returns [0930]. The error channel [0940], the parameter conventions [0900], multiple returns
-[0920], 'escaping' [0780] and generic parameters [1290] remain deferred. The
+function returns [0930]. The error channel [0940], the parameter conventions
+[0900], 'escaping' [0780] and generic parameters [1290] remain deferred. The
 enabled signature is infallible, takes values including function values, and
-hands one value including a function value, or none, back. A function type
-reuses this `signature` production but has no body. Its labels are type
-description only and do not declare parameters or a named return.
+hands one or more named values, or none, back. A function type reuses this
+`signature` production but has no body. Its labels are type description only
+and do not declare parameters or named returns.
 
 An anonymous function [1010] writes that same signature and body without a
 module name. It captures no enclosing local, parameter or named return: its
 signature and body are a separate routine whose outer scope is the module.
 Forming it produces a static code address and does not execute its body.
 A body is one block. Its statements run in source order and an optional final
-expression fills the named return. One token past a leading name decides
+expression fills the one named return or the complete anonymous aggregate of a
+multiple return list. One token past a leading name decides
 between a first statement and a direct expression: ':' opens a binding and '='
 an assignment, and anything else means the body begins with its value. A
 function returning none has no expression form, because there is no return for
@@ -261,11 +262,16 @@ anonymous_function ::= signature "=" body "end"
 signature          ::= "(" parameters? ")" "->" returns
 parameters  ::= parameter ("," parameter)*
 parameter   ::= identifier ":" type
-returns     ::= "(" identifier ":" type ")" | "none"
+returns     ::= "(" named_return ("," named_return)* ")" | "none"
+named_return ::= identifier ":" type
 body        ::= block
 block       ::= statement* | value_statement* expression
-value_statement ::= binding | assignment | increment | discard | call
-                  | "return" "when" expression | if | match | bare_block
+value_statement ::= binding | destructuring_binding | assignment
+                  | increment | discard | call | "return" "when" expression
+                  | if | match | bare_block
+destructuring_binding ::= "(" destructured_field
+                          ("," destructured_field)* ")" ":=" expression
+destructured_field ::= identifier (":" (identifier | "_"))? | "_"
 
 ```
 
@@ -298,8 +304,8 @@ and stepped exactly as the binding holding it is. What may be
 written is [1900]'s and not this rule's: a field is writable when
 the binding it belongs to is.
 ```landin-grammar
-statement   ::= binding | assignment | increment | discard | call
-              | return | if | match | bare_block
+statement   ::= binding | destructuring_binding | assignment | increment
+              | discard | call | return | if | match | bare_block
 assignment  ::= place "=" expression
 increment   ::= ("inc" | "dec") place
 discard     ::= "_" "=" expression
@@ -404,7 +410,7 @@ an inner scope means nothing until the inner ones are named.
 | scope | what it holds |
 |---|---|
 | module | every file compiled together. There is one, until [1410]'s directories arrive. |
-| signature | a declared or anonymous function's parameters and its named return [1800]. The named return is a place the body assigns [0930], so it is declared here and not in the body, and a parameter and a return may not share a name. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
+| signature | a declared or anonymous function's parameters and named returns [1800]. Every named return is a place the body assigns [0930], so each is declared here and not in the body; parameters and returns share one namespace. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
 | body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; and one for every bare `begin` block [1810]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings live in their arm's scope. |
 
 [1800]'s direct final expression opens no additional scope inside its function
@@ -479,7 +485,8 @@ kernel these positions give a literal a type:
 - a binding's declared type [1790]
 - the type of the place an assignment writes [1810]
 - the type of the parameter an argument fills [1800]
-- the named return's type, for an expression body [0880]
+- the named return's type, or the complete anonymous result aggregate for a
+  multiple-return expression body [0880] [0990]
 - the result expected from an `if`, `match`, or bare `begin` expression; that
   same complete context reaches every fallthrough answer
 - the element type of a contextual array literal or repetition
@@ -490,7 +497,11 @@ kernel these positions give a literal a type:
   want a bool [1050] [0970] and so give an integer literal
   a context it cannot take
 
-and two give none: the inferred form [0050] and a discard
+A call with two or more results has [0990]'s anonymous structural aggregate:
+its declaration-order field names and complete field types are its value shape.
+That shape supplies an inferred whole binding and every arm of a control value.
+
+And two give none: the inferred form [0050] and a discard
 [1020], where [0200]'s i32 is what is left.
 With no surrounding context, the first written answer of a control expression
 supplies its scalar type, fixed-array element and extent, or nominal aggregate
@@ -570,8 +581,9 @@ Assigned before it is read.
 assigned before use and [0930] says every named return must
 be assigned before the function returns. In a body those are
 one question and this is its shape: at every read of a name,
-at every 'return', and where a body ends, the name has to
-have been assigned by every path that arrives there.
+at every `return`, and where a body ends, each applicable name has to
+have been assigned by every path that arrives there. For multiple results the
+question is asked independently of every named return.
 No condition is believed. A name assigned in one arm of an
 'if' and not in another is not assigned after it, and 'if
 true then r = 1 end if' leaves r unassigned, because a
@@ -606,15 +618,29 @@ named return.
 A call of a function returning none has no type. It is a
 statement [1810] and nothing else: nothing binds it, no
 argument is one, and [1930] cannot discard it, because there
-is no result there to discard.
+is no result there to discard. A call with one named return has that return's
+type. A call with two or more has [0990]'s anonymous structural aggregate;
+its fields are selected and destructured by the return names.
 A callee is a function. It may be a declared function or a local, module,
 parameter or named-return binding whose value has a function type; every stored
 form calls the runtime code address. A function's own name and an anonymous
 function away from a call are values of their function types [1000] [1010].
 All positions retain one complete structural signature, recursively when a
-parameter or result is itself a function. Labels are not part of agreement:
-parameter order and type, plus result type, are. A binding of any other type is
-not a function.
+parameter or result is itself a function. Labels are not part of function
+signature agreement: parameter order and type, plus the ordered result types,
+are. The labels do remain the field names of a multiple-result value at its
+static call site. A binding of any other type is not a function.
+
+A whole multiple result may initialize an inferred local, be selected by field,
+be assigned to a mutable inferred local of the same named structural shape, or
+cross a control-expression join. A destructuring binding evaluates its source
+once and selects fields by return name in any written order. A bare name binds a
+local of the same name; `field: local` renames it; `field: _` ignores that field;
+and one bare `_` explicitly ignores every unbound field. Unmentioned fields are
+also ignored, as [0990]'s one-field example requires. An unknown or repeated
+field and two locals with one name are refused by the ordinary field and scope
+rules. The anonymous shape is not a nominal struct type and has no type spelling
+of its own.
 A scalar type name in front of the '(' is [0700]'s
 conversion, which [0310] describes and this grammar omits,
 so [1830] refuses that by name too. It is not a misspelling
@@ -6769,4 +6795,70 @@ last one missing; the third duplicates D118's run at one depth.
 `negative/variant-part-below-a-computed-index`, the malformed case
 `Whole_Element_Beyond_The_Array`, the generated IR record, and
 `runtime/whole-array-elements` and `runtime/variant-inside-an-element` on
+Linux x86-64.
+
+### D128 — Multiple named returns form one anonymous structural aggregate
+
+**The tour said** that a function may have multiple named returns [0920], that
+the return list is an anonymous struct bound whole or destructured by name
+[0990], and that every named return is assigned before an exit [0930]. It did
+not say whether result labels participate in function-value agreement, how the
+anonymous shape is laid out and transported, or how partial destructuring and
+control-expression joins retain it.
+
+**Chosen:** a non-`none` return list contains one or more named positions. One
+position keeps the existing result type and carrier. Two or more positions form
+one anonymous structural aggregate whose fields are those positions in source
+order. Its value shape includes each field name and complete type, recursively
+including nominal aggregates, fixed arrays and D123 function signatures. The
+padded aggregate must fit the selected target. It has no source type spelling
+and no nominal declaration identity.
+
+Function signature agreement compares the ordered result *types* and ignores
+result labels, as [1000] requires. A call through a stored function therefore
+uses the labels written by that value's static function type while the runtime
+positions remain compatible. Outside function-signature agreement, two whole
+anonymous result values agree only when their ordered names and complete field
+types agree.
+
+The internal ABI transports every multiple result as one aggregate. The caller
+supplies D106's one hidden destination, the callee owns one independently shaped
+result slot, and each source named return writes its declaration-order field.
+Every early or final leave performs the existing complete aggregate copy to the
+caller. Direct and indirect calls, stack arguments and aggregate fields within
+the result add no second convention. A function-valued field is a `usize`
+carrier that retains its nested signature; aggregate-shaped field copies reuse
+the compact verified storage-copy operation.
+
+A whole result can initialize or update an inferred local, cross D125's one
+consumer-owned control join, be read by field, or be destructured. Destructuring
+evaluates the source once and binds fields by name in any order. `field` keeps
+the field name as the local, `field: local` renames it, `field: _` ignores that
+field, and one bare `_` explicitly ignores every unbound field. Omission is
+also legal. Unknown and repeated fields use the ordinary field diagnostics;
+new locals enter scope only after the source is resolved and obey [1850].
+
+Definite assignment tracks the named return declarations independently. Every
+reachable early return and final fallthrough requires every one; a direct
+expression body fills the complete anonymous aggregate on its fallthrough edge.
+A returning control edge supplies no joined aggregate but still proves all
+named returns, exactly as D124 requires.
+
+**Why one aggregate rather than one hidden pointer or register per return:** the
+latter makes source arity rewrite the ABI and duplicates D106's caller-storage
+rule. One structural image gives whole binding, field selection, destructuring
+and control joins the same value while leaving target classification to R4.40.
+Making the result nominal would invent a declaration the source never wrote and
+would contradict [0990].
+
+**Pinned by** the return-list and destructuring parser/resolver/checker/flow
+walks; ordered checking and IR signature result runs; caller-owned result slots,
+direct and indirect lowering, function-valued result fields, verifier malformed
+result-slot cases and x86-64 aggregate copies; `positive/multiple-named-returns`;
+`negative/function-type-return-name-duplicate`,
+`multiple-return-name-duplicate`, `multiple-return-unassigned`,
+`multiple-result-function-signature-mismatch`,
+`result-destructure-duplicate-field`, `result-destructure-needs-multiple`,
+`result-destructure-unknown-field` and `control-result-field-name-mismatch`;
+the generated lexical and IR records; and `runtime/multiple-named-returns` on
 Linux x86-64.

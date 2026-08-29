@@ -52,9 +52,9 @@ replaced.
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and never freed | hand out a tree that can be copied or written to |
 | `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
-| `Landin.Checking` | what type every node and declaration has, including nominal aggregate identity, structural fixed-array shape and aggregate element identity, recursive first-class target-neutral function signatures, and scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout | decide a rule, or ask the host for a width |
-| `Landin.IR` | the target-neutral instructions: items, slots, blocks and values; recursive callable signature descriptors on declared or anonymous routines, static function datums, code addresses, function-value slots and calls; scalar, compact fixed-array, unfolded variant and recursively nested ordinary shapes; a fixed array's element shape; folded aggregate images and compact payload segments; and arbitrary-depth neutral paths through contextual, variant and indexed-element operations, starting at a base part or at whole array storage | hold a scope tree, name a machine, ask a width, or hold an offset, register or padding byte |
-| `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including descriptor/carrier and static function-image agreement, valid neutral subobject paths and target-aware fit of static images | diagnose source, repair malformed IR, or choose backend policy |
+| `Landin.Checking` | what type every node and declaration has, including nominal aggregate identity, structural fixed-array and anonymous result shapes, aggregate element identity, recursive first-class target-neutral function signatures with ordered result runs, and scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout | decide a rule, or ask the host for a width |
+| `Landin.IR` | the target-neutral instructions: items, slots, blocks and values; recursive callable signature descriptors with ordered result runs on declared or anonymous routines, static function datums, code addresses, function-value slots and calls; scalar, compact fixed-array, unfolded variant, anonymous result and recursively nested ordinary shapes; a fixed array's element shape; folded aggregate images and compact payload segments; and arbitrary-depth neutral paths through contextual, variant and indexed-element operations, starting at a base part or at whole array storage | hold a scope tree, name a machine, ask a width, or hold an offset, register or padding byte |
+| `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including descriptor/carrier, multiple-result slot and static function-image agreement, valid neutral subobject paths and target-aware fit of static images | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, and the target-width scalar, finite-array, compact repetition and selected-variant directives and padding for written aggregate images | decide a layout, write a file, or run a tool |
@@ -162,12 +162,17 @@ callee item, carries each complete signature through checking, routine and
 static-datum items, address values, slots and calls. Mutable replacement
 requires an agreeing signature; function-valued parameters and named results
 occupy one ordinary code-address carrier and share aggregate-result and
-stack-argument conventions. Static module chains resolve to one declared or
+stack-argument conventions. Two or more signature results form one anonymous
+structural aggregate: its ordered fields retain names for whole binding,
+selection and by-name destructuring, while function-value agreement ignores
+those labels and compares the ordered types. One hidden caller destination and
+one callee result slot carry it through direct, indirect, early-return and
+control-expression paths. Static module chains resolve to one declared or
 anonymous routine address and have no implicit zero image. A no-capture
 anonymous function sees the module and its own signature/body declarations,
 lowers to a deterministic routine item and receives a backend-local symbol.
-Function-valued struct fields remain
-absent. Completion into
+Function-valued fields in nominal structs remain absent; anonymous result
+aggregates retain their function field's descriptor. Completion into
 an aggregate destination contributes an ordinary whole-place flow fact, so
 branch joins and guarded-return edges require no call-specific exception. Each
 early or final aggregate-result exit copies that complete independent slot to

@@ -2058,10 +2058,7 @@ ordinary shaped storage and control edges, the x86 backend alone derives frame
 offsets and copy extents, and runtime cases cover scalar, function-value,
 fixed-array, ordinary-struct, variant-match, early-exit and source-order paths.
 
-Further aggregate arguments and result contexts remain here too; R4.40 later
-supplies complete C ABI classification rather than owning this internal
-convention.
-The thirty-seventh increment gives the five variant operations D118's run, so
+The forty-second increment gives the five variant operations D118's run, so
 a variant part sits wherever an ordinary struct may: inside an ordinary child
 and inside a variant payload. A match subject may be any chain that reaches
 one, including a chain rooted at a payload alias. Composing a run and a
@@ -2069,14 +2066,28 @@ selected case fixes their order — the run reaches the part, the case is
 selected inside it — and a run below a payload is a case step of the same run,
 so nothing follows the payload.
 
-The thirty-eighth increment makes a known index one identity of the run
-rather than a value, so a whole array element at one is a value and a place
-wherever a whole ordinary child is, and an array whose element is a struct
-with a variant part follows. Where a run may start became one question: base
-zero with no run is the storage itself, base zero with a run is whole array
-storage, and a positive base is a struct's field or an array's element
-position. A computed index stays refused, because reaching a whole element
-there would need an address the contextual forms do not form.
+The forty-third increment makes a known index one identity of the run rather
+than a value, so a whole array element at one is a value and a place wherever
+a whole ordinary child is, and an array whose element is a struct with a
+variant part follows. Where a run may start became one question: base zero with
+no run is the storage itself, base zero with a run is whole array storage, and
+a positive base is a struct's field or an array's element position. A computed
+index stays refused, because reaching a whole element there would need an
+address the contextual forms do not form.
+
+The forty-fourth increment gives [0920]'s two-or-more named returns one
+anonymous structural aggregate. Ordered result runs extend recursive function
+signatures while labels remain call-site field names rather than function-type
+identity. One hidden destination carries the complete padded result through
+direct or indirect calls; each named return writes its field of an independent
+callee slot, and every early or final leave uses the existing aggregate copy.
+Whole inferred bindings, field reads, by-name partial destructuring, aggregate
+and function-valued fields, and control-expression joins all retain that one
+shape without a source-level tuple type or another ABI convention.
+
+Further aggregate arguments and result contexts remain here too; R4.40 later
+supplies complete C ABI classification rather than owning this internal
+convention.
 
 D118--D127 have closed the nested-ordinary forms R2.20 left contextual:
 whole nested field selection, construction and copy, deeper recursive
@@ -2097,7 +2108,8 @@ does not.
 
 Exit evidence: ABI tests cover ordinary and failing calls, aggregate values,
 inferred and explicitly typed indirect calls, function-valued parameters and
-results, static and mutable module addresses, no-capture anonymous routines,
+results, multiple named structural results and by-name destructuring, static
+and mutable module addresses, no-capture anonymous routines,
 expression-valued non-loop controls, more arguments than the register-only
 stopgap accepted and every control-flow exit path. Malformed IR also proves
 that a runtime address, nested descriptor or static routine target cannot

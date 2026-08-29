@@ -227,6 +227,10 @@ package body Landin.Stages.Checking is
          Element_Body : Res.Declaration_Id := Res.No_Declaration;
          Signature    : Landin.Checking.Signature_Id :=
            Landin.Checking.No_Signature;
+         --  Nonzero only for [0990]'s anonymous structural aggregate: the
+         --  source signature whose ordered named results form this value.
+         Result_Shape : Landin.Checking.Signature_Id :=
+           Landin.Checking.No_Signature;
       end record;
 
       No_Value_Context : constant Value_Context := (others => <>);
@@ -883,7 +887,9 @@ package body Landin.Stages.Checking is
          Count : constant Natural := Syn.Parameter_Count (Of_Tree, Node);
          Parts : Landin.Checking.Signature_Part_Array (1 .. Count) :=
            [others => (others => <>)];
-         Result : Landin.Checking.Signature_Part := (others => <>);
+         Results : Landin.Checking.Signature_Part_Array
+           (1 .. Syn.Return_Count (Of_Tree, Node)) :=
+             [others => (others => <>)];
          Valid : Boolean := True;
 
          function Part_At
@@ -900,7 +906,10 @@ package body Landin.Stages.Checking is
               Syn.Declared_Type (Of_Tree, Declared);
             Held : constant Ty.Type_Kind := Type_At (Of_Tree, Written);
             Part : Landin.Checking.Signature_Part :=
-              (Kind => Held, Site => Site, others => <>);
+              (Kind => Held,
+               Name => Syn.Name (Of_Tree, Declared),
+               Site => Site,
+               others => <>);
          begin
             case Held is
                when Ty.Scalar_Name =>
@@ -916,6 +925,9 @@ package body Landin.Stages.Checking is
                       (Types.all, Of_Tree, Written);
                   Part.Element :=
                     Landin.Checking.Array_Element
+                      (Types.all, Of_Tree, Written);
+                  Part.Aggregate_Body :=
+                    Landin.Checking.Array_Element_Body
                       (Types.all, Of_Tree, Written);
                when Ty.Function_Value =>
                   --  A function-valued position is one code-address carrier;
@@ -942,17 +954,111 @@ package body Landin.Stages.Checking is
             end;
          end loop;
 
-         if Syn.Return_Of (Of_Tree, Node) = Syn.No_Node then
-            Result :=
-              (Kind => Ty.No_Value,
-               Site => Syn.Origin (Of_Tree, Node),
-               others => <>);
-         else
+         for Index in Results'Range loop
             declare
-               Returns : constant Syn.Node_Id :=
-                 Syn.Return_Of (Of_Tree, Node);
+               Returned : constant Syn.Node_Id :=
+                 Syn.Nth_Return (Of_Tree, Node, Index);
             begin
-               Result := Part_At (Returns, Syn.Origin (Of_Tree, Returns));
+               Results (Index) :=
+                 Part_At (Returned, Syn.Origin (Of_Tree, Returned));
+            end;
+         end loop;
+
+         --  A written function type opens no scope, but two equal result
+         --  labels would still make [0990]'s structural field lookup
+         --  ambiguous.  Declared routines get the equivalent [1850]
+         --  diagnosis from resolution before checking reaches them.
+         if Syn.Kind (Of_Tree, Node) = Syn.Function_Type then
+            for Right in 2 .. Syn.Return_Count (Of_Tree, Node) loop
+               for Left in 1 .. Right - 1 loop
+                  if Results (Left).Name = Results (Right).Name then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Anchor
+                          (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Right)),
+                        Message => "this function type gives two results the"
+                                   & " same field name",
+                        Note    => "[0990]: a multiple result is selected by"
+                                   & " its unique return names",
+                        Related => Syn.Origin
+                          (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Left)),
+                        Because => "the first result with that name",
+                        Into    => Found);
+                     Valid := False;
+                  end if;
+               end loop;
+            end loop;
+         end if;
+
+         if Valid and then Results'Length > 1 then
+            declare
+               Placed : Landin.Targets.Placement :=
+                 Landin.Targets.Empty_Placement;
+               Ignored : Landin.Targets.Byte_Count;
+            begin
+               for Part of Results loop
+                  declare
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                     Scalar : Landin.Targets.Scalar_Size;
+                  begin
+                     case Part.Kind is
+                        when Ty.Scalar_Name | Ty.Function_Value =>
+                           Scalar := Ty.Storage_Size
+                             ((if Part.Kind = Ty.Function_Value
+                               then Ty.Usize else Ty.Scalar_Name (Part.Kind)),
+                              Facts);
+                           Size := Landin.Targets.Byte_Count
+                             (Landin.Targets.Bytes (Scalar));
+                           Alignment := Landin.Targets.Alignment_Of
+                             (Facts, Scalar);
+                        when Ty.Aggregate =>
+                           Size := Landin.Checking.Layout_Size
+                             (Types.all, Part.Aggregate_Body);
+                           Alignment := Landin.Checking.Layout_Alignment
+                             (Types.all, Part.Aggregate_Body);
+                        when Ty.Fixed_Array =>
+                           if Part.Aggregate_Body /= Res.No_Declaration then
+                              Size := Landin.Targets.Byte_Count (Part.Length)
+                                * Landin.Checking.Layout_Size
+                                    (Types.all, Part.Aggregate_Body);
+                              Alignment := Landin.Checking.Layout_Alignment
+                                (Types.all, Part.Aggregate_Body);
+                           else
+                              Scalar := Ty.Storage_Size (Part.Element, Facts);
+                              Size := Landin.Targets.Byte_Count (Part.Length)
+                                * Landin.Targets.Byte_Count
+                                    (Landin.Targets.Bytes (Scalar));
+                              Alignment := Landin.Targets.Alignment_Of
+                                (Facts, Scalar);
+                           end if;
+                        when others =>
+                           Size := 0;
+                           Alignment := 1;
+                     end case;
+
+                     if not Landin.Targets.Can_Place
+                       (Placed, Size, Alignment,
+                        Landin.Targets.Maximum_Object_Size (Facts))
+                     then
+                        Bad.Report
+                          (Item    => Bad.Literal_Out_Of_Range,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where
+                             (Of_Tree, Syn.Returns_Of (Of_Tree, Node)),
+                           Message => "these named returns are too large for"
+                                      & " the target's usize",
+                           Note    => "D128: the anonymous result aggregate"
+                                      & " has one padded caller-owned image",
+                           Into    => Found);
+                        Valid := False;
+                        exit;
+                     end if;
+                     Landin.Targets.Place
+                       (Placed, Size, Alignment, Ignored);
+                  end;
+               end loop;
             end;
          end if;
 
@@ -963,7 +1069,7 @@ package body Landin.Stages.Checking is
          declare
             Made : constant Landin.Checking.Signature_Id :=
               Landin.Checking.Add_Signature
-                (Types.all, Parts, Result, Syn.Origin (Of_Tree, Node));
+                (Types.all, Parts, Results, Syn.Origin (Of_Tree, Node));
          begin
             Landin.Checking.Note_Signature
               (Types.all, Of_Tree, Node, Made);
@@ -1941,8 +2047,13 @@ package body Landin.Stages.Checking is
            Landin.Checking.Signature_Parameter_Count
              (Types.all, Signature);
          Given  : constant Natural := Syn.Argument_Count (Of_Tree, Node);
+         Result_Count : constant Natural :=
+           Landin.Checking.Signature_Result_Count (Types.all, Signature);
          Result : constant Landin.Checking.Signature_Part :=
-           Landin.Checking.Signature_Result (Types.all, Signature);
+           (if Result_Count = 1
+            then Landin.Checking.Nth_Signature_Result
+              (Types.all, Signature, 1)
+            else (Kind => Ty.No_Value, others => <>));
       begin
          if Given /= Wanted then
             Bad.Report
@@ -2185,8 +2296,12 @@ package body Landin.Stages.Checking is
             end;
          end loop;
 
-         if Result.Kind = Ty.No_Value then
+         if Result_Count = 0 then
             return Ty.No_Value;
+         elsif Result_Count > 1 then
+            Landin.Checking.Note_Result_Shape
+              (Types.all, Of_Tree, Node, Signature);
+            return Ty.Aggregate;
          end if;
 
          if Result.Kind = Ty.Aggregate then
@@ -2226,6 +2341,16 @@ package body Landin.Stages.Checking is
       --  other direction of Field_At, and read from the same body.
       function Field_Named
         (Wrote : Res.Declaration_Id; Index : Positive) return String;
+
+      function Result_Field_At
+        (Shape : Landin.Checking.Signature_Id;
+         Named : Landin.Source.Names.Name_Id) return Natural;
+
+      function Note_Result_Field
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Shape   : Landin.Checking.Signature_Id;
+         Which   : Positive) return Ty.Type_Kind;
 
       function Field_At
         (Wrote : Res.Declaration_Id;
@@ -2276,6 +2401,57 @@ package body Landin.Stages.Checking is
                      (Of_Tree.all,
                       Syn.Nth_Field (Of_Tree.all, Written, Index)));
       end Field_Named;
+
+      function Result_Field_At
+        (Shape : Landin.Checking.Signature_Id;
+         Named : Landin.Source.Names.Name_Id) return Natural
+      is
+      begin
+         for Index in
+           1 .. Landin.Checking.Signature_Result_Count (Types.all, Shape)
+         loop
+            if Landin.Checking.Nth_Signature_Result
+                 (Types.all, Shape, Index).Name = Named
+            then
+               return Index;
+            end if;
+         end loop;
+         return 0;
+      end Result_Field_At;
+
+      function Note_Result_Field
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Shape   : Landin.Checking.Signature_Id;
+         Which   : Positive) return Ty.Type_Kind
+      is
+         Part : constant Landin.Checking.Signature_Part :=
+           Landin.Checking.Nth_Signature_Result
+             (Types.all, Shape, Which);
+      begin
+         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+              = Ty.Undecided
+         then
+            Landin.Checking.Note (Types.all, Of_Tree, Node, Part.Kind);
+         end if;
+         Landin.Checking.Note_Field (Types.all, Of_Tree, Node, Which);
+         case Part.Kind is
+            when Ty.Aggregate =>
+               Landin.Checking.Note_Body
+                 (Types.all, Of_Tree, Node, Part.Aggregate_Body);
+            when Ty.Fixed_Array =>
+               Landin.Checking.Note_Array
+                 (Types.all, Of_Tree, Node, Part.Length, Part.Element);
+               Landin.Checking.Note_Array_Element_Body
+                 (Types.all, Of_Tree, Node, Part.Aggregate_Body);
+            when Ty.Function_Value =>
+               Landin.Checking.Note_Signature
+                 (Types.all, Of_Tree, Node, Part.Signature);
+            when others =>
+               null;
+         end case;
+         return Part.Kind;
+      end Note_Result_Field;
 
       procedure Check_Index_Bound
         (Of_Tree : Syn.Tree;
@@ -2379,6 +2555,21 @@ package body Landin.Stages.Checking is
             begin
                if Held = Ty.Aggregate then
                   declare
+                     Shape : constant Landin.Checking.Signature_Id :=
+                       Landin.Checking.Result_Shape_Of
+                         (Types.all, Of_Tree, From);
+                     Which : constant Natural :=
+                       (if Shape = Landin.Checking.No_Signature then 0
+                        else Result_Field_At
+                          (Shape, Syn.Name (Of_Tree, Node)));
+                  begin
+                     if Which > 0 then
+                        return Note_Result_Field
+                          (Of_Tree, Node, Shape, Positive (Which));
+                     end if;
+                  end;
+
+                  declare
                      Wrote : constant Res.Declaration_Id :=
                        Landin.Checking.Body_Of (Types.all, Of_Tree, From);
                      Which : constant Natural :=
@@ -2439,9 +2630,18 @@ package body Landin.Stages.Checking is
                   then
                      Landin.Checking.Note
                        (Types.all, Of_Tree, Node, Held);
-                     Landin.Checking.Note_Body
-                       (Types.all, Of_Tree, Node,
-                        Landin.Checking.Body_Of (Types.all, Means));
+                     if Landin.Checking.Result_Shape_Of
+                          (Types.all, Means) /= Landin.Checking.No_Signature
+                     then
+                        Landin.Checking.Note_Result_Shape
+                          (Types.all, Of_Tree, Node,
+                           Landin.Checking.Result_Shape_Of
+                             (Types.all, Means));
+                     else
+                        Landin.Checking.Note_Body
+                          (Types.all, Of_Tree, Node,
+                           Landin.Checking.Body_Of (Types.all, Means));
+                     end if;
                   end if;
 
                   return Held;
@@ -3218,6 +3418,17 @@ package body Landin.Stages.Checking is
                      --  may declare and not yet reach: reading the whole of
                      --  one is a value, and carrying one waits for the rest
                      --  of R2.20 exactly as a binding of one does.
+                     if Held = Ty.Aggregate
+                       and then Landin.Checking.Result_Shape_Of
+                         (Types.all, Means) /= Landin.Checking.No_Signature
+                     then
+                        Landin.Checking.Note_Result_Shape
+                          (Types.all, Of_Tree, Node,
+                           Landin.Checking.Result_Shape_Of
+                             (Types.all, Means));
+                        return Kept (Ty.Aggregate);
+                     end if;
+
                      if Held = Ty.Aggregate then
                         Bad.Report
                           (Item    => Bad.Unsupported_Use,
@@ -3419,12 +3630,29 @@ package body Landin.Stages.Checking is
                   end if;
 
                   declare
+                     Shape : constant Landin.Checking.Signature_Id :=
+                       Landin.Checking.Result_Shape_Of
+                         (Types.all, Of_Tree, From);
+                     Result_Field : constant Natural :=
+                       (if Shape = Landin.Checking.No_Signature then 0
+                        else Result_Field_At
+                          (Shape, Syn.Name (Of_Tree, Node)));
                      Wrote : constant Res.Declaration_Id :=
                        Landin.Checking.Body_Of (Types.all, Of_Tree, From);
                      Which : constant Natural :=
-                       (if Wrote = Res.No_Declaration then 0
+                       (if Shape /= Landin.Checking.No_Signature
+                        then Result_Field
+                        elsif Wrote = Res.No_Declaration then 0
                         else Field_At (Wrote, Syn.Name (Of_Tree, Node)));
                   begin
+                     if Shape /= Landin.Checking.No_Signature
+                       and then Which > 0
+                     then
+                        return Kept
+                          (Note_Result_Field
+                             (Of_Tree, Node, Shape, Positive (Which)));
+                     end if;
+
                      if Which = 0 then
                         Bad.Report
                           (Item    => Bad.Unresolved_Field,
@@ -3665,6 +3893,7 @@ package body Landin.Stages.Checking is
                   when Res.Module_Type | Res.Case_Name => False,
                   when Res.Pattern_Binding =>
                      Syn.Is_Mutable (Their_Tree.all, Their_Node),
+                  when Res.Result_Binding => False,
                   when Res.Module_Binding | Res.Local_Binding =>
                      Syn.Is_Mutable (Their_Tree.all, Their_Node));
 
@@ -5856,6 +6085,189 @@ package body Landin.Stages.Checking is
                   end if;
                end;
 
+            when Syn.Destructuring_Binding =>
+               declare
+                  Value : constant Syn.Node_Id :=
+                    Syn.Destructured_Value (Of_Tree, Node);
+                  Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Value);
+                  Shape : constant Landin.Checking.Signature_Id :=
+                    Landin.Checking.Result_Shape_Of
+                      (Types.all, Of_Tree, Value);
+                  Seen : array
+                    (1 .. (if Shape = Landin.Checking.No_Signature
+                           then 1
+                           else Landin.Checking.Signature_Result_Count
+                             (Types.all, Shape))) of Boolean :=
+                               [others => False];
+                  Wildcard : Boolean := False;
+               begin
+                  if Got = Ty.Ill_Typed then
+                     null;
+                  elsif Got /= Ty.Aggregate
+                    or else Shape = Landin.Checking.No_Signature
+                  then
+                     Bad.Report
+                       (Item    => Bad.Type_Mismatch,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Value),
+                        Message => "this does not produce multiple named"
+                                   & " returns to bind",
+                        Note    => "[0990]: destructuring binds an anonymous"
+                                   & " result aggregate by field name",
+                        Related => Syn.Origin (Of_Tree, Node),
+                        Because => "this result binding",
+                        Into    => Found);
+                     Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+                  else
+                     for Position in
+                       1 .. Syn.Destructured_Field_Count (Of_Tree, Node)
+                     loop
+                        declare
+                           Field : constant Syn.Node_Id :=
+                             Syn.Nth_Destructured_Field
+                               (Of_Tree, Node, Position);
+                        begin
+                           if Syn.Kind (Of_Tree, Field)
+                                = Syn.Result_Wildcard
+                           then
+                              if Wildcard then
+                                 Bad.Report
+                                   (Item    => Bad.Type_Mismatch,
+                                    Source  => Syn.Source_Of (Of_Tree),
+                                    Where   => Syn.Where (Of_Tree, Field),
+                                    Message => "a result binding needs at"
+                                               & " most one `_` wildcard",
+                                    Note    => "[0990]: `_` ignores the"
+                                               & " unbound returned fields",
+                                    Related => Syn.Origin (Of_Tree, Node),
+                                    Because => "this result binding",
+                                    Into    => Found);
+                              end if;
+                              Wildcard := True;
+                           else
+                              declare
+                                 Which : constant Natural :=
+                                   Result_Field_At
+                                     (Shape, Syn.Name (Of_Tree, Field));
+                              begin
+                                 if Which = 0 then
+                                    Bad.Report
+                                      (Item    => Bad.Unresolved_Field,
+                                       Source  => Syn.Source_Of (Of_Tree),
+                                       Where   => Syn.Anchor (Of_Tree, Field),
+                                       Message => "this result has no field"
+                                                  & " called `"
+                                                  & Spelled
+                                                    (Syn.Name
+                                                       (Of_Tree, Field))
+                                                  & "`",
+                                       Note    => "[0990]: result binding is"
+                                                  & " by name, never by"
+                                                  & " position",
+                                       Into    => Found);
+                                 elsif Seen (Which) then
+                                    Bad.Report
+                                      (Item    => Bad.Type_Mismatch,
+                                       Source  => Syn.Source_Of (Of_Tree),
+                                       Where   => Syn.Anchor (Of_Tree, Field),
+                                       Message => "this returned field is"
+                                                  & " bound twice",
+                                       Note    => "[0990]: each selected"
+                                                  & " field has one local",
+                                       Related => Syn.Origin (Of_Tree, Node),
+                                       Because => "this result binding",
+                                       Into    => Found);
+                                    if Syn.Destructured_Local
+                                      (Of_Tree, Field) /= Syn.No_Node
+                                    then
+                                       declare
+                                          Local : constant Syn.Node_Id :=
+                                            Syn.Destructured_Local
+                                              (Of_Tree, Field);
+                                          Id : constant Res.Declaration_Id :=
+                                            Declaration_At
+                                              (Syn.Source_Of (Of_Tree), Local);
+                                          Part : constant
+                                            Landin.Checking.Signature_Part :=
+                                              Landin.Checking
+                                                .Nth_Signature_Result
+                                                  (Types.all, Shape, Which);
+                                       begin
+                                          Landin.Checking.Settle
+                                            (Types.all, Id, Part.Kind);
+                                       end;
+                                    end if;
+                                 else
+                                    Seen (Which) := True;
+                                    Landin.Checking.Note_Field
+                                      (Types.all, Of_Tree, Field, Which);
+                                    if Syn.Destructured_Local
+                                      (Of_Tree, Field) /= Syn.No_Node
+                                    then
+                                       declare
+                                          Local : constant Syn.Node_Id :=
+                                            Syn.Destructured_Local
+                                              (Of_Tree, Field);
+                                          Id : constant Res.Declaration_Id :=
+                                            Declaration_At
+                                              (Syn.Source_Of (Of_Tree), Local);
+                                          Part : constant
+                                            Landin.Checking.Signature_Part :=
+                                              Landin.Checking
+                                                .Nth_Signature_Result
+                                                  (Types.all, Shape, Which);
+                                       begin
+                                          Landin.Checking.Settle
+                                            (Types.all, Id, Part.Kind);
+                                          Landin.Checking.Note
+                                            (Types.all, Of_Tree, Local,
+                                             Part.Kind);
+                                          case Part.Kind is
+                                             when Ty.Aggregate =>
+                                                Landin.Checking.Note_Body
+                                                  (Types.all, Id,
+                                                   Part.Aggregate_Body);
+                                                Landin.Checking.Note_Body
+                                                  (Types.all, Of_Tree, Local,
+                                                   Part.Aggregate_Body);
+                                             when Ty.Fixed_Array =>
+                                                Landin.Checking.Note_Array
+                                                  (Types.all, Id, Part.Length,
+                                                   Part.Element);
+                                                Landin.Checking.Note_Array
+                                                  (Types.all, Of_Tree, Local,
+                                                   Part.Length, Part.Element);
+                                                Landin.Checking
+                                                  .Note_Array_Element_Body
+                                                    (Types.all, Id,
+                                                     Part.Aggregate_Body);
+                                                Landin.Checking
+                                                  .Note_Array_Element_Body
+                                                    (Types.all, Of_Tree,
+                                                     Local,
+                                                     Part.Aggregate_Body);
+                                             when Ty.Function_Value =>
+                                                Landin.Checking.Note_Signature
+                                                  (Types.all, Id,
+                                                   Part.Signature);
+                                                Landin.Checking.Note_Signature
+                                                  (Types.all, Of_Tree, Local,
+                                                   Part.Signature);
+                                             when others =>
+                                                null;
+                                          end case;
+                                       end;
+                                    end if;
+                                 end if;
+                              end;
+                           end if;
+                        end;
+                     end loop;
+                  end if;
+                  Landin.Checking.Note
+                    (Types.all, Of_Tree, Node, Ty.Not_Typed);
+               end;
+
             when Syn.Assignment =>
                --  D76 gives a directly selected variant part one contextual
                --  destination form.  It is intercepted before ordinary
@@ -5969,6 +6381,23 @@ package body Landin.Stages.Checking is
                   end if;
 
                   if Wants = Ty.Aggregate then
+                     declare
+                        Shape : constant Landin.Checking.Signature_Id :=
+                          Landin.Checking.Result_Shape_Of
+                            (Types.all, Of_Tree, Place);
+                     begin
+                        if Shape /= Landin.Checking.No_Signature then
+                           Check_Contextual_Value
+                             (Of_Tree, Value,
+                              (Kind         => Ty.Aggregate,
+                               Result_Shape => Shape,
+                               others       => <>),
+                              Syn.Origin (Of_Tree, Place),
+                              "the result aggregate written here");
+                           return;
+                        end if;
+                     end;
+
                      if Syn.Kind (Of_Tree, Value)
                           in Syn.If_Statement | Syn.Match_Statement
                              | Syn.Bare_Block
@@ -6447,8 +6876,13 @@ package body Landin.Stages.Checking is
             Landin.Checking.Note
               (Types.all, Of_Tree, Node, Expected.Kind);
             if Expected.Kind = Ty.Aggregate then
-               Landin.Checking.Note_Body
-                 (Types.all, Of_Tree, Node, Expected.Nominal);
+               if Expected.Result_Shape /= Landin.Checking.No_Signature then
+                  Landin.Checking.Note_Result_Shape
+                    (Types.all, Of_Tree, Node, Expected.Result_Shape);
+               else
+                  Landin.Checking.Note_Body
+                    (Types.all, Of_Tree, Node, Expected.Nominal);
+               end if;
             elsif Expected.Kind = Ty.Fixed_Array then
                Landin.Checking.Note_Array
                  (Types.all, Of_Tree, Node,
@@ -6549,6 +6983,31 @@ package body Landin.Stages.Checking is
 
          case Expected.Kind is
             when Ty.Aggregate =>
+               if Expected.Result_Shape /= Landin.Checking.No_Signature then
+                  declare
+                     Got : constant Ty.Type_Kind :=
+                       (if Syn.Kind (Of_Tree, Node)
+                             in Syn.Name_Reference | Syn.Member_Selection
+                        then Selected_From (Of_Tree, Node)
+                        else Synthesise (Of_Tree, Node));
+                     Actual : constant Landin.Checking.Signature_Id :=
+                       Landin.Checking.Result_Shape_Of
+                         (Types.all, Of_Tree, Node);
+                  begin
+                     if Got /= Ty.Ill_Typed
+                       and then
+                         (Got /= Ty.Aggregate
+                          or else Actual = Landin.Checking.No_Signature
+                          or else not Landin.Checking.Result_Shapes_Agree
+                            (Types.all, Expected.Result_Shape, Actual))
+                     then
+                        Context_Mismatch
+                          (Of_Tree, Node, Expected, Site, Because);
+                     end if;
+                  end;
+                  return;
+               end if;
+
                if Syn.Kind (Of_Tree, Node) = Syn.Struct_Literal then
                   if Construction_Agrees
                        (Of_Tree, Node, Expected.Nominal, Site, Because)
@@ -6730,8 +7189,12 @@ package body Landin.Stages.Checking is
 
             Expected.Kind := Got;
             if Got = Ty.Aggregate then
-               Expected.Nominal := Landin.Checking.Body_Of
+               Expected.Result_Shape := Landin.Checking.Result_Shape_Of
                  (Types.all, Of_Tree, First);
+               if Expected.Result_Shape = Landin.Checking.No_Signature then
+                  Expected.Nominal := Landin.Checking.Body_Of
+                    (Types.all, Of_Tree, First);
+               end if;
             elsif Got = Ty.Fixed_Array then
                Expected.Length := Landin.Checking.Array_Length
                  (Types.all, Of_Tree, First);
@@ -7250,8 +7713,11 @@ package body Landin.Stages.Checking is
             Direct_Struct : constant Boolean :=
               (Named_Storage
                and then Named_Type = Ty.Aggregate
-               and then Landin.Checking.Body_Of (Types.all, Named)
-                          /= Res.No_Declaration)
+               and then
+                 (Landin.Checking.Body_Of (Types.all, Named)
+                    /= Res.No_Declaration
+                  or else Landin.Checking.Result_Shape_Of (Types.all, Named)
+                    /= Landin.Checking.No_Signature))
               or else Direct_Child;
             Direct_Source : constant Boolean :=
               Direct_Name or else Direct_Field or else Direct_Struct;
@@ -7300,14 +7766,23 @@ package body Landin.Stages.Checking is
                            or else Syn.Kind (Of_Tree.all, Value) = Syn.Call
                            or else Control_Source)
                then
-                  --  D56/D61: an inferred aggregate has no written type node
-                  --  from which Declared_As can copy [0710]'s identity.  Carry
-                  --  the source body's declaration before settling the new
-                  --  local or module binding.
-                  Landin.Checking.Note_Body
-                    (Types.all, Id,
-                     Landin.Checking.Body_Of
-                       (Types.all, Of_Tree.all, Value));
+                  declare
+                     Shape : constant Landin.Checking.Signature_Id :=
+                       Landin.Checking.Result_Shape_Of
+                         (Types.all, Of_Tree.all, Value);
+                  begin
+                     if Shape /= Landin.Checking.No_Signature then
+                        Landin.Checking.Note_Result_Shape
+                          (Types.all, Id, Shape);
+                     else
+                        --  D56/D61: an inferred nominal aggregate carries
+                        --  the declaration that wrote its body.
+                        Landin.Checking.Note_Body
+                          (Types.all, Id,
+                           Landin.Checking.Body_Of
+                             (Types.all, Of_Tree.all, Value));
+                     end if;
+                  end;
                end if;
 
                Landin.Checking.Settle (Types.all, Id, Got);
@@ -9094,14 +9569,41 @@ package body Landin.Stages.Checking is
       procedure Check_Routine_Body
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
       is
-         Result : constant Syn.Node_Id := Syn.Return_Of (Of_Tree, Node);
+         Count : constant Natural := Syn.Return_Count (Of_Tree, Node);
+         Result : constant Syn.Node_Id :=
+           (if Count = 1 then Syn.Nth_Return (Of_Tree, Node, 1)
+            else Syn.No_Node);
          Gives : constant Ty.Type_Kind :=
-           (if Result = Syn.No_Node then Ty.No_Value
-            else Declared_As_Node (Of_Tree, Result));
+           (if Count = 0 then Ty.No_Value
+            elsif Count = 1 then Declared_As_Node (Of_Tree, Result)
+            else Ty.Aggregate);
          Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Node);
+         Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Signature_Of (Types.all, Of_Tree, Node);
          Expected : Value_Context := (Kind => Gives, others => <>);
+         Result_Site : constant Landin.Provenance.Origin :=
+           (if Syn.Returns_Of (Of_Tree, Node) = Syn.No_Node
+            then Syn.Origin (Of_Tree, Node)
+            else Syn.Origin
+              (Of_Tree, Syn.Returns_Of (Of_Tree, Node)));
       begin
-         if Gives = Ty.Aggregate then
+         --  Ensure every return declaration is settled even when the
+         --  anonymous structural aggregate, rather than one return, is the
+         --  body's surrounding result context.
+         for Which in 1 .. Count loop
+            declare
+               Returned : constant Syn.Node_Id :=
+                 Syn.Nth_Return (Of_Tree, Node, Which);
+               Held : constant Ty.Type_Kind :=
+                 Declared_As_Node (Of_Tree, Returned);
+            begin
+               pragma Unreferenced (Held);
+            end;
+         end loop;
+
+         if Count > 1 then
+            Expected.Result_Shape := Signature;
+         elsif Gives = Ty.Aggregate then
             Expected.Nominal := Landin.Checking.Body_Of
               (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
          elsif Gives = Ty.Fixed_Array then
@@ -9123,23 +9625,20 @@ package body Landin.Stages.Checking is
             else
                Check_Block
                  (Of_Tree, Runs, Gives, Expected,
-                  Syn.Origin (Of_Tree, Result), "the return this fills");
+                  Result_Site, "the returns this fills");
             end if;
          else
             Check_Contextual_Value
-              (Of_Tree, Runs, Expected,
-               (if Result = Syn.No_Node
-                then Syn.Origin (Of_Tree, Node)
-                else Syn.Origin (Of_Tree, Result)),
-               "the return this fills");
+              (Of_Tree, Runs, Expected, Result_Site,
+               "the returns this fills");
          end if;
 
          --  D124 extends [1910]'s edge walk through direct expression bodies
-         --  too: an expression fills the result on fallthrough, while an
-         --  early `return` inside a control value still requires the named
-         --  result to have been assigned at that edge.
+         --  too.  D128 asks the same question independently of every named
+         --  return on each returning and final edge.
          Landin.Stages.Checking.Flow.Check_Function
-           (Context, Of_Tree, Node, Runs, Result, Found);
+           (Context, Of_Tree, Node, Runs,
+            Syn.Returns_Of (Of_Tree, Node), Found);
 
          Check_Operands (Of_Tree, Runs, Whole_Fold => False);
       end Check_Routine_Body;
@@ -9177,9 +9676,12 @@ package body Landin.Stages.Checking is
                --  Declared_As or Infer: both are paths for declarations that
                --  carry storage.
                Landin.Checking.Settle (Types.all, Id, Ty.Not_Typed);
-            elsif Res.Sort_Of (Meanings.all, Id) = Res.Pattern_Binding then
+            elsif Res.Sort_Of (Meanings.all, Id)
+                    in Res.Pattern_Binding | Res.Result_Binding
+            then
                --  D78 settles each positional payload alias only after its
-               --  arm has been paired with a case.
+               --  arm has been paired with a case.  [0990] likewise settles
+               --  a selected local only after checking its source result.
                null;
             else
                declare
@@ -9200,7 +9702,8 @@ package body Landin.Stages.Checking is
       loop
          if Landin.Checking.State_Of (Types.all, Id)
             = Landin.Checking.Untouched
-           and then Res.Sort_Of (Meanings.all, Id) /= Res.Pattern_Binding
+           and then Res.Sort_Of (Meanings.all, Id)
+             not in Res.Pattern_Binding | Res.Result_Binding
          then
             Infer (Id);
          end if;

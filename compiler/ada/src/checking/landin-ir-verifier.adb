@@ -235,6 +235,12 @@ package body Landin.IR.Verifier is
          Nested  : Path_Step_Array;
          Element : out Landin.Types.Scalar_Name) return Fault_Kind;
 
+      function Scalar_Field_Signature
+        (Item   : Item_Id;
+         Place  : Storage;
+         Field  : Part_Position;
+         Nested : Path_Step_Array) return Signature_Id;
+
       --  D121: an array's element may be an aggregate, so what an array
       --  shape answers is the element's shape and not a scalar name.
       function Shape_Of
@@ -245,7 +251,8 @@ package body Landin.IR.Verifier is
          Length  : out Element_Total;
          Which   : Natural := 0;
          Payload_Field : Natural := 0;
-         Nested  : Path_Step_Array := No_Path_Steps) return Fault_Kind;
+         Nested  : Path_Step_Array := No_Path_Steps;
+         Aggregate_Field : Boolean := False) return Fault_Kind;
 
       function Root_Shape_Of
         (Item  : Item_Id;
@@ -341,6 +348,33 @@ package body Landin.IR.Verifier is
          end;
       end Scalar_Field_Of;
 
+      function Scalar_Field_Signature
+        (Item   : Item_Id;
+         Place  : Storage;
+         Field  : Part_Position;
+         Nested : Path_Step_Array) return Signature_Id
+      is
+         Root : Field_Shape;
+      begin
+         case Place.Kind is
+            when Module_Datum =>
+               if Result_Of (Of_Unit, Place.Datum)
+                    = Landin.Types.Fixed_Array
+               then
+                  return No_Signature;
+               end if;
+               Root := Nth_Field_Shape
+                 (Of_Unit, Place.Datum, Positive (Field));
+            when Frame_Slot =>
+               if Is_Array (Of_Unit, Item, Place.Slot) then
+                  return No_Signature;
+               end if;
+               Root := Nth_Slot_Field_Shape
+                 (Of_Unit, Item, Place.Slot, Positive (Field));
+         end case;
+         return Shape_At (Of_Unit, Root, Nested).Signature;
+      end Scalar_Field_Signature;
+
       function Shape_Of
         (Item    : Item_Id;
          Place   : Storage;
@@ -349,7 +383,8 @@ package body Landin.IR.Verifier is
          Length  : out Element_Total;
          Which   : Natural := 0;
          Payload_Field : Natural := 0;
-         Nested  : Path_Step_Array := No_Path_Steps) return Fault_Kind
+         Nested  : Path_Step_Array := No_Path_Steps;
+         Aggregate_Field : Boolean := False) return Fault_Kind
       is
       begin
          Element := (others => <>);
@@ -376,11 +411,17 @@ package body Landin.IR.Verifier is
                   Leaf : constant Field_Shape :=
                     Shape_At (Of_Unit, Shape, Nested);
                begin
-                  if Leaf.Kind /= Array_Field_Shape then
+                  if Leaf.Kind = Aggregate_Field_Shape
+                    and then Aggregate_Field
+                  then
+                     Element := Leaf;
+                     Length := 1;
+                  elsif Leaf.Kind = Array_Field_Shape then
+                     Element := Array_Element_Shape (Of_Unit, Leaf);
+                     Length := Leaf.Length;
+                  else
                      return Element_Field_Is_Not_An_Array;
                   end if;
-                  Element := Array_Element_Shape (Of_Unit, Leaf);
-                  Length := Leaf.Length;
                   return Nothing_Wrong;
                end;
             end;
@@ -431,19 +472,23 @@ package body Landin.IR.Verifier is
                      return Element_Field_Out_Of_Range;
                   end if;
 
-                  if Nth_Field_Shape
-                       (Of_Unit, Place.Datum, Positive (Field)).Kind
-                       /= Array_Field_Shape
-                  then
-                     return Element_Field_Is_Not_An_Array;
-                  end if;
-
-                  Element := Array_Element_Shape
-                    (Of_Unit,
-                     Nth_Field_Shape
-                       (Of_Unit, Place.Datum, Positive (Field)));
-                  Length := Nth_Field_Shape
-                    (Of_Unit, Place.Datum, Positive (Field)).Length;
+                  declare
+                     Shape : constant Field_Shape :=
+                       Nth_Field_Shape
+                         (Of_Unit, Place.Datum, Positive (Field));
+                  begin
+                     if Shape.Kind = Aggregate_Field_Shape
+                       and then Aggregate_Field
+                     then
+                        Element := Shape;
+                        Length := 1;
+                     elsif Shape.Kind = Array_Field_Shape then
+                        Element := Array_Element_Shape (Of_Unit, Shape);
+                        Length := Shape.Length;
+                     else
+                        return Element_Field_Is_Not_An_Array;
+                     end if;
+                  end;
                end if;
 
             when Frame_Slot =>
@@ -467,19 +512,23 @@ package body Landin.IR.Verifier is
                      return Element_Field_Out_Of_Range;
                   end if;
 
-                  if Nth_Slot_Field_Shape
-                       (Of_Unit, Item, Place.Slot, Positive (Field)).Kind
-                       /= Array_Field_Shape
-                  then
-                     return Element_Field_Is_Not_An_Array;
-                  end if;
-
-                  Element := Array_Element_Shape
-                    (Of_Unit,
-                     Nth_Slot_Field_Shape
-                       (Of_Unit, Item, Place.Slot, Positive (Field)));
-                  Length := Nth_Slot_Field_Shape
-                    (Of_Unit, Item, Place.Slot, Positive (Field)).Length;
+                  declare
+                     Shape : constant Field_Shape :=
+                       Nth_Slot_Field_Shape
+                         (Of_Unit, Item, Place.Slot, Positive (Field));
+                  begin
+                     if Shape.Kind = Aggregate_Field_Shape
+                       and then Aggregate_Field
+                     then
+                        Element := Shape;
+                        Length := 1;
+                     elsif Shape.Kind = Array_Field_Shape then
+                        Element := Array_Element_Shape (Of_Unit, Shape);
+                        Length := Shape.Length;
+                     else
+                        return Element_Field_Is_Not_An_Array;
+                     end if;
+                  end;
                end if;
          end case;
 
@@ -719,7 +768,7 @@ package body Landin.IR.Verifier is
         return Boolean;
 
       function Signature_Part_Is_Malformed
-        (Part : Signature_Part; Result_Part : Boolean) return Boolean;
+        (Part : Signature_Part) return Boolean;
 
       function Signature_Carrier_Count
         (Signature : Signature_Id) return Natural;
@@ -729,6 +778,10 @@ package body Landin.IR.Verifier is
 
       function Part_Agrees_With_Slot
         (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
+         return Boolean;
+
+      function Results_Agree_With_Slot
+        (Item : Item_Id; Signature : Signature_Id; Slot : Slot_Id)
          return Boolean;
 
       function Field_Shape_Is_Malformed
@@ -744,7 +797,14 @@ package body Landin.IR.Verifier is
          if Shape.Kind = Scalar_Field_Shape then
             return Shape.Length /= 1
               or else Shape.Cases /= 0
-              or else Shape.Payloads_First /= 0;
+              or else Shape.Payloads_First /= 0
+              or else
+                (if Shape.Signature = No_Signature
+                 then False
+                 else Shape.Element /= Landin.Types.Usize
+                   or else not Holds (Of_Unit, Shape.Signature));
+         elsif Shape.Signature /= No_Signature then
+            return True;
          elsif Shape.Kind = Array_Field_Shape then
             --  D121: an aggregate element is one run of exactly one shape.
             --  No run at all is the scalar element every array had before.
@@ -833,15 +893,12 @@ package body Landin.IR.Verifier is
       end Field_Shape_Is_Malformed;
 
       function Signature_Part_Is_Malformed
-        (Part : Signature_Part; Result_Part : Boolean) return Boolean
+        (Part : Signature_Part) return Boolean
       is
       begin
          case Part.Kind is
             when Landin.Types.No_Value =>
-               return not Result_Part
-                 or else Part.Aggregate_Body /= No_Declaration
-                 or else Part.Length /= 0
-                 or else Part.Signature /= No_Signature;
+               return True;
             when Landin.Types.Scalar_Name =>
                return Part.Aggregate_Body /= No_Declaration
                  or else Part.Length /= 0
@@ -853,7 +910,9 @@ package body Landin.IR.Verifier is
                  or else Part.Length /= 0
                  or else Part.Signature /= No_Signature;
             when Landin.Types.Fixed_Array =>
-               return Part.Aggregate_Body /= No_Declaration
+               return (Part.Aggregate_Body /= No_Declaration
+                         and then Natural (Part.Aggregate_Body)
+                           > Declaration_Limit (Of_Unit))
                  or else Part.Signature /= No_Signature;
             when Landin.Types.Function_Value =>
                return Part.Aggregate_Body /= No_Declaration
@@ -867,8 +926,12 @@ package body Landin.IR.Verifier is
       function Signature_Carrier_Count
         (Signature : Signature_Id) return Natural
         is (Signature_Parameter_Count (Of_Unit, Signature)
-            + (if Signature_Result (Of_Unit, Signature).Kind
-                    in Landin.Types.Aggregate | Landin.Types.Fixed_Array
+            + (if Signature_Result_Count (Of_Unit, Signature) > 1
+               or else
+                 (Signature_Result_Count (Of_Unit, Signature) = 1
+                  and then Nth_Signature_Result
+                    (Of_Unit, Signature, 1).Kind
+                      in Landin.Types.Aggregate | Landin.Types.Fixed_Array)
                then 1 else 0));
 
       function Carrier_Kind (Part : Signature_Part)
@@ -904,6 +967,59 @@ package body Landin.IR.Verifier is
                      Signature_Of (Of_Unit, Item, Slot)),
                when others => False);
 
+      function Results_Agree_With_Slot
+        (Item : Item_Id; Signature : Signature_Id; Slot : Slot_Id)
+         return Boolean
+      is
+         Count : constant Natural :=
+           Signature_Result_Count (Of_Unit, Signature);
+      begin
+         if not Is_Aggregate (Of_Unit, Item, Slot)
+           or else Slot_Field_Count (Of_Unit, Item, Slot) /= Count
+         then
+            return False;
+         end if;
+         for Index in 1 .. Count loop
+            declare
+               Part : constant Signature_Part :=
+                 Nth_Signature_Result (Of_Unit, Signature, Index);
+               Shape : constant Field_Shape :=
+                 Nth_Slot_Field_Shape (Of_Unit, Item, Slot, Index);
+               Agrees : Boolean;
+            begin
+               case Part.Kind is
+                  when Landin.Types.Scalar_Name =>
+                     Agrees := Shape.Kind = Scalar_Field_Shape
+                       and then Shape.Element = Part.Kind
+                       and then Shape.Signature = No_Signature;
+                  when Landin.Types.Function_Value =>
+                     Agrees := Shape.Kind = Scalar_Field_Shape
+                       and then Shape.Element = Landin.Types.Usize
+                       and then Holds (Of_Unit, Shape.Signature)
+                       and then Signatures_Agree
+                         (Of_Unit, Part.Signature, Shape.Signature);
+                  when Landin.Types.Aggregate =>
+                     Agrees := Shape.Kind = Aggregate_Field_Shape;
+                  when Landin.Types.Fixed_Array =>
+                     Agrees := Shape.Kind = Array_Field_Shape
+                       and then Shape.Length = Part.Length
+                       and then
+                         (if Part.Aggregate_Body = No_Declaration
+                          then not Array_Element_Is_Aggregate
+                            (Of_Unit, Shape)
+                            and then Shape.Element = Part.Element
+                          else Array_Element_Is_Aggregate (Of_Unit, Shape));
+                  when others =>
+                     Agrees := False;
+               end case;
+               if not Agrees then
+                  return False;
+               end if;
+            end;
+         end loop;
+         return True;
+      end Results_Agree_With_Slot;
+
    begin
       if not Is_Prepared (Of_Unit) then
          return (Kind => Unprepared_Unit, others => <>);
@@ -936,19 +1052,37 @@ package body Landin.IR.Verifier is
                for Index in 1 .. Held.Parameters.Count loop
                   if Signature_Part_Is_Malformed
                     (Of_Unit.Signature_Parts
-                       (Held.Parameters.First + Index),
-                     Result_Part => False)
+                       (Held.Parameters.First + Index))
                   then
                      return
                        (Kind => Signature_Part_Malformed, others => <>);
                   end if;
                end loop;
-               if Signature_Part_Is_Malformed
-                    (Held.Result, Result_Part => True)
-               then
-                  return (Kind => Signature_Part_Malformed, others => <>);
-               end if;
                Parts := Parts + Held.Parameters.Count;
+
+               if Held.Results.Count /= 0
+                 and then Held.Results.First /= Parts
+               then
+                  return (Kind => Signature_Runs_Overlap, others => <>);
+               end if;
+               if Held.Results.First >
+                    Natural (Of_Unit.Signature_Parts.Length)
+                 or else Held.Results.Count
+                    > Natural (Of_Unit.Signature_Parts.Length)
+                        - Held.Results.First
+               then
+                  return (Kind => Signature_Runs_Overlap, others => <>);
+               end if;
+               for Index in 1 .. Held.Results.Count loop
+                  if Signature_Part_Is_Malformed
+                    (Of_Unit.Signature_Parts
+                       (Held.Results.First + Index))
+                  then
+                     return
+                       (Kind => Signature_Part_Malformed, others => <>);
+                  end if;
+               end loop;
+               Parts := Parts + Held.Results.Count;
             end;
          end loop;
          if Parts /= Natural (Of_Unit.Signature_Parts.Length) then
@@ -1238,14 +1372,26 @@ package body Landin.IR.Verifier is
                   end if;
 
                   declare
+                     Count : constant Natural :=
+                       Signature_Result_Count (Of_Unit, Signature);
                      Result : constant Signature_Part :=
-                       Signature_Result (Of_Unit, Signature);
+                       (if Count = 1
+                        then Nth_Signature_Result
+                          (Of_Unit, Signature, 1)
+                        else (Kind => Landin.Types.No_Value, others => <>));
                      Hidden : constant Natural :=
-                       (if Result.Kind in Landin.Types.Aggregate
-                                             | Landin.Types.Fixed_Array
+                       (if Count > 1
+                          or else
+                            (Count = 1
+                             and then Result.Kind in Landin.Types.Aggregate
+                                                   | Landin.Types.Fixed_Array)
                         then 1 else 0);
+                     Carrier : constant Landin.Types.Type_Kind :=
+                       (if Count = 0 then Landin.Types.No_Value
+                        elsif Count > 1 then Landin.Types.Aggregate
+                        else Carrier_Kind (Result));
                   begin
-                     if Result_Of (Of_Unit, Id) /= Carrier_Kind (Result)
+                     if Result_Of (Of_Unit, Id) /= Carrier
                        or else Parameter_Count (Of_Unit, Id)
                                  /= Signature_Carrier_Count (Signature)
                      then
@@ -1253,15 +1399,23 @@ package body Landin.IR.Verifier is
                                 Item => Id, others => <>);
                      end if;
 
-                     if (Result.Kind = Landin.Types.No_Value
+                     if (Count = 0
                          and then Result_Slot (Of_Unit, Id) /= No_Slot)
                        or else
-                         (Result.Kind /= Landin.Types.No_Value
+                         (Count = 1
                           and then
                             (not Holds
                                (Of_Unit, Id, Result_Slot (Of_Unit, Id))
                              or else not Part_Agrees_With_Slot
                                (Id, Result,
+                                Result_Slot (Of_Unit, Id))))
+                       or else
+                         (Count > 1
+                          and then
+                            (not Holds
+                               (Of_Unit, Id, Result_Slot (Of_Unit, Id))
+                             or else not Results_Agree_With_Slot
+                               (Id, Signature,
                                 Result_Slot (Of_Unit, Id))))
                      then
                         return (Kind => Routine_Signature_Disagrees,
@@ -1888,6 +2042,39 @@ package body Landin.IR.Verifier is
                                              Item => Id, Block => Block,
                                              Value => V);
                                        end if;
+                                       if Op = Load_Field then
+                                          declare
+                                             Expected : constant
+                                               Signature_Id :=
+                                               Scalar_Field_Signature
+                                                 (Id,
+                                                  (Kind => Frame_Slot,
+                                                   Slot => Cell),
+                                                  Field_Of (Of_Unit, Id, V),
+                                                  Path_Of (Of_Unit, Id, V));
+                                             Actual : constant Signature_Id :=
+                                               Signature_Of
+                                                 (Of_Unit, Id, V);
+                                          begin
+                                             if (Expected = No_Signature)
+                                                  /= (Actual = No_Signature)
+                                               or else
+                                                 (Expected /= No_Signature
+                                                  and then
+                                                    (not Holds
+                                                       (Of_Unit, Actual)
+                                                     or else not
+                                                       Signatures_Agree
+                                                         (Of_Unit, Expected,
+                                                          Actual)))
+                                             then
+                                                return
+                                                  (Kind => Signature_Mismatch,
+                                                   Item => Id, Block => Block,
+                                                   Value => V);
+                                             end if;
+                                          end;
+                                       end if;
                                     end;
                                  end;
                               else
@@ -1947,6 +2134,39 @@ package body Landin.IR.Verifier is
                                             (Kind => Result_Disagrees,
                                              Item => Id, Block => Block,
                                              Value => V);
+                                       end if;
+                                       if Op = Load_Field then
+                                          declare
+                                             Expected : constant
+                                               Signature_Id :=
+                                               Scalar_Field_Signature
+                                                 (Id,
+                                                  (Kind => Module_Datum,
+                                                   Datum => D),
+                                                  Field_Of (Of_Unit, Id, V),
+                                                  Path_Of (Of_Unit, Id, V));
+                                             Actual : constant Signature_Id :=
+                                               Signature_Of
+                                                 (Of_Unit, Id, V);
+                                          begin
+                                             if (Expected = No_Signature)
+                                                  /= (Actual = No_Signature)
+                                               or else
+                                                 (Expected /= No_Signature
+                                                  and then
+                                                    (not Holds
+                                                       (Of_Unit, Actual)
+                                                     or else not
+                                                       Signatures_Agree
+                                                         (Of_Unit, Expected,
+                                                          Actual)))
+                                             then
+                                                return
+                                                  (Kind => Signature_Mismatch,
+                                                   Item => Id, Block => Block,
+                                                   Value => V);
+                                             end if;
+                                          end;
                                        end if;
                                     end;
                                  end;
@@ -2011,7 +2231,8 @@ package body Landin.IR.Verifier is
                                     Source_Field_Of (Of_Unit, Id, V),
                                     Source_Element, Source_Length,
                                     Nested => Source_Path_Of
-                                      (Of_Unit, Id, V));
+                                      (Of_Unit, Id, V),
+                                    Aggregate_Field => True);
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
@@ -2025,7 +2246,8 @@ package body Landin.IR.Verifier is
                                     Variant_Payload_Field_Of
                                       (Of_Unit, Id, V),
                                     Nested => Path_Of
-                                      (Of_Unit, Id, V));
+                                      (Of_Unit, Id, V),
+                                    Aggregate_Field => True);
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
@@ -2813,6 +3035,33 @@ package body Landin.IR.Verifier is
                                        Item => Id, Block => Block,
                                        Value => V);
                                  end if;
+                                 declare
+                                    Expected : constant Signature_Id :=
+                                      Scalar_Field_Signature
+                                        (Id, Place,
+                                         Field_Of (Of_Unit, Id, V),
+                                         Path_Of (Of_Unit, Id, V));
+                                    Actual : constant Signature_Id :=
+                                      Signature_Of
+                                        (Of_Unit, Id,
+                                         Nth_Operand (Of_Unit, Id, V, 1));
+                                 begin
+                                    if (Expected = No_Signature)
+                                         /= (Actual = No_Signature)
+                                      or else
+                                        (Expected /= No_Signature
+                                         and then
+                                           (not Holds (Of_Unit, Actual)
+                                            or else not Signatures_Agree
+                                              (Of_Unit, Expected, Actual)))
+                                    then
+                                       return
+                                         (Kind =>
+                                            Function_Value_Signature_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
                               end;
 
                            when Store_Variant_Field =>
@@ -2925,19 +3174,29 @@ package body Landin.IR.Verifier is
                               declare
                                  Signature : constant Signature_Id :=
                                    Call_Signature (Of_Unit, Id, V);
+                                 Result_Count : constant Natural :=
+                                   Signature_Result_Count
+                                     (Of_Unit, Signature);
                                  Declared_Result : constant Signature_Part :=
-                                   Signature_Result (Of_Unit, Signature);
+                                   (if Result_Count = 1
+                                    then Nth_Signature_Result
+                                      (Of_Unit, Signature, 1)
+                                    else (Kind => Landin.Types.No_Value,
+                                          others => <>));
                                  Indirect : constant Boolean :=
                                    Op = Indirect_Call;
                                  Hidden : constant Natural :=
-                                   (if Declared_Result.Kind in
-                                          Landin.Types.Aggregate
-                                            | Landin.Types.Fixed_Array
+                                   (if Result_Count > 1
+                                      or else
+                                        (Result_Count = 1
+                                         and then Declared_Result.Kind in
+                                           Landin.Types.Aggregate
+                                             | Landin.Types.Fixed_Array)
                                     then 1 else 0);
                                  Offset : constant Natural :=
                                    (if Indirect then 1 else 0);
                               begin
-                                 if (if Hidden = 1
+                                 if (if Hidden = 1 or else Result_Count = 0
                                      then Result_Of (Of_Unit, Id, V)
                                             /= Landin.Types.No_Value
                                      else Result_Of (Of_Unit, Id, V)
@@ -3072,10 +3331,13 @@ package body Landin.IR.Verifier is
                                        if Kind_Of (Of_Unit, Id) = Datum then
                                           Expected_Signature :=
                                             Signature_Of (Of_Unit, Id);
-                                       elsif Signature_Result
+                                       elsif Signature_Result_Count
                                          (Of_Unit,
-                                          Signature_Of (Of_Unit, Id)).Kind
-                                           = Landin.Types.Function_Value
+                                          Signature_Of (Of_Unit, Id)) = 1
+                                         and then Signature_Result
+                                           (Of_Unit,
+                                            Signature_Of (Of_Unit, Id)).Kind
+                                             = Landin.Types.Function_Value
                                        then
                                           Expected_Signature :=
                                             Signature_Result

@@ -96,7 +96,6 @@ package Landin.Diagnostics.Syntactic is
       Float_Type,
       Text_Type,
       Parameter_Convention,
-      Multiple_Returns,
       Defer_Statement,
       Undo_Statement,
       Loop_Statement,
@@ -130,7 +129,6 @@ package Landin.Diagnostics.Syntactic is
             when Float_Type           => "[0170]",
             when Text_Type            => "[0600]",
             when Parameter_Convention => "[0900]",
-            when Multiple_Returns     => "[0920]",
             when Defer_Statement      => "[1100]",
             when Undo_Statement       => "[1110]",
             when Loop_Statement       => "[1130]",
@@ -183,8 +181,7 @@ private
             when Try_Expression
                | Fail_Statement
                | Defer_Statement
-               | Undo_Statement
-               | Multiple_Returns     => "R2.30",
+               | Undo_Statement       => "R2.30",
             when Loop_Statement
                | While_Statement
                | For_Statement

@@ -150,10 +150,10 @@ package body Landin.Stages.Resolution is
             Declare_One
               (Of_Tree, Syn.Nth_Parameter (Of_Tree, Node, Which), Signature);
          end loop;
-         if Syn.Return_Of (Of_Tree, Node) /= Syn.No_Node then
+         for Which in 1 .. Syn.Return_Count (Of_Tree, Node) loop
             Declare_One
-              (Of_Tree, Syn.Return_Of (Of_Tree, Node), Signature);
-         end if;
+              (Of_Tree, Syn.Nth_Return (Of_Tree, Node, Which), Signature);
+         end loop;
 
          if Syn.Kind (Of_Tree, Runs) = Syn.Block then
             declare
@@ -326,6 +326,34 @@ package body Landin.Stages.Resolution is
                      Resolve (Of_Tree, Syn.Value_Of (Of_Tree, Item),
                               Inside);
                      Declare_One (Of_Tree, Item, Inside);
+
+                  when Syn.Destructuring_Binding =>
+                     --  [0990] evaluates the source before introducing any
+                     --  selected local, exactly as an inferred binding does.
+                     Resolve
+                       (Of_Tree, Syn.Destructured_Value (Of_Tree, Item),
+                        Inside);
+                     for Position in
+                       1 .. Syn.Destructured_Field_Count (Of_Tree, Item)
+                     loop
+                        declare
+                           Field : constant Syn.Node_Id :=
+                             Syn.Nth_Destructured_Field
+                               (Of_Tree, Item, Position);
+                        begin
+                           if Syn.Kind (Of_Tree, Field)
+                                = Syn.Destructured_Field
+                             and then Syn.Destructured_Local
+                               (Of_Tree, Field) /= Syn.No_Node
+                           then
+                              Declare_One
+                                (Of_Tree,
+                                 Syn.Destructured_Local (Of_Tree, Field),
+                                 Inside,
+                                 Resolve_Declared => False);
+                           end if;
+                        end;
+                     end loop;
 
                   when others =>
                      Resolve (Of_Tree, Item, Inside);
@@ -505,18 +533,19 @@ package body Landin.Stages.Resolution is
                                  Signature);
                            end loop;
 
-                           --  The named return is declared here and not in
-                           --  the body [1840]: the body assigns it like any
-                           --  other place [0930], and a parameter and a
-                           --  return may not share a name.
-                           if Syn.Return_Of (Of_Tree.all, Node)
-                              /= Syn.No_Node
-                           then
+                           --  Named returns are declared here and not in
+                           --  the body [1840]: the body assigns each like
+                           --  any other place [0930], and no parameter or
+                           --  sibling return may share its name.
+                           for Which in
+                             1 .. Syn.Return_Count (Of_Tree.all, Node)
+                           loop
                               Declare_One
                                 (Of_Tree.all,
-                                 Syn.Return_Of (Of_Tree.all, Node),
+                                 Syn.Nth_Return
+                                   (Of_Tree.all, Node, Which),
                                  Signature);
-                           end if;
+                           end loop;
 
                            --  [1800]'s expression body opens no scope,
                            --  because an expression declares nothing.

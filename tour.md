@@ -1337,6 +1337,9 @@ divide: (a: i32, b: i32) -> (quot: i32, rem: i32) =
 end divide
 
 ```
+Two or more returns travel as one anonymous structural result aggregate. Their
+written order fixes its layout and transport; their names are its fields. A
+single return keeps its own type rather than being wrapped.
 
 ### [0930] Every named return must be assigned before return
 
@@ -1424,6 +1427,12 @@ sum         := whole.quot + whole.rem
 (quot, _)   := divide(30, 3)
 
 ```
+The call is evaluated once. Names may be selected in any order, omitted, or
+renamed after `:`; `_` explicitly ignores what is not bound. A whole result can
+also cross an `if`, `match`, or bare-block value when every fallthrough edge has
+the same names and field types. Function types compare result types in order
+but not these labels, so a call through a stored function uses the labels of
+its static function type.
 
 ### [1000] A function type is an ordinary type
 

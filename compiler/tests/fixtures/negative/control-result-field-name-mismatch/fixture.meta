@@ -1,0 +1,5 @@
+class: negative
+summary: a control value keeps one named structural result shape on fallthrough
+constructs: 0920, 0990, 1050, 1800, 1810, 1820
+program: program.ldn
+codes: L0301
