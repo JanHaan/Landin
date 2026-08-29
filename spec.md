@@ -6018,3 +6018,30 @@ ABI. Both are fixed-size by-value storage and need the same caller lifetime.
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
 `negative/array-return-unassigned`; the generated token and IR records; and
 `runtime/array-returns-cross-calls` on Linux x86-64.
+
+### D108 — An aggregate-returning call may fill aggregate storage directly
+
+**The tour said** that an expression body fills its named return [0880], while
+assignment evaluates its source before committing the destination [0410]. Once
+D106/D107 give a call caller-owned storage, routing its result through another
+aggregate value would add no semantics and would lose that direct destination.
+
+**Chosen:** a matching struct- or fixed-array-returning call may initialize a
+typed local, assign a direct whole aggregate place, fill a named return in a
+block, or serve as that return's expression body. Lowering supplies the final
+place itself as the hidden result destination. Forwarding therefore performs
+callee-to-caller copies at each source call boundary but never materializes an
+aggregate SSA value or aliases one frame's storage into another.
+
+Child-field destinations remain separate: they require a field-qualified
+hidden destination carrier before a returned call can fill them directly.
+
+**Why retain each boundary copy:** the language says aggregate arguments and
+results are values, not aliases. Tail-call storage forwarding could elide a
+copy later, but it is an optimization only when it preserves the independently
+observable named-return place and all source evaluation order.
+
+**Pinned by** the checker, flow, lowering, verifier and backend public seams;
+the generated token and IR records; and the forwarding paths in
+`runtime/struct-returns-cross-calls` and `runtime/array-returns-cross-calls` on
+Linux x86-64.

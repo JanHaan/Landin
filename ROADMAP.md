@@ -1932,6 +1932,11 @@ The twenty-first increment applies the same caller-owned convention to fixed
 arrays. Their result slot retains only scalar element type and length, and
 whole-array definite assignment reaches every successful leave.
 
+The twenty-second increment routes a matching aggregate-returning call
+directly into a typed local, direct assignment or named return, including an
+expression body. Each source call boundary keeps its by-value copy without an
+aggregate SSA value.
+
 Further aggregate arguments and result contexts remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
