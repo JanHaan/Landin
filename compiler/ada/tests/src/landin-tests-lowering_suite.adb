@@ -4019,10 +4019,19 @@ package body Landin.Tests.Lowering_Suite is
          & "             + take_array([6, 7])" & LF
          & "             + take_array([2 of 8])" & LF
          & "             + take_array([9, of 10])" & LF
+         & "             + score((x: 11, y: 12))" & LF
+         & "             + score(point(y: 13, of zeroed))" & LF
          & "end use" & LF
          & "take_array: (value: [2]i32) -> (answer: i32) =" & LF
          & "    answer = value[0] + value[1]" & LF
-         & "end take_array" & LF,
+         & "end take_array" & LF
+         & "point: type = struct" & LF
+         & "    x: i32" & LF
+         & "    y: i32" & LF
+         & "end point" & LF
+         & "score: (value: point) -> (answer: i32) =" & LF
+         & "    answer = value.x + value.y" & LF
+         & "end score" & LF,
          Ran);
 
       Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
@@ -4068,7 +4077,7 @@ package body Landin.Tests.Lowering_Suite is
          end loop;
          Landin.Testing.Check
            (Item,
-            Addresses = 7 and then Calls = 7 and then Clears = 2
+            Addresses = 9 and then Calls = 9 and then Clears = 2
               and then Fills = 2,
             "contextual arguments use compact shaped caller temporaries");
          Landin.Testing.Check

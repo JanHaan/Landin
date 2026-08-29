@@ -1897,6 +1897,11 @@ The thirteenth increment gives full and mixed array repetition the same
 argument context. Explicit prefix elements are stored in order and one
 repeated expression produces a compact suffix fill, including at D18 lengths.
 
+The fourteenth increment lets a scalar-field ordinary-struct parameter context
+type bare or matching nominal construction. Labels fill a shaped caller
+temporary in source order and `of zeroed` fills omitted scalar fields before
+ordinary transport.
+
 Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
