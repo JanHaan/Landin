@@ -1,0 +1,6 @@
+class: negative
+summary: fail carries one payload-free atom even when its expression has several results
+constructs: 0940, 0970, 0990
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, synthetic-32
