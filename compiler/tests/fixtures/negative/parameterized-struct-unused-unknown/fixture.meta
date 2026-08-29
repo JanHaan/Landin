@@ -1,0 +1,6 @@
+class: negative
+summary: an unused nominal template still rejects a free type name
+constructs: 0670, 1350, 1795, 1860
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0304

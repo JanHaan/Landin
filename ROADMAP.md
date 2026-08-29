@@ -2285,15 +2285,23 @@ written
 onto a template node. Fixed actuals in type applications remain literals or
 forwarded formals for this slice.
 
-A frontend-only increment now also admits a parameterised struct body after a
-type declaration's formals and resolves those formals in the same collected
-declaration scope as an alias. It deliberately stops before checking,
-instantiating or lowering that nominal family.
+D137's nominal increment now carries that parsed struct body end to end. A
+fully applied struct interns one checker-owned identity from its source template
+and complete ordered normalized actual tuple. Alias-normalized actuals reuse a
+key; different actuals or templates remain different even when unused or laid
+out identically. Every enabled concrete identity may be a type actual, while
+the substituted field or payload position decides its legality. Fixed formals
+substitute bounds. Symbolic validation checks unused templates, and L0313
+distinguishes impossible by-value nominal recursion from L0307 alias expansion.
+Each canonical identity receives one selected-target layout without AST
+mutation or a synthetic declaration. Existing contextual aggregate storage,
+images, construction, copies, calls, control joins, arrays, nested children and
+variants then use the ordinary nominal shape path. Templates and formals make
+no IR item, slot or ABI position.
 
-The next semantic increments extend the same substitution layer to
-parameterised nominal instance identities, generic routine instances and exact
-deduction from ordinary argument types, then fixed conditional declaration
-lists. Deduction does not use return context,
+The next semantic increments extend the substitution layer to generic routine
+instances and exact deduction from ordinary argument types, then fixed
+conditional declaration lists. Deduction does not use return context,
 constraint lookup or arithmetic inversion. Parameterised nominal types and
 generic routines receive identities derived from a template and normalised
 actual tuple rather than reusing one source declaration identity for unequal
@@ -2301,11 +2309,14 @@ instances. No correctness step executes a user routine. R2.70 remains the
 owner of shared generic evidence and R4.50 the owner of choosing
 specialisation as an optimisation.
 
-Exit evidence: generic shape and fixed-expression fixtures, including direct
-and expression-folded zero lengths and a syntactically valid rejected call in
-an array bound, pass; nested unconditional template defects are declaration-
-order independent while dependent failures retain application provenance; no
-user code executes during compilation.
+Exit evidence: generic shape, nominal identity/layout, parser, resolution,
+checking, lowering and verifier seams pass. Positive, negative and runtime
+fixtures cover canonical reuse, alias normalization, unequal phantom actuals,
+fixed layout changes, every enabled substituted field family, contextual value
+transport, target overflow, malformed unused templates, declaration-order
+independence, application provenance and nominal recursion. Direct and
+expression-folded zero lengths and a syntactically valid rejected call in an
+array bound remain covered; no user code executes during compilation.
 
 ### R2.50 — Implement references and local lifetime checks
 

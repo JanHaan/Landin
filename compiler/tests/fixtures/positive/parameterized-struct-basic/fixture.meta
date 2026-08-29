@@ -1,0 +1,5 @@
+class: positive
+summary: a fully applied parameterized struct is a concrete nominal type
+constructs: 0670, 0710, 1350, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

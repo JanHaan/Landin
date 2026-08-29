@@ -1,0 +1,6 @@
+outer: type (item: type) = struct
+    child: inner(item)
+end outer
+inner: type (item: type) = struct
+    bad: [2][3]u8
+end inner

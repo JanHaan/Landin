@@ -1,0 +1,6 @@
+class: negative
+summary: an unused nominal template cannot require an infinite by-value instance layout
+constructs: 0670, 0710, 1350, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0313

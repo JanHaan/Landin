@@ -1,0 +1,6 @@
+class: negative
+summary: unequal actual tuples and templates stay nominally distinct despite equal layouts and unused actuals
+constructs: 0540, 0670, 0710, 1350, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301, L0301, L0301

@@ -200,10 +200,10 @@ An array [0520] is a type position too, and its length is part
 of it. D136 folds the bound expression from integer literals, fixed formals,
 unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
 and `%`.
-The element is a type like any other. A parameterized alias is a type position
-through its fully applied positional
-application. D135 substitutes it during checking and normalizes it to the same
-scalar or fixed-array descriptor that direct syntax would produce.
+The element is a type like any other. A parameterized alias or nominal struct
+is a type position through its fully applied positional application. D135
+substitutes an alias during checking; D137 interns a struct application by its
+template and normalized actual tuple, then checks the substituted field shape.
 
 ```landin-grammar
 binding       ::= "mut"? identifier ":" type ("=" expression)?
@@ -229,9 +229,10 @@ A type declaration names a type, and names nothing new.
 D15 reads the second as deciding the first: without that word a
 declaration gives an existing type another name and the two are
 one type everywhere. A struct body [0670] has no existing type
-to alias and introduces the nominal type [0710] whose identity
-is this declaration; an alias of that name keeps the same
-identity. Every alias chain has to reach a scalar type, atom set, fixed array, function
+to alias and introduces the nominal type [0710]. Without formals its identity
+is this declaration's empty-actual instance. With formals, D137 makes each
+fully applied normalized actual tuple a distinct instance of this declaration;
+an alias of either keeps that same identity. Every alias chain has to reach a scalar type, atom set, fixed array, function
 type or struct body. A chain that comes back to an alias in the chain
 reaches no type and is refused at that declaration.
 A type name is an ordinary declared name [1760], so one
@@ -464,7 +465,7 @@ an inner scope means nothing until the inner ones are named.
 | scope | what it holds |
 | --- | --- |
 | module | every file compiled together. There is one, until [1410]'s directories arrive. |
-| type declaration | D135's complete ordered formal list. The scope encloses the module and is visible in every fixed formal's declared type and in the alias body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
+| type declaration | D135's complete ordered formal list. The scope encloses the module and is visible in every fixed formal's declared type and in the alias or struct body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
 | signature | a declared or anonymous function's parameters and named returns [1800]. Every named return is a place the body assigns [0930], so each is declared here and not in the body; parameters and returns share one namespace. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
 | body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; one for every bare `begin` block; and one for a call-site recovery [1810] [1030]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings and a recovery error name live only in their block. |
 
@@ -7399,11 +7400,9 @@ fixed n: u32) = rhs`, with `fixed` before its name. `fixed` is reserved. Its
 arguments are positional: a type application is `name(type_argument, ...)`,
 where an argument is a type or an integer for a fixed formal. A fixed formal
 may supply an array bound, so `[n]t` is an alias body. The grammar admits that
-formal list before either an alias type or a struct body. This increment carries
-a parameterized struct through parsing and resolution only; checking,
-instantiation and runtime representation of its applications remain outside the
-enabled kernel. A parameterized atom union and every generic function remain
-outside it.
+formal list before either an alias type or a struct body. A parameterized atom
+union, generic function or constraint, deduction and fixed conditional
+declaration remain outside the enabled kernel.
 
 One type-declaration scope contains all of the formals. The resolver collects
 the complete formal list into that scope before it resolves any fixed formal's
@@ -7411,29 +7410,35 @@ declared type or the declaration right-hand side. Thus a formal may name one
 written later, but the formals do not escape to the module or another
 declaration.
 
-A fully applied alias is normalized during checking. A type formal accepts a
-scalar or fixed-array type descriptor. A fixed formal has an integer type and
-accepts an integer literal; when one parameterized alias applies another, its
-fixed formal may pass that compile-time integer onward. Substitution therefore
-covers a scalar body, a fixed-array body such as `[n]t`, and nested alias
-applications without adding a new runtime type category. The resulting scalar
-or fixed-array descriptor is the descriptor direct syntax already uses.
+A fully applied alias is normalized during checking. Its enabled result remains
+a scalar or fixed-array descriptor. A fully applied struct instead interns
+D137's nominal instance. A struct type formal accepts every enabled concrete
+identity: scalar, structural atom set, exact fixed array, nominal instance or
+structural function signature. The substituted field or payload position then
+decides whether that identity is legal there. A fixed formal has an integer
+type and accepts an integer literal; a nested application may forward its
+caller's fixed formal. Substitution therefore covers fixed bounds and every
+concrete field and payload shape the ordinary struct already admits.
 
-A parameterized alias named without arguments, an application with the wrong
-arity or argument kind, a bound outside the fixed-expression forms D135 first
-enabled, and recursive expansion are refused. The substituted byte extent of
-an array
-must fit D18's target `usize`. The declaration, its body and its formals are a
-compile-time template: formals have no runtime type and no instantiation writes
-a type, length or other per-application metadata onto a template syntax node.
+A parameterized declaration named without arguments, an application with the
+wrong arity or argument kind, a fixed actual outside its declared integer type,
+a bound outside D136's fixed-expression forms, and recursive alias expansion
+are refused. The substituted extent of an array or nominal instance must fit
+the target `usize`. The declaration, its body and its formals are a compile-time
+template: formals have no runtime type, IR slot or ABI position, and no
+instantiation writes a type, length, layout or other per-application metadata
+onto a template syntax node.
 
 A template is still a declaration and is validated even when never applied.
 The checker uses symbolic formals, not a guessed instantiation, to reject an
 unresolved or non-type free name, a fixed formal whose declared type is
-decidably non-integer, a result shape that is decidably neither scalar nor
-fixed array, and an unconditional alias-expansion cycle. A question whose
-answer genuinely depends on a type formal remains for application checking;
-the symbolic validation records no type or shape on the template nodes.
+decidably non-integer, an unsupported decidable field or alias-result shape,
+duplicate field or case names, an unconditional alias-expansion cycle and
+D137's unconditional by-value nominal recursion. A question whose answer
+genuinely depends on an actual remains for application checking. Its primary is
+the application and its related label is the template field or expression; two
+distinct bad applications therefore remain distinct. Declaration order does
+not move an unconditional defect onto an outer application.
 
 **Why one declaration scope:** resolving while reading would make a correct
 alias depend on its formal order, while making each formal a module declaration
@@ -7445,11 +7450,12 @@ requires substitution. All were declined.
 resolution public-seam cases; the checking and lowering public-seam cases;
 `positive/parameterized-type-alias-scalar`,
 `positive/parameterized-type-alias-fixed-array`; the
-`negative/parameterized-alias-*`,
-`negative/parameterized-atom-union` and
-`negative/parameterized-struct-checking-deferred` fixtures; the generated
-lexical, construct and IR records; and
-`runtime/parameterized-type-alias-fixed-array` on Linux x86-64.
+`positive/parameterized-struct-basic`,
+`positive/parameterized-struct-instances`; the `negative/parameterized-alias-*`,
+`negative/parameterized-atom-union`, `negative/parameterized-struct-*` and
+`negative/nominal-struct-recursive-layout` fixtures; the generated lexical,
+construct and IR records; and `runtime/parameterized-type-alias-fixed-array`
+and `runtime/parameterized-struct-values` on Linux x86-64.
 
 ### D136 — Fixed-array bounds use a closed target-independent fold
 
@@ -7509,3 +7515,59 @@ contains a valid user call whose body is never run;
 `negative/fixed-array-bound-invalid`; the generated lexical, construct and IR
 records; and `runtime/fixed-array-bound-expression` and
 `runtime/fixed-array-bound-zero` on Linux x86-64.
+
+### D137 — A parameterized struct application is one canonical nominal instance
+
+**The tour said** that ordinary structs are nominal [0710], that type and fixed
+parameters are compile-time substitution [1290] [1350], and that target layout
+is not host type identity [0750]. It did not say whether two applications of
+one struct declaration are the same nominal type, whether an unused formal
+participates, or where the instantiated field shape lives.
+
+**Chosen:** a fully applied struct interns one checker-owned identity keyed by
+the source template declaration and the complete ordered tuple of normalized
+actuals. Aliases are erased before they enter the tuple. Scalar identities,
+structural atom sets, exact fixed arrays including nominal elements, nominal
+instances, structural function signatures and mathematical fixed magnitudes
+are the only key forms. Equal keys reuse one identity. A different actual or
+template remains a different nominal type even when every field, byte of
+layout, and used formal is otherwise equal. Identity is target-independent.
+
+The checker substitutes the tuple while walking the source body and builds one
+layout for that canonical instance against the selected target. Scalar,
+function, fixed-array, ordinary-child and existing variant payload shapes use
+the same field descriptors and contextual value paths as a nonparameterized
+struct. The body and formal nodes receive no instantiated answer, no synthetic
+declaration is created, and the template and its formals create no IR item,
+slot or ABI position. Lowering maps only concrete nominal identities and their
+instantiated neutral shape trees.
+
+Every template is first walked symbolically. Free names, decidable fixed-formal
+and field-shape errors, duplicate fields and cases, and unconditional by-value
+recursion are therefore rejected even when no instance is requested. A truly
+actual-dependent failure is primary at each application and relates the field
+or expression in the template. Fixed actuals remain integer literals or
+forwarded fixed formals. Parameterized atom unions, generic routines and
+constraints, deduction and fixed conditional declarations remain deferred.
+
+An alias expansion that reaches no type remains L0307. A nominal field,
+nominal array element or variant payload that would require a finite instance
+to contain itself by value is instead L0313, whether the cycle crosses aliases
+or templates. Function-signature references do not form such a value-layout
+edge: a function field is the already enabled one-`usize` carrier. A zero-length
+nominal array still validates its element identity and is not an escape from
+the recursion rule.
+
+**Why the complete tuple:** dropping an unused actual makes adding the first
+field that uses it silently change existing type identity. Structuralizing the
+instantiated body makes two declarations equal contrary to [0710]. Putting
+layout in the key makes a source type change with the selected target. Mutating
+the AST or synthesizing declarations makes one application overwrite another
+or leak compile-time binders into runtime representation. All were declined.
+
+**Pinned by** the checking, lowering and verifier public-seam cases;
+`positive/parameterized-struct-basic`,
+`positive/parameterized-struct-instances`; the `negative/parameterized-struct-*`
+and `negative/nominal-struct-recursive-layout` fixtures; the generated IR and
+diagnostic catalogue; and `runtime/parameterized-struct-values` on Linux
+x86-64.

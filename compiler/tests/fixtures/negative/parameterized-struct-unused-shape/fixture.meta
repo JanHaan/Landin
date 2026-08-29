@@ -1,0 +1,6 @@
+class: negative
+summary: an unused nominal template rejects a decidably unsupported field shape
+constructs: 0520, 0670, 1350, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0304

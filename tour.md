@@ -867,6 +867,11 @@ size2: type = (w: u32, h: u32)
 
 ```
 
+The block form may take type and fixed parameters. A fully applied instance
+substitutes them through scalar, fixed-array, nested ordinary-struct, function
+and existing variant payload fields. The formals remain compile-time names;
+they add no field or hidden runtime argument.
+
 ### [0680] Struct with a variant part
 
 Struct with a variant part. Common fields need no ceremony.
@@ -933,6 +938,13 @@ here: point = (x: 1.0, y: 2.0)
 pair: (quot: i32, rem: i32) = divide(10, 3)
 -- named: point_pair = divide(10, 3)     -- no, that is named
 ```
+
+A named parameterized struct is nominal per fully applied instance. The
+identity is the source declaration plus its complete normalized positional
+actual tuple, including an actual the current field list does not use. Aliases
+of actuals do not create a second identity; changing an actual or the template
+does, even when the resulting fields and layout are equal. Target widths,
+offsets and padding are layout facts, not identity.
 
 At module scope that context forms a static image rather than running a
 constructor before the entry point [1460]. The image follows ordinary child
@@ -2272,15 +2284,25 @@ end list
 
 ```
 
-The parameter list is the same one everywhere: a variable
-may be constrained, and a fixed value parameter may stand
-among the type parameters.
+The enabled declaration form takes unconstrained type parameters and fixed
+integer parameters. Applications are fully applied and positional. A type
+actual may be any enabled concrete identity; whether it is legal as a field,
+array element or payload is checked after substitution. Fixed actuals are
+integer literals, or fixed formals forwarded by another template, and must fit
+their declared integer type. Constraints, deduction, generic routines and
+fixed conditional declarations remain later work.
 
 ```landin
 map: type (K: type is hashable, V: type) = struct ... end map
 small: type (T: type is zeroable, fixed N: u32) = struct ... end small
 
 ```
+
+The two constrained examples above still describe the complete language rather
+than today's kernel. What is enabled already uses the same substitution model:
+no user routine runs, each canonical nominal instance gets the target layout of
+its substituted fields, and neither the template nor its formals acquire
+per-instance runtime state.
 
 ### [1360] Allocation is an ordinary concept
 

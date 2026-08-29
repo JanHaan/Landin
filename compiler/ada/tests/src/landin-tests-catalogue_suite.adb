@@ -65,6 +65,7 @@ package body Landin.Tests.Catalogue_Suite is
             Name'Image & " has a valid secondary-label interval");
          if Name not in Rows.Literal_Out_Of_Range
                       | Rows.Impossible_Operand
+                      | Rows.Unsupported_Use
          then
             Landin.Testing.Check_Equal
               (Item, Rows.Minimum_Secondaries (Name),
@@ -79,8 +80,10 @@ package body Landin.Tests.Catalogue_Suite is
            and then Rows.Maximum_Secondaries
              (Rows.Literal_Out_Of_Range) = 1
            and then Rows.Minimum_Secondaries (Rows.Impossible_Operand) = 0
-           and then Rows.Maximum_Secondaries (Rows.Impossible_Operand) = 1,
-         "range and impossible-operand reports admit one template label");
+           and then Rows.Maximum_Secondaries (Rows.Impossible_Operand) = 1
+           and then Rows.Minimum_Secondaries (Rows.Unsupported_Use) = 0
+           and then Rows.Maximum_Secondaries (Rows.Unsupported_Use) = 1,
+         "dependent checker reports admit one template label");
 
       --  Distinct, because a number that names two rules is worse than no
       --  number at all.
@@ -95,7 +98,7 @@ package body Landin.Tests.Catalogue_Suite is
       end loop;
 
       Landin.Testing.Check_Equal
-        (Item, Rows.Count, 42, "the catalogue holds forty-two codes");
+        (Item, Rows.Count, 43, "the catalogue holds forty-three codes");
    end Rows_Are_Whole;
 
    --  A fault kind maps to exactly one code, and every kind has one.

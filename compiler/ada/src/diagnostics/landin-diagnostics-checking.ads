@@ -7,7 +7,7 @@
 --  against that code's row before it leaves, and the stage that found the
 --  fault therefore contains no code at all.
 --
---  Nine rules, each with its own paragraph in the specification, because
+--  Fourteen rules, each with its own paragraph in the specification, because
 --  none of them could be read out of the older ones.  [1880] says where a
 --  literal's type comes from and that a value the type does not hold is
 --  refused; [1890] says what each operator takes and gives; [1900] says
@@ -42,6 +42,11 @@
 --  two notes, the construct and the work that enables it, and it is not a
 --  misspelling and must never be reported as one.
 --
+--  Recursive_Nominal_Value is D137's finite-layout rule, distinct from
+--  Cyclic_Type_Alias: an alias cycle reaches no type, while a nominal cycle
+--  reaches a type whose by-value extent could never be finite.  Its related
+--  label names the struct body or substituted field that closes the cycle.
+--
 --  Related is a Landin.Provenance.Origin and not a span, for the reason
 --  Landin.Diagnostics.Resolution found first: the declaration a mismatch
 --  points at can be in another file.
@@ -69,7 +74,8 @@ package Landin.Diagnostics.Checking is
       Field_Named_Twice,
       Field_Not_Given,
       Variant_Case_Named_Twice,
-      Variant_Case_Not_Matched);
+      Variant_Case_Not_Matched,
+      Recursive_Nominal_Value);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -99,7 +105,9 @@ package Landin.Diagnostics.Checking is
             when Variant_Case_Named_Twice =>
                Catalogue.Variant_Case_Named_Twice,
             when Variant_Case_Not_Matched =>
-               Catalogue.Variant_Case_Not_Matched);
+               Catalogue.Variant_Case_Not_Matched,
+            when Recursive_Nominal_Value =>
+               Catalogue.Recursive_Nominal_Value);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

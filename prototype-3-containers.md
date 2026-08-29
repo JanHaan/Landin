@@ -365,7 +365,12 @@ Restricted to a T with a zero image, and that restriction is the
 honest form of [Z8]: the inline slots have to hold something and
 [0540] gives no honest value for a T without one. So
 small(ptr node, 4) does not exist until a raw-storage type does
-[0510].
+[0510]. The current R2.40 resolution now gives an unconstrained fully applied
+struct instance the nominal identity `(template, normalized actual tuple)` and
+substitutes fixed bounds, nested ordinary structs and existing variants without
+runtime formals or a synthetic declaration. This sketch still waits on R2.60's
+`is zeroable` constraint and R3.20's raw storage; those exclusions, rather than
+nominal parameterization, are what keep `small` itself from the enabled kernel.
 
 ```landin
 public small: type (T: type is zeroable, fixed N: u32) = struct
