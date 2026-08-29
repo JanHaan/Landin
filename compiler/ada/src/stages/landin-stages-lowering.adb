@@ -715,6 +715,50 @@ package body Landin.Stages.Lowering is
                            (Kind => IR.Frame_Slot, Slot => Temporary),
                            Site_Of (Of_Tree, Argument));
                      end;
+                  elsif Syn.Kind (Of_Tree, Argument) = Syn.Array_Literal
+                  then
+                     declare
+                        Parameter : constant Syn.Node_Id :=
+                          Syn.Nth_Parameter
+                            (Their_Tree.all, Their_Node, Which);
+                        Id : constant Res.Declaration_Id :=
+                          Declaration_At
+                            (Syn.Source_Of (Their_Tree.all), Parameter);
+                        Temporary : constant IR.Slot_Id :=
+                          IR.Add_Array_Slot
+                            (Unit.all, Filling,
+                             Landin.Checking.Array_Element (Types.all, Id),
+                             IR.Element_Total
+                               (Landin.Checking.Array_Length (Types.all, Id)),
+                             Res.No_Declaration,
+                             Site_Of (Of_Tree, Argument));
+                     begin
+                        for Position in
+                          1 .. Syn.Element_Count (Of_Tree, Argument)
+                        loop
+                           declare
+                              Element : constant Syn.Node_Id :=
+                                Syn.Nth_Element
+                                  (Of_Tree, Argument, Position);
+                              Value : constant IR.Value_Id :=
+                                Lower_Expression (Of_Tree, Element, Scope);
+                              Index : constant IR.Value_Id :=
+                                IR.Emit_Number
+                                  (Unit.all, Filling, Ty.Usize,
+                                   Ty.Magnitude (Position - 1), False,
+                                   Site_Of (Of_Tree, Element));
+                           begin
+                              IR.Emit_Store_Slot_Element
+                                (Unit.all, Filling, Temporary, Index, Value,
+                                 Site_Of (Of_Tree, Element));
+                           end;
+                        end loop;
+
+                        Given (Which) := IR.Emit_Storage_Address
+                          (Unit.all, Filling,
+                           (Kind => IR.Frame_Slot, Slot => Temporary),
+                           Site_Of (Of_Tree, Argument));
+                     end;
                   else
                      declare
                         Selected : constant Boolean :=

@@ -5727,3 +5727,32 @@ placement and by-value independence identical.
 **Pinned by** the checker, lowering, verifier and backend public seams; the
 generated token and IR records; and `runtime/nested-storage-arguments` on
 Linux x86-64.
+
+### D98 — An array literal may directly fill an argument temporary
+
+**The tour said** that an array literal evaluates its elements in source order
+[0410] and a fixed-array parameter supplies a complete length and scalar
+element type [0520]. D95 initially required named storage, and D97 admitted
+only its all-zero contextual value.
+
+**Chosen:** an array literal may appear directly in a fixed-array argument
+position when it has exactly the parameter's length and every element matches
+the parameter's scalar element type. The caller allocates a fresh shaped array
+slot, evaluates and stores each element left to right, then passes the slot's
+`Storage_Address` through D95's existing one-position convention. The callee
+copies it into independent parameter storage as usual.
+
+The literal remains contextual: its parameter supplies shape before any
+element is checked, and no array-valued expression result or target-sized IR
+run is introduced. One scalar store is emitted per written literal element;
+D18's unbounded compactness requirement is unaffected because source text
+already contains exactly that many elements.
+
+**Why materialize in the caller:** flattening literal elements into ABI
+positions would change the convention by source form and target, while a
+callee-only construction would reverse [0410]'s caller-side argument order.
+The temporary preserves both order and one-position transport.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/array-literal-argument-shape-mismatch`; the generated token and IR
+records; and `runtime/array-arguments-cross-calls` on Linux x86-64.

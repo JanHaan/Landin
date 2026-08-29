@@ -1,0 +1,6 @@
+consume: (value: [2]i32) -> none =
+end consume
+
+bad: () -> none =
+    consume([1, 2, 3])
+end bad
