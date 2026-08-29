@@ -1,5 +1,15 @@
 package body Landin.IR is
 
+   package body Nominal_Identities is
+      function None return Id is (0);
+
+
+      function From_Position (Position : Positive) return Id
+        is (Id (Position));
+
+      function Position (Of_Id : Id) return Natural is (Natural (Of_Id));
+   end Nominal_Identities;
+
    ------------------------------------------------------------------
    --  Runs
    --
@@ -32,6 +42,37 @@ package body Landin.IR is
 
    function Declaration_Limit (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Standing.Length));
+
+   function Nominal_Type_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Nominal_Templates.Length));
+
+   function Nth_Nominal_Type
+     (Of_Unit : Unit; Position : Positive) return Nominal_Type_Id
+   is
+      pragma Unreferenced (Of_Unit);
+   begin
+      return Nominal_Identities.From_Position (Position);
+   end Nth_Nominal_Type;
+
+   function Holds (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
+     is (Of_Unit.Ready
+         and then Id /= No_Nominal_Type
+         and then Nominal_Identities.Position (Id)
+                    <= Nominal_Type_Count (Of_Unit));
+
+   function Add_Nominal_Type
+     (Into : in out Unit; Template : Declaration_Id) return Nominal_Type_Id
+   is
+   begin
+      Into.Nominal_Templates.Append (Template);
+      return Nominal_Identities.From_Position
+        (Into.Nominal_Templates.Last_Index);
+   end Add_Nominal_Type;
+
+   function Template_Of
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Declaration_Id
+     is (Of_Unit.Nominal_Templates
+           (Positive (Nominal_Identities.Position (Id))));
 
    function Item_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Items.Length));
@@ -221,11 +262,11 @@ package body Landin.IR is
                         and then Atom_Sets_Agree
                           (Of_Unit, A.Atoms, B.Atoms)),
                   when Landin.Types.Aggregate =>
-                     A.Aggregate_Body = B.Aggregate_Body,
+                     A.Nominal = B.Nominal,
                   when Landin.Types.Fixed_Array =>
                      A.Length = B.Length
                      and then A.Element = B.Element
-                     and then A.Aggregate_Body = B.Aggregate_Body,
+                     and then A.Nominal = B.Nominal,
                   when Landin.Types.Function_Value =>
                      Holds (Of_Unit, A.Signature)
                      and then Holds (Of_Unit, B.Signature)
@@ -271,13 +312,15 @@ package body Landin.IR is
       Kind     : Item_Kind;
       Declares : Declaration_Id;
       Result   : Landin.Types.Type_Kind;
-      Site     : Landin.Provenance.Origin) return Item_Id
+      Site     : Landin.Provenance.Origin;
+      Nominal  : Nominal_Type_Id := No_Nominal_Type) return Item_Id
    is
       Made : Item_Record;
    begin
       Made.Kind := Kind;
       Made.Declaration := Declares;
       Made.Result := Result;
+      Made.Nominal := Nominal;
       Made.Site := Site;
       --  A run's base is taken on its first append and not here.  [1740]
       --  makes a module a set, so `f` may call `g` written below it, and
@@ -311,6 +354,10 @@ package body Landin.IR is
    function Result_Of (Of_Unit : Unit; Id : Item_Id)
      return Landin.Types.Type_Kind
      is (Element (Of_Unit, Id).Result);
+
+   function Nominal_Of (Of_Unit : Unit; Id : Item_Id)
+     return Nominal_Type_Id
+     is (Element (Of_Unit, Id).Nominal);
 
    function Origin_Of (Of_Unit : Unit; Id : Item_Id)
      return Landin.Provenance.Origin
@@ -536,7 +583,8 @@ package body Landin.IR is
      (Into     : in out Unit;
       Item     : Item_Id;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Nominal  : Nominal_Type_Id := No_Nominal_Type) return Slot_Id
    is
       Held : Item_Record := Element (Into, Item);
    begin
@@ -544,6 +592,7 @@ package body Landin.IR is
       Into.Slots.Append
         (Slot_Record'(Aggregate   => True,
                       Declaration => Declares,
+                      Nominal     => Nominal,
                       Site        => Site,
                       others      => <>));
       Held.Slots.Count := Held.Slots.Count + 1;
@@ -643,6 +692,7 @@ package body Landin.IR is
          Cases          =>
            (if Element (Of_Unit, Item).Element_Run = 0 then 0 else 1),
          Payloads_First => Element (Of_Unit, Item).Element_Run,
+         Nominal        => Element (Of_Unit, Item).Element.Nominal,
          others         => <>);
 
    function Array_Length
@@ -967,18 +1017,19 @@ package body Landin.IR is
 
    function Whole_Slot_Array_Shape
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
-     is (Kind           => Array_Field_Shape,
-         Element        =>
-           Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element.Element,
-         Length         =>
-           Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Length,
-         Cases          =>
-           (if Of_Unit.Slots
-                 (Slot_At (Of_Unit, Item, Slot)).Element_Run = 0
-            then 0 else 1),
-         Payloads_First =>
-           Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element_Run,
-         others => <>);
+   is
+      Held : Slot_Record renames
+        Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot));
+   begin
+      return
+        (Kind           => Array_Field_Shape,
+         Element        => Held.Element.Element,
+         Length         => Held.Length,
+         Cases          => (if Held.Element_Run = 0 then 0 else 1),
+         Payloads_First => Held.Element_Run,
+         Nominal        => Held.Element.Nominal,
+         others         => <>);
+   end Whole_Slot_Array_Shape;
 
    function Slot_Array_Length
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total
@@ -1115,10 +1166,11 @@ package body Landin.IR is
      (Into     : in out Unit;
       Item     : Item_Id;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Nominal  : Nominal_Type_Id) return Slot_Id
    is
       Made : constant Slot_Id :=
-        Add_Aggregate_Slot (Into, Item, Declares, Site);
+        Add_Aggregate_Slot (Into, Item, Declares, Site, Nominal);
       Held : Item_Record := Element (Into, Item);
    begin
       Open_Run (Held.Parameters, Natural (Into.Parameters.Length));
@@ -1138,6 +1190,25 @@ package body Landin.IR is
    is
       Made : constant Slot_Id :=
         Add_Array_Slot (Into, Item, Of_Type, Length, Declares, Site);
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Parameters, Natural (Into.Parameters.Length));
+      Into.Parameters.Append (Made);
+      Held.Parameters.Count := Held.Parameters.Count + 1;
+      Into.Items (Positive (Item)) := Held;
+      return Made;
+   end Add_Array_Parameter;
+
+   function Add_Array_Parameter
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Shape    : Field_Shape;
+      Length   : Element_Total;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+   is
+      Made : constant Slot_Id :=
+        Add_Array_Slot (Into, Item, Shape, Length, Declares, Site);
       Held : Item_Record := Element (Into, Item);
    begin
       Open_Run (Held.Parameters, Natural (Into.Parameters.Length));
@@ -1183,6 +1254,10 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
      return Declaration_Id
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Declaration);
+
+   function Nominal_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Nominal_Type_Id
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Nominal);
 
    function Origin_Of
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
@@ -1613,7 +1688,9 @@ package body Landin.IR is
       return Boolean
    is
    begin
-      if Left.Kind /= Right.Kind then
+      if Left.Kind /= Right.Kind
+        or else Left.Nominal /= Right.Nominal
+      then
          return False;
       end if;
 

@@ -43,6 +43,7 @@ package body Landin.Tests.Lowering_Suite is
    use type IR.Element_Total;
    use type IR.Item_Id;
    use type IR.Item_Kind;
+   use type IR.Nominal_Type_Id;
    use type Landin.Platform.Read_Status;
    use type Landin.Platform.Write_Status;
    use type Landin.Testing.Fixtures.Fixture_Class;
@@ -1045,6 +1046,96 @@ package body Landin.Tests.Lowering_Suite is
          Check_Terminators (Item, Unit, "parameterized alias erasure");
       end;
    end Parameterized_Aliases_Lower_As_Ordinary_Arrays;
+
+   ------------------------------------------------------------------
+
+   procedure Nominal_Identity_Maps_Through_The_Public_IR_Seam
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nominal_Identity_Maps_Through_The_Public_IR_Seam
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "left: type = struct" & LF
+         & "    value: u32" & LF
+         & "end left" & LF
+         & "right: type = struct" & LF
+         & "    value: u32" & LF
+         & "end right" & LF
+         & "same: type = left" & LF
+         & "nested: type = struct" & LF
+         & "    child: same" & LF
+         & "    rows: [2]right" & LF
+         & "end nested" & LF
+         & "state: nested" & LF
+         & "convert: (arg: left) -> (result: right) =" & LF
+         & "    result = zeroed" & LF
+         & "end convert" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Left : constant IR.Nominal_Type_Id :=
+           IR.Nth_Nominal_Type (Unit, 1);
+         Right : constant IR.Nominal_Type_Id :=
+           IR.Nth_Nominal_Type (Unit, 2);
+         Nested : constant IR.Nominal_Type_Id :=
+           IR.Nth_Nominal_Type (Unit, 3);
+         State : constant IR.Item_Id := 1;
+         Convert : constant IR.Item_Id := 2;
+         Child : constant IR.Field_Shape :=
+           IR.Nth_Field_Shape (Unit, State, 1);
+         Rows : constant IR.Field_Shape :=
+           IR.Nth_Field_Shape (Unit, State, 2);
+         Row : constant IR.Field_Shape :=
+           IR.Array_Element_Shape (Unit, Rows);
+         Signature : constant IR.Signature_Id :=
+           IR.Signature_Of (Unit, Convert);
+         Parameter : constant IR.Slot_Id :=
+           IR.Nth_Parameter (Unit, Convert, 2);
+         Result : constant IR.Slot_Id := IR.Result_Slot (Unit, Convert);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Nominal_Type_Count (Unit), 3,
+            "three struct templates map in deterministic source order");
+         Landin.Testing.Check
+           (Item, Left /= Right
+             and then IR.Template_Of (Unit, Left)
+                        /= IR.Template_Of (Unit, Right),
+            "same-layout structs remain nominally unequal in neutral IR");
+         Landin.Testing.Check_Equal
+           (Item, IR.Item_Count (Unit), 2,
+            "three templates and one alias create no IR items");
+         Landin.Testing.Check
+           (Item, IR.Nominal_Of (Unit, State) = Nested
+             and then Child.Nominal = Left
+             and then Rows.Nominal = Right
+             and then Row.Nominal = Right
+             and then not IR.Same_Shape (Unit, Child, Row),
+            "nested fields and array elements retain nominal identity");
+         Landin.Testing.Check
+           (Item, IR.Nominal_Of (Unit, Convert) = Right
+             and then IR.Nominal_Of (Unit, Convert, Parameter) = Left
+             and then IR.Nominal_Of (Unit, Convert, Result) = Right,
+            "routine, parameter and result storage retain identity");
+         Landin.Testing.Check
+           (Item,
+            IR.Nth_Signature_Parameter (Unit, Signature, 1).Nominal = Left
+            and then IR.Nth_Signature_Result
+              (Unit, Signature, 1).Nominal = Right,
+            "the recursive signature descriptor retains both identities");
+         Check_Terminators (Item, Unit, "nominal identity mapping");
+      end;
+   end Nominal_Identity_Maps_Through_The_Public_IR_Seam;
 
    ------------------------------------------------------------------
 
@@ -5766,6 +5857,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "parameterized aliases lower as arrays",
          Parameterized_Aliases_Lower_As_Ordinary_Arrays'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "nominal identity maps through public IR",
+         Nominal_Identity_Maps_Through_The_Public_IR_Seam'Access);
       Landin.Testing.Register
         (Into, "lowering", "a logical module value becomes blocks",
          A_Logical_Module_Value_Becomes_Blocks'Access);

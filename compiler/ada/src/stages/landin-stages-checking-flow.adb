@@ -64,11 +64,15 @@ package body Landin.Stages.Checking.Flow is
               (Ty.Folded'Image (Value), Ada.Strings.Both));
 
       function Field_Named
-        (Wrote : Res.Declaration_Id; Index : Positive) return String;
+        (Nominal : Landin.Checking.Nominal_Type_Id;
+         Index   : Positive) return String;
 
       function Field_Named
-        (Wrote : Res.Declaration_Id; Index : Positive) return String
+        (Nominal : Landin.Checking.Nominal_Type_Id;
+         Index   : Positive) return String
       is
+         Wrote : constant Res.Declaration_Id :=
+           Landin.Checking.Template_Of (Types.all, Nominal);
          Field_Tree : constant not null access constant Syn.Tree :=
            Tree_For (Res.Source_Of (Meanings.all, Wrote));
          Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Wrote);
@@ -672,17 +676,19 @@ package body Landin.Stages.Checking.Flow is
          --  the one to name, because a reader fixes them one at a time.
          if Field = 0
            and then Is_Tracked (Id)
-           and then Landin.Checking.Has_Layout (Types.all, Id)
+           and then Landin.Checking.Has_Layout
+             (Types.all, Landin.Checking.Nominal_Of (Types.all, Id))
          then
             for Each in
-              1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
+              1 .. Landin.Checking.Layout_Field_Count
+                (Types.all, Landin.Checking.Nominal_Of (Types.all, Id))
             loop
                if Each in 1 .. Widest_Struct then
                   declare
                      Kind : constant Landin.Checking.Field_Kind :=
                        Landin.Checking.Field_Kind_Of
                          (Types.all,
-                          Landin.Checking.Body_Of (Types.all, Id), Each);
+                          Landin.Checking.Nominal_Of (Types.all, Id), Each);
                      Missing : Boolean;
                   begin
                      case Kind is
@@ -703,7 +709,8 @@ package body Landin.Stages.Checking.Flow is
                            & "` is read here and no path that arrives"
                            & " assigned its `"
                            & Field_Named
-                               (Landin.Checking.Body_Of (Types.all, Id), Each)
+                               (Landin.Checking.Nominal_Of (Types.all, Id),
+                                Each)
                            & "`");
                         return;
                      end if;
@@ -757,28 +764,28 @@ package body Landin.Stages.Checking.Flow is
       --  the same walk Landin.IR.Shape_At does over neutral ones.
       function Held_By
         (Id : Res.Declaration_Id; Path : Field_Path)
-         return Res.Declaration_Id;
+         return Landin.Checking.Nominal_Type_Id;
 
       function Held_By
         (Id : Res.Declaration_Id; Path : Field_Path)
-         return Res.Declaration_Id
+         return Landin.Checking.Nominal_Type_Id
       is
          Shape : constant Landin.Checking.Signature_Id :=
            Landin.Checking.Result_Shape_Of (Types.all, Id);
-         Where : Res.Declaration_Id :=
-           Landin.Checking.Body_Of (Types.all, Id);
+         Where : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Id);
          First : Positive := 1;
       begin
          if Shape /= Landin.Checking.No_Signature
            and then not Path.Is_Empty
          then
             Where := Landin.Checking.Nth_Signature_Result
-              (Types.all, Shape, Positive (Path (1))).Aggregate_Body;
+              (Types.all, Shape, Positive (Path (1))).Nominal;
             First := 2;
          end if;
          for Step in First .. Natural (Path.Length) - 1 loop
             Where := Landin.Checking.Field_Shape_Of
-              (Types.all, Where, Path (Step)).Aggregate_Body;
+              (Types.all, Where, Path (Step)).Nominal;
          end loop;
          return Where;
       end Held_By;
@@ -852,8 +859,8 @@ package body Landin.Stages.Checking.Flow is
       is
          Shape : constant Landin.Checking.Signature_Id :=
            Landin.Checking.Result_Shape_Of (Types.all, Id);
-         Where : Res.Declaration_Id :=
-           Landin.Checking.Body_Of (Types.all, Id);
+         Where : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Id);
          Text  : Unbounded.Unbounded_String :=
            Unbounded.To_Unbounded_String
              (Spelled (Res.Name_Of (Meanings.all, Id)));
@@ -868,7 +875,7 @@ package body Landin.Stages.Checking.Flow is
                    (Types.all, Shape, Positive (Path (1)));
             begin
                Unbounded.Append (Text, "." & Spelled (Part.Name));
-               Where := Part.Aggregate_Body;
+               Where := Part.Nominal;
                First := 2;
             end;
          end if;
@@ -876,7 +883,7 @@ package body Landin.Stages.Checking.Flow is
             Unbounded.Append (Text, "." & Field_Named (Where, Path (Step)));
             if Step < Natural (Path.Length) then
                Where := Landin.Checking.Field_Shape_Of
-                 (Types.all, Where, Path (Step)).Aggregate_Body;
+                 (Types.all, Where, Path (Step)).Nominal;
             end if;
          end loop;
          return Unbounded.To_String (Text);
@@ -1910,10 +1917,12 @@ package body Landin.Stages.Checking.Flow is
                               --  do not also mark the scalar-field table.
                               Array_Sets.Include
                                 (State.Whole_Arrays, (Id, One (Which)));
-                           elsif Landin.Checking.Has_Layout (Types.all, Id)
+                           elsif Landin.Checking.Has_Layout
+                             (Types.all,
+                              Landin.Checking.Nominal_Of (Types.all, Id))
                              and then Landin.Checking.Field_Kind_Of
                                (Types.all,
-                                Landin.Checking.Body_Of (Types.all, Id),
+                                Landin.Checking.Nominal_Of (Types.all, Id),
                                 Which) = Landin.Checking.Variant_Field
                            then
                               --  D77 reads the selected tag as one whole
@@ -1959,15 +1968,18 @@ package body Landin.Stages.Checking.Flow is
                      --  scalar field and every complete array field.  The
                      --  two facts stay in their D16 and D48 tables rather
                      --  than making an array field look scalar.
-                     if Landin.Checking.Has_Layout (Types.all, Id) then
+                     if Landin.Checking.Has_Layout
+                       (Types.all, Landin.Checking.Nominal_Of (Types.all, Id))
+                     then
                         for Each in
                           1 .. Landin.Checking.Layout_Field_Count
-                                 (Types.all, Id)
+                            (Types.all,
+                             Landin.Checking.Nominal_Of (Types.all, Id))
                         loop
                            if Each in 1 .. Widest_Struct then
                               case Landin.Checking.Field_Kind_Of
                                 (Types.all,
-                                 Landin.Checking.Body_Of (Types.all, Id),
+                                 Landin.Checking.Nominal_Of (Types.all, Id),
                                  Each)
                               is
                                  when Landin.Checking.Scalar_Field =>

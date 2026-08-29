@@ -324,6 +324,25 @@ package Landin.IR is
    type Signature_Id is range 0 .. Integer'Last;
    type Atom_Set_Id is range 0 .. Integer'Last;
 
+   --  A target-neutral nominal instance identity mapped from checking.
+   --  It is opaque so source Declaration_Id remains provenance and storage
+   --  ownership rather than doubling as a runtime type identity.
+   package Nominal_Identities is
+      type Id is private;
+
+      function None return Id;
+      function From_Position (Position : Positive) return Id;
+      function Position (Of_Id : Id) return Natural;
+   private
+      type Id is range 0 .. Integer'Last;
+   end Nominal_Identities;
+
+   subtype Nominal_Type_Id is Nominal_Identities.Id;
+   use type Nominal_Type_Id;
+
+   function No_Nominal_Type return Nominal_Type_Id
+     renames Nominal_Identities.None;
+
    --  One target-neutral aggregate field shape.  D44 needs the scalar form,
    --  D45 adds the compact fixed-scalar-array form for measurement, D46
    --  uses that input for module storage, D74 adds the unfolded variant,
@@ -346,6 +365,9 @@ package Landin.IR is
       --  Nonzero only when a scalar-shaped `u32` field carries an atom value
       --  inside [0990]'s anonymous result aggregate.
       Atoms     : Atom_Set_Id               := 0;
+      --  Aggregate_Field_Shape's own identity, or Array_Field_Shape's
+      --  aggregate element identity.  Scalar and variant shapes have none.
+      Nominal   : Nominal_Type_Id            := No_Nominal_Type;
    end record;
 
    type Field_Shape_Array is array (Positive range <>) of Field_Shape;
@@ -391,14 +413,15 @@ package Landin.IR is
 
    --  D117/D128/D131's target-neutral callable shape.  Parameter and result
    --  runs
-   --  contain these parts; aggregate bodies are nominal source identities,
-   --  arrays retain their length and element identity, and a function-valued
+   --  contain these parts; aggregates carry mapped nominal instance
+   --  identities, arrays retain their length and element identity, and a
+   --  function-valued
    --  position refers to another structural descriptor.
    --  A backend may derive a carrier convention from these facts; no register,
    --  byte width or target offset is represented here.
    type Signature_Part is record
       Kind    : Landin.Types.Type_Kind := Landin.Types.No_Value;
-      Aggregate_Body : Declaration_Id  := No_Declaration;
+      Nominal : Nominal_Type_Id := No_Nominal_Type;
       Length  : Element_Total          := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Signature : Signature_Id         := No_Signature;
@@ -458,6 +481,29 @@ package Landin.IR is
 
    function Declaration_Limit (Of_Unit : Unit) return Natural
      with Pre => Is_Prepared (Of_Unit);
+
+   function Nominal_Type_Count (Of_Unit : Unit) return Natural;
+
+   function Nth_Nominal_Type
+     (Of_Unit : Unit; Position : Positive) return Nominal_Type_Id
+     with Pre => Position <= Nominal_Type_Count (Of_Unit);
+
+   function Holds (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean;
+
+   --  Add one checking identity in checker order.  The template remains
+   --  source provenance; the returned identity is the neutral IR mapping.
+   function Add_Nominal_Type
+     (Into : in out Unit; Template : Declaration_Id) return Nominal_Type_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Template /= No_Declaration
+                  and then Natural (Template) <= Declaration_Limit (Into),
+          Post => Nominal_Type_Count (Into)
+                    = Nominal_Type_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Nominal_Type'Result);
+
+   function Template_Of
+     (Of_Unit : Unit; Id : Nominal_Type_Id) return Declaration_Id
+     with Pre => Holds (Of_Unit, Id);
 
    ------------------------------------------------------------------
    --  Atom sets and signatures
@@ -583,7 +629,8 @@ package Landin.IR is
       Kind     : Item_Kind;
       Declares : Declaration_Id;
       Result   : Landin.Types.Type_Kind;
-      Site     : Landin.Provenance.Origin) return Item_Id
+      Site     : Landin.Provenance.Origin;
+      Nominal  : Nominal_Type_Id := No_Nominal_Type) return Item_Id
      with Pre  => Is_Prepared (Into)
                   and then (Declares /= No_Declaration or else Kind = Routine)
                   and then (Declares = No_Declaration
@@ -601,6 +648,10 @@ package Landin.IR is
                                      and then Result
                                               in Landin.Types.Aggregate
                                                  | Landin.Types.Fixed_Array))
+                  and then (Nominal = No_Nominal_Type
+                            or else Holds (Into, Nominal))
+                  and then (Result = Landin.Types.Aggregate
+                            or else Nominal = No_Nominal_Type)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Item_Count (Into) = Item_Count (Into)'Old + 1
                   and then Holds (Into, Add_Item'Result)
@@ -620,6 +671,10 @@ package Landin.IR is
 
    function Result_Of (Of_Unit : Unit; Id : Item_Id)
      return Landin.Types.Type_Kind
+     with Pre => Holds (Of_Unit, Id);
+
+   function Nominal_Of (Of_Unit : Unit; Id : Item_Id)
+     return Nominal_Type_Id
      with Pre => Holds (Of_Unit, Id);
 
    function Origin_Of (Of_Unit : Unit; Id : Item_Id)
@@ -1283,8 +1338,11 @@ package Landin.IR is
      (Into     : in out Unit;
       Item     : Item_Id;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Nominal  : Nominal_Type_Id := No_Nominal_Type) return Slot_Id
      with Pre  => Holds (Into, Item)
+                  and then (Nominal = No_Nominal_Type
+                            or else Holds (Into, Nominal))
                   and then Landin.Provenance.Is_Known (Site),
           Post => Slot_Count (Into, Item)
                     = Slot_Count (Into, Item)'Old + 1
@@ -1509,10 +1567,12 @@ package Landin.IR is
      (Into     : in out Unit;
       Item     : Item_Id;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Nominal  : Nominal_Type_Id) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Kind_Of (Into, Item) = Routine
                   and then Declares /= No_Declaration
+                  and then Holds (Into, Nominal)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Parameter_Count (Into, Item)
                     = Parameter_Count (Into, Item)'Old + 1
@@ -1530,6 +1590,27 @@ package Landin.IR is
      (Into     : in out Unit;
       Item     : Item_Id;
       Of_Type  : Landin.Types.Scalar_Name;
+      Length   : Element_Total;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+     with Pre  => Holds (Into, Item)
+                  and then Kind_Of (Into, Item) = Routine
+                  and then Declares /= No_Declaration
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Parameter_Count (Into, Item)
+                    = Parameter_Count (Into, Item)'Old + 1
+                  and then Holds (Into, Item, Add_Array_Parameter'Result)
+                  and then Is_Array
+                    (Into, Item, Add_Array_Parameter'Result)
+                  and then Nth_Parameter
+                             (Into, Item,
+                              Parameter_Count (Into, Item))
+                           = Add_Array_Parameter'Result;
+
+   function Add_Array_Parameter
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Shape    : Field_Shape;
       Length   : Element_Total;
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin) return Slot_Id
@@ -1596,6 +1677,10 @@ package Landin.IR is
 
    function Declares
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Declaration_Id
+     with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+
+   function Nominal_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Nominal_Type_Id
      with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
 
    function Origin_Of
@@ -2794,6 +2879,7 @@ private
       --  complete target-neutral shape reached by its stored address.
       Addressed   : Boolean                   := False;
       Declaration : Declaration_Id            := No_Declaration;
+      Nominal     : Nominal_Type_Id           := No_Nominal_Type;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
    end record;
@@ -2811,6 +2897,7 @@ private
       Kind        : Item_Kind                 := Datum;
       Declaration : Declaration_Id            := No_Declaration;
       Result      : Landin.Types.Type_Kind    := Landin.Types.Not_Typed;
+      Nominal     : Nominal_Type_Id           := No_Nominal_Type;
       Signature   : Signature_Id              := No_Signature;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
       Function_Image : Item_Id                := No_Item;
@@ -2883,6 +2970,11 @@ private
    package Item_Ref_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Item_Id);
 
+   package Nominal_Template_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Declaration_Id,
+      "="          => Landin.Provenance."=");
+
    package Field_Shape_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Field_Shape);
@@ -2912,6 +3004,7 @@ private
       Blocks     : Block_Vectors.Vector;
       Code       : Code_Vectors.Vector;
       Operands   : Value_Ref_Vectors.Vector;
+      Nominal_Templates : Nominal_Template_Vectors.Vector;
       Atom_Sets  : Atom_Set_Vectors.Vector;
       Atoms      : Atom_Vectors.Vector;
       Signatures : Signature_Vectors.Vector;

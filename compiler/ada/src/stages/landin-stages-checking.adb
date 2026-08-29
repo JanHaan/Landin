@@ -33,6 +33,7 @@ package body Landin.Stages.Checking is
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Error_Set_Form;
    use type Landin.Checking.Field_Kind;
+   use type Landin.Checking.Nominal_Type_Id;
    use type Landin.Checking.Signature_Id;
    use type Res.Verdict;
    use type Res.Declaration_Sort;
@@ -100,6 +101,11 @@ package body Landin.Stages.Checking is
       function Tree_For (Id : Landin.Source.Source_Id)
         return not null access constant Syn.Tree
         is (Syn.Forest.Tree_Of (Trees.all, Id));
+
+      function Template_Declaration
+        (Nominal : Landin.Checking.Nominal_Type_Id)
+         return Res.Declaration_Id
+        is (Landin.Checking.Template_Of (Types.all, Nominal));
 
       function Spelled (Of_Name : Landin.Source.Names.Name_Id) return String
         is (Landin.Source.Names.Spelling (Spellings.all, Of_Name));
@@ -174,11 +180,11 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Construction_Body
         (Of_Tree : Syn.Tree; Literal : Syn.Node_Id)
-         return Res.Declaration_Id;
+         return Landin.Checking.Nominal_Type_Id;
       function Construction_Agrees
         (Of_Tree  : Syn.Tree;
          Literal  : Syn.Node_Id;
-         Expected : Res.Declaration_Id;
+         Expected : Landin.Checking.Nominal_Type_Id;
          Related  : Landin.Provenance.Origin;
          Because  : String) return Boolean;
       function Declared_As_Node
@@ -232,12 +238,14 @@ package body Landin.Stages.Checking is
       function Signatures_Agree
         (Left, Right : Landin.Checking.Signature_Id) return Boolean;
       function Field_Has_Zero_Image
-        (Wrote : Res.Declaration_Id; Field : Positive) return Boolean;
-      function Has_Zero_Image (Wrote : Res.Declaration_Id) return Boolean;
+        (Wrote : Landin.Checking.Nominal_Type_Id;
+         Field : Positive) return Boolean;
+      function Has_Zero_Image
+        (Wrote : Landin.Checking.Nominal_Type_Id) return Boolean;
       procedure Check_Aggregate_Zeroed
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Wrote   : Res.Declaration_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id;
          Site    : Landin.Provenance.Origin;
          Because : String);
       procedure Check_Array_Zeroed
@@ -245,7 +253,7 @@ package body Landin.Stages.Checking is
          Node    : Syn.Node_Id;
          Length  : Landin.Checking.Element_Count;
          Element : Ty.Scalar_Name;
-         Element_Body : Res.Declaration_Id;
+         Element_Nominal : Landin.Checking.Nominal_Type_Id;
          Site    : Landin.Provenance.Origin;
          Because : String);
 
@@ -257,10 +265,12 @@ package body Landin.Stages.Checking is
       --  importing a backend layout into checking.
       type Value_Context is record
          Kind         : Ty.Type_Kind := Ty.Undecided;
-         Nominal      : Res.Declaration_Id := Res.No_Declaration;
+         Nominal      : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
          Length       : Landin.Checking.Element_Count := 0;
          Element      : Ty.Scalar_Name := Ty.Bool;
-         Element_Body : Res.Declaration_Id := Res.No_Declaration;
+         Element_Nominal : Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.No_Nominal_Type;
          Signature    : Landin.Checking.Signature_Id :=
            Landin.Checking.No_Signature;
          --  Nonzero only for [0990]'s anonymous structural aggregate: the
@@ -316,13 +326,13 @@ package body Landin.Stages.Checking is
       procedure Check_Struct_Literal
         (Of_Tree      : Syn.Tree;
          Literal      : Syn.Node_Id;
-         Wrote        : Res.Declaration_Id;
+         Wrote        : Landin.Checking.Nominal_Type_Id;
          Static_Image : Boolean);
       procedure Check_Variant_Value
         (Of_Tree : Syn.Tree;
          Site    : Syn.Node_Id;
          Value   : Syn.Node_Id;
-         Wrote   : Res.Declaration_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id;
          Field   : Positive;
          Static_Image : Boolean := False);
       procedure Check_Match
@@ -1582,8 +1592,8 @@ package body Landin.Stages.Checking is
                                       Syn.Declared_Type (Of_Tree, Each)),
                         --  D121: an ordinary-struct element carries the
                         --  declaration that wrote it, as a child does.
-                        Aggregate_Body =>
-                          Landin.Checking.Array_Element_Body
+                        Nominal =>
+                          Landin.Checking.Array_Element_Nominal
                             (Types.all, Of_Tree,
                              Syn.Declared_Type (Of_Tree, Each)),
                         others  => <>);
@@ -1591,8 +1601,9 @@ package body Landin.Stages.Checking is
                     and then Aggregate_Allowed
                   then
                      declare
-                        Child_Body : constant Res.Declaration_Id :=
-                          Landin.Checking.Body_Of
+                        Child_Body : constant
+                          Landin.Checking.Nominal_Type_Id :=
+                          Landin.Checking.Nominal_Of
                             (Types.all, Of_Tree,
                              Syn.Declared_Type (Of_Tree, Each));
                      begin
@@ -1603,7 +1614,7 @@ package body Landin.Stages.Checking is
                         --  D126 drops the last one: a child holding a
                         --  variant part is reached by the same run, which
                         --  every variant operation now carries.
-                        if Child_Body /= Res.No_Declaration
+                        if Child_Body /= Landin.Checking.No_Nominal_Type
                           and then Landin.Checking.Has_Layout
                             (Types.all, Child_Body)
                         then
@@ -1611,7 +1622,7 @@ package body Landin.Stages.Checking is
                              (Kind    => Landin.Checking.Aggregate_Field,
                               Element => Ty.Bool,
                               Length  => 1,
-                              Aggregate_Body => Child_Body,
+                              Nominal => Child_Body,
                               others  => <>);
                         else
                            Can_Lay_Out := False;
@@ -1710,7 +1721,10 @@ package body Landin.Stages.Checking is
                      Fits : Boolean;
                   begin
                      Landin.Checking.Lay_Out
-                       (Types.all, For_Declaration, Fields, Facts, Fits,
+                       (Types.all,
+                        Landin.Checking.Empty_Nominal_Instance
+                          (Types.all, For_Declaration),
+                        Fields, Facts, Fits,
                         Cases => Cases, Payloads => Payloads);
 
                      if not Fits then
@@ -1749,14 +1763,14 @@ package body Landin.Stages.Checking is
                --  the only thing an array adds is the repetition.  D127
                --  makes a known index one step of D118's run, which is
                --  how a variant part inside an element is reached.
-               Element_Body : constant Res.Declaration_Id :=
+               Element_Nominal : constant Landin.Checking.Nominal_Type_Id :=
                  (if Held = Ty.Aggregate
-                  then Landin.Checking.Body_Of (Types.all, Of_Tree, Element)
-                  else Res.No_Declaration);
+                  then Landin.Checking.Nominal_Of (Types.all, Of_Tree, Element)
+                  else Landin.Checking.No_Nominal_Type);
                Aggregate_Element : constant Boolean :=
-                 Element_Body /= Res.No_Declaration
+                 Element_Nominal /= Landin.Checking.No_Nominal_Type
                  and then Landin.Checking.Has_Layout
-                   (Types.all, Element_Body);
+                   (Types.all, Element_Nominal);
                Length : Landin.Checking.Element_Count := 0;
             begin
                if Held not in Ty.Scalar_Name
@@ -1807,7 +1821,7 @@ package body Landin.Stages.Checking is
                        (if Aggregate_Element
                         then Ty.Magnitude
                           (Landin.Checking.Layout_Size
-                             (Types.all, Element_Body))
+                             (Types.all, Element_Nominal))
                         else Ty.Magnitude
                           (Landin.Targets.Bytes
                              (Ty.Storage_Size
@@ -1840,8 +1854,8 @@ package body Landin.Stages.Checking is
                   (if Aggregate_Element then Ty.U8 else Ty.Scalar_Name
                      (Held)));
                if Aggregate_Element then
-                  Landin.Checking.Note_Array_Element_Body
-                    (Types.all, Of_Tree, Written, Element_Body);
+                  Landin.Checking.Note_Array_Element_Nominal
+                    (Types.all, Of_Tree, Written, Element_Nominal);
                end if;
                return Ty.Fixed_Array;
             end;
@@ -1983,9 +1997,9 @@ package body Landin.Stages.Checking is
                --  [0710]: which aggregate this is, carried from the
                --  declaration that wrote it to every place that names it.
                if Held = Ty.Aggregate then
-                  Landin.Checking.Note_Body
+                  Landin.Checking.Note_Nominal
                     (Types.all, Of_Tree, Written,
-                     Landin.Checking.Body_Of (Types.all, Means));
+                     Landin.Checking.Nominal_Of (Types.all, Means));
                end if;
 
                --  D17: and which array, which is its shape.
@@ -2055,10 +2069,10 @@ package body Landin.Stages.Checking is
                   Valid := Valid
                     and then Part.Atoms /= Landin.Checking.No_Atom_Set;
                when Ty.Aggregate =>
-                  Part.Aggregate_Body :=
-                    Landin.Checking.Body_Of (Types.all, Of_Tree, Written);
+                  Part.Nominal :=
+                    Landin.Checking.Nominal_Of (Types.all, Of_Tree, Written);
                   Valid := Valid
-                    and then Part.Aggregate_Body /= Res.No_Declaration;
+                    and then Part.Nominal /= Landin.Checking.No_Nominal_Type;
                when Ty.Fixed_Array =>
                   Part.Length :=
                     Landin.Checking.Array_Length
@@ -2066,8 +2080,8 @@ package body Landin.Stages.Checking is
                   Part.Element :=
                     Landin.Checking.Array_Element
                       (Types.all, Of_Tree, Written);
-                  Part.Aggregate_Body :=
-                    Landin.Checking.Array_Element_Body
+                  Part.Nominal :=
+                    Landin.Checking.Array_Element_Nominal
                       (Types.all, Of_Tree, Written);
                when Ty.Function_Value =>
                   --  A function-valued position is one code-address carrier;
@@ -2158,16 +2172,18 @@ package body Landin.Stages.Checking is
                              (Facts, Scalar);
                         when Ty.Aggregate =>
                            Size := Landin.Checking.Layout_Size
-                             (Types.all, Part.Aggregate_Body);
+                             (Types.all, Part.Nominal);
                            Alignment := Landin.Checking.Layout_Alignment
-                             (Types.all, Part.Aggregate_Body);
+                             (Types.all, Part.Nominal);
                         when Ty.Fixed_Array =>
-                           if Part.Aggregate_Body /= Res.No_Declaration then
+                           if Part.Nominal
+                             /= Landin.Checking.No_Nominal_Type
+                           then
                               Size := Landin.Targets.Byte_Count (Part.Length)
                                 * Landin.Checking.Layout_Size
-                                    (Types.all, Part.Aggregate_Body);
+                                    (Types.all, Part.Nominal);
                               Alignment := Landin.Checking.Layout_Alignment
-                                (Types.all, Part.Aggregate_Body);
+                                (Types.all, Part.Nominal);
                            else
                               Scalar := Ty.Storage_Size (Part.Element, Facts);
                               Size := Landin.Targets.Byte_Count (Part.Length)
@@ -2263,7 +2279,7 @@ package body Landin.Stages.Checking is
       --  passes decline to add a second report.
       function Construction_Body
         (Of_Tree : Syn.Tree; Literal : Syn.Node_Id)
-         return Res.Declaration_Id
+         return Landin.Checking.Nominal_Type_Id
       is
          Nominal : constant Syn.Node_Id :=
            Syn.Constructed_Type (Of_Tree, Literal);
@@ -2272,7 +2288,7 @@ package body Landin.Stages.Checking is
            or else Landin.Checking.Type_Of (Types.all, Of_Tree, Literal)
                      = Ty.Ill_Typed
          then
-            return Res.No_Declaration;
+            return Landin.Checking.No_Nominal_Type;
          end if;
 
          --  A resolved binding or function in this position is a permanent
@@ -2294,7 +2310,7 @@ package body Landin.Stages.Checking is
                Refused => Bad.Variant_Value,
                Into    => Found);
             Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
-            return Res.No_Declaration;
+            return Landin.Checking.No_Nominal_Type;
          end if;
 
          if Syn.Kind (Of_Tree, Nominal) = Syn.Type_Reference
@@ -2317,7 +2333,7 @@ package body Landin.Stages.Checking is
                Because => "this construction",
                Into    => Found);
             Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
-            return Res.No_Declaration;
+            return Landin.Checking.No_Nominal_Type;
          end if;
 
          declare
@@ -2328,7 +2344,7 @@ package body Landin.Stages.Checking is
                --  admitted, because Check_Aggregate_Field already checks a
                --  labelled child value against that child's own body and
                --  the lowering fills it one place deeper.
-               return Landin.Checking.Body_Of (Types.all, Of_Tree, Nominal);
+               return Landin.Checking.Nominal_Of (Types.all, Of_Tree, Nominal);
             elsif Held = Ty.Ill_Typed then
                --  Type_At either reported the missing/refused type or
                --  inherited its earlier owner.  Mark the enclosing value so
@@ -2349,27 +2365,27 @@ package body Landin.Stages.Checking is
                Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
             end if;
 
-            return Res.No_Declaration;
+            return Landin.Checking.No_Nominal_Type;
          end;
       end Construction_Body;
 
       function Construction_Agrees
         (Of_Tree  : Syn.Tree;
          Literal  : Syn.Node_Id;
-         Expected : Res.Declaration_Id;
+         Expected : Landin.Checking.Nominal_Type_Id;
          Related  : Landin.Provenance.Origin;
          Because  : String) return Boolean
       is
          Nominal : constant Syn.Node_Id :=
            Syn.Constructed_Type (Of_Tree, Literal);
-         Wrote : Res.Declaration_Id;
+         Wrote : Landin.Checking.Nominal_Type_Id;
       begin
          if Nominal = Syn.No_Node then
             return True;
          end if;
 
          Wrote := Construction_Body (Of_Tree, Literal);
-         if Wrote = Res.No_Declaration then
+         if Wrote = Landin.Checking.No_Nominal_Type then
             return False;
          elsif Wrote /= Expected then
             Bad.Report
@@ -2421,19 +2437,19 @@ package body Landin.Stages.Checking is
          declare
             Held : constant Ty.Type_Kind :=
               Type_At (Of_Tree, Written, For_Declaration);
-            Struct_Body_Id : constant Res.Declaration_Id :=
+            Struct_Body_Id : constant Landin.Checking.Nominal_Type_Id :=
               (if Held = Ty.Aggregate
-               then Landin.Checking.Body_Of
+               then Landin.Checking.Nominal_Of
                  (Types.all, Of_Tree, Written)
-               else Res.No_Declaration);
+               else Landin.Checking.No_Nominal_Type);
             Variant_Bearing : constant Boolean :=
-              Struct_Body_Id /= Res.No_Declaration
+              Struct_Body_Id /= Landin.Checking.No_Nominal_Type
               and then Landin.Checking.Has_Layout
                 (Types.all, Struct_Body_Id)
               and then Landin.Checking.Has_Variant_Part
                 (Types.all, Struct_Body_Id);
             Aggregate_Bearing : constant Boolean :=
-              Struct_Body_Id /= Res.No_Declaration
+              Struct_Body_Id /= Landin.Checking.No_Nominal_Type
               and then Landin.Checking.Has_Layout
                 (Types.all, Struct_Body_Id)
               and then Landin.Checking.Has_Aggregate_Field
@@ -2471,8 +2487,9 @@ package body Landin.Stages.Checking is
               and then
                 (Held /= Ty.Aggregate
                  or else
-                   Landin.Checking.Body_Of
-                     (Types.all, Of_Tree, Written) /= Res.No_Declaration);
+                   Landin.Checking.Nominal_Of
+                     (Types.all, Of_Tree, Written)
+                       /= Landin.Checking.No_Nominal_Type);
             --  D21: an array binding may be initialized directly from a
             --  whole-array storage name.  Resolution makes that module
             --  storage at module scope and an in-scope storage declaration
@@ -2519,8 +2536,9 @@ package body Landin.Stages.Checking is
                 (Is_Local_Binding (Of_Tree, Node)
                  or else Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                            = Syn.Name_Reference)
-              and then Landin.Checking.Body_Of
-                (Types.all, Of_Tree, Written) /= Res.No_Declaration;
+              and then Landin.Checking.Nominal_Of
+                (Types.all, Of_Tree, Written)
+                  /= Landin.Checking.No_Nominal_Type;
             Is_Array_Call_Init : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Is_Local_Binding (Of_Tree, Node)
@@ -2533,8 +2551,9 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Call
-              and then Landin.Checking.Body_Of
-                (Types.all, Of_Tree, Written) /= Res.No_Declaration;
+              and then Landin.Checking.Nominal_Of
+                (Types.all, Of_Tree, Written)
+                  /= Landin.Checking.No_Nominal_Type;
             --  D57/D59: the written local or module struct supplies [0540]'s
             --  complete all-bits-zero image.  Inference and general values
             --  remain separate contextual positions.
@@ -2544,8 +2563,9 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Zeroed_Literal
-              and then Landin.Checking.Body_Of
-                (Types.all, Of_Tree, Written) /= Res.No_Declaration;
+              and then Landin.Checking.Nominal_Of
+                (Types.all, Of_Tree, Written)
+                  /= Landin.Checking.No_Nominal_Type;
             --  D64/D66: a written local or module struct type supplies the
             --  body for one labelled literal.  The module form is a static
             --  image; an inferred literal still has no nominal identity.
@@ -2555,8 +2575,9 @@ package body Landin.Stages.Checking is
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Struct_Literal
-              and then Landin.Checking.Body_Of
-                (Types.all, Of_Tree, Written) /= Res.No_Declaration;
+              and then Landin.Checking.Nominal_Of
+                (Types.all, Of_Tree, Written)
+                  /= Landin.Checking.No_Nominal_Type;
             --  D23 admits a literal only where its written local array type
             --  supplies both the element context and the exact length.
             Is_Local_Literal_Init : constant Boolean :=
@@ -2828,9 +2849,15 @@ package body Landin.Stages.Checking is
             --  The identity exists before the body is checked because its
             --  layout is recorded against that identity during the walk.
             if Is_Body then
-               Landin.Checking.Note_Body (Types.all, Id, Id);
-               Landin.Checking.Note_Body
-                 (Types.all, Of_Tree.all, Written, Id);
+               declare
+                  Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                    Landin.Checking.Empty_Nominal_Instance
+                      (Types.all, Id);
+               begin
+                  Landin.Checking.Note_Nominal (Types.all, Id, Nominal);
+                  Landin.Checking.Note_Nominal
+                    (Types.all, Of_Tree.all, Written, Nominal);
+               end;
             end if;
 
             declare
@@ -2844,9 +2871,9 @@ package body Landin.Stages.Checking is
                --  A declaration that names an existing aggregate is D15's
                --  alias and carries the identity the type position was given.
                if Held = Ty.Aggregate and then not Is_Body then
-                  Landin.Checking.Note_Body
+                  Landin.Checking.Note_Nominal
                     (Types.all, Id,
-                     Landin.Checking.Body_Of
+                     Landin.Checking.Nominal_Of
                        (Types.all, Of_Tree.all, Written));
                end if;
 
@@ -2864,9 +2891,9 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Array_Element
                        (Types.all, Of_Tree.all, Written));
                   --  D121's element body is part of that shape.
-                  Landin.Checking.Note_Array_Element_Body
+                  Landin.Checking.Note_Array_Element_Nominal
                     (Types.all, Id,
-                     Landin.Checking.Array_Element_Body
+                     Landin.Checking.Array_Element_Nominal
                        (Types.all, Of_Tree.all, Written));
                end if;
 
@@ -3348,11 +3375,11 @@ package body Landin.Stages.Checking is
                   begin
                      case Wants is
                         when Ty.Aggregate =>
-                           Expected.Nominal := Parameter.Aggregate_Body;
+                           Expected.Nominal := Parameter.Nominal;
                         when Ty.Fixed_Array =>
                            Expected.Length := Parameter.Length;
                            Expected.Element := Parameter.Element;
-                           Expected.Element_Body := Parameter.Aggregate_Body;
+                           Expected.Element_Nominal := Parameter.Nominal;
                         when Ty.Function_Value =>
                            Expected.Signature := Parameter.Signature;
                         when Ty.Atom_Value =>
@@ -3402,8 +3429,8 @@ package body Landin.Stages.Checking is
                  and then Syn.Kind (Of_Tree, Argument) = Syn.Struct_Literal
                then
                   declare
-                     Expected : constant Res.Declaration_Id :=
-                       Parameter.Aggregate_Body;
+                     Expected : constant Landin.Checking.Nominal_Type_Id :=
+                       Parameter.Nominal;
                      Leaf_Only : Boolean := True;
                   begin
                      for Field in
@@ -3471,9 +3498,9 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note
                     (Types.all, Of_Tree, Argument, Wants);
                   if Wants = Ty.Aggregate then
-                        Landin.Checking.Note_Body
+                        Landin.Checking.Note_Nominal
                           (Types.all, Of_Tree, Argument,
-                           Parameter.Aggregate_Body);
+                           Parameter.Nominal);
                   else
                         Landin.Checking.Note_Array
                           (Types.all, Of_Tree, Argument,
@@ -3494,10 +3521,10 @@ package body Landin.Stages.Checking is
                         then (if Admit_Array_Field (Of_Tree, Argument)
                               then Ty.Fixed_Array else Ty.Ill_Typed)
                         else Selected_From (Of_Tree, Argument));
-                     Expected : constant Res.Declaration_Id :=
-                       Parameter.Aggregate_Body;
-                     Actual : constant Res.Declaration_Id :=
-                       Landin.Checking.Body_Of
+                     Expected : constant Landin.Checking.Nominal_Type_Id :=
+                       Parameter.Nominal;
+                     Actual : constant Landin.Checking.Nominal_Type_Id :=
+                       Landin.Checking.Nominal_Of
                          (Types.all, Of_Tree, Argument);
                   begin
                      if Got = Ty.Aggregate and then Actual /= Expected then
@@ -3604,11 +3631,11 @@ package body Landin.Stages.Checking is
                      when Ty.Atom_Value =>
                         Expected.Atoms := Result.Atoms;
                      when Ty.Aggregate =>
-                        Expected.Nominal := Result.Aggregate_Body;
+                        Expected.Nominal := Result.Nominal;
                      when Ty.Fixed_Array =>
                         Expected.Length := Result.Length;
                         Expected.Element := Result.Element;
-                        Expected.Element_Body := Result.Aggregate_Body;
+                        Expected.Element_Nominal := Result.Nominal;
                      when Ty.Function_Value =>
                         Expected.Signature := Result.Signature;
                      when others =>
@@ -3644,8 +3671,8 @@ package body Landin.Stages.Checking is
             Landin.Checking.Note_Atom_Set
               (Types.all, Of_Tree, Node, Result.Atoms);
          elsif Result.Kind = Ty.Aggregate then
-            Landin.Checking.Note_Body
-              (Types.all, Of_Tree, Node, Result.Aggregate_Body);
+            Landin.Checking.Note_Nominal
+              (Types.all, Of_Tree, Node, Result.Nominal);
          elsif Result.Kind = Ty.Fixed_Array then
             Landin.Checking.Note_Array
               (Types.all, Of_Tree, Node, Result.Length, Result.Element);
@@ -3673,13 +3700,14 @@ package body Landin.Stages.Checking is
       --  kept beside the layout: a field's name is a fact about the
       --  source and Landin.Checking holds what a thing's type is.
       function Field_At
-        (Wrote : Res.Declaration_Id;
+        (Wrote : Landin.Checking.Nominal_Type_Id;
          Named : Landin.Source.Names.Name_Id) return Natural;
 
       --  How a field of that struct is spelt, by [0750]'s order.  The
       --  other direction of Field_At, and read from the same body.
       function Field_Named
-        (Wrote : Res.Declaration_Id; Index : Positive) return String;
+        (Wrote : Landin.Checking.Nominal_Type_Id;
+         Index : Positive) return String;
 
       function Result_Field_At
         (Shape : Landin.Checking.Signature_Id;
@@ -3694,16 +3722,18 @@ package body Landin.Stages.Checking is
       function Note_Struct_Field
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Wrote   : Res.Declaration_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id;
          Which   : Positive) return Ty.Type_Kind;
 
       function Field_At
-        (Wrote : Res.Declaration_Id;
+        (Wrote : Landin.Checking.Nominal_Type_Id;
          Named : Landin.Source.Names.Name_Id) return Natural
       is
+         Template : constant Res.Declaration_Id :=
+           Landin.Checking.Template_Of (Types.all, Wrote);
          Of_Tree : constant not null access constant Syn.Tree :=
-           Tree_For (Res.Source_Of (Meanings.all, Wrote));
-         Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Wrote);
+           Tree_For (Res.Source_Of (Meanings.all, Template));
+         Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Template);
          Written : constant Syn.Node_Id :=
            Syn.Declared_Type (Of_Tree.all, Node);
       begin
@@ -3726,11 +3756,14 @@ package body Landin.Stages.Checking is
       end Field_At;
 
       function Field_Named
-        (Wrote : Res.Declaration_Id; Index : Positive) return String
+        (Wrote : Landin.Checking.Nominal_Type_Id;
+         Index : Positive) return String
       is
+         Template : constant Res.Declaration_Id :=
+           Landin.Checking.Template_Of (Types.all, Wrote);
          Of_Tree : constant not null access constant Syn.Tree :=
-           Tree_For (Res.Source_Of (Meanings.all, Wrote));
-         Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Wrote);
+           Tree_For (Res.Source_Of (Meanings.all, Template));
+         Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Template);
          Written : constant Syn.Node_Id :=
            Syn.Declared_Type (Of_Tree.all, Node);
       begin
@@ -3782,13 +3815,13 @@ package body Landin.Stages.Checking is
          Landin.Checking.Note_Field (Types.all, Of_Tree, Node, Which);
          case Part.Kind is
             when Ty.Aggregate =>
-               Landin.Checking.Note_Body
-                 (Types.all, Of_Tree, Node, Part.Aggregate_Body);
+               Landin.Checking.Note_Nominal
+                 (Types.all, Of_Tree, Node, Part.Nominal);
             when Ty.Fixed_Array =>
                Landin.Checking.Note_Array
                  (Types.all, Of_Tree, Node, Part.Length, Part.Element);
-               Landin.Checking.Note_Array_Element_Body
-                 (Types.all, Of_Tree, Node, Part.Aggregate_Body);
+               Landin.Checking.Note_Array_Element_Nominal
+                 (Types.all, Of_Tree, Node, Part.Nominal);
             when Ty.Function_Value =>
                Landin.Checking.Note_Signature
                  (Types.all, Of_Tree, Node, Part.Signature);
@@ -3804,7 +3837,7 @@ package body Landin.Stages.Checking is
       function Note_Struct_Field
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Wrote   : Res.Declaration_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id;
          Which   : Positive) return Ty.Type_Kind
       is
          Shape : constant Landin.Checking.Field_Shape :=
@@ -3837,7 +3870,8 @@ package body Landin.Stages.Checking is
       end Note_Struct_Field;
 
       function Field_Has_Zero_Image
-        (Wrote : Res.Declaration_Id; Field : Positive) return Boolean
+        (Wrote : Landin.Checking.Nominal_Type_Id;
+         Field : Positive) return Boolean
       is
          Shape : constant Landin.Checking.Field_Shape :=
            Landin.Checking.Field_Shape_Of
@@ -3850,10 +3884,10 @@ package body Landin.Stages.Checking is
                   Part.Signature = Landin.Checking.No_Signature,
                 when Landin.Checking.Fixed_Array_Field =>
                   Part.Length = 0
-                  or else Part.Aggregate_Body = Res.No_Declaration
-                  or else Has_Zero_Image (Part.Aggregate_Body),
+                  or else Part.Nominal = Landin.Checking.No_Nominal_Type
+                  or else Has_Zero_Image (Part.Nominal),
                 when Landin.Checking.Aggregate_Field =>
-                  Has_Zero_Image (Part.Aggregate_Body),
+                  Has_Zero_Image (Part.Nominal),
                 when Landin.Checking.Variant_Field => False);
       begin
          if Shape.Kind /= Landin.Checking.Variant_Field then
@@ -3875,10 +3909,11 @@ package body Landin.Stages.Checking is
          return True;
       end Field_Has_Zero_Image;
 
-      function Has_Zero_Image (Wrote : Res.Declaration_Id) return Boolean
+      function Has_Zero_Image
+        (Wrote : Landin.Checking.Nominal_Type_Id) return Boolean
       is
       begin
-         if Wrote = Res.No_Declaration
+         if Wrote = Landin.Checking.No_Nominal_Type
            or else not Landin.Checking.Has_Layout (Types.all, Wrote)
          then
             return False;
@@ -3896,7 +3931,7 @@ package body Landin.Stages.Checking is
       procedure Check_Aggregate_Zeroed
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Wrote   : Res.Declaration_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id;
          Site    : Landin.Provenance.Origin;
          Because : String) is
       begin
@@ -3916,7 +3951,7 @@ package body Landin.Stages.Checking is
          end if;
          Landin.Checking.Note
            (Types.all, Of_Tree, Node, Ty.Aggregate);
-         Landin.Checking.Note_Body
+         Landin.Checking.Note_Nominal
            (Types.all, Of_Tree, Node, Wrote);
       end Check_Aggregate_Zeroed;
 
@@ -3925,13 +3960,13 @@ package body Landin.Stages.Checking is
          Node    : Syn.Node_Id;
          Length  : Landin.Checking.Element_Count;
          Element : Ty.Scalar_Name;
-         Element_Body : Res.Declaration_Id;
+         Element_Nominal : Landin.Checking.Nominal_Type_Id;
          Site    : Landin.Provenance.Origin;
          Because : String) is
       begin
          if Length > 0
-           and then Element_Body /= Res.No_Declaration
-           and then not Has_Zero_Image (Element_Body)
+           and then Element_Nominal /= Landin.Checking.No_Nominal_Type
+           and then not Has_Zero_Image (Element_Nominal)
          then
             Bad.Report
               (Item    => Bad.Type_Mismatch,
@@ -3950,9 +3985,9 @@ package body Landin.Stages.Checking is
            (Types.all, Of_Tree, Node, Ty.Fixed_Array);
          Landin.Checking.Note_Array
            (Types.all, Of_Tree, Node, Length, Element);
-         if Element_Body /= Res.No_Declaration then
-            Landin.Checking.Note_Array_Element_Body
-              (Types.all, Of_Tree, Node, Element_Body);
+         if Element_Nominal /= Landin.Checking.No_Nominal_Type then
+            Landin.Checking.Note_Array_Element_Nominal
+              (Types.all, Of_Tree, Node, Element_Nominal);
          end if;
       end Check_Array_Zeroed;
 
@@ -4073,10 +4108,10 @@ package body Landin.Stages.Checking is
                   end;
 
                   declare
-                     Wrote : constant Res.Declaration_Id :=
-                       Landin.Checking.Body_Of (Types.all, Of_Tree, From);
+                     Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                       Landin.Checking.Nominal_Of (Types.all, Of_Tree, From);
                      Which : constant Natural :=
-                       (if Wrote = Res.No_Declaration then 0
+                       (if Wrote = Landin.Checking.No_Nominal_Type then 0
                         else Field_At (Wrote, Syn.Name (Of_Tree, Node)));
                   begin
                      if Which > 0
@@ -4086,9 +4121,9 @@ package body Landin.Stages.Checking is
                                 = Landin.Checking.Aggregate_Field
                      then
                         declare
-                           Child : constant Res.Declaration_Id :=
+                           Child : constant Landin.Checking.Nominal_Type_Id :=
                              Landin.Checking.Field_Shape_Of
-                               (Types.all, Wrote, Which).Aggregate_Body;
+                               (Types.all, Wrote, Which).Nominal;
                         begin
                            if Landin.Checking.Type_Of
                                 (Types.all, Of_Tree, Node) = Ty.Undecided
@@ -4097,7 +4132,7 @@ package body Landin.Stages.Checking is
                                 (Types.all, Of_Tree, Node, Ty.Aggregate);
                               Landin.Checking.Note_Field
                                 (Types.all, Of_Tree, Node, Which);
-                              Landin.Checking.Note_Body
+                              Landin.Checking.Note_Nominal
                                 (Types.all, Of_Tree, Node, Child);
                            end if;
                            return Ty.Aggregate;
@@ -4141,9 +4176,9 @@ package body Landin.Stages.Checking is
                            Landin.Checking.Result_Shape_Of
                              (Types.all, Means));
                      else
-                        Landin.Checking.Note_Body
+                        Landin.Checking.Note_Nominal
                           (Types.all, Of_Tree, Node,
-                           Landin.Checking.Body_Of (Types.all, Means));
+                           Landin.Checking.Nominal_Of (Types.all, Means));
                      end if;
                   end if;
 
@@ -4168,9 +4203,9 @@ package body Landin.Stages.Checking is
                         Landin.Checking.Array_Element (Types.all, Means));
                      --  D121: which struct the elements are is part of
                      --  that shape.
-                     Landin.Checking.Note_Array_Element_Body
+                     Landin.Checking.Note_Array_Element_Nominal
                        (Types.all, Of_Tree, Node,
-                        Landin.Checking.Array_Element_Body
+                        Landin.Checking.Array_Element_Nominal
                           (Types.all, Means));
                   end if;
 
@@ -4290,11 +4325,11 @@ package body Landin.Stages.Checking is
 
                      if Held = Ty.Aggregate then
                         declare
-                           Wrote : constant Res.Declaration_Id :=
-                             Landin.Checking.Body_Of
+                           Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                             Landin.Checking.Nominal_Of
                                (Types.all, Of_Tree, From);
                            Which : constant Natural :=
-                             (if Wrote = Res.No_Declaration then 0
+                             (if Wrote = Landin.Checking.No_Nominal_Type then 0
                               else Field_At
                                      (Wrote, Syn.Name (Of_Tree, Node)));
                         begin
@@ -4317,11 +4352,11 @@ package body Landin.Stages.Checking is
                                    (Types.all, Wrote, Which));
                               --  D121: an ordinary-struct element is part
                               --  of that field's shape.
-                              Landin.Checking.Note_Array_Element_Body
+                              Landin.Checking.Note_Array_Element_Nominal
                                 (Types.all, Of_Tree, Node,
                                  Landin.Checking.Field_Shape_Of
                                    (Types.all, Wrote, Which)
-                                     .Aggregate_Body);
+                                     .Nominal);
                               return True;
                            end if;
                         end;
@@ -4360,10 +4395,10 @@ package body Landin.Stages.Checking is
                end if;
 
                declare
-                  Wrote : constant Res.Declaration_Id :=
-                    Landin.Checking.Body_Of (Types.all, Of_Tree, From);
+                  Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                    Landin.Checking.Nominal_Of (Types.all, Of_Tree, From);
                   Which : constant Natural :=
-                    (if Wrote = Res.No_Declaration then 0
+                    (if Wrote = Landin.Checking.No_Nominal_Type then 0
                      else Field_At (Wrote, Syn.Name (Of_Tree, Node)));
                begin
                   if Which = 0
@@ -4625,12 +4660,12 @@ package body Landin.Stages.Checking is
                      if Held in Ty.Scalar_Name | Ty.Fixed_Array
                        or else
                          (Held = Ty.Aggregate
-                          and then Landin.Checking.Body_Of
+                          and then Landin.Checking.Nominal_Of
                             (Types.all, Of_Tree, Asked)
-                              /= Res.No_Declaration
+                              /= Landin.Checking.No_Nominal_Type
                           and then Landin.Checking.Has_Layout
                             (Types.all,
-                             Landin.Checking.Body_Of
+                             Landin.Checking.Nominal_Of
                                (Types.all, Of_Tree, Asked)))
                      then
                         return Kept (Ty.Usize);
@@ -5006,15 +5041,16 @@ package body Landin.Stages.Checking is
                   --  and then indexing hands back that struct with its
                   --  own [0710] identity rather than a scalar.
                   declare
-                     Body_Of_Element : constant Res.Declaration_Id :=
-                       Landin.Checking.Array_Element_Body
+                     Body_Of_Element : constant
+                       Landin.Checking.Nominal_Type_Id :=
+                       Landin.Checking.Array_Element_Nominal
                          (Types.all, Of_Tree, From);
                   begin
-                     if Body_Of_Element /= Res.No_Declaration then
+                     if Body_Of_Element /= Landin.Checking.No_Nominal_Type then
                         if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                              = Ty.Undecided
                         then
-                           Landin.Checking.Note_Body
+                           Landin.Checking.Note_Nominal
                              (Types.all, Of_Tree, Node, Body_Of_Element);
                         end if;
                         return Kept (Ty.Aggregate);
@@ -5082,12 +5118,12 @@ package body Landin.Stages.Checking is
                        (if Shape = Landin.Checking.No_Signature then 0
                         else Result_Field_At
                           (Shape, Syn.Name (Of_Tree, Node)));
-                     Wrote : constant Res.Declaration_Id :=
-                       Landin.Checking.Body_Of (Types.all, Of_Tree, From);
+                     Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                       Landin.Checking.Nominal_Of (Types.all, Of_Tree, From);
                      Which : constant Natural :=
                        (if Shape /= Landin.Checking.No_Signature
                         then Result_Field
-                        elsif Wrote = Res.No_Declaration then 0
+                        elsif Wrote = Landin.Checking.No_Nominal_Type then 0
                         else Field_At (Wrote, Syn.Name (Of_Tree, Node)));
                   begin
                      if Shape /= Landin.Checking.No_Signature
@@ -5262,9 +5298,9 @@ package body Landin.Stages.Checking is
                         Landin.Checking.Result_Shape_Of
                           (Types.all, Of_Tree, Operand));
                   elsif Held = Ty.Aggregate then
-                     Landin.Checking.Note_Body
+                     Landin.Checking.Note_Nominal
                        (Types.all, Of_Tree, Node,
-                        Landin.Checking.Body_Of
+                        Landin.Checking.Nominal_Of
                           (Types.all, Of_Tree, Operand));
                   elsif Held = Ty.Fixed_Array then
                      Landin.Checking.Note_Array
@@ -5633,15 +5669,17 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Site    : Syn.Node_Id;
          Value   : Syn.Node_Id;
-         Wrote   : Res.Declaration_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id;
          Field   : Positive;
          Static_Image : Boolean := False)
       is
          Body_Tree : constant not null access constant Syn.Tree :=
-           Tree_For (Res.Source_Of (Meanings.all, Wrote));
+           Tree_For (Res.Source_Of
+             (Meanings.all, Template_Declaration (Wrote)));
          Body_Node : constant Syn.Node_Id :=
            Syn.Declared_Type
-             (Body_Tree.all, Res.Node_Of (Meanings.all, Wrote));
+             (Body_Tree.all, Res.Node_Of
+               (Meanings.all, Template_Declaration (Wrote)));
          Part : constant Syn.Node_Id :=
            Syn.Nth_Field (Body_Tree.all, Body_Node, Field);
          Nominal : Syn.Node_Id := Syn.No_Node;
@@ -5694,7 +5732,8 @@ package body Landin.Stages.Checking is
             Given : Syn.Node_Id;
             Shape : Landin.Checking.Field_Shape)
          is
-            Expected : constant Res.Declaration_Id := Shape.Aggregate_Body;
+            Expected : constant
+              Landin.Checking.Nominal_Type_Id := Shape.Nominal;
             Got : Ty.Type_Kind;
          begin
             if Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal then
@@ -5751,7 +5790,7 @@ package body Landin.Stages.Checking is
             end if;
 
             if Got = Ty.Aggregate
-              and then Landin.Checking.Body_Of
+              and then Landin.Checking.Nominal_Of
                 (Types.all, Of_Tree, Given) = Expected
             then
                null;
@@ -5840,7 +5879,7 @@ package body Landin.Stages.Checking is
                when Syn.Zeroed_Literal =>
                   Check_Array_Zeroed
                     (Of_Tree, Given, Shape.Length, Shape.Element,
-                     Shape.Aggregate_Body, Syn.Origin (Of_Tree, Label),
+                     Shape.Nominal, Syn.Origin (Of_Tree, Label),
                      "the fixed-array payload field");
 
                when Syn.Name_Reference =>
@@ -6278,12 +6317,12 @@ package body Landin.Stages.Checking is
                                         Landin.Checking.No_Signature,
                                     when Landin.Checking.Fixed_Array_Field =>
                                       Shape.Length = 0
-                                      or else Shape.Aggregate_Body =
-                                        Res.No_Declaration
+                                      or else Shape.Nominal =
+                                        Landin.Checking.No_Nominal_Type
                                       or else Has_Zero_Image
-                                        (Shape.Aggregate_Body),
+                                        (Shape.Nominal),
                                     when Landin.Checking.Aggregate_Field =>
-                                      Has_Zero_Image (Shape.Aggregate_Body),
+                                      Has_Zero_Image (Shape.Nominal),
                                     when Landin.Checking.Variant_Field =>
                                       False);
                            begin
@@ -6363,7 +6402,7 @@ package body Landin.Stages.Checking is
       procedure Check_Struct_Literal
         (Of_Tree      : Syn.Tree;
          Literal      : Syn.Node_Id;
-         Wrote        : Res.Declaration_Id;
+         Wrote        : Landin.Checking.Nominal_Type_Id;
          Static_Image : Boolean)
       is
          Count : constant Natural :=
@@ -6402,9 +6441,9 @@ package body Landin.Stages.Checking is
          procedure Check_Aggregate_Field
            (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive)
          is
-            Expected : constant Res.Declaration_Id :=
+            Expected : constant Landin.Checking.Nominal_Type_Id :=
               Landin.Checking.Field_Shape_Of
-                (Types.all, Wrote, Which).Aggregate_Body;
+                (Types.all, Wrote, Which).Nominal;
             Got : Ty.Type_Kind;
          begin
             if Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
@@ -6461,7 +6500,7 @@ package body Landin.Stages.Checking is
             end if;
 
             if Got = Ty.Aggregate
-              and then Landin.Checking.Body_Of
+              and then Landin.Checking.Nominal_Of
                 (Types.all, Of_Tree, Value) = Expected
             then
                if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
@@ -6495,9 +6534,9 @@ package body Landin.Stages.Checking is
             Element : constant Ty.Scalar_Name :=
               Landin.Checking.Field_Array_Element
                 (Types.all, Wrote, Which);
-            Element_Body : constant Res.Declaration_Id :=
+            Element_Nominal : constant Landin.Checking.Nominal_Type_Id :=
               Landin.Checking.Field_Shape_Of
-                (Types.all, Wrote, Which).Aggregate_Body;
+                (Types.all, Wrote, Which).Nominal;
 
             procedure Require_Known (Each : Syn.Node_Id);
 
@@ -6577,7 +6616,7 @@ package body Landin.Stages.Checking is
 
                   when Syn.Zeroed_Literal =>
                      Check_Array_Zeroed
-                       (Of_Tree, Value, Expected, Element, Element_Body,
+                       (Of_Tree, Value, Expected, Element, Element_Nominal,
                         Syn.Origin (Of_Tree, Field),
                         "the array field named here");
 
@@ -6696,7 +6735,7 @@ package body Landin.Stages.Checking is
 
                when Syn.Zeroed_Literal =>
                   Check_Array_Zeroed
-                    (Of_Tree, Value, Expected, Element, Element_Body,
+                    (Of_Tree, Value, Expected, Element, Element_Nominal,
                      Syn.Origin (Of_Tree, Field),
                      "the array field named here");
 
@@ -6755,7 +6794,7 @@ package body Landin.Stages.Checking is
          then
             Landin.Checking.Note
               (Types.all, Of_Tree, Literal, Ty.Aggregate);
-            Landin.Checking.Note_Body (Types.all, Of_Tree, Literal, Wrote);
+            Landin.Checking.Note_Nominal (Types.all, Of_Tree, Literal, Wrote);
          end if;
 
          for Position in 1 .. Syn.Field_Value_Count (Of_Tree, Literal) loop
@@ -7455,15 +7494,17 @@ package body Landin.Stages.Checking is
          declare
             From : constant Syn.Node_Id :=
               Syn.Target_Of (Of_Tree, Subject);
-            Wrote : constant Res.Declaration_Id :=
-              Landin.Checking.Body_Of (Types.all, Of_Tree, From);
+            Wrote : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Of_Tree, From);
             Field : constant Positive := Positive
               (Landin.Checking.Field_Index (Types.all, Of_Tree, Subject));
             Body_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Res.Source_Of (Meanings.all, Wrote));
+              Tree_For (Res.Source_Of
+             (Meanings.all, Template_Declaration (Wrote)));
             Body_Node : constant Syn.Node_Id :=
               Syn.Declared_Type
-                (Body_Tree.all, Res.Node_Of (Meanings.all, Wrote));
+                (Body_Tree.all, Res.Node_Of
+               (Meanings.all, Template_Declaration (Wrote)));
             Part : constant Syn.Node_Id :=
               Syn.Nth_Field (Body_Tree.all, Body_Node, Field);
             Count : constant Positive := Syn.Case_Count
@@ -7615,15 +7656,15 @@ package body Landin.Stages.Checking is
                                        --  are reached as any struct's are.
                                        Landin.Checking.Settle
                                          (Types.all, Id, Ty.Aggregate);
-                                       Landin.Checking.Note_Body
+                                       Landin.Checking.Note_Nominal
                                          (Types.all, Id,
-                                          Shape.Aggregate_Body);
+                                          Shape.Nominal);
                                        Landin.Checking.Note
                                          (Types.all, Of_Tree, Binding,
                                           Ty.Aggregate);
-                                       Landin.Checking.Note_Body
+                                       Landin.Checking.Note_Nominal
                                          (Types.all, Of_Tree, Binding,
-                                          Shape.Aggregate_Body);
+                                          Shape.Nominal);
 
                                     when Landin.Checking.Variant_Field =>
                                        raise Landin.Compiler_Defect with
@@ -7717,7 +7758,7 @@ package body Landin.Stages.Checking is
                         if Inferred_Construction then
                            Check_Struct_Literal
                              (Of_Tree, Value,
-                              Landin.Checking.Body_Of
+                              Landin.Checking.Nominal_Of
                                 (Types.all, Of_Tree, Value),
                               Static_Image =>
                                 not Is_Local_Binding (Of_Tree, Node));
@@ -7781,7 +7822,7 @@ package body Landin.Stages.Checking is
                            Check_Contextual_Value
                              (Of_Tree, Value,
                               (Kind    => Ty.Aggregate,
-                               Nominal => Landin.Checking.Body_Of
+                               Nominal => Landin.Checking.Nominal_Of
                                  (Types.all, Of_Tree, Written),
                                others  => <>),
                               Syn.Origin (Of_Tree, Node),
@@ -7791,8 +7832,9 @@ package body Landin.Stages.Checking is
                         elsif Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal
                         then
                            declare
-                              Expected : constant Res.Declaration_Id :=
-                                Landin.Checking.Body_Of
+                              Expected : constant
+                                Landin.Checking.Nominal_Type_Id :=
+                                Landin.Checking.Nominal_Of
                                   (Types.all, Of_Tree, Written);
                            begin
                               if Construction_Agrees
@@ -7810,7 +7852,7 @@ package body Landin.Stages.Checking is
                         then
                            Check_Aggregate_Zeroed
                              (Of_Tree, Value,
-                              Landin.Checking.Body_Of
+                              Landin.Checking.Nominal_Of
                                 (Types.all, Of_Tree, Written),
                               Syn.Origin (Of_Tree, Written),
                               "the struct type written here");
@@ -7830,9 +7872,9 @@ package body Landin.Stages.Checking is
                               if Got = Ty.Ill_Typed then
                                  null;
                               elsif Got /= Ty.Aggregate
-                                or else Landin.Checking.Body_Of
+                                or else Landin.Checking.Nominal_Of
                                   (Types.all, Of_Tree, Written)
-                                    /= Landin.Checking.Body_Of
+                                    /= Landin.Checking.Nominal_Of
                                       (Types.all, Of_Tree, Value)
                               then
                                  Bad.Report
@@ -7870,8 +7912,8 @@ package body Landin.Stages.Checking is
                                  (Types.all, Of_Tree, Written),
                                Element => Landin.Checking.Array_Element
                                  (Types.all, Of_Tree, Written),
-                               Element_Body =>
-                                 Landin.Checking.Array_Element_Body
+                               Element_Nominal =>
+                                 Landin.Checking.Array_Element_Nominal
                                    (Types.all, Of_Tree, Written),
                                others  => <>),
                               Syn.Origin (Of_Tree, Node),
@@ -7886,7 +7928,7 @@ package body Landin.Stages.Checking is
                                 (Types.all, Of_Tree, Written),
                               Landin.Checking.Array_Element
                                 (Types.all, Of_Tree, Written),
-                              Landin.Checking.Array_Element_Body
+                              Landin.Checking.Array_Element_Nominal
                                 (Types.all, Of_Tree, Written),
                               Syn.Origin (Of_Tree, Written),
                               "the array type written here");
@@ -8203,12 +8245,12 @@ package body Landin.Stages.Checking is
                                              Part.Kind);
                                           case Part.Kind is
                                              when Ty.Aggregate =>
-                                                Landin.Checking.Note_Body
+                                                Landin.Checking.Note_Nominal
                                                   (Types.all, Id,
-                                                   Part.Aggregate_Body);
-                                                Landin.Checking.Note_Body
+                                                   Part.Nominal);
+                                                Landin.Checking.Note_Nominal
                                                   (Types.all, Of_Tree, Local,
-                                                   Part.Aggregate_Body);
+                                                   Part.Nominal);
                                              when Ty.Fixed_Array =>
                                                 Landin.Checking.Note_Array
                                                   (Types.all, Id, Part.Length,
@@ -8217,14 +8259,14 @@ package body Landin.Stages.Checking is
                                                   (Types.all, Of_Tree, Local,
                                                    Part.Length, Part.Element);
                                                 Landin.Checking
-                                                  .Note_Array_Element_Body
+                                                  .Note_Array_Element_Nominal
                                                     (Types.all, Id,
-                                                     Part.Aggregate_Body);
+                                                     Part.Nominal);
                                                 Landin.Checking
-                                                  .Note_Array_Element_Body
+                                                  .Note_Array_Element_Nominal
                                                     (Types.all, Of_Tree,
                                                      Local,
-                                                     Part.Aggregate_Body);
+                                                     Part.Nominal);
                                              when Ty.Function_Value =>
                                                 Landin.Checking.Note_Signature
                                                   (Types.all, Id,
@@ -8275,7 +8317,7 @@ package body Landin.Stages.Checking is
                      else
                         Check_Variant_Value
                           (Of_Tree, Place, Value,
-                           Landin.Checking.Body_Of
+                           Landin.Checking.Nominal_Of
                              (Types.all, Of_Tree, Base),
                            Positive
                              (Landin.Checking.Field_Index
@@ -8363,15 +8405,16 @@ package body Landin.Stages.Checking is
                         Check_Contextual_Value
                           (Of_Tree, Value,
                            (Kind    => Ty.Aggregate,
-                            Nominal => Landin.Checking.Body_Of
+                            Nominal => Landin.Checking.Nominal_Of
                               (Types.all, Of_Tree, Place),
                             others  => <>),
                            Syn.Origin (Of_Tree, Place),
                            "the place written here");
                      elsif Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
                         declare
-                           Expected : constant Res.Declaration_Id :=
-                             Landin.Checking.Body_Of
+                           Expected : constant
+                             Landin.Checking.Nominal_Type_Id :=
+                             Landin.Checking.Nominal_Of
                                (Types.all, Of_Tree, Place);
                         begin
                            if Construction_Agrees
@@ -8387,7 +8430,7 @@ package body Landin.Stages.Checking is
                      elsif Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
                         Check_Aggregate_Zeroed
                           (Of_Tree, Value,
-                           Landin.Checking.Body_Of
+                           Landin.Checking.Nominal_Of
                              (Types.all, Of_Tree, Place),
                            Syn.Origin (Of_Tree, Place),
                            "the struct place written here");
@@ -8409,9 +8452,9 @@ package body Landin.Stages.Checking is
                            if Got = Ty.Ill_Typed then
                               null;
                            elsif Got /= Ty.Aggregate
-                             or else Landin.Checking.Body_Of
+                             or else Landin.Checking.Nominal_Of
                                        (Types.all, Of_Tree, Place)
-                                     /= Landin.Checking.Body_Of
+                                     /= Landin.Checking.Nominal_Of
                                           (Types.all, Of_Tree, Value)
                            then
                               Bad.Report
@@ -8453,8 +8496,8 @@ package body Landin.Stages.Checking is
                               (Types.all, Of_Tree, Place),
                             Element => Landin.Checking.Array_Element
                               (Types.all, Of_Tree, Place),
-                            Element_Body =>
-                              Landin.Checking.Array_Element_Body
+                            Element_Nominal =>
+                              Landin.Checking.Array_Element_Nominal
                                 (Types.all, Of_Tree, Place),
                             others  => <>),
                            Syn.Origin (Of_Tree, Place),
@@ -8497,7 +8540,7 @@ package body Landin.Stages.Checking is
                              (Types.all, Of_Tree, Place),
                            Landin.Checking.Array_Element
                              (Types.all, Of_Tree, Place),
-                           Landin.Checking.Array_Element_Body
+                           Landin.Checking.Array_Element_Nominal
                              (Types.all, Of_Tree, Place),
                            Syn.Origin (Of_Tree, Place),
                            "the array place written here");
@@ -8886,15 +8929,15 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note_Result_Shape
                     (Types.all, Of_Tree, Node, Expected.Result_Shape);
                else
-                  Landin.Checking.Note_Body
+                  Landin.Checking.Note_Nominal
                     (Types.all, Of_Tree, Node, Expected.Nominal);
                end if;
             elsif Expected.Kind = Ty.Fixed_Array then
                Landin.Checking.Note_Array
                  (Types.all, Of_Tree, Node,
                   Expected.Length, Expected.Element);
-               Landin.Checking.Note_Array_Element_Body
-                 (Types.all, Of_Tree, Node, Expected.Element_Body);
+               Landin.Checking.Note_Array_Element_Nominal
+                 (Types.all, Of_Tree, Node, Expected.Element_Nominal);
             elsif Expected.Kind = Ty.Function_Value then
                Landin.Checking.Note_Signature
                  (Types.all, Of_Tree, Node, Expected.Signature);
@@ -9041,7 +9084,7 @@ package body Landin.Stages.Checking is
                   if Got /= Ty.Ill_Typed
                     and then
                       (Got /= Ty.Aggregate
-                       or else Landin.Checking.Body_Of
+                       or else Landin.Checking.Nominal_Of
                          (Types.all, Of_Tree, Node) /= Expected.Nominal)
                   then
                      Context_Mismatch
@@ -9069,7 +9112,7 @@ package body Landin.Stages.Checking is
                   when Syn.Zeroed_Literal =>
                      Check_Array_Zeroed
                        (Of_Tree, Node, Expected.Length, Expected.Element,
-                        Expected.Element_Body, Site, Because);
+                        Expected.Element_Nominal, Site, Because);
                      return;
                   when others =>
                      null;
@@ -9093,9 +9136,9 @@ package body Landin.Stages.Checking is
                          (Types.all, Of_Tree, Node) /= Expected.Length
                        or else Landin.Checking.Array_Element
                          (Types.all, Of_Tree, Node) /= Expected.Element
-                       or else Landin.Checking.Array_Element_Body
+                       or else Landin.Checking.Array_Element_Nominal
                          (Types.all, Of_Tree, Node)
-                           /= Expected.Element_Body)
+                           /= Expected.Element_Nominal)
                   then
                      Context_Mismatch
                        (Of_Tree, Node, Expected, Site, Because);
@@ -9178,7 +9221,7 @@ package body Landin.Stages.Checking is
               (Kind => Ty.Aggregate,
                Nominal => Construction_Body (Of_Tree, First),
                others => <>);
-            if Expected.Nominal = Res.No_Declaration then
+            if Expected.Nominal = Landin.Checking.No_Nominal_Type then
                return Ty.Ill_Typed;
             end if;
          else
@@ -9198,7 +9241,7 @@ package body Landin.Stages.Checking is
                Expected.Result_Shape := Landin.Checking.Result_Shape_Of
                  (Types.all, Of_Tree, First);
                if Expected.Result_Shape = Landin.Checking.No_Signature then
-                  Expected.Nominal := Landin.Checking.Body_Of
+                  Expected.Nominal := Landin.Checking.Nominal_Of
                     (Types.all, Of_Tree, First);
                end if;
             elsif Got = Ty.Fixed_Array then
@@ -9206,8 +9249,8 @@ package body Landin.Stages.Checking is
                  (Types.all, Of_Tree, First);
                Expected.Element := Landin.Checking.Array_Element
                  (Types.all, Of_Tree, First);
-               Expected.Element_Body :=
-                 Landin.Checking.Array_Element_Body
+               Expected.Element_Nominal :=
+                 Landin.Checking.Array_Element_Nominal
                    (Types.all, Of_Tree, First);
             elsif Got = Ty.Function_Value then
                Expected.Signature := Landin.Checking.Signature_Of
@@ -9397,17 +9440,17 @@ package body Landin.Stages.Checking is
            and then Landin.Checking.Array_Length
              (Types.all,
               Declaration_At (Syn.Source_Of (Of_Tree), Node)) > 0
-           and then Landin.Checking.Array_Element_Body
+           and then Landin.Checking.Array_Element_Nominal
              (Types.all,
               Declaration_At (Syn.Source_Of (Of_Tree), Node))
-                /= Res.No_Declaration
+                /= Landin.Checking.No_Nominal_Type
            and then Landin.Checking.Has_Layout
              (Types.all,
-              Landin.Checking.Array_Element_Body
+              Landin.Checking.Array_Element_Nominal
                 (Types.all,
                  Declaration_At (Syn.Source_Of (Of_Tree), Node)))
            and then not Has_Zero_Image
-             (Landin.Checking.Array_Element_Body
+             (Landin.Checking.Array_Element_Nominal
                 (Types.all,
                  Declaration_At (Syn.Source_Of (Of_Tree), Node)))
          then
@@ -9433,11 +9476,11 @@ package body Landin.Stages.Checking is
            and then Value = Syn.No_Node
            and then Landin.Checking.Has_Layout
              (Types.all,
-              Landin.Checking.Body_Of
+              Landin.Checking.Nominal_Of
                 (Types.all,
                  Declaration_At (Syn.Source_Of (Of_Tree), Node)))
            and then not Has_Zero_Image
-             (Landin.Checking.Body_Of
+             (Landin.Checking.Nominal_Of
                 (Types.all,
                  Declaration_At (Syn.Source_Of (Of_Tree), Node)))
          then
@@ -9527,17 +9570,17 @@ package body Landin.Stages.Checking is
            and then Syn.Constructed_Type (Of_Tree.all, Value) /= Syn.No_Node
          then
             declare
-               Wrote : constant Res.Declaration_Id :=
+               Wrote : constant Landin.Checking.Nominal_Type_Id :=
                  Construction_Body (Of_Tree.all, Value);
             begin
-               if Wrote = Res.No_Declaration then
+               if Wrote = Landin.Checking.No_Nominal_Type then
                   Landin.Checking.Settle (Types.all, Id, Ty.Ill_Typed);
                else
                   Landin.Checking.Note
                     (Types.all, Of_Tree.all, Value, Ty.Aggregate);
-                  Landin.Checking.Note_Body
+                  Landin.Checking.Note_Nominal
                     (Types.all, Of_Tree.all, Value, Wrote);
-                  Landin.Checking.Note_Body (Types.all, Id, Wrote);
+                  Landin.Checking.Note_Nominal (Types.all, Id, Wrote);
                   Landin.Checking.Settle (Types.all, Id, Ty.Aggregate);
                end if;
             end;
@@ -9819,8 +9862,8 @@ package body Landin.Stages.Checking is
               (Named_Storage
                and then Named_Type = Ty.Aggregate
                and then
-                 (Landin.Checking.Body_Of (Types.all, Named)
-                    /= Res.No_Declaration
+                 (Landin.Checking.Nominal_Of (Types.all, Named)
+                    /= Landin.Checking.No_Nominal_Type
                   or else Landin.Checking.Result_Shape_Of (Types.all, Named)
                     /= Landin.Checking.No_Signature))
               or else Direct_Child;
@@ -9853,9 +9896,9 @@ package body Landin.Stages.Checking is
                        (Types.all, Of_Tree.all, Value),
                      Landin.Checking.Array_Element
                        (Types.all, Of_Tree.all, Value));
-                  Landin.Checking.Note_Array_Element_Body
+                  Landin.Checking.Note_Array_Element_Nominal
                     (Types.all, Id,
-                     Landin.Checking.Array_Element_Body
+                     Landin.Checking.Array_Element_Nominal
                        (Types.all, Of_Tree.all, Value));
                end if;
 
@@ -9887,9 +9930,9 @@ package body Landin.Stages.Checking is
                      else
                         --  D56/D61: an inferred nominal aggregate carries
                         --  the declaration that wrote its body.
-                        Landin.Checking.Note_Body
+                        Landin.Checking.Note_Nominal
                           (Types.all, Id,
-                           Landin.Checking.Body_Of
+                           Landin.Checking.Nominal_Of
                              (Types.all, Of_Tree.all, Value));
                      end if;
                   end;
@@ -10019,16 +10062,16 @@ package body Landin.Stages.Checking is
 
       function Validate_Recursive_Struct_Image
         (Of_Tree : Syn.Tree;
-         Wrote   : Res.Declaration_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id;
          Literal : Syn.Node_Id) return Boolean;
 
       function Body_Image_Contains_Aggregate
-        (Wrote : Res.Declaration_Id) return Boolean;
+        (Wrote : Landin.Checking.Nominal_Type_Id) return Boolean;
 
       procedure Validate_Module_Images;
 
       function Body_Image_Contains_Aggregate
-        (Wrote : Res.Declaration_Id) return Boolean
+        (Wrote : Landin.Checking.Nominal_Type_Id) return Boolean
       is
       begin
          for Field in
@@ -10064,12 +10107,12 @@ package body Landin.Stages.Checking is
 
       function Validate_Recursive_Struct_Image
         (Of_Tree : Syn.Tree;
-         Wrote   : Res.Declaration_Id;
+         Wrote   : Landin.Checking.Nominal_Type_Id;
          Literal : Syn.Node_Id) return Boolean
       is
          function Validate_Aggregate_Value
            (Given : Syn.Node_Id;
-            Expected : Res.Declaration_Id) return Boolean;
+            Expected : Landin.Checking.Nominal_Type_Id) return Boolean;
 
          function Selected_Case
            (Given : Syn.Node_Id;
@@ -10080,9 +10123,11 @@ package body Landin.Stages.Checking is
             Field : Positive) return Natural
          is
             Body_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Res.Source_Of (Meanings.all, Wrote));
+              Tree_For (Res.Source_Of
+             (Meanings.all, Template_Declaration (Wrote)));
             Body_Node : constant Syn.Node_Id := Syn.Declared_Type
-              (Body_Tree.all, Res.Node_Of (Meanings.all, Wrote));
+              (Body_Tree.all, Res.Node_Of
+               (Meanings.all, Template_Declaration (Wrote)));
             Part : constant Syn.Node_Id :=
               Syn.Nth_Field (Body_Tree.all, Body_Node, Field);
             Nominal : constant Syn.Node_Id :=
@@ -10114,7 +10159,7 @@ package body Landin.Stages.Checking is
 
          function Validate_Aggregate_Value
            (Given : Syn.Node_Id;
-            Expected : Res.Declaration_Id) return Boolean
+            Expected : Landin.Checking.Nominal_Type_Id) return Boolean
          is
          begin
             if Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal then
@@ -10134,7 +10179,7 @@ package body Landin.Stages.Checking is
                            = Res.Module_Binding
                     and then Landin.Checking.Type_Of
                       (Types.all, Source_Id) = Ty.Aggregate
-                    and then Landin.Checking.Body_Of
+                    and then Landin.Checking.Nominal_Of
                       (Types.all, Source_Id) = Expected
                     and then Validate_Module_Image (Source_Id);
                end;
@@ -10144,15 +10189,15 @@ package body Landin.Stages.Checking is
                     Syn.Target_Of (Of_Tree, Given);
                   Source_Id : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Root);
-                  Source_Body : constant Res.Declaration_Id :=
-                    Landin.Checking.Body_Of (Types.all, Source_Id);
+                  Source_Body : constant Landin.Checking.Nominal_Type_Id :=
+                    Landin.Checking.Nominal_Of (Types.all, Source_Id);
                   Which : constant Natural :=
-                    (if Source_Body = Res.No_Declaration
+                    (if Source_Body = Landin.Checking.No_Nominal_Type
                      then 0
                      else Field_At
                        (Source_Body, Syn.Name (Of_Tree, Given)));
                begin
-                  return Source_Body /= Res.No_Declaration
+                  return Source_Body /= Landin.Checking.No_Nominal_Type
                     and then Landin.Checking.Has_Layout
                       (Types.all, Source_Body)
                     and then Which /= 0
@@ -10160,7 +10205,7 @@ package body Landin.Stages.Checking is
                       (Types.all, Source_Body, Which)
                         = Landin.Checking.Aggregate_Field
                     and then Landin.Checking.Field_Shape_Of
-                      (Types.all, Source_Body, Which).Aggregate_Body
+                      (Types.all, Source_Body, Which).Nominal
                         = Expected
                     and then Validate_Module_Image (Source_Id);
                end;
@@ -10242,7 +10287,7 @@ package body Landin.Stages.Checking is
 
                         when Landin.Checking.Aggregate_Field =>
                            Reaches := Validate_Aggregate_Value
-                             (Given, Shape.Aggregate_Body)
+                             (Given, Shape.Nominal)
                              and then Reaches;
 
                         when Landin.Checking.Variant_Field =>
@@ -10271,12 +10316,16 @@ package body Landin.Stages.Checking is
                                        Body_Tree : constant not null access
                                          constant Syn.Tree := Tree_For
                                            (Res.Source_Of
-                                              (Meanings.all, Wrote));
+                                              (Meanings.all,
+                                               Template_Declaration
+                                                 (Wrote)));
                                        Body_Node : constant Syn.Node_Id :=
                                          Syn.Declared_Type
                                            (Body_Tree.all,
                                             Res.Node_Of
-                                              (Meanings.all, Wrote));
+                                              (Meanings.all,
+                                               Template_Declaration
+                                                 (Wrote)));
                                        Part : constant Syn.Node_Id :=
                                          Syn.Nth_Field
                                            (Body_Tree.all, Body_Node,
@@ -10322,7 +10371,7 @@ package body Landin.Stages.Checking is
                                                   Validate_Aggregate_Value
                                                     (Given_Payload,
                                                      Payload_Shape
-                                                       .Aggregate_Body)
+                                                       .Nominal)
                                                   and then Reaches;
                                              elsif Payload_Shape.Kind =
                                                 Landin.Checking
@@ -10465,11 +10514,11 @@ package body Landin.Stages.Checking is
             --  the shared Visiting state owns every array/struct mixture that
             --  comes back to a declaration already on the image path.
             declare
-               Wrote : constant Res.Declaration_Id :=
-                 Landin.Checking.Body_Of (Types.all, Id);
+               Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nominal_Of (Types.all, Id);
                Reaches_Image : Boolean := True;
             begin
-               if Wrote = Res.No_Declaration
+               if Wrote = Landin.Checking.No_Nominal_Type
                  or else not Landin.Checking.Has_Layout (Types.all, Wrote)
                then
                   Image_States (Id) := Invalid;
@@ -10574,11 +10623,13 @@ package body Landin.Stages.Checking is
                            Body_Tree : constant not null access constant
                              Syn.Tree :=
                                Tree_For
-                                 (Res.Source_Of (Meanings.all, Wrote));
+                                 (Res.Source_Of
+             (Meanings.all, Template_Declaration (Wrote)));
                            Body_Node : constant Syn.Node_Id :=
                              Syn.Declared_Type
                                (Body_Tree.all,
-                                Res.Node_Of (Meanings.all, Wrote));
+                                Res.Node_Of
+               (Meanings.all, Template_Declaration (Wrote)));
                            Part : constant Syn.Node_Id :=
                              Syn.Nth_Field
                                (Body_Tree.all, Body_Node,
@@ -10826,8 +10877,8 @@ package body Landin.Stages.Checking is
                elsif Landin.Checking.Type_Of (Types.all, Id) = Ty.Aggregate
                  and then Landin.Checking.Type_Of (Types.all, Source_Id)
                           = Ty.Aggregate
-                 and then Landin.Checking.Body_Of (Types.all, Source_Id)
-                          = Landin.Checking.Body_Of (Types.all, Id)
+                 and then Landin.Checking.Nominal_Of (Types.all, Source_Id)
+                          = Landin.Checking.Nominal_Of (Types.all, Id)
                then
                   --  D60/D61 follow either D10/D59's absent zero image or
                   --  D66--D68's labelled folded image.  Following identities
@@ -11458,11 +11509,11 @@ package body Landin.Stages.Checking is
                      end;
                   elsif Held = Ty.Aggregate then
                      declare
-                        Declared : constant Res.Declaration_Id :=
-                          Landin.Checking.Body_Of
+                        Declared : constant Landin.Checking.Nominal_Type_Id :=
+                          Landin.Checking.Nominal_Of
                             (Types.all, Of_Tree, Asked);
                      begin
-                        if Declared /= Res.No_Declaration
+                        if Declared /= Landin.Checking.No_Nominal_Type
                           and then Landin.Checking.Has_Layout
                             (Types.all, Declared)
                         then
@@ -11533,15 +11584,15 @@ package body Landin.Stages.Checking is
            (Given : Syn.Node_Id; Element : Ty.Scalar_Name);
 
          procedure Check_Struct_Image
-           (Literal : Syn.Node_Id; Wrote : Res.Declaration_Id);
+           (Literal : Syn.Node_Id; Wrote : Landin.Checking.Nominal_Type_Id);
 
          procedure Check_Variant_Image
            (Value : Syn.Node_Id;
-            Wrote : Res.Declaration_Id;
+            Wrote : Landin.Checking.Nominal_Type_Id;
             Field : Positive);
 
          function Body_Contains_Aggregate
-           (Wrote : Res.Declaration_Id) return Boolean;
+           (Wrote : Landin.Checking.Nominal_Type_Id) return Boolean;
 
          procedure Check_Image_Scalar
            (Each : Syn.Node_Id; Element : Ty.Scalar_Name)
@@ -11625,7 +11676,7 @@ package body Landin.Stages.Checking is
 
          procedure Check_Variant_Image
            (Value : Syn.Node_Id;
-            Wrote : Res.Declaration_Id;
+            Wrote : Landin.Checking.Nominal_Type_Id;
             Field : Positive)
          is
          begin
@@ -11664,7 +11715,7 @@ package body Landin.Stages.Checking is
                                 = Syn.Struct_Literal
                            then
                               Check_Struct_Image
-                                (Given, Shape.Aggregate_Body);
+                                (Given, Shape.Nominal);
                            end if;
                         when Landin.Checking.Variant_Field =>
                            raise Landin.Compiler_Defect with
@@ -11676,7 +11727,7 @@ package body Landin.Stages.Checking is
          end Check_Variant_Image;
 
          procedure Check_Struct_Image
-           (Literal : Syn.Node_Id; Wrote : Res.Declaration_Id)
+           (Literal : Syn.Node_Id; Wrote : Landin.Checking.Nominal_Type_Id)
          is
          begin
             for Position in
@@ -11704,7 +11755,7 @@ package body Landin.Stages.Checking is
                      when Landin.Checking.Aggregate_Field =>
                         if Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
                            Check_Struct_Image
-                             (Given, Shape.Aggregate_Body);
+                             (Given, Shape.Nominal);
                         end if;
                      when Landin.Checking.Variant_Field =>
                         Check_Variant_Image (Given, Wrote, Which);
@@ -11714,7 +11765,7 @@ package body Landin.Stages.Checking is
          end Check_Struct_Image;
 
          function Body_Contains_Aggregate
-           (Wrote : Res.Declaration_Id) return Boolean
+           (Wrote : Landin.Checking.Nominal_Type_Id) return Boolean
          is
          begin
             for Field in
@@ -11809,8 +11860,8 @@ package body Landin.Stages.Checking is
                     = Ty.Aggregate
          then
             declare
-               Wrote : constant Res.Declaration_Id :=
-                 Landin.Checking.Body_Of (Types.all, Of_Tree, Value);
+               Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nominal_Of (Types.all, Of_Tree, Value);
             begin
                if Body_Contains_Aggregate (Wrote) then
                   Check_Struct_Image (Value, Wrote);
@@ -12867,14 +12918,14 @@ package body Landin.Stages.Checking is
             Expected.Atoms := Landin.Checking.Atom_Set_Of
               (Types.all, Declaration_At (Syn.Source_Of (Of_Tree), Result));
          elsif Gives = Ty.Aggregate then
-            Expected.Nominal := Landin.Checking.Body_Of
+            Expected.Nominal := Landin.Checking.Nominal_Of
               (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
          elsif Gives = Ty.Fixed_Array then
             Expected.Length := Landin.Checking.Array_Length
               (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
             Expected.Element := Landin.Checking.Array_Element
               (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
-            Expected.Element_Body := Landin.Checking.Array_Element_Body
+            Expected.Element_Nominal := Landin.Checking.Array_Element_Nominal
               (Types.all, Of_Tree, Syn.Declared_Type (Of_Tree, Result));
          elsif Gives = Ty.Function_Value then
             Expected.Signature := Landin.Checking.Signature_Of

@@ -1080,7 +1080,8 @@ package body Landin.IR.Verifier is
             else Budget);
       begin
          if Shape.Kind = Scalar_Field_Shape then
-            return Shape.Length /= 1
+            return Shape.Nominal /= No_Nominal_Type
+              or else Shape.Length /= 1
               or else Shape.Cases /= 0
               or else Shape.Payloads_First /= 0
               or else
@@ -1103,10 +1104,14 @@ package body Landin.IR.Verifier is
             --  D121: an aggregate element is one run of exactly one shape.
             --  No run at all is the scalar element every array had before.
             if Shape.Cases = 0 then
-               return Shape.Payloads_First /= 0;
+               return Shape.Nominal /= No_Nominal_Type
+                 or else Shape.Payloads_First /= 0;
             end if;
-            return Shape.Cases /= 1
+            return not Holds (Of_Unit, Shape.Nominal)
+              or else Shape.Cases /= 1
               or else not Array_Element_Is_Aggregate (Of_Unit, Shape)
+              or else Array_Element_Shape (Of_Unit, Shape).Nominal
+                        /= Shape.Nominal
               or else Left = 0
               or else Field_Shape_Is_Malformed
                 (Array_Element_Shape (Of_Unit, Shape),
@@ -1114,6 +1119,7 @@ package body Landin.IR.Verifier is
                  Budget => Left - 1);
          elsif Shape.Kind = Aggregate_Field_Shape then
             if not Aggregate_Allowed
+              or else not Holds (Of_Unit, Shape.Nominal)
               or else Shape.Length /= 1
               or else Shape.Element /= Landin.Types.Bool
               or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
@@ -1138,7 +1144,8 @@ package body Landin.IR.Verifier is
             return False;
          end if;
 
-         if Shape.Length /= 1
+         if Shape.Nominal /= No_Nominal_Type
+           or else Shape.Length /= 1
            or else Shape.Element not in
              Landin.Types.U8 | Landin.Types.U16 | Landin.Types.U32
            or else Shape.Cases = 0
@@ -1237,7 +1244,7 @@ package body Landin.IR.Verifier is
             when Landin.Types.No_Value =>
                return True;
             when Landin.Types.Scalar_Name =>
-               return Part.Aggregate_Body /= No_Declaration
+               return Part.Nominal /= No_Nominal_Type
                  or else Part.Length /= 0
                  or else Part.Signature /= No_Signature
                  or else
@@ -1246,20 +1253,17 @@ package body Landin.IR.Verifier is
                       (Part.Kind /= Landin.Types.U32
                        or else not Holds (Of_Unit, Part.Atoms)));
             when Landin.Types.Aggregate =>
-               return Part.Aggregate_Body = No_Declaration
-                 or else Natural (Part.Aggregate_Body)
-                           > Declaration_Limit (Of_Unit)
+               return not Holds (Of_Unit, Part.Nominal)
                  or else Part.Length /= 0
                  or else Part.Signature /= No_Signature
                  or else Part.Atoms /= No_Atom_Set;
             when Landin.Types.Fixed_Array =>
-               return (Part.Aggregate_Body /= No_Declaration
-                         and then Natural (Part.Aggregate_Body)
-                           > Declaration_Limit (Of_Unit))
+               return (Part.Nominal /= No_Nominal_Type
+                         and then not Holds (Of_Unit, Part.Nominal))
                  or else Part.Signature /= No_Signature
                  or else Part.Atoms /= No_Atom_Set;
             when Landin.Types.Function_Value =>
-               return Part.Aggregate_Body /= No_Declaration
+               return Part.Nominal /= No_Nominal_Type
                  or else Part.Length /= 0
                  or else not Holds (Of_Unit, Part.Signature)
                  or else Part.Atoms /= No_Atom_Set;
@@ -1342,13 +1346,16 @@ package body Landin.IR.Verifier is
                   and then Atom_Metadata_Agrees
                     (Part.Atoms, Atom_Set_Of (Of_Unit, Item, Slot)),
                when Landin.Types.Aggregate =>
-                  Is_Aggregate (Of_Unit, Item, Slot),
+                  Is_Aggregate (Of_Unit, Item, Slot)
+                  and then Nominal_Of (Of_Unit, Item, Slot) = Part.Nominal,
                when Landin.Types.Fixed_Array =>
                   Is_Array (Of_Unit, Item, Slot)
                   and then Slot_Array_Length (Of_Unit, Item, Slot)
                              = Part.Length
                   and then Slot_Array_Element (Of_Unit, Item, Slot)
-                             = Part.Element,
+                             = Part.Element
+                  and then Slot_Array_Element_Shape
+                    (Of_Unit, Item, Slot).Nominal = Part.Nominal,
                when Landin.Types.Function_Value =>
                   not Is_Aggregate (Of_Unit, Item, Slot)
                   and then not Is_Array (Of_Unit, Item, Slot)
@@ -1393,16 +1400,18 @@ package body Landin.IR.Verifier is
                        and then Signatures_Agree
                          (Of_Unit, Part.Signature, Shape.Signature);
                   when Landin.Types.Aggregate =>
-                     Agrees := Shape.Kind = Aggregate_Field_Shape;
+                     Agrees := Shape.Kind = Aggregate_Field_Shape
+                       and then Shape.Nominal = Part.Nominal;
                   when Landin.Types.Fixed_Array =>
                      Agrees := Shape.Kind = Array_Field_Shape
                        and then Shape.Length = Part.Length
                        and then
-                         (if Part.Aggregate_Body = No_Declaration
+                         (if Part.Nominal = No_Nominal_Type
                           then not Array_Element_Is_Aggregate
                             (Of_Unit, Shape)
                             and then Shape.Element = Part.Element
-                          else Array_Element_Is_Aggregate (Of_Unit, Shape));
+                          else Array_Element_Is_Aggregate (Of_Unit, Shape)
+                            and then Shape.Nominal = Part.Nominal);
                   when others =>
                      Agrees := False;
                end case;
