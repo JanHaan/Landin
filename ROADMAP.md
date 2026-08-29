@@ -1971,6 +1971,10 @@ The thirtieth increment closes ordinary control-flow evidence for aggregate
 calls: completion contributes a normal whole-place assignment fact, branch
 joins intersect it, and guarded-return continuing edges preserve it.
 
+The thirty-first increment closes early-exit evidence for aggregate results:
+each accepted `return` performs the final copy from the independent named slot
+to caller-owned storage, while a path without that complete slot is refused.
+
 Written function types, function parameters and anonymous functions remain in
 this item. Further aggregate arguments and result contexts remain here too; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.

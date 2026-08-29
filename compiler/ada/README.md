@@ -153,7 +153,9 @@ is represented by a target code address and called through verified
 and indirect calls share aggregate-result and stack-argument conventions;
 written function types and function parameters remain absent. Completion into
 an aggregate destination contributes an ordinary whole-place flow fact, so
-branch joins and guarded-return edges require no call-specific exception.
+branch joins and guarded-return edges require no call-specific exception. Each
+early or final aggregate-result exit copies that complete independent slot to
+the hidden caller destination.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver
