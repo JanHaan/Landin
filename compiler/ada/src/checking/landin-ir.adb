@@ -3,11 +3,24 @@ package body Landin.IR is
    package body Nominal_Identities is
       function None return Id is (0);
 
-
       function From_Position (Position : Positive) return Id
         is (Id (Position));
 
-      function Position (Of_Id : Id) return Natural is (Natural (Of_Id));
+      function Nth (Of_Unit : Unit; Position : Positive) return Id
+        is (if Position <= Natural (Of_Unit.Nominal_Templates.Length)
+            then From_Position (Position) else None);
+
+      function Holds (Of_Unit : Unit; Of_Id : Id) return Boolean
+        is (Of_Unit.Ready
+            and then Of_Id /= None
+            and then Natural (Of_Id)
+                       <= Natural (Of_Unit.Nominal_Templates.Length));
+
+      function Position (Of_Unit : Unit; Of_Id : Id) return Positive is
+         pragma Unreferenced (Of_Unit);
+      begin
+         return Positive (Of_Id);
+      end Position;
    end Nominal_Identities;
 
    ------------------------------------------------------------------
@@ -48,31 +61,24 @@ package body Landin.IR is
 
    function Nth_Nominal_Type
      (Of_Unit : Unit; Position : Positive) return Nominal_Type_Id
-   is
-      pragma Unreferenced (Of_Unit);
-   begin
-      return Nominal_Identities.From_Position (Position);
-   end Nth_Nominal_Type;
+     is (Nominal_Identities.Nth (Of_Unit, Position));
 
    function Holds (Of_Unit : Unit; Id : Nominal_Type_Id) return Boolean
-     is (Of_Unit.Ready
-         and then Id /= No_Nominal_Type
-         and then Nominal_Identities.Position (Id)
-                    <= Nominal_Type_Count (Of_Unit));
+     is (Nominal_Identities.Holds (Of_Unit, Id));
 
    function Add_Nominal_Type
      (Into : in out Unit; Template : Declaration_Id) return Nominal_Type_Id
    is
    begin
       Into.Nominal_Templates.Append (Template);
-      return Nominal_Identities.From_Position
-        (Into.Nominal_Templates.Last_Index);
+      return Nominal_Identities.Nth
+        (Into, Into.Nominal_Templates.Last_Index);
    end Add_Nominal_Type;
 
    function Template_Of
      (Of_Unit : Unit; Id : Nominal_Type_Id) return Declaration_Id
      is (Of_Unit.Nominal_Templates
-           (Positive (Nominal_Identities.Position (Id))));
+           (Nominal_Identities.Position (Of_Unit, Id)));
 
    function Item_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Items.Length));
@@ -247,7 +253,14 @@ package body Landin.IR is
      is (Of_Unit.Signatures (Positive (Signature)).Errors);
 
    function Signatures_Agree
-     (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
+     (Of_Unit : Unit;
+      Left, Right : Signature_Id;
+      Budget : Natural) return Boolean;
+
+   function Signatures_Agree
+     (Of_Unit : Unit;
+      Left, Right : Signature_Id;
+      Budget : Natural) return Boolean
    is
       function Parts_Agree (A, B : Signature_Part) return Boolean
         is (A.Kind = B.Kind
@@ -268,10 +281,11 @@ package body Landin.IR is
                      and then A.Element = B.Element
                      and then A.Nominal = B.Nominal,
                   when Landin.Types.Function_Value =>
-                     Holds (Of_Unit, A.Signature)
+                     Budget > 0
+                     and then Holds (Of_Unit, A.Signature)
                      and then Holds (Of_Unit, B.Signature)
                      and then Signatures_Agree
-                       (Of_Unit, A.Signature, B.Signature),
+                       (Of_Unit, A.Signature, B.Signature, Budget - 1),
                   when others => False));
    begin
       if (Signature_Errors (Of_Unit, Left) = No_Atom_Set)
@@ -306,6 +320,11 @@ package body Landin.IR is
       end loop;
       return True;
    end Signatures_Agree;
+
+   function Signatures_Agree
+     (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
+     is (Signatures_Agree
+           (Of_Unit, Left, Right, Signature_Count (Of_Unit) + 1));
 
    function Add_Item
      (Into     : in out Unit;
@@ -1704,7 +1723,15 @@ package body Landin.IR is
                    (Holds (Of_Unit, Left.Signature)
                     and then Holds (Of_Unit, Right.Signature)
                     and then Signatures_Agree
-                      (Of_Unit, Left.Signature, Right.Signature)));
+                      (Of_Unit, Left.Signature, Right.Signature)))
+              and then
+                ((Left.Atoms = No_Atom_Set
+                    and then Right.Atoms = No_Atom_Set)
+                 or else
+                   (Holds (Of_Unit, Left.Atoms)
+                    and then Holds (Of_Unit, Right.Atoms)
+                    and then Atom_Sets_Agree
+                      (Of_Unit, Left.Atoms, Right.Atoms)));
 
          when Array_Field_Shape =>
             if Left.Length /= Right.Length then

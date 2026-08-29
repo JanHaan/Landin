@@ -324,17 +324,24 @@ package Landin.IR is
    type Signature_Id is range 0 .. Integer'Last;
    type Atom_Set_Id is range 0 .. Integer'Last;
 
+   type Unit is tagged limited private;
+
    --  A target-neutral nominal instance identity mapped from checking.
    --  It is opaque so source Declaration_Id remains provenance and storage
-   --  ownership rather than doubling as a runtime type identity.
+   --  ownership rather than doubling as a runtime type identity.  A caller
+   --  can retrieve identities held by a unit but cannot construct one from
+   --  an integer.
    package Nominal_Identities is
       type Id is private;
 
       function None return Id;
-      function From_Position (Position : Positive) return Id;
-      function Position (Of_Id : Id) return Natural;
+      function Nth (Of_Unit : Unit; Position : Positive) return Id;
+      function Holds (Of_Unit : Unit; Of_Id : Id) return Boolean;
+      function Position (Of_Unit : Unit; Of_Id : Id) return Positive
+        with Pre => Holds (Of_Unit, Of_Id);
    private
       type Id is range 0 .. Integer'Last;
+      function From_Position (Position : Positive) return Id;
    end Nominal_Identities;
 
    subtype Nominal_Type_Id is Nominal_Identities.Id;
@@ -461,8 +468,6 @@ package Landin.IR is
    --  Landin.Resolution.Sort_Of when the item is added and never asked
    --  again, which is what Landin.Resolution does with Declaration_Sort.
    type Item_Kind is (Routine, Datum);
-
-   type Unit is tagged limited private;
 
    ------------------------------------------------------------------
    --  Building
