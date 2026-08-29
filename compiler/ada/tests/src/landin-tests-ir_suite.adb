@@ -14,6 +14,7 @@
 
 with Ada.Strings.Fixed;
 
+with Landin.Cleanup;
 with Landin.IR;
 with Landin.IR.Dump;
 with Landin.IR.Verifier;
@@ -1294,6 +1295,50 @@ package body Landin.Tests.IR_Suite is
       end;
    end A_Control_Join_Crosses_Through_Caller_Storage;
 
+   --  The exit selector is deliberately neutral semantic data rather than
+   --  an x86 branch kind or a cleanup opcode.  `undo` is still refused by
+   --  the parser, but its eventual failure-only policy is fixed beside the
+   --  defer policy before either flow or lowering consumes it.
+   procedure Cleanup_Exit_Selection_Is_Target_Neutral
+     (Item : in out Landin.Testing.Context);
+
+   procedure Cleanup_Exit_Selection_Is_Target_Neutral
+     (Item : in out Landin.Testing.Context) is
+   begin
+      Landin.Testing.Check
+        (Item,
+         Landin.Cleanup.Applies
+           (Landin.Cleanup.Deferred_Call,
+            Landin.Cleanup.Normal_Fallthrough)
+         and then Landin.Cleanup.Applies
+           (Landin.Cleanup.Deferred_Call,
+            Landin.Cleanup.Successful_Return)
+         and then Landin.Cleanup.Applies
+           (Landin.Cleanup.Deferred_Call,
+            Landin.Cleanup.Failure_Propagation)
+         and then Landin.Cleanup.Applies
+           (Landin.Cleanup.Deferred_Call,
+            Landin.Cleanup.Structured_Transfer),
+         "defer applies to every language edge that unwinds a block");
+      Landin.Testing.Check
+        (Item,
+         not Landin.Cleanup.Applies
+           (Landin.Cleanup.Deferred_Call, Landin.Cleanup.Trap_Stop),
+         "a trap never selects deferred cleanup");
+      Landin.Testing.Check
+        (Item,
+         Landin.Cleanup.Applies
+           (Landin.Cleanup.Failure_Undo,
+            Landin.Cleanup.Failure_Propagation)
+         and then not Landin.Cleanup.Applies
+           (Landin.Cleanup.Failure_Undo,
+            Landin.Cleanup.Normal_Fallthrough)
+         and then not Landin.Cleanup.Applies
+           (Landin.Cleanup.Failure_Undo,
+            Landin.Cleanup.Successful_Return),
+         "the future undo policy selects failure edges alone");
+   end Cleanup_Exit_Selection_Is_Target_Neutral;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1335,6 +1380,9 @@ package body Landin.Tests.IR_Suite is
       Landin.Testing.Register
         (Into, "ir", "a control join crosses through caller storage",
          A_Control_Join_Crosses_Through_Caller_Storage'Access);
+      Landin.Testing.Register
+        (Into, "ir", "cleanup exit selection is target neutral",
+         Cleanup_Exit_Selection_Is_Target_Neutral'Access);
    end Register;
 
 end Landin.Tests.IR_Suite;
