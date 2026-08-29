@@ -1884,6 +1884,11 @@ boundary: a depth-one ordinary child, direct array field or nested child array
 leaf may supply a matching aggregate parameter. Parent and child identities
 stay neutral until the backend derives the selected target address.
 
+The eleventh increment lets an aggregate parameter context type `zeroed`.
+Lowering clears a fresh shaped caller temporary and transports its address
+through the same convention, so no second all-zero ABI rule or general
+aggregate expression is introduced.
+
 Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20

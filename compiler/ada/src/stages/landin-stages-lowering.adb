@@ -650,6 +650,10 @@ package body Landin.Stages.Lowering is
          Means : constant Res.Declaration_Id :=
            Res.Bound_To (Meanings.all, Of_Tree, Callee);
          Target : constant IR.Item_Id := IR.Item_For (Unit.all, Means);
+         Their_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Means));
+         Their_Node : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Means);
          Count : constant Natural := Syn.Argument_Count (Of_Tree, Node);
          Given : array (1 .. Positive'Max (1, Count)) of IR.Value_Id :=
            [others => IR.No_Value];
@@ -670,44 +674,88 @@ package body Landin.Stages.Lowering is
                if Type_At (Of_Tree, Argument)
                     in Ty.Aggregate | Ty.Fixed_Array
                then
-                  declare
-                     Selected : constant Boolean :=
-                       Syn.Kind (Of_Tree, Argument) = Syn.Member_Selection;
-                     Nested : constant Boolean :=
-                       Selected
-                       and then Syn.Kind
-                         (Of_Tree, Syn.Target_Of (Of_Tree, Argument))
-                           = Syn.Member_Selection;
-                     Middle : constant Syn.Node_Id :=
-                       (if Nested
-                        then Syn.Target_Of (Of_Tree, Argument)
-                        else Syn.No_Node);
-                     Named : constant Syn.Node_Id :=
-                       (if Nested
-                        then Syn.Target_Of (Of_Tree, Middle)
-                        elsif Selected
-                        then Syn.Target_Of (Of_Tree, Argument)
-                        else Argument);
-                     Field : constant Natural :=
-                       (if Nested
-                        then Landin.Checking.Field_Index
-                          (Types.all, Of_Tree, Middle)
-                        elsif Selected
-                        then Landin.Checking.Field_Index
-                          (Types.all, Of_Tree, Argument)
-                        else 0);
-                     Child : constant Natural :=
-                       (if Nested
-                        then Landin.Checking.Field_Index
-                          (Types.all, Of_Tree, Argument)
-                        else 0);
-                  begin
-                     Given (Which) :=
-                       IR.Emit_Storage_Address
-                         (Unit.all, Filling, Storage_For (Of_Tree, Named),
-                          Site_Of (Of_Tree, Argument),
-                          Field => Field, Nested_Field => Child);
-                  end;
+                  if Syn.Kind (Of_Tree, Argument) = Syn.Zeroed_Literal then
+                     declare
+                        Parameter : constant Syn.Node_Id :=
+                          Syn.Nth_Parameter
+                            (Their_Tree.all, Their_Node, Which);
+                        Id : constant Res.Declaration_Id :=
+                          Declaration_At
+                            (Syn.Source_Of (Their_Tree.all), Parameter);
+                        Temporary : IR.Slot_Id;
+                     begin
+                        if Type_At (Of_Tree, Argument) = Ty.Aggregate then
+                           Temporary := IR.Add_Aggregate_Slot
+                             (Unit.all, Filling, Res.No_Declaration,
+                              Site_Of (Of_Tree, Argument));
+                           for Field in
+                             1 .. Landin.Checking.Layout_Field_Count
+                                    (Types.all, Id)
+                           loop
+                              Add_Stored_Field
+                                (Id, Field, Slot => Temporary);
+                           end loop;
+                        else
+                           Temporary := IR.Add_Array_Slot
+                             (Unit.all, Filling,
+                              Landin.Checking.Array_Element (Types.all, Id),
+                              IR.Element_Total
+                                (Landin.Checking.Array_Length
+                                   (Types.all, Id)),
+                              Res.No_Declaration,
+                              Site_Of (Of_Tree, Argument));
+                        end if;
+
+                        IR.Emit_Array_Clear
+                          (Unit.all, Filling,
+                           (Kind => IR.Frame_Slot, Slot => Temporary),
+                           Site_Of (Of_Tree, Argument));
+                        Given (Which) := IR.Emit_Storage_Address
+                          (Unit.all, Filling,
+                           (Kind => IR.Frame_Slot, Slot => Temporary),
+                           Site_Of (Of_Tree, Argument));
+                     end;
+                  else
+                     declare
+                        Selected : constant Boolean :=
+                          Syn.Kind (Of_Tree, Argument)
+                            = Syn.Member_Selection;
+                        Nested : constant Boolean :=
+                          Selected
+                          and then Syn.Kind
+                            (Of_Tree, Syn.Target_Of (Of_Tree, Argument))
+                              = Syn.Member_Selection;
+                        Middle : constant Syn.Node_Id :=
+                          (if Nested
+                           then Syn.Target_Of (Of_Tree, Argument)
+                           else Syn.No_Node);
+                        Named : constant Syn.Node_Id :=
+                          (if Nested
+                           then Syn.Target_Of (Of_Tree, Middle)
+                           elsif Selected
+                           then Syn.Target_Of (Of_Tree, Argument)
+                           else Argument);
+                        Field : constant Natural :=
+                          (if Nested
+                           then Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Middle)
+                           elsif Selected
+                           then Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Argument)
+                           else 0);
+                        Child : constant Natural :=
+                          (if Nested
+                           then Landin.Checking.Field_Index
+                             (Types.all, Of_Tree, Argument)
+                           else 0);
+                     begin
+                        Given (Which) :=
+                          IR.Emit_Storage_Address
+                            (Unit.all, Filling, Storage_For (Of_Tree, Named),
+                             Site_Of (Of_Tree, Argument),
+                             Field => Field, Nested_Field => Child);
+                     end;
+                  end if;
                else
                   Given (Which) :=
                     Lower_Expression (Of_Tree, Argument, Scope);
