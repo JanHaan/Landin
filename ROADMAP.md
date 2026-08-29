@@ -2007,6 +2007,13 @@ inference. A nominal construction whose body has an ordinary child is
 admitted. A module binding's static image containing a child value remains
 refused, because [1940] folds an image rather than copying it.
 
+The thirty-sixth increment gives a variant case payload field an ordinary
+struct type, with the contextual values a labelled child takes and a match
+alias that names the whole struct. A payload struct holding a variant part of
+its own stays refused, and so does a module image containing one: [1940] folds
+an image rather than copying it, and D67's folded run has no carrier for a
+child's own image. Both refusals name this item.
+
 Function-typed module storage, struct fields, function parameters and results,
 declared-error function types and anonymous functions remain in this item.
 Further aggregate arguments and result contexts remain here too; R4.40 later

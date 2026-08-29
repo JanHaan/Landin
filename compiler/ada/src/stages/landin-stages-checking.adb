@@ -427,13 +427,23 @@ package body Landin.Stages.Checking is
                   if Held = Ty.Aggregate
                     and then Into.Kind /= Landin.Checking.Aggregate_Field
                   then
+                     --  D118/D120 admit an ordinary child and an ordinary
+                     --  payload; what is left is a struct that has a
+                     --  variant part of its own.
                      Bad.Report
                        (Item    => Bad.Unsupported_Use,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Each),
-                        Message => "a field of a struct type is not"
-                                   & " enabled yet",
-                        Refused => Bad.Struct_Value,
+                        Message =>
+                          (if Aggregate_Allowed
+                           then "a struct with a variant part is not a"
+                                & " field or a payload yet"
+                           else "a field of a struct type is not"
+                                & " enabled yet"),
+                        Refused =>
+                          (if Aggregate_Allowed
+                           then Bad.Nested_Variant_Struct
+                           else Bad.Struct_Value),
                         Into    => Found);
                   end if;
                end Check_Leaf;
@@ -479,10 +489,17 @@ package body Landin.Stages.Checking is
                                  Next_Case := Next_Case + 1;
 
                                  for Position in 1 .. Payload_Count loop
+                                    --  D120: a payload field may be an
+                                    --  ordinary struct, for the reason an
+                                    --  ordinary field may -- its extent is
+                                    --  the child's own layout.  A variant
+                                    --  part inside one is still refused,
+                                    --  because Check_Leaf will not take a
+                                    --  child that has one.
                                     Check_Leaf
                                       (Syn.Nth_Payload_Field
                                          (Of_Tree, Variant, Position),
-                                       Payloads (Next_Payload), False);
+                                       Payloads (Next_Payload), True);
                                     Next_Payload := Next_Payload + 1;
                                  end loop;
                               end;
@@ -2449,6 +2466,8 @@ package body Landin.Stages.Checking is
       --  Whether this node directly names a binding that owns runtime storage.
       function Is_Direct_Binding_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      function Is_Aggregate_Alias_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
       function Is_Direct_Binding_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
@@ -2461,6 +2480,31 @@ package body Landin.Stages.Checking is
                        Res.Bound_To (Meanings.all, Of_Tree, Node))
                     in Res.Module_Binding | Res.Local_Binding;
       end Is_Direct_Binding_Name;
+
+      --  D120: a match alias for an ordinary-struct payload names storage
+      --  the same way a binding does, so it is a copy source in every
+      --  context that takes one.  It is deliberately a second question
+      --  rather than a wider Is_Direct_Binding_Name: an alias is not a
+      --  binding anywhere else in this checker.
+      function Is_Aggregate_Alias_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+      begin
+         if Syn.Kind (Of_Tree, Node) /= Syn.Name_Reference
+           or else Res.Verdict_Of (Meanings.all, Of_Tree, Node) /= Res.Bound
+         then
+            return False;
+         end if;
+
+         declare
+            Means : constant Res.Declaration_Id :=
+              Res.Bound_To (Meanings.all, Of_Tree, Node);
+         begin
+            return Res.Sort_Of (Meanings.all, Means) = Res.Pattern_Binding
+              and then Landin.Checking.Type_Of (Types.all, Means)
+                         = Ty.Aggregate;
+         end;
+      end Is_Aggregate_Alias_Name;
 
       --  D41 is a direct-binding slice; D42 adds one ordinary scalar field or
       --  fixed-array element selected immediately from that storage.  D62
@@ -3430,6 +3474,17 @@ package body Landin.Stages.Checking is
             Given : Syn.Node_Id;
             Shape : Landin.Checking.Field_Shape);
 
+         --  D120: a payload field of ordinary struct type takes the same
+         --  contextual values a labelled ordinary child does -- `zeroed`,
+         --  a matching literal or nominal construction, and a copy from
+         --  storage of the same nominal type.  A module image of one is
+         --  still refused, for the reason a module image of an ordinary
+         --  child is.
+         procedure Check_Aggregate_Payload
+           (Label : Syn.Node_Id;
+            Given : Syn.Node_Id;
+            Shape : Landin.Checking.Field_Shape);
+
          function Subtree_Was_Refused
            (Node : Syn.Node_Id) return Boolean
          is
@@ -3451,6 +3506,72 @@ package body Landin.Stages.Checking is
             end loop;
             return False;
          end Subtree_Was_Refused;
+
+         procedure Check_Aggregate_Payload
+           (Label : Syn.Node_Id;
+            Given : Syn.Node_Id;
+            Shape : Landin.Checking.Field_Shape)
+         is
+            Expected : constant Res.Declaration_Id := Shape.Aggregate_Body;
+            Got : Ty.Type_Kind;
+         begin
+            if Static_Image then
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Given),
+                  Message => "a module variant image cannot yet contain an"
+                             & " ordinary-struct payload value",
+                  Refused => Bad.Nested_Module_Image,
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Given);
+               return;
+            end if;
+
+            if Syn.Kind (Of_Tree, Given) = Syn.Zeroed_Literal then
+               Landin.Checking.Note
+                 (Types.all, Of_Tree, Given, Ty.Aggregate);
+               Landin.Checking.Note_Body
+                 (Types.all, Of_Tree, Given, Expected);
+               return;
+            elsif Syn.Kind (Of_Tree, Given) = Syn.Struct_Literal then
+               if Construction_Agrees
+                    (Of_Tree, Given, Expected,
+                     Syn.Origin (Of_Tree, Label),
+                     "this ordinary-struct payload field")
+               then
+                  Check_Struct_Literal
+                    (Of_Tree, Given, Expected, Static_Image => False);
+               end if;
+               return;
+            elsif Is_Direct_Binding_Name (Of_Tree, Given)
+              or else Is_Aggregate_Alias_Name (Of_Tree, Given)
+              or else Syn.Kind (Of_Tree, Given) = Syn.Member_Selection
+            then
+               Got := Selected_From (Of_Tree, Given);
+            else
+               Got := Synthesise (Of_Tree, Given);
+            end if;
+
+            if Got = Ty.Aggregate
+              and then Landin.Checking.Body_Of
+                (Types.all, Of_Tree, Given) = Expected
+            then
+               null;
+            elsif Got /= Ty.Ill_Typed then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Given),
+                  Message => "this is not the nominal struct type named by"
+                             & " the payload field",
+                  Note    => "[0710]: ordinary struct identity is nominal",
+                  Related => Syn.Origin (Of_Tree, Label),
+                  Because => "the payload field named here",
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Given);
+            end if;
+         end Check_Aggregate_Payload;
 
          procedure Check_Fixed_Array_Payload
            (Label : Syn.Node_Id;
@@ -3838,8 +3959,8 @@ package body Landin.Stages.Checking is
                                    (Label, Given, Shape);
 
                               when Landin.Checking.Aggregate_Field =>
-                                 raise Landin.Compiler_Defect with
-                                   "a nested aggregate payload reached D76";
+                                 Check_Aggregate_Payload
+                                   (Label, Given, Shape);
 
                               when Landin.Checking.Variant_Field =>
                                  raise Landin.Compiler_Defect with
@@ -3979,7 +4100,7 @@ package body Landin.Stages.Checking is
                   Where   => Syn.Where (Of_Tree, Value),
                   Message => "a module struct image cannot yet contain an"
                              & " ordinary-child field value",
-                  Refused => Bad.Struct_Value,
+                  Refused => Bad.Nested_Module_Image,
                   Into    => Found);
                Landin.Checking.Refuse (Types.all, Of_Tree, Value);
                return;
@@ -4002,6 +4123,7 @@ package body Landin.Stages.Checking is
                end if;
                return;
             elsif Is_Direct_Binding_Name (Of_Tree, Value)
+              or else Is_Aggregate_Alias_Name (Of_Tree, Value)
               or else Syn.Kind (Of_Tree, Value) = Syn.Member_Selection
             then
                Got := Selected_From (Of_Tree, Value);
@@ -4863,24 +4985,46 @@ package body Landin.Stages.Checking is
                                        (Types.all, Wrote, Field, Which,
                                         Payload);
                               begin
-                                 if Shape.Kind =
-                                      Landin.Checking.Scalar_Field
-                                 then
-                                    Landin.Checking.Settle
-                                      (Types.all, Id, Shape.Element);
-                                    Landin.Checking.Note
-                                      (Types.all, Of_Tree, Binding,
-                                       Shape.Element);
-                                 else
-                                    Landin.Checking.Settle
-                                      (Types.all, Id, Ty.Fixed_Array);
-                                    Landin.Checking.Note
-                                      (Types.all, Of_Tree, Binding,
-                                       Ty.Fixed_Array);
-                                    Landin.Checking.Note_Array
-                                      (Types.all, Id,
-                                       Shape.Length, Shape.Element);
-                                 end if;
+                                 case Shape.Kind is
+                                    when Landin.Checking.Scalar_Field =>
+                                       Landin.Checking.Settle
+                                         (Types.all, Id, Shape.Element);
+                                       Landin.Checking.Note
+                                         (Types.all, Of_Tree, Binding,
+                                          Shape.Element);
+
+                                    when Landin.Checking.Fixed_Array_Field =>
+                                       Landin.Checking.Settle
+                                         (Types.all, Id, Ty.Fixed_Array);
+                                       Landin.Checking.Note
+                                         (Types.all, Of_Tree, Binding,
+                                          Ty.Fixed_Array);
+                                       Landin.Checking.Note_Array
+                                         (Types.all, Id,
+                                          Shape.Length, Shape.Element);
+
+                                    when Landin.Checking.Aggregate_Field =>
+                                       --  D120: the alias names the whole
+                                       --  payload struct, so it carries
+                                       --  [0710]'s identity and its fields
+                                       --  are reached as any struct's are.
+                                       Landin.Checking.Settle
+                                         (Types.all, Id, Ty.Aggregate);
+                                       Landin.Checking.Note_Body
+                                         (Types.all, Id,
+                                          Shape.Aggregate_Body);
+                                       Landin.Checking.Note
+                                         (Types.all, Of_Tree, Binding,
+                                          Ty.Aggregate);
+                                       Landin.Checking.Note_Body
+                                         (Types.all, Of_Tree, Binding,
+                                          Shape.Aggregate_Body);
+
+                                    when Landin.Checking.Variant_Field =>
+                                       raise Landin.Compiler_Defect with
+                                         "a variant payload reached a"
+                                         & " match binding";
+                                 end case;
                               end;
                            end loop;
                         end if;
@@ -5380,6 +5524,8 @@ package body Landin.Stages.Checking is
                         declare
                            Got : constant Ty.Type_Kind :=
                              (if Is_Direct_Binding_Name (Of_Tree, Value)
+                                   or else Is_Aggregate_Alias_Name
+                                     (Of_Tree, Value)
                                    or else Syn.Kind (Of_Tree, Value)
                                              = Syn.Member_Selection
                               then Selected_From (Of_Tree, Value)

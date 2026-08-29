@@ -1,0 +1,66 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+choice: type = struct
+    kind: variant
+        leaf |
+        spot: (at: point, weight: i32)
+    end kind
+end choice
+
+mut state: choice
+place: point = (x: 5, y: 6)
+
+constructed: () -> (result: i32) =
+    state.kind = spot(at: point(x: 1, y: 2), weight: 3)
+    result = 0
+    match state.kind
+        leaf: result = 0
+        spot(at, weight): result = at.x + at.y + weight
+    end match
+end constructed
+
+copied: () -> (result: i32) =
+    mut local: choice
+    local.kind = leaf
+    state.kind = spot(at: place, weight: 4)
+    result = 0
+    match state.kind
+        leaf: local.kind = leaf
+        spot(at, weight): if true then
+            local.kind = spot(at: at, weight: weight)
+        end if
+    end match
+    match local.kind
+        leaf: result = 0
+        spot(at, weight): result = at.x + at.y + weight
+    end match
+end copied
+
+cleared: () -> (result: i32) =
+    state.kind = spot(at: zeroed, weight: 9)
+    result = 0
+    match state.kind
+        leaf: result = 0
+        spot(at, weight): result = at.x + at.y + weight
+    end match
+end cleared
+
+written: () -> (result: i32) =
+    state.kind = spot(at: point(x: 1, y: 1), weight: 1)
+    result = 0
+    match state.kind
+        leaf: result = 0
+        spot(inout at, weight): if true then
+            at.x = at.x + 8
+            at.y = at.y + 1
+            result = at.x + at.y + weight
+        end if
+    end match
+end written
+
+public main: () -> (code: i32) =
+    code = constructed() + copied() + cleared() + written()
+end main

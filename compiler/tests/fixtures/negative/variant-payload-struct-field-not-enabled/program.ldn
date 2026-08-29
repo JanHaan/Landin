@@ -1,9 +1,0 @@
-inner: type = struct
-    value: u8
-end inner
-
-outer: type = struct
-    kind: variant
-        nested: (value: inner)
-    end kind
-end outer

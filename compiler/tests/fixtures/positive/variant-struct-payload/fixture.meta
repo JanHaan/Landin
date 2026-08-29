@@ -1,0 +1,5 @@
+class: positive
+summary: D120 gives a variant case payload field an ordinary struct type, constructs it, copies it and matches it
+constructs: 0420, 0670, 0680, 0700, 0710, 0750, 1795, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64
