@@ -182,17 +182,19 @@ private
      is (case Item is
             --  R2.20 implements the types a program declares.
             when Declared_Type        => "R2.20",
-            --  R2.30 implements control flow and declared errors.
+            --  R2.30 implements non-loop control flow, declared errors and
+            --  multiple returns.  R4.10 owns the remaining hosted loop
+            --  surface, including its transfers.
             when Try_Expression
                | Fail_Statement
                | Defer_Statement
                | Undo_Statement
-               | Loop_Statement
+               | Multiple_Returns     => "R2.30",
+            when Loop_Statement
                | While_Statement
                | For_Statement
                | Continue_Statement
-               | Break_Statement
-               | Multiple_Returns     => "R2.30",
+               | Break_Statement      => "R4.10",
             --  The remaining R2.20 constructs each wait for their own
             --  aggregate slice.
             when Struct_Type
