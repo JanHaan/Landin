@@ -1,0 +1,5 @@
+class: negative
+summary: defer registers a call rather than an uncalled name
+program: program.ldn
+codes: L0103
+constructs: 1100, 1800, 1810, 1830

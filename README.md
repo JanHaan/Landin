@@ -18,8 +18,10 @@ active. `refine` scans, parses, resolves names, checks types and definite
 assignment, lowers and verifies target-neutral IR, emits Linux x86-64
 assembly, and can assemble and link a hosted executable. Runtime fixtures run
 those binaries on the native x86-64 gate. The enabled kernel includes scalars,
-fixed arrays, depth-one ordinary structs and unfolded variants; native macOS
-arm64, Cortex-M and the standard library remain future work.**
+fixed arrays, recursively nested ordinary structs, unfolded variants,
+first-class infallible function signatures, expression-valued non-loop control
+flow and lexical `defer`; native macOS arm64, Cortex-M and the standard library
+remain future work.**
 
 ## What is here
 
@@ -142,7 +144,8 @@ on macOS arm64 and passes its full suite there when the Linux target toolchain
 is present; the pinned `linux/amd64` container and x86-64 CI run the Linux
 binaries. R2 is active; R2.20's
 target-parametric aggregate and variant representation is complete, and R2.30
-owns functions, control-flow expressions, declared errors and the aggregate ABI.
+owns functions, control-flow expressions, lexical cleanup, declared errors and
+the aggregate ABI.
 Language and architecture questions are resolved when the first vertical
 slice needs them.
 

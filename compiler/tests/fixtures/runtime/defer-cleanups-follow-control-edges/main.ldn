@@ -1,0 +1,83 @@
+mut trace: i32 = 0
+
+mark: (value: i32) -> none =
+    trace = trace * 10 + value
+end mark
+
+normal: () -> none =
+    mut late: i32 = 1
+    defer mark(late)
+    defer mark(2)
+    late = 3
+end normal
+
+nested: (leave: bool) -> (result: i32) =
+    defer mark(4)
+    begin
+        mut inner: i32 = 1
+        defer mark(inner)
+        inner = 5
+        if leave then
+            result = 42
+            return
+        end if
+        defer mark(6)
+    end
+    defer mark(7)
+    result = 0
+end nested
+
+control_value: (left: bool) -> (result: i32) =
+    mut late: i32 = 8
+    result = if left then
+        defer mark(late)
+        late = 9
+        42
+    else
+        begin
+            defer mark(1)
+            42
+        end
+    end if
+end control_value
+
+return_from_cleanup_argument: () -> (result: i32) =
+    defer mark(begin
+        result = 42
+        return
+    end)
+    defer mark(2)
+end return_from_cleanup_argument
+
+public main: () -> (code: i32) =
+    normal()
+    normal_ok: bool = trace == 23
+
+    trace = 0
+    early: i32 = nested(true)
+    early_ok: bool = early == 42 and trace == 54
+
+    trace = 0
+    ordinary: i32 = nested(false)
+    nested_ok: bool = ordinary == 0 and trace == 6574
+
+    trace = 0
+    left: i32 = control_value(true)
+    left_ok: bool = left == 42 and trace == 9
+
+    trace = 0
+    right: i32 = control_value(false)
+    right_ok: bool = right == 42 and trace == 1
+
+    trace = 0
+    cleanup_exit: i32 = return_from_cleanup_argument()
+    cleanup_exit_ok: bool = cleanup_exit == 42 and trace == 2
+
+    if normal_ok and early_ok and nested_ok and left_ok and right_ok
+      and cleanup_exit_ok
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

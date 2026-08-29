@@ -1,0 +1,8 @@
+sink: (value: i32) -> none =
+    _ = value
+end sink
+
+f: () -> none =
+    defer sink(local)
+    local: i32 = 42
+end f

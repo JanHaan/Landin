@@ -1,0 +1,6 @@
+class: runtime
+summary: a trap stops before normal block cleanup and never unwinds defer
+program: main.ldn
+traps: yes
+constructs: 0290, 0410, 0930, 1100, 1800, 1810, 1920, 1960
+targets: linux-x86-64

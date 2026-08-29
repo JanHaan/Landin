@@ -6699,6 +6699,17 @@ package body Landin.Stages.Checking is
                   end if;
                end;
 
+            when Syn.Defer_Statement =>
+               --  [1100]: type the registered call where it is written, but
+               --  leave every definite-assignment read to the exit point at
+               --  which its callee and arguments are actually evaluated.
+               declare
+                  Got : constant Ty.Type_Kind :=
+                    Synthesise (Of_Tree, Syn.Deferred_Call (Of_Tree, Node));
+               begin
+                  pragma Unreferenced (Got);
+               end;
+
             when Syn.Return_Statement =>
                --  [1890]: an exit's `when` is a condition, so it is a bool
                --  for [1050]'s reason asked where the exit is.

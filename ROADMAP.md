@@ -2085,6 +2085,20 @@ Whole inferred bindings, field reads, by-name partial destructuring, aggregate
 and function-valued fields, and control-expression joins all retain that one
 shape without a source-level tuple type or another ABI convention.
 
+The forty-fifth increment enables `defer` over a lexical cleanup stack. A
+reached statement registers only its call syntax; callee and argument
+evaluation happens in reverse order after a block's final value on ordinary
+fallthrough, and across every active inner-to-outer frame before a successful
+return. Definite assignment is consequently checked at each execution edge,
+while resolution remains source ordered at the statement. Cleanup calls lower
+to the existing direct or indirect internal convention, including register and
+stack arguments, function values, stored aggregate arguments and caller-owned
+aggregate results. The neutral exit selector already distinguishes normal,
+successful-return, future failure and structured-transfer edges from a trap,
+which never unwinds. Its failure-only cleanup policy is reserved for `undo`;
+the spelling remains refused until this item's declared-error increment
+supplies a failure edge, and R4.10 still owns every loop transfer.
+
 Further aggregate arguments and result contexts remain here too; R4.40 later
 supplies complete C ABI classification rather than owning this internal
 convention.
@@ -2110,8 +2124,10 @@ Exit evidence: ABI tests cover ordinary and failing calls, aggregate values,
 inferred and explicitly typed indirect calls, function-valued parameters and
 results, multiple named structural results and by-name destructuring, static
 and mutable module addresses, no-capture anonymous routines,
-expression-valued non-loop controls, more arguments than the register-only
-stopgap accepted and every control-flow exit path. Malformed IR also proves
+expression-valued non-loop controls, lexical reverse-order deferred cleanup,
+late direct and indirect cleanup arguments, more arguments than the
+register-only stopgap accepted and every enabled control-flow exit path.
+Malformed IR also proves
 that a runtime address, nested descriptor or static routine target cannot
 substitute for its neutral signature descriptor.
 

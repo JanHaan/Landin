@@ -601,6 +601,40 @@ item 2 ROUTINE reach result none signature 1 params 0 slots 3 blocks 1 values 17
     15 LOAD usize slot 3
     16 STORE_ELEMENT datum 1 global field 2 nested 2 nested 2 <- 15 14
     17 LEAVE
+file positive/defer-evaluates-at-exit/program.ldn
+unit signatures 3 items 3
+signature 1 (i32) -> none
+signature 2 () -> i32
+signature 3 () -> none
+item 1 ROUTINE sink result none signature 1 params 1 slots 1 blocks 1 values 2
+  slot 1 value i32 param 1
+  block 1 scope 3 BLOCK length 2
+    1 LOAD i32 slot 1
+    2 LEAVE
+item 2 ROUTINE fills_return result i32 signature 2 params 0 slots 2 blocks 3 values 10
+  slot 1 result i32 return
+  slot 2 - i32
+  block 1 scope 5 BLOCK length 1
+    1 JUMP target 2
+  block 2 scope 6 BLOCK length 5
+    2 NUMBER i32 42
+    3 STORE slot 1 <- 2
+    4 LOAD i32 slot 1
+    5 STORE slot 2 <- 4
+    6 JUMP target 3
+  block 3 scope 5 BLOCK length 4
+    7 LOAD i32 slot 2
+    8 CALL none callee 1 sink signature 1 <- 7
+    9 LOAD i32 slot 1
+    10 LEAVE <- 9
+item 3 ROUTINE assigned_later result none signature 3 params 0 slots 1 blocks 1 values 5
+  slot 1 local i32
+  block 1 scope 8 BLOCK length 5
+    1 NUMBER i32 42
+    2 STORE slot 1 <- 1
+    3 LOAD i32 slot 1
+    4 CALL none callee 1 sink signature 1 <- 3
+    5 LEAVE
 file positive/discard-of-a-value/program.ldn
 unit signatures 1 items 1
 signature 1 () -> none
