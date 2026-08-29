@@ -31,6 +31,7 @@ package body Landin.Stages.Checking is
    use type Landin.Checking.Progress;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Field_Kind;
+   use type Landin.Checking.Signature_Id;
    use type Res.Verdict;
    use type Res.Declaration_Sort;
    use type Landin.Source.Source_Id;
@@ -132,6 +133,9 @@ package body Landin.Stages.Checking is
 
       function Settled_Type (Id : Res.Declaration_Id) return Ty.Type_Kind;
       function Declared_As (Id : Res.Declaration_Id) return Ty.Type_Kind;
+      function Signature_At
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         return Landin.Checking.Signature_Id;
       function Is_Local_Binding
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Construction_Body
@@ -168,12 +172,12 @@ package body Landin.Stages.Checking is
       function Synthesise_Binary
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Signatures_Agree
-        (Left, Right : Res.Declaration_Id) return Boolean;
+        (Left, Right : Landin.Checking.Signature_Id) return Boolean;
 
       function Check_Call
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Callee  : Res.Declaration_Id) return Ty.Type_Kind;
+         Signature : Landin.Checking.Signature_Id) return Ty.Type_Kind;
       procedure Require
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -191,7 +195,9 @@ package body Landin.Stages.Checking is
          Literal      : Syn.Node_Id;
          Expected     : Landin.Checking.Element_Count;
          Element      : Ty.Scalar_Name;
-         Static_Image : Boolean);
+         Static_Image : Boolean;
+         Context_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin);
       procedure Check_Struct_Literal
         (Of_Tree      : Syn.Tree;
          Literal      : Syn.Node_Id;
@@ -212,14 +218,18 @@ package body Landin.Stages.Checking is
          Repetition   : Syn.Node_Id;
          Expected     : Landin.Checking.Element_Count;
          Element      : Ty.Scalar_Name;
-         Static_Image : Boolean);
+         Static_Image : Boolean;
+         Context_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin);
       procedure Check_Array_Repetition
         (Of_Tree      : Syn.Tree;
          Site_Node    : Syn.Node_Id;
          Repetition   : Syn.Node_Id;
          Expected     : Landin.Checking.Element_Count;
          Element      : Ty.Scalar_Name;
-         Static_Image : Boolean);
+         Static_Image : Boolean;
+         Context_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin);
       procedure Check_Statement
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Block
@@ -257,6 +267,23 @@ package body Landin.Stages.Checking is
          For_Declaration : Res.Declaration_Id := Res.No_Declaration)
          return Ty.Type_Kind is
       begin
+         --  D117's written function type is the same target-neutral
+         --  descriptor a declared function receives.  Build it once per
+         --  syntax occurrence; aliases and values copy its identity below.
+         if Syn.Kind (Of_Tree, Written) = Syn.Function_Type then
+            if Landin.Checking.Signature_Of
+                 (Types.all, Of_Tree, Written)
+                 /= Landin.Checking.No_Signature
+            then
+               return Ty.Function_Value;
+            end if;
+
+            return
+              (if Signature_At (Of_Tree, Written)
+                    = Landin.Checking.No_Signature
+               then Ty.Ill_Typed else Ty.Function_Value);
+         end if;
+
          --  [0670]'s block form.  Every field's type is checked here,
          --  because this is the walk that reaches them: a field is a
          --  binding without a value and nothing else visits one.
@@ -691,10 +718,116 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Array_Element (Types.all, Means));
                end if;
 
+               if Held = Ty.Function_Value then
+                  Landin.Checking.Note_Signature
+                    (Types.all, Of_Tree, Written,
+                     Landin.Checking.Signature_Of (Types.all, Means));
+               end if;
+
                return Held;
             end;
          end;
       end Type_At;
+
+      function Signature_At
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+         return Landin.Checking.Signature_Id
+      is
+         Count : constant Natural := Syn.Parameter_Count (Of_Tree, Node);
+         Parts : Landin.Checking.Signature_Part_Array (1 .. Count) :=
+           [others => (others => <>)];
+         Result : Landin.Checking.Signature_Part := (others => <>);
+         Valid : Boolean := True;
+
+         function Part_At
+           (Declared : Syn.Node_Id;
+            Site     : Landin.Provenance.Origin)
+            return Landin.Checking.Signature_Part;
+
+         function Part_At
+           (Declared : Syn.Node_Id;
+            Site     : Landin.Provenance.Origin)
+            return Landin.Checking.Signature_Part
+         is
+            Written : constant Syn.Node_Id :=
+              Syn.Declared_Type (Of_Tree, Declared);
+            Held : constant Ty.Type_Kind := Type_At (Of_Tree, Written);
+            Part : Landin.Checking.Signature_Part :=
+              (Kind => Held, Site => Site, others => <>);
+         begin
+            case Held is
+               when Ty.Scalar_Name =>
+                  null;
+               when Ty.Aggregate =>
+                  Part.Aggregate_Body :=
+                    Landin.Checking.Body_Of (Types.all, Of_Tree, Written);
+                  Valid := Valid
+                    and then Part.Aggregate_Body /= Res.No_Declaration;
+               when Ty.Fixed_Array =>
+                  Part.Length :=
+                    Landin.Checking.Array_Length
+                      (Types.all, Of_Tree, Written);
+                  Part.Element :=
+                    Landin.Checking.Array_Element
+                      (Types.all, Of_Tree, Written);
+               when Ty.Function_Value =>
+                  --  Function parameters and function results remain later
+                  --  R2.30 work.  The written outer type is enabled; nesting
+                  --  one here would enable ABI passage as a side effect.
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Written),
+                     Message => "a function type as a parameter or return"
+                                & " is not enabled yet",
+                     Refused => Bad.Function_Value,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Written);
+                  Valid := False;
+               when others =>
+                  Valid := False;
+            end case;
+            return Part;
+         end Part_At;
+      begin
+         for Index in Parts'Range loop
+            declare
+               Parameter : constant Syn.Node_Id :=
+                 Syn.Nth_Parameter (Of_Tree, Node, Index);
+            begin
+               Parts (Index) :=
+                 Part_At (Parameter, Syn.Origin (Of_Tree, Parameter));
+            end;
+         end loop;
+
+         if Syn.Return_Of (Of_Tree, Node) = Syn.No_Node then
+            Result :=
+              (Kind => Ty.No_Value,
+               Site => Syn.Origin (Of_Tree, Node),
+               others => <>);
+         else
+            declare
+               Returns : constant Syn.Node_Id :=
+                 Syn.Return_Of (Of_Tree, Node);
+            begin
+               Result := Part_At (Returns, Syn.Origin (Of_Tree, Returns));
+            end;
+         end if;
+
+         if not Valid then
+            return Landin.Checking.No_Signature;
+         end if;
+
+         declare
+            Made : constant Landin.Checking.Signature_Id :=
+              Landin.Checking.Add_Signature
+                (Types.all, Parts, Result, Syn.Origin (Of_Tree, Node));
+         begin
+            Landin.Checking.Note_Signature
+              (Types.all, Of_Tree, Node, Made);
+            return Made;
+         end;
+      end Signature_At;
 
       --  D72: construction is a Struct_Literal whose optional nominal slot
       --  is a type position.  It supplies [0710]'s body to an inferred
@@ -1133,6 +1266,28 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Zeroed_Literal;
          begin
+            --  D117 enables the written type itself and explicitly typed
+            --  local storage.  Module images cannot contain code addresses,
+            --  and passing or returning one would be the separate function-
+            --  parameter ABI slice, so those contexts retain the existing
+            --  function-value refusal.
+            if Held = Ty.Function_Value
+              and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
+              and then
+                (Syn.Kind (Of_Tree, Node) /= Syn.Binding
+                 or else not Is_Local_Binding (Of_Tree, Node))
+            then
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Node),
+                  Message => "a written function type is enabled only for"
+                             & " a type declaration or local storage",
+                  Refused => Bad.Function_Value,
+                  Into    => Found);
+               return Ty.Ill_Typed;
+            end if;
+
             --  [1795] declares the type; most *values* of one wait for the
             --  rest of R2.20.  A declaration-only module array is zeroed by
             --  D10, a declaration-only local array is frame storage whose
@@ -1289,8 +1444,17 @@ package body Landin.Stages.Checking is
          Node    : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
       begin
          if Syn.Kind (Of_Tree.all, Node) = Syn.Function_Declaration then
-            Landin.Checking.Note_Body (Types.all, Id, Id);
-            return Ty.Function_Value;
+            declare
+               Signature : constant Landin.Checking.Signature_Id :=
+                 Signature_At (Of_Tree.all, Node);
+            begin
+               if Signature = Landin.Checking.No_Signature then
+                  return Ty.Ill_Typed;
+               end if;
+               Landin.Checking.Note_Signature
+                 (Types.all, Id, Signature);
+               return Ty.Function_Value;
+            end;
          end if;
 
          declare
@@ -1337,6 +1501,16 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Array_Length
                        (Types.all, Of_Tree.all, Written),
                      Landin.Checking.Array_Element
+                       (Types.all, Of_Tree.all, Written));
+               end if;
+
+               --  D117: a type alias and explicitly typed local carry the
+               --  descriptor written by their type position.  This is
+               --  independent of whichever function value later fills it.
+               if Held = Ty.Function_Value then
+                  Landin.Checking.Note_Signature
+                    (Types.all, Id,
+                     Landin.Checking.Signature_Of
                        (Types.all, Of_Tree.all, Written));
                end if;
 
@@ -1637,81 +1811,8 @@ package body Landin.Stages.Checking is
       end Synthesise_Binary;
 
       function Signatures_Agree
-        (Left, Right : Res.Declaration_Id) return Boolean
-      is
-         Left_Tree : constant not null access constant Syn.Tree :=
-           Tree_For (Res.Source_Of (Meanings.all, Left));
-         Right_Tree : constant not null access constant Syn.Tree :=
-           Tree_For (Res.Source_Of (Meanings.all, Right));
-         Left_Node : constant Syn.Node_Id :=
-           Res.Node_Of (Meanings.all, Left);
-         Right_Node : constant Syn.Node_Id :=
-           Res.Node_Of (Meanings.all, Right);
-
-         function Same_Declaration_Type
-           (Left_Tree, Right_Tree : Syn.Tree;
-            Left_Node, Right_Node : Syn.Node_Id) return Boolean;
-
-         function Same_Declaration_Type
-           (Left_Tree, Right_Tree : Syn.Tree;
-            Left_Node, Right_Node : Syn.Node_Id) return Boolean
-         is
-            Left_Id : constant Res.Declaration_Id :=
-              Declaration_At (Syn.Source_Of (Left_Tree), Left_Node);
-            Right_Id : constant Res.Declaration_Id :=
-              Declaration_At (Syn.Source_Of (Right_Tree), Right_Node);
-            Left_Type : constant Ty.Type_Kind :=
-              Landin.Checking.Type_Of (Types.all, Left_Id);
-            Right_Type : constant Ty.Type_Kind :=
-              Landin.Checking.Type_Of (Types.all, Right_Id);
-         begin
-            if Left_Type /= Right_Type then
-               return False;
-            elsif Left_Type = Ty.Aggregate then
-               return Landin.Checking.Body_Of (Types.all, Left_Id)
-                 = Landin.Checking.Body_Of (Types.all, Right_Id);
-            elsif Left_Type = Ty.Fixed_Array then
-               return Landin.Checking.Array_Length (Types.all, Left_Id)
-                        = Landin.Checking.Array_Length (Types.all, Right_Id)
-                 and then Landin.Checking.Array_Element (Types.all, Left_Id)
-                        = Landin.Checking.Array_Element (Types.all, Right_Id);
-            end if;
-            return True;
-         end Same_Declaration_Type;
-      begin
-         if Syn.Parameter_Count (Left_Tree.all, Left_Node)
-              /= Syn.Parameter_Count (Right_Tree.all, Right_Node)
-         then
-            return False;
-         end if;
-
-         for Position in 1 .. Syn.Parameter_Count
-           (Left_Tree.all, Left_Node)
-         loop
-            if not Same_Declaration_Type
-              (Left_Tree.all, Right_Tree.all,
-               Syn.Nth_Parameter (Left_Tree.all, Left_Node, Position),
-               Syn.Nth_Parameter (Right_Tree.all, Right_Node, Position))
-            then
-               return False;
-            end if;
-         end loop;
-
-         declare
-            Left_Result : constant Syn.Node_Id :=
-              Syn.Return_Of (Left_Tree.all, Left_Node);
-            Right_Result : constant Syn.Node_Id :=
-              Syn.Return_Of (Right_Tree.all, Right_Node);
-         begin
-            if (Left_Result = Syn.No_Node) /= (Right_Result = Syn.No_Node)
-            then
-               return False;
-            end if;
-            return Left_Result = Syn.No_Node
-              or else Same_Declaration_Type
-                (Left_Tree.all, Right_Tree.all, Left_Result, Right_Result);
-         end;
-      end Signatures_Agree;
+        (Left, Right : Landin.Checking.Signature_Id) return Boolean
+        is (Landin.Checking.Signatures_Agree (Types.all, Left, Right));
 
       --  [1920]: a call names every parameter exactly once and in order,
       --  each argument has its parameter's type, and the call has the type
@@ -1719,17 +1820,14 @@ package body Landin.Stages.Checking is
       function Check_Call
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
-         Callee  : Res.Declaration_Id) return Ty.Type_Kind
+         Signature : Landin.Checking.Signature_Id) return Ty.Type_Kind
       is
-         Their_Tree : constant not null access constant Syn.Tree :=
-           Tree_For (Res.Source_Of (Meanings.all, Callee));
-         Their_Node : constant Syn.Node_Id :=
-           Res.Node_Of (Meanings.all, Callee);
          Wanted : constant Natural :=
-           Syn.Parameter_Count (Their_Tree.all, Their_Node);
+           Landin.Checking.Signature_Parameter_Count
+             (Types.all, Signature);
          Given  : constant Natural := Syn.Argument_Count (Of_Tree, Node);
-         Result : constant Syn.Node_Id :=
-           Syn.Return_Of (Their_Tree.all, Their_Node);
+         Result : constant Landin.Checking.Signature_Part :=
+           Landin.Checking.Signature_Result (Types.all, Signature);
       begin
          if Given /= Wanted then
             Bad.Report
@@ -1741,18 +1839,20 @@ package body Landin.Stages.Checking is
                           & Counted (Wanted, "argument"),
                Note    => "[1920]: a call names every parameter exactly"
                           & " once and in order",
-               Related => Syn.Origin (Their_Tree.all, Their_Node),
-               Because => "declared here",
+               Related => Landin.Checking.Signature_Origin
+                            (Types.all, Signature),
+               Because => "the signature written here",
                Into    => Found);
             return Ty.Ill_Typed;
          end if;
 
          for Which in 1 .. Wanted loop
             declare
-               Parameter : constant Syn.Node_Id :=
-                 Syn.Nth_Parameter (Their_Tree.all, Their_Node, Which);
+               Parameter : constant Landin.Checking.Signature_Part :=
+                 Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Signature, Which);
                Wants : constant Ty.Type_Kind :=
-                 Declared_As_Node (Their_Tree.all, Parameter);
+                 Parameter.Kind;
                Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
@@ -1761,9 +1861,7 @@ package body Landin.Stages.Checking is
                then
                   declare
                      Expected : constant Res.Declaration_Id :=
-                       Landin.Checking.Body_Of
-                         (Types.all, Their_Tree.all,
-                          Syn.Declared_Type (Their_Tree.all, Parameter));
+                       Parameter.Aggregate_Body;
                      Leaf_Only : Boolean := True;
                   begin
                      for Field in
@@ -1782,7 +1880,7 @@ package body Landin.Stages.Checking is
                      if Leaf_Only
                        and then Construction_Agrees
                          (Of_Tree, Argument, Expected,
-                          Syn.Origin (Their_Tree.all, Parameter),
+                          Parameter.Site,
                           "this parameter")
                      then
                         Check_Struct_Literal
@@ -1791,7 +1889,7 @@ package body Landin.Stages.Checking is
                      else
                         Require
                           (Of_Tree, Argument, Wants,
-                           Syn.Origin (Their_Tree.all, Parameter),
+                           Parameter.Site,
                            "this parameter");
                      end if;
                   end;
@@ -1802,27 +1900,25 @@ package body Landin.Stages.Checking is
                then
                   declare
                      Expected : constant Landin.Checking.Element_Count :=
-                       Landin.Checking.Array_Length
-                         (Types.all, Their_Tree.all,
-                          Syn.Declared_Type (Their_Tree.all, Parameter));
-                     Element : constant Ty.Scalar_Name :=
-                       Landin.Checking.Array_Element
-                         (Types.all, Their_Tree.all,
-                          Syn.Declared_Type (Their_Tree.all, Parameter));
+                       Parameter.Length;
+                     Element : constant Ty.Scalar_Name := Parameter.Element;
                   begin
                      case Syn.Kind (Of_Tree, Argument) is
                         when Syn.Array_Literal =>
                            Check_Array_Literal
-                             (Of_Tree, Parameter, Argument,
-                              Expected, Element, Static_Image => False);
+                             (Of_Tree, Node, Argument,
+                              Expected, Element, Static_Image => False,
+                              Context_Site => Parameter.Site);
                         when Syn.Array_Repetition =>
                            Check_Array_Repetition
-                             (Of_Tree, Parameter, Argument,
-                              Expected, Element, Static_Image => False);
+                             (Of_Tree, Node, Argument,
+                              Expected, Element, Static_Image => False,
+                              Context_Site => Parameter.Site);
                         when Syn.Mixed_Array_Repetition =>
                            Check_Mixed_Array_Repetition
-                             (Of_Tree, Parameter, Argument,
-                              Expected, Element, Static_Image => False);
+                             (Of_Tree, Node, Argument,
+                              Expected, Element, Static_Image => False,
+                              Context_Site => Parameter.Site);
                         when others =>
                            raise Landin.Compiler_Defect;
                      end case;
@@ -1833,23 +1929,13 @@ package body Landin.Stages.Checking is
                   Landin.Checking.Note
                     (Types.all, Of_Tree, Argument, Wants);
                   if Wants = Ty.Aggregate then
-                     Landin.Checking.Note_Body
-                       (Types.all, Of_Tree, Argument,
-                        Landin.Checking.Body_Of
-                          (Types.all, Their_Tree.all,
-                           Syn.Declared_Type
-                             (Their_Tree.all, Parameter)));
+                        Landin.Checking.Note_Body
+                          (Types.all, Of_Tree, Argument,
+                           Parameter.Aggregate_Body);
                   else
-                     Landin.Checking.Note_Array
-                       (Types.all, Of_Tree, Argument,
-                        Landin.Checking.Array_Length
-                          (Types.all, Their_Tree.all,
-                           Syn.Declared_Type
-                             (Their_Tree.all, Parameter)),
-                        Landin.Checking.Array_Element
-                          (Types.all, Their_Tree.all,
-                           Syn.Declared_Type
-                             (Their_Tree.all, Parameter)));
+                        Landin.Checking.Note_Array
+                          (Types.all, Of_Tree, Argument,
+                           Parameter.Length, Parameter.Element);
                   end if;
                elsif Wants in Ty.Aggregate | Ty.Fixed_Array
                  and then Syn.Kind (Of_Tree, Argument)
@@ -1874,9 +1960,7 @@ package body Landin.Stages.Checking is
                               then Ty.Fixed_Array else Ty.Ill_Typed)
                         else Selected_From (Of_Tree, Argument));
                      Expected : constant Res.Declaration_Id :=
-                       Landin.Checking.Body_Of
-                         (Types.all, Their_Tree.all,
-                          Syn.Declared_Type (Their_Tree.all, Parameter));
+                       Parameter.Aggregate_Body;
                      Actual : constant Res.Declaration_Id :=
                        Landin.Checking.Body_Of
                          (Types.all, Of_Tree, Argument);
@@ -1891,24 +1975,17 @@ package body Landin.Stages.Checking is
                            Message => "this argument has a different struct"
                                       & " type",
                            Note    => "[0710]: ordinary structs are nominal",
-                           Related => Syn.Origin
-                             (Their_Tree.all, Parameter),
+                           Related => Parameter.Site,
                            Because => "this parameter",
                            Into    => Found);
                      elsif Got = Ty.Fixed_Array
                        and then
                          (Landin.Checking.Array_Length
                             (Types.all, Of_Tree, Argument)
-                            /= Landin.Checking.Array_Length
-                                 (Types.all, Their_Tree.all,
-                                  Syn.Declared_Type
-                                    (Their_Tree.all, Parameter))
+                            /= Parameter.Length
                           or else Landin.Checking.Array_Element
                             (Types.all, Of_Tree, Argument)
-                            /= Landin.Checking.Array_Element
-                                 (Types.all, Their_Tree.all,
-                                  Syn.Declared_Type
-                                    (Their_Tree.all, Parameter)))
+                            /= Parameter.Element)
                      then
                         Landin.Checking.Refuse
                           (Types.all, Of_Tree, Argument);
@@ -1920,52 +1997,37 @@ package body Landin.Stages.Checking is
                                       & " shape",
                            Note    => "D17: a fixed array is its length and"
                                       & " scalar element type",
-                           Related => Syn.Origin
-                             (Their_Tree.all, Parameter),
+                           Related => Parameter.Site,
                            Because => "this parameter",
                            Into    => Found);
                      elsif Got /= Wants then
                         Require
                           (Of_Tree, Argument, Wants,
-                           Syn.Origin (Their_Tree.all, Parameter),
+                           Parameter.Site,
                            "this parameter");
                      end if;
                   end;
                else
                   Require
                     (Of_Tree, Argument, Wants,
-                     Syn.Origin (Their_Tree.all, Parameter),
+                     Parameter.Site,
                      "this parameter");
                end if;
             end;
          end loop;
 
-         if Result = Syn.No_Node then
+         if Result.Kind = Ty.No_Value then
             return Ty.No_Value;
          end if;
 
-         declare
-            Gives : constant Ty.Type_Kind :=
-              Declared_As_Node (Their_Tree.all, Result);
-         begin
-            if Gives = Ty.Aggregate then
-               Landin.Checking.Note_Body
-                 (Types.all, Of_Tree, Node,
-                  Landin.Checking.Body_Of
-                    (Types.all, Their_Tree.all,
-                     Syn.Declared_Type (Their_Tree.all, Result)));
-            elsif Gives = Ty.Fixed_Array then
-               Landin.Checking.Note_Array
-                 (Types.all, Of_Tree, Node,
-                  Landin.Checking.Array_Length
-                    (Types.all, Their_Tree.all,
-                     Syn.Declared_Type (Their_Tree.all, Result)),
-                  Landin.Checking.Array_Element
-                    (Types.all, Their_Tree.all,
-                     Syn.Declared_Type (Their_Tree.all, Result)));
-            end if;
-            return Gives;
-         end;
+         if Result.Kind = Ty.Aggregate then
+            Landin.Checking.Note_Body
+              (Types.all, Of_Tree, Node, Result.Aggregate_Body);
+         elsif Result.Kind = Ty.Fixed_Array then
+            Landin.Checking.Note_Array
+              (Types.all, Of_Tree, Node, Result.Length, Result.Element);
+         end if;
+         return Result.Kind;
       end Check_Call;
 
       --  [1950]'s third row.  An index the compiler knows is refused when
@@ -2777,9 +2839,9 @@ package body Landin.Stages.Checking is
                      Held : constant Ty.Type_Kind := Settled_Type (Means);
                   begin
                      if Held = Ty.Function_Value then
-                        Landin.Checking.Note_Body
+                        Landin.Checking.Note_Signature
                           (Types.all, Of_Tree, Node,
-                           Landin.Checking.Body_Of (Types.all, Means));
+                           Landin.Checking.Signature_Of (Types.all, Means));
                         return Kept (Ty.Function_Value);
                      end if;
 
@@ -3087,7 +3149,8 @@ package body Landin.Stages.Checking is
                      return Kept
                        (Check_Call
                           (Of_Tree, Node,
-                           Landin.Checking.Body_Of (Types.all, Means)));
+                           Landin.Checking.Signature_Of
+                             (Types.all, Means)));
                   end;
                end;
 
@@ -3303,8 +3366,13 @@ package body Landin.Stages.Checking is
          Literal      : Syn.Node_Id;
          Expected     : Landin.Checking.Element_Count;
          Element      : Ty.Scalar_Name;
-         Static_Image : Boolean)
+         Static_Image : Boolean;
+         Context_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin)
       is
+         Related : constant Landin.Provenance.Origin :=
+           (if Landin.Provenance.Is_Known (Context_Site)
+            then Context_Site else Syn.Origin (Of_Tree, Context));
       begin
          --  Check_Module_Value refuses a call element by [1940] and marks
          --  the whole literal Ill_Typed on the way out; walking each
@@ -3333,7 +3401,7 @@ package body Landin.Stages.Checking is
                           & ", and its array context has a different length",
                Note    => "D23/D24/D26/D29: an array literal supplies exactly"
                           & " the number of elements its context names",
-               Related => Syn.Origin (Of_Tree, Context),
+               Related => Related,
                Because => "the array context here",
                Into    => Found);
             Landin.Checking.Refuse (Types.all, Of_Tree, Literal);
@@ -3342,7 +3410,7 @@ package body Landin.Stages.Checking is
          for Position in 1 .. Syn.Element_Count (Of_Tree, Literal) loop
             Require
               (Of_Tree, Syn.Nth_Element (Of_Tree, Literal, Position), Element,
-               Syn.Origin (Of_Tree, Context), "the array element type");
+               Related, "the array element type");
          end loop;
 
          --  D24: an element must be a compile-time known scalar the
@@ -4442,9 +4510,14 @@ package body Landin.Stages.Checking is
          Repetition   : Syn.Node_Id;
          Expected     : Landin.Checking.Element_Count;
          Element      : Ty.Scalar_Name;
-         Static_Image : Boolean)
+         Static_Image : Boolean;
+         Context_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin)
       is
          Prefix : constant Natural := Syn.Element_Count (Of_Tree, Repetition);
+         Related : constant Landin.Provenance.Origin :=
+           (if Landin.Provenance.Is_Known (Context_Site)
+            then Context_Site else Syn.Origin (Of_Tree, Site_Node));
       begin
          --  Check_Module_Value may already have refused a non-static subtree
          --  and marked the complete hybrid ill typed before this contextual
@@ -4468,7 +4541,7 @@ package body Landin.Stages.Checking is
                Message => "this mixed repetition leaves no array suffix to"
                           & " fill",
                Note    => "D36/D37: a prefix requires 1 <= k < N",
-               Related => Syn.Origin (Of_Tree, Site_Node),
+               Related => Related,
                Because => "the array context here",
                Into    => Found);
             Landin.Checking.Refuse (Types.all, Of_Tree, Repetition);
@@ -4477,13 +4550,13 @@ package body Landin.Stages.Checking is
          for Position in 1 .. Prefix loop
             Require
               (Of_Tree, Syn.Nth_Element (Of_Tree, Repetition, Position),
-               Element, Syn.Origin (Of_Tree, Site_Node),
+               Element, Related,
                "the array element type");
          end loop;
 
          Require
            (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition), Element,
-            Syn.Origin (Of_Tree, Site_Node), "the array element type");
+            Related, "the array element type");
 
          if Static_Image then
             declare
@@ -4532,10 +4605,15 @@ package body Landin.Stages.Checking is
          Repetition   : Syn.Node_Id;
          Expected     : Landin.Checking.Element_Count;
          Element      : Ty.Scalar_Name;
-         Static_Image : Boolean)
+         Static_Image : Boolean;
+         Context_Site : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin)
       is
          Count : constant Syn.Node_Id :=
            Syn.Repetition_Count (Of_Tree, Repetition);
+         Related : constant Landin.Provenance.Origin :=
+           (if Landin.Provenance.Is_Known (Context_Site)
+            then Context_Site else Syn.Origin (Of_Tree, Site_Node));
       begin
          --  D32's repetition is contextual like `zeroed`: the destination
          --  supplies the complete array shape, while one scalar expression
@@ -4588,7 +4666,7 @@ package body Landin.Stages.Checking is
                                 & " array context",
                      Note    => "D32: a written repetition count is exactly"
                                 & " the destination array's length",
-                     Related => Syn.Origin (Of_Tree, Site_Node),
+                     Related => Related,
                      Because => "the array context here",
                      Into    => Found);
                   Landin.Checking.Refuse
@@ -4599,7 +4677,7 @@ package body Landin.Stages.Checking is
 
          Require
            (Of_Tree, Syn.Repeated_Element (Of_Tree, Repetition), Element,
-            Syn.Origin (Of_Tree, Site_Node), "the array element type");
+            Related, "the array element type");
 
          if Static_Image then
             declare
@@ -5165,6 +5243,40 @@ package body Landin.Stages.Checking is
                            end;
                         end if;
                      end;
+                  elsif Wants = Ty.Function_Value then
+                     declare
+                        Got : constant Ty.Type_Kind :=
+                          Synthesise (Of_Tree, Value);
+                        Written : constant Syn.Node_Id :=
+                          Syn.Declared_Type (Of_Tree, Node);
+                     begin
+                        if Got = Ty.Function_Value
+                          and then not Signatures_Agree
+                            (Landin.Checking.Signature_Of
+                               (Types.all, Of_Tree, Written),
+                             Landin.Checking.Signature_Of
+                               (Types.all, Of_Tree, Value))
+                        then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Value),
+                              Message => "this function has a different"
+                                         & " signature",
+                              Note    => "[1000]: function values have the"
+                                         & " signature written by their type",
+                              Related => Syn.Origin (Of_Tree, Written),
+                              Because => "the function type written here",
+                              Into    => Found);
+                           Landin.Checking.Refuse
+                             (Types.all, Of_Tree, Value);
+                        elsif Got /= Ty.Function_Value then
+                           Require
+                             (Of_Tree, Value, Wants,
+                              Syn.Origin (Of_Tree, Written),
+                              "the function type written here");
+                        end if;
+                     end;
                   elsif Wants in Ty.Scalar_Name
                     and then Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
                   then
@@ -5443,8 +5555,9 @@ package body Landin.Stages.Checking is
                      begin
                         if Got = Ty.Function_Value
                           and then not Signatures_Agree
-                            (Landin.Checking.Body_Of (Types.all, Place_Id),
-                             Landin.Checking.Body_Of
+                            (Landin.Checking.Signature_Of
+                               (Types.all, Place_Id),
+                             Landin.Checking.Signature_Of
                                (Types.all, Of_Tree, Value))
                         then
                            Bad.Report
@@ -6091,9 +6204,9 @@ package body Landin.Stages.Checking is
                end if;
 
                if Got = Ty.Function_Value then
-                  Landin.Checking.Note_Body
+                  Landin.Checking.Note_Signature
                     (Types.all, Id,
-                     Landin.Checking.Body_Of
+                     Landin.Checking.Signature_Of
                        (Types.all, Of_Tree.all, Value));
                end if;
 

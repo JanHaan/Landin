@@ -97,9 +97,10 @@ package body Landin.Syntax.Parser is
             when Word_Continue => Syn.Continue_Statement,
             when Word_Distinct => Syn.Distinct_Type);
 
-   --  The kernel's types are the scalar names only [1790].  These are
-   --  ordinary declared names the kernel predeclares, not keywords, which
-   --  is why they are compared by interned identity rather than by kind.
+   --  The scalar names [1790].  These are the types the kernel predeclares,
+   --  not keywords, which is why they are compared by interned identity
+   --  rather than by kind.  Arrays and function types have syntax of their
+   --  own, and other names resolve to declarations.
    type Scalar_Name is
      (Type_U8, Type_U16, Type_U32, Type_U64,
       Type_I8, Type_I16, Type_I32, Type_I64,
@@ -1068,6 +1069,30 @@ package body Landin.Syntax.Parser is
                Declared_At  : Landin.Source.Span) return Node_Id
             is
                At_Type : constant Landin.Source.Span := Here;
+
+               --  A parenthesised struct body and a function type have the
+               --  same first token.  The token after the balanced parameter
+               --  list decides without consuming either form, including a
+               --  nested function type inside that list.
+               function Starts_Function_Type return Boolean;
+
+               function Starts_Function_Type return Boolean is
+                  Step  : Tok.Token_Index := 1;
+                  Depth : Positive := 1;
+               begin
+                  while Ahead (Step) /= Tok.End_Of_Input loop
+                     if Ahead (Step) = Tok.Left_Paren then
+                        Depth := Depth + 1;
+                     elsif Ahead (Step) = Tok.Right_Paren then
+                        if Depth = 1 then
+                           return Ahead (Step + 1) = Tok.Minus_Greater;
+                        end if;
+                        Depth := Depth - 1;
+                     end if;
+                     Step := Step + 1;
+                  end loop;
+                  return False;
+               end Starts_Function_Type;
             begin
                Type_Refused := False;
 
@@ -1088,12 +1113,77 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Type, At_Type);
                end if;
 
-               --  [0670]'s inline form is also the parameter, return and
-               --  payload list, so a `(` where a type belongs is a struct
-               --  and is named as one.  [1795] made this reachable: the
-               --  declaration around it is enabled now and its body is
-               --  what is not.
+               --  D117: the infallible signature syntax is also one written
+               --  type.  Parameter and return names describe the signature;
+               --  they do not introduce declarations at the use site.
                if Peek = Tok.Left_Paren then
+                  if Starts_Function_Type then
+                     declare
+                        Params       : Slot_Vectors.Vector;
+                        Returns_Node : Node_Id := No_Node;
+                        Returns_At   : Landin.Source.Span :=
+                          Landin.Source.Empty_Span;
+                     begin
+                        Advance;
+
+                        if Peek /= Tok.Right_Paren then
+                           loop
+                              declare
+                                 Before : constant Tok.Token_Index := Index;
+                              begin
+                                 Params.Append (Parse_Parameter);
+                                 exit when Index = Before;
+                              end;
+
+                              exit when Peek /= Tok.Comma;
+                              Advance;
+                           end loop;
+                        end if;
+
+                        if not Expect
+                          (Wanted  => Tok.Right_Paren,
+                           Message => "the function type's parameter list"
+                                      & " is never closed",
+                           Note    => "D117: a function type is `(`"
+                                      & " parameters? `)` `->` returns",
+                           Related => Declared_At,
+                           Because => "the type written here")
+                        then
+                           Resync (List_Anchor);
+                           if Peek = Tok.Right_Paren then
+                              Advance;
+                           end if;
+                        end if;
+
+                        if Expect
+                          (Wanted  => Tok.Minus_Greater,
+                           Message => "a function type says what it returns"
+                                      & " after `->`",
+                           Note    => "D117: a function type is `(`"
+                                      & " parameters? `)` `->` returns",
+                           Related => Declared_At,
+                           Because => "the type written here")
+                        then
+                           Returns_Node :=
+                             Parse_Returns (Declared_At, Returns_At);
+                        end if;
+
+                        declare
+                           Head : constant Slot_List (1 .. 1) :=
+                             [1 => Returns_Node];
+                        begin
+                           return Add
+                             (Of_Kind  => Function_Type,
+                              At_Token => At_Type,
+                              Extent   => Join (At_Type, After_Previous),
+                              Children => Head & To_List (Params));
+                        end;
+                     end;
+                  end if;
+
+                  --  [0670]'s inline form is also a parameter, return and
+                  --  payload list.  Without a following arrow it remains a
+                  --  struct and retains the existing refusal and recovery.
                   Type_Refused := True;
                   Refuse
                     (Item    => Syn.Struct_Type,

@@ -1,0 +1,12 @@
+unary: type = (value: i32) -> (result: i32)
+
+double: (value: i32) -> (result: i32) = value * 2 end double
+triple: (value: i32) -> (result: i32) = value * 3 end triple
+
+public main: () -> (code: i32) =
+    mut current: unary = double
+    first := current(10)
+    alternate: (input: i32) -> (output: i32) = triple
+    current = alternate
+    code = first + current(7)
+end main

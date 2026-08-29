@@ -22,10 +22,12 @@ package body Landin.Stages.Lowering is
    use type IR.Field_Shape_Kind;
    use type IR.Item_Id;
    use type IR.Slot_Id;
+   use type IR.Signature_Id;
    use type IR.Part_Position;
    use type IR.Value_Id;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Field_Kind;
+   use type Landin.Checking.Signature_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
@@ -107,6 +109,16 @@ package body Landin.Stages.Lowering is
 
       Slots : Slot_Map := No_Slots;
 
+      subtype Source_Signature is Positive range
+        1 .. Positive'Max
+               (1, Landin.Checking.Signature_Count (Types.all));
+      type Signature_Map is
+        array (Source_Signature) of IR.Signature_Id;
+      Signatures : Signature_Map := [others => IR.No_Signature];
+
+      function Signature_For
+        (Source : Landin.Checking.Signature_Id) return IR.Signature_Id;
+
       --  D78's arm bindings are aliases into the selected payload, not
       --  copied frame locals.  The declaration identity is arm-local; the
       --  source storage and three source-order identities remain target
@@ -141,6 +153,41 @@ package body Landin.Stages.Lowering is
 
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name;
+
+      function Signature_For
+        (Source : Landin.Checking.Signature_Id) return IR.Signature_Id
+      is
+         Count : constant Natural :=
+           Landin.Checking.Signature_Parameter_Count
+             (Types.all, Source);
+         Parts : IR.Signature_Part_Array (1 .. Count) :=
+           [others => (others => <>)];
+
+         function Converted
+           (Part : Landin.Checking.Signature_Part)
+            return IR.Signature_Part
+           is (Kind    => Part.Kind,
+               Aggregate_Body => Part.Aggregate_Body,
+               Length  => IR.Element_Total (Part.Length),
+               Element => Part.Element);
+      begin
+         if Signatures (Positive (Source)) /= IR.No_Signature then
+            return Signatures (Positive (Source));
+         end if;
+
+         for Index in Parts'Range loop
+            Parts (Index) :=
+              Converted
+                (Landin.Checking.Nth_Signature_Parameter
+                   (Types.all, Source, Index));
+         end loop;
+         Signatures (Positive (Source)) :=
+           IR.Add_Signature
+             (Unit.all, Parts,
+              Converted
+                (Landin.Checking.Signature_Result (Types.all, Source)));
+         return Signatures (Positive (Source));
+      end Signature_For;
 
       --  [1820]'s operators onto Landin.IR's opcodes, one to one.  The
       --  two missing are the logical words: [0410] makes them
@@ -572,7 +619,12 @@ package body Landin.Stages.Lowering is
              (Unit.all, Filling,
               (if Held = Ty.Function_Value then Ty.Usize
                else Ty.Scalar_Name (Held)),
-              Id, Site_Of (Of_Tree, Node));
+              Id, Site_Of (Of_Tree, Node),
+              Signature =>
+                (if Held = Ty.Function_Value
+                 then Signature_For
+                   (Landin.Checking.Signature_Of (Types.all, Id))
+                 else IR.No_Signature));
          return Slots (Positive (Id));
       end Slot_For;
 
@@ -661,15 +713,15 @@ package body Landin.Stages.Lowering is
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
          Means : constant Res.Declaration_Id :=
            Res.Bound_To (Meanings.all, Of_Tree, Callee);
-         Signature : constant Res.Declaration_Id :=
-           Landin.Checking.Body_Of (Types.all, Means);
-         Target : constant IR.Item_Id := IR.Item_For (Unit.all, Signature);
+         Source_Signature : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Signature_Of (Types.all, Means);
+         Signature : constant IR.Signature_Id :=
+           Signature_For (Source_Signature);
          Indirect : constant Boolean :=
            Res.Sort_Of (Meanings.all, Means) /= Res.Module_Function;
-         Their_Tree : constant not null access constant Syn.Tree :=
-           Tree_For (Res.Source_Of (Meanings.all, Means));
-         Their_Node : constant Syn.Node_Id :=
-           Res.Node_Of (Meanings.all, Means);
+         Target : constant IR.Item_Id :=
+           (if Indirect then IR.No_Item
+            else IR.Item_For (Unit.all, Means));
          Count : constant Natural := Syn.Argument_Count (Of_Tree, Node);
          Returns_Stored : constant Boolean :=
            Type_At (Of_Tree, Node)
@@ -685,7 +737,8 @@ package body Landin.Stages.Lowering is
       begin
          if Indirect then
             Callee_Saved := IR.Add_Slot
-              (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+              (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site,
+               Signature => Signature);
             IR.Emit_Store
               (Unit.all, Filling, Callee_Saved,
                Lower_Expression (Of_Tree, Callee, Scope), Site);
@@ -706,12 +759,10 @@ package body Landin.Stages.Lowering is
                then
                   if Syn.Kind (Of_Tree, Argument) = Syn.Call then
                      declare
-                        Parameter : constant Syn.Node_Id :=
-                          Syn.Nth_Parameter
-                            (Their_Tree.all, Their_Node, Which);
-                        Id : constant Res.Declaration_Id :=
-                          Declaration_At
-                            (Syn.Source_Of (Their_Tree.all), Parameter);
+                        Parameter : constant
+                          Landin.Checking.Signature_Part :=
+                            Landin.Checking.Nth_Signature_Parameter
+                              (Types.all, Source_Signature, Which);
                         Temporary : IR.Slot_Id;
                         Ignored : IR.Value_Id;
                      begin
@@ -721,18 +772,17 @@ package body Landin.Stages.Lowering is
                               Site_Of (Of_Tree, Argument));
                            for Field in
                              1 .. Landin.Checking.Layout_Field_Count
-                                    (Types.all, Id)
+                                    (Types.all, Parameter.Aggregate_Body)
                            loop
                               Add_Stored_Field
-                                (Id, Field, Slot => Temporary);
+                                (Parameter.Aggregate_Body, Field,
+                                 Slot => Temporary);
                            end loop;
                         else
                            Temporary := IR.Add_Array_Slot
                              (Unit.all, Filling,
-                              Landin.Checking.Array_Element (Types.all, Id),
-                              IR.Element_Total
-                                (Landin.Checking.Array_Length
-                                   (Types.all, Id)),
+                              Parameter.Element,
+                              IR.Element_Total (Parameter.Length),
                               Res.No_Declaration,
                               Site_Of (Of_Tree, Argument));
                         end if;
@@ -749,12 +799,10 @@ package body Landin.Stages.Lowering is
                           = Syn.Zeroed_Literal
                   then
                      declare
-                        Parameter : constant Syn.Node_Id :=
-                          Syn.Nth_Parameter
-                            (Their_Tree.all, Their_Node, Which);
-                        Id : constant Res.Declaration_Id :=
-                          Declaration_At
-                            (Syn.Source_Of (Their_Tree.all), Parameter);
+                        Parameter : constant
+                          Landin.Checking.Signature_Part :=
+                            Landin.Checking.Nth_Signature_Parameter
+                              (Types.all, Source_Signature, Which);
                         Temporary : IR.Slot_Id;
                      begin
                         if Type_At (Of_Tree, Argument) = Ty.Aggregate then
@@ -763,18 +811,17 @@ package body Landin.Stages.Lowering is
                               Site_Of (Of_Tree, Argument));
                            for Field in
                              1 .. Landin.Checking.Layout_Field_Count
-                                    (Types.all, Id)
+                                    (Types.all, Parameter.Aggregate_Body)
                            loop
                               Add_Stored_Field
-                                (Id, Field, Slot => Temporary);
+                                (Parameter.Aggregate_Body, Field,
+                                 Slot => Temporary);
                            end loop;
                         else
                            Temporary := IR.Add_Array_Slot
                              (Unit.all, Filling,
-                              Landin.Checking.Array_Element (Types.all, Id),
-                              IR.Element_Total
-                                (Landin.Checking.Array_Length
-                                   (Types.all, Id)),
+                              Parameter.Element,
+                              IR.Element_Total (Parameter.Length),
                               Res.No_Declaration,
                               Site_Of (Of_Tree, Argument));
                         end if;
@@ -791,12 +838,12 @@ package body Landin.Stages.Lowering is
                   elsif Syn.Kind (Of_Tree, Argument) = Syn.Struct_Literal
                   then
                      declare
-                        Parameter : constant Syn.Node_Id :=
-                          Syn.Nth_Parameter
-                            (Their_Tree.all, Their_Node, Which);
+                        Parameter : constant
+                          Landin.Checking.Signature_Part :=
+                            Landin.Checking.Nth_Signature_Parameter
+                              (Types.all, Source_Signature, Which);
                         Id : constant Res.Declaration_Id :=
-                          Declaration_At
-                            (Syn.Source_Of (Their_Tree.all), Parameter);
+                          Parameter.Aggregate_Body;
                         Count : constant Natural :=
                           Landin.Checking.Layout_Field_Count (Types.all, Id);
                         type Seen_Array is
@@ -1326,18 +1373,15 @@ package body Landin.Stages.Lowering is
                              | Syn.Mixed_Array_Repetition
                   then
                      declare
-                        Parameter : constant Syn.Node_Id :=
-                          Syn.Nth_Parameter
-                            (Their_Tree.all, Their_Node, Which);
-                        Id : constant Res.Declaration_Id :=
-                          Declaration_At
-                            (Syn.Source_Of (Their_Tree.all), Parameter);
+                        Parameter : constant
+                          Landin.Checking.Signature_Part :=
+                            Landin.Checking.Nth_Signature_Parameter
+                              (Types.all, Source_Signature, Which);
                         Temporary : constant IR.Slot_Id :=
                           IR.Add_Array_Slot
                             (Unit.all, Filling,
-                             Landin.Checking.Array_Element (Types.all, Id),
-                             IR.Element_Total
-                               (Landin.Checking.Array_Length (Types.all, Id)),
+                             Parameter.Element,
+                             IR.Element_Total (Parameter.Length),
                              Res.No_Declaration,
                              Site_Of (Of_Tree, Argument));
                         Prefix : constant Natural :=
@@ -1475,11 +1519,17 @@ package body Landin.Stages.Lowering is
          end if;
 
          Made :=
-           IR.Emit_Call
-             (Unit.all, Filling, Target,
-              (if Returns_Stored then Ty.No_Value
-               else Type_At (Of_Tree, Node)),
-              Site, Indirect => Indirect);
+           (if Indirect
+            then IR.Emit_Indirect_Call
+              (Unit.all, Filling, Signature,
+               (if Returns_Stored then Ty.No_Value
+                else Type_At (Of_Tree, Node)),
+               Site)
+            else IR.Emit_Call
+              (Unit.all, Filling, Target,
+               (if Returns_Stored then Ty.No_Value
+                else Type_At (Of_Tree, Node)),
+               Site));
 
          if Indirect then
             IR.Add_Argument (Unit.all, Filling, Made, Callee_Value);
@@ -4099,6 +4149,11 @@ package body Landin.Stages.Lowering is
                              IR.Add_Item
                                (Unit.all, IR.Routine, Id, Held,
                                 Site_Of (Of_Tree.all, Node));
+                           IR.Set_Signature
+                             (Unit.all, Made,
+                              Signature_For
+                                (Landin.Checking.Signature_Of
+                                   (Types.all, Id)));
                         end;
 
                      when Syn.Binding =>

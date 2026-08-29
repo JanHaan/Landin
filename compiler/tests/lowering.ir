@@ -2,8 +2,9 @@
 # Every positive fixture, lowered to Landin.IR and rendered by Landin.IR.Dump.
 # Target: linux-x86-64.  Not a stable interface; see landin-ir-dump.ads.
 file positive/arm-scopes-are-siblings/program.ldn
-unit items 1
-item 1 ROUTINE f result u32 params 1 slots 4 blocks 5 values 17
+unit signatures 1 items 1
+signature 1 (bool) -> u32
+item 1 ROUTINE f result u32 signature 1 params 1 slots 4 blocks 5 values 17
   slot 1 c bool param 1
   slot 2 r u32 return
   slot 3 t u32
@@ -31,8 +32,9 @@ item 1 ROUTINE f result u32 params 1 slots 4 blocks 5 values 17
     14 STORE slot 2 <- 13
     15 JUMP target 2
 file positive/array-literal-assignment/program.ldn
-unit items 1
-item 1 ROUTINE f result u8 params 1 slots 3 blocks 1 values 9
+unit signatures 1 items 1
+signature 1 (usize) -> u8
+item 1 ROUTINE f result u8 signature 1 params 1 slots 3 blocks 1 values 9
   slot 1 at usize param 1
   slot 2 value u8 return
   slot 3 row elements 2 of u8
@@ -47,12 +49,13 @@ item 1 ROUTINE f result u8 params 1 slots 3 blocks 1 values 9
     8 LOAD u8 slot 2
     9 LEAVE <- 8
 file positive/array-mixed-repetition-assignment/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (u16) -> u16
 item 1 DATUM state result array params 0 slots 0 blocks 1 values 1
   elements 4 of u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE f result u16 params 1 slots 5 blocks 1 values 22
+item 2 ROUTINE f result u16 signature 1 params 1 slots 5 blocks 1 values 22
   slot 1 input u16 param 1
   slot 2 answer u16 return
   slot 3 row elements 4 of u16
@@ -82,7 +85,7 @@ item 2 ROUTINE f result u16 params 1 slots 5 blocks 1 values 22
     21 LOAD u16 slot 2
     22 LEAVE <- 21
 file positive/array-module-state/program.ldn
-unit items 2
+unit signatures 0 items 2
 item 1 DATUM buffer result array params 0 slots 0 blocks 1 values 1
   elements 4 of u32
   block 1 scope 1 PROGRAM length 1
@@ -92,12 +95,13 @@ item 2 DATUM flags result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/array-type-is-declared/program.ldn
-unit items 0
+unit signatures 0 items 0
 file positive/array-types-alias-and-agree/program.ldn
-unit items 0
+unit signatures 0 items 0
 file positive/array-zeroed-assignment/program.ldn
-unit items 1
-item 1 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6
+unit signatures 1 items 1
+signature 1 (usize) -> u32
+item 1 ROUTINE f result u32 signature 1 params 1 slots 3 blocks 1 values 6
   slot 1 at usize param 1
   slot 2 value u32 return
   slot 3 row elements 4 of u32
@@ -109,8 +113,9 @@ item 1 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6
     5 LOAD u32 slot 2
     6 LEAVE <- 5
 file positive/assigned-on-every-path/program.ldn
-unit items 1
-item 1 ROUTINE f result u32 params 1 slots 2 blocks 5 values 11
+unit signatures 1 items 1
+signature 1 (bool) -> u32
+item 1 ROUTINE f result u32 signature 1 params 1 slots 2 blocks 5 values 11
   slot 1 c bool param 1
   slot 2 r u32 return
   block 1 scope 3 BLOCK length 2
@@ -130,8 +135,9 @@ item 1 ROUTINE f result u32 params 1 slots 2 blocks 5 values 11
     8 STORE slot 2 <- 7
     9 JUMP target 2
 file positive/assignment-to-a-mutable-binding/program.ldn
-unit items 1
-item 1 ROUTINE f result u32 params 0 slots 2 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> u32
+item 1 ROUTINE f result u32 signature 1 params 0 slots 2 blocks 1 values 12
   slot 1 r u32 return
   slot 2 total u32
   block 1 scope 3 BLOCK length 12
@@ -148,8 +154,9 @@ item 1 ROUTINE f result u32 params 0 slots 2 blocks 1 values 12
     11 LOAD u32 slot 1
     12 LEAVE <- 11
 file positive/associativity-product-left/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 1 r i32 return
   slot 2 - i32
   slot 3 - i32
@@ -167,8 +174,9 @@ item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
     11 LOAD i32 slot 1
     12 LEAVE <- 11
 file positive/associativity-sum-left/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 1 r i32 return
   slot 2 - i32
   slot 3 - i32
@@ -186,32 +194,34 @@ item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
     11 LOAD i32 slot 1
     12 LEAVE <- 11
 file positive/binding-declared-only/program.ldn
-unit items 1
+unit signatures 0 items 1
 item 1 DATUM later result i32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER i32 0
     2 LEAVE <- 1
 file positive/binding-inferred/program.ldn
-unit items 1
+unit signatures 0 items 1
 item 1 DATUM limit result i32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER i32 4096
     2 LEAVE <- 1
 file positive/binding-mutable/program.ldn
-unit items 1
+unit signatures 0 items 1
 item 1 DATUM count result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 0
     2 LEAVE <- 1
 file positive/binding-typed/program.ldn
-unit items 1
+unit signatures 0 items 1
 item 1 DATUM limit result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 4096
     2 LEAVE <- 1
 file positive/call-fills-every-parameter/program.ldn
-unit items 2
-item 1 ROUTINE add result i32 params 2 slots 4 blocks 1 values 8
+unit signatures 2 items 2
+signature 1 (i32, i32) -> i32
+signature 2 () -> i32
+item 1 ROUTINE add result i32 signature 1 params 2 slots 4 blocks 1 values 8
   slot 1 a i32 param 1
   slot 2 b i32 param 2
   slot 3 r i32 return
@@ -225,7 +235,7 @@ item 1 ROUTINE add result i32 params 2 slots 4 blocks 1 values 8
     6 STORE slot 3 <- 5
     7 LOAD i32 slot 3
     8 LEAVE <- 7
-item 2 ROUTINE f result i32 params 0 slots 2 blocks 1 values 8
+item 2 ROUTINE f result i32 signature 2 params 0 slots 2 blocks 1 values 8
   slot 1 r i32 return
   slot 2 - i32
   block 1 scope 3 SIGNATURE length 8
@@ -233,13 +243,14 @@ item 2 ROUTINE f result i32 params 0 slots 2 blocks 1 values 8
     2 STORE slot 2 <- 1
     3 NUMBER i32 2
     4 LOAD i32 slot 2
-    5 CALL i32 callee 1 add <- 4 3
+    5 CALL i32 callee 1 add signature 1 <- 4 3
     6 STORE slot 1 <- 5
     7 LOAD i32 slot 1
     8 LEAVE <- 7
 file positive/comment-forms/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 2 blocks 1 values 8
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 2 blocks 1 values 8
   slot 1 r i32 return
   slot 2 - i32
   block 1 scope 2 SIGNATURE length 8
@@ -252,8 +263,9 @@ item 1 ROUTINE f result i32 params 0 slots 2 blocks 1 values 8
     7 LOAD i32 slot 1
     8 LEAVE <- 7
 file positive/comparison-gives-a-bool/program.ldn
-unit items 1
-item 1 ROUTINE f result bool params 2 slots 4 blocks 1 values 8
+unit signatures 1 items 1
+signature 1 (u32, u32) -> bool
+item 1 ROUTINE f result bool signature 1 params 2 slots 4 blocks 1 values 8
   slot 1 a u32 param 1
   slot 2 b u32 param 2
   slot 3 r bool return
@@ -268,14 +280,15 @@ item 1 ROUTINE f result bool params 2 slots 4 blocks 1 values 8
     7 LOAD bool slot 3
     8 LEAVE <- 7
 file positive/declaration-public/program.ldn
-unit items 1
+unit signatures 0 items 1
 item 1 DATUM limit result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 4096
     2 LEAVE <- 1
 file positive/discard-of-a-value/program.ldn
-unit items 1
-item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 6
+unit signatures 1 items 1
+signature 1 () -> none
+item 1 ROUTINE f result none signature 1 params 0 slots 1 blocks 1 values 6
   slot 1 - i32
   block 1 scope 3 BLOCK length 6
     1 NUMBER i32 1
@@ -285,8 +298,9 @@ item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 6
     5 ADD i32 <- 4 3
     6 LEAVE
 file positive/divisor-is-not-known/program.ldn
-unit items 1
-item 1 ROUTINE f result u32 params 2 slots 4 blocks 1 values 8
+unit signatures 1 items 1
+signature 1 (u32, u32) -> u32
+item 1 ROUTINE f result u32 signature 1 params 2 slots 4 blocks 1 values 8
   slot 1 x u32 param 1
   slot 2 y u32 param 2
   slot 3 r u32 return
@@ -301,8 +315,9 @@ item 1 ROUTINE f result u32 params 2 slots 4 blocks 1 values 8
     7 LOAD u32 slot 3
     8 LEAVE <- 7
 file positive/function-end-unnamed/program.ldn
-unit items 1
-item 1 ROUTINE one result i32 params 0 slots 1 blocks 1 values 4
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE one result i32 signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 r i32 return
   block 1 scope 2 SIGNATURE length 4
     1 NUMBER i32 1
@@ -310,8 +325,9 @@ item 1 ROUTINE one result i32 params 0 slots 1 blocks 1 values 4
     3 LOAD i32 slot 1
     4 LEAVE <- 3
 file positive/function-expression-body/program.ldn
-unit items 1
-item 1 ROUTINE triple_it result i32 params 1 slots 3 blocks 1 values 8
+unit signatures 1 items 1
+signature 1 (i32) -> i32
+item 1 ROUTINE triple_it result i32 signature 1 params 1 slots 3 blocks 1 values 8
   slot 1 x i32 param 1
   slot 2 r i32 return
   slot 3 - i32
@@ -325,8 +341,9 @@ item 1 ROUTINE triple_it result i32 params 1 slots 3 blocks 1 values 8
     7 LOAD i32 slot 2
     8 LEAVE <- 7
 file positive/function-parameters/program.ldn
-unit items 1
-item 1 ROUTINE add3 result i32 params 3 slots 6 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 (i32, i32, i32) -> i32
+item 1 ROUTINE add3 result i32 signature 1 params 3 slots 6 blocks 1 values 12
   slot 1 a i32 param 1
   slot 2 b i32 param 2
   slot 3 c i32 param 3
@@ -347,14 +364,16 @@ item 1 ROUTINE add3 result i32 params 3 slots 6 blocks 1 values 12
     11 LOAD i32 slot 4
     12 LEAVE <- 11
 file positive/function-returns-none/program.ldn
-unit items 1
-item 1 ROUTINE quiet result none params 1 slots 1 blocks 1 values 1
+unit signatures 1 items 1
+signature 1 (i32) -> none
+item 1 ROUTINE quiet result none signature 1 params 1 slots 1 blocks 1 values 1
   slot 1 m i32 param 1
   block 1 scope 3 BLOCK length 1
     1 LEAVE
 file positive/function-statements/program.ldn
-unit items 1
-item 1 ROUTINE double result i32 params 1 slots 3 blocks 1 values 8
+unit signatures 1 items 1
+signature 1 (i32) -> i32
+item 1 ROUTINE double result i32 signature 1 params 1 slots 3 blocks 1 values 8
   slot 1 x i32 param 1
   slot 2 r i32 return
   slot 3 - i32
@@ -368,7 +387,7 @@ item 1 ROUTINE double result i32 params 1 slots 3 blocks 1 values 8
     7 LOAD i32 slot 2
     8 LEAVE <- 7
 file positive/identifier-underscore/program.ldn
-unit items 2
+unit signatures 0 items 2
 item 1 DATUM _hidden result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 1
@@ -378,8 +397,9 @@ item 2 DATUM with_parts result u32 params 0 slots 0 blocks 1 values 2
     1 NUMBER u32 2
     2 LEAVE <- 1
 file positive/if-elsif-else/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 1 slots 4 blocks 7 values 24
+unit signatures 1 items 1
+signature 1 (i32) -> i32
+item 1 ROUTINE f result i32 signature 1 params 1 slots 4 blocks 7 values 24
   slot 1 x i32 param 1
   slot 2 r i32 return
   slot 3 - i32
@@ -416,8 +436,9 @@ item 1 ROUTINE f result i32 params 1 slots 4 blocks 7 values 24
     21 STORE slot 2 <- 20
     22 JUMP target 2
 file positive/if-one-line/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 1 slots 3 blocks 4 values 14
+unit signatures 1 items 1
+signature 1 (i32) -> i32
+item 1 ROUTINE f result i32 signature 1 params 1 slots 3 blocks 4 values 14
   slot 1 x i32 param 1
   slot 2 r i32 return
   slot 3 - i32
@@ -440,8 +461,9 @@ item 1 ROUTINE f result i32 params 1 slots 3 blocks 4 values 14
   block 4 scope 3 BLOCK length 1
     12 JUMP target 2
 file positive/if-plain/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 1 slots 3 blocks 4 values 14
+unit signatures 1 items 1
+signature 1 (i32) -> i32
+item 1 ROUTINE f result i32 signature 1 params 1 slots 3 blocks 4 values 14
   slot 1 x i32 param 1
   slot 2 r i32 return
   slot 3 - i32
@@ -464,8 +486,9 @@ item 1 ROUTINE f result i32 params 1 slots 3 blocks 4 values 14
   block 4 scope 3 BLOCK length 1
     12 JUMP target 2
 file positive/lenof-array-literal-does-not-read-elements/program.ldn
-unit items 1
-item 1 ROUTINE f result usize params 0 slots 3 blocks 1 values 4
+unit signatures 1 items 1
+signature 1 () -> usize
+item 1 ROUTINE f result usize signature 1 params 0 slots 3 blocks 1 values 4
   slot 1 length usize return
   slot 2 first u8
   slot 3 second u8
@@ -475,24 +498,27 @@ item 1 ROUTINE f result usize params 0 slots 3 blocks 1 values 4
     3 LOAD usize slot 1
     4 LEAVE <- 3
 file positive/lenof-remains-a-name/program.ldn
-unit items 2
-item 1 ROUTINE lenof result usize params 0 slots 1 blocks 1 values 4
+unit signatures 2 items 2
+signature 1 () -> usize
+signature 2 () -> usize
+item 1 ROUTINE lenof result usize signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 r usize return
   block 1 scope 2 SIGNATURE length 4
     1 NUMBER usize 3
     2 STORE slot 1 <- 1
     3 LOAD usize slot 1
     4 LEAVE <- 3
-item 2 ROUTINE f result usize params 0 slots 1 blocks 1 values 4
+item 2 ROUTINE f result usize signature 2 params 0 slots 1 blocks 1 values 4
   slot 1 r usize return
   block 1 scope 3 SIGNATURE length 4
-    1 CALL usize callee 1 lenof
+    1 CALL usize callee 1 lenof signature 1
     2 STORE slot 1 <- 1
     3 LOAD usize slot 1
     4 LEAVE <- 3
 file positive/lenof-uninitialized-fixed-array/program.ldn
-unit items 1
-item 1 ROUTINE f result usize params 0 slots 2 blocks 1 values 4
+unit signatures 1 items 1
+signature 1 () -> usize
+item 1 ROUTINE f result usize signature 1 params 0 slots 2 blocks 1 values 4
   slot 1 r usize return
   slot 2 grid elements 7 of u16
   block 1 scope 3 BLOCK length 4
@@ -501,8 +527,9 @@ item 1 ROUTINE f result usize params 0 slots 2 blocks 1 values 4
     3 LOAD usize slot 1
     4 LEAVE <- 3
 file positive/line-ends-crlf/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 1 blocks 1 values 4
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 r i32 return
   block 1 scope 3 BLOCK length 4
     1 NUMBER i32 1
@@ -510,8 +537,9 @@ item 1 ROUTINE f result i32 params 0 slots 1 blocks 1 values 4
     3 LOAD i32 slot 1
     4 LEAVE <- 3
 file positive/line-ends-lone-cr/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 1 blocks 1 values 4
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 r i32 return
   block 1 scope 3 BLOCK length 4
     1 NUMBER i32 1
@@ -519,7 +547,7 @@ item 1 ROUTINE f result i32 params 0 slots 1 blocks 1 values 4
     3 LOAD i32 slot 1
     4 LEAVE <- 3
 file positive/line-ends-mixed/program.ldn
-unit items 3
+unit signatures 0 items 3
 item 1 DATUM a result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 1
@@ -533,7 +561,7 @@ item 3 DATUM c result u32 params 0 slots 0 blocks 1 values 2
     1 NUMBER u32 3
     2 LEAVE <- 1
 file positive/literal-at-the-widest-value/program.ldn
-unit items 2
+unit signatures 0 items 2
 item 1 DATUM widest result u8 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u8 255
@@ -543,7 +571,7 @@ item 2 DATUM smallest result i8 params 0 slots 0 blocks 1 values 2
     1 NUMBER i8 128 negated
     2 LEAVE <- 1
 file positive/literal-bases/program.ldn
-unit items 4
+unit signatures 0 items 4
 item 1 DATUM a result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 3735928559
@@ -561,7 +589,7 @@ item 4 DATUM d result u32 params 0 slots 0 blocks 1 values 2
     1 NUMBER u32 1000000
     2 LEAVE <- 1
 file positive/literal-booleans/program.ldn
-unit items 2
+unit signatures 0 items 2
 item 1 DATUM yes result bool params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 TRUTH bool true
@@ -571,8 +599,9 @@ item 2 DATUM no result bool params 0 slots 0 blocks 1 values 2
     1 TRUTH bool false
     2 LEAVE <- 1
 file positive/literal-takes-a-sibling-type/program.ldn
-unit items 1
-item 1 ROUTINE f result u8 params 1 slots 3 blocks 1 values 8
+unit signatures 1 items 1
+signature 1 (u8) -> u8
+item 1 ROUTINE f result u8 signature 1 params 1 slots 3 blocks 1 values 8
   slot 1 x u8 param 1
   slot 2 r u8 return
   slot 3 - u8
@@ -586,12 +615,13 @@ item 1 ROUTINE f result u8 params 1 slots 3 blocks 1 values 8
     7 LOAD u8 slot 2
     8 LEAVE <- 7
 file positive/local-array-computed-element-after-whole-copy/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (usize, u32) -> u32
 item 1 DATUM source result array params 0 slots 0 blocks 1 values 1
   elements 2 of u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE f result u32 params 2 slots 5 blocks 1 values 14
+item 2 ROUTINE f result u32 signature 1 params 2 slots 5 blocks 1 values 14
   slot 1 at usize param 1
   slot 2 value u32 param 2
   slot 3 r u32 return
@@ -613,25 +643,27 @@ item 2 ROUTINE f result u32 params 2 slots 5 blocks 1 values 14
     13 LOAD u32 slot 3
     14 LEAVE <- 13
 file positive/local-array-copy/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 () -> none
 item 1 DATUM source result array params 0 slots 0 blocks 1 values 1
   elements 2 of u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE f result none params 0 slots 1 blocks 1 values 2
+item 2 ROUTINE f result none signature 1 params 0 slots 1 blocks 1 values 2
   slot 1 words elements 2 of u32
   block 1 scope 3 BLOCK length 2
     1 COPY_ARRAY from datum 1 source to slot 1
     2 LEAVE
 file positive/local-array-initialized-from-field/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (usize) -> usize
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE from_fields result usize params 1 slots 12 blocks 1 values 31
+item 2 ROUTINE from_fields result usize signature 1 params 1 slots 12 blocks 1 values 31
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 typed elements 2 of usize
@@ -677,12 +709,14 @@ item 2 ROUTINE from_fields result usize params 1 slots 12 blocks 1 values 31
     30 LOAD usize slot 2
     31 LEAVE <- 30
 file positive/local-array-initialized-from-source-name/program.ldn
-unit items 3
+unit signatures 2 items 3
+signature 1 () -> none
+signature 2 () -> none
 item 1 DATUM source result array params 0 slots 0 blocks 1 values 1
   elements 2 of u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE f result none params 0 slots 4 blocks 1 values 5
+item 2 ROUTINE f result none signature 1 params 0 slots 4 blocks 1 values 5
   slot 1 from_mut_module elements 2 of u32
   slot 2 from_immutable_module elements 2 of u32
   slot 3 from_mut_local elements 2 of u32
@@ -693,14 +727,16 @@ item 2 ROUTINE f result none params 0 slots 4 blocks 1 values 5
     3 COPY_ARRAY from slot 1 to slot 3
     4 COPY_ARRAY from slot 2 to slot 4
     5 LEAVE
-item 3 ROUTINE g result none params 0 slots 1 blocks 1 values 2
+item 3 ROUTINE g result none signature 2 params 0 slots 1 blocks 1 values 2
   slot 1 source elements 2 of u32
   block 1 scope 5 BLOCK length 2
     1 COPY_ARRAY from datum 1 source to slot 1
     2 LEAVE
 file positive/local-array-literal-inferred-length/program.ldn
-unit items 2
-item 1 ROUTINE f result none params 0 slots 2 blocks 1 values 9
+unit signatures 2 items 2
+signature 1 () -> none
+signature 2 (u8) -> none
+item 1 ROUTINE f result none signature 1 params 0 slots 2 blocks 1 values 9
   slot 1 row elements 3 of i32
   slot 2 last i32
   block 1 scope 3 BLOCK length 9
@@ -713,7 +749,7 @@ item 1 ROUTINE f result none params 0 slots 2 blocks 1 values 9
     7 LOAD_FIELD i32
     8 STORE slot 2 <- 7
     9 LEAVE
-item 2 ROUTINE g result none params 1 slots 3 blocks 1 values 7
+item 2 ROUTINE g result none signature 2 params 1 slots 3 blocks 1 values 7
   slot 1 seed u8 param 1
   slot 2 bytes elements 2 of u8
   slot 3 last u8
@@ -726,8 +762,9 @@ item 2 ROUTINE g result none params 1 slots 3 blocks 1 values 7
     6 STORE slot 3 <- 5
     7 LEAVE
 file positive/local-array-literal-initializer/program.ldn
-unit items 1
-item 1 ROUTINE read_row result u32 params 1 slots 7 blocks 5 values 32
+unit signatures 1 items 1
+signature 1 (usize) -> u32
+item 1 ROUTINE read_row result u32 signature 1 params 1 slots 7 blocks 5 values 32
   slot 1 i usize param 1
   slot 2 r u32 return
   slot 3 of u32
@@ -773,8 +810,9 @@ item 1 ROUTINE read_row result u32 params 1 slots 7 blocks 5 values 32
     29 STORE slot 2 <- 28
     30 JUMP target 2
 file positive/local-array-mixed-repetition/program.ldn
-unit items 1
-item 1 ROUTINE f result u16 params 2 slots 6 blocks 1 values 19
+unit signatures 1 items 1
+signature 1 (usize, u16) -> u16
+item 1 ROUTINE f result u16 signature 1 params 2 slots 6 blocks 1 values 19
   slot 1 at usize param 1
   slot 2 seed u16 param 2
   slot 3 value u16 return
@@ -802,8 +840,9 @@ item 1 ROUTINE f result u16 params 2 slots 6 blocks 1 values 19
     18 LOAD u16 slot 3
     19 LEAVE <- 18
 file positive/local-array-repetition/program.ldn
-unit items 1
-item 1 ROUTINE f result u32 params 2 slots 10 blocks 1 values 29
+unit signatures 1 items 1
+signature 1 (usize, u32) -> u32
+item 1 ROUTINE f result u32 signature 1 params 2 slots 10 blocks 1 values 29
   slot 1 at usize param 1
   slot 2 seed u32 param 2
   slot 3 value u32 return
@@ -845,8 +884,10 @@ item 1 ROUTINE f result u32 params 2 slots 10 blocks 1 values 29
     28 LOAD u32 slot 3
     29 LEAVE <- 28
 file positive/local-array-repetition-inferred/program.ldn
-unit items 2
-item 1 ROUTINE typed result u32 params 2 slots 4 blocks 1 values 7
+unit signatures 2 items 2
+signature 1 (usize, u32) -> u32
+signature 2 (usize) -> i32
+item 1 ROUTINE typed result u32 signature 1 params 2 slots 4 blocks 1 values 7
   slot 1 at usize param 1
   slot 2 seed u32 param 2
   slot 3 value u32 return
@@ -859,7 +900,7 @@ item 1 ROUTINE typed result u32 params 2 slots 4 blocks 1 values 7
     5 STORE slot 3 <- 4
     6 LOAD u32 slot 3
     7 LEAVE <- 6
-item 2 ROUTINE defaulted result i32 params 1 slots 3 blocks 1 values 7
+item 2 ROUTINE defaulted result i32 signature 2 params 1 slots 3 blocks 1 values 7
   slot 1 at usize param 1
   slot 2 value i32 return
   slot 3 row elements 2 of i32
@@ -872,8 +913,9 @@ item 2 ROUTINE defaulted result i32 params 1 slots 3 blocks 1 values 7
     6 LOAD i32 slot 2
     7 LEAVE <- 6
 file positive/local-array-zeroed-initializer/program.ldn
-unit items 1
-item 1 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6
+unit signatures 1 items 1
+signature 1 (usize) -> u32
+item 1 ROUTINE f result u32 signature 1 params 1 slots 3 blocks 1 values 6
   slot 1 at usize param 1
   slot 2 value u32 return
   slot 3 row elements 4 of u32
@@ -885,8 +927,9 @@ item 1 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6
     5 LOAD u32 slot 2
     6 LEAVE <- 5
 file positive/local-scalar-zeroed-initializer/program.ldn
-unit items 1
-item 1 ROUTINE f result u32 params 0 slots 3 blocks 5 values 15
+unit signatures 1 items 1
+signature 1 () -> u32
+item 1 ROUTINE f result u32 signature 1 params 0 slots 3 blocks 5 values 15
   slot 1 result u32 return
   slot 2 value u32
   slot 3 flag bool
@@ -911,8 +954,9 @@ item 1 ROUTINE f result u32 params 0 slots 3 blocks 5 values 15
     12 STORE slot 1 <- 11
     13 JUMP target 2
 file positive/local-shadows-a-parameter/program.ldn
-unit items 1
-item 1 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6
+unit signatures 1 items 1
+signature 1 (u32) -> u32
+item 1 ROUTINE f result u32 signature 1 params 1 slots 3 blocks 1 values 6
   slot 1 x u32 param 1
   slot 2 r u32 return
   slot 3 x u32
@@ -924,14 +968,15 @@ item 1 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6
     5 LOAD u32 slot 2
     6 LEAVE <- 5
 file positive/local-struct-inferred-from-name/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (usize) -> usize
 item 1 DATUM module_source result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE copy result usize params 1 slots 12 blocks 1 values 59
+item 2 ROUTINE copy result usize signature 1 params 1 slots 12 blocks 1 values 59
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 scalar_source aggregate fields u32 u32
@@ -1005,14 +1050,15 @@ item 2 ROUTINE copy result usize params 1 slots 12 blocks 1 values 59
     58 LOAD usize slot 2
     59 LEAVE <- 58
 file positive/local-struct-initialized-from-name/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (usize) -> usize
 item 1 DATUM module_source result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE copy result usize params 1 slots 8 blocks 1 values 39
+item 2 ROUTINE copy result usize signature 1 params 1 slots 8 blocks 1 values 39
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 scalar_source aggregate fields u32 u32
@@ -1062,8 +1108,9 @@ item 2 ROUTINE copy result usize params 1 slots 8 blocks 1 values 39
     38 LOAD usize slot 2
     39 LEAVE <- 38
 file positive/local-struct-zeroed-initializer/program.ldn
-unit items 1
-item 1 ROUTINE read result usize params 1 slots 6 blocks 1 values 19
+unit signatures 1 items 1
+signature 1 (usize) -> usize
+item 1 ROUTINE read result usize signature 1 params 1 slots 6 blocks 1 values 19
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 scalar aggregate fields u32 u16
@@ -1091,7 +1138,8 @@ item 1 ROUTINE read result usize params 1 slots 6 blocks 1 values 19
     18 LOAD usize slot 2
     19 LEAVE <- 18
 file positive/measurement-of-a-type/program.ldn
-unit items 5
+unit signatures 1 items 5
+signature 1 () -> usize
 item 1 DATUM width result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 MEASURE_SIZE usize
@@ -1108,7 +1156,7 @@ item 4 DATUM here result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 MEASURE_SIZE usize
     2 LEAVE <- 1
-item 5 ROUTINE pointer_width result usize params 0 slots 1 blocks 1 values 4
+item 5 ROUTINE pointer_width result usize signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 r usize return
   block 1 scope 2 SIGNATURE length 4
     1 MEASURE_SIZE usize
@@ -1116,7 +1164,7 @@ item 5 ROUTINE pointer_width result usize params 0 slots 1 blocks 1 values 4
     3 LOAD usize slot 1
     4 LEAVE <- 3
 file positive/measurement-of-fixed-arrays/program.ldn
-unit items 4
+unit signatures 0 items 4
 item 1 DATUM inline_size result usize params 0 slots 0 blocks 1 values 4
   block 1 scope 1 PROGRAM length 4
     1 MEASURE_SIZE usize
@@ -1138,14 +1186,14 @@ item 4 DATUM aliased_align result usize params 0 slots 0 blocks 1 values 2
     1 MEASURE_ALIGN usize
     2 LEAVE <- 1
 file positive/measurement-of-nested-struct-field/program.ldn
-unit items 1
+unit signatures 0 items 1
 item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1
   elements 8 of usize
   image 24 8 24 8 40 8 8 4
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/measurement-of-struct-array-fields/program.ldn
-unit items 5
+unit signatures 0 items 5
 item 1 DATUM direct_size result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 MEASURE_SIZE usize fields u8 [2]usize u16
@@ -1168,7 +1216,7 @@ item 5 DATUM static_image result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/measurement-of-structs/program.ldn
-unit items 7
+unit signatures 0 items 7
 item 1 DATUM direct_size result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 MEASURE_SIZE usize fields u8 u64 u16
@@ -1199,7 +1247,7 @@ item 7 DATUM static_image result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-from-struct-field/program.ldn
-unit items 12
+unit signatures 0 items 12
 item 1 DATUM finite_copy result array params 0 slots 0 blocks 1 values 1
   elements 2 of u16
   image 11 13
@@ -1281,7 +1329,7 @@ item 12 DATUM through_aggregate_chain result array params 0 slots 0 blocks 1 val
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-initialized-from-source-name/program.ldn
-unit items 3
+unit signatures 0 items 3
 item 1 DATUM typed_buffer result array params 0 slots 0 blocks 1 values 1
   elements 2 of u32
   block 1 scope 1 PROGRAM length 1
@@ -1295,7 +1343,7 @@ item 3 DATUM source result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-literal-1820-operators/program.ldn
-unit items 6
+unit signatures 0 items 6
 item 1 DATUM comparisons result array params 0 slots 0 blocks 1 values 1
   elements 3 of bool
   image 1 1 0
@@ -1327,12 +1375,13 @@ item 6 DATUM measurements result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-literal-assignment-runtime-elements/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (u32) -> none
 item 1 DATUM state result array params 0 slots 0 blocks 1 values 1
   elements 2 of u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE set result none params 1 slots 2 blocks 1 values 9
+item 2 ROUTINE set result none signature 1 params 1 slots 2 blocks 1 values 9
   slot 1 value u32 param 1
   slot 2 - u32
   block 1 scope 3 BLOCK length 9
@@ -1346,7 +1395,7 @@ item 2 ROUTINE set result none params 1 slots 2 blocks 1 values 9
     8 STORE_FIELD <- 7
     9 LEAVE
 file positive/module-array-literal-forward-scalar-reference/program.ldn
-unit items 2
+unit signatures 0 items 2
 item 1 DATUM buffer result array params 0 slots 0 blocks 1 values 1
   elements 3 of u32
   image 100 101 102
@@ -1357,7 +1406,7 @@ item 2 DATUM base result u32 params 0 slots 0 blocks 1 values 2
     1 NUMBER u32 100
     2 LEAVE <- 1
 file positive/module-array-literal-inferred-length/program.ldn
-unit items 3
+unit signatures 0 items 3
 item 1 DATUM row result array params 0 slots 0 blocks 1 values 1
   elements 3 of i32
   image 1 2 3
@@ -1373,7 +1422,7 @@ item 3 DATUM bytes result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-literal-initializer/program.ldn
-unit items 3
+unit signatures 0 items 3
 item 1 DATUM numbers result array params 0 slots 0 blocks 1 values 1
   elements 4 of u32
   image 10 21 30 40
@@ -1390,7 +1439,7 @@ item 3 DATUM signed result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-literal-wrapping-arithmetic/program.ldn
-unit items 4
+unit signatures 0 items 4
 item 1 DATUM u8_wraps result array params 0 slots 0 blocks 1 values 1
   elements 3 of u8
   image 0 255 0
@@ -1412,7 +1461,7 @@ item 4 DATUM i64_wraps result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-mixed-repetition/program.ldn
-unit items 5
+unit signatures 0 items 5
 item 1 DATUM base result u8 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u8 39
@@ -1438,7 +1487,7 @@ item 5 DATUM zero_suffix result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-repetition/program.ldn
-unit items 5
+unit signatures 0 items 5
 item 1 DATUM through result array params 0 slots 0 blocks 1 values 1
   elements 4294967295 of u8
   image repeat 165
@@ -1463,7 +1512,7 @@ item 5 DATUM zero result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-repetition-inferred/program.ldn
-unit items 5
+unit signatures 0 items 5
 item 1 DATUM seed result u16 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u16 40
@@ -1488,7 +1537,7 @@ item 5 DATUM through result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-array-zeroed-initializer/program.ldn
-unit items 2
+unit signatures 0 items 2
 item 1 DATUM numbers result array params 0 slots 0 blocks 1 values 1
   elements 4 of u32
   block 1 scope 1 PROGRAM length 1
@@ -1498,7 +1547,9 @@ item 2 DATUM flags result array params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-binding-with-no-value-reads-zero/program.ldn
-unit items 4
+unit signatures 2 items 4
+signature 1 () -> i32
+signature 2 () -> u32
 item 1 DATUM later result i32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER i32 0
@@ -1507,14 +1558,14 @@ item 2 DATUM counter result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 0
     2 LEAVE <- 1
-item 3 ROUTINE read_before_write result i32 params 0 slots 1 blocks 1 values 4
+item 3 ROUTINE read_before_write result i32 signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 r i32 return
   block 1 scope 3 BLOCK length 4
     1 LOAD_DATUM i32 datum 1 later
     2 STORE slot 1 <- 1
     3 LOAD i32 slot 1
     4 LEAVE <- 3
-item 4 ROUTINE count_up result u32 params 0 slots 2 blocks 1 values 10
+item 4 ROUTINE count_up result u32 signature 2 params 0 slots 2 blocks 1 values 10
   slot 1 r u32 return
   slot 2 - u32
   block 1 scope 5 BLOCK length 10
@@ -1529,7 +1580,7 @@ item 4 ROUTINE count_up result u32 params 0 slots 2 blocks 1 values 10
     9 LOAD u32 slot 1
     10 LEAVE <- 9
 file positive/module-fold-that-fits/program.ldn
-unit items 4
+unit signatures 0 items 4
 item 1 DATUM sum result u8 params 0 slots 1 blocks 1 values 6
   slot 1 - u8
   block 1 scope 1 PROGRAM length 6
@@ -1562,7 +1613,7 @@ item 4 DATUM sum_base result u32 params 0 slots 0 blocks 1 values 2
     1 NUMBER u32 9
     2 LEAVE <- 1
 file positive/module-scalar-wrapping-arithmetic/program.ldn
-unit items 11
+unit signatures 0 items 11
 item 1 DATUM u8_wraps_add result u8 params 0 slots 1 blocks 1 values 6
   slot 1 - u8
   block 1 scope 1 PROGRAM length 6
@@ -1663,7 +1714,7 @@ item 11 DATUM i64_wraps_sub result i64 params 0 slots 1 blocks 1 values 6
     5 WRAPPING_SUBTRACT i64 <- 4 3
     6 LEAVE <- 5
 file positive/module-scalar-zeroed-initializer/program.ldn
-unit items 2
+unit signatures 0 items 2
 item 1 DATUM number result u64 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u64 0
@@ -1673,7 +1724,8 @@ item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 2
     1 TRUTH bool false
     2 LEAVE <- 1
 file positive/module-struct-inferred-from-name/program.ldn
-unit items 5
+unit signatures 1 items 5
+signature 1 () -> usize
 item 1 DATUM first result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
@@ -1698,7 +1750,7 @@ item 4 DATUM terminal result struct params 0 slots 0 blocks 1 values 1
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 5 ROUTINE observe result usize params 0 slots 4 blocks 1 values 20
+item 5 ROUTINE observe result usize signature 1 params 0 slots 4 blocks 1 values 20
   slot 1 value usize return
   slot 2 - usize
   slot 3 - usize
@@ -1725,7 +1777,8 @@ item 5 ROUTINE observe result usize params 0 slots 4 blocks 1 values 20
     19 LOAD usize slot 1
     20 LEAVE <- 19
 file positive/module-struct-initialized-from-name/program.ldn
-unit items 4
+unit signatures 1 items 4
+signature 1 () -> usize
 item 1 DATUM first result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
@@ -1744,7 +1797,7 @@ item 3 DATUM terminal result struct params 0 slots 0 blocks 1 values 1
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 4 ROUTINE observe result usize params 0 slots 3 blocks 1 values 15
+item 4 ROUTINE observe result usize signature 1 params 0 slots 3 blocks 1 values 15
   slot 1 value usize return
   slot 2 - usize
   slot 3 - usize
@@ -1765,7 +1818,7 @@ item 4 ROUTINE observe result usize params 0 slots 3 blocks 1 values 15
     14 LOAD usize slot 1
     15 LEAVE <- 14
 file positive/module-struct-literal-array-image/program.ldn
-unit items 6
+unit signatures 0 items 6
 item 1 DATUM seed result u16 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u16 10
@@ -1860,7 +1913,7 @@ item 6 DATUM blank result struct params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-struct-literal-array-image-copy/program.ldn
-unit items 11
+unit signatures 0 items 11
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 [2]u16
   field 2 [2]u16
@@ -1942,7 +1995,7 @@ item 11 DATUM inferred result struct params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-struct-literal-initializer/program.ldn
-unit items 8
+unit signatures 0 items 8
 item 1 DATUM seed result usize params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER usize 6
@@ -2006,7 +2059,7 @@ item 8 DATUM blank result struct params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-struct-literal-selected-field-image/program.ldn
-unit items 7
+unit signatures 0 items 7
 item 1 DATUM copy result struct params 0 slots 0 blocks 1 values 1
   field 1 [2]u16
   field 2 [2]u16
@@ -2105,7 +2158,8 @@ item 7 DATUM seed result struct params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/module-struct-zeroed-initializer/program.ldn
-unit items 3
+unit signatures 1 items 3
+signature 1 (usize) -> usize
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
@@ -2118,7 +2172,7 @@ item 2 DATUM aliased result struct params 0 slots 0 blocks 1 values 1
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 3 ROUTINE read result usize params 1 slots 3 blocks 1 values 14
+item 3 ROUTINE read result usize signature 1 params 1 slots 3 blocks 1 values 14
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 - usize
@@ -2138,7 +2192,7 @@ item 3 ROUTINE read result usize params 1 slots 3 blocks 1 values 14
     13 LOAD usize slot 2
     14 LEAVE <- 13
 file positive/module-value-from-another/program.ldn
-unit items 2
+unit signatures 0 items 2
 item 1 DATUM doubled result u32 params 0 slots 1 blocks 1 values 6
   slot 1 - u32
   block 1 scope 1 PROGRAM length 6
@@ -2153,12 +2207,13 @@ item 2 DATUM base result u32 params 0 slots 0 blocks 1 values 2
     1 NUMBER u32 7
     2 LEAVE <- 1
 file positive/name-shadows-an-outer-one/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (u32) -> u32
 item 1 DATUM n result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 1
     2 LEAVE <- 1
-item 2 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6
+item 2 ROUTINE f result u32 signature 1 params 1 slots 3 blocks 1 values 6
   slot 1 n u32 param 1
   slot 2 r u32 return
   slot 3 m u32
@@ -2170,8 +2225,9 @@ item 2 ROUTINE f result u32 params 1 slots 3 blocks 1 values 6
     5 LOAD u32 slot 2
     6 LEAVE <- 5
 file positive/name-used-above-its-declaration/program.ldn
-unit items 2
-item 1 ROUTINE f result u32 params 0 slots 1 blocks 1 values 4
+unit signatures 1 items 2
+signature 1 () -> u32
+item 1 ROUTINE f result u32 signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 r u32 return
   block 1 scope 2 SIGNATURE length 4
     1 LOAD_DATUM u32 datum 2 later
@@ -2183,15 +2239,17 @@ item 2 DATUM later result u32 params 0 slots 0 blocks 1 values 2
     1 NUMBER u32 7
     2 LEAVE <- 1
 file positive/named-return-zeroed-assignment/program.ldn
-unit items 2
-item 1 ROUTINE integer result u32 params 0 slots 1 blocks 1 values 4
+unit signatures 2 items 2
+signature 1 () -> u32
+signature 2 () -> bool
+item 1 ROUTINE integer result u32 signature 1 params 0 slots 1 blocks 1 values 4
   slot 1 result u32 return
   block 1 scope 3 BLOCK length 4
     1 NUMBER u32 0
     2 STORE slot 1 <- 1
     3 LOAD u32 slot 1
     4 LEAVE <- 3
-item 2 ROUTINE boolean result bool params 0 slots 1 blocks 1 values 4
+item 2 ROUTINE boolean result bool signature 2 params 0 slots 1 blocks 1 values 4
   slot 1 result bool return
   block 1 scope 5 BLOCK length 4
     1 TRUTH bool false
@@ -2199,7 +2257,8 @@ item 2 ROUTINE boolean result bool params 0 slots 1 blocks 1 values 4
     3 LOAD bool slot 1
     4 LEAVE <- 3
 file positive/nested-struct-zero-storage/program.ldn
-unit items 3
+unit signatures 1 items 3
+signature 1 () -> none
 item 1 DATUM omitted result struct params 0 slots 0 blocks 1 values 1
   field 1 u16
   field 2 struct (u8,usize,[3]u16)
@@ -2212,7 +2271,7 @@ item 2 DATUM explicit result struct params 0 slots 0 blocks 1 values 1
   field 3 u8
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 3 ROUTINE exercise result none params 0 slots 2 blocks 1 values 14
+item 3 ROUTINE exercise result none signature 1 params 0 slots 2 blocks 1 values 14
   slot 1 local aggregate fields u16 struct (u8,usize,[3]u16) u8
   slot 2 initialized aggregate fields u16 struct (u8,usize,[3]u16) u8
   block 1 scope 3 BLOCK length 14
@@ -2231,14 +2290,15 @@ item 3 ROUTINE exercise result none params 0 slots 2 blocks 1 values 14
     13 STORE_FIELD <- 12
     14 LEAVE
 file positive/no-final-line-end/program.ldn
-unit items 1
+unit signatures 0 items 1
 item 1 DATUM a result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 1
     2 LEAVE <- 1
 file positive/parentheses-override/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 1 r i32 return
   slot 2 - i32
   slot 3 - i32
@@ -2256,8 +2316,9 @@ item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
     11 LOAD i32 slot 1
     12 LEAVE <- 11
 file positive/precedence-alternation-over-comparison/program.ldn
-unit items 1
-item 1 ROUTINE f result bool params 0 slots 3 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> bool
+item 1 ROUTINE f result bool signature 1 params 0 slots 3 blocks 1 values 12
   slot 1 r bool return
   slot 2 - i32
   slot 3 - i32
@@ -2275,8 +2336,9 @@ item 1 ROUTINE f result bool params 0 slots 3 blocks 1 values 12
     11 LOAD bool slot 1
     12 LEAVE <- 11
 file positive/precedence-and-over-or/program.ldn
-unit items 1
-item 1 ROUTINE f result bool params 3 slots 6 blocks 5 values 16
+unit signatures 1 items 1
+signature 1 (bool, bool, bool) -> bool
+item 1 ROUTINE f result bool signature 1 params 3 slots 6 blocks 5 values 16
   slot 1 a bool param 1
   slot 2 b bool param 2
   slot 3 c bool param 3
@@ -2305,8 +2367,9 @@ item 1 ROUTINE f result bool params 3 slots 6 blocks 5 values 16
     11 STORE slot 5 <- 10
     12 JUMP target 3
 file positive/precedence-comparison-over-and/program.ldn
-unit items 1
-item 1 ROUTINE f result bool params 1 slots 5 blocks 3 values 18
+unit signatures 1 items 1
+signature 1 (i32) -> bool
+item 1 ROUTINE f result bool signature 1 params 1 slots 5 blocks 3 values 18
   slot 1 x i32 param 1
   slot 2 r bool return
   slot 3 - bool
@@ -2334,8 +2397,9 @@ item 1 ROUTINE f result bool params 1 slots 5 blocks 3 values 18
     17 LOAD bool slot 2
     18 LEAVE <- 17
 file positive/precedence-conjunction-over-exclusion/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 1 r i32 return
   slot 2 - i32
   slot 3 - i32
@@ -2353,8 +2417,9 @@ item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
     11 LOAD i32 slot 1
     12 LEAVE <- 11
 file positive/precedence-exclusion-over-alternation/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 1 r i32 return
   slot 2 - i32
   slot 3 - i32
@@ -2372,8 +2437,9 @@ item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
     11 LOAD i32 slot 1
     12 LEAVE <- 11
 file positive/precedence-product-over-sum/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 1 r i32 return
   slot 2 - i32
   slot 3 - i32
@@ -2391,8 +2457,9 @@ item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
     11 LOAD i32 slot 1
     12 LEAVE <- 11
 file positive/precedence-shift-over-conjunction/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 1 r i32 return
   slot 2 - i32
   slot 3 - i32
@@ -2410,8 +2477,9 @@ item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
     11 LOAD i32 slot 1
     12 LEAVE <- 11
 file positive/precedence-sum-over-shift/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 () -> i32
+item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
   slot 1 r i32 return
   slot 2 - i32
   slot 3 - i32
@@ -2429,13 +2497,15 @@ item 1 ROUTINE f result i32 params 0 slots 3 blocks 1 values 12
     11 LOAD i32 slot 1
     12 LEAVE <- 11
 file positive/return-bare/program.ldn
-unit items 1
-item 1 ROUTINE f result none params 0 slots 0 blocks 1 values 1
+unit signatures 1 items 1
+signature 1 () -> none
+item 1 ROUTINE f result none signature 1 params 0 slots 0 blocks 1 values 1
   block 1 scope 3 BLOCK length 1
     1 LEAVE
 file positive/return-when/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 1 slots 3 blocks 3 values 14
+unit signatures 1 items 1
+signature 1 (i32) -> i32
+item 1 ROUTINE f result i32 signature 1 params 1 slots 3 blocks 3 values 14
   slot 1 x i32 param 1
   slot 2 r i32 return
   slot 3 - i32
@@ -2457,7 +2527,10 @@ item 1 ROUTINE f result i32 params 1 slots 3 blocks 3 values 14
     13 LOAD i32 slot 2
     14 LEAVE <- 13
 file positive/scalar-subobject-zeroed-assignment/program.ldn
-unit items 5
+unit signatures 3 items 5
+signature 1 () -> none
+signature 2 () -> u32
+signature 3 () -> u32
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u32
   block 1 scope 1 PROGRAM length 1
@@ -2466,14 +2539,14 @@ item 2 DATUM row result array params 0 slots 0 blocks 1 values 1
   elements 1 of u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 3 ROUTINE f result none params 0 slots 0 blocks 1 values 5
+item 3 ROUTINE f result none signature 1 params 0 slots 0 blocks 1 values 5
   block 1 scope 3 BLOCK length 5
     1 NUMBER u32 0
     2 STORE_FIELD <- 1
     3 NUMBER u32 0
     4 STORE_FIELD <- 3
     5 LEAVE
-item 4 ROUTINE local_field result u32 params 0 slots 2 blocks 1 values 6
+item 4 ROUTINE local_field result u32 signature 2 params 0 slots 2 blocks 1 values 6
   slot 1 result u32 return
   slot 2 local aggregate fields u32
   block 1 scope 5 BLOCK length 6
@@ -2483,7 +2556,7 @@ item 4 ROUTINE local_field result u32 params 0 slots 2 blocks 1 values 6
     4 STORE slot 1 <- 3
     5 LOAD u32 slot 1
     6 LEAVE <- 5
-item 5 ROUTINE local_element result u32 params 0 slots 2 blocks 1 values 6
+item 5 ROUTINE local_element result u32 signature 3 params 0 slots 2 blocks 1 values 6
   slot 1 result u32 return
   slot 2 local elements 1 of u32
   block 1 scope 7 BLOCK length 6
@@ -2494,12 +2567,13 @@ item 5 ROUTINE local_element result u32 params 0 slots 2 blocks 1 values 6
     5 LOAD u32 slot 1
     6 LEAVE <- 5
 file positive/scalar-zeroed-assignment/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 () -> bool
 item 1 DATUM module result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 0
     2 LEAVE <- 1
-item 2 ROUTINE f result bool params 0 slots 2 blocks 1 values 8
+item 2 ROUTINE f result bool signature 1 params 0 slots 2 blocks 1 values 8
   slot 1 result bool return
   slot 2 local bool
   block 1 scope 3 BLOCK length 8
@@ -2512,8 +2586,9 @@ item 2 ROUTINE f result bool params 0 slots 2 blocks 1 values 8
     7 LOAD bool slot 1
     8 LEAVE <- 7
 file positive/shift-amount-is-not-known/program.ldn
-unit items 1
-item 1 ROUTINE g result i32 params 2 slots 5 blocks 1 values 14
+unit signatures 1 items 1
+signature 1 (i32, i32) -> i32
+item 1 ROUTINE g result i32 signature 1 params 2 slots 5 blocks 1 values 14
   slot 1 x i32 param 1
   slot 2 s i32 param 2
   slot 3 r i32 return
@@ -2535,8 +2610,9 @@ item 1 ROUTINE g result i32 params 2 slots 5 blocks 1 values 14
     13 LOAD i32 slot 3
     14 LEAVE <- 13
 file positive/space-forms/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 1 slots 2 blocks 1 values 4
+unit signatures 1 items 1
+signature 1 (i32) -> i32
+item 1 ROUTINE f result i32 signature 1 params 1 slots 2 blocks 1 values 4
   slot 1 x i32 param 1
   slot 2 r i32 return
   block 1 scope 3 BLOCK length 4
@@ -2545,8 +2621,9 @@ item 1 ROUTINE f result i32 params 1 slots 2 blocks 1 values 4
     3 LOAD i32 slot 2
     4 LEAVE <- 3
 file positive/statement-assignment/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 1 slots 2 blocks 1 values 6
+unit signatures 1 items 1
+signature 1 (i32) -> i32
+item 1 ROUTINE f result i32 signature 1 params 1 slots 2 blocks 1 values 6
   slot 1 x i32 param 1
   slot 2 r i32 return
   block 1 scope 3 BLOCK length 6
@@ -2557,21 +2634,24 @@ item 1 ROUTINE f result i32 params 1 slots 2 blocks 1 values 6
     5 LOAD i32 slot 2
     6 LEAVE <- 5
 file positive/statement-call/program.ldn
-unit items 2
-item 1 ROUTINE quiet result none params 1 slots 1 blocks 1 values 1
+unit signatures 2 items 2
+signature 1 (i32) -> none
+signature 2 () -> none
+item 1 ROUTINE quiet result none signature 1 params 1 slots 1 blocks 1 values 1
   slot 1 m i32 param 1
   block 1 scope 3 BLOCK length 1
     1 LEAVE
-item 2 ROUTINE use result none params 0 slots 0 blocks 1 values 5
+item 2 ROUTINE use result none signature 2 params 0 slots 0 blocks 1 values 5
   block 1 scope 5 BLOCK length 5
     1 NUMBER i32 1
-    2 CALL none callee 1 quiet <- 1
+    2 CALL none callee 1 quiet signature 1 <- 1
     3 NUMBER i32 2
-    4 CALL none callee 1 quiet <- 3
+    4 CALL none callee 1 quiet signature 1 <- 3
     5 LEAVE
 file positive/statement-discard/program.ldn
-unit items 1
-item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 6
+unit signatures 1 items 1
+signature 1 () -> none
+item 1 ROUTINE f result none signature 1 params 0 slots 1 blocks 1 values 6
   slot 1 - i32
   block 1 scope 3 BLOCK length 6
     1 NUMBER i32 1
@@ -2581,8 +2661,9 @@ item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 6
     5 ADD i32 <- 4 3
     6 LEAVE
 file positive/statement-inc-dec/program.ldn
-unit items 1
-item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 11
+unit signatures 1 items 1
+signature 1 () -> none
+item 1 ROUTINE f result none signature 1 params 0 slots 1 blocks 1 values 11
   slot 1 n u32
   block 1 scope 3 BLOCK length 11
     1 NUMBER u32 1
@@ -2597,7 +2678,9 @@ item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 11
     10 STORE slot 1 <- 9
     11 LEAVE
 file positive/struct-array-field-copy/program.ldn
-unit items 5
+unit signatures 2 items 5
+signature 1 () -> none
+signature 2 (usize) -> usize
 item 1 DATUM source result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
@@ -2616,14 +2699,14 @@ item 3 DATUM words result array params 0 slots 0 blocks 1 values 1
   elements 2 of usize
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 4 ROUTINE copy_module result none params 0 slots 0 blocks 1 values 5
+item 4 ROUTINE copy_module result none signature 1 params 0 slots 0 blocks 1 values 5
   block 1 scope 3 BLOCK length 5
     1 COPY_ARRAY from datum 1 source field 2 to datum 2 destination field 2
     2 COPY_ARRAY from datum 2 destination field 2 to datum 3 words
     3 COPY_ARRAY from datum 3 words to datum 1 source field 2
     4 COPY_ARRAY from datum 1 source field 2 to datum 1 source field 2
     5 LEAVE
-item 5 ROUTINE copy_local result usize params 1 slots 7 blocks 1 values 19
+item 5 ROUTINE copy_local result usize signature 2 params 1 slots 7 blocks 1 values 19
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 left aggregate fields u8 [2]usize [2]usize u16
@@ -2652,13 +2735,14 @@ item 5 ROUTINE copy_local result usize params 1 slots 7 blocks 1 values 19
     18 LOAD usize slot 2
     19 LEAVE <- 18
 file positive/struct-array-field-element-zeroed/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (usize) -> u32
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 [1]bool
   field 2 [2]u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE set result u32 params 1 slots 7 blocks 5 values 33
+item 2 ROUTINE set result u32 signature 1 params 1 slots 7 blocks 5 values 33
   slot 1 at usize param 1
   slot 2 result u32 return
   slot 3 local aggregate fields [1]bool [2]u32
@@ -2705,14 +2789,16 @@ item 2 ROUTINE set result u32 params 1 slots 7 blocks 5 values 33
     30 STORE slot 2 <- 29
     31 JUMP target 2
 file positive/struct-array-field-literal-assignment/program.ldn
-unit items 3
+unit signatures 2 items 3
+signature 1 (usize) -> usize
+signature 2 (usize) -> usize
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE module_field result usize params 1 slots 2 blocks 1 values 11
+item 2 ROUTINE module_field result usize signature 1 params 1 slots 2 blocks 1 values 11
   slot 1 at usize param 1
   slot 2 result usize return
   block 1 scope 3 BLOCK length 11
@@ -2727,7 +2813,7 @@ item 2 ROUTINE module_field result usize params 1 slots 2 blocks 1 values 11
     9 STORE slot 2 <- 8
     10 LOAD usize slot 2
     11 LEAVE <- 10
-item 3 ROUTINE local_field result usize params 1 slots 3 blocks 1 values 11
+item 3 ROUTINE local_field result usize signature 2 params 1 slots 3 blocks 1 values 11
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 local aggregate fields u8 [2]usize u16
@@ -2744,8 +2830,9 @@ item 3 ROUTINE local_field result usize params 1 slots 3 blocks 1 values 11
     10 LOAD usize slot 2
     11 LEAVE <- 10
 file positive/struct-array-field-local-storage/program.ldn
-unit items 1
-item 1 ROUTINE use result none params 0 slots 10 blocks 1 values 34
+unit signatures 1 items 1
+signature 1 () -> none
+item 1 ROUTINE use result none signature 1 params 0 slots 10 blocks 1 values 34
   slot 1 direct aggregate fields u8 [2]usize u16
   slot 2 through_alias aggregate fields u8 [2]usize u16
   slot 3 - usize
@@ -2792,7 +2879,8 @@ item 1 ROUTINE use result none params 0 slots 10 blocks 1 values 34
     33 STORE slot 10 <- 32
     34 LEAVE
 file positive/struct-array-field-module-state/program.ldn
-unit items 3
+unit signatures 1 items 3
+signature 1 () -> none
 item 1 DATUM direct result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
@@ -2805,7 +2893,7 @@ item 2 DATUM through_alias result struct params 0 slots 0 blocks 1 values 1
   field 3 u32
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 3 ROUTINE touch result none params 0 slots 4 blocks 1 values 15
+item 3 ROUTINE touch result none signature 1 params 0 slots 4 blocks 1 values 15
   slot 1 seen u8
   slot 2 first usize
   slot 3 at usize
@@ -2827,14 +2915,16 @@ item 3 ROUTINE touch result none params 0 slots 4 blocks 1 values 15
     14 STORE_FIELD <- 13
     15 LEAVE
 file positive/struct-array-field-repetition-assignment/program.ldn
-unit items 3
+unit signatures 2 items 3
+signature 1 (usize) -> usize
+signature 2 (usize) -> usize
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [4]usize
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE module_field result usize params 1 slots 2 blocks 1 values 15
+item 2 ROUTINE module_field result usize signature 1 params 1 slots 2 blocks 1 values 15
   slot 1 at usize param 1
   slot 2 result usize return
   block 1 scope 3 BLOCK length 15
@@ -2853,7 +2943,7 @@ item 2 ROUTINE module_field result usize params 1 slots 2 blocks 1 values 15
     13 STORE slot 2 <- 12
     14 LOAD usize slot 2
     15 LEAVE <- 14
-item 3 ROUTINE local_field result usize params 1 slots 3 blocks 1 values 15
+item 3 ROUTINE local_field result usize signature 2 params 1 slots 3 blocks 1 values 15
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 local aggregate fields u8 [4]usize u16
@@ -2874,14 +2964,15 @@ item 3 ROUTINE local_field result usize params 1 slots 3 blocks 1 values 15
     14 LOAD usize slot 2
     15 LEAVE <- 14
 file positive/struct-array-field-whole-copy/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (usize) -> usize
 item 1 DATUM saved result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE copy result usize params 1 slots 7 blocks 1 values 41
+item 2 ROUTINE copy result usize signature 1 params 1 slots 7 blocks 1 values 41
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 source aggregate fields u8 [2]usize u16
@@ -2932,7 +3023,8 @@ item 2 ROUTINE copy result usize params 1 slots 7 blocks 1 values 41
     40 LOAD usize slot 2
     41 LEAVE <- 40
 file positive/struct-array-field-zeroed-assignment/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (usize) -> none
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
@@ -2940,7 +3032,7 @@ item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 4 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE use result none params 1 slots 7 blocks 1 values 22
+item 2 ROUTINE use result none signature 1 params 1 slots 7 blocks 1 values 22
   slot 1 at usize param 1
   slot 2 - usize
   slot 3 - usize
@@ -2972,7 +3064,8 @@ item 2 ROUTINE use result none params 1 slots 7 blocks 1 values 22
     21 STORE slot 7 <- 20
     22 LEAVE
 file positive/struct-construction-contexts/program.ldn
-unit items 7
+unit signatures 1 items 7
+signature 1 () -> none
 item 1 DATUM origin result struct params 0 slots 0 blocks 1 values 1
   field 1 i32
   field 2 i32
@@ -3009,7 +3102,7 @@ item 6 DATUM image result struct params 0 slots 0 blocks 1 values 1
   field 2 image 11 13
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 7 ROUTINE f result none params 0 slots 5 blocks 1 values 22
+item 7 ROUTINE f result none signature 1 params 0 slots 5 blocks 1 values 22
   slot 1 local aggregate fields i32 i32
   slot 2 typed_local aggregate fields i32 i32
   slot 3 assigned aggregate fields i32 i32
@@ -3039,7 +3132,8 @@ item 7 ROUTINE f result none params 0 slots 5 blocks 1 values 22
     21 ADD i32 <- 20 19
     22 LEAVE
 file positive/struct-literal-array-field-forms/program.ldn
-unit items 3
+unit signatures 1 items 3
+signature 1 () -> usize
 item 1 DATUM words result array params 0 slots 0 blocks 1 values 1
   elements 3 of usize
   image 1 2 3
@@ -3052,7 +3146,7 @@ item 2 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 4 u8
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 3 ROUTINE write result usize params 0 slots 8 blocks 1 values 62
+item 3 ROUTINE write result usize signature 1 params 0 slots 8 blocks 1 values 62
   slot 1 result usize return
   slot 2 local aggregate fields bool [3]usize [3]usize u8
   slot 3 copied aggregate fields bool [3]usize [3]usize u8
@@ -3125,7 +3219,8 @@ item 3 ROUTINE write result usize params 0 slots 8 blocks 1 values 62
     61 LOAD usize slot 1
     62 LEAVE <- 61
 file positive/struct-literal-contexts/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (usize) -> usize
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]usize
@@ -3133,7 +3228,7 @@ item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 4 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE read result usize params 1 slots 6 blocks 1 values 39
+item 2 ROUTINE read result usize signature 1 params 1 slots 6 blocks 1 values 39
   slot 1 at usize param 1
   slot 2 result usize return
   slot 3 local aggregate fields u8 [2]usize bool u16
@@ -3181,7 +3276,7 @@ item 2 ROUTINE read result usize params 1 slots 6 blocks 1 values 39
     38 LOAD usize slot 2
     39 LEAVE <- 38
 file positive/struct-module-state/program.ldn
-unit items 1
+unit signatures 0 items 1
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u32
   field 2 u32
@@ -3189,16 +3284,17 @@ item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/struct-type-is-declared/program.ldn
-unit items 0
+unit signatures 0 items 0
 file positive/struct-zeroed-assignment/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 (usize) -> u32
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 [2]u32
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE read result u32 params 1 slots 4 blocks 1 values 16
+item 2 ROUTINE read result u32 signature 1 params 1 slots 4 blocks 1 values 16
   slot 1 at usize param 1
   slot 2 result u32 return
   slot 3 local aggregate fields u8 [2]u32 u16
@@ -3221,8 +3317,9 @@ item 2 ROUTINE read result u32 params 1 slots 4 blocks 1 values 16
     15 LOAD u32 slot 2
     16 LEAVE <- 15
 file positive/token-separation/program.ldn
-unit items 1
-item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 7
+unit signatures 1 items 1
+signature 1 () -> none
+item 1 ROUTINE f result none signature 1 params 0 slots 1 blocks 1 values 7
   slot 1 incx u32
   block 1 scope 3 BLOCK length 7
     1 NUMBER u32 0
@@ -3233,7 +3330,8 @@ item 1 ROUTINE f result none params 0 slots 1 blocks 1 values 7
     6 STORE slot 1 <- 5
     7 LEAVE
 file positive/type-declaration-aliases-a-scalar/program.ldn
-unit items 3
+unit signatures 1 items 3
+signature 1 (u32) -> u32
 item 1 DATUM n result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 7
@@ -3242,7 +3340,7 @@ item 2 DATUM m result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 9
     2 LEAVE <- 1
-item 3 ROUTINE widen result u32 params 1 slots 3 blocks 1 values 8
+item 3 ROUTINE widen result u32 signature 1 params 1 slots 3 blocks 1 values 8
   slot 1 a u32 param 1
   slot 2 r u32 return
   slot 3 - u32
@@ -3256,8 +3354,9 @@ item 3 ROUTINE widen result u32 params 1 slots 3 blocks 1 values 8
     7 LOAD u32 slot 2
     8 LEAVE <- 7
 file positive/unary-binds-tightest/program.ldn
-unit items 1
-item 1 ROUTINE f result i32 params 1 slots 4 blocks 1 values 12
+unit signatures 1 items 1
+signature 1 (i32) -> i32
+item 1 ROUTINE f result i32 signature 1 params 1 slots 4 blocks 1 values 12
   slot 1 x i32 param 1
   slot 2 r i32 return
   slot 3 - i32
@@ -3276,14 +3375,15 @@ item 1 ROUTINE f result i32 params 1 slots 4 blocks 1 values 12
     11 LOAD i32 slot 2
     12 LEAVE <- 11
 file positive/variant-case-construction/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 () -> none
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 variant u8 cases3 () (u8,u16) ([2]u32)
   field 3 bool
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE construct result none params 0 slots 3 blocks 1 values 48
+item 2 ROUTINE construct result none signature 1 params 0 slots 3 blocks 1 values 48
   slot 1 local aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 2 named aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 3 inferred aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
@@ -3337,12 +3437,13 @@ item 2 ROUTINE construct result none params 0 slots 3 blocks 1 values 48
     47 LOAD_FIELD bool
     48 LEAVE
 file positive/variant-match-array-payload-bindings/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 () -> none
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 variant u8 cases2 () ([3]u16)
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE read_and_write result none params 0 slots 6 blocks 15 values 71
+item 2 ROUTINE read_and_write result none signature 1 params 0 slots 6 blocks 15 values 71
   slot 1 at usize
   slot 2 local aggregate fields variant u8 cases2 () ([3]u16)
   slot 3 - u8
@@ -3436,12 +3537,13 @@ item 2 ROUTINE read_and_write result none params 0 slots 6 blocks 15 values 71
   block 15 scope 8 BLOCK length 1
     69 JUMP target 13
 file positive/variant-match-exhaustive/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 () -> none
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 variant u8 cases3 () (u8) ([2]u16)
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE match_variants result none params 0 slots 4 blocks 13 values 42
+item 2 ROUTINE match_variants result none signature 1 params 0 slots 4 blocks 13 values 42
   slot 1 local aggregate fields variant u8 cases3 () (u8) ([2]u16)
   slot 2 answer u8
   slot 3 - u8
@@ -3502,12 +3604,13 @@ item 2 ROUTINE match_variants result none params 0 slots 4 blocks 13 values 42
     40 NUMBER i32 3
     41 JUMP target 8
 file positive/variant-match-payload-bindings/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 () -> none
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 variant u8 cases3 () (u8,u8) ([2]u8)
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE bind_payloads result none params 0 slots 4 blocks 19 values 57
+item 2 ROUTINE bind_payloads result none signature 1 params 0 slots 4 blocks 19 values 57
   slot 1 local aggregate fields variant u8 cases3 () (u8,u8) ([2]u8)
   slot 2 - u8
   slot 3 - u8
@@ -3589,7 +3692,8 @@ item 2 ROUTINE bind_payloads result none params 0 slots 4 blocks 19 values 57
     55 NUMBER i32 0
     56 JUMP target 11
 file positive/variant-module-array-payload-image/program.ldn
-unit items 4
+unit signatures 1 items 4
+signature 1 () -> none
 item 1 DATUM origin result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 variant u8 cases2 () ([3]u8,[3]u16,[3]u8,[2]bool)
@@ -3626,7 +3730,7 @@ item 3 DATUM inferred result struct params 0 slots 0 blocks 1 values 1
     payload 4 image 1 0
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 4 ROUTINE read result none params 0 slots 2 blocks 9 values 23
+item 4 ROUTINE read result none signature 1 params 0 slots 2 blocks 9 values 23
   slot 1 - u8
   slot 2 - u8
   block 1 scope 3 BLOCK length 6
@@ -3662,7 +3766,8 @@ item 4 ROUTINE read result none params 0 slots 2 blocks 9 values 23
     21 LOAD_FIELD u8
     22 JUMP target 6
 file positive/variant-module-array-payload-image-copy/program.ldn
-unit items 9
+unit signatures 1 items 9
+signature 1 () -> none
 item 1 DATUM origin result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 variant u8 cases2 () ([2]u8,[2]u16,[3]u8,[2]bool,[2]u8,[2]u16,[3]u8,[2]bool,[2]u32)
@@ -3745,7 +3850,7 @@ item 8 DATUM zero_source result array params 0 slots 0 blocks 1 values 1
   elements 2 of bool
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 9 ROUTINE read result none params 0 slots 2 blocks 9 values 23
+item 9 ROUTINE read result none signature 1 params 0 slots 2 blocks 9 values 23
   slot 1 - u8
   slot 2 - u8
   block 1 scope 3 BLOCK length 6
@@ -3781,7 +3886,8 @@ item 9 ROUTINE read result none params 0 slots 2 blocks 9 values 23
     21 LOAD_FIELD u8
     22 JUMP target 6
 file positive/variant-module-case-image/program.ldn
-unit items 6
+unit signatures 1 items 6
+signature 1 () -> none
 item 1 DATUM seed result u8 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u8 10
@@ -3823,7 +3929,7 @@ item 5 DATUM bare result struct params 0 slots 0 blocks 1 values 1
   field 2 case 1
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 6 ROUTINE read result none params 0 slots 3 blocks 19 values 52
+item 6 ROUTINE read result none signature 1 params 0 slots 3 blocks 19 values 52
   slot 1 - u8
   slot 2 - u8
   slot 3 - u8
@@ -3899,14 +4005,15 @@ item 6 ROUTINE read result none params 0 slots 3 blocks 19 values 52
     50 LOAD_FIELD u8
     51 JUMP target 14
 file positive/variant-part-measured/program.ldn
-unit items 1
+unit signatures 0 items 1
 item 1 DATUM measurements result array params 0 slots 0 blocks 1 values 1
   elements 8 of usize
   image 1 1 8 4 40 8 32 8
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
 file positive/variant-runtime-array-payload/program.ldn
-unit items 4
+unit signatures 1 items 4
+signature 1 () -> none
 item 1 DATUM module_values result array params 0 slots 0 blocks 1 values 1
   elements 3 of u8
   image 11 13 17
@@ -3924,7 +4031,7 @@ item 3 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 3 u8
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 4 ROUTINE write result none params 0 slots 3 blocks 1 values 86
+item 4 ROUTINE write result none signature 1 params 0 slots 3 blocks 1 values 86
   slot 1 local_values elements 3 of u8
   slot 2 local_holder aggregate fields [2]u16
   slot 3 local aggregate fields u8 variant u8 cases2 () ([3]u8,[3]u16,[3]u8,[2]bool,[3]u8,[2]u16) u8
@@ -4016,14 +4123,15 @@ item 4 ROUTINE write result none params 0 slots 3 blocks 1 values 86
     85 LOAD_FIELD u8
     86 LEAVE
 file positive/variant-whole-copy/program.ldn
-unit items 2
+unit signatures 1 items 2
+signature 1 () -> none
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 variant u8 cases3 () (u8,u16) ([2]u32)
   field 3 bool
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 2 ROUTINE copy result none params 0 slots 9 blocks 12 values 75
+item 2 ROUTINE copy result none signature 1 params 0 slots 9 blocks 12 values 75
   slot 1 source aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 2 typed aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
   slot 3 inferred aggregate fields u8 variant u8 cases3 () (u8,u16) ([2]u32) bool
@@ -4121,7 +4229,8 @@ item 2 ROUTINE copy result none params 0 slots 9 blocks 12 values 75
     73 NUMBER i32 3
     74 JUMP target 2
 file positive/variant-zeroed-storage/program.ldn
-unit items 3
+unit signatures 1 items 3
+signature 1 () -> none
 item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
   field 1 u8
   field 2 variant u8 cases3 () (usize,u8) ([3]u16)
@@ -4134,7 +4243,7 @@ item 2 DATUM reset result struct params 0 slots 0 blocks 1 values 1
   field 3 u16
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
-item 3 ROUTINE use_storage result none params 0 slots 2 blocks 1 values 10
+item 3 ROUTINE use_storage result none signature 1 params 0 slots 2 blocks 1 values 10
   slot 1 local aggregate fields u8 variant u8 cases3 () (usize,u8) ([3]u16) u16
   slot 2 initialized aggregate fields u8 variant u8 cases3 () (usize,u8) ([3]u16) u16
   block 1 scope 3 BLOCK length 10
@@ -4149,8 +4258,9 @@ item 3 ROUTINE use_storage result none params 0 slots 2 blocks 1 values 10
     9 LOAD_FIELD u16
     10 LEAVE
 file positive/wrapping-operators/program.ldn
-unit items 1
-item 1 ROUTINE f result u8 params 1 slots 3 blocks 1 values 8
+unit signatures 1 items 1
+signature 1 (u8) -> u8
+item 1 ROUTINE f result u8 signature 1 params 1 slots 3 blocks 1 values 8
   slot 1 x u8 param 1
   slot 2 r u8 return
   slot 3 - u8
@@ -4163,3 +4273,31 @@ item 1 ROUTINE f result u8 params 1 slots 3 blocks 1 values 8
     6 STORE slot 2 <- 5
     7 LOAD u8 slot 2
     8 LEAVE <- 7
+file positive/written-function-values/program.ldn
+unit signatures 3 items 2
+signature 1 (i32) -> i32
+signature 2 () -> i32
+signature 3 (i32) -> i32
+item 1 ROUTINE identity result i32 signature 1 params 1 slots 2 blocks 1 values 4
+  slot 1 value i32 param 1
+  slot 2 result i32 return
+  block 1 scope 2 SIGNATURE length 4
+    1 LOAD i32 slot 1
+    2 STORE slot 2 <- 1
+    3 LOAD i32 slot 2
+    4 LEAVE <- 3
+item 2 ROUTINE use result i32 signature 2 params 0 slots 3 blocks 1 values 10
+  slot 1 result i32 return
+  slot 2 current usize signature 3
+  slot 3 - usize signature 3
+  block 1 scope 4 BLOCK length 10
+    1 FUNCTION_ADDRESS usize target 1 identity signature 1
+    2 STORE slot 2 <- 1
+    3 LOAD usize slot 2
+    4 STORE slot 3 <- 3
+    5 NUMBER i32 4
+    6 LOAD usize slot 3
+    7 INDIRECT_CALL i32 signature 3 <- 6 5
+    8 STORE slot 1 <- 7
+    9 LOAD i32 slot 1
+    10 LEAVE <- 9

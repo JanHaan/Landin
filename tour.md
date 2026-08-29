@@ -1436,6 +1436,9 @@ handler: type = () -> none
 mut current: handler = default_handler
 
 ```
+The names written inside the signature describe its parameter and return
+positions; in a type they do not declare local names. Two function types agree
+by those positions' types, not by their labels.
 A callback is therefore a pair of that and a state pointer,
 written out because nothing is captured.
 ```landin

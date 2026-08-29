@@ -1,0 +1,6 @@
+class: runtime
+summary: a written function type stores and indirectly calls matching functions
+constructs: 0050, 0870, 1000, 1790, 1795, 1920
+program: main.ldn
+status: 41
+targets: linux-x86-64

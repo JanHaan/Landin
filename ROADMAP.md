@@ -1977,9 +1977,20 @@ The thirty-first increment closes early-exit evidence for aggregate results:
 each accepted `return` performs the final copy from the independent named slot
 to caller-owned storage, while a path without that complete slot is refused.
 
-Written function types, function parameters and anonymous functions remain in
-this item. Further aggregate arguments and result contexts remain here too; R4.40 later supplies
-complete C ABI classification rather than owning this internal convention.
+The thirty-second increment makes complete signatures first-class,
+target-neutral descriptors in checking and verified IR. Declared routines,
+written types, inferred values, code-address values, explicitly typed local
+slots and calls carry descriptors rather than treating one concrete callee as
+type evidence. [1800]'s infallible signature becomes a written type that a type
+declaration may name and an explicitly typed local may store and call. The
+verifier rejects malformed descriptors, mismatched function-value stores and
+indirect address/signature disagreement before the x86-64 backend sees them.
+
+Function-typed module storage, struct fields, function parameters and results,
+declared-error function types and anonymous functions remain in this item.
+Further aggregate arguments and result contexts remain here too; R4.40 later
+supplies complete C ABI classification rather than owning this internal
+convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
 left contextual: whole nested field selection, construction and copy, deeper recursive
 composition, aggregate variant payloads and D17's fixed arrays whose element
@@ -1994,8 +2005,10 @@ needed detail, or record language-evolution work when that program proves it
 does not.
 
 Exit evidence: ABI tests cover ordinary and failing calls, aggregate values,
-indirect calls, more arguments than the register-only stopgap accepted and
-every control-flow exit path.
+inferred and explicitly typed indirect calls, more arguments than the
+register-only stopgap accepted and every control-flow exit path. Malformed IR
+also proves that a runtime address cannot substitute for its neutral signature
+descriptor.
 
 ### R2.40 — Implement fixed parameters and compile-time substitution
 Status: planned

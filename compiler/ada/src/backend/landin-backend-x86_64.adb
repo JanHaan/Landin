@@ -1632,13 +1632,15 @@ package body Landin.Backend.X86_64 is
                   --  callee defines nothing, and [1930] says there is no
                   --  result there to store.
                   declare
-                     Callee : constant Landin.IR.Item_Id :=
-                       Landin.IR.Callee_Of (Of_Unit, Item, Value);
                      Gives : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
                      Indirect : constant Boolean :=
                        Landin.IR.Op_Of (Of_Unit, Item, Value)
                          = Landin.IR.Indirect_Call;
+                     Callee : constant Landin.IR.Item_Id :=
+                       (if Indirect then Landin.IR.No_Item
+                        else Landin.IR.Callee_Of
+                          (Of_Unit, Item, Value));
                      Offset : constant Natural :=
                        (if Indirect then 1 else 0);
                      Count : constant Natural :=

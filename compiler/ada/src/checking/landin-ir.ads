@@ -256,11 +256,12 @@ package Landin.IR is
       Less_Or_Equal,
       Greater_Than,
       Greater_Or_Equal,
-      --  [0870]: a routine's target-neutral code identity, lowered to one
-      --  target code address.
+      --  [0870]: a routine's target-neutral code identity and D117
+      --  signature descriptor, lowered to one target code address.
       Function_Address,
       --  [1920]: every parameter named once and in order, and the type
-      --  of the named return, or no value at all.
+      --  of the named return, or no value at all.  Both forms carry a
+      --  descriptor; only the direct form also names a routine item.
       Call,
       Indirect_Call,
       --  The terminators.  Leave is [1810]'s `return`, which "carries no
@@ -309,6 +310,7 @@ package Landin.IR is
    type Slot_Id  is range 0 .. Integer'Last;
    type Block_Id is range 0 .. Integer'Last;
    type Value_Id is range 0 .. Integer'Last;
+   type Signature_Id is range 0 .. Integer'Last;
 
    --  One target-neutral aggregate field shape.  D44 needs the scalar form,
    --  D45 adds the compact fixed-scalar-array form for measurement, D46
@@ -344,6 +346,23 @@ package Landin.IR is
    No_Slot  : constant Slot_Id  := 0;
    No_Block : constant Block_Id := 0;
    No_Value : constant Value_Id := 0;
+   No_Signature : constant Signature_Id := 0;
+
+   --  D117's target-neutral callable shape.  Aggregate bodies are nominal
+   --  source identities and arrays retain only their length and scalar
+   --  element.  A backend may derive a carrier convention from these facts;
+   --  no register, byte width or target offset is represented here.
+   type Signature_Part is record
+      Kind    : Landin.Types.Type_Kind := Landin.Types.No_Value;
+      Aggregate_Body : Declaration_Id  := No_Declaration;
+      Length  : Element_Total          := 0;
+      Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
+   end record;
+
+   type Signature_Part_Array is
+     array (Positive range <>) of Signature_Part;
+
+   No_Signature_Parts : constant Signature_Part_Array (1 .. 0) := [];
 
    --  An array copy reaches either a module datum or a slot in the frame of
    --  the item containing the instruction.  A discriminant prevents an
@@ -387,6 +406,43 @@ package Landin.IR is
 
    function Declaration_Limit (Of_Unit : Unit) return Natural
      with Pre => Is_Prepared (Of_Unit);
+
+   ------------------------------------------------------------------
+   --  Signatures
+   ------------------------------------------------------------------
+
+   function Signature_Count (Of_Unit : Unit) return Natural;
+
+   function Holds (Of_Unit : Unit; Id : Signature_Id) return Boolean
+     is (Id /= No_Signature
+         and then Natural (Id) <= Signature_Count (Of_Unit));
+
+   function Add_Signature
+     (Into       : in out Unit;
+      Parameters : Signature_Part_Array;
+      Result     : Signature_Part) return Signature_Id
+     with Pre  => Is_Prepared (Into),
+          Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Signature'Result);
+
+   function Signature_Parameter_Count
+     (Of_Unit : Unit; Signature : Signature_Id) return Natural
+     with Pre => Holds (Of_Unit, Signature);
+
+   function Nth_Signature_Parameter
+     (Of_Unit : Unit; Signature : Signature_Id; Index : Positive)
+      return Signature_Part
+     with Pre => Holds (Of_Unit, Signature)
+                 and then Index <= Signature_Parameter_Count
+                                     (Of_Unit, Signature);
+
+   function Signature_Result
+     (Of_Unit : Unit; Signature : Signature_Id) return Signature_Part
+     with Pre => Holds (Of_Unit, Signature);
+
+   function Signatures_Agree
+     (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
+     with Pre => Holds (Of_Unit, Left) and then Holds (Of_Unit, Right);
 
    ------------------------------------------------------------------
    --  Items
@@ -452,6 +508,18 @@ package Landin.IR is
    function Origin_Of (Of_Unit : Unit; Id : Item_Id)
      return Landin.Provenance.Origin
      with Pre => Holds (Of_Unit, Id);
+
+   function Signature_Of (Of_Unit : Unit; Item : Item_Id)
+      return Signature_Id
+     with Pre => Holds (Of_Unit, Item);
+
+   procedure Set_Signature
+     (Into : in out Unit; Item : Item_Id; Signature : Signature_Id)
+     with Pre  => Holds (Into, Item)
+                  and then Kind_Of (Into, Item) = Routine
+                  and then Holds (Into, Signature)
+                  and then Signature_Of (Into, Item) = No_Signature,
+          Post => Signature_Of (Into, Item) = Signature;
 
    --  Which item stands for a declaration, so a call and a module read
    --  cost one index.  No_Item for a declaration that is not a module
@@ -897,7 +965,7 @@ package Landin.IR is
    --  Slots
    ------------------------------------------------------------------
 
-   --  A named cell of one of [1790]'s eleven types, and the only thing
+   --  A named scalar or function-value cell, and the only thing
    --  that crosses a block boundary.  Five kinds of thing become one:
    --  [1800]'s parameter, its named return, [1810]'s local binding, a cell
    --  the lowering introduces for a short-circuit's result, and a temporary
@@ -910,11 +978,13 @@ package Landin.IR is
    --  R1.80's frame question and how wide it is comes from
    --  Landin.Types.Width against a target description.
    --
-   --  A slot may also hold [0670]'s aggregate, and then it carries its
+   --  D117 represents a function-value slot as the neutral Usize carrier
+   --  plus a signature descriptor.  Usize is not its source type and the
+   --  descriptor contains no target pointer width.  A slot may also hold
+   --  [0670]'s aggregate, and then it carries its
    --  fields' types the way an aggregate item does and for the same
    --  reason: where each one sits needs a target and this package has
-   --  none.  Only a local binding [1810] is one today, because a
-   --  parameter and a named return are an ABI question R2.30 owns.
+   --  none.
    function Slot_Count (Of_Unit : Unit; Item : Item_Id) return Natural
      with Pre => Holds (Of_Unit, Item);
 
@@ -929,8 +999,13 @@ package Landin.IR is
       Item     : Item_Id;
       Of_Type  : Landin.Types.Scalar_Name;
       Declares : Declaration_Id;
-      Site     : Landin.Provenance.Origin) return Slot_Id
+      Site     : Landin.Provenance.Origin;
+      Signature : Signature_Id := No_Signature) return Slot_Id
      with Pre  => Holds (Into, Item)
+                  and then (Signature = No_Signature
+                            or else Holds (Into, Signature))
+                  and then (Signature = No_Signature
+                            or else Of_Type = Landin.Types.Usize)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Slot_Count (Into, Item)
                     = Slot_Count (Into, Item)'Old + 1
@@ -1184,6 +1259,11 @@ package Landin.IR is
                  and then not Is_Aggregate (Of_Unit, Item, Slot)
                  and then not Is_Array (Of_Unit, Item, Slot);
 
+   function Signature_Of
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Signature_Id
+     with Pre => Holds (Of_Unit, Item)
+                 and then Holds (Of_Unit, Item, Slot);
+
    function Declares
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Declaration_Id
      with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
@@ -1301,6 +1381,22 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Type_Kind
      with Pre => Holds (Of_Unit, Item, Value);
+
+   --  No_Signature for ordinary values.  A Function_Address introduces a
+   --  descriptor and a Load carries the descriptor of its slot, so an
+   --  indirect call can be verified without naming a concrete routine.
+   function Signature_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
+     with Pre => Holds (Of_Unit, Item, Value);
+
+   --  The descriptor a direct or indirect call consumes.  This is not the
+   --  signature of the value produced by the call: the enabled written
+   --  function type is not yet a result type.
+   function Call_Signature
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Signature_Id
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                            in Call | Indirect_Call;
 
    --  Where the construct this instruction came from is written.  Taken
    --  from Landin.Syntax.Anchor and not from the extent, because that is
@@ -1506,7 +1602,7 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                   in Function_Address | Call | Indirect_Call;
+                   in Function_Address | Call;
 
    function Target_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Block_Id
@@ -2036,23 +2132,35 @@ package Landin.IR is
       Site  : Landin.Provenance.Origin) return Value_Id
      with Pre  => Holds (Into, Item)
                   and then Holds (Into, Target)
-                  and then Kind_Of (Into, Target) = Routine;
+                  and then Kind_Of (Into, Target) = Routine
+                  and then Signature_Of (Into, Target) /= No_Signature;
 
    function Emit_Call
      (Into   : in out Unit;
       Item   : Item_Id;
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
-      Site   : Landin.Provenance.Origin;
-      Indirect : Boolean := False) return Value_Id
+      Site   : Landin.Provenance.Origin) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Callee)
                   and then (Result in Landin.Types.Scalar_Name
                             or else Result = Landin.Types.No_Value)
                   and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted (Into, Item, Emit_Call'Result, Call);
+
+   function Emit_Indirect_Call
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Signature : Signature_Id;
+      Result   : Landin.Types.Type_Kind;
+      Site     : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Signature)
+                  and then (Result in Landin.Types.Scalar_Name
+                            or else Result = Landin.Types.No_Value)
+                  and then Landin.Provenance.Is_Known (Site),
           Post => Emitted
-                    (Into, Item, Emit_Call'Result,
-                     (if Indirect then Indirect_Call else Call));
+                    (Into, Item, Emit_Indirect_Call'Result, Indirect_Call);
 
    procedure Add_Argument
      (Into  : in out Unit;
@@ -2138,6 +2246,7 @@ private
       Args        : Natural                   := 0;
       Slot        : Slot_Id                   := No_Slot;
       Named       : Item_Id                   := No_Item;
+      Signature   : Signature_Id              := No_Signature;
       Source      : Storage                   := (others => <>);
       Source_Field : Natural                  := 0;
       Source_Nested_Part : Natural             := 0;
@@ -2176,6 +2285,7 @@ private
       Fields      : Run;
       Element     : Landin.Types.Scalar_Name  := Landin.Types.Bool;
       Length      : Element_Total             := 0;
+      Signature   : Signature_Id              := No_Signature;
       Declaration : Declaration_Id            := No_Declaration;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
@@ -2194,6 +2304,7 @@ private
       Kind        : Item_Kind                 := Datum;
       Declaration : Declaration_Id            := No_Declaration;
       Result      : Landin.Types.Type_Kind    := Landin.Types.Not_Typed;
+      Signature   : Signature_Id              := No_Signature;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;
       Slots       : Run;
@@ -2231,7 +2342,18 @@ private
      (Index_Type => Positive, Element_Type => Slot_Id);
 
    package Value_Ref_Vectors is new Ada.Containers.Vectors
-     (Index_Type => Positive, Element_Type => Value_Id);
+      (Index_Type => Positive, Element_Type => Value_Id);
+
+   package Signature_Part_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Signature_Part);
+
+   type Signature_Record is record
+      Parameters : Run;
+      Result     : Signature_Part;
+   end record;
+
+   package Signature_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Signature_Record);
 
    package Item_Ref_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Item_Id);
@@ -2261,6 +2383,8 @@ private
       Blocks     : Block_Vectors.Vector;
       Code       : Code_Vectors.Vector;
       Operands   : Value_Ref_Vectors.Vector;
+      Signatures : Signature_Vectors.Vector;
+      Signature_Parts : Signature_Part_Vectors.Vector;
       Fields     : Field_Shape_Vectors.Vector;
       Slot_Fields : Field_Shape_Vectors.Vector;
       Measurement_Fields : Field_Shape_Vectors.Vector;

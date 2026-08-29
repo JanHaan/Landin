@@ -1,0 +1,6 @@
+class: negative
+summary: explicitly typed function storage requires its written signature
+constructs: 0870, 1000, 1790, 1795, 1900
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

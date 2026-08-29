@@ -50,6 +50,7 @@ package body Landin.Checking is
             for Unused in 1 .. Held loop
                Into.Node_Types.Append (Landin.Types.Undecided);
                Into.Node_Bodies.Append (Landin.Provenance.No_Declaration);
+               Into.Node_Signatures.Append (No_Signature);
                Into.Node_Fields.Append (0);
                Into.Node_Shapes.Append (Array_Shape'(others => <>));
             end loop;
@@ -60,6 +61,7 @@ package body Landin.Checking is
          Into.Declarations.Append (Settlement'(others => <>));
          Into.Layouts.Append (Aggregate_Layout'(others => <>));
          Into.Shapes.Append (Array_Shape'(others => <>));
+         Into.Declaration_Signatures.Append (No_Signature);
       end loop;
 
       --  Interned once, so a Type_Name node costs eleven integer
@@ -159,6 +161,136 @@ package body Landin.Checking is
 
       Into.Bodies (Natural (Id)) := Wrote;
    end Note_Body;
+
+   ------------------------------------------------------------------
+   --  Function signatures
+   ------------------------------------------------------------------
+
+   function Signature_Count (Of_Table : Table) return Natural
+     is (Natural (Of_Table.Signatures.Length));
+
+   function Add_Signature
+     (Into       : in out Table;
+      Parameters : Signature_Part_Array;
+      Result     : Signature_Part;
+      Site       : Landin.Provenance.Origin) return Signature_Id
+   is
+      Made : Signature_Record :=
+        (Parameters => (First => 0, Count => 0),
+         Result     => Result,
+         Site       => Site);
+   begin
+      if Parameters'Length > 0 then
+         Made.Parameters.First := Natural (Into.Signature_Parts.Length);
+         for Part of Parameters loop
+            Into.Signature_Parts.Append (Part);
+            Made.Parameters.Count := Made.Parameters.Count + 1;
+         end loop;
+      end if;
+
+      Into.Signatures.Append (Made);
+      return Signature_Id (Into.Signatures.Last_Index);
+   end Add_Signature;
+
+   function Signature_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Signature_Id
+     is (Of_Table.Node_Signatures (Slot (Of_Table, Of_Tree, Node)));
+
+   function Signature_Of
+     (Of_Table : Table; Id : Declaration_Id) return Signature_Id
+     is (if Id = No_Declaration then No_Signature
+         else Of_Table.Declaration_Signatures (Positive (Id)));
+
+   procedure Note_Signature
+     (Into      : in out Table;
+      Of_Tree   : Landin.Syntax.Tree;
+      Node      : Landin.Syntax.Node_Id;
+      Signature : Signature_Id)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Into.Node_Signatures (Where) /= No_Signature
+        and then Into.Node_Signatures (Where) /= Signature
+      then
+         raise Landin.Compiler_Defect with
+           "one node was assigned two function signatures";
+      end if;
+      Into.Node_Signatures (Where) := Signature;
+   end Note_Signature;
+
+   procedure Note_Signature
+     (Into      : in out Table;
+      Id        : Declaration_Id;
+      Signature : Signature_Id) is
+   begin
+      if Into.Declaration_Signatures (Positive (Id)) /= No_Signature
+        and then Into.Declaration_Signatures (Positive (Id)) /= Signature
+      then
+         raise Landin.Compiler_Defect with
+           "one declaration was assigned two function signatures";
+      end if;
+      Into.Declaration_Signatures (Positive (Id)) := Signature;
+   end Note_Signature;
+
+   function Signature_Parameter_Count
+     (Of_Table : Table; Signature : Signature_Id) return Natural
+     is (Of_Table.Signatures (Positive (Signature)).Parameters.Count);
+
+   function Nth_Signature_Parameter
+     (Of_Table : Table; Signature : Signature_Id; Index : Positive)
+      return Signature_Part
+   is
+      Parameters : constant Run :=
+        Of_Table.Signatures (Positive (Signature)).Parameters;
+   begin
+      return Of_Table.Signature_Parts (Parameters.First + Index);
+   end Nth_Signature_Parameter;
+
+   function Signature_Result
+     (Of_Table : Table; Signature : Signature_Id) return Signature_Part
+     is (Of_Table.Signatures (Positive (Signature)).Result);
+
+   function Signature_Origin
+     (Of_Table : Table; Signature : Signature_Id)
+      return Landin.Provenance.Origin
+     is (Of_Table.Signatures (Positive (Signature)).Site);
+
+   function Signatures_Agree
+     (Of_Table : Table; Left, Right : Signature_Id) return Boolean
+   is
+      function Parts_Agree (A, B : Signature_Part) return Boolean
+        is (A.Kind = B.Kind
+            and then
+              (case A.Kind is
+                  when Landin.Types.No_Value => True,
+                  when Landin.Types.Scalar_Name => True,
+                  when Landin.Types.Aggregate =>
+                     A.Aggregate_Body = B.Aggregate_Body,
+                  when Landin.Types.Fixed_Array =>
+                     A.Length = B.Length and then A.Element = B.Element,
+                  when others => False));
+   begin
+      if Signature_Parameter_Count (Of_Table, Left)
+           /= Signature_Parameter_Count (Of_Table, Right)
+        or else not Parts_Agree
+          (Signature_Result (Of_Table, Left),
+           Signature_Result (Of_Table, Right))
+      then
+         return False;
+      end if;
+
+      for Index in 1 .. Signature_Parameter_Count (Of_Table, Left) loop
+         if not Parts_Agree
+           (Nth_Signature_Parameter (Of_Table, Left, Index),
+            Nth_Signature_Parameter (Of_Table, Right, Index))
+         then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Signatures_Agree;
 
    ------------------------------------------------------------------
    --  How an aggregate is laid out

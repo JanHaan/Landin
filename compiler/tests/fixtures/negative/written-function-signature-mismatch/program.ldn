@@ -1,0 +1,9 @@
+unary: type = (value: i32) -> (result: i32)
+
+pair: (left: i32, right: i32) -> (result: i32) =
+    result = left + right
+end pair
+
+bad: () -> none =
+    current: unary = pair
+end bad
