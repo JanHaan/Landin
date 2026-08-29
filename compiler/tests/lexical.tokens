@@ -20967,6 +20967,28 @@ file negative/parameterized-atom-union/program.ldn tokens 15
   36 43 problem
   44 45 |
   46 53 problem
+file negative/parameterized-struct-checking-deferred/program.ldn tokens 21
+  0 4 pair
+  4 5 :
+  6 10 type
+  11 12 (
+  12 16 item
+  16 17 :
+  18 22 type
+  22 23 )
+  24 25 =
+  26 32 struct
+  37 42 first
+  42 43 :
+  44 48 item
+  49 52 end
+  53 57 pair
+  58 64 sample
+  64 65 :
+  66 70 pair
+  70 71 (
+  71 73 u8
+  73 74 )
 file negative/public-on-statement/program.ldn tokens 15
   0 1 f
   1 2 :

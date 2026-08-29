@@ -215,7 +215,7 @@ package Landin.Syntax is
       --  the kernel predeclares because those are known to the parser and
       --  this one is a name only resolution can answer for.
       Type_Reference,
-      --  D135's positional application of a parameterized alias.  Its
+      --  D135's positional application of a parameterized type.  Its
       --  first slot names the applied type; its trailing run is the written
       --  type and fixed arguments in order.
       Type_Application,
@@ -486,9 +486,9 @@ package Landin.Syntax is
                           in Binding | Parameter | Named_Return
                              | Type_Declaration | Fixed_Formal | Field;
 
-   --  D135's ordered formals are visible to the declared type and RHS of
-   --  a parameterized alias.  Type_Formal and Fixed_Formal distinguish the
-   --  two source forms; only the latter has Declared_Type.
+   --  D135's ordered formals are visible to the declared type or struct body
+   --  of a parameterized type declaration.  Type_Formal and Fixed_Formal
+   --  distinguish the two source forms; only the latter has Declared_Type.
    function Type_Formal_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Type_Declaration;

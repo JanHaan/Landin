@@ -376,6 +376,138 @@ package body Landin.Tests.Resolution_Suite is
       end;
    end Type_Formals_Have_One_Collected_Scope;
 
+   procedure Parameterized_Struct_Formals_Have_One_Collected_Scope
+     (Item : in out Landin.Testing.Context);
+
+   --  The struct branch uses D135's same type-declaration scope as an
+   --  alias.  This runs only syntax and resolution: nominal instance
+   --  checking and lowering are deliberately outside this increment.
+   procedure Parameterized_Struct_Formals_Have_One_Collected_Scope
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Id    : Landin.Source.Source_Id;
+   begin
+      Id := Landin.Stages.Add_Source
+        (Work, "struct-formals.ldn",
+         "buffer: type (fixed count: element, element: type) = struct" & LF
+         & "    slots: [count]element" & LF
+         & "end buffer" & LF
+         & "sample: buffer(2, u8)" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 2, "the resolver ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a parameterized struct resolves its collected formals");
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Id);
+         Struct : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Of_Tree.all, 1);
+         Count : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Type_Formal (Of_Tree.all, Struct, 1);
+         Element : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Type_Formal (Of_Tree.all, Struct, 2);
+         Count_Type : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type (Of_Tree.all, Count);
+         Struct_Body : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type (Of_Tree.all, Struct);
+         Slots : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Field (Of_Tree.all, Struct_Body, 1);
+         Slots_Type : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type (Of_Tree.all, Slots);
+         Bound : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Bound_Of (Of_Tree.all, Slots_Type);
+         Element_Use : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Element_Of (Of_Tree.all, Slots_Type);
+         Application : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 2));
+         Target : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Applied_Type (Of_Tree.all, Application);
+         Formal_Scope : constant Landin.Resolution.Scope_Id :=
+           Landin.Resolution.Scope_At (Meanings.all, Of_Tree.all, Struct);
+         Count_Declaration : Landin.Resolution.Declaration_Id :=
+           Landin.Resolution.No_Declaration;
+         Element_Declaration : Landin.Resolution.Declaration_Id :=
+           Landin.Resolution.No_Declaration;
+      begin
+         for Decl in Landin.Resolution.Declaration_Id'(1)
+                       .. Landin.Resolution.Declaration_Id
+                            (Landin.Resolution.Declaration_Count
+                               (Meanings.all))
+         loop
+            if Landin.Resolution.Source_Of (Meanings.all, Decl) = Id then
+               if Landin.Resolution.Node_Of (Meanings.all, Decl) = Count then
+                  Count_Declaration := Decl;
+               elsif Landin.Resolution.Node_Of (Meanings.all, Decl)
+                     = Element
+               then
+                  Element_Declaration := Decl;
+               end if;
+            end if;
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Sort_Of (Meanings.all, Formal_Scope)
+              = Landin.Resolution.Type_Declaration
+              and then Landin.Resolution.Scope_Of
+                (Meanings.all, Count_Declaration) = Formal_Scope
+              and then Landin.Resolution.Scope_Of
+                (Meanings.all, Element_Declaration) = Formal_Scope
+              and then Landin.Resolution.Sort_Of
+                (Meanings.all, Count_Declaration)
+                  = Landin.Resolution.Fixed_Parameter
+              and then Landin.Resolution.Sort_Of
+                (Meanings.all, Element_Declaration)
+                  = Landin.Resolution.Type_Parameter,
+            "the struct owns one scope containing its collected formals");
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Verdict_Of
+              (Meanings.all, Of_Tree.all, Count_Type)
+                = Landin.Resolution.Bound
+              and then Landin.Resolution.Bound_To
+                (Meanings.all, Of_Tree.all, Count_Type)
+                  = Element_Declaration
+              and then Landin.Resolution.Verdict_Of
+                (Meanings.all, Of_Tree.all, Bound)
+                  = Landin.Resolution.Bound
+              and then Landin.Resolution.Bound_To
+                (Meanings.all, Of_Tree.all, Bound) = Count_Declaration
+              and then Landin.Resolution.Verdict_Of
+                (Meanings.all, Of_Tree.all, Element_Use)
+                  = Landin.Resolution.Bound
+              and then Landin.Resolution.Bound_To
+                (Meanings.all, Of_Tree.all, Element_Use)
+                  = Element_Declaration,
+            "struct fields resolve every collected formal regardless of"
+            & " order");
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Verdict_Of
+              (Meanings.all, Of_Tree.all, Target) = Landin.Resolution.Bound
+              and then Landin.Resolution.Sort_Of
+                (Meanings.all,
+                 Landin.Resolution.Bound_To
+                   (Meanings.all, Of_Tree.all, Target))
+                  = Landin.Resolution.Module_Type,
+            "a struct application resolves its template declaration");
+      end;
+   end Parameterized_Struct_Formals_Have_One_Collected_Scope;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -390,6 +522,10 @@ package body Landin.Tests.Resolution_Suite is
       Landin.Testing.Register
         (Into, "resolution", "type formals have one collected scope",
          Type_Formals_Have_One_Collected_Scope'Access);
+      Landin.Testing.Register
+        (Into, "resolution",
+         "parameterized struct formals have one collected scope",
+         Parameterized_Struct_Formals_Have_One_Collected_Scope'Access);
    end Register;
 
 end Landin.Tests.Resolution_Suite;
