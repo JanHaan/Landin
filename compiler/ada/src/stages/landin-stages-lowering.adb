@@ -67,6 +67,19 @@ package body Landin.Stages.Lowering is
                   [1 => (Field      => IR.Part_Position (Field),
                          Case_Index => 0)]);
 
+   --  D120: descending into one selected case's payload field.  It is a
+   --  step like any other; naming the case is what says the run it indexes
+   --  is a payload run and not an ordinary field run.  The base is always
+   --  the variant part, so there is no base-zero form here.
+   function Payload_Steps
+     (Steps : IR.Path_Step_Array;
+      Which : Positive;
+      Field : Positive) return IR.Path_Step_Array
+     is (Steps
+         & IR.Path_Step_Array'
+             [1 => (Field      => IR.Part_Position (Field),
+                    Case_Index => Which)]);
+
    overriding function Name (Item : Instance) return String is
       pragma Unreferenced (Item);
    begin
@@ -277,6 +290,32 @@ package body Landin.Stages.Lowering is
 
       function Chain_Steps
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array;
+
+      --  Every selection of the chain, including the first.  This is what
+      --  a chain rooted at something that is itself already a part needs:
+      --  D120's match alias names a payload, so the payload is the base
+      --  and every selection below it is a step.
+      function Chain_All_Steps
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array;
+
+      --  Where a chain's root actually lives, and the place inside it the
+      --  root already names.  An ordinary name is storage and names no
+      --  part of it; D78's match alias names a selected payload of storage
+      --  somewhere else, and D120 lets that payload be a struct whose
+      --  fields the chain goes on to select.
+      function Rooted_Storage
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
+
+      function Rooted_Base
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural;
+
+      function Rooted_Steps
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array;
+
+      --  Whether that root is an aggregate payload alias, which is the one
+      --  case where the three above do not answer what a slot would.
+      function Roots_At_An_Aggregate_Alias
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
       --  D75 uses D74's one variant carrier for both storage classes.
       --  Exactly one destination identity is supplied; payload leaves remain
@@ -627,6 +666,88 @@ package body Landin.Stages.Lowering is
          end loop;
          return Steps;
       end Chain_Steps;
+
+      function Chain_All_Steps
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array
+      is
+         Steps : IR.Path_Step_Array (1 .. Chain_Depth (Of_Tree, Node)) :=
+           [others => (others => <>)];
+         Where : Syn.Node_Id := Node;
+      begin
+         for Step in reverse Steps'Range loop
+            Steps (Step) :=
+              (Field      => IR.Part_Position
+                 (Landin.Checking.Field_Index (Types.all, Of_Tree, Where)),
+               Case_Index => 0);
+            Where := Syn.Target_Of (Of_Tree, Where);
+         end loop;
+         return Steps;
+      end Chain_All_Steps;
+
+      function Roots_At_An_Aggregate_Alias
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Root : constant Syn.Node_Id := Chain_Root (Of_Tree, Node);
+      begin
+         if Syn.Kind (Of_Tree, Root) /= Syn.Name_Reference
+           or else Res.Verdict_Of (Meanings.all, Of_Tree, Root) /= Res.Bound
+         then
+            return False;
+         end if;
+
+         declare
+            Means : constant Res.Declaration_Id :=
+              Res.Bound_To (Meanings.all, Of_Tree, Root);
+         begin
+            return Res.Sort_Of (Meanings.all, Means) = Res.Pattern_Binding
+              and then Aliases (Declared (Means)).Active
+              and then Landin.Checking.Type_Of (Types.all, Means)
+                         = Ty.Aggregate;
+         end;
+      end Roots_At_An_Aggregate_Alias;
+
+      function Rooted_Storage
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage
+      is
+         Root : constant Syn.Node_Id := Chain_Root (Of_Tree, Node);
+      begin
+         if Roots_At_An_Aggregate_Alias (Of_Tree, Node) then
+            return Aliases
+              (Declared (Res.Bound_To (Meanings.all, Of_Tree, Root))).Source;
+         end if;
+         return Storage_For (Of_Tree, Root);
+      end Rooted_Storage;
+
+      function Rooted_Base
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Natural
+      is
+         Root : constant Syn.Node_Id := Chain_Root (Of_Tree, Node);
+      begin
+         if Roots_At_An_Aggregate_Alias (Of_Tree, Node) then
+            return Aliases
+              (Declared (Res.Bound_To (Meanings.all, Of_Tree, Root))).Field;
+         end if;
+         return Chain_Base (Of_Tree, Node);
+      end Rooted_Base;
+
+      function Rooted_Steps
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array
+      is
+         Root : constant Syn.Node_Id := Chain_Root (Of_Tree, Node);
+      begin
+         if Roots_At_An_Aggregate_Alias (Of_Tree, Node) then
+            declare
+               Alias : Payload_Alias renames Aliases
+                 (Declared (Res.Bound_To (Meanings.all, Of_Tree, Root)));
+            begin
+               return Payload_Steps
+                 (IR.No_Path_Steps, Positive (Alias.Which),
+                  Positive (Alias.Payload_Field))
+                 & Chain_All_Steps (Of_Tree, Node);
+            end;
+         end if;
+         return Chain_Steps (Of_Tree, Node);
+      end Rooted_Steps;
 
       procedure Add_Stored_Field
         (Wrote : Res.Declaration_Id;
@@ -1018,16 +1139,16 @@ package body Landin.Stages.Lowering is
                               end if;
                            elsif Kind not in Syn.Array_Literal then
                               declare
-                                 Named : constant Syn.Node_Id :=
-                                   Chain_Root (Of_Tree, Value);
+                                 Source_Place : constant IR.Storage :=
+                                   Rooted_Storage (Of_Tree, Value);
                                  Source_Field : constant Natural :=
-                                   Chain_Base (Of_Tree, Value);
+                                   Rooted_Base (Of_Tree, Value);
                                  Source_Steps : constant IR.Path_Step_Array :=
-                                   Chain_Steps (Of_Tree, Value);
+                                   Rooted_Steps (Of_Tree, Value);
                               begin
                                  IR.Emit_Array_Copy
                                    (Unit.all, Filling,
-                                    Source => Storage_For (Of_Tree, Named),
+                                    Source => Source_Place,
                                     Destination =>
                                       (Kind => IR.Frame_Slot,
                                        Slot => Temporary),
@@ -2088,26 +2209,26 @@ package body Landin.Stages.Lowering is
                     Chain_Root (Of_Tree, Node);
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
+                  Place : constant IR.Storage :=
+                    Rooted_Storage (Of_Tree, Node);
                   Which : constant IR.Part_Position :=
-                    IR.Part_Position (Chain_Base (Of_Tree, Node));
+                    IR.Part_Position (Rooted_Base (Of_Tree, Node));
                   Child_Steps : constant IR.Path_Step_Array :=
-                    Chain_Steps (Of_Tree, Node);
+                    Rooted_Steps (Of_Tree, Node);
                begin
-                  if Res.Sort_Of (Meanings.all, Means)
-                     = Res.Module_Binding
-                  then
-                     return IR.Emit_Load_Field
-                              (Unit.all, Filling,
-                               IR.Item_For (Unit.all, Means), Which,
-                               Scalar_At (Of_Tree, Node), Site,
-                               Nested => Child_Steps);
-                  end if;
-
-                  return IR.Emit_Load_Slot_Field
-                           (Unit.all, Filling,
-                            Slot_For (Of_Tree, Named, Means), Which,
-                            Scalar_At (Of_Tree, Node), Site,
-                            Nested => Child_Steps);
+                  pragma Unreferenced (Means);
+                  case Place.Kind is
+                     when IR.Module_Datum =>
+                        return IR.Emit_Load_Field
+                                 (Unit.all, Filling, Place.Datum, Which,
+                                  Scalar_At (Of_Tree, Node), Site,
+                                  Nested => Child_Steps);
+                     when IR.Frame_Slot =>
+                        return IR.Emit_Load_Slot_Field
+                                 (Unit.all, Filling, Place.Slot, Which,
+                                  Scalar_At (Of_Tree, Node), Site,
+                                  Nested => Child_Steps);
+                  end case;
                end;
 
             when Syn.Name_Reference =>
@@ -2729,16 +2850,16 @@ package body Landin.Stages.Lowering is
                      --  D20/D50: a whole array source is storage, optionally
                      --  qualified by its containing aggregate field.
                      declare
-                        Source_Named : constant Syn.Node_Id :=
-                          Chain_Root (Of_Tree, Value);
+                        Source_Place : constant IR.Storage :=
+                          Rooted_Storage (Of_Tree, Value);
                         Source_Field : constant Natural :=
-                          Chain_Base (Of_Tree, Value);
+                          Rooted_Base (Of_Tree, Value);
                         Source_Steps : constant IR.Path_Step_Array :=
-                          Chain_Steps (Of_Tree, Value);
+                          Rooted_Steps (Of_Tree, Value);
                      begin
                         IR.Emit_Array_Copy
                           (Unit.all, Filling,
-                           Source => Storage_For (Of_Tree, Source_Named),
+                           Source => Source_Place,
                            Destination => Destination,
                            Site => Site,
                            Source_Field => Source_Field,
@@ -2808,9 +2929,61 @@ package body Landin.Stages.Lowering is
                                  Variant_Payload_Field => Payload_Field);
 
                            when Landin.Checking.Aggregate_Field =>
-                              raise Landin.Compiler_Defect with
-                                "a nested aggregate payload reached"
-                                & " lowering";
+                              --  D120: the payload is a place like any
+                              --  other, and the case it sits in is one
+                              --  step of the run that reaches it.
+                              declare
+                                 Child : constant Res.Declaration_Id :=
+                                   Shape.Aggregate_Body;
+                                 Into_Steps :
+                                   constant IR.Path_Step_Array :=
+                                     Payload_Steps
+                                       (IR.No_Path_Steps, Which,
+                                        Payload_Field);
+                                 Given : constant Syn.Node_Id :=
+                                   Syn.Value_Of (Of_Tree, Label);
+                              begin
+                                 if Syn.Kind (Of_Tree, Given)
+                                      = Syn.Struct_Literal
+                                 then
+                                    Write_Struct_Literal
+                                      (Given, Child, Destination,
+                                       Base  => Field,
+                                       Steps => Into_Steps);
+                                 elsif Syn.Kind (Of_Tree, Given)
+                                         = Syn.Zeroed_Literal
+                                 then
+                                    --  Selecting the case already cleared
+                                    --  the complete padded part, so an
+                                    --  all-zero payload is nothing to do.
+                                    null;
+                                 else
+                                    declare
+                                       Source_Base : constant Natural :=
+                                         Rooted_Base (Of_Tree, Given);
+                                       Source_Steps :
+                                         constant IR.Path_Step_Array :=
+                                           Rooted_Steps (Of_Tree, Given);
+                                       Source : constant IR.Storage :=
+                                         Rooted_Storage (Of_Tree, Given);
+                                    begin
+                                       for Part in
+                                         1 .. Landin.Checking
+                                                .Layout_Field_Count
+                                                  (Types.all, Child)
+                                       loop
+                                          Copy_Field
+                                            (Child, Source, Destination,
+                                             Part,
+                                             Source_Base => Source_Base,
+                                             Source_Steps => Source_Steps,
+                                             Destination_Base => Field,
+                                             Destination_Steps =>
+                                               Into_Steps);
+                                       end loop;
+                                    end;
+                                 end if;
+                              end;
 
                            when Landin.Checking.Variant_Field =>
                               raise Landin.Compiler_Defect with
@@ -2919,16 +3092,13 @@ package body Landin.Stages.Lowering is
                                        Nested => Into_Steps);
                                  else
                                     declare
-                                       Source_Named : constant Syn.Node_Id :=
-                                         Chain_Root (Of_Tree, Value);
                                        Source_Base : constant Natural :=
-                                         Chain_Base (Of_Tree, Value);
+                                         Rooted_Base (Of_Tree, Value);
                                        Source_Steps :
                                          constant IR.Path_Step_Array :=
-                                           Chain_Steps (Of_Tree, Value);
+                                           Rooted_Steps (Of_Tree, Value);
                                        Source : constant IR.Storage :=
-                                         Storage_For
-                                           (Of_Tree, Source_Named);
+                                         Rooted_Storage (Of_Tree, Value);
                                     begin
                                        for Child_Field in
                                          1 .. Landin.Checking
@@ -3113,8 +3283,14 @@ package body Landin.Stages.Lowering is
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
+                  --  D120: an alias for an ordinary-struct payload is not
+                  --  a payload leaf; a field of it is written the way a
+                  --  field of any other storage is, through the run that
+                  --  reaches it.
                   if Res.Sort_Of (Meanings.all, Means)
                        = Res.Pattern_Binding
+                    and then not Roots_At_An_Aggregate_Alias
+                      (Of_Tree, Selected)
                   then
                      declare
                         Alias : Payload_Alias renames
@@ -3195,24 +3371,23 @@ package body Landin.Stages.Lowering is
 
                   if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection then
                      declare
+                        Into : constant IR.Storage :=
+                          Rooted_Storage (Of_Tree, Place);
                         Which : constant IR.Part_Position :=
-                          IR.Part_Position (Chain_Base (Of_Tree, Place));
+                          IR.Part_Position (Rooted_Base (Of_Tree, Place));
                         Child_Steps : constant IR.Path_Step_Array :=
-                          Chain_Steps (Of_Tree, Place);
+                          Rooted_Steps (Of_Tree, Place);
                      begin
-                        if Res.Sort_Of (Meanings.all, Means)
-                           = Res.Module_Binding
-                        then
-                           IR.Emit_Store_Field
-                             (Unit.all, Filling,
-                              IR.Item_For (Unit.all, Means), Which,
-                              Value, Site, Nested => Child_Steps);
-                        else
-                           IR.Emit_Store_Slot_Field
-                             (Unit.all, Filling,
-                              Slot_For (Of_Tree, Named, Means), Which,
-                              Value, Site, Nested => Child_Steps);
-                        end if;
+                        case Into.Kind is
+                           when IR.Module_Datum =>
+                              IR.Emit_Store_Field
+                                (Unit.all, Filling, Into.Datum, Which,
+                                 Value, Site, Nested => Child_Steps);
+                           when IR.Frame_Slot =>
+                              IR.Emit_Store_Slot_Field
+                                (Unit.all, Filling, Into.Slot, Which,
+                                 Value, Site, Nested => Child_Steps);
+                        end case;
                      end;
 
                      return;
@@ -3345,18 +3520,17 @@ package body Landin.Stages.Lowering is
                               --  that storage is a containing struct; no
                               --  opcode or target offset is introduced.
                               declare
-                                 Source_Named : constant Syn.Node_Id :=
-                                   Chain_Root (Of_Tree, Value);
+                                 Source_Place : constant IR.Storage :=
+                                   Rooted_Storage (Of_Tree, Value);
                                  Source_Field : constant Natural :=
-                                   Chain_Base (Of_Tree, Value);
+                                   Rooted_Base (Of_Tree, Value);
                                  Source_Steps :
                                    constant IR.Path_Step_Array :=
-                                     Chain_Steps (Of_Tree, Value);
+                                     Rooted_Steps (Of_Tree, Value);
                               begin
                                  IR.Emit_Array_Copy
                                    (Unit.all, Filling,
-                                    Source =>
-                                      Storage_For (Of_Tree, Source_Named),
+                                    Source => Source_Place,
                                     Destination =>
                                       IR.Storage'
                                         (Kind => IR.Frame_Slot,
@@ -3405,15 +3579,13 @@ package body Landin.Stages.Lowering is
                               declare
                                  Wrote : constant Res.Declaration_Id :=
                                    Landin.Checking.Body_Of (Types.all, Id);
-                                 Source_Named : constant Syn.Node_Id :=
-                                   Chain_Root (Of_Tree, Value);
                                  Source_Base : constant Natural :=
-                                   Chain_Base (Of_Tree, Value);
+                                   Rooted_Base (Of_Tree, Value);
                                  Source_Steps :
                                    constant IR.Path_Step_Array :=
-                                     Chain_Steps (Of_Tree, Value);
+                                     Rooted_Steps (Of_Tree, Value);
                                  Source : constant IR.Storage :=
-                                   Storage_For (Of_Tree, Source_Named);
+                                   Rooted_Storage (Of_Tree, Value);
                                  Destination : constant IR.Storage :=
                                    (Kind => IR.Frame_Slot, Slot => Where);
                               begin
@@ -3532,15 +3704,13 @@ package body Landin.Stages.Lowering is
                                  Wrote : constant Res.Declaration_Id :=
                                    Landin.Checking.Body_Of
                                      (Types.all, Of_Tree, Place);
-                                 Source_Named : constant Syn.Node_Id :=
-                                   Chain_Root (Of_Tree, From);
                                  Source_Base : constant Natural :=
-                                   Chain_Base (Of_Tree, From);
+                                   Rooted_Base (Of_Tree, From);
                                  Source_Steps :
                                    constant IR.Path_Step_Array :=
-                                     Chain_Steps (Of_Tree, From);
+                                     Rooted_Steps (Of_Tree, From);
                                  Source : constant IR.Storage :=
-                                   Storage_For (Of_Tree, Source_Named);
+                                   Rooted_Storage (Of_Tree, From);
                               begin
                                  for Field in
                                    1 .. Landin.Checking.Layout_Field_Count

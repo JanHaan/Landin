@@ -4714,7 +4714,7 @@ boundary. All were declined.
 **Pinned by** the parser, resolution, lowering, verifier and target-layout
 public seams; `positive/variant-part-measured`;
 `negative/variant-part-empty`; `negative/variant-case-duplicate`;
-`negative/variant-payload-struct-field-not-enabled`;
+`negative/variant-inside-a-nested-struct-not-enabled`;
 `negative/variant-case-value-not-enabled`;
 `negative/variant-return-unassigned`; the generated construct, token, IR and
 target-layout records; the backend seam against both target descriptions; and
@@ -6405,3 +6405,33 @@ and an expression lifetime that none of these assignments wants.
 `negative/deep-nested-child-copy-unassigned`,
 `negative/module-struct-image-with-a-child`, the generated IR record, and
 `runtime/deep-nested-struct-children` on Linux x86-64.
+
+### D121 — A variant case payload may be an ordinary struct
+
+**The tour said** that a variant part's cases carry payload fields [0680] and
+that a struct's field may have any type a binding may have [0670] [0750]. D74
+laid a payload out from scalar and fixed-array leaves alone, because the pair
+of identities every payload operation carried had no room for a third.
+
+**Chosen:** a case payload field may be an ordinary struct. It takes the same
+contextual values a labelled ordinary child takes — `zeroed`, a matching
+labelled literal or nominal construction, and a copy from storage of the same
+nominal type — and a match arm's positional alias for it names the whole
+struct, so its fields are read and written the way any struct's are.
+
+The payload is reached by D117's run: the case a step names is what says the
+run it indexes is a payload run rather than an ordinary field run. No opcode
+is added, and the two payload operations D76/D78 introduced keep their exact
+meaning for a scalar leaf. A payload struct that has a variant part of its own
+is refused, and so is a module image containing an ordinary-struct payload
+value: [1940] folds an image rather than copying one.
+
+**Why the alias is a struct and not a second kind of binding:** D78's alias
+already denotes storage; making it denote a struct's storage rather than a
+scalar's changes what it names and nothing about what a name is. Every
+selection below it is then an ordinary step of the same run.
+
+**Pinned by** `positive/variant-struct-payload`,
+`negative/variant-struct-payload-mismatch`,
+`negative/variant-inside-a-nested-struct-not-enabled`, the generated IR
+record, and `runtime/variant-struct-payloads` on Linux x86-64.
