@@ -5223,6 +5223,125 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Deferred_Exits_Become_Ordinary_Reverse_Calls;
 
+   --  [1110] shares defer's lexical stack but not its selector.  The
+   --  propagated branch contains the mixed stack in reverse registration
+   --  order; the possible success branch and an explicit return contain
+   --  only defer.  All remain ordinary calls in verifier-visible IR.
+   procedure Undo_Exits_Become_Selected_Reverse_Calls
+     (Item : in out Landin.Testing.Context);
+
+   procedure Undo_Exits_Become_Selected_Reverse_Calls
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "bad: atom" & LF
+         & "problem: type = bad" & LF
+         & "mark: (value: i32) -> none = _ = value end mark" & LF
+         & "failure: () -> none ! problem = fail bad end failure" & LF
+         & "fails: () -> none ! ... =" & LF
+         & "    defer mark(1)" & LF
+         & "    undo mark(2)" & LF
+         & "    begin" & LF
+         & "        defer mark(3)" & LF
+         & "        undo mark(4)" & LF
+         & "        try failure()" & LF
+         & "    end" & LF
+         & "end fails" & LF
+         & "succeeds: () -> none ! problem =" & LF
+         & "    undo mark(5)" & LF
+         & "    defer mark(6)" & LF
+         & "    return" & LF
+         & "end succeeds" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "mixed failure-only and deferred cleanups are lowered");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Fails_Routine : constant IR.Item_Id := 3;
+         Success_Routine : constant IR.Item_Id := 4;
+         type Magnitude_Array is
+           array (Positive range <>) of Landin.Types.Magnitude;
+         Failed_Calls : Natural := 0;
+         Failed_Values : Magnitude_Array (1 .. 6) :=
+           [others => 0];
+         Success_Calls : Natural := 0;
+         Success_Value : Landin.Types.Magnitude := 0;
+
+         procedure Read_Mark_Calls
+           (Routine : IR.Item_Id;
+            Count   : in out Natural;
+            Values  : in out Magnitude_Array);
+
+         procedure Read_Mark_Calls
+           (Routine : IR.Item_Id;
+            Count   : in out Natural;
+            Values  : in out Magnitude_Array)
+         is
+         begin
+            for Which in 1 .. IR.Value_Count (Unit, Routine) loop
+               declare
+                  Value : constant IR.Value_Id := IR.Value_Id (Which);
+               begin
+                  if IR.Op_Of (Unit, Routine, Value) = IR.Call
+                    and then IR.Callee_Of (Unit, Routine, Value) = 1
+                  then
+                     Count := Count + 1;
+                     if Count <= Values'Length
+                       and then IR.Operand_Count (Unit, Routine, Value) = 1
+                     then
+                        declare
+                           Argument : constant IR.Value_Id :=
+                             IR.Nth_Operand (Unit, Routine, Value, 1);
+                        begin
+                           if IR.Op_Of (Unit, Routine, Argument) = IR.Number
+                           then
+                              Values (Values'First + Count - 1) :=
+                                IR.Number_Of (Unit, Routine, Argument);
+                           end if;
+                        end;
+                     end if;
+                  end if;
+               end;
+            end loop;
+         end Read_Mark_Calls;
+      begin
+         Read_Mark_Calls
+           (Fails_Routine, Failed_Calls, Failed_Values);
+         declare
+            One : Magnitude_Array (1 .. 1) := [others => 0];
+         begin
+            Read_Mark_Calls (Success_Routine, Success_Calls, One);
+            Success_Value := One (1);
+         end;
+
+         Landin.Testing.Check_Equal
+           (Item, Failed_Calls, 6,
+            "failure and possible success paths contain six selected calls");
+         Landin.Testing.Check
+           (Item, Failed_Values = [4, 3, 2, 1, 3, 1],
+            "failure selects mixed LIFO while success selects defer alone");
+         Landin.Testing.Check_Equal
+           (Item, Success_Calls, 1,
+            "a successful return skips its registered undo");
+         Landin.Testing.Check
+           (Item, Success_Value = 6,
+            "the successful return retains its ordinary defer");
+         Check_Terminators (Item, Unit, "failure-only cleanup calls");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts undo lowered as ordinary failure calls");
+      end;
+   end Undo_Exits_Become_Selected_Reverse_Calls;
+
    ------------------------------------------------------------------
    --  The recorded artefact
    ------------------------------------------------------------------
@@ -5773,6 +5892,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "deferred exits become ordinary reverse calls",
          Deferred_Exits_Become_Ordinary_Reverse_Calls'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "undo exits become selected reverse calls",
+         Undo_Exits_Become_Selected_Reverse_Calls'Access);
       Landin.Testing.Register
         (Into, "lowering", "a struct literal becomes ordered field writes",
          A_Struct_Literal_Becomes_Ordered_Field_Writes'Access);

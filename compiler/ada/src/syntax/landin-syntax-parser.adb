@@ -52,14 +52,14 @@ package body Landin.Syntax.Parser is
    ------------------------------------------------------------------
    --  The words the tour spells and the kernel does not reserve
    --
-   --  [1760] reserves twenty-two words, and none of them is `loop`,
-   --  `while`, `for`, `undo`, `try`, `fail`, `break` or `continue`.
+   --  [1760] reserves twenty-five words, and none of them is `loop`,
+   --  `while`, `for`, `break` or `continue`.
    --  Every one of those lexes as an ordinary identifier, so
    --  the scan cannot refuse it and only the parser can: at a statement
    --  position, an identifier that is one of these is the construct the
    --  tour describes and not a name someone forgot a colon after. Enabled
-   --  contextual words such as `match`, `begin` and `defer` are recognised
-   --  separately and therefore do not belong in this refusal table.
+   --  contextual words such as `match`, `begin`, `defer` and `undo` are
+   --  recognised separately and therefore do not belong in this table.
    --
    --  This is the other half of what Landin.Tokens.Construct does for the
    --  deferred signs, and it is derived rather than guessed: check.py
@@ -70,7 +70,7 @@ package body Landin.Syntax.Parser is
    type Refused_Word is
      (Word_None,
       Word_Loop, Word_While, Word_For,
-      Word_Undo, Word_Break, Word_Continue, Word_Distinct);
+      Word_Break, Word_Continue, Word_Distinct);
 
    subtype Real_Word is Refused_Word range Word_Loop .. Word_Distinct;
 
@@ -79,7 +79,6 @@ package body Landin.Syntax.Parser is
             when Word_Loop     => "loop",
             when Word_While    => "while",
             when Word_For      => "for",
-            when Word_Undo     => "undo",
             when Word_Break    => "break",
             when Word_Continue => "continue",
             when Word_Distinct => "distinct");
@@ -89,7 +88,6 @@ package body Landin.Syntax.Parser is
             when Word_Loop     => Syn.Loop_Statement,
             when Word_While    => Syn.While_Statement,
             when Word_For      => Syn.For_Statement,
-            when Word_Undo     => Syn.Undo_Statement,
             when Word_Break    => Syn.Break_Statement,
             when Word_Continue => Syn.Continue_Statement,
             when Word_Distinct => Syn.Distinct_Type);
@@ -203,6 +201,9 @@ package body Landin.Syntax.Parser is
 
             Defer_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "defer");
+
+            Undo_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "undo");
 
             Scalar_Id : constant array (Scalar_Name)
               of Landin.Source.Names.Name_Id :=
@@ -2355,7 +2356,8 @@ package body Landin.Syntax.Parser is
             function Parse_Body (Context : Frame) return Node_Id is
             begin
                if Context.Returns then
-                  if Peek = Tok.Identifier and then Named_Here = Defer_Id
+                  if Peek = Tok.Identifier
+                    and then Named_Here in Defer_Id | Undo_Id
                   then
                      return Parse_Block (Context);
                   end if;
@@ -2747,7 +2749,7 @@ package body Landin.Syntax.Parser is
                      return False;
                   end if;
 
-                  return Named_Here = Defer_Id
+                  return Named_Here in Defer_Id | Undo_Id
                     or else Word_At_Hand /= Word_None
                     or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                     or else After_Selectors = Tok.Equal;
@@ -2994,10 +2996,23 @@ package body Landin.Syntax.Parser is
                         Join (Start, After_Previous));
 
                   when Tok.Identifier =>
-                     if Named_Here = Defer_Id then
+                     if Named_Here in Defer_Id | Undo_Id then
                         declare
-                           At_Defer : constant Landin.Source.Span := Here;
+                           Is_Undo : constant Boolean :=
+                             Named_Here = Undo_Id;
+                           At_Cleanup : constant Landin.Source.Span := Here;
                            Call_Node : Node_Id := No_Node;
+
+                           function Cleanup_Name return String
+                             is (if Is_Undo then "undo" else "defer");
+
+                           function Cleanup_Paragraph return String
+                             is (if Is_Undo then "[1110]" else "[1100]");
+
+                           function Execution_Note return String
+                             is (if Is_Undo
+                                 then " when failure propagates"
+                                 else " when its block is left");
                         begin
                            Advance;
 
@@ -3015,11 +3030,13 @@ package body Landin.Syntax.Parser is
                                 (Item    => Syn.Expression_Expected,
                                  Where   => (if Peek = Tok.End_Of_Input
                                              then After_Previous else Here),
-                                 Message => "`defer` registers a call here",
-                                 Note    => "[1100]: the call is evaluated"
-                                            & " when its block is left",
-                                 Related => At_Defer,
-                                 Because => "the defer");
+                                 Message => "`" & Cleanup_Name
+                                            & "` registers a call here",
+                                 Note    => Cleanup_Paragraph
+                                            & ": the call is evaluated"
+                                            & Execution_Note,
+                                 Related => At_Cleanup,
+                                 Because => "the " & Cleanup_Name);
                               Call_Node := Add (Error_Expression, Point);
                            end if;
 
@@ -3030,21 +3047,25 @@ package body Landin.Syntax.Parser is
                                  Complain
                                    (Item    => Syn.Expression_Expected,
                                     Where   => Where (Result, Call_Node),
-                                    Message => "`defer` registers a call,"
-                                               & " not a constructed value",
-                                    Note    => "[1100]: write the call that"
-                                               & " runs when the block ends",
-                                    Related => At_Defer,
-                                    Because => "the defer");
+                                    Message => "`" & Cleanup_Name
+                                               & "` registers a call, not a"
+                                               & " constructed value",
+                                    Note    => Cleanup_Paragraph
+                                               & ": write the call that runs"
+                                               & Execution_Note,
+                                    Related => At_Cleanup,
+                                    Because => "the " & Cleanup_Name);
                               end if;
                               return Add
-                                (Error_Statement, At_Defer,
+                                (Error_Statement, At_Cleanup,
                                  Join (Start, After_Previous), [Call_Node]);
                            end if;
 
                            return Add
-                             (Of_Kind  => Defer_Statement,
-                              At_Token => At_Defer,
+                             (Of_Kind  =>
+                                (if Is_Undo
+                                 then Undo_Statement else Defer_Statement),
+                              At_Token => At_Cleanup,
                               Extent   => Join (Start, After_Previous),
                               Children => [Call_Node]);
                         end;
@@ -3433,7 +3454,7 @@ package body Landin.Syntax.Parser is
                           or else
                             (Peek = Tok.Identifier
                              and then
-                               (Named_Here = Defer_Id
+                               (Named_Here in Defer_Id | Undo_Id
                                 or else
                                   (Named_Here not in Match_Id | Begin_Id
                                    and then

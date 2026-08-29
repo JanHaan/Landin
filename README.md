@@ -19,9 +19,9 @@ assignment, lowers and verifies target-neutral IR, emits Linux x86-64
 assembly, and can assemble and link a hosted executable. Runtime fixtures run
 those binaries on the native x86-64 gate. The enabled kernel includes scalars,
 fixed arrays, recursively nested ordinary structs, unfolded variants,
-first-class infallible function signatures, expression-valued non-loop control
-flow and lexical `defer`; native macOS arm64, Cortex-M and the standard library
-remain future work.**
+first-class function signatures with declared atom errors, expression-valued
+non-loop control flow, and lexical `defer`/failure-only `undo`; native macOS
+arm64, Cortex-M and the standard library remain future work.**
 
 ## What is here
 
@@ -145,7 +145,8 @@ is present; the pinned `linux/amd64` container and x86-64 CI run the Linux
 binaries. R2 is active; R2.20's
 target-parametric aggregate and variant representation is complete, and R2.30
 owns functions, control-flow expressions, lexical cleanup, declared errors and
-the aggregate ABI.
+the aggregate ABI; its enabled cleanup forms are unconditional `defer` and
+failure-only `undo`.
 Language and architecture questions are resolved when the first vertical
 slice needs them.
 

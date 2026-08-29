@@ -124,7 +124,7 @@
 1080   tour        accepted emitted executed refused  A block has the value of its last expression
 1090   tour        accepted emitted executed          Bare block, for scoping
 1100   tour        accepted emitted executed refused  defer runs at the end of its block, in reverse order
-1110   tour        refused refused-by-name            undo is the same machinery under a condition
+1110   tour        accepted emitted executed refused  undo is the same machinery under a condition
 1120   tour        -                                  Checks may be switched off for a region, visibly
 1130   tour        refused refused-by-name            Unconditional loop
 1140   tour        refused-by-name                    Conditional loop

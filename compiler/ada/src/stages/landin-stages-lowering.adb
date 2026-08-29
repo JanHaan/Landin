@@ -6068,14 +6068,18 @@ package body Landin.Stages.Lowering is
                            or else Current = IR.No_Block);
                      end;
 
-                  when Syn.Defer_Statement =>
+                  when Syn.Defer_Statement | Syn.Undo_Statement =>
                      --  Registration emits nothing and evaluates nothing.
                      --  The call syntax and its lexical scope are retained
                      --  until an applicable edge leaves this block.
                      Cleanup_Stack.Append
                        (Cleanup_Entry'
-                          (Kind   => Cleanup.Deferred_Call,
-                           Call   => Syn.Deferred_Call (Of_Tree, Stmt),
+                          (Kind   =>
+                             (if Syn.Kind (Of_Tree, Stmt)
+                                   = Syn.Undo_Statement
+                              then Cleanup.Failure_Undo
+                              else Cleanup.Deferred_Call),
+                           Call   => Syn.Cleanup_Call (Of_Tree, Stmt),
                            Scope  => Scope,
                            Active => True));
 

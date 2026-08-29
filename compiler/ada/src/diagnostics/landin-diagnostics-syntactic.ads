@@ -9,8 +9,8 @@
 --  It also owns the other half of [1830].  Landin.Tokens.Construct answers
 --  for a refused *lexeme*, because the scan can see `1.5` and name it.  A
 --  refused *construct* is spelled with tokens the kernel enables -- `loop`
---  and `undo` remain ordinary identifiers because [1760] does not reserve
---  them -- so only the parser
+--  remains an ordinary identifier because [1760] does not reserve it -- so
+--  only the parser
 --  knows it met one, and only from where it was standing.  The parser says
 --  which construct it met; this package says which paragraph of the tour
 --  describes it and which roadmap item enables it, and may invent neither.
@@ -85,8 +85,7 @@ package Landin.Diagnostics.Syntactic is
    --  and not the lexeme it saw.
    --
    --  Several are ordinary identifiers to the scan, because [1760]
-   --  reserves none of `loop`, `while`, `for`, `undo`, `try`, `fail`,
-   --  `break` or `continue`.
+   --  reserves none of `loop`, `while`, `for`, `break` or `continue`.
    --  Without this table the compiler would say that `loop` is a name that
    --  needs a `:` after it, which is true and useless.
    type Refused_Construct is
@@ -96,7 +95,6 @@ package Landin.Diagnostics.Syntactic is
       Float_Type,
       Text_Type,
       Parameter_Convention,
-      Undo_Statement,
       Loop_Statement,
       While_Statement,
       For_Statement,
@@ -128,7 +126,6 @@ package Landin.Diagnostics.Syntactic is
             when Float_Type           => "[0170]",
             when Text_Type            => "[0600]",
             when Parameter_Convention => "[0900]",
-            when Undo_Statement       => "[1110]",
             when Loop_Statement       => "[1130]",
             when While_Statement      => "[1140]",
             when For_Statement        => "[1150]",
@@ -177,8 +174,7 @@ private
             --  multiple returns.  R4.10 owns the remaining hosted loop
             --  surface, including its transfers.
             when Try_Expression
-               | Fail_Statement
-               | Undo_Statement       => "R2.30",
+               | Fail_Statement       => "R2.30",
             when Loop_Statement
                | While_Statement
                | For_Statement

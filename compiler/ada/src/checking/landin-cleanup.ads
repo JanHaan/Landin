@@ -2,9 +2,8 @@
 --
 --  A cleanup is selected by the kind of edge leaving its lexical block.
 --  `defer` applies to every language exit that unwinds a block; a trap is a
---  synchronous stop and never unwinds.  `undo` remains syntactically refused,
---  but its failure-only selection lives here now so the declared-error slice
---  can add that spelling without replacing the cleanup substrate.
+--  synchronous stop and never unwinds.  `undo` uses the same lexical stack
+--  but is selected only while a declared failure propagates.
 
 package Landin.Cleanup is
 
