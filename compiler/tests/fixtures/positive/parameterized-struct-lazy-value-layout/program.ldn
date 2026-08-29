@@ -1,0 +1,9 @@
+cell: type (item: type) = struct
+    value: item
+end cell
+wrapper: type (item: type) = struct
+    value: item
+end wrapper
+good: wrapper(cell(u8)) = (value: (value: 1))
+nested: wrapper(wrapper(cell(u8))) = (value: (value: (value: 2)))
+row: wrapper([2]cell(u8)) = zeroed

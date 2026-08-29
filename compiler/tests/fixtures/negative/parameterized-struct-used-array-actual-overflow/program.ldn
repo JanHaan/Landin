@@ -1,0 +1,7 @@
+cell: type (item: type) = struct
+    value: item
+end cell
+wrapper: type (item: type) = struct
+    value: item
+end wrapper
+bad: wrapper([18446744073709551615]cell(u64))

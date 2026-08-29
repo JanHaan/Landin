@@ -3486,6 +3486,27 @@ item 11 DATUM callback_value result struct params 0 slots 0 blocks 1 values 1
   field 1 function target 10
   block 1 scope 1 PROGRAM length 1
     1 LEAVE
+file positive/parameterized-struct-lazy-value-layout/program.ldn
+unit signatures 0 items 3
+item 1 DATUM good result struct params 0 slots 0 blocks 1 values 1
+  field 1 struct (u8)
+  image 0
+  field 1 nested
+  field 1.1 image 1
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM nested result struct params 0 slots 0 blocks 1 values 1
+  field 1 struct (struct (u8))
+  image 0
+  field 1 nested
+  field 1.1 nested
+  field 1.1.1 image 2
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM row result struct params 0 slots 0 blocks 1 values 1
+  field 1 [2]struct (u8)
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
 file positive/parameterized-type-alias-fixed-array/program.ldn
 unit signatures 0 items 1
 item 1 DATUM direct result array params 0 slots 0 blocks 1 values 1

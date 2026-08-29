@@ -1,0 +1,6 @@
+class: runtime
+summary: lazily materialized nested nominal and nominal-array actuals execute through ordinary aggregate paths
+constructs: 0520, 0670, 0710, 1350, 1795
+program: main.ldn
+targets: linux-x86-64
+status: 42
