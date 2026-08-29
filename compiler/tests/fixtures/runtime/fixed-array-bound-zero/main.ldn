@@ -1,0 +1,12 @@
+direct: type = [0]u8
+folded: type = [9 - 9]u16
+mut first: direct
+
+public main: () -> (code: i32) =
+    second: folded
+    if lenof first == 0 and lenof second == 0 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

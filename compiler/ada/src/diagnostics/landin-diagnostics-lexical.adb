@@ -116,8 +116,10 @@ package body Landin.Diagnostics.Lexical is
             --  just built.  A code whose occurrences do not carry what it
             --  promises is worse than no code at all.
             if Rows.Required_Notes (Named) /= Note_Count (Report)
-              or else Rows.Required_Secondaries (Named)
-                      /= Label_Count (Report)
+              or else Label_Count (Report)
+                      < Rows.Minimum_Secondaries (Named)
+              or else Label_Count (Report)
+                      > Rows.Maximum_Secondaries (Named)
             then
                raise Compiler_Defect
                  with "the catalogue row for " & Text

@@ -398,9 +398,11 @@ package body Landin.Stages.Checking is
       --  is a value local to this walk; in particular, an array node in a
       --  generic alias never receives the length of one instantiation.
       function Normalized_Type
-        (Of_Tree : Syn.Tree;
-         Written : Syn.Node_Id;
-         Actuals : Formal_Actual_Array) return Type_Descriptor;
+        (Of_Tree    : Syn.Tree;
+         Written    : Syn.Node_Id;
+         Actuals    : Formal_Actual_Array;
+         Application : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin) return Type_Descriptor;
 
       procedure Validate_Template (Id : Res.Declaration_Id);
 
@@ -413,6 +415,30 @@ package body Landin.Stages.Checking is
          Actuals : Formal_Actual_Array;
          Valid   : out Boolean;
          Known   : out Boolean) return Ty.Magnitude;
+
+      --  D136's one evaluator for direct and substituted array bounds.  It
+      --  returns a local mathematical value and never annotates a template
+      --  node with an instantiation-specific answer.
+      function Fixed_Bound
+        (Of_Tree    : Syn.Tree;
+         Written    : Syn.Node_Id;
+         Actuals    : Formal_Actual_Array;
+         Application : Landin.Provenance.Origin;
+         Valid      : out Boolean;
+         Known      : out Boolean) return Ty.Folded;
+
+      procedure Report_Fixed_Bound_Range
+        (Of_Tree    : Syn.Tree;
+         At_Node    : Syn.Node_Id;
+         Application : Landin.Provenance.Origin;
+         Message    : String;
+         Note       : String);
+
+      procedure Report_Fixed_Bound_Operand
+        (Of_Tree    : Syn.Tree;
+         At_Node    : Syn.Node_Id;
+         Application : Landin.Provenance.Origin;
+         Message    : String);
 
       procedure Report_Application
         (Of_Tree : Syn.Tree; At_Node : Syn.Node_Id; Message : String) is
@@ -491,10 +517,313 @@ package body Landin.Stages.Checking is
          return 0;
       end Fixed_Argument;
 
+      procedure Report_Fixed_Bound_Range
+        (Of_Tree    : Syn.Tree;
+         At_Node    : Syn.Node_Id;
+         Application : Landin.Provenance.Origin;
+         Message    : String;
+         Note       : String) is
+      begin
+         if Landin.Provenance.Is_Known (Application) then
+            Bad.Report
+              (Item    => Bad.Literal_Out_Of_Range,
+               Source  => Application.Source,
+               Where   => Application.Where,
+               Message => Message,
+               Note    => Note,
+               Related => Syn.Origin (Of_Tree, At_Node),
+               Because => "the template expression folded here",
+               Into    => Found);
+         else
+            Bad.Report
+              (Item    => Bad.Literal_Out_Of_Range,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Anchor (Of_Tree, At_Node),
+               Message => Message,
+               Note    => Note,
+               Into    => Found);
+         end if;
+      end Report_Fixed_Bound_Range;
+
+      procedure Report_Fixed_Bound_Operand
+        (Of_Tree    : Syn.Tree;
+         At_Node    : Syn.Node_Id;
+         Application : Landin.Provenance.Origin;
+         Message    : String) is
+      begin
+         if Landin.Provenance.Is_Known (Application) then
+            Bad.Report
+              (Item    => Bad.Impossible_Operand,
+               Source  => Application.Source,
+               Where   => Application.Where,
+               Message => Message,
+               Note    => "[1950]: an operand the operation cannot take is"
+                          & " refused where the compiler knows it",
+               Related => Syn.Origin (Of_Tree, At_Node),
+               Because => "the impossible template operand",
+               Into    => Found);
+         else
+            Bad.Report
+              (Item    => Bad.Impossible_Operand,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, At_Node),
+               Message => Message,
+               Note    => "[1950]: an operand the operation cannot take is"
+                          & " refused where the compiler knows it",
+               Into    => Found);
+         end if;
+      end Report_Fixed_Bound_Operand;
+
+      function Fixed_Bound
+        (Of_Tree    : Syn.Tree;
+         Written    : Syn.Node_Id;
+         Actuals    : Formal_Actual_Array;
+         Application : Landin.Provenance.Origin;
+         Valid      : out Boolean;
+         Known      : out Boolean) return Ty.Folded
+      is
+         procedure Report_Not_Fixed (At_Node : Syn.Node_Id; Message : String);
+         procedure Report_Not_Integer
+           (At_Node : Syn.Node_Id; Message : String);
+         procedure Report_Overflow (At_Node : Syn.Node_Id);
+
+         procedure Report_Not_Fixed
+           (At_Node : Syn.Node_Id; Message : String) is
+         begin
+            Bad.Report
+              (Item    => Bad.Not_Known_At_Compile_Time,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, At_Node),
+               Message => Message,
+               Note    => "D136: an array bound is folded from integer"
+                          & " literals, fixed formals and target-independent"
+                          & " integer arithmetic; no user routine runs",
+               Into    => Found);
+         end Report_Not_Fixed;
+
+         procedure Report_Not_Integer
+           (At_Node : Syn.Node_Id; Message : String) is
+         begin
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, At_Node),
+               Message => Message,
+               Note    => "D136: a fixed-array bound must produce an"
+                          & " integer element count",
+               Related => Syn.Origin (Of_Tree, At_Node),
+               Because => "the bound requiring an integer count",
+               Into    => Found);
+         end Report_Not_Integer;
+
+         procedure Report_Overflow (At_Node : Syn.Node_Id) is
+         begin
+            Report_Fixed_Bound_Range
+              (Of_Tree, At_Node, Application,
+               "this fixed expression overflows the compiler's widest"
+               & " enabled integer magnitude",
+               "D136: every intermediate arithmetic answer must remain"
+               & " representable");
+         end Report_Overflow;
+
+         Of_Kind : constant Syn.Node_Kind := Syn.Kind (Of_Tree, Written);
+      begin
+         Valid := False;
+         Known := False;
+
+         if Of_Kind = Syn.Integer_Literal then
+            declare
+               Snap : constant Landin.Source.Snapshot :=
+                 Source (Context, Syn.Source_Of (Of_Tree));
+               Text : constant String := Landin.Source.Slice
+                 (Snap, Syn.Digit_Span (Of_Tree, Written));
+               Value : Ty.Magnitude;
+               Overflowed : Boolean;
+            begin
+               Ty.Evaluate
+                 (Text, Syn.Base (Of_Tree, Written), Value, Overflowed);
+               if Overflowed then
+                  Report_Overflow (Written);
+                  return 0;
+               end if;
+               Valid := True;
+               Known := True;
+               return Ty.Folded (Value);
+            end;
+         end if;
+
+         if Of_Kind = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Written) = Res.Bound
+         then
+            declare
+               Formal : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree, Written);
+            begin
+               if Res.Sort_Of (Meanings.all, Formal) = Res.Fixed_Parameter
+               then
+                  for Each of Actuals loop
+                     if Each.Formal = Formal then
+                        Valid := True;
+                        Known := Each.Fixed_Known;
+                        return Ty.Folded (Each.Fixed);
+                     end if;
+                  end loop;
+               end if;
+            end;
+         end if;
+
+         if Of_Kind = Syn.Negation then
+            declare
+               Under : Ty.Folded;
+               Under_Valid, Under_Known : Boolean;
+            begin
+               Under := Fixed_Bound
+                 (Of_Tree, Syn.Operand_Of (Of_Tree, Written), Actuals,
+                  Application, Under_Valid, Under_Known);
+               Valid := Under_Valid;
+               Known := Under_Known;
+               return (if Under_Known then -Under else 0);
+            end;
+         end if;
+
+         if Of_Kind in Syn.Add | Syn.Subtract | Syn.Multiply
+                       | Syn.Divide | Syn.Remainder
+         then
+            declare
+               Left, Right : Ty.Folded;
+               Left_Valid, Right_Valid : Boolean;
+               Left_Known, Right_Known : Boolean;
+               Fits : Boolean := True;
+            begin
+               Left := Fixed_Bound
+                 (Of_Tree, Syn.Left_Of (Of_Tree, Written), Actuals,
+                  Application, Left_Valid, Left_Known);
+               Right := Fixed_Bound
+                 (Of_Tree, Syn.Right_Of (Of_Tree, Written), Actuals,
+                  Application, Right_Valid, Right_Known);
+               Valid := Left_Valid and then Right_Valid;
+               if not Valid then
+                  return 0;
+               end if;
+
+               if Of_Kind in Syn.Divide | Syn.Remainder
+                 and then Right_Known and then Right = 0
+               then
+                  Report_Fixed_Bound_Operand
+                    (Of_Tree, Syn.Right_Of (Of_Tree, Written), Application,
+                     "this fixed-expression divisor is zero");
+                  Valid := False;
+                  return 0;
+               end if;
+
+               if not Left_Known or else not Right_Known then
+                  Known := False;
+                  return 0;
+               end if;
+
+               case Of_Kind is
+                  when Syn.Add =>
+                     Fits := (if Right > 0
+                              then Left <= Ty.Folded'Last - Right
+                              else Left >= Ty.Folded'First - Right);
+                  when Syn.Subtract =>
+                     Fits := (if Right > 0
+                              then Left >= Ty.Folded'First + Right
+                              else Left <= Ty.Folded'Last + Right);
+                  when Syn.Multiply =>
+                     Fits := Left = 0
+                       or else abs Right <= Ty.Folded'Last / abs Left;
+                  when Syn.Divide | Syn.Remainder =>
+                     null;
+                  when others =>
+                     raise Landin.Compiler_Defect with
+                       "non-arithmetic fixed expression in arithmetic fold";
+               end case;
+
+               if not Fits then
+                  Report_Overflow (Written);
+                  Valid := False;
+                  return 0;
+               end if;
+
+               Valid := True;
+               Known := True;
+               case Of_Kind is
+                  when Syn.Add       => return Left + Right;
+                  when Syn.Subtract  => return Left - Right;
+                  when Syn.Multiply  => return Left * Right;
+                  when Syn.Divide    => return Left / Right;
+                  when Syn.Remainder => return Left rem Right;
+                  when others =>
+                     raise Landin.Compiler_Defect with
+                       "non-arithmetic fixed expression after arithmetic fold";
+               end case;
+            end;
+         end if;
+
+         if Of_Kind in Syn.True_Literal | Syn.False_Literal
+                       | Syn.Equal_To | Syn.Not_Equal_To | Syn.Less_Than
+                       | Syn.Less_Or_Equal | Syn.Greater_Than
+                       | Syn.Greater_Or_Equal | Syn.Logical_And
+                       | Syn.Logical_Or | Syn.Logical_Not
+         then
+            Report_Not_Integer
+              (Written, "this fixed-array bound produces a bool, not an"
+                        & " integer element count");
+            return 0;
+         end if;
+
+         if Of_Kind in Syn.Wrapping_Add | Syn.Wrapping_Subtract
+                       | Syn.Wrapping_Multiply | Syn.Bitwise_And
+                       | Syn.Bitwise_Xor | Syn.Bitwise_Or | Syn.Shift_Left
+                       | Syn.Shift_Right | Syn.Complement
+         then
+            Report_Not_Fixed
+              (Written, "this operator needs an operand width and is not"
+                        & " available in a target-independent fixed"
+                        & " expression");
+            return 0;
+         end if;
+
+         if Of_Kind = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Written) = Res.Bound
+         then
+            declare
+               Sort : constant Res.Declaration_Sort := Res.Sort_Of
+                 (Meanings.all,
+                  Res.Bound_To (Meanings.all, Of_Tree, Written));
+            begin
+               Report_Not_Fixed
+                 (Written,
+                  (case Sort is
+                      when Res.Type_Parameter =>
+                         "this name is a type formal, not a fixed value",
+                      when Res.Module_Type | Res.Module_Function
+                         | Res.Module_Atom | Res.Case_Name =>
+                         "this name does not denote a fixed integer value",
+                      when Res.Fixed_Parameter =>
+                         "this fixed formal has no value in this fold",
+                      when others =>
+                         "this name is runtime storage, not a fixed formal"));
+               return 0;
+            end;
+         end if;
+
+         Report_Not_Fixed
+           (Written,
+            (if Of_Kind = Syn.Call
+             then "a user call is not a fixed expression and its body is"
+                  & " not executed"
+             else "this is not one of the closed fixed-expression forms"));
+         return 0;
+      end Fixed_Bound;
+
       function Normalized_Type
-        (Of_Tree : Syn.Tree;
-         Written : Syn.Node_Id;
-         Actuals : Formal_Actual_Array) return Type_Descriptor
+        (Of_Tree    : Syn.Tree;
+         Written    : Syn.Node_Id;
+         Actuals    : Formal_Actual_Array;
+         Application : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin) return Type_Descriptor
       is
          function Invalid return Type_Descriptor
            is ((Kind => Ty.Ill_Typed, others => <>));
@@ -534,15 +863,24 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Written) = Syn.Array_Type then
             declare
                Element : constant Type_Descriptor := Normalized_Type
-                 (Of_Tree, Syn.Element_Of (Of_Tree, Written), Actuals);
-               Value : Ty.Magnitude;
+                 (Of_Tree, Syn.Element_Of (Of_Tree, Written), Actuals,
+                  Application);
+               Folded_Value : Ty.Folded;
+               Value : Ty.Magnitude := 0;
                Is_Fixed : Boolean;
                Is_Known : Boolean;
             begin
-               Value := Fixed_Argument
+               Folded_Value := Fixed_Bound
                  (Of_Tree, Syn.Bound_Of (Of_Tree, Written), Actuals,
-                  Is_Fixed, Is_Known);
+                  Application, Is_Fixed, Is_Known);
                if Element.Kind = Ty.Ill_Typed or else not Is_Fixed then
+                  return Invalid;
+               elsif Is_Known and then Folded_Value < 0 then
+                  Report_Fixed_Bound_Range
+                    (Of_Tree, Syn.Bound_Of (Of_Tree, Written), Application,
+                     "this fixed-array bound is negative",
+                     "D136 accepts zero as a fixed-array bound but refuses"
+                     & " a negative answer");
                   return Invalid;
                elsif Element.Kind /= Ty.Undecided
                  and then Element.Kind not in Ty.Scalar_Name
@@ -558,6 +896,7 @@ package body Landin.Stages.Checking is
                   return (Kind => Ty.Undecided, others => <>);
                end if;
 
+               Value := Ty.Magnitude (Folded_Value);
                declare
                   Element_Bytes : constant Ty.Magnitude := Ty.Magnitude
                     (Landin.Targets.Bytes
@@ -569,16 +908,11 @@ package body Landin.Stages.Checking is
                   if Element_Bytes /= 0
                     and then Value > Maximum_Bytes / Element_Bytes
                   then
-                     Bad.Report
-                       (Item    => Bad.Literal_Out_Of_Range,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where
-                          (Of_Tree, Syn.Bound_Of (Of_Tree, Written)),
-                        Message => "this array is larger than the target can"
-                                   & " address",
-                        Note    => "D18: an array's byte extent must fit the"
-                                   & " target's usize",
-                        Into    => Found);
+                     Report_Fixed_Bound_Range
+                       (Of_Tree, Syn.Bound_Of (Of_Tree, Written), Application,
+                        "this array is larger than the target can address",
+                        "D18: an array's byte extent must fit the target's"
+                        & " usize");
                      return Invalid;
                   end if;
                end;
@@ -670,6 +1004,9 @@ package body Landin.Stages.Checking is
          declare
             Target : constant Syn.Node_Id :=
               Syn.Applied_Type (Of_Tree, Written);
+            This_Application : constant Landin.Provenance.Origin :=
+              (if Landin.Provenance.Is_Known (Application)
+               then Application else Syn.Origin (Of_Tree, Written));
          begin
             if Syn.Kind (Of_Tree, Target) /= Syn.Type_Reference
               or else Res.Verdict_Of
@@ -704,11 +1041,19 @@ package body Landin.Stages.Checking is
                      Report_Application
                        (Of_Tree, Target, "this type alias takes no arguments");
                      return Invalid;
-                  elsif Template_Invalid (Positive (Means)) then
+                  end if;
+
+                  --  Validate a nested declaration before this application
+                  --  can inherit an origin. Unconditional defects belong to
+                  --  that declaration regardless of declaration order;
+                  --  symbolic failures remain open for substitution below.
+                  Validate_Template (Means);
+                  if Template_Invalid (Positive (Means)) then
                      --  Declaration validation already diagnosed the
                      --  template itself; a use is not a second source error.
                      return Invalid;
                   end if;
+
                   if Syn.Type_Argument_Count (Of_Tree, Written)
                        /= Formal_Count
                   then
@@ -784,7 +1129,8 @@ package body Landin.Stages.Checking is
                            then
                               Require_Type_Actual
                                 (Argument,
-                                 Normalized_Type (Of_Tree, Argument, Actuals),
+                                 Normalized_Type
+                                   (Of_Tree, Argument, Actuals, Application),
                                  Bound (Index).Value);
                               Good := Good and then Bound (Index).Value.Kind
                                 /= Ty.Ill_Typed;
@@ -819,7 +1165,7 @@ package body Landin.Stages.Checking is
                                      (Template.all,
                                       Syn.Declared_Type
                                         (Template.all, Formal_Node),
-                                      Bound);
+                                      Bound, This_Application);
                               begin
                                  if not Is_Fixed
                                    or else Expected.Kind = Ty.Ill_Typed
@@ -864,7 +1210,7 @@ package body Landin.Stages.Checking is
                           (Template.all,
                            Syn.Declared_Type
                              (Template.all, Declaration),
-                           Bound);
+                           Bound, This_Application);
                      begin
                         Generic_Expansion (Positive (Means)) := False;
                         if Result.Kind = Ty.Ill_Typed then
@@ -1385,7 +1731,7 @@ package body Landin.Stages.Checking is
             return Ty.Aggregate;
          end if;
 
-         --  array_type ::= "[" integer "]" type              [1790]
+         --  array_type ::= "[" expression "]" type           [1790]
          --
          --  D17 makes it structural, so what is recorded is the length and
          --  the element and never where it was written.  An element the
@@ -1436,36 +1782,27 @@ package body Landin.Stages.Checking is
                   return Ty.Ill_Typed;
                end if;
 
-               if Syn.Kind (Of_Tree, Bound) /= Syn.Integer_Literal then
-                  return Ty.Ill_Typed;
-               end if;
-
                declare
-                  Snap : constant Landin.Source.Snapshot :=
-                    Source (Context, Syn.Source_Of (Of_Tree));
-                  Text : constant String :=
-                    Landin.Source.Slice
-                      (Snap, Syn.Digit_Span (Of_Tree, Bound));
-                  Value      : Ty.Magnitude;
-                  Overflowed : Boolean;
+                  Valid, Known : Boolean;
+                  Folded_Value : constant Ty.Folded := Fixed_Bound
+                    (Of_Tree, Bound,
+                     Formal_Actual_Array'(1 .. 0 => (others => <>)),
+                     Landin.Provenance.No_Origin, Valid, Known);
                begin
-                  Ty.Evaluate
-                    (Text, Syn.Base (Of_Tree, Bound), Value, Overflowed);
-
-                  if Overflowed then
-                     Bad.Report
-                       (Item    => Bad.Literal_Out_Of_Range,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Bound),
-                        Message => "this is more elements than an array"
-                                   & " may have",
-                        Note    => "D18: an array's byte extent must fit the"
-                                   & " target's usize",
-                        Into    => Found);
+                  if not Valid or else not Known then
+                     return Ty.Ill_Typed;
+                  elsif Folded_Value < 0 then
+                     Report_Fixed_Bound_Range
+                       (Of_Tree, Bound, Landin.Provenance.No_Origin,
+                        "this fixed-array bound is negative",
+                        "D136 accepts zero as a fixed-array bound but refuses"
+                        & " a negative answer");
                      return Ty.Ill_Typed;
                   end if;
 
                   declare
+                     Value : constant Ty.Magnitude :=
+                       Ty.Magnitude (Folded_Value);
                      Element_Bytes : constant Ty.Magnitude :=
                        (if Aggregate_Element
                         then Ty.Magnitude
@@ -1493,9 +1830,9 @@ package body Landin.Stages.Checking is
                            Into    => Found);
                         return Ty.Ill_Typed;
                      end if;
-                  end;
 
-                  Length := Landin.Checking.Element_Count (Value);
+                     Length := Landin.Checking.Element_Count (Value);
+                  end;
                end;
 
                Landin.Checking.Note_Array
@@ -6792,10 +7129,9 @@ package body Landin.Stages.Checking is
               (Types.all, Of_Tree, Repetition, Expected, Element);
          end if;
 
-         --  D34 deliberately does not decide whether [0580]'s zero-length
-         --  fixed-array type is legal source.  Repetition needs at least one
-         --  destination position, so a zero contextual extent is refused at
-         --  this construct rather than admitted as a zero-length array value.
+         --  D136 admits [0520]'s zero-length fixed-array type. Repetition
+         --  still needs at least one destination position, so a zero
+         --  contextual extent is refused by this construct-specific rule.
          if Expected = 0 then
             Bad.Report
               (Item    => Bad.Unsupported_Use,
@@ -9306,8 +9642,9 @@ package body Landin.Stages.Checking is
          --  element type from its
          --  one expression.  Like D25, an untyped integer takes [0200]'s
          --  default; unlike a literal, no source run needs a common context.
-         --  A zero count remains deferred with [0580]'s source-level empty
-         --  array decision even though the internal shape can represent one.
+         --  D136 admits an explicitly typed zero-length array. A repetition
+         --  that must infer its shape still has no element-bearing source run,
+         --  so D33/D35 continue to refuse a zero count.
          if Res.Sort_Of (Meanings.all, Id)
               in Res.Local_Binding | Res.Module_Binding
            and then Syn.Kind (Of_Tree.all, Value) = Syn.Array_Repetition

@@ -1,6 +1,6 @@
 class: negative
-summary: an alias array bound must name a fixed formal or literal
+summary: D136 permits fixed formal references in an alias bound but rejects a type formal as a non-fixed value
 constructs: 0520, 1350, 1790, 1795
 program: program.ldn
 targets: linux-x86-64, macos-arm64
-codes: L0304
+codes: L0305

@@ -1,0 +1,12 @@
+twice: type (t: type, fixed n: u32) = [n * 2]t
+mut data: twice(u8, 2)
+
+public main: () -> (code: i32) =
+    local: twice(u16, 3)
+    data[3] = 42
+    if lenof data == 4 and lenof local == 6 and data[3] == 42 then
+        code = 42
+    else
+        code = 1
+    end if
+end main

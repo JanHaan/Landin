@@ -26,6 +26,13 @@
 --  about an input, and a reader told the wrong one looks in the wrong
 --  place.
 --
+--  Not_Known_At_Compile_Time serves both [1940]'s static module images and
+--  D136's fixed-array bounds: each requires an answer before runtime and
+--  refuses a runtime name or call rather than executing user code. D136's
+--  application-dependent range and operand failures retain L0300 and L0306:
+--  the semantic rule is unchanged, while the application is primary and the
+--  template expression is related.
+--
 --  Unsupported_Use is the checker's half of [1830], and it is separate from
 --  Landin.Diagnostics.Syntactic's Construct_Not_Enabled for a reason of
 --  information and not of stage.  The parser refuses `loop` because of the

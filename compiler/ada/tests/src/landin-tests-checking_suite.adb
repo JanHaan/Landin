@@ -6,6 +6,7 @@
 --  equal layouts prove [0710]'s nominal rule.
 
 with Landin.Checking;
+with Landin.Diagnostics;
 with Landin.Provenance;
 with Landin.Resolution;
 with Landin.Source;
@@ -20,6 +21,7 @@ with Landin.Types;
 package body Landin.Tests.Checking_Suite is
 
    use type Landin.Provenance.Declaration_Id;
+   use type Landin.Source.Span;
    use type Landin.Resolution.Declaration_Sort;
    use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
@@ -644,6 +646,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Invalid_Parameterized_Templates_Are_Checked_When_Unused
      (Item : in out Landin.Testing.Context);
 
+   procedure Fixed_Bound_Arithmetic_And_Applications_Are_Bounded
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
      (Item : in out Landin.Testing.Context)
    is
@@ -656,13 +661,14 @@ package body Landin.Tests.Checking_Suite is
       Src := Landin.Stages.Add_Source
         (Work, "parameterized-aliases.ldn",
          "identity: type (t: type) = t" & LF
-         & "bytes: type (t: type, fixed n: u64) = [n]t" & LF
+         & "bytes: type (t: type, fixed n: u64) = [n * 2]t" & LF
          & "nested: type (fixed n: integer, integer: type, t: type)"
          & " = bytes(t, n)" & LF
          & "word: type = identity(u16)" & LF
          & "pair: type = identity([2]u8)" & LF
-         & "four: type = nested(4, u8, u32)" & LF
-         & "mut direct: bytes(u8, 7)" & LF);
+         & "four: type = nested(2, u8, u32)" & LF
+         & "mut direct: bytes(u8, 7)" & LF
+         & "large: type = [64 * 1024]u8" & LF);
       Landin.Stages.Append (Order, Frontend'Access);
       Landin.Stages.Append (Order, Names'Access);
       Landin.Stages.Append (Order, Checker'Access);
@@ -718,6 +724,8 @@ package body Landin.Tests.Checking_Suite is
            Declaration_At (6);
          Direct : constant Landin.Provenance.Declaration_Id :=
            Declaration_At (7);
+         Large : constant Landin.Provenance.Declaration_Id :=
+           Declaration_At (8);
          type Template_Array is array (Positive range <>) of
            Landin.Syntax.Node_Id;
          Compile_Time_Formals : Natural := 0;
@@ -743,10 +751,17 @@ package body Landin.Tests.Checking_Suite is
          Landin.Testing.Check
            (Item, Landin.Checking.Type_Of (Types.all, Direct)
                     = Landin.Types.Fixed_Array
-             and then Landin.Checking.Array_Length (Types.all, Direct) = 7
+             and then Landin.Checking.Array_Length (Types.all, Direct) = 14
              and then Landin.Checking.Array_Element (Types.all, Direct)
                         = Landin.Types.U8,
-            "a direct application is an ordinary fixed-array binding");
+            "a direct application folds its substituted bound");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Type_Of (Types.all, Large)
+                    = Landin.Types.Fixed_Array
+             and then Landin.Checking.Array_Length (Types.all, Large) = 65_536
+             and then Landin.Checking.Array_Element (Types.all, Large)
+                        = Landin.Types.U8,
+            "a concrete fixed expression supplies the canonical count");
 
          for Template of Template_Array'[Identity, Bytes, Nested] loop
             declare
@@ -794,6 +809,10 @@ package body Landin.Tests.Checking_Suite is
      (Item : in out Landin.Testing.Context)
    is
       procedure Check_Rejected (Text : String; What : String);
+      procedure Check_Rejected_Message
+        (Text : String; Expected : String; What : String);
+      procedure Check_Nested_Unconditional
+        (Outer_First : Boolean; What : String);
 
       procedure Check_Rejected (Text : String; What : String) is
          Work  : Landin.Stages.Compilation :=
@@ -812,6 +831,81 @@ package body Landin.Tests.Checking_Suite is
              and then Landin.Stages.Failed (Work),
             What);
       end Check_Rejected;
+
+      procedure Check_Rejected_Message
+        (Text : String; Expected : String; What : String)
+      is
+         Work  : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran   : Natural;
+         Src   : Landin.Source.Source_Id;
+      begin
+         Src := Landin.Stages.Add_Source (Work, "nonfixed-name.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Src /= Landin.Source.No_Source and then Ran = 3
+                and then Landin.Diagnostics.Count (Reports) = 1
+                and then Landin.Diagnostics.Message
+                  (Landin.Diagnostics.Primary
+                     (Landin.Diagnostics.Get (Reports, 1))) = Expected,
+               What);
+         end;
+      end Check_Rejected_Message;
+
+      procedure Check_Nested_Unconditional
+        (Outer_First : Boolean; What : String)
+      is
+         Work  : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran   : Natural;
+         Outer, Inner : Landin.Source.Source_Id;
+      begin
+         if Outer_First then
+            Outer := Landin.Stages.Add_Source
+              (Work, "outer.ldn",
+               "outer: type (t: type) = inner(t)" & LF);
+            Inner := Landin.Stages.Add_Source
+              (Work, "inner.ldn",
+               "inner: type (t: type) = [1 / 0]t" & LF);
+         else
+            Inner := Landin.Stages.Add_Source
+              (Work, "inner.ldn",
+               "inner: type (t: type) = [1 / 0]t" & LF);
+            Outer := Landin.Stages.Add_Source
+              (Work, "outer.ldn",
+               "outer: type (t: type) = inner(t)" & LF);
+         end if;
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+            Report : constant Landin.Diagnostics.Diagnostic :=
+              Landin.Diagnostics.Get (Reports, 1);
+         begin
+            Landin.Testing.Check
+              (Item, Outer /= Landin.Source.No_Source
+                and then Inner /= Landin.Source.No_Source
+                and then Ran = 3
+                and then Landin.Diagnostics.Count (Reports) = 1
+                and then Landin.Diagnostics.Code (Report) = "L0306"
+                and then Landin.Diagnostics.Source_Of
+                  (Landin.Diagnostics.Primary (Report)) = Inner
+                and then Landin.Diagnostics.Label_Count (Report) = 0,
+               What);
+         end;
+      end Check_Nested_Unconditional;
 
       Work  : Landin.Stages.Compilation :=
         Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -877,7 +971,303 @@ package body Landin.Tests.Checking_Suite is
         ("a: type (t: type) = b(t)" & LF
          & "b: type (t: type) = a(t)" & LF,
          "unused templates reject an unconditional expansion cycle");
+      Check_Rejected
+        ("bad: type (t: type) = [1 / 0]t" & LF,
+         "an impossible fixed-expression divisor is rejected");
+      Check_Nested_Unconditional
+        (Outer_First => True,
+         What => "an inner unconditional defect belongs to its declaration"
+                 & " when the outer template is declared first");
+      Check_Nested_Unconditional
+        (Outer_First => False,
+         What => "an inner unconditional defect belongs to its declaration"
+                 & " when the inner template is declared first");
+      Check_Rejected
+        ("bad: type (t: type) = [18446744073709551615 + 1]t" & LF,
+         "a fixed-expression intermediate overflow is rejected");
+      Check_Rejected_Message
+        ("bad: type (n: type, t: type) = [n]t" & LF,
+         "this name is a type formal, not a fixed value",
+         "a type formal is distinguished from runtime storage");
+      Check_Rejected_Message
+        ("named: type = u8" & LF
+         & "bad: type (t: type) = [named]t" & LF,
+         "this name does not denote a fixed integer value",
+         "a non-value declaration is distinguished from runtime storage");
+      Check_Rejected_Message
+        ("n: u32 = 4" & LF
+         & "bad: type (t: type) = [n]t" & LF,
+         "this name is runtime storage, not a fixed formal",
+         "runtime storage is identified as the non-fixed leaf");
+      Check_Rejected
+        ("size: () -> (n: u32) = n = 4 end size" & LF
+         & "bad: type (t: type) = [size()]t" & LF,
+         "a user call in a bound is rejected without evaluating its body");
+      Check_Rejected
+        ("bad: type (t: type) = [1 << 2]t" & LF,
+         "a width-dependent operator is not a fixed expression");
    end Invalid_Parameterized_Templates_Are_Checked_When_Unused;
+
+   procedure Fixed_Bound_Arithmetic_And_Applications_Are_Bounded
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Append_Checking (Into : in out Landin.Stages.Pipeline);
+
+      procedure Append_Checking (Into : in out Landin.Stages.Pipeline) is
+      begin
+         Landin.Stages.Append (Into, Frontend'Access);
+         Landin.Stages.Append (Into, Names'Access);
+         Landin.Stages.Append (Into, Checker'Access);
+      end Append_Checking;
+   begin
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "fixed-boundaries.ldn",
+            "first_cancel: type = [(-18446744073709551615)"
+            & " + 18446744073709551615 + 1]u8" & LF
+            & "last_divide: type = [(-18446744073709551615) / -1]u8"
+            & LF
+            & "multiply_boundary: type = [(-18446744073709551615) * -1]u8"
+            & LF
+            & "negative_divide: type = [-7 / 2 + 4]u8" & LF
+            & "negative_remainder: type = [-7 % 2 + 2]u8" & LF);
+         Append_Checking (Order);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check
+           (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+            "exact folded boundaries and negative quotient rules are valid");
+
+         declare
+            Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Work).all, Src);
+            Meanings : constant not null access Landin.Resolution.Table :=
+              Landin.Stages.Meanings (Work);
+            Types : constant not null access Landin.Checking.Table :=
+              Landin.Stages.Types (Work);
+
+            function Declaration_At (Node : Landin.Syntax.Node_Id)
+              return Landin.Provenance.Declaration_Id;
+
+            function Declaration_At (Node : Landin.Syntax.Node_Id)
+              return Landin.Provenance.Declaration_Id is
+            begin
+               for Id in Landin.Provenance.Declaration_Id'(1)
+                 .. Landin.Provenance.Declaration_Id
+                      (Landin.Resolution.Declaration_Count (Meanings.all))
+               loop
+                  if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                    and then Landin.Resolution.Node_Of (Meanings.all, Id)
+                               = Node
+                  then
+                     return Id;
+                  end if;
+               end loop;
+               return Landin.Provenance.No_Declaration;
+            end Declaration_At;
+
+            Expected : constant array (Positive range 1 .. 5) of
+              Landin.Checking.Element_Count :=
+                [1, Landin.Checking.Element_Count'Last,
+                 Landin.Checking.Element_Count'Last, 1, 1];
+         begin
+            for Index in Expected'Range loop
+               declare
+                  Declaration : constant Landin.Provenance.Declaration_Id :=
+                    Declaration_At
+                      (Landin.Syntax.Nth_Declaration (Of_Tree.all, Index));
+               begin
+                  Landin.Testing.Check
+                    (Item, Landin.Checking.Type_Of (Types.all, Declaration)
+                              = Landin.Types.Fixed_Array
+                       and then Landin.Checking.Array_Length
+                         (Types.all, Declaration) = Expected (Index),
+                     "the boundary expression has its exact canonical count");
+               end;
+            end loop;
+         end;
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "fixed-overflow.ldn",
+            "subtract_underflow: type = [-18446744073709551615 - 1]u8"
+            & LF
+            & "multiply_overflow: type = [18446744073709551615 * 2]u8"
+            & LF);
+         Append_Checking (Order);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Src /= Landin.Source.No_Source and then Ran = 3
+                and then Landin.Diagnostics.Count (Reports) = 2
+                and then Landin.Diagnostics.Code
+                  (Landin.Diagnostics.Get (Reports, 1)) = "L0300"
+                and then Landin.Diagnostics.Code
+                  (Landin.Diagnostics.Get (Reports, 2)) = "L0300",
+               "subtraction underflow and multiplication overflow are exact");
+         end;
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Template_Src, Use_Src : Landin.Source.Source_Id;
+      begin
+         Template_Src := Landin.Stages.Add_Source
+           (Work, "templates.ldn",
+            "scaled: type (fixed n: u64) = [n * 2]u8" & LF
+            & "quotient: type (fixed n: u64, fixed d: u64) = [n / d]u8"
+            & LF);
+         Use_Src := Landin.Stages.Add_Source
+           (Work, "applications.ldn",
+            "good: type = scaled(3)" & LF
+            & "overflow_one: type = scaled(18446744073709551615)" & LF
+            & "overflow_two: type = scaled(18446744073709551614)" & LF
+            & "zero_divisor: type = quotient(8, 0)" & LF);
+         Append_Checking (Order);
+         Ran := Landin.Stages.Run (Order, Work);
+
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+            Template_Tree : constant not null access constant
+              Landin.Syntax.Tree := Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Work).all, Template_Src);
+            Use_Tree : constant not null access constant Landin.Syntax.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Work).all, Use_Src);
+            Types : constant not null access Landin.Checking.Table :=
+              Landin.Stages.Types (Work);
+            Good : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Declared_Type
+                (Use_Tree.all,
+                 Landin.Syntax.Nth_Declaration (Use_Tree.all, 1));
+         begin
+            Landin.Testing.Check
+              (Item, Ran = 3 and then Landin.Diagnostics.Count (Reports) = 3,
+               "one valid and three application-dependent folds are checked");
+            Landin.Testing.Check
+              (Item, Landin.Checking.Type_Of (Types.all, Use_Tree.all, Good)
+                       = Landin.Types.Fixed_Array
+                and then Landin.Checking.Array_Length
+                  (Types.all, Use_Tree.all, Good) = 6,
+               "an unknown template formal becomes a valid concrete count");
+
+            for Index in 1 .. 3 loop
+               declare
+                  Report : constant Landin.Diagnostics.Diagnostic :=
+                    Landin.Diagnostics.Get (Reports, Index);
+                  Application_Node : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Declared_Type
+                      (Use_Tree.all,
+                       Landin.Syntax.Nth_Declaration
+                         (Use_Tree.all, Index + 1));
+               begin
+                  Landin.Testing.Check
+                    (Item, Landin.Diagnostics.Source_Of
+                       (Landin.Diagnostics.Primary (Report)) = Use_Src
+                       and then Landin.Diagnostics.Span_Of
+                         (Landin.Diagnostics.Primary (Report))
+                           = Landin.Syntax.Where
+                               (Use_Tree.all, Application_Node),
+                     "an applied fold failure is primary at its application");
+                  Landin.Testing.Check
+                    (Item, Landin.Diagnostics.Label_Count (Report) = 1
+                       and then Landin.Diagnostics.Source_Of
+                         (Landin.Diagnostics.Nth_Label (Report, 1))
+                           = Template_Src,
+                     "an applied fold failure relates its template"
+                     & " expression");
+               end;
+            end loop;
+
+            Landin.Testing.Check
+              (Item, Landin.Diagnostics.Code
+                 (Landin.Diagnostics.Get (Reports, 1)) = "L0300"
+                and then Landin.Diagnostics.Code
+                  (Landin.Diagnostics.Get (Reports, 2)) = "L0300"
+                and then Landin.Diagnostics.Code
+                  (Landin.Diagnostics.Get (Reports, 3)) = "L0306",
+               "direct and applied failures retain their semantic codes");
+            Landin.Testing.Check
+              (Item, Landin.Diagnostics.Span_Of
+                 (Landin.Diagnostics.Primary
+                    (Landin.Diagnostics.Get (Reports, 1)))
+                /= Landin.Diagnostics.Span_Of
+                  (Landin.Diagnostics.Primary
+                     (Landin.Diagnostics.Get (Reports, 2))),
+               "two bad instantiations have distinguishable primary spans");
+            Landin.Testing.Check
+              (Item, Landin.Checking.Type_Of
+                 (Types.all, Template_Tree.all,
+                  Landin.Syntax.Declared_Type
+                    (Template_Tree.all,
+                     Landin.Syntax.Nth_Declaration
+                       (Template_Tree.all, 1))) = Landin.Types.Undecided,
+               "application folds write no answer onto the template body");
+         end;
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+      begin
+         Src := Landin.Stages.Add_Source
+           (Work, "nested-dependent.ldn",
+            "inner: type (fixed d: u32, t: type) = [8 / d]t" & LF
+            & "outer: type (fixed d: u32, t: type) = inner(d, t)" & LF
+            & "bad: type = outer(0, u8)" & LF);
+         Append_Checking (Order);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+            Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Landin.Stages.Trees (Work).all, Src);
+            Application : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Declared_Type
+                (Of_Tree.all,
+                 Landin.Syntax.Nth_Declaration (Of_Tree.all, 3));
+            Report : constant Landin.Diagnostics.Diagnostic :=
+              Landin.Diagnostics.Get (Reports, 1);
+         begin
+            Landin.Testing.Check
+              (Item, Ran = 3
+                and then Landin.Diagnostics.Count (Reports) = 1
+                and then Landin.Diagnostics.Code (Report) = "L0306"
+                and then Landin.Diagnostics.Source_Of
+                  (Landin.Diagnostics.Primary (Report)) = Src
+                and then Landin.Diagnostics.Span_Of
+                  (Landin.Diagnostics.Primary (Report))
+                    = Landin.Syntax.Where (Of_Tree.all, Application)
+                and then Landin.Diagnostics.Label_Count (Report) = 1,
+               "a genuinely dependent nested defect belongs to the"
+               & " application and relates its inner template expression");
+         end;
+      end;
+   end Fixed_Bound_Arithmetic_And_Applications_Are_Bounded;
 
    --  R2.20: inference from a direct storage name carries D17's exact shape
    --  onto module and local declarations, independent of destination
@@ -3846,6 +4236,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "invalid unused templates are checked",
          Invalid_Parameterized_Templates_Are_Checked_When_Unused'Access);
+      Landin.Testing.Register
+        (Into, "checking", "fixed bound arithmetic stays bounded",
+         Fixed_Bound_Arithmetic_And_Applications_Are_Bounded'Access);
       Landin.Testing.Register
         (Into, "checking", "inferred arrays carry their source shape",
          Inferred_Array_Bindings_Carry_Their_Source_Shape'Access);
