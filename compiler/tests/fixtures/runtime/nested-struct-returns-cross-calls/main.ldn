@@ -1,0 +1,24 @@
+inner: type = struct
+    value: i32
+    row: [2]i32
+end inner
+
+outer: type = struct
+    prefix: u8
+    nested: inner
+    suffix: u16
+end outer
+
+make: () -> (result: outer) =
+    result = (prefix: 0,
+              nested: (value: 12, row: [13, 17]),
+              suffix: 0)
+end make
+
+public main: () -> (code: i32) =
+    mut answer := make()
+    mut other := make()
+    other.nested = zeroed
+    code = answer.nested.value
+           + answer.nested.row[0] + answer.nested.row[1]
+end main

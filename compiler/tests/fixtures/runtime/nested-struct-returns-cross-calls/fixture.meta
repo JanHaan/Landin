@@ -1,0 +1,6 @@
+class: runtime
+summary: depth-one nested structs return with child identity and padding intact
+constructs: 0670, 0710, 0750, 0930, 1800, 1810, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64

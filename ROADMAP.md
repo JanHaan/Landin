@@ -1953,6 +1953,11 @@ The twenty-sixth increment gives an explicitly discarded aggregate call a
 shaped temporary lifetime through completion, then drops it without reading a
 field or forming an aggregate IR value.
 
+The twenty-seventh increment closes executable result evidence over every
+aggregate shape R2.20 enables: flat and array-bearing structs, unfolded
+variants, depth-one ordinary children and fixed arrays all retain independent
+caller storage across repeated calls.
+
 Further aggregate arguments and result contexts remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
