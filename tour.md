@@ -586,9 +586,17 @@ and R3.30, not guessed as a prerequisite to the first front end.
 
 ### [0520] Array: a value
 
-Array: a value. Assignment copies. Size is part of the type. A whole element
-of aggregate type is the same value and place whether its index is written as a
-known position or computed at run time. A computed index is evaluated and
+Array: a value. Assignment copies. Size is part of the type. Its bound is a
+closed fixed expression: integer literals and fixed parameters combined with
+parentheses, unary `-`, and non-wrapping `+`, `-`, `*`, `/` and `%`. It is
+substitution and arithmetic, never a call or compile-time user execution;
+width-dependent wrapping, bitwise and shift operations are not bound forms. A
+negative result is refused. A zero result is accepted: `[0]T` and an admitted
+fixed expression that folds to zero denote a zero-length array. This does not
+add an empty array literal or make zero-length repetition valid.
+A whole element of aggregate type is the same value and place whether its index
+is written as a known position or computed at run time. A computed index is
+evaluated and
 bounds-checked once before the element is used; this does not expose a pointer
 or change the array's by-value copies.
 An array literal assigned to existing storage is formed there in written order:
@@ -698,9 +706,11 @@ row = [header(), of padding()]     -- prefix first, then one padding call
 
 ```
 
-A zero contextual length and a zero count in the inferred form are refused while
-[0580]'s empty-array decision remains open. A count-less inferred initializer
-and other general array value positions remain later compiler slices. Every
+A zero contextual length and a zero count in the inferred form remain refused:
+`[0]T` is a valid fixed-array type, but repetition still needs a nonzero
+contextual destination or a count that supplies an inferred element shape. A
+count-less inferred initializer and other general array value positions remain
+later compiler slices. Every
 inferred extent must fit the target's `usize`. A module
 repetition uses [1940]'s target-aware fold and range rules; its compact repeated
 image survives direct-name chains, while a folded zero pattern has the same

@@ -1357,8 +1357,12 @@ package body Landin.Syntax.Parser is
                   return Add (Error_Type, At_Type);
                end if;
 
-               --  array_type ::= "[" integer "]" type            [1790]
+               --  array_type ::= "[" expression "]" type         [1790]
                --
+               --  D136 gives this expression its closed fixed fold.  Parse
+               --  the ordinary expression grammar here so a call remains
+               --  syntactically valid and the checker can reject it for not
+               --  being fixed without ever executing the routine.
                --  The element is a type like any other, so this recurses
                --  and `[2][3]u8` derives; which elements the kernel can
                --  lay out is the checker's to say, not this stage's.
@@ -1391,32 +1395,17 @@ package body Landin.Syntax.Parser is
                   begin
                      Advance;
 
-                     if Peek = Tok.Integer_Literal then
-                        declare
-                           Item : constant Tok.Token :=
-                             Tok.Token_At (From, Index);
-                        begin
-                           Bound :=
-                             Add (Integer_Literal, Here,
-                                  Radix     => Tok.Base (Item),
-                                  Digits_At => Tok.Digit_Span (Item));
-                        end;
-
-                        Advance;
-                     elsif Peek = Tok.Identifier then
-                        --  D135: a fixed formal supplies an array bound.
-                        Bound := Add
-                          (Name_Reference, Here, Named => Named_Here);
-                        Advance;
+                     if Pre.Begins_Expression (Peek) then
+                        Bound := Parse_Expression;
                      else
                         Complain
-                          (Item    => Syn.Type_Expected,
+                          (Item    => Syn.Expression_Expected,
                            Where   => (if Peek = Tok.End_Of_Input
                                        then After_Previous else Here),
-                           Message => "an array's length belongs here",
-                           Note    => "[1790]: the bound is an integer"
-                                      & " literal and the length is part"
-                                      & " of the type [0520]",
+                           Message => "an array's fixed length belongs here",
+                           Note    => "[1790]: the bound is an expression"
+                                      & " and the length is part of the"
+                                      & " type [0520]",
                            Related => At_Type,
                            Because => "this array");
                         Bound := Add (Error_Expression, Point);
@@ -3849,7 +3838,25 @@ package body Landin.Syntax.Parser is
                         end if;
 
                         Advance;
-                        Right := Parse_Expression (Pre.Level'Succ (Rank));
+                        if Pre.Begins_Expression (Peek) then
+                           Right := Parse_Expression (Pre.Level'Succ (Rank));
+                        else
+                           --  Keep a closer in hand for its owning construct.
+                           --  In `[1 + ]u8`, consuming `]` here would turn one
+                           --  missing operand into a missing bracket and lose
+                           --  the valid element type that follows it.
+                           Complain
+                             (Item    => Syn.Expression_Expected,
+                              Where   => (if Peek = Tok.End_Of_Input
+                                          then After_Previous else Here),
+                              Message => "an expression belongs after this"
+                                         & " operator",
+                              Note    => "[1820]: every binary operator has"
+                                         & " a right operand",
+                              Related => At_Op,
+                              Because => "the operator");
+                           Right := Add (Error_Expression, Point);
+                        end if;
                         Left := Add
                           (Of_Kind  => Pre.Binary_Node (Op),
                            At_Token => At_Op,

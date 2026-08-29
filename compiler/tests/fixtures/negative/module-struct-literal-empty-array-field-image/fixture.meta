@@ -1,5 +1,5 @@
 class: negative
-summary: D67 keeps an internal zero-length array field's zero image but no nonempty finite literal
+summary: D67 gives an accepted zero-length array field a zero image but no nonempty finite literal
 constructs: 0040, 0520, 0670, 0710, 0750, 1740, 1810, 1940
 program: program.ldn
 codes: L0301

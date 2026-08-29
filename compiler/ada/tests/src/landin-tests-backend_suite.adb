@@ -2431,9 +2431,9 @@ package body Landin.Tests.Backend_Suite is
       Check_Target (Landin.Targets.Synthetic_32, "-16", "-12", "-4");
    end A_Struct_Array_Field_Local_Follows_Its_Target;
 
-   --  D17's empty fixed-array shape is internal evidence, not a source
-   --  decision about `[0]T`: when one reaches D47's slot field run it takes
-   --  no bytes and imposes alignment one, exactly as in D45 and D46.
+   --  D136 admits D17's empty fixed-array source shape. When one reaches
+   --  D47's slot field run it takes no bytes and imposes alignment one,
+   --  exactly as in D45 and D46.
    procedure An_Empty_Array_Slot_Field_Has_Identity_Extent
      (Item : in out Landin.Testing.Context);
 

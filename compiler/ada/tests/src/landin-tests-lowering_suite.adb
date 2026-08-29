@@ -1010,7 +1010,7 @@ package body Landin.Tests.Lowering_Suite is
    begin
       Lower
         (Work,
-         "bytes: type (t: type, fixed n: u64) = [n]t" & LF
+         "bytes: type (t: type, fixed n: u64) = [n * 2]t" & LF
          & "mut module: bytes(u16, 3)" & LF
          & "f: () -> none =" & LF
          & "    local: bytes(u8, 5)" & LF
@@ -1031,14 +1031,14 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Testing.Check
            (Item, IR.Kind_Of (Unit, 1) = IR.Datum
              and then IR.Result_Of (Unit, 1) = Landin.Types.Fixed_Array
-             and then IR.Array_Length (Unit, 1) = 3
+             and then IR.Array_Length (Unit, 1) = 6
              and then IR.Array_Element (Unit, 1) = Landin.Types.U16,
             "the module application is an ordinary array datum");
          Landin.Testing.Check
            (Item, IR.Kind_Of (Unit, 2) = IR.Routine
              and then IR.Slot_Count (Unit, 2) = 1
              and then IR.Is_Array (Unit, 2, Local)
-             and then IR.Slot_Array_Length (Unit, 2, Local) = 5
+             and then IR.Slot_Array_Length (Unit, 2, Local) = 10
              and then IR.Slot_Array_Element (Unit, 2, Local)
                         = Landin.Types.U8,
             "the local application is an ordinary array slot");
@@ -4860,10 +4860,9 @@ package body Landin.Tests.Lowering_Suite is
    --  An internal array shape the source does not pin
    ------------------------------------------------------------------
 
-   --  D17's checked table represents a zero-element shape, while source
-   --  legality for `[0]T` remains deliberately undecided.  Start from source
-   --  the frontend accepts, then use that public table seam to ask lowering
-   --  the internal question without making `[0]T` a corpus fixture.
+   --  D136 admits D17's zero-element source shape. This older public-table
+   --  seam still asks lowering the same representation question independently
+   --  of parsing and checking the direct `[0]T` corpus fixtures.
    procedure An_Internal_Empty_Array_Has_Identity_Measurements
      (Item : in out Landin.Testing.Context);
 

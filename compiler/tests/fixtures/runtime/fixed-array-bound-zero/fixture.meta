@@ -1,0 +1,6 @@
+class: runtime
+summary: direct and expression-folded zero bounds have zero length and execute without storage work
+constructs: 0290, 0370, 0520, 1790, 1800, 1810, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

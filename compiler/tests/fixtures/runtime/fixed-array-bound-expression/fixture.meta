@@ -1,0 +1,6 @@
+class: runtime
+summary: D136 substitutes and folds one alias-template bound without per-instantiation metadata
+constructs: 0080, 0290, 0370, 0520, 0570, 1350, 1800, 1810, 1880, 1950, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

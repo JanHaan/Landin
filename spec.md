@@ -197,9 +197,11 @@ remain deferred. A type position holds a declared name either way, since
 predeclares; the grammar spells them out because they are the
 only ones a program does not have to declare for itself.
 An array [0520] is a type position too, and its length is part
-of it: the bound is [1770]'s integer, written in whatever base,
-or D135's fixed formal, and the element is a type like any other.
-A parameterized alias is a type position through its fully applied positional
+of it. D136 folds the bound expression from integer literals, fixed formals,
+unary `-`, and the target-independent binary arithmetic `+`, `-`, `*`, `/`
+and `%`.
+The element is a type like any other. A parameterized alias is a type position
+through its fully applied positional
 application. D135 substitutes it during checking and normalizes it to the same
 scalar or fixed-array descriptor that direct syntax would produce.
 
@@ -209,8 +211,7 @@ binding       ::= "mut"? identifier ":" type ("=" expression)?
 type          ::= function_type | array_type | type_application | scalar_name
                 | identifier
 function_type ::= signature
-array_type    ::= "[" array_bound "]" type
-array_bound   ::= integer | identifier
+array_type    ::= "[" expression "]" type
 type_application ::= identifier "(" type_argument
                      ("," type_argument)* ")"
 type_argument ::= type | integer
@@ -1710,9 +1711,9 @@ admits the explicitly typed module form, D25 the inferred local form and D29
 assignment to an existing array. A parameter, return, argument or discard
 still refuses the literal. An empty literal, repetition [0560], `zeroed`
 [0540], slices [0570], nested array values and non-scalar elements remain
-outside this slice. In particular, requiring one expression in the literal
-grammar does not decide whether a programmer may write the zero-length type
-`[0]T`.
+outside this slice. In particular, this literal rule still requires one
+expression; D136 later accepts the zero-length type `[0]T` without adding empty
+literal syntax.
 
 **Why the written type:** it gives both facts the checker needs without an
 array-value inference rule: D17's exact length and the scalar context [0190]
@@ -1769,7 +1770,8 @@ This is D24's sole new module array initializer form. D26 later admits
 empty literal, `zeroed` [0540], repetition [0560], slices [0570], nested
 array values, non-scalar elements, calls, selections and index results all
 remain outside these slices. Requiring one expression in the literal grammar
-does not settle whether a programmer may write the zero-length type `[0]T`.
+still excludes an empty literal; D136 later accepts the zero-length type
+`[0]T` independently.
 
 The [1820] operators [1940] admits over literals are folded during
 checking and again when lowering records the verified image: [0290]'s
@@ -2173,8 +2175,8 @@ identifier. The parentheses are part of the measurement syntax, not a general
 expression operand: without them, `lenof[index]` continues to index an ordinary
 binding named `lenof`, as [1760]'s contextual spelling requires. A slice,
 selection, index, call and every other general `lenof` expression remain
-deferred. Empty literal syntax and `[0]T` source legality remain undecided with
-[0520].
+deferred. Empty literal syntax remains deferred. D136 later accepts `[0]T`
+source legality independently of that syntax.
 
 **Why type-check expressions that do not run:** the brackets still claim one
 array literal, and D25 already gives that claim a deterministic scalar shape.
@@ -2274,12 +2276,13 @@ value, followed by one compact `Fill_Array` for the inferred local frame slot.
 Successful initialization establishes the whole array. Neither checker nor IR
 enumerates the inferred extent.
 
-A written zero count remains refused in this inference position. The compiler's
-internal layout can represent an empty array, but whether source may write one is
-still [0580]'s open empty-array decision; this refusal deliberately does not
-settle it. A count-less inferred initializer, module initializer, mixed-prefix
-repetition, argument, return, discard, nested repetition and other general array
-value remain outside this slice.
+A written zero count remains refused in this inference position because the
+repetition supplies no element-bearing source run. D136 later accepts an
+explicit zero-length fixed-array type; that does not make repetition an empty
+array literal or give an inferred zero-count repetition an element type. A
+count-less inferred initializer, module initializer, mixed-prefix repetition,
+argument, return, discard, nested repetition and other general array value
+remain outside this slice.
 
 **Why the scalar expression:** unlike a literal source run, repetition has only
 one value-producing expression. Taking its settled scalar type gives every
@@ -2331,9 +2334,10 @@ most four bytes and would discard the high half of a `u64` pattern. An absent ze
 image stays `.bss`.
 
 A repetition whose written contextual length is zero is refused at the
-repetition. This is a construct-specific nonzero requirement, not an admission or
-rejection of `[0]T` as source; [0580]'s empty-array legality remains undecided.
-D33's zero-count inferred refusal remains for the same reason. An inferred module initializer remained outside this slice until D35. A
+repetition. This is a construct-specific nonzero requirement. D136 later
+accepts `[0]T` as source, while repetition over that zero contextual extent
+remains refused. D33's zero-count inferred refusal remains for the same reason.
+An inferred module initializer remained outside this slice until D35. A
 count-less inferred initializer, every mixed-prefix context other than D36's
 typed local, argument, return, discard, nested repetition and every other
 general array value position remain refused.
@@ -2854,9 +2858,9 @@ backend shared.
 **Chosen:** a field of a named ordinary struct may be a fixed array of an
 enabled scalar, written directly or through an alias. Layout places that array
 once in declaration order, as one extent of length times target element size
-at the array's target alignment. D17's internal zero-element shape contributes
-size zero and alignment one here as everywhere else; this does not decide
-whether source may spell `[0]T`.
+at the array's target alignment. D17's zero-element shape contributes size zero
+and alignment one here as everywhere else; D136 later accepts source spelling
+`[0]T`.
 
 The complete padded struct must fit the selected target's `usize`. If it does
 not, the checker reports L0300 at the struct body, records no layout, and a
@@ -2889,9 +2893,9 @@ placement preserves D44's one authority for layout.
 **The alternatives:** expand one IR field per array element, or carry the
 checker-computed size and alignment. The first cannot represent enabled
 extents and the second puts a target answer into target-neutral IR, so both
-were declined. Refusing a zero-length field specially was also declined:
-D17 already defines the internal shape, and source legality remains one
-future decision for every `[0]T` context rather than one D45 exception.
+were declined. Refusing a zero-length field specially was also declined: D17
+already defines the shape, and D136 later accepts source `[0]T` uniformly rather
+than making a D45 exception.
 
 **Pinned by** the checker, target, lowering, verifier and backend public-seam
 cases; `positive/measurement-of-struct-array-fields`;
@@ -2930,9 +2934,8 @@ refused in this slice; D54 later supersedes the whole-copy boundary and
 D55/D56, after D47 supplies the frame representation, the explicitly typed or
 inferred local direct-storage-name initializer boundary.
 Struct fields of struct type and other nested aggregate composition remain
-outside D45 and therefore outside this decision. D17's internal
-zero-length field rule is unchanged, and source `[0]T` legality remains
-undecided.
+outside D45 and therefore outside this decision. D17's zero-length field rule
+is unchanged; D136 later accepts source `[0]T` uniformly.
 
 Lowering records the module datum as one declaration-order run of neutral field
 shapes. A scalar shape has canonical length one; a fixed-array shape carries one
@@ -3009,9 +3012,9 @@ name only a scalar part. Thus the inaccessible array field cannot cross the
 verified scalar operation boundary even if lowering is damaged.
 
 The backend replays every slot shape through the same target placement as D45
-measurement and D46 module storage. D17's internal zero-element shape therefore
-contributes size zero and alignment one here too without deciding whether
-source may spell `[0]T`. Scalar field operations use the resulting offset.
+measurement and D46 module storage. D17's zero-element shape therefore
+contributes size zero and alignment one here too; D136 later accepts source
+`[0]T`. Scalar field operations use the resulting offset.
 On x86-64 the existing signed frame-displacement limit applies to the complete
 cell: a routine whose padded frame is not addressable reports L0504 before
 assembly is emitted, including when an array field is what makes it too wide.
@@ -3063,8 +3066,8 @@ field, and position; assigning one position establishes only that fact. A
 computed read requires the whole-field fact, which holds once every declared
 position in that field has a fact on every arriving path. A computed write
 establishes no fact and clears none, and `inc`/`dec` first requires the read.
-An internal zero-length field is vacuously complete, preserving D17 without
-deciding whether source may spell `[0]T`.
+A zero-length field is vacuously complete, preserving D17; D136 later accepts
+source `[0]T`.
 
 Lowering carries the root storage identity, the declaration-order field
 position, and the index through the existing `Load_Element` and
@@ -3141,9 +3144,8 @@ fact. Normal completion for a local records the whole-field fact keyed by the
 binding and field. Every compiler-known or computed element of that field may
 then be read; a later computed write keeps the fact under D22, and no scalar
 sibling or other array field is affected. A merge keeps the fact only when every
-arriving path has it. An internal zero-length field is vacuously complete and
-clears zero bytes, preserving D17 without deciding whether source may spell
-`[0]T`.
+arriving path has it. A zero-length field is vacuously complete and clears zero
+bytes, preserving D17; D136 later accepts source `[0]T`.
 
 Lowering emits the existing compact `Clear_Array` with the root storage and the
 field's declaration-order identity. Field zero continues to mean that the
@@ -3206,8 +3208,8 @@ source under [0410], and neither endpoint evaluates an element.
 The source is read as a whole. D10 makes a module field complete. A local
 source field must be complete on every arriving path: D49's clear or an earlier
 D50 copy supplies its binding-and-field whole fact, while D19/D48's sparse
-facts also suffice when they cover the declared length. An internal zero-length
-field is vacuously complete. Self-copy follows the same rule and therefore
+facts also suffice when they cover the declared length. A zero-length field is
+vacuously complete. Self-copy follows the same rule and therefore
 cannot make an unassigned field assigned. Normal completion records only the
 destination's whole fact; a scalar sibling and every other array field remain
 independent, and a branch merge keeps that fact only when every arriving path
@@ -3284,8 +3286,8 @@ mutable.
 The source is read before the new name enters scope [0110] and as a whole. D10
 makes a module field complete. A local field must be complete on every arriving
 path: D49's clear or a D50 copy supplies its binding-and-field whole fact, while
-D19/D48's sparse facts also suffice when they cover the declared length. An
-internal zero-length field is vacuously complete. The fresh local is completely
+D19/D48's sparse facts also suffice when they cover the declared length. A
+zero-length field is vacuously complete. The fresh local is completely
 initialized by the copy and, like every local declared with a value, needs no
 later definite-assignment tracking. A refused contextual value owns its report;
 [1940] does not add a static-module-value report after that node is ill typed.
@@ -3419,10 +3421,9 @@ a fixed array of enabled scalars, D32's full `[N of expression]` and
 destination. Direct and aliased root, field and scalar element types have the
 same meaning. The field supplies D17's length `N` and element type `T`: a
 written full count must equal `N`, every expression must have type `T`, and a
-mixed prefix must satisfy `1 <= k < N`. Consequently neither form admits an
-internal zero-length field under D32/D37's construct-specific nonzero
-contextual rules. The root must be mutable; L0303 owns an immutable root first
-and alone.
+mixed prefix must satisfy `1 <= k < N`. Consequently neither form admits a
+zero-length field under D32/D37's construct-specific nonzero contextual rules.
+The root must be mutable; L0303 owns an immutable root first and alone.
 
 The destination is reached first. A full repetition evaluates its scalar once
 and fills the field. A mixed repetition evaluates and immediately stores each
@@ -3506,10 +3507,9 @@ struct assignment, not a general aggregate value.
 A module source is complete under D10. Before a tracked local source is copied,
 every scalar field must have D16's field fact and every fixed-array field must
 be complete under D48--D53: either its D49/D50/D52/D53 binding-and-field whole
-fact exists or its D48 sparse element facts cover the declared length. An
-internal zero-length
-field is vacuously complete. The first incomplete field owns D16's L0302 and is
-named in the report. Self-copy follows the same read rule, so it cannot turn an
+fact exists or its D48 sparse element facts cover the declared length. A
+zero-length field is vacuously complete. The first incomplete field owns D16's
+L0302 and is named in the report. Self-copy follows the same read rule, so it cannot turn an
 unassigned object into an assigned one. A merge retains only the contributing
 facts present on every arriving path.
 
@@ -3588,9 +3588,9 @@ outer binding.
 A module source is complete under D10. A tracked local source must satisfy
 D54's whole-read rule before the initializer executes: every scalar field has
 its D16 fact and every fixed-array field has either its binding-and-field whole
-fact or complete D48 sparse facts. An internal zero-length field is vacuously
-complete. The first incomplete field reports D16's L0302. Two distinct,
-same-shaped struct declarations remain nominally different and report L0301 at
+fact or complete D48 sparse facts. A zero-length field is vacuously complete.
+The first incomplete field reports D16's L0302. Two distinct, same-shaped struct
+declarations remain nominally different and report L0301 at
 the source, related to the binding. An unresolved source keeps resolution's
 own report.
 
@@ -4386,8 +4386,8 @@ a call reports L0305, a selected field, index or nested image reports L0304,
 and a fold beyond the compiler's widest magnitude or the selected target type
 reports L0300. A length or element disagreement keeps the existing L0301
 owner. `zeroed` denotes the absent all-zero field image, including for D17's
-internal zero-length shape; a written finite literal remains nonempty, so it
-cannot initialize that shape.
+zero-length shape; a written finite literal remains nonempty, so it cannot
+initialize that shape.
 
 D66's flat aggregate image remains one `Folded` placeholder per field in
 declaration order, and every array placeholder remains zero. A parallel
@@ -7416,8 +7416,9 @@ applications without adding a new runtime type category. The resulting scalar
 or fixed-array descriptor is the descriptor direct syntax already uses.
 
 A parameterized alias named without arguments, an application with the wrong
-arity or argument kind, a bound that is neither a literal nor a fixed formal,
-and recursive expansion are refused. The substituted byte extent of an array
+arity or argument kind, a bound outside the fixed-expression forms D135 first
+enabled, and recursive expansion are refused. The substituted byte extent of
+an array
 must fit D18's target `usize`. The declaration, its body and its formals are a
 compile-time template: formals have no runtime type and no instantiation writes
 a type, length or other per-application metadata onto a template syntax node.
@@ -7442,3 +7443,62 @@ requires substitution. All were declined.
 `negative/parameterized-alias-*` and `negative/parameterized-atom-union`
 fixtures; the generated lexical, construct and IR records; and
 `runtime/parameterized-type-alias-fixed-array` on Linux x86-64.
+
+### D136 — Fixed-array bounds use a closed target-independent fold
+
+**The tour said** that an array's length is a compile-time value [0370], that
+its size is part of its type [0520], that fixed parameters are compile-time
+[1290], and that parameterized types use substitution rather than execution
+[1350]. Prototype 3 wrote `[64 * 1024]u8`. None said which expressions could
+supply a bound or whether accepting a call there would execute user code.
+
+**Chosen:** the syntax between an array type's brackets is an expression. Its
+fixed meaning is deliberately closed: integer literals, references to fixed
+formals, parentheses, unary `-`, and the non-wrapping arithmetic `+`, `-`, `*`,
+`/` and `%`. These operations use mathematical integer answers within the
+widest enabled integer magnitude; they do not acquire an operand width from a
+host or target. Every intermediate answer must remain in that range, division
+or remainder by zero is impossible under [1950], and a negative final answer is
+refused. When source legality otherwise admits the bound, the folded answer is
+D17's canonical element count and D18 checks its target byte extent exactly as
+it does for a literal bound. A final answer of zero is accepted: `[0]T` and any
+admitted fixed expression that folds to zero denote D17's canonical
+zero-element shape. Its size is zero, its alignment is one, and the ordinary
+rules for its context still apply; in
+particular this does not add empty literal syntax or make repetition valid in a
+context whose length is zero.
+
+A boolean or a comparison/logical result is not an integer count. Wrapping,
+bitwise, complement and shift operations need an operand width and are not in
+this target-independent fold. A runtime or storage name is not a fixed formal;
+a type formal or another non-value name is diagnosed as such rather than called
+runtime storage. A call is syntactically valid in the brackets but is not a fixed expression:
+the compiler rejects it and never executes its body. No other expression form
+is admitted, and an implementation becoming better at ordinary constant
+folding does not enlarge this set.
+
+The same evaluator handles a direct bound and an alias-template bound such as
+`[n * 2]t`. During symbolic template validation an unknown fixed formal remains
+unknown; during an application its substituted value is folded locally. Before
+a nested template application can inherit an application origin, the nested
+template is validated on its own. An unconditional inner defect is therefore
+reported once at the inner declaration regardless of declaration order. Only a
+failure that depends on substitution is primary at the application and relates
+the failing template expression, so two bad applications remain distinct. No
+instantiation writes a value, type or shape onto the template syntax, and fixed
+actuals in a type application remain D135's integer literal or forwarding fixed
+formal rather than growing a second expression grammar in argument position.
+
+**Why a closed mathematical fold:** executing a helper would contradict [1350]
+and make compile-time effects possible. Reusing the ordinary target-width fold
+would make type identity depend on a selected target before D18 asks its layout
+question. Admitting whatever an optimiser happens to fold would move source
+legality between compiler versions. All three were declined.
+
+**Pinned by** the parser, checking and lowering public-seam cases;
+`positive/fixed-array-bound-expression` and
+`positive/fixed-array-bound-zero`; `negative/fixed-array-bound-call`, which
+contains a valid user call whose body is never run;
+`negative/fixed-array-bound-invalid`; the generated lexical, construct and IR
+records; and `runtime/fixed-array-bound-expression` and
+`runtime/fixed-array-bound-zero` on Linux x86-64.

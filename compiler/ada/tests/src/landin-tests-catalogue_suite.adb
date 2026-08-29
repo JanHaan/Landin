@@ -59,7 +59,28 @@ package body Landin.Tests.Catalogue_Suite is
          Landin.Testing.Check
            (Item, Rows.Named (Rows.Code (Name)) = Name,
             Name'Image & " is found by its own code");
+         Landin.Testing.Check
+           (Item, Rows.Minimum_Secondaries (Name)
+                    <= Rows.Maximum_Secondaries (Name),
+            Name'Image & " has a valid secondary-label interval");
+         if Name not in Rows.Literal_Out_Of_Range
+                      | Rows.Impossible_Operand
+         then
+            Landin.Testing.Check_Equal
+              (Item, Rows.Minimum_Secondaries (Name),
+               Rows.Maximum_Secondaries (Name),
+               Name'Image & " retains one exact secondary-label count");
+         end if;
       end loop;
+
+      Landin.Testing.Check
+        (Item,
+         Rows.Minimum_Secondaries (Rows.Literal_Out_Of_Range) = 0
+           and then Rows.Maximum_Secondaries
+             (Rows.Literal_Out_Of_Range) = 1
+           and then Rows.Minimum_Secondaries (Rows.Impossible_Operand) = 0
+           and then Rows.Maximum_Secondaries (Rows.Impossible_Operand) = 1,
+         "range and impossible-operand reports admit one template label");
 
       --  Distinct, because a number that names two rules is worse than no
       --  number at all.
@@ -159,7 +180,7 @@ package body Landin.Tests.Catalogue_Suite is
         (Item,
          Landin.Diagnostics.Label_Count
            (Landin.Diagnostics.Get (Report, 1)),
-         Rows.Required_Secondaries (Rows.Unterminated_Comment),
+         Rows.Minimum_Secondaries (Rows.Unterminated_Comment),
          "and the secondary label its row requires");
       Landin.Testing.Check
         (Item,

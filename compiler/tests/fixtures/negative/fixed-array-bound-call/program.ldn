@@ -1,0 +1,8 @@
+runtime_count: u32 = 4
+from_storage: type = [runtime_count]u8
+
+count: () -> (n: u32) =
+    n = count()
+end count
+
+from_call: type = [count()]u8
