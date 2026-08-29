@@ -24,6 +24,7 @@ package body Landin.Stages.Lowering is
    use type IR.Element_Total;
    use type IR.Field_Image_Form;
    use type IR.Field_Shape_Kind;
+   use type IR.Atom_Set_Id;
    use type IR.Item_Id;
    use type IR.Slot_Id;
    use type IR.Signature_Id;
@@ -31,10 +32,13 @@ package body Landin.Stages.Lowering is
    use type IR.Part_Position;
    use type IR.Path_Step_Array;
    use type IR.Value_Id;
+   use type Landin.Checking.Atom_Set_Id;
    use type Landin.Checking.Element_Count;
+   use type Landin.Checking.Error_Set_Form;
    use type Landin.Checking.Field_Kind;
    use type Landin.Checking.Signature_Id;
    use type Landin.Source.Source_Id;
+   use type Landin.Source.Names.Name_Id;
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
    use type Res.Declaration_Id;
@@ -207,6 +211,39 @@ package body Landin.Stages.Lowering is
            "an anonymous function has no deterministic routine item";
       end Anonymous_Item;
 
+      subtype Source_Atom_Set is Positive range
+        1 .. Positive'Max
+               (1, Landin.Checking.Atom_Set_Count (Types.all));
+      type Atom_Set_Map is array (Source_Atom_Set) of IR.Atom_Set_Id;
+      Atom_Sets : Atom_Set_Map := [others => IR.No_Atom_Set];
+
+      function Atom_Set_For
+        (Source : Landin.Checking.Atom_Set_Id) return IR.Atom_Set_Id;
+
+      function Atom_Set_For
+        (Source : Landin.Checking.Atom_Set_Id) return IR.Atom_Set_Id
+      is
+      begin
+         if Source = Landin.Checking.No_Atom_Set then
+            return IR.No_Atom_Set;
+         end if;
+         if Atom_Sets (Positive (Source)) = IR.No_Atom_Set then
+            declare
+               Count : constant Natural :=
+                 Landin.Checking.Atom_Count (Types.all, Source);
+               Members : IR.Atom_Array (1 .. Count);
+            begin
+               for Index in Members'Range loop
+                  Members (Index) :=
+                    Landin.Checking.Nth_Atom (Types.all, Source, Index);
+               end loop;
+               Atom_Sets (Positive (Source)) :=
+                 IR.Add_Atom_Set (Unit.all, Members);
+            end;
+         end if;
+         return Atom_Sets (Positive (Source));
+      end Atom_Set_For;
+
       subtype Source_Signature is Positive range
         1 .. Positive'Max
                (1, Landin.Checking.Signature_Count (Types.all));
@@ -289,17 +326,28 @@ package body Landin.Stages.Lowering is
          function Converted
            (Part : Landin.Checking.Signature_Part)
             return IR.Signature_Part
-           is (Kind    => Part.Kind,
+           is (Kind    =>
+                 (if Part.Kind = Ty.Atom_Value then Ty.U32 else Part.Kind),
                Aggregate_Body => Part.Aggregate_Body,
                Length  => IR.Element_Total (Part.Length),
                Element => Part.Element,
                Signature =>
                  (if Part.Kind = Ty.Function_Value
                   then Signature_For (Part.Signature)
-                  else IR.No_Signature));
+                  else IR.No_Signature),
+               Atoms =>
+                 (if Part.Kind = Ty.Atom_Value
+                  then Atom_Set_For (Part.Atoms)
+                  else IR.No_Atom_Set));
       begin
          if Signatures (Positive (Source)) /= IR.No_Signature then
             return Signatures (Positive (Source));
+         end if;
+         if Landin.Checking.Signature_Error_Form (Types.all, Source)
+              = Landin.Checking.Inferred
+         then
+            raise Landin.Compiler_Defect with
+              "an unfinalized inferred error set reached lowering";
          end if;
 
          for Index in Parts'Range loop
@@ -315,7 +363,10 @@ package body Landin.Stages.Lowering is
                    (Types.all, Source, Index));
          end loop;
          Signatures (Positive (Source)) :=
-           IR.Add_Signature_With_Results (Unit.all, Parts, Results);
+           IR.Add_Signature_With_Results
+             (Unit.all, Parts, Results,
+              Atom_Set_For
+                (Landin.Checking.Signature_Errors (Types.all, Source)));
          return Signatures (Positive (Source));
       end Signature_For;
 
@@ -448,7 +499,8 @@ package body Landin.Stages.Lowering is
          Destination      : IR.Slot_Id := IR.No_Slot;
          Destination_Field : Natural := 0;
          Destination_Steps : IR.Path_Step_Array :=
-           IR.No_Path_Steps) return IR.Value_Id;
+           IR.No_Path_Steps;
+         Propagate : Boolean := False) return IR.Value_Id;
 
       function Lower_Short_Circuit
         (Of_Tree : Syn.Tree;
@@ -464,35 +516,63 @@ package body Landin.Stages.Lowering is
         (Of_Tree     : Syn.Tree;
          Node        : Syn.Node_Id;
          Scope       : Res.Scope_Id;
-         Destination : IR.Slot_Id);
+         Destination : IR.Slot_Id;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
 
       procedure Lower_Statements
         (Of_Tree : Syn.Tree;
          Block   : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot);
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
 
       procedure Lower_If
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot);
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
 
       procedure Lower_Match
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot);
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
+
+      procedure Lower_Variant_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
+
+      procedure Lower_Atom_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
 
       procedure Lower_Bare_Block
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot);
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps);
 
       procedure Leave_With
         (Result : IR.Slot_Id; Site : Landin.Provenance.Origin);
@@ -510,6 +590,11 @@ package body Landin.Stages.Lowering is
          Result  : IR.Slot_Id;
          Site    : Landin.Provenance.Origin);
 
+      procedure Fail_Through_Cleanups
+        (Of_Tree : Syn.Tree;
+         Error   : IR.Value_Id;
+         Site    : Landin.Provenance.Origin);
+
       function Scalar_At (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Ty.Scalar_Name
       is
@@ -517,6 +602,8 @@ package body Landin.Stages.Lowering is
       begin
          if Held = Ty.Function_Value then
             return Ty.Usize;
+         elsif Held = Ty.Atom_Value then
+            return Ty.U32;
          end if;
          if Held not in Ty.Scalar_Name then
             raise Landin.Compiler_Defect with
@@ -644,6 +731,30 @@ package body Landin.Stages.Lowering is
             Leave_With (Result, Site);
          end if;
       end Leave_Through_Cleanups;
+
+      procedure Fail_Through_Cleanups
+        (Of_Tree : Syn.Tree;
+         Error   : IR.Value_Id;
+         Site    : Landin.Provenance.Origin)
+      is
+         Saved : constant IR.Slot_Id :=
+           IR.Add_Slot
+             (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
+              Atoms => IR.Atom_Set_Of (Unit.all, Filling, Error));
+      begin
+         IR.Emit_Store (Unit.all, Filling, Saved, Error, Site);
+         Emit_Cleanups (Of_Tree, 1, Cleanup.Failure_Propagation);
+         if Current /= IR.No_Block then
+            declare
+               Carried : constant IR.Value_Id :=
+                 IR.Emit_Load (Unit.all, Filling, Saved, Site);
+            begin
+               IR.Emit_Fail (Unit.all, Filling, Carried, Site);
+               IR.Leave_Block (Unit.all, Filling);
+               Current := IR.No_Block;
+            end;
+         end if;
+      end Fail_Through_Cleanups;
 
       function Fresh
         (Of_Tree : Syn.Tree;
@@ -1330,7 +1441,8 @@ package body Landin.Stages.Lowering is
             return Slots (Positive (Id));
          end if;
 
-         if Held not in Ty.Scalar_Name | Ty.Function_Value then
+         if Held not in Ty.Scalar_Name | Ty.Function_Value | Ty.Atom_Value
+         then
             raise Landin.Compiler_Defect with
               "a declaration reached the lowering with no storable type";
          end if;
@@ -1339,13 +1451,19 @@ package body Landin.Stages.Lowering is
            IR.Add_Slot
              (Unit.all, Filling,
               (if Held = Ty.Function_Value then Ty.Usize
+               elsif Held = Ty.Atom_Value then Ty.U32
                else Ty.Scalar_Name (Held)),
               Id, Site_Of (Of_Tree, Node),
               Signature =>
                 (if Held = Ty.Function_Value
                  then Signature_For
                    (Landin.Checking.Signature_Of (Types.all, Id))
-                 else IR.No_Signature));
+                 else IR.No_Signature),
+              Atoms =>
+                (if Held = Ty.Atom_Value
+                 then Atom_Set_For
+                   (Landin.Checking.Atom_Set_Of (Types.all, Id))
+                 else IR.No_Atom_Set));
          return Slots (Positive (Id));
       end Slot_For;
 
@@ -1501,10 +1619,18 @@ package body Landin.Stages.Lowering is
          --  An all-return control has no fallthrough value to type or carry.
          --  The checker may therefore leave the control itself untyped even
          --  though its enclosing expression supplied a context.
-         if Held in Ty.Scalar_Name then
+         if Held in Ty.Scalar_Name | Ty.Atom_Value then
             Answer := IR.Add_Slot
-              (Unit.all, Filling, Ty.Scalar_Name (Held),
-               Res.No_Declaration, Site);
+              (Unit.all, Filling,
+               (if Held = Ty.Atom_Value then Ty.U32
+                else Ty.Scalar_Name (Held)),
+               Res.No_Declaration, Site,
+               Atoms =>
+                 (if Held = Ty.Atom_Value
+                  then Atom_Set_For
+                    (Landin.Checking.Atom_Set_Of
+                       (Types.all, Of_Tree, Node))
+                  else IR.No_Atom_Set));
          elsif Held = Ty.Function_Value then
             Answer := IR.Add_Slot
               (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site,
@@ -1543,24 +1669,38 @@ package body Landin.Stages.Lowering is
         (Of_Tree     : Syn.Tree;
          Node        : Syn.Node_Id;
          Scope       : Res.Scope_Id;
-         Destination : IR.Slot_Id)
+         Destination : IR.Slot_Id;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
       is
          Ignored : IR.Value_Id;
+         pragma Unreferenced (Ignored);
       begin
          case Syn.Kind (Of_Tree, Node) is
             when Syn.Call =>
                Ignored := Lower_Call
-                 (Of_Tree, Node, Scope, Destination => Destination);
-               pragma Unreferenced (Ignored);
+                 (Of_Tree, Node, Scope, Destination => Destination,
+                  Destination_Field => Destination_Field,
+                  Destination_Steps => Destination_Path);
+            when Syn.Try_Expression =>
+               Ignored := Lower_Call
+                 (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Scope,
+                  Destination => Destination,
+                  Destination_Field => Destination_Field,
+                  Destination_Steps => Destination_Path,
+                  Propagate => True);
             when Syn.If_Statement =>
                Lower_If
-                 (Of_Tree, Node, Scope, Active_Result, Destination);
+                 (Of_Tree, Node, Scope, Active_Result, Destination,
+                  Destination_Field, Destination_Path);
             when Syn.Match_Statement =>
                Lower_Match
-                 (Of_Tree, Node, Scope, Active_Result, Destination);
+                 (Of_Tree, Node, Scope, Active_Result, Destination,
+                  Destination_Field, Destination_Path);
             when Syn.Bare_Block =>
                Lower_Bare_Block
-                 (Of_Tree, Node, Scope, Active_Result, Destination);
+                 (Of_Tree, Node, Scope, Active_Result, Destination,
+                  Destination_Field, Destination_Path);
             when others =>
                raise Landin.Compiler_Defect with
                  "an expression cannot fill caller-owned storage";
@@ -1578,7 +1718,8 @@ package body Landin.Stages.Lowering is
          Destination      : IR.Slot_Id := IR.No_Slot;
          Destination_Field : Natural := 0;
          Destination_Steps : IR.Path_Step_Array :=
-           IR.No_Path_Steps) return IR.Value_Id
+           IR.No_Path_Steps;
+         Propagate : Boolean := False) return IR.Value_Id
       is
          Site : constant Landin.Provenance.Origin :=
            Site_Of (Of_Tree, Node);
@@ -1605,8 +1746,36 @@ package body Landin.Stages.Lowering is
          Hidden : IR.Value_Id := IR.No_Value;
          Callee_Saved : IR.Slot_Id := IR.No_Slot;
          Callee_Value : IR.Value_Id := IR.No_Value;
+         Error_Set : constant IR.Atom_Set_Id :=
+           IR.Signature_Errors (Unit.all, Signature);
+         Failure_Slot : IR.Slot_Id := IR.No_Slot;
+         Success_Slot : IR.Slot_Id := IR.No_Slot;
          Made : IR.Value_Id;
       begin
+         if Error_Set /= IR.No_Atom_Set then
+            Failure_Slot := IR.Add_Slot
+              (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
+               Atoms => Error_Set);
+            if Type_At (Of_Tree, Node)
+                 in Ty.Scalar_Name | Ty.Function_Value | Ty.Atom_Value
+            then
+               Success_Slot := IR.Add_Slot
+                 (Unit.all, Filling, Scalar_At (Of_Tree, Node),
+                  Res.No_Declaration, Site,
+                  Signature =>
+                    (if Type_At (Of_Tree, Node) = Ty.Function_Value
+                     then Signature_For
+                       (Landin.Checking.Signature_Of
+                          (Types.all, Of_Tree, Node))
+                     else IR.No_Signature),
+                  Atoms =>
+                    (if Type_At (Of_Tree, Node) = Ty.Atom_Value
+                     then Atom_Set_For
+                       (Landin.Checking.Atom_Set_Of
+                          (Types.all, Of_Tree, Node))
+                     else IR.No_Atom_Set));
+            end if;
+         end if;
          if Indirect then
             Callee_Saved := IR.Add_Slot
               (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site,
@@ -1637,8 +1806,8 @@ package body Landin.Stages.Lowering is
                     in Ty.Aggregate | Ty.Fixed_Array
                then
                   if Syn.Kind (Of_Tree, Argument)
-                       in Syn.Call | Syn.If_Statement | Syn.Match_Statement
-                          | Syn.Bare_Block
+                       in Syn.Call | Syn.Try_Expression | Syn.If_Statement
+                          | Syn.Match_Statement | Syn.Bare_Block
                   then
                      declare
                         Temporary : constant IR.Slot_Id :=
@@ -2376,7 +2545,13 @@ package body Landin.Stages.Lowering is
                           then Signature_For
                             (Landin.Checking.Signature_Of
                                (Types.all, Of_Tree, Argument))
-                          else IR.No_Signature));
+                          else IR.No_Signature),
+                       Atoms =>
+                         (if Type_At (Of_Tree, Argument) = Ty.Atom_Value
+                          then Atom_Set_For
+                            (Landin.Checking.Atom_Set_Of
+                               (Types.all, Of_Tree, Argument))
+                          else IR.No_Atom_Set));
                   IR.Emit_Store
                     (Unit.all, Filling, Saved (Which), Given (Which),
                      Site_Of (Of_Tree, Argument));
@@ -2413,14 +2588,18 @@ package body Landin.Stages.Lowering is
               (Unit.all, Filling, Signature,
                (if Returns_Stored then Ty.No_Value
                 elsif Type_At (Of_Tree, Node) = Ty.Function_Value
-                then Ty.Usize else Type_At (Of_Tree, Node)),
-               Site)
+                then Ty.Usize
+                elsif Type_At (Of_Tree, Node) = Ty.Atom_Value
+                then Ty.U32 else Type_At (Of_Tree, Node)),
+               Site, Failure => Failure_Slot)
             else IR.Emit_Call
               (Unit.all, Filling, Target,
                (if Returns_Stored then Ty.No_Value
                 elsif Type_At (Of_Tree, Node) = Ty.Function_Value
-                then Ty.Usize else Type_At (Of_Tree, Node)),
-               Site));
+                then Ty.Usize
+                elsif Type_At (Of_Tree, Node) = Ty.Atom_Value
+                then Ty.U32 else Type_At (Of_Tree, Node)),
+               Site, Failure => Failure_Slot));
 
          if Indirect then
             IR.Add_Argument (Unit.all, Filling, Made, Callee_Value);
@@ -2434,7 +2613,128 @@ package body Landin.Stages.Lowering is
             IR.Add_Argument (Unit.all, Filling, Made, Given (Which));
          end loop;
 
-         return Made;
+         if Error_Set = IR.No_Atom_Set then
+            return Made;
+         end if;
+
+         if Success_Slot /= IR.No_Slot then
+            IR.Emit_Store
+              (Unit.all, Filling, Success_Slot, Made, Site);
+         end if;
+
+         declare
+            Error_Value : constant IR.Value_Id :=
+              IR.Emit_Load (Unit.all, Filling, Failure_Slot, Site);
+            Has_Error : constant IR.Value_Id :=
+              IR.Emit_Failure_Test
+                (Unit.all, Filling, Error_Value, Site);
+            Failed_Block : constant IR.Block_Id :=
+              Fresh (Of_Tree, Node, Scope);
+            Success_Block : constant IR.Block_Id :=
+              Fresh (Of_Tree, Node, Scope);
+         begin
+            IR.Emit_Branch
+              (Unit.all, Filling, Has_Error,
+               Failed_Block, Success_Block, Site);
+            IR.Leave_Block (Unit.all, Filling);
+            Current := IR.No_Block;
+
+            if Propagate then
+               Open (Failed_Block);
+               declare
+                  Error : constant IR.Value_Id :=
+                    IR.Emit_Load
+                      (Unit.all, Filling, Failure_Slot, Site);
+               begin
+                  Fail_Through_Cleanups (Of_Tree, Error, Site);
+               end;
+
+               Open (Success_Block);
+               if Success_Slot /= IR.No_Slot then
+                  return IR.Emit_Load
+                    (Unit.all, Filling, Success_Slot, Site);
+               end if;
+               return Made;
+            end if;
+
+            if Syn.Recovery_Of (Of_Tree, Node) = Syn.No_Node then
+               raise Landin.Compiler_Defect with
+                 "a failing call reached lowering without try or else";
+            end if;
+
+            declare
+               Recovery : constant Syn.Node_Id :=
+                 Syn.Recovery_Of (Of_Tree, Node);
+               Recovery_Body : constant Syn.Node_Id :=
+                 Syn.Else_Body (Of_Tree, Recovery);
+               Recovery_Scope : constant Res.Scope_Id :=
+                 Res.Scope_At (Meanings.all, Of_Tree, Recovery);
+               Join : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Recovery, Scope);
+            begin
+               Open (Failed_Block);
+               if Syn.Name (Of_Tree, Recovery)
+                    /= Landin.Source.Names.No_Name
+               then
+                  declare
+                     Id : constant Res.Declaration_Id :=
+                       Declaration_At
+                         (Syn.Source_Of (Of_Tree), Recovery);
+                     Error : constant IR.Value_Id :=
+                       IR.Emit_Load
+                         (Unit.all, Filling, Failure_Slot, Site);
+                  begin
+                     IR.Emit_Store
+                       (Unit.all, Filling,
+                        Slot_For (Of_Tree, Recovery, Id), Error, Site);
+                  end;
+               end if;
+
+               if Syn.Kind (Of_Tree, Recovery_Body) = Syn.Block then
+                  Lower_Statements
+                    (Of_Tree, Recovery_Body, Recovery_Scope,
+                     Active_Result,
+                     Destination =>
+                       (if Returns_Stored then Destination
+                        else Success_Slot),
+                     Destination_Field =>
+                       (if Returns_Stored then Destination_Field else 0),
+                     Destination_Path =>
+                       (if Returns_Stored
+                        then Destination_Steps else IR.No_Path_Steps));
+               elsif Returns_Stored then
+                  Lower_Stored_Expression
+                    (Of_Tree, Recovery_Body, Recovery_Scope, Destination,
+                     Destination_Field, Destination_Steps);
+               else
+                  declare
+                     Recovered : constant IR.Value_Id :=
+                       Lower_Expression
+                         (Of_Tree, Recovery_Body, Recovery_Scope);
+                  begin
+                     if Current /= IR.No_Block
+                       and then Success_Slot /= IR.No_Slot
+                     then
+                        IR.Emit_Store
+                          (Unit.all, Filling, Success_Slot, Recovered, Site);
+                     end if;
+                  end;
+               end if;
+
+               if Current /= IR.No_Block then
+                  Close_With_Jump (Join, Site);
+               end if;
+
+               Open (Success_Block);
+               Close_With_Jump (Join, Site);
+               Open (Join);
+               if Success_Slot /= IR.No_Slot then
+                  return IR.Emit_Load
+                    (Unit.all, Filling, Success_Slot, Site);
+               end if;
+               return Made;
+            end;
+         end;
       end Lower_Call;
 
       ------------------------------------------------------------
@@ -3084,6 +3384,14 @@ package body Landin.Stages.Lowering is
                      end;
                   end if;
 
+                  if Res.Sort_Of (Meanings.all, Means) = Res.Module_Atom then
+                     return IR.Emit_Atom
+                       (Unit.all, Filling, Means,
+                        Atom_Set_For
+                          (Landin.Checking.Atom_Set_Of (Types.all, Means)),
+                        Site);
+                  end if;
+
                   if Res.Sort_Of (Meanings.all, Means)
                      = Res.Module_Function
                   then
@@ -3104,6 +3412,11 @@ package body Landin.Stages.Lowering is
                            (Unit.all, Filling,
                             Slot_For (Of_Tree, Node, Means), Site);
                end;
+
+            when Syn.Try_Expression =>
+               return Lower_Call
+                 (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Scope,
+                  Propagate => True);
 
             when Syn.Call =>
                return Lower_Call (Of_Tree, Node, Scope);
@@ -3132,7 +3445,13 @@ package body Landin.Stages.Lowering is
                          (Unit.all, Filling,
                           Scalar_At (Of_Tree, Left_Node),
                           Res.No_Declaration,
-                          Site_Of (Of_Tree, Left_Node));
+                          Site_Of (Of_Tree, Left_Node),
+                          Atoms =>
+                            (if Type_At (Of_Tree, Left_Node) = Ty.Atom_Value
+                             then Atom_Set_For
+                               (Landin.Checking.Atom_Set_Of
+                                  (Types.all, Of_Tree, Left_Node))
+                             else IR.No_Atom_Set));
                   begin
                      IR.Emit_Store
                        (Unit.all, Filling, Saved_Left, Left,
@@ -3171,7 +3490,9 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot)
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
       is
          Site : constant Landin.Provenance.Origin :=
            Site_Of (Of_Tree, Node);
@@ -3217,7 +3538,8 @@ package body Landin.Stages.Lowering is
 
                   Open (Taken);
                   Lower_Statements
-                    (Of_Tree, Runs, Inside, Result, Destination);
+                    (Of_Tree, Runs, Inside, Result, Destination,
+                     Destination_Field, Destination_Path);
 
                   if Current /= IR.No_Block then
                      Close_To_Merge;
@@ -3243,7 +3565,8 @@ package body Landin.Stages.Lowering is
                Close_With_Jump (Otherwise, Site);
                Open (Otherwise);
                Lower_Statements
-                 (Of_Tree, Runs, Inside, Result, Destination);
+                 (Of_Tree, Runs, Inside, Result, Destination,
+                  Destination_Field, Destination_Path);
             end;
          end if;
 
@@ -3262,12 +3585,14 @@ package body Landin.Stages.Lowering is
       --  D77: an exhaustive unfolded-variant tag match
       ------------------------------------------------------------
 
-      procedure Lower_Match
+      procedure Lower_Variant_Match
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot)
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
       is
          Site : constant Landin.Provenance.Origin :=
            Site_Of (Of_Tree, Node);
@@ -3392,7 +3717,8 @@ package body Landin.Stages.Lowering is
                      Open (Taken);
                      Bind (Arm);
                      Lower_Statements
-                       (Of_Tree, Runs, Inside, Result, Destination);
+                       (Of_Tree, Runs, Inside, Result, Destination,
+                        Destination_Field, Destination_Path);
                      if Current /= IR.No_Block then
                         Close_To_Merge;
                      end if;
@@ -3406,7 +3732,8 @@ package body Landin.Stages.Lowering is
                   Open (Taken);
                   Bind (Arm);
                   Lower_Statements
-                    (Of_Tree, Runs, Inside, Result, Destination);
+                    (Of_Tree, Runs, Inside, Result, Destination,
+                     Destination_Field, Destination_Path);
                   if Current /= IR.No_Block then
                      Close_To_Merge;
                   end if;
@@ -3417,6 +3744,141 @@ package body Landin.Stages.Lowering is
          if Merge /= IR.No_Block then
             Open (Merge);
          end if;
+      end Lower_Variant_Match;
+
+      procedure Lower_Atom_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
+      is
+         Site : constant Landin.Provenance.Origin :=
+           Site_Of (Of_Tree, Node);
+         Subject : constant Syn.Node_Id :=
+           Syn.Match_Subject (Of_Tree, Node);
+         Set_Id : constant IR.Atom_Set_Id :=
+           Atom_Set_For
+             (Landin.Checking.Atom_Set_Of
+                (Types.all, Of_Tree, Subject));
+         Saved : constant IR.Slot_Id :=
+           IR.Add_Slot
+             (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,
+              Atoms => Set_Id);
+         Merge : IR.Block_Id := IR.No_Block;
+
+         procedure Close_To_Merge;
+
+         procedure Close_To_Merge is
+         begin
+            if Merge = IR.No_Block then
+               Merge := Fresh (Of_Tree, Node, Scope);
+            end if;
+            Close_With_Jump (Merge, Site);
+         end Close_To_Merge;
+      begin
+         declare
+            Value : constant IR.Value_Id :=
+              Lower_Expression (Of_Tree, Subject, Scope);
+         begin
+            if Current = IR.No_Block then
+               return;
+            end if;
+            IR.Emit_Store (Unit.all, Filling, Saved, Value, Site);
+         end;
+
+         for Position in 1 .. Syn.Match_Arm_Count (Of_Tree, Node) loop
+            declare
+               Arm : constant Syn.Node_Id :=
+                 Syn.Nth_Match_Arm (Of_Tree, Node, Position);
+               Pattern : constant Syn.Node_Id :=
+                 Syn.Match_Pattern (Of_Tree, Arm);
+               Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Arm);
+               Inside : constant Res.Scope_Id :=
+                 Res.Scope_At (Meanings.all, Of_Tree, Runs);
+               Taken : constant IR.Block_Id :=
+                 Fresh (Of_Tree, Runs, Inside);
+               Wildcard : constant Boolean :=
+                 Syn.Name (Of_Tree, Pattern)
+                   = Landin.Source.Names.No_Name;
+               Last : constant Boolean :=
+                 Position = Syn.Match_Arm_Count (Of_Tree, Node);
+            begin
+               if Wildcard or else Last then
+                  Close_With_Jump (Taken, Site);
+                  Open (Taken);
+                  Lower_Statements
+                    (Of_Tree, Runs, Inside, Result, Destination,
+                     Destination_Field, Destination_Path);
+                  if Current /= IR.No_Block then
+                     Close_To_Merge;
+                  end if;
+                  exit when Wildcard;
+               else
+                  declare
+                     Next : constant IR.Block_Id :=
+                       Fresh (Of_Tree, Node, Scope);
+                     Means : constant Res.Declaration_Id :=
+                       Res.Bound_To (Meanings.all, Of_Tree, Pattern);
+                     Got : constant IR.Value_Id :=
+                       IR.Emit_Load (Unit.all, Filling, Saved, Site);
+                     Wanted : constant IR.Value_Id :=
+                       IR.Emit_Atom
+                         (Unit.all, Filling, Means,
+                          Atom_Set_For
+                            (Landin.Checking.Atom_Set_Of
+                               (Types.all, Means)), Site);
+                     Test : constant IR.Value_Id :=
+                       IR.Emit_Binary
+                         (Unit.all, Filling, IR.Equal_To,
+                          Got, Wanted, Ty.Bool, Site);
+                  begin
+                     IR.Emit_Branch
+                       (Unit.all, Filling, Test, Taken, Next, Site);
+                     IR.Leave_Block (Unit.all, Filling);
+                     Current := IR.No_Block;
+
+                     Open (Taken);
+                     Lower_Statements
+                       (Of_Tree, Runs, Inside, Result, Destination,
+                        Destination_Field, Destination_Path);
+                     if Current /= IR.No_Block then
+                        Close_To_Merge;
+                     end if;
+
+                     Open (Next);
+                  end;
+               end if;
+            end;
+         end loop;
+
+         if Merge /= IR.No_Block then
+            Open (Merge);
+         end if;
+      end Lower_Atom_Match;
+
+      procedure Lower_Match
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Scope   : Res.Scope_Id;
+         Result  : IR.Slot_Id;
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps) is
+      begin
+         if Type_At (Of_Tree, Syn.Match_Subject (Of_Tree, Node))
+              = Ty.Atom_Value
+         then
+            Lower_Atom_Match
+              (Of_Tree, Node, Scope, Result, Destination,
+               Destination_Field, Destination_Path);
+         else
+            Lower_Variant_Match
+              (Of_Tree, Node, Scope, Result, Destination,
+               Destination_Field, Destination_Path);
+         end if;
       end Lower_Match;
 
       procedure Lower_Bare_Block
@@ -3424,7 +3886,9 @@ package body Landin.Stages.Lowering is
          Node    : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot)
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
       is
          Site : constant Landin.Provenance.Origin :=
            Site_Of (Of_Tree, Node);
@@ -3436,7 +3900,8 @@ package body Landin.Stages.Lowering is
          Close_With_Jump (Start, Site);
          Open (Start);
          Lower_Statements
-           (Of_Tree, Runs, Inside, Result, Destination);
+           (Of_Tree, Runs, Inside, Result, Destination,
+            Destination_Field, Destination_Path);
          if Current /= IR.No_Block then
             declare
                Merge : constant IR.Block_Id :=
@@ -3457,7 +3922,9 @@ package body Landin.Stages.Lowering is
          Block   : Syn.Node_Id;
          Scope   : Res.Scope_Id;
          Result  : IR.Slot_Id;
-         Destination : IR.Slot_Id := IR.No_Slot)
+         Destination : IR.Slot_Id := IR.No_Slot;
+         Destination_Field : Natural := 0;
+         Destination_Path : IR.Path_Step_Array := IR.No_Path_Steps)
       is
          Last_Statement : constant Natural :=
            Syn.Statement_Count (Of_Tree, Block);
@@ -4644,7 +5111,9 @@ package body Landin.Stages.Lowering is
                         begin
                            pragma Unreferenced (Ignored);
                         end;
-                     elsif Held in Ty.Scalar_Name | Ty.Function_Value then
+                     elsif Held in
+                       Ty.Scalar_Name | Ty.Function_Value | Ty.Atom_Value
+                     then
                         declare
                            Ignored : constant IR.Value_Id :=
                              Lower_Expression (Of_Tree, Stmt, Scope);
@@ -4659,27 +5128,28 @@ package body Landin.Stages.Lowering is
                         end;
                      elsif Syn.Kind (Of_Tree, Stmt) = Syn.If_Statement then
                         Lower_If
-                          (Of_Tree, Stmt, Scope, Result, Target);
+                          (Of_Tree, Stmt, Scope, Result, Target,
+                           Destination_Field, Destination_Path);
                      elsif Syn.Kind (Of_Tree, Stmt)
                              = Syn.Match_Statement
                      then
                         Lower_Match
-                          (Of_Tree, Stmt, Scope, Result, Target);
+                          (Of_Tree, Stmt, Scope, Result, Target,
+                           Destination_Field, Destination_Path);
                      elsif Syn.Kind (Of_Tree, Stmt) = Syn.Bare_Block then
                         Lower_Bare_Block
-                          (Of_Tree, Stmt, Scope, Result, Target);
-                     elsif Syn.Kind (Of_Tree, Stmt) = Syn.Call then
-                        declare
-                           Ignored : constant IR.Value_Id :=
-                             Lower_Call
-                               (Of_Tree, Stmt, Scope,
-                                Destination => Target);
-                        begin
-                           pragma Unreferenced (Ignored);
-                        end;
+                          (Of_Tree, Stmt, Scope, Result, Target,
+                           Destination_Field, Destination_Path);
+                     elsif Syn.Kind (Of_Tree, Stmt)
+                             in Syn.Call | Syn.Try_Expression
+                     then
+                        Lower_Stored_Expression
+                          (Of_Tree, Stmt, Scope, Target,
+                           Destination_Field, Destination_Path);
                      elsif Held = Ty.Fixed_Array then
                         Write_Array_Value
-                          (Stmt, (Kind => IR.Frame_Slot, Slot => Target), 0);
+                          (Stmt, (Kind => IR.Frame_Slot, Slot => Target),
+                           Destination_Field, Path => Destination_Path);
                      elsif Held = Ty.Aggregate
                        and then Syn.Kind (Of_Tree, Stmt)
                                   = Syn.Struct_Literal
@@ -4688,14 +5158,18 @@ package body Landin.Stages.Lowering is
                           (Stmt,
                            Landin.Checking.Body_Of
                              (Types.all, Of_Tree, Stmt),
-                           (Kind => IR.Frame_Slot, Slot => Target));
+                           (Kind => IR.Frame_Slot, Slot => Target),
+                           Base => Destination_Field,
+                           Steps => Destination_Path);
                      elsif Held = Ty.Aggregate
                        and then Syn.Kind (Of_Tree, Stmt)
                                   = Syn.Zeroed_Literal
                      then
                         IR.Emit_Array_Clear
                           (Unit.all, Filling,
-                           (Kind => IR.Frame_Slot, Slot => Target), Site);
+                           (Kind => IR.Frame_Slot, Slot => Target), Site,
+                           Field => Destination_Field,
+                           Nested => Destination_Path);
                      elsif Held = Ty.Aggregate then
                         declare
                            Shape : constant Landin.Checking.Signature_Id :=
@@ -4729,7 +5203,9 @@ package body Landin.Stages.Lowering is
                                  Copy_Field
                                    (Wrote, Source, Target_Storage, Field,
                                     Source_Base => Source_Base,
-                                    Source_Steps => Source_Steps);
+                                    Source_Steps => Source_Steps,
+                                    Destination_Base => Destination_Field,
+                                    Destination_Steps => Destination_Path);
                               end loop;
                            end if;
                         end;
@@ -4771,15 +5247,11 @@ package body Landin.Stages.Lowering is
                                  when others =>
                                     raise Landin.Compiler_Defect;
                               end case;
-                           elsif Syn.Kind (Of_Tree, Value) = Syn.Call then
-                              declare
-                                 Ignored : constant IR.Value_Id :=
-                                   Lower_Call
-                                     (Of_Tree, Value, Scope,
-                                      Destination => Where);
-                              begin
-                                 pragma Unreferenced (Ignored);
-                              end;
+                           elsif Syn.Kind (Of_Tree, Value)
+                                   in Syn.Call | Syn.Try_Expression
+                           then
+                              Lower_Stored_Expression
+                                (Of_Tree, Value, Scope, Where);
                            elsif Syn.Kind (Of_Tree, Value)
                                    = Syn.Array_Literal
                            then
@@ -4934,15 +5406,11 @@ package body Landin.Stages.Lowering is
                                  when others =>
                                     raise Landin.Compiler_Defect;
                               end case;
-                           elsif Syn.Kind (Of_Tree, Value) = Syn.Call then
-                              declare
-                                 Ignored : constant IR.Value_Id :=
-                                   Lower_Call
-                                     (Of_Tree, Value, Scope,
-                                      Destination => Where);
-                              begin
-                                 pragma Unreferenced (Ignored);
-                              end;
+                           elsif Syn.Kind (Of_Tree, Value)
+                                   in Syn.Call | Syn.Try_Expression
+                           then
+                              Lower_Stored_Expression
+                                (Of_Tree, Value, Scope, Where);
                            elsif Syn.Kind (Of_Tree, Value)
                                    = Syn.Struct_Literal
                            then
@@ -5254,19 +5722,37 @@ package body Landin.Stages.Lowering is
                                     end loop;
                                  end if;
                               end;
-                           elsif Syn.Kind (Of_Tree, From) = Syn.Call then
+                           elsif Syn.Kind (Of_Tree, From)
+                                   in Syn.Call | Syn.Try_Expression
+                           then
                               pragma Assert
                                 (Destination.Kind in IR.Frame_Slot);
-                              declare
-                                 Ignored : constant IR.Value_Id :=
-                                   Lower_Call
-                                     (Of_Tree, From, Scope,
-                                      Destination => Destination.Slot,
-                                      Destination_Field => Parent_Field,
-                                      Destination_Steps => Parent_Steps);
-                              begin
-                                 pragma Unreferenced (Ignored);
-                              end;
+                              if Syn.Kind (Of_Tree, From) = Syn.Call then
+                                 declare
+                                    Ignored : constant IR.Value_Id :=
+                                      Lower_Call
+                                        (Of_Tree, From, Scope,
+                                         Destination => Destination.Slot,
+                                         Destination_Field => Parent_Field,
+                                         Destination_Steps => Parent_Steps);
+                                 begin
+                                    pragma Unreferenced (Ignored);
+                                 end;
+                              else
+                                 declare
+                                    Ignored : constant IR.Value_Id :=
+                                      Lower_Call
+                                        (Of_Tree,
+                                         Syn.Operand_Of (Of_Tree, From),
+                                         Scope,
+                                         Destination => Destination.Slot,
+                                         Destination_Field => Parent_Field,
+                                         Destination_Steps => Parent_Steps,
+                                         Propagate => True);
+                                 begin
+                                    pragma Unreferenced (Ignored);
+                                 end;
+                              end if;
                            elsif Syn.Kind (Of_Tree, From)
                                    = Syn.Struct_Literal
                            then
@@ -5358,17 +5844,25 @@ package body Landin.Stages.Lowering is
                                        Destination_Nested => Child_Steps);
                                  end if;
                               end;
-                           elsif Syn.Kind (Of_Tree, Value) = Syn.Call then
+                           elsif Syn.Kind (Of_Tree, Value)
+                                   in Syn.Call | Syn.Try_Expression
+                           then
                               pragma Assert
                                 (Destination.Kind in IR.Frame_Slot);
                               declare
+                                 Actual_Call : constant Syn.Node_Id :=
+                                   (if Syn.Kind (Of_Tree, Value) = Syn.Call
+                                    then Value
+                                    else Syn.Operand_Of (Of_Tree, Value));
                                  Ignored : constant IR.Value_Id :=
                                    Lower_Call
-                                     (Of_Tree, Value, Scope,
+                                     (Of_Tree, Actual_Call, Scope,
                                       Destination => Destination.Slot,
                                       Destination_Field => Field,
-                                      Destination_Steps =>
-                                        Child_Steps);
+                                      Destination_Steps => Child_Steps,
+                                      Propagate =>
+                                        Syn.Kind (Of_Tree, Value)
+                                          = Syn.Try_Expression);
                               begin
                                  pragma Unreferenced (Ignored);
                               end;
@@ -5489,6 +5983,18 @@ package body Landin.Stages.Lowering is
                         end if;
                      end;
 
+                  when Syn.Try_Expression =>
+                     declare
+                        Ignored : constant IR.Value_Id :=
+                          Lower_Call
+                            (Of_Tree, Syn.Operand_Of (Of_Tree, Stmt), Scope,
+                             Propagate => True);
+                     begin
+                        pragma Assert
+                          (Ignored /= IR.No_Value
+                           or else Current = IR.No_Block);
+                     end;
+
                   when Syn.Call =>
                      declare
                         Ignored : constant IR.Value_Id :=
@@ -5509,6 +6015,58 @@ package body Landin.Stages.Lowering is
                            Call   => Syn.Deferred_Call (Of_Tree, Stmt),
                            Scope  => Scope,
                            Active => True));
+
+                  when Syn.Fail_Statement =>
+                     if Syn.Condition_Of (Of_Tree, Stmt) = Syn.No_Node
+                     then
+                        declare
+                           Error : constant IR.Value_Id :=
+                             Lower_Expression
+                               (Of_Tree, Syn.Value_Of (Of_Tree, Stmt), Scope);
+                        begin
+                           if Current /= IR.No_Block then
+                              Fail_Through_Cleanups (Of_Tree, Error, Site);
+                           end if;
+                        end;
+                     else
+                        declare
+                           Test : constant IR.Value_Id :=
+                             Lower_Expression
+                               (Of_Tree,
+                                Syn.Condition_Of (Of_Tree, Stmt), Scope);
+                        begin
+                           if Current /= IR.No_Block then
+                              declare
+                                 Goes : constant IR.Block_Id :=
+                                   Fresh (Of_Tree, Stmt, Scope);
+                                 Stays : constant IR.Block_Id :=
+                                   Fresh (Of_Tree, Stmt, Scope);
+                              begin
+                                 IR.Emit_Branch
+                                   (Unit.all, Filling, Test, Goes, Stays,
+                                    Site);
+                                 IR.Leave_Block (Unit.all, Filling);
+                                 Current := IR.No_Block;
+
+                                 Open (Goes);
+                                 declare
+                                    Error : constant IR.Value_Id :=
+                                      Lower_Expression
+                                        (Of_Tree,
+                                         Syn.Value_Of (Of_Tree, Stmt),
+                                         Scope);
+                                 begin
+                                    if Current /= IR.No_Block then
+                                       Fail_Through_Cleanups
+                                         (Of_Tree, Error, Site);
+                                    end if;
+                                 end;
+
+                                 Open (Stays);
+                              end;
+                           end if;
+                        end;
+                     end if;
 
                   when Syn.Return_Statement =>
                      if Syn.Condition_Of (Of_Tree, Stmt) = Syn.No_Node
@@ -5660,17 +6218,26 @@ package body Landin.Stages.Lowering is
                        IR.Element_Total
                          (Landin.Checking.Array_Length (Types.all, Id)),
                        Id, Site_Of (Of_Tree, Param));
-               elsif Held in Ty.Scalar_Name | Ty.Function_Value then
+               elsif Held in
+                 Ty.Scalar_Name | Ty.Function_Value | Ty.Atom_Value
+               then
                   Slots (Positive (Id)) :=
                     IR.Add_Parameter
                       (Unit.all, Filling,
-                       (if Held = Ty.Function_Value then Ty.Usize else Held),
+                       (if Held = Ty.Function_Value then Ty.Usize
+                        elsif Held = Ty.Atom_Value then Ty.U32
+                        else Held),
                        Id, Site_Of (Of_Tree, Param),
                        Signature =>
                          (if Held = Ty.Function_Value
                           then Signature_For
                             (Landin.Checking.Signature_Of (Types.all, Id))
-                          else IR.No_Signature));
+                          else IR.No_Signature),
+                       Atoms =>
+                         (if Held = Ty.Atom_Value
+                          then Atom_Set_For
+                            (Landin.Checking.Atom_Set_Of (Types.all, Id))
+                          else IR.No_Atom_Set));
                else
                   raise Landin.Compiler_Defect with
                     "a parameter reached the lowering with no storable type";
@@ -5834,7 +6401,7 @@ package body Landin.Stages.Lowering is
          Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree, Node);
          Answer : IR.Value_Id;
       begin
-         if Held not in Ty.Scalar_Name | Ty.Function_Value
+         if Held not in Ty.Scalar_Name | Ty.Function_Value | Ty.Atom_Value
            and then Held not in Ty.Aggregate | Ty.Fixed_Array
          then
             raise Landin.Compiler_Defect with
@@ -5947,8 +6514,18 @@ package body Landin.Stages.Lowering is
                              IR.Add_Item
                                (Unit.all, IR.Routine, Id,
                                 (if Held = Ty.Function_Value
-                                 then Ty.Usize else Held),
+                                 then Ty.Usize
+                                 elsif Held = Ty.Atom_Value
+                                 then Ty.U32 else Held),
                                 Site_Of (Of_Tree.all, Node));
+                           if Held = Ty.Atom_Value then
+                              IR.Set_Atom_Set
+                                (Unit.all, Made,
+                                 Atom_Set_For
+                                   (Landin.Checking.Atom_Set_Of
+                                      (Types.all,
+                                       Declaration_At (Src, Gives))));
+                           end if;
                            IR.Set_Signature
                              (Unit.all, Made,
                               Signature_For
@@ -5965,8 +6542,18 @@ package body Landin.Stages.Lowering is
                              IR.Add_Item
                                (Unit.all, IR.Datum, Id,
                                 (if Held = Ty.Function_Value
-                                 then Ty.Usize else Held),
+                                 then Ty.Usize
+                                 elsif Held = Ty.Atom_Value
+                                 then Ty.U32 else Held),
                                 Site_Of (Of_Tree.all, Node));
+
+                           if Held = Ty.Atom_Value then
+                              IR.Set_Atom_Set
+                                (Unit.all, Made,
+                                 Atom_Set_For
+                                   (Landin.Checking.Atom_Set_Of
+                                      (Types.all, Id)));
+                           end if;
 
                            if Held = Ty.Function_Value then
                               IR.Set_Signature
@@ -6044,9 +6631,18 @@ package body Landin.Stages.Lowering is
                        IR.Add_Item
                          (Unit.all, IR.Routine, Res.No_Declaration,
                           (if Held = Ty.Function_Value
-                           then Ty.Usize else Held),
+                           then Ty.Usize
+                           elsif Held = Ty.Atom_Value
+                           then Ty.U32 else Held),
                           Site_Of (Of_Tree.all, Node));
                   begin
+                     if Held = Ty.Atom_Value then
+                        IR.Set_Atom_Set
+                          (Unit.all, Made,
+                           Atom_Set_For
+                             (Landin.Checking.Atom_Set_Of
+                                (Types.all, Declaration_At (Src, Gives))));
+                     end if;
                      IR.Set_Signature
                        (Unit.all, Made,
                         Signature_For

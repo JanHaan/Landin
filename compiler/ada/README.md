@@ -36,7 +36,7 @@ replaced.
 ## Package ownership
 
 | package | owns | must not |
-|---|---|---|
+| --- | --- | --- |
 | `Landin` | the namespace and the three exceptions | contain any logic |
 | `Landin.Source` | immutable snapshots, byte offsets, spans, line maps | read a file, or know an encoding beyond bytes |
 | `Landin.Source` storage | heap-allocated text and line maps, never freed while the process lives | put a source file in an automatic object |
@@ -52,10 +52,10 @@ replaced.
 | `Landin.Syntax.Forest` | one tree per source for the whole compilation, on the heap and never freed | hand out a tree that can be copied or written to |
 | `Landin.Resolution` | declarations, scopes, and which declaration each name means | hold a diagnostic, or decide what a name may be called |
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
-| `Landin.Checking` | what type every node and declaration has, including nominal aggregate identity, structural fixed-array and anonymous result shapes, aggregate element identity, recursive first-class target-neutral function signatures with ordered result runs, and scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout | decide a rule, or ask the host for a width |
+| `Landin.Checking` | what type every node and declaration has, including structural atom/error sets, nominal aggregate identity, structural fixed-array and anonymous result shapes, aggregate element identity, recursive first-class target-neutral function signatures with ordered result runs, and scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout | decide a rule, or ask the host for a width |
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/future-undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
-| `Landin.IR` | the target-neutral instructions: items, slots, blocks and values; recursive callable signature descriptors with ordered result runs on declared or anonymous routines, static function datums, code addresses, function-value slots and calls; scalar, compact fixed-array, unfolded variant, anonymous result and recursively nested ordinary shapes; a fixed array's element shape; folded aggregate images and compact payload segments; and arbitrary-depth neutral paths through contextual, variant and indexed-element operations, starting at a base part or at whole array storage | hold a scope tree, name a machine, ask a width, or hold an offset, register or padding byte |
-| `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including descriptor/carrier, multiple-result slot and static function-image agreement, valid neutral subobject paths and target-aware fit of static images | diagnose source, repair malformed IR, or choose backend policy |
+| `Landin.IR` | the target-neutral instructions: items, slots, blocks and values; atom-set descriptors, atom identities, orthogonal call-failure slots and failure exits; recursive callable signature descriptors with ordered result runs on declared or anonymous routines, static function datums, code addresses, function-value slots and calls; scalar, compact fixed-array, unfolded variant, anonymous result and recursively nested ordinary shapes; a fixed array's element shape; folded aggregate images and compact payload segments; and arbitrary-depth neutral paths through contextual, variant and indexed-element operations, starting at a base part or at whole array storage | hold a scope tree, name a machine, ask a width, or hold an offset, register or padding byte |
+| `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and target-aware fit of static images | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
 | `Landin.Backend.X86_64` | the assembly text for one target, every register in it, and the target-width scalar, finite-array, compact repetition and selected-variant directives and padding for written aggregate images | decide a layout, write a file, or run a tool |
@@ -173,7 +173,18 @@ anonymous routine address and have no implicit zero image. A no-capture
 anonymous function sees the module and its own signature/body declarations,
 lowers to a deterministic routine item and receives a backend-local symbol.
 Function-valued fields in nominal structs remain absent; anonymous result
-aggregates retain their function field's descriptor. Completion into
+aggregates retain their function field's descriptor. Atom declarations and
+unions are structural declaration-identity sets carried as ordinary values.
+Concrete error sets are part of recursive function signatures; private `! ...`
+routines are solved as a whole-module least fixed point before lowering. Direct
+and indirect failing calls keep their successful scalar, function or caller-
+owned aggregate convention and add one neutral failure slot. `try`, `fail`, and
+call-site `else` become explicit control edges, including recovery values and
+exhaustive atom matches. Active deferred cleanups run before a failure leaves
+their lexical blocks. On Linux x86-64 ordinary atoms use dense nonzero 32-bit
+codes and the normal argument/`%eax` result positions; `%r10d` is the dedicated
+error carrier, with zero meaning success. It consumes no source parameter or
+result position. Completion into
 an aggregate destination contributes an ordinary whole-place flow fact, so
 branch joins and guarded-return edges require no call-specific exception. Each
 early or final aggregate-result exit copies that complete independent slot to
@@ -192,9 +203,10 @@ on macOS would hand ELF-only assembly to a toolchain that emits Mach-O.
 The `Runtime` fixture class compiles programs, links them, runs them on the
 target and checks their statuses. The Linux gate therefore proves the scalar
 arithmetic and non-loop expression-valued control-flow kernel, early returns,
-lexical deferred cleanup and source order, register/stack and recursive calls,
-folded module values, fixed arrays, ordinary structs and their target-derived
-module and frame layouts on the hardware the backend emits for. A host without the target toolchain fails
+lexical deferred cleanup, declared atom errors and source order, register/stack
+and recursive calls, folded module values, fixed arrays, ordinary structs and
+their target-derived module and frame layouts on the hardware the backend emits
+for. A host without the target toolchain fails
 rather than silently skipping that evidence. The active
 R2 items own extensions to the semantic and representation core; later target
 and ABI work remains with the roadmap items that name it.

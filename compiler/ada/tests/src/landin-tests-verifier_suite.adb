@@ -2554,6 +2554,167 @@ package body Landin.Tests.Verifier_Suite is
       end;
    end Malformed_Multiple_Results_Are_Rejected;
 
+   --  R2.30: atom identity and the orthogonal failure edge stay explicit in
+   --  neutral IR.  Each malformed shape below is builder-reachable, so each
+   --  verifier rule can fail independently rather than existing only in prose.
+   procedure Malformed_Error_IR_Is_Rejected
+     (Item : in out Landin.Testing.Context);
+
+   procedure Malformed_Error_IR_Is_Rejected
+     (Item : in out Landin.Testing.Context)
+   is
+   begin
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Duplicate : IR.Atom_Set_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Duplicate := IR.Add_Atom_Set (Unit, [5, 5]);
+         pragma Unreferenced (Duplicate);
+         Expect
+           (Item, V.Check (Unit), V.Atom_Set_Malformed,
+            "a duplicated atom identity is refused");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Atoms : IR.Atom_Set_Id;
+         Signature : IR.Signature_Id;
+         Routine : IR.Item_Id;
+         Result : IR.Slot_Id;
+         Block : IR.Block_Id;
+         Value : IR.Value_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Atoms := IR.Add_Atom_Set (Unit, [1 => 5]);
+         Signature := IR.Add_Signature
+           (Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.U32, Atoms => Atoms, others => <>));
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         IR.Set_Atom_Set (Unit, Routine, Atoms);
+         IR.Set_Signature (Unit, Routine, Signature);
+         Result := IR.Add_Slot
+           (Unit, Routine, Landin.Types.U32, 2, Site, Atoms => Atoms);
+         IR.Set_Result_Slot (Unit, Routine, Result);
+         Block := IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Routine, Block);
+         Value := IR.Emit_Atom (Unit, Routine, 6, Atoms, Site);
+         IR.Emit_Store (Unit, Routine, Result, Value, Site);
+         Value := IR.Emit_Load (Unit, Routine, Result, Site);
+         IR.Emit_Leave (Unit, Routine, Value, Site);
+         IR.Leave_Block (Unit, Routine);
+         Expect
+           (Item, V.Check (Unit), V.Atom_Identity_Not_In_Set,
+            "an atom constant outside its structural set is refused");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Errors : IR.Atom_Set_Id;
+         Callee_Signature, Caller_Signature : IR.Signature_Id;
+         Callee, Caller : IR.Item_Id;
+         Callee_Result, Caller_Result, Wrong : IR.Slot_Id;
+         Callee_Block, Caller_Block : IR.Block_Id;
+         Value : IR.Value_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Errors := IR.Add_Atom_Set (Unit, [1 => 5]);
+         Callee_Signature := IR.Add_Signature
+           (Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.U32, others => <>), Errors);
+         Caller_Signature := IR.Add_Signature
+           (Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.U32, others => <>));
+         Callee := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         Caller := IR.Add_Item
+           (Unit, IR.Routine, 3, Landin.Types.U32, Site);
+         IR.Set_Signature (Unit, Callee, Callee_Signature);
+         IR.Set_Signature (Unit, Caller, Caller_Signature);
+         Callee_Result := IR.Add_Slot
+           (Unit, Callee, Landin.Types.U32, 2, Site);
+         Caller_Result := IR.Add_Slot
+           (Unit, Caller, Landin.Types.U32, 4, Site);
+         Wrong := IR.Add_Slot
+           (Unit, Caller, Landin.Types.Bool, IR.No_Declaration, Site);
+         IR.Set_Result_Slot (Unit, Callee, Callee_Result);
+         IR.Set_Result_Slot (Unit, Caller, Caller_Result);
+
+         Callee_Block := IR.Add_Block
+           (Unit, Callee, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Callee, Callee_Block);
+         Value := IR.Emit_Number
+           (Unit, Callee, Landin.Types.U32, 1, False, Site);
+         IR.Emit_Store (Unit, Callee, Callee_Result, Value, Site);
+         Value := IR.Emit_Load (Unit, Callee, Callee_Result, Site);
+         IR.Emit_Leave (Unit, Callee, Value, Site);
+         IR.Leave_Block (Unit, Callee);
+
+         Caller_Block := IR.Add_Block
+           (Unit, Caller, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Caller, Caller_Block);
+         Value := IR.Emit_Call
+           (Unit, Caller, Callee, Landin.Types.U32, Site,
+            Failure => Wrong);
+         IR.Emit_Store (Unit, Caller, Caller_Result, Value, Site);
+         Value := IR.Emit_Load (Unit, Caller, Caller_Result, Site);
+         IR.Emit_Leave (Unit, Caller, Value, Site);
+         IR.Leave_Block (Unit, Caller);
+         Expect
+           (Item, V.Check (Unit), V.Call_Failure_Slot_Disagrees,
+            "a failing call cannot write an ordinary bool slot");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Atoms : IR.Atom_Set_Id;
+         Signature : IR.Signature_Id;
+         Routine : IR.Item_Id;
+         Result : IR.Slot_Id;
+         Block : IR.Block_Id;
+         Value : IR.Value_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Atoms := IR.Add_Atom_Set (Unit, [1 => 5]);
+         Signature := IR.Add_Signature
+           (Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.U32, others => <>));
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         IR.Set_Signature (Unit, Routine, Signature);
+         Result := IR.Add_Slot
+           (Unit, Routine, Landin.Types.U32, 2, Site);
+         IR.Set_Result_Slot (Unit, Routine, Result);
+         Block := IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Routine, Block);
+         Value := IR.Emit_Atom (Unit, Routine, 5, Atoms, Site);
+         IR.Emit_Fail (Unit, Routine, Value, Site);
+         IR.Leave_Block (Unit, Routine);
+         Expect
+           (Item, V.Check (Unit), V.Fail_Disagrees_With_Signature,
+            "an infallible signature cannot contain a failure edge");
+      end;
+   end Malformed_Error_IR_Is_Rejected;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2577,6 +2738,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "malformed multiple results are rejected",
          Malformed_Multiple_Results_Are_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "malformed error IR is rejected",
+         Malformed_Error_IR_Is_Rejected'Access);
    end Register;
 
 end Landin.Tests.Verifier_Suite;

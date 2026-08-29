@@ -54,9 +54,13 @@ declarations rather than a sequence of them, and a name may be used
 above the line that introduces it. 'public' rides on a declaration
 and not on a statement [0090]: what a module exports is decided
 where the module is written, never inside a body.
+
 ```landin-grammar
 program     ::= declaration*
-declaration ::= "public"? (binding | function | type_declaration)
+declaration ::= "public"? (atom_declaration | binding | function
+                            | type_declaration)
+atom_declaration ::= identifiers ":" "atom"
+identifiers ::= identifier ("," identifier)*
 
 ```
 
@@ -79,6 +83,7 @@ rule below this layer mentions it. A line end therefore never
 terminates a statement: when the token after it can continue the
 expression or selection before it, it does. This is [1060]'s
 one-line rule read from the other direction.
+
 ```landin-grammar
 space       ::= " " | "\t" | line_end | comment
 line_end    ::= "\n" | "\r\n" | "\r"
@@ -97,11 +102,12 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves twenty-two words; the reserved set of the whole language is
+reserves twenty-five words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
 declared names [0120] that the kernel happens to predeclare.
+
 ```landin-grammar
 identifier  ::= lower (lower | digit | "_")*
               | "_" (lower | digit | "_")+
@@ -111,6 +117,7 @@ keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
               | "end" | "return" | "when" | "inc" | "dec" | "none"
               | "true" | "false" | "and" | "or" | "not"
               | "sizeof" | "alignof" | "type" | "struct" | "zeroed"
+              | "atom" | "fail" | "try"
 
 ```
 
@@ -130,6 +137,7 @@ where no enabled construct supplies that context. Floats
 [0210], characters
 [0250], text [0260] and raw literals [0280] are described in this tour and are
 not enabled yet.
+
 ```landin-grammar
 literal     ::= integer | "true" | "false" | "zeroed"
 integer     ::= decimal | hex | octal | binary
@@ -158,6 +166,7 @@ close it, which is why commenting out a region that already
 contains one is not a trap. One never closed runs to the end of
 the file and is reported there. A comment is space [1750], so it
 may appear wherever a space may.
+
 ```landin-grammar
 comment       ::= block_comment | doc_comment | line_comment
 block_comment ::= "--(" block_item* ")--"
@@ -173,8 +182,9 @@ line_comment  ::= "--" (any byte except line_end)*
 A binding names one thing, and says how much it may change.
 The full form, the inferred form and the mutable form are [0040],
 [0050] and [0060]; a binding with no value must be assigned before
-it is read [0080]. The kernel's types are the eleven scalar names, fixed
-arrays, D117's one infallible function type, and what [1795] declares from
+it is read [0080]. The kernel's types are the eleven scalar names, atom sets, fixed arrays,
+function types with their complete declared error sets, and what [1795]
+declares from
 them: aliases, named ordinary structs and D74's named variant-bearing structs.
 Enabled runtime leaves are scalar or fixed array; D86/D87 additionally compose
 one named ordinary struct field for measurement and zeroable storage while
@@ -189,6 +199,7 @@ only ones a program does not have to declare for itself.
 An array [0520] is a type position too, and its length is part
 of it: the bound is [1770]'s integer, written in whatever base,
 and the element is a type like any other.
+
 ```landin-grammar
 binding       ::= "mut"? identifier ":" type ("=" expression)?
                 | "mut"? identifier ":=" expression
@@ -211,14 +222,17 @@ declaration gives an existing type another name and the two are
 one type everywhere. A struct body [0670] has no existing type
 to alias and introduces the nominal type [0710] whose identity
 is this declaration; an alias of that name keeps the same
-identity. Every alias chain has to reach a scalar type, fixed array, function
+identity. Every alias chain has to reach a scalar type, atom set, fixed array, function
 type or struct body. A chain that comes back to an alias in the chain
 reaches no type and is refused at that declaration.
 A type name is an ordinary declared name [1760], so one
 declaration per name per scope [1850] and a name that names
 nothing is refused [1860] both hold for it unchanged.
+
 ```landin-grammar
-type_declaration ::= identifier ":" "type" "=" (type | struct_body)
+type_declaration ::= identifier ":" "type" "="
+                     (atom_union | type | struct_body)
+atom_union      ::= identifier "|" identifier ("|" identifier)*
 struct_body      ::= "struct" member+ "end" identifier?
 member           ::= field | variant_part
 field            ::= identifier ":" type
@@ -234,12 +248,12 @@ A function is a value with a body, and its returns are named.
 '=' opens the body and 'end' closes it [0870]; a body that is one
 expression still takes an end, and the expression fills the named
 return [0880]; every named return must be assigned before the
-function returns [0930]. The error channel [0940], the parameter conventions
-[0900], 'escaping' [0780] and generic parameters [1290] remain deferred. The
-enabled signature is infallible, takes values including function values, and
-hands one or more named values, or none, back. A function type reuses this
-`signature` production but has no body. Its labels are type description only
-and do not declare parameters or named returns.
+function returns [0930]. The parameter conventions [0900], `escaping` [0780]
+and generic parameters [1290] remain deferred. An enabled signature takes
+values including function values, hands one or more named values (or none)
+back, and optionally declares [0940]'s payload-free atom error set. A function
+type reuses this `signature` production but has no body. Its labels are type
+description only and do not declare parameters or named returns.
 
 An anonymous function [1010] writes that same signature and body without a
 module name. It captures no enclosing local, parameter or named return: its
@@ -256,10 +270,12 @@ An unguarded `return` has no fallthrough edge, so it can end a statement-only
 block but cannot be read as the prefix of that block's final expression. This
 also keeps `return 1` the refused payload spelling [1810]. A guarded return may
 prefix a final expression because its untaken edge continues.
+
 ```landin-grammar
 function           ::= identifier ":" signature "=" body "end" identifier?
 anonymous_function ::= signature "=" body "end"
-signature          ::= "(" parameters? ")" "->" returns
+signature          ::= "(" parameters? ")" "->" returns errors?
+errors             ::= "!" (identifier ("|" identifier)* | "...")
 parameters  ::= parameter ("," parameter)*
 parameter   ::= identifier ":" type
 returns     ::= "(" named_return ("," named_return)* ")" | "none"
@@ -267,8 +283,9 @@ named_return ::= identifier ":" type
 body        ::= block
 block       ::= statement* | value_statement* expression
 value_statement ::= binding | destructuring_binding | assignment
-                  | increment | discard | call | defer
+                  | increment | discard | call | defer | try
                   | "return" "when" expression
+                  | "fail" expression "when" expression
                   | if | match | bare_block
 destructuring_binding ::= "(" destructured_field
                           ("," destructured_field)* ")" ":=" expression
@@ -285,19 +302,21 @@ a result is written out [1020]; the one-line form of every
 construct is [1060]. 'when' rides on an exit and on nothing else,
 which is what keeps a conditional statement from having two
 spellings.
-'return' carries no value. A named return is assigned like any
-other place and 'return' leaves [0930], which is why the kernel
-needs no second way to say what a function hands back.
+`return` carries no value. A named return is assigned like any other place and
+`return` leaves [0930], which is why the kernel needs no second way to say what
+a function hands back. `fail` is the other early exit [0970]: it carries one
+payload-free atom on the declared channel and does not read the successful
+named return.
 A call is a statement as well as an expression, because a function
 returning none has nothing to bind and [1020] wants a result
-discarded on purpose rather than by omission. A call whose result
-is dropped that way is the one place the kernel accepts an
-expression standing alone.
-`defer` registers one call when its statement is reached and evaluates the
-callee and arguments only on the applicable exits from its lexical block
-[1100]. It is a statement rather than an expression and so cannot supply a
-block's final value.
-A match is D77's exhaustive tag selection. Its subject is one directly
+discarded on purpose rather than by omission. A call whose result is dropped
+that way is the one place the kernel accepts an ordinary expression standing
+alone. A standalone `try call` explicitly propagates its failure and discards
+any successful result. `defer` registers one call when its statement is reached
+and evaluates the callee and arguments only on the applicable exits from its
+lexical block [1100]. It is a statement rather than an expression and so cannot
+supply a block's final value. A match is D77's exhaustive tag selection or
+[0640]'s exhaustive atom-set selection. A variant subject is one directly
 selected variant part and each case arm carries one statement or one
 expression; a bare `begin` block makes a multi-statement arm. D78 extends the
 arm with positional payload bindings. An `if`, a `match`, and a bare `begin`
@@ -308,20 +327,25 @@ an enabled array element is written
 and stepped exactly as the binding holding it is. What may be
 written is [1900]'s and not this rule's: a field is writable when
 the binding it belongs to is.
+
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
-              | discard | call | defer | return | if | match | bare_block
+              | discard | call | defer | try | return | fail
+              | if | match | bare_block
 assignment  ::= place "=" expression
 increment   ::= ("inc" | "dec") place
 discard     ::= "_" "=" expression
 defer       ::= "defer" call
 return      ::= "return" ("when" expression)?
+fail        ::= "fail" expression ("when" expression)?
+try         ::= "try" call
 if          ::= "if" expression "then" block
                 ("elsif" expression "then" block)*
                 ("else" block)?
                 "end" "if"
 match       ::= "match" expression match_arm+ "end" "match"
-match_arm   ::= identifier ("(" match_binding ("," match_binding)* ")")?
+match_arm   ::= (identifier | "_")
+                ("(" match_binding ("," match_binding)* ")")?
                 ":" (statement | expression)
 match_binding ::= "inout"? identifier
 bare_block  ::= "begin" block "end"
@@ -355,6 +379,9 @@ An ordinary-struct literal is [0710]'s nonempty run of labelled field values,
 optionally followed by [0720]'s contextual fill. D64--D71 state the contexts
 that admit it. D72's construction prefixes the same run with the ordinary
 struct type it builds; the all-fill spelling remains refused by name.
+A call-site `else` binds to the call except where that same token directly
+closes an enclosing `then` or `elsif` arm; parentheses around the recovered
+call make the inner use explicit.
 An `if`, exhaustive `match`, or bare `begin` block is also a primary. Its
 conditions or subject run first, then exactly the selected block runs in source
 order. In a value context the final expression of every edge that can fall
@@ -363,10 +390,11 @@ complete edge and type rule, and D125 gives its storage representation. These
 three non-loop controls do not enable R4.10's loops, `break`, or `continue`.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
+
 ```landin-grammar
 primary     ::= literal | array_literal | array_repetition | struct_literal
               | construction | anonymous_function | indexed | call
-              | measurement
+              | measurement | try
               | if | match | bare_block | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
 array_repetition ::= "[" integer "of" expression "]"
@@ -379,7 +407,9 @@ construction ::= identifier "(" field_value ("," field_value)*
                  ("," "of" expression)? ")"
 indexed     ::= selection (("[" expression "]") | ("." identifier))*
 selection   ::= identifier ("." identifier)*
-call        ::= identifier "(" arguments? ")"
+call        ::= identifier "(" arguments? ")" recovery?
+recovery    ::= "else" expression
+              | "else" "(" identifier ")" block "end"
 measurement ::= ("sizeof" | "alignof") type | "lenof" identifier
               | "lenof" "(" array_literal ")"
 arguments   ::= expression ("," expression)*
@@ -413,11 +443,12 @@ The kernel's scopes, outermost first.
 [0130] and [0140] are two sentences about scopes and this
 grammar has to say which scopes it has, because a rule about
 an inner scope means nothing until the inner ones are named.
+
 | scope | what it holds |
-|---|---|
+| --- | --- |
 | module | every file compiled together. There is one, until [1410]'s directories arrive. |
 | signature | a declared or anonymous function's parameters and named returns [1800]. Every named return is a place the body assigns [0930], so each is declared here and not in the body; parameters and returns share one namespace. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
-| body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; and one for every bare `begin` block [1810]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings live in their arm's scope. |
+| body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; one for every bare `begin` block; and one for a call-site recovery [1810] [1030]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings and a recovery error name live only in their block. |
 
 [1800]'s direct final expression opens no additional scope inside its function
 body, because an expression declares nothing.
@@ -455,12 +486,14 @@ says what one of them holds, so nothing yet says whether a
 u8 may be given 300. [0150] puts the width in the name,
 [0160] takes usize and isize from the machine and [0180]
 gives bool its two values; written out, that is:
+
 | type | what it holds |
-|---|---|
+| --- | --- |
 | `u8` `u16` `u32` `u64` | every unsigned value of that many bits |
 | `i8` `i16` `i32` `i64` | every signed one, two's complement |
 | `usize` `isize` | the same pair, at the target's pointer width [0160] |
 | `bool` | false and true [0180] |
+| an atom union | exactly the declaration identities in its flattened set [0630] [0640] |
 
 Two's complement is not a new decision. [0300]'s wrapping
 forms have to wrap somewhere and [0320]'s '>>' keeps a sign,
@@ -474,6 +507,11 @@ does not say two names are one type.
 u128 and i128 [0150], the packed widths [0730] and the
 floats [0170] are described in this tour and are not enabled
 yet.
+An atom declaration introduces one value and its singleton type. An atom union
+is structural: aliases are flattened, order and repeated members do not change
+identity, and assignment or argument passing may widen a singleton or smaller
+set into a set that contains it. No integer is an atom and no zero or default
+atom exists.
 Fixed arrays hold their declaration-order elements [0520], and ordinary or
 variant-bearing structs hold the fields their nominal declaration gives them
 [0710] [0750]. A function type holds a target code address with the complete
@@ -488,13 +526,15 @@ its context and is checked at that point, and [0200] says it
 is i32 with none. Neither says what a context is, and a
 checker cannot ask for one until they are listed. In the
 kernel these positions give a literal a type:
+
 - a binding's declared type [1790]
 - the type of the place an assignment writes [1810]
 - the type of the parameter an argument fills [1800]
 - the named return's type, or the complete anonymous result aggregate for a
   multiple-return expression body [0880] [0990]
-- the result expected from an `if`, `match`, or bare `begin` expression; that
-  same complete context reaches every fallthrough answer
+- the result expected from an `if`, `match`, bare `begin`, or call-site `else`
+  expression; that same complete context reaches every fallthrough answer
+
 - the element type of a contextual array literal or repetition
 - the field type of a contextual labelled struct literal
 - the other operand's type, for a binary operator
@@ -536,12 +576,13 @@ What each operator takes and what it gives.
 binary operator takes two operands of one type, because
 [0310] converts nothing and there is nowhere else for a
 second type to go.
+
 | operator | takes, and gives back |
-|---|---|
+| --- | --- |
 | `+` `-` `*` `/` `%`, and [0300]'s `+%` `-%` `*%` | one integer type, and that type back [0290] |
 | `&` `^` `\|`, and the unary `~` | one integer type, and that type back [0330] |
 | `<<` `>>` | an integer shifted by an integer of that same type, and that type back [0320]. The amount is not bounded by the width: [0320] fills with zeros beyond it for any amount. |
-| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350] |
+| `==` `<>` `<` `<=` `>` `>=` | one type on both sides, and a bool back [0350]; atom sets have identity equality and inequality only |
 | `and` `or` `not` | bool, and a bool back [0340] |
 | unary `-` | one integer type, and that type back |
 
@@ -561,14 +602,16 @@ the exit is.
 What may be written, and what may not.
 [1810]'s place is a name, and of the four kinds of name the
 kernel has, two may be written and two may not.
+
 | name | written? |
-|---|---|
+| --- | --- |
 | a mutable binding [0060] | may be |
 | a named return | may be: [0930] says it must be, and [1840] declares it as a place for that reason |
 | an immutable binding | may not: [0040] makes it immutable and [0450] says it protects the value it holds |
 | a parameter | may not: the unmarked convention is [0900]'s 'in', which is the promise not to change the value |
 
-A function declaration is not a place. A local or module binding holding a
+An atom declaration and a recovery clause's error name are immutable values,
+not places. A function declaration is not a place. A local or module binding holding a
 function value is an ordinary place: an immutable one may be called but not
 replaced, and a mutable one may be replaced only by a value with the same
 complete signature. A named function-valued return is a writable place; an
@@ -597,8 +640,13 @@ checker that read the condition to decide this would be
 running the program in order to check it.
 'return when' is a return [1810], so what the function hands
 back is assigned above it and not below.
-A control-flow edge has two independent facts: whether it can fall through and
-whether it can return. Only fallthrough states meet at an `if` or `match` join;
+A control-flow edge has independent fallthrough, successful-return, and
+failure consequences. A `fail` edge never needs the successful named return;
+its untaken guarded edge continues. A tried call may fail after its arguments
+and before any later action; a recovered call joins its success edge only with
+recovery edges that fall through.
+A return-compatible control-flow edge has two facts: whether it can fall
+through and whether it can return. Only fallthrough states meet at an `if` or `match` join;
 a returned arm neither lends nor removes assignment facts on a surviving arm.
 Every reachable fallthrough edge of a control expression must reach its block's
 final expression, and every such expression has the one complete type and shape
@@ -621,12 +669,13 @@ every parameter exactly once and in order, and [1820]'s
 argument list is positional only. Each argument has its
 parameter's type [0310], and the call has the type of the
 named return.
-A call of a function returning none has no type. It is a
-statement [1810] and nothing else: nothing binds it, no
-argument is one, and [1930] cannot discard it, because there
-is no result there to discard. A call with one named return has that return's
-type. A call with two or more has [0990]'s anonymous structural aggregate;
-its fields are selected and destructured by the return names.
+A call of a function returning none has no successful-result type. It is a
+statement [1810] and nothing else: nothing binds it, no argument is one, and
+[1930] cannot discard it, because there is no result there to discard. A call
+with one named return has that return's type. A call with two or more has
+[0990]'s anonymous structural aggregate; its fields are selected and
+destructured by the return names. The orthogonal declared error outcome is
+unchanged at every result count: a failing call is still tried or recovered.
 A callee is a function. It may be a declared function or a local, module,
 parameter or named-return binding whose value has a function type; every stored
 form calls the runtime code address. A function's own name and an anonymous
@@ -661,8 +710,10 @@ type may be thrown away, including a value nobody computed
 for the purpose: '_ = 1 + 2' is a discard of an i32 by
 [0200], because a rule about wasted work is a rule about
 people and this one is about types.
-What may not is a call of a function returning none [1920].
-Discarding is for a result, and that call has none.
+What may not is a call of a function returning none [1920]. Discarding is for
+a result, and that call has none. A call with a declared error is also refused
+when a discard would ignore that outcome; `try` propagates it and call-site
+`else` handles it explicitly.
 
 ### [1940] A module value is known when the compiler reads it
 
@@ -695,6 +746,9 @@ whose static chain reaches one; a chain that returns to itself is refused like
 any other module-value cycle. Function code addresses have no all-zero value,
 so a function-valued module binding must write an initializer.
 
+An atom-valued module binding must name an initializer. There is no zero atom,
+and the zero carrier pattern reserved by [1980] is not a source value.
+
 A scalar binding with no value is known too, and what it holds is
 zero — false, for a bool. [0080] lets a binding carry no
 value and says it must be assigned before use, and that
@@ -717,8 +771,9 @@ type and gives that type back, and for three of them a
 value of the right type is still not one the operation can
 use. No paragraph of the tour says what any of the three
 does.
+
 | the operation | the operand it cannot take |
-|---|---|
+| --- | --- |
 | `/` `%` | a divisor of zero [0290] |
 | `<<` `>>` | a negative amount [0320] |
 | `[ ]` | an index outside the length [0520] |
@@ -797,7 +852,58 @@ to the host as the program's status through the system C ABI
 [1650]. This is the first native slice's boundary, not a
 restriction on every hosted executable: [1650]'s C `argc` and
 `argv` form stays available. A freestanding program does not
-use this rule; its build description names the entry [1650].
+use this rule; its build description names the entry [1650]. The first hosted
+entry is infallible: this boundary has no host mapping for a declared Landin
+error.
+
+### [1980] Declared errors are an orthogonal payload-free atom outcome
+
+A function is infallible when its signature has no `!`. A concrete `!` names a
+nonempty atom set; that set is part of complete structural function-type
+identity, recursively when a function value occurs in another signature. A
+public declaration, anonymous function, and written function type must be
+concrete. A private declared routine may write `! ...`; whole-module checking
+then takes the least fixed point containing every atom it fails with and every
+concrete or inferred set propagated by `try`. Mutually recursive private
+routines are solved together. An inferred empty set makes the routine
+infallible.
+
+`fail atom` leaves by the error outcome and carries no successful result. The
+atom's possible set must be a subset of the routine's finalized declared set.
+A fail path need not assign the named successful result. `when` evaluates its
+condition first; only the taken edge evaluates the atom and fails. `try call`
+evaluates the call once and propagates its error unchanged; its success value,
+including a function, fixed array or enabled aggregate, has the ordinary call
+shape. A failing call written without `try` or call-site `else` is refused.
+
+Call-site `else` handles only a nonempty declared error set. Its optional name
+is an immutable atom value scoped to the recovery block and typed as that
+complete set. The successful call edge and every recovery edge that falls
+through must supply the same complete scalar, atom, function, array or nominal
+aggregate shape. A recovery edge may instead `return` or `fail`; it then
+supplies no placeholder and does not participate in the value join. Atom
+`match` is exhaustive over the subject's structural set; one final `_` arm may cover
+all members not named explicitly, and atom arms bind no payload.
+
+Neutral IR keeps successful results and errors separate. Atom constants carry
+source declaration identity and atom-set metadata; slots, datums, signature
+parts and values retain that structural set. A call with errors names a
+separate error slot, `Failure_Test` branches on the abstract outcome, and
+`Fail` is its own terminator. No inferred marker reaches IR. Verification
+checks set runs, identity membership, widening stores and arguments, complete
+signature equality, call failure slots, and failure subsets before a backend
+sees the unit.
+
+For the documented Linux x86-64 internal convention, ordinary atom values use
+a 32-bit carrier. The backend assigns dense nonzero codes in declaration-
+identity order. They use the ordinary integer argument positions and `%eax`
+for a successful atom result. `%r10d` is the dedicated failure carrier for
+both direct and indirect Landin calls: zero means success and a nonzero dense
+atom code means failure. A successful callee clears `%r10d`; `fail` writes it.
+The ordinary scalar or function result remains in `%rax`, and an aggregate
+success still uses caller-owned storage, so the error carrier consumes no
+source parameter, result position, or stack argument. No source atom has code
+zero.
 
 ## THE DECISIONS THIS DOCUMENT TOOK
 
@@ -1044,7 +1150,7 @@ reach. `panic_kind` is a `type` over atoms and `noreturn` is a return form,
 and [1790]'s type rule enables none of the three, so there is nothing to call
 and no way to spell it. `ud2` is what a compiler that cannot write [1670] can
 do, and R6.70 is where panic behaviour is implemented; the alternative
-declined above is calling a runtime routine *instead of* [1670]'s, not
+declined above is calling a runtime routine _instead of_ [1670]'s, not
 [1670] itself.
 
 **Evidence:** `runtime/checked-overflow-traps` and
@@ -1113,7 +1219,7 @@ leaves behind.
 **The tour said** that `sizeof`, `alignof` and `lenof` measure, and that on
 an array or a literal the length is a compile-time value [0370]. It writes
 `w1 := sizeof u32` with the inferred form, so nothing in it says what type a
-measurement has, and [0200]'s default is about an integer *literal* rather
+measurement has, and [0200]'s default is about an integer _literal_ rather
 than about this.
 
 **Chosen:** `usize`. A size and an alignment are counts of bytes on the
@@ -1249,7 +1355,7 @@ mention, and this language does not do work a reader cannot see.
 ### D17 — An array's identity is its length and its element
 
 **The tour said** that an array is a value, that assignment copies it and
-that its size is part of its type [0520]. It says what an array *is* and
+that its size is part of its type [0520]. It says what an array _is_ and
 never says when two of them are the same type, which for a struct [0710]
 answers by naming the declaration that wrote it.
 
@@ -1384,7 +1490,7 @@ declaration, even one whose declared type is the required fixed array, owns no
 runtime storage and is refused by the existing whole-value L0304 rather than
 being lowered as a copy source.
 
-A branch merge intersects what the facts *mean*, not merely how they happen to
+A branch merge intersects what the facts _mean_, not merely how they happen to
 be represented. Whole on both paths remains whole; whole on one path and
 sparse facts on the other keeps those sparse facts; sparse on both keeps their
 intersection. Completeness is decided by counting the sparse facts already
@@ -6395,7 +6501,7 @@ one step below a parent field and spelt it as a second scalar identity beside
 the first, which is a pair and cannot say what a third selection reached.
 
 **Chosen:** every target-neutral operation that names part of an aggregate
-carries a *path*: a run of steps, each naming a declaration-order position
+carries a _path_: a run of steps, each naming a declaration-order position
 [0750] inside the run the step before it reached, and each carrying the
 one-based source-order case when the run it indexes is a variant part's
 payload rather than an ordinary field run. An empty path is the direct
@@ -6540,7 +6646,7 @@ and two arrays of the same length and the same element copy whole.
 `a[i].f` selects a leaf of an element and is a value and a place. [1820]'s
 `indexed` accordingly derives a selection after an index, which is what the
 tour already writes; the parser's by-name refusal of that spelling is retired.
-Definite assignment keeps a fact per known position *and* per run inside the
+Definite assignment keeps a fact per known position _and_ per run inside the
 element, so writing `a[0].x` establishes exactly that leaf and reading it asks
 for exactly that fact — with a fact about the whole element, or about anything
 containing the array, covering it.
@@ -6561,6 +6667,7 @@ both, by making a known index one step of the run rather than a value.
 `negative/selection-from-a-scalar-element`, the malformed case
 `Element_Path_Below_A_Scalar_Element`, the generated IR record, and
 `runtime/array-of-structs` on Linux x86-64.
+
 ### D123 — Infallible function values use one recursive carrier rule
 
 **The tour said** that a function is an ordinary code-address value [0870]
@@ -6741,8 +6848,8 @@ including one rooted at D121's payload alias; and the arm's own aliases carry
 that run with them.
 
 Composing a run and a selected case fixes their order. The run reaches the
-part, and the case is then selected *inside* the part, so the payload offset
-is the reached part's own and not the base field's. A run *below* a selected
+part, and the case is then selected _inside_ the part, so the payload offset
+is the reached part's own and not the base field's. A run _below_ a selected
 payload is a `Case_Index` step of the same run, so nothing is ever added after
 the payload and one order suffices.
 
@@ -6820,7 +6927,7 @@ including nominal aggregates, fixed arrays and D123 function signatures. The
 padded aggregate must fit the selected target. It has no source type spelling
 and no nominal declaration identity.
 
-Function signature agreement compares the ordered result *types* and ignores
+Function signature agreement compares the ordered result _types_ and ignores
 result labels, as [1000] requires. A call through a stored function therefore
 uses the labels written by that value's static function type while the runtime
 positions remain compatible. Outside function-signature agreement, two whole
@@ -6938,3 +7045,46 @@ Both were declined.
 `runtime/defer-call-shapes`, and `runtime/defer-does-not-unwind-traps` on Linux
 x86-64, together with the parser, checker/flow, IR policy, lowering/verifier and
 x86 backend public-seam cases and the generated IR record.
+
+### D130 — Errors are an orthogonal atom outcome, not a second result
+
+**The tour said** that errors are payload-free atoms in one dedicated register,
+that `try` propagates them, and that call-site `else` handles them [0940]
+[0960] [1030]. It did not fix atom-set identity, recursive private inference,
+the success sentinel, the neutral IR carrier, or how scalar and aggregate
+results coexist with that register.
+
+**Chosen:** [1980]. Atom and error sets are structural sets of declaration
+identities. A failing signature adds one orthogonal outcome to its existing
+successful result rather than wrapping, replacing, or adding a named return.
+Concrete sets are part of recursive function-type agreement; private `! ...`
+is the least fixed point of local failures and tried callees, including
+mutually recursive routines. Every first-class or public signature stays
+concrete.
+
+Neutral IR carries source atom identities and set metadata, one call failure
+slot, a semantic `Failure_Test`, and a distinct `Fail` terminator. A recovery
+joins only its fallthrough value with the success value; `return` and `fail`
+edges need no placeholder. The malformed-IR verifier checks set partitions,
+membership, widening, signatures, failure slots, and failure exits before a
+backend can assign bits.
+
+Linux x86-64 uses dense nonzero 32-bit atom codes in declaration-identity order
+and `%r10d` as the dedicated call-failure carrier; zero means success. Ordinary
+atoms still use normal argument positions and `%eax` results. Scalar/function
+results remain in `%rax`, aggregate results remain in caller-owned storage, and
+neither direct nor indirect failing calls consume a source ABI position.
+
+**Why orthogonal rather than a result union:** a `none` function may fail, an
+aggregate result already has independent caller-owned lifetime, and wrapping
+every result would change every value convention and indirect signature merely
+to represent an outcome the tour already assigns its own register. A hidden
+out-parameter would instead consume an argument position and make the declared
+channel alias ordinary storage. Both alternatives erase the one visible
+mechanism [0940] chose.
+
+**Pinned by** `positive/atoms-and-error-signatures`, the negative declared-error
+fixtures, `runtime/atom-values-cross-the-abi`,
+`runtime/declared-errors-direct-and-inferred`,
+`runtime/declared-errors-indirect-abi`, the malformed-error verifier case, and
+the generated lexical, construct and IR records.

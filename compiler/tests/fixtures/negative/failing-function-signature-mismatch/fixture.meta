@@ -1,0 +1,6 @@
+class: negative
+summary: concrete errors participate in complete function signature equality
+constructs: 0940, 1000
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, synthetic-32

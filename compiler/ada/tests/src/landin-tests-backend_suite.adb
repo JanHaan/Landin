@@ -4740,6 +4740,52 @@ package body Landin.Tests.Backend_Suite is
          "a bool occupies the next machine width above one bit");
    end A_Frame_Follows_The_Target_And_Not_The_Host;
 
+   procedure Declared_Errors_Use_The_Dedicated_Register
+     (Item : in out Landin.Testing.Context);
+
+   procedure Declared_Errors_Use_The_Dedicated_Register
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "bad: atom" & LF
+         & "problem: type = bad" & LF
+         & "operation: type = (fails: bool) -> (value: i32) ! problem" & LF
+         & "leaf: (fails: bool) -> (value: i32) ! problem =" & LF
+         & "    fail bad when fails" & LF
+         & "    value = 42" & LF
+         & "end leaf" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    indirect: operation = leaf" & LF
+         & "    code = indirect(false) else 1" & LF
+         & "end main" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check
+           (Item, Contains (Text, "movl %r10d, "),
+            "a caller captures the dedicated error carrier");
+         Landin.Testing.Check
+           (Item, Contains (Text, "movl ") and then Contains (Text, ", %r10d"),
+            "fail writes the dedicated error carrier");
+         Landin.Testing.Check
+           (Item, Contains (Text, "xorl %r10d, %r10d"),
+            "a successful failing-signature return clears the carrier");
+         Landin.Testing.Check
+           (Item, Contains (Text, "call *"),
+            "the same carrier surrounds an indirect call");
+      end;
+   end Declared_Errors_Use_The_Dedicated_Register;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -4909,6 +4955,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "a call returning none keeps nothing",
          A_Call_Returning_None_Keeps_Nothing'Access);
+      Landin.Testing.Register
+        (Into, "backend", "declared errors use the dedicated register",
+         Declared_Errors_Use_The_Dedicated_Register'Access);
       Landin.Testing.Register
         (Into, "backend", "six arguments reach their own widths",
          Six_Arguments_Reach_Their_Own_Widths'Access);

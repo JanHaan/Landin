@@ -36,7 +36,8 @@ package body Landin.Syntax.Parser is
    --  branch or at the body's `end` rather than run past it.
    Statement_Anchor : constant Tok.Kind_Set :=
      [Tok.Kw_Mut | Tok.Identifier | Tok.Underscore | Tok.Left_Paren
-        | Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Return | Tok.Kw_If | Tok.Kw_Elsif
+        | Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Return | Tok.Kw_Fail | Tok.Kw_Try
+        | Tok.Kw_If | Tok.Kw_Elsif
         | Tok.Kw_Else | Tok.Kw_End | Tok.Kw_Public
         | Tok.End_Of_Input => True,
       others => False];
@@ -69,8 +70,7 @@ package body Landin.Syntax.Parser is
    type Refused_Word is
      (Word_None,
       Word_Loop, Word_While, Word_For,
-      Word_Undo, Word_Try, Word_Fail, Word_Break, Word_Continue,
-      Word_Distinct);
+      Word_Undo, Word_Break, Word_Continue, Word_Distinct);
 
    subtype Real_Word is Refused_Word range Word_Loop .. Word_Distinct;
 
@@ -80,8 +80,6 @@ package body Landin.Syntax.Parser is
             when Word_While    => "while",
             when Word_For      => "for",
             when Word_Undo     => "undo",
-            when Word_Try      => "try",
-            when Word_Fail     => "fail",
             when Word_Break    => "break",
             when Word_Continue => "continue",
             when Word_Distinct => "distinct");
@@ -92,8 +90,6 @@ package body Landin.Syntax.Parser is
             when Word_While    => Syn.While_Statement,
             when Word_For      => Syn.For_Statement,
             when Word_Undo     => Syn.Undo_Statement,
-            when Word_Try      => Syn.Try_Expression,
-            when Word_Fail     => Syn.Fail_Statement,
             when Word_Break    => Syn.Break_Statement,
             when Word_Continue => Syn.Continue_Statement,
             when Word_Distinct => Syn.Distinct_Type);
@@ -172,6 +168,10 @@ package body Landin.Syntax.Parser is
             --  bodies.  Control expressions may contain `return`, whose
             --  parser diagnostic points back to the active signature.
             Active_Frame : Frame;
+            --  A call and its enclosing `if` both use `else`.  At the direct
+            --  end of a then/elsif arm the enclosing branch wins; wrapping a
+            --  recovered call in parentheses makes its inner `else` explicit.
+            Else_Closes_Arm : Boolean := False;
 
             --  Set by Parse_Type when it refused a construct rather than
             --  failing to read one.  A binding whose type is a construct
@@ -249,7 +249,8 @@ package body Landin.Syntax.Parser is
                Radix     : Tok.Integer_Base := Tok.Decimal;
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
                Exported  : Boolean := False;
-               Mutable   : Boolean := False) return Node_Id;
+               Mutable   : Boolean := False;
+               Recovers  : Node_Id := No_Node) return Node_Id;
 
             function Extent_Of (Nodes : Slot_List)
               return Landin.Source.Span;
@@ -296,6 +297,9 @@ package body Landin.Syntax.Parser is
               return Slot_List;
             function Parse_Program return Node_Id;
             function Parse_Declaration return Node_Id;
+            function Parse_Atom_Declaration
+              (Exported  : Boolean;
+               Public_At : Landin.Source.Span) return Node_Id;
             function Parse_Type_Declaration
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
@@ -314,6 +318,8 @@ package body Landin.Syntax.Parser is
             function Parse_Returns
               (Declared_At : Landin.Source.Span;
                Returns_At  : out Landin.Source.Span) return Node_Id;
+            function Parse_Errors
+              (Declared_At : Landin.Source.Span) return Node_Id;
             function Parse_Type
               (In_Parameter : Boolean;
                Declared_At  : Landin.Source.Span) return Node_Id;
@@ -536,7 +542,8 @@ package body Landin.Syntax.Parser is
                Radix     : Tok.Integer_Base := Tok.Decimal;
                Digits_At : Landin.Source.Span := Landin.Source.Empty_Span;
                Exported  : Boolean := False;
-               Mutable   : Boolean := False) return Node_Id
+               Mutable   : Boolean := False;
+               Recovers  : Node_Id := No_Node) return Node_Id
             is
                Total : Landin.Source.Span :=
                  Join (Join (Extent, At_Token), Extent_Of (Children));
@@ -550,6 +557,11 @@ package body Landin.Syntax.Parser is
                   end if;
                   Result.Links.Append (Item);
                end loop;
+
+               if Recovers /= No_Node then
+                  Sound := Sound
+                    and then Result.Items (Positive (Recovers)).Sound;
+               end if;
 
                if Total = Landin.Source.Empty_Span then
                   Total := At_Token;
@@ -566,7 +578,8 @@ package body Landin.Syntax.Parser is
                    Slots      => Children'Length,
                    Sound      => Sound,
                    Exported   => Exported,
-                   Mutable    => Mutable));
+                   Mutable    => Mutable,
+                   Recovery   => Recovers));
 
                return Node_Id (Result.Items.Last_Index);
             end Add;
@@ -894,6 +907,24 @@ package body Landin.Syntax.Parser is
                   Advance;
                end if;
 
+               if Peek = Tok.Identifier then
+                  declare
+                     Step : Tok.Token_Index := 1;
+                  begin
+                     while Ahead (Step) = Tok.Comma
+                       and then Ahead (Step + 1) = Tok.Identifier
+                     loop
+                        Step := Step + 2;
+                     end loop;
+                     if Ahead (Step) = Tok.Colon
+                       and then Ahead (Step + 1) = Tok.Kw_Atom
+                     then
+                        return Parse_Atom_Declaration
+                          (Exported, Public_At);
+                     end if;
+                  end;
+               end if;
+
                if Peek = Tok.Identifier
                  and then Ahead (1) = Tok.Colon
                  and then Ahead (2) = Tok.Left_Paren
@@ -1163,6 +1194,7 @@ package body Landin.Syntax.Parser is
                         Returns_Node : Node_Id := No_Node;
                         Returns_At   : Landin.Source.Span :=
                           Landin.Source.Empty_Span;
+                        Errors_Node  : Node_Id := No_Node;
                      begin
                         Advance;
 
@@ -1208,9 +1240,11 @@ package body Landin.Syntax.Parser is
                              Parse_Returns (Declared_At, Returns_At);
                         end if;
 
+                        Errors_Node := Parse_Errors (Declared_At);
+
                         declare
-                           Head : constant Slot_List (1 .. 1) :=
-                             [1 => Returns_Node];
+                           Head : constant Slot_List (1 .. 2) :=
+                             [Returns_Node, Errors_Node];
                         begin
                            return Add
                              (Of_Kind  => Function_Type,
@@ -1394,6 +1428,46 @@ package body Landin.Syntax.Parser is
                return Add (Error_Type, At_Type);
             end Parse_Type;
 
+            --  atom_declaration ::= identifiers ":" "atom"      [0630]
+            --  identifiers ::= identifier ("," identifier)*
+            function Parse_Atom_Declaration
+              (Exported  : Boolean;
+               Public_At : Landin.Source.Span) return Node_Id
+            is
+               Start : constant Landin.Source.Span :=
+                 (if Exported then Public_At else Here);
+               Named   : Landin.Source.Names.Name_Id;
+               At_Name : constant Landin.Source.Span :=
+                 Parse_Declared_Name (Named);
+               More : Slot_Vectors.Vector;
+            begin
+               while Peek = Tok.Comma loop
+                  Advance;
+                  declare
+                     Next_Name : Landin.Source.Names.Name_Id;
+                     At_Next : constant Landin.Source.Span :=
+                       Parse_Declared_Name (Next_Name);
+                  begin
+                     More.Append
+                       (Add (Of_Kind  => Atom_Declaration,
+                             At_Token => At_Next,
+                             Named    => Next_Name,
+                             Exported => Exported));
+                  end;
+               end loop;
+
+               --  The lookahead in Parse_Declaration established both.
+               Advance;
+               Advance;
+               return Add
+                 (Of_Kind  => Atom_Declaration,
+                  At_Token => At_Name,
+                  Extent   => Join (Start, After_Previous),
+                  Children => To_List (More),
+                  Named    => Named,
+                  Exported => Exported);
+            end Parse_Atom_Declaration;
+
             --  binding ::= "mut"? identifier ":" type ("=" expression)?
             --            | "mut"? identifier ":=" expression      [1790]
             --  `identifier ":" "type" "=" type` [1795].  The name is
@@ -1427,7 +1501,55 @@ package body Landin.Syntax.Parser is
                   else
                      Aliased_Type := Parse_Type (False, At_Name);
 
-                     if Type_Refused then
+                     --  [0640]: a union is a nonempty run of atom type
+                     --  names.  Parse_Type read the first name; only a type
+                     --  declaration admits the following bars, so ordinary
+                     --  expression precedence remains untouched.
+                     if not Type_Refused and then Peek = Tok.Bar then
+                        declare
+                           Members : Slot_Vectors.Vector;
+                           Starts  : constant Landin.Source.Span :=
+                             Where (Result, Aliased_Type);
+                        begin
+                           Members.Append (Aliased_Type);
+                           while Peek = Tok.Bar loop
+                              Advance;
+                              if Peek = Tok.Identifier then
+                                 declare
+                                    At_Member : constant Landin.Source.Span :=
+                                      Here;
+                                    Named_Member : constant
+                                      Landin.Source.Names.Name_Id :=
+                                        Named_Here;
+                                 begin
+                                    Advance;
+                                    Members.Append
+                                      (Add (Type_Reference, At_Member,
+                                            Named => Named_Member));
+                                 end;
+                              else
+                                 Complain
+                                   (Item    => Syn.Type_Expected,
+                                    Where   =>
+                                      (if Peek = Tok.End_Of_Input
+                                       then After_Previous else Here),
+                                    Message => "an atom type name belongs"
+                                               & " after `|`",
+                                    Note    => "[0640]: an atom union is a"
+                                               & " nonempty run of atom"
+                                               & " type names",
+                                    Related => At_Name,
+                                    Because => "the type declared here");
+                                 exit;
+                              end if;
+                           end loop;
+                           Aliased_Type := Add
+                             (Of_Kind  => Atom_Union_Type,
+                              At_Token => Starts,
+                              Extent   => Join (Starts, After_Previous),
+                              Children => To_List (Members));
+                        end;
+                     elsif Type_Refused then
                         Resync_Declaration;
                      end if;
                   end if;
@@ -2102,6 +2224,65 @@ package body Landin.Syntax.Parser is
                   Children => To_List (Results));
             end Parse_Returns;
 
+            --  errors ::= "!" ("..." | identifier ("|" identifier)*)
+            --  [0940] [0960].  The concrete form reuses Atom_Union_Type:
+            --  both spell one structural set of atom declaration identities.
+            function Parse_Errors
+              (Declared_At : Landin.Source.Span) return Node_Id
+            is
+               pragma Unreferenced (Declared_At);
+               At_Bang : constant Landin.Source.Span := Here;
+               Members : Slot_Vectors.Vector;
+            begin
+               if Peek /= Tok.Bang then
+                  return No_Node;
+               end if;
+               Advance;
+
+               if Peek = Tok.Dot_Dot_Dot then
+                  declare
+                     At_Inferred : constant Landin.Source.Span := Here;
+                  begin
+                     Advance;
+                     return Add
+                       (Inferred_Error_Set, At_Inferred,
+                        Join (At_Bang, At_Inferred));
+                  end;
+               end if;
+
+               loop
+                  if Peek /= Tok.Identifier then
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => Here,
+                        Message => "an error set names at least one atom",
+                        Note    => "[0940]: `!` is followed by atom names");
+                     return Add
+                       (Error_Type, At_Bang,
+                        Join (At_Bang, After_Previous));
+                  end if;
+
+                  declare
+                     At_Name : constant Landin.Source.Span := Here;
+                     Named   : constant Landin.Source.Names.Name_Id :=
+                       Named_Here;
+                  begin
+                     Advance;
+                     Members.Append
+                       (Add (Type_Reference, At_Name, Named => Named));
+                  end;
+
+                  exit when Peek /= Tok.Bar;
+                  Advance;
+               end loop;
+
+               return Add
+                 (Of_Kind  => Atom_Union_Type,
+                  At_Token => At_Bang,
+                  Extent   => Join (At_Bang, After_Previous),
+                  Children => To_List (Members));
+            end Parse_Errors;
+
             --  body ::= block                                     [1800]
             --
             --  One token past a leading name decides, and the one shape
@@ -2265,6 +2446,7 @@ package body Landin.Syntax.Parser is
                Returns_Node : Node_Id := No_Node;
                Returns_At   : Landin.Source.Span :=
                  Landin.Source.Empty_Span;
+               Errors_Node  : Node_Id := No_Node;
                Body_Node    : Node_Id := No_Node;
                Context      : Frame;
             begin
@@ -2337,6 +2519,8 @@ package body Landin.Syntax.Parser is
                   Returns_Node := Parse_Returns (At_Name, Returns_At);
                end if;
 
+               Errors_Node := Parse_Errors (At_Name);
+
                Context :=
                  (Owner   => At_Name,
                   Result  => Returns_At,
@@ -2394,8 +2578,8 @@ package body Landin.Syntax.Parser is
                end if;
 
                declare
-                  Head : constant Slot_List (1 .. 2) :=
-                    [Returns_Node, Body_Node];
+                  Head : constant Slot_List (1 .. 3) :=
+                    [Returns_Node, Errors_Node, Body_Node];
                begin
                   return Add
                     (Of_Kind  => Function_Declaration,
@@ -2417,6 +2601,7 @@ package body Landin.Syntax.Parser is
                Returns_Node : Node_Id := No_Node;
                Returns_At   : Landin.Source.Span :=
                  Landin.Source.Empty_Span;
+               Errors_Node  : Node_Id := No_Node;
                Body_Node    : Node_Id := No_Node;
                Context      : Frame;
             begin
@@ -2468,6 +2653,8 @@ package body Landin.Syntax.Parser is
                   Returns_Node := Parse_Returns (Start, Returns_At);
                end if;
 
+               Errors_Node := Parse_Errors (Start);
+
                Context :=
                  (Owner   => Start,
                   Result  => Returns_At,
@@ -2501,8 +2688,8 @@ package body Landin.Syntax.Parser is
 
                Depth := Depth - 1;
                declare
-                  Head : constant Slot_List (1 .. 2) :=
-                    [Returns_Node, Body_Node];
+                  Head : constant Slot_List (1 .. 3) :=
+                    [Returns_Node, Errors_Node, Body_Node];
                begin
                   return Add
                     (Of_Kind  => Anonymous_Function,
@@ -2547,7 +2734,7 @@ package body Landin.Syntax.Parser is
                   end if;
 
                   if Peek in Tok.Kw_Mut | Tok.Kw_Inc | Tok.Kw_Dec
-                             | Tok.Underscore | Tok.Kw_Return
+                             | Tok.Underscore | Tok.Kw_Return | Tok.Kw_Fail
                              | Tok.Kw_Public
                   then
                      return True;
@@ -2682,6 +2869,28 @@ package body Landin.Syntax.Parser is
 
                   when Tok.Kw_If =>
                      return Parse_If (Context);
+
+                  when Tok.Kw_Try =>
+                     return Parse_Expression;
+
+                  when Tok.Kw_Fail =>
+                     declare
+                        At_Fail : constant Landin.Source.Span := Here;
+                        Error   : Node_Id;
+                        Guard   : Node_Id := No_Node;
+                     begin
+                        Advance;
+                        Error := Parse_Expression;
+                        if Peek = Tok.Kw_When then
+                           Advance;
+                           Guard := Parse_Expression;
+                        end if;
+                        return Add
+                          (Of_Kind  => Fail_Statement,
+                           At_Token => At_Fail,
+                           Extent   => Join (Start, After_Previous),
+                           Children => [Error, Guard]);
+                     end;
 
                   when Tok.Kw_Return =>
                      declare
@@ -2990,8 +3199,14 @@ package body Landin.Syntax.Parser is
                         Related => At_If,
                         Because => "this branch");
                      pragma Unreferenced (Kept);
-                     Arm_Body := Parse_Block
-                       (Context, Allow_Value => True);
+                     declare
+                        Saved : constant Boolean := Else_Closes_Arm;
+                     begin
+                        Else_Closes_Arm := True;
+                        Arm_Body := Parse_Block
+                          (Context, Allow_Value => True);
+                        Else_Closes_Arm := Saved;
+                     end;
                      Arms.Append
                        (Add (Of_Kind  => If_Arm,
                              At_Token => At_Arm,
@@ -3120,7 +3335,7 @@ package body Landin.Syntax.Parser is
                            and then Named_Ahead (1) = Match_Id)
                  and then Peek /= Tok.End_Of_Input
                loop
-                  if Peek /= Tok.Identifier then
+                  if Peek not in Tok.Identifier | Tok.Underscore then
                      Complain
                        (Item    => Syn.Name_Expected,
                         Where   => Here,
@@ -3134,7 +3349,8 @@ package body Landin.Syntax.Parser is
                   declare
                      At_Case : constant Landin.Source.Span := Here;
                      Named   : constant Landin.Source.Names.Name_Id :=
-                       Named_Here;
+                       (if Peek = Tok.Underscore
+                        then Landin.Source.Names.No_Name else Named_Here);
                      Pattern, Runs : Node_Id;
                      Bindings : Slot_Vectors.Vector;
                      Kept : Boolean;
@@ -3210,7 +3426,7 @@ package body Landin.Syntax.Parser is
                         Is_Statement : constant Boolean :=
                           Peek in Tok.Kw_Mut | Tok.Kw_Inc | Tok.Kw_Dec
                                   | Tok.Underscore | Tok.Kw_Return
-                                  | Tok.Kw_Public
+                                  | Tok.Kw_Fail | Tok.Kw_Public
                           or else
                             (Peek = Tok.Identifier
                              and then
@@ -3409,6 +3625,27 @@ package body Landin.Syntax.Parser is
             --  unary ::= ("-" | "~" | "not")* primary             [1820]
             function Parse_Unary return Node_Id is
             begin
+               if Peek = Tok.Kw_Try then
+                  declare
+                     At_Try : constant Landin.Source.Span := Here;
+                     Operand : Node_Id;
+                  begin
+                     if Too_Deep (At_Try) then
+                        Advance;
+                        return Add (Error_Expression, At_Try);
+                     end if;
+                     Depth := Depth + 1;
+                     Advance;
+                     Operand := Parse_Unary;
+                     Depth := Depth - 1;
+                     return Add
+                       (Of_Kind  => Try_Expression,
+                        At_Token => At_Try,
+                        Extent   => Join (At_Try, After_Previous),
+                        Children => [Operand]);
+                  end;
+               end if;
+
                if not Pre.Is_Prefix (Peek) then
                   return Parse_Primary;
                end if;
@@ -3790,9 +4027,13 @@ package body Landin.Syntax.Parser is
                   Advance;
 
                   declare
-                     Inner : constant Node_Id := Parse_Expression;
+                     Saved : constant Boolean := Else_Closes_Arm;
+                     Inner : Node_Id;
                      Kept  : Boolean;
                   begin
+                     Else_Closes_Arm := False;
+                     Inner := Parse_Expression;
+                     Else_Closes_Arm := Saved;
                      Depth := Depth - 1;
                      Kept := Expect
                        (Wanted  => Tok.Right_Paren,
@@ -3820,15 +4061,6 @@ package body Landin.Syntax.Parser is
                end if;
 
                if Peek = Tok.Identifier then
-                  if Word_At_Hand = Word_Try then
-                     Refuse
-                       (Item    => Syn.Try_Expression,
-                        Where   => At_Item,
-                        Message => "`try` is not enabled yet");
-                     Advance;
-                     return Add (Error_Expression, At_Item);
-                  end if;
-
                   --  `:` never follows an expression: it appears in four
                   --  productions and in each it follows a name being
                   --  declared.  So an identifier followed by `:` or `:=`
@@ -4026,8 +4258,9 @@ package body Landin.Syntax.Parser is
               (Name_At : Landin.Source.Span;
                Named   : Landin.Source.Names.Name_Id) return Node_Id
             is
-               Callee : Node_Id := No_Node;
-               Args   : Slot_Vectors.Vector;
+               Callee   : Node_Id := No_Node;
+               Recovery : Node_Id := No_Node;
+               Args     : Slot_Vectors.Vector;
             begin
                --  D72: a labelled argument run is [0700]'s construction,
                --  not a call.  The leading name is resolved as a type and
@@ -4122,14 +4355,84 @@ package body Landin.Syntax.Parser is
                   end if;
                end if;
 
+               if Peek = Tok.Kw_Else and then not Else_Closes_Arm then
+                  declare
+                     At_Else : constant Landin.Source.Span := Here;
+                     Error_Name : Landin.Source.Names.Name_Id :=
+                       Landin.Source.Names.No_Name;
+                     Recovery_Body : Node_Id;
+                  begin
+                     Advance;
+                     if Peek = Tok.Left_Paren
+                       and then Ahead (1) = Tok.Identifier
+                       and then Ahead (2) = Tok.Right_Paren
+                     then
+                        Advance;
+                        Error_Name := Named_Here;
+                        Advance;
+                        declare
+                           Closed : constant Boolean :=
+                             Expect
+                               (Wanted  => Tok.Right_Paren,
+                                Message => "an error binding closes with `)`",
+                                Note    => "[1030]: `else (error)` binds"
+                                           & " the failed atom",
+                                Related => At_Else,
+                                Because => "this recovery clause");
+                        begin
+                           pragma Unreferenced (Closed);
+                        end;
+
+                        Recovery_Body := Parse_Block
+                          (Active_Frame, Allow_Value => True);
+                        if Peek = Tok.Kw_End then
+                           Advance;
+                        else
+                           Complain
+                             (Item    => Syn.Unclosed_Construct,
+                              Where   => After_Previous,
+                              Message => "this recovery clause is never"
+                                         & " closed",
+                              Note    => "[1030]: a bound `else` clause"
+                                         & " closes with `end`",
+                              Related => At_Else,
+                              Because => "opened here",
+                              Gate    => False);
+                        end if;
+                     else
+                        declare
+                           Value : constant Node_Id := Parse_Expression;
+                        begin
+                           --  A one-expression `else` is the same value block
+                           --  as the bound multiline form, represented by the
+                           --  Block node every contextual consumer already
+                           --  understands.
+                           Recovery_Body := Add
+                             (Of_Kind  => Block,
+                              At_Token => At_Else,
+                              Extent   => Join (At_Else, After_Previous),
+                              Children => [1 => Value]);
+                        end;
+                     end if;
+
+                     Recovery := Add
+                       (Of_Kind  => Recovery_Clause,
+                        At_Token => At_Else,
+                        Extent   => Join (At_Else, After_Previous),
+                        Children => [Recovery_Body],
+                        Named    => Error_Name);
+                  end;
+               end if;
+
                declare
-                  Head : constant Slot_List (1 .. 1) := [Callee];
+                  Head : constant Slot_List (1 .. 1) := [1 => Callee];
                begin
                   return Add
                     (Of_Kind  => Call,
                      At_Token => Name_At,
                      Extent   => Join (Name_At, After_Previous),
-                     Children => Head & To_List (Args));
+                     Children => Head & To_List (Args),
+                     Recovers => Recovery);
                end;
             end Parse_Call;
 

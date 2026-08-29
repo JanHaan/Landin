@@ -50,6 +50,7 @@ package body Landin.Checking is
             for Unused in 1 .. Held loop
                Into.Node_Types.Append (Landin.Types.Undecided);
                Into.Node_Bodies.Append (Landin.Provenance.No_Declaration);
+               Into.Node_Atom_Sets.Append (No_Atom_Set);
                Into.Node_Signatures.Append (No_Signature);
                Into.Node_Result_Shapes.Append (No_Signature);
                Into.Node_Fields.Append (0);
@@ -62,6 +63,7 @@ package body Landin.Checking is
          Into.Declarations.Append (Settlement'(others => <>));
          Into.Layouts.Append (Aggregate_Layout'(others => <>));
          Into.Shapes.Append (Array_Shape'(others => <>));
+         Into.Declaration_Atom_Sets.Append (No_Atom_Set);
          Into.Declaration_Signatures.Append (No_Signature);
          Into.Declaration_Result_Shapes.Append (No_Signature);
       end loop;
@@ -165,6 +167,117 @@ package body Landin.Checking is
    end Note_Body;
 
    ------------------------------------------------------------------
+   --  Atom sets
+   ------------------------------------------------------------------
+
+   function Atom_Set_Count (Of_Table : Table) return Natural
+     is (Natural (Of_Table.Atom_Sets.Length));
+
+   function Add_Atom_Set
+     (Into : in out Table; Atoms : Atom_Array) return Atom_Set_Id
+   is
+      Made : Atom_Set_Record := (Members => (First => 0, Count => 0));
+   begin
+      Made.Members.First := Natural (Into.Atoms.Length);
+      for Atom of Atoms loop
+         Into.Atoms.Append (Atom);
+         Made.Members.Count := Made.Members.Count + 1;
+      end loop;
+      Into.Atom_Sets.Append (Made);
+      return Atom_Set_Id (Into.Atom_Sets.Last_Index);
+   end Add_Atom_Set;
+
+   function Atom_Count
+     (Of_Table : Table; Set_Id : Atom_Set_Id) return Natural
+     is (Of_Table.Atom_Sets (Positive (Set_Id)).Members.Count);
+
+   function Nth_Atom
+     (Of_Table : Table; Set_Id : Atom_Set_Id; Index : Positive)
+      return Declaration_Id
+   is
+      Members : constant Run :=
+        Of_Table.Atom_Sets (Positive (Set_Id)).Members;
+   begin
+      return Of_Table.Atoms (Members.First + Index);
+   end Nth_Atom;
+
+   function Contains_Atom
+     (Of_Table : Table; Set_Id : Atom_Set_Id; Atom : Declaration_Id)
+      return Boolean
+   is
+   begin
+      for Index in 1 .. Atom_Count (Of_Table, Set_Id) loop
+         if Nth_Atom (Of_Table, Set_Id, Index) = Atom then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Contains_Atom;
+
+   function Is_Subset
+     (Of_Table : Table; Left, Right : Atom_Set_Id) return Boolean
+   is
+   begin
+      for Index in 1 .. Atom_Count (Of_Table, Left) loop
+         if not Contains_Atom
+           (Of_Table, Right, Nth_Atom (Of_Table, Left, Index))
+         then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Is_Subset;
+
+   function Atom_Sets_Agree
+     (Of_Table : Table; Left, Right : Atom_Set_Id) return Boolean
+     is (Atom_Count (Of_Table, Left) = Atom_Count (Of_Table, Right)
+         and then Is_Subset (Of_Table, Left, Right));
+
+   function Atom_Set_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Atom_Set_Id
+     is (Of_Table.Node_Atom_Sets (Slot (Of_Table, Of_Tree, Node)));
+
+   function Atom_Set_Of
+     (Of_Table : Table; Id : Declaration_Id) return Atom_Set_Id
+     is (if Id = No_Declaration then No_Atom_Set
+         else Of_Table.Declaration_Atom_Sets (Positive (Id)));
+
+   procedure Note_Atom_Set
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Set_Id  : Atom_Set_Id)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Into.Node_Atom_Sets (Where) /= No_Atom_Set
+        and then not Atom_Sets_Agree
+          (Into, Into.Node_Atom_Sets (Where), Set_Id)
+      then
+         raise Landin.Compiler_Defect with
+           "one node was assigned two atom sets";
+      end if;
+      Into.Node_Atom_Sets (Where) := Set_Id;
+   end Note_Atom_Set;
+
+   procedure Note_Atom_Set
+     (Into   : in out Table;
+      Id     : Declaration_Id;
+      Set_Id : Atom_Set_Id) is
+   begin
+      if Into.Declaration_Atom_Sets (Positive (Id)) /= No_Atom_Set
+        and then not Atom_Sets_Agree
+          (Into, Into.Declaration_Atom_Sets (Positive (Id)), Set_Id)
+      then
+         raise Landin.Compiler_Defect with
+           "one declaration was assigned two atom sets";
+      end if;
+      Into.Declaration_Atom_Sets (Positive (Id)) := Set_Id;
+   end Note_Atom_Set;
+
+   ------------------------------------------------------------------
    --  Function signatures
    ------------------------------------------------------------------
 
@@ -175,12 +288,16 @@ package body Landin.Checking is
      (Into       : in out Table;
       Parameters : Signature_Part_Array;
       Results    : Signature_Part_Array;
-      Site       : Landin.Provenance.Origin) return Signature_Id
+      Site       : Landin.Provenance.Origin;
+      Errors     : Atom_Set_Id := No_Atom_Set;
+      Error_Form : Error_Set_Form := Infallible) return Signature_Id
    is
       Made : Signature_Record :=
         (Parameters => (First => 0, Count => 0),
          Results    => (First => 0, Count => 0),
-         Site       => Site);
+         Site       => Site,
+         Errors     => Errors,
+         Error_Form => Error_Form);
 
       procedure Append
         (Parts : Signature_Part_Array; To_Run : in out Run);
@@ -207,15 +324,19 @@ package body Landin.Checking is
      (Into       : in out Table;
       Parameters : Signature_Part_Array;
       Result     : Signature_Part;
-      Site       : Landin.Provenance.Origin) return Signature_Id
+      Site       : Landin.Provenance.Origin;
+      Errors     : Atom_Set_Id := No_Atom_Set;
+      Error_Form : Error_Set_Form := Infallible) return Signature_Id
    is
    begin
       if Result.Kind = Landin.Types.No_Value then
          return Add_Signature
-           (Into, Parameters, No_Signature_Parts, Site);
+           (Into, Parameters, No_Signature_Parts, Site,
+            Errors, Error_Form);
       end if;
       return Add_Signature
-        (Into, Parameters, Signature_Part_Array'[1 => Result], Site);
+        (Into, Parameters, Signature_Part_Array'[1 => Result], Site,
+         Errors, Error_Form);
    end Add_Signature;
 
    function Signature_Of
@@ -306,6 +427,27 @@ package body Landin.Checking is
       return Landin.Provenance.Origin
      is (Of_Table.Signatures (Positive (Signature)).Site);
 
+   function Signature_Error_Form
+     (Of_Table : Table; Signature : Signature_Id) return Error_Set_Form
+     is (Of_Table.Signatures (Positive (Signature)).Error_Form);
+
+   function Signature_Errors
+     (Of_Table : Table; Signature : Signature_Id) return Atom_Set_Id
+     is (Of_Table.Signatures (Positive (Signature)).Errors);
+
+   procedure Finalize_Inferred_Errors
+     (Into      : in out Table;
+      Signature : Signature_Id;
+      Errors    : Atom_Set_Id)
+   is
+      Held : Signature_Record := Into.Signatures (Positive (Signature));
+   begin
+      Held.Errors := Errors;
+      Held.Error_Form := (if Errors = No_Atom_Set then Infallible
+                          else Concrete);
+      Into.Signatures (Positive (Signature)) := Held;
+   end Finalize_Inferred_Errors;
+
    function Parts_Agree
      (Of_Table : Table; A, B : Signature_Part) return Boolean;
 
@@ -321,6 +463,10 @@ package body Landin.Checking is
             return True;
          when Landin.Types.Scalar_Name =>
             return True;
+         when Landin.Types.Atom_Value =>
+            return Holds (Of_Table, A.Atoms)
+              and then Holds (Of_Table, B.Atoms)
+              and then Atom_Sets_Agree (Of_Table, A.Atoms, B.Atoms);
          when Landin.Types.Aggregate =>
             return A.Aggregate_Body = B.Aggregate_Body;
          when Landin.Types.Fixed_Array =>
@@ -341,7 +487,20 @@ package body Landin.Checking is
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean
    is
    begin
-      if Signature_Parameter_Count (Of_Table, Left)
+      if Left = Right then
+         return True;
+      end if;
+
+      if Signature_Error_Form (Of_Table, Left) = Inferred
+        or else Signature_Error_Form (Of_Table, Right) = Inferred
+        or else Signature_Error_Form (Of_Table, Left)
+                  /= Signature_Error_Form (Of_Table, Right)
+        or else
+          (Signature_Error_Form (Of_Table, Left) = Concrete
+           and then not Atom_Sets_Agree
+             (Of_Table, Signature_Errors (Of_Table, Left),
+              Signature_Errors (Of_Table, Right)))
+        or else Signature_Parameter_Count (Of_Table, Left)
            /= Signature_Parameter_Count (Of_Table, Right)
         or else Signature_Result_Count (Of_Table, Left)
            /= Signature_Result_Count (Of_Table, Right)

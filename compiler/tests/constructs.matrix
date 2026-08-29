@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 107 with evidence, 91 with neither.
+#  199 constructs, 111 with evidence, 88 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -22,8 +22,8 @@
 0060   tour        accepted emitted executed refused  Mutable binding
 0070   tour        -                                  Two questions about a reference
 0080   tour        accepted emitted executed refused  Declaration only
-0090   tour        accepted emitted                   Exported from the module
-0100   tour        -                                  Several names may share one declaration
+0090   tour        accepted emitted refused           Exported from the module
+0100   tour        accepted emitted executed          Several names may share one declaration
 0110   tour        accepted emitted executed refused  Left of ':' is always the name being introduced
 0120   tour        accepted emitted refused refused-by-name Types are declared like any other value, with 'type'
 0130   tour        accepted emitted executed refused  Order inside a module does not matter
@@ -76,8 +76,8 @@
 0600   tour        refused refused-by-name            Text types are distinct views
 0610   tour        -                                  Indexing utf8 by an integer yields the bytes of one
 0620   tour        -                                  DEFERRED to a later version, kept here as a design record
-0630   tour        -                                  Atoms: one declaration, one value, its own type
-0640   tour        -                                  An enumeration is a union of atoms
+0630   tour        accepted emitted executed refused  Atoms: one declaration, one value, its own type
+0640   tour        accepted emitted executed refused  An enumeration is a union of atoms
 0650   tour        refused refused-by-name            Distinct type
 0660   tour        -                                  Range subtype: checked at assignment and conversion
 0670   tour        accepted emitted executed refused refused-by-name Struct, block form and inline form
@@ -107,16 +107,16 @@
 0910   tour        -                                  sink takes a place
 0920   tour        accepted emitted executed refused  Multiple named returns
 0930   tour        accepted emitted executed refused  Every named return must be assigned before return
-0940   tour        refused                            Errors: a declared set of atoms in one dedicated register
+0940   tour        accepted emitted executed refused  Errors: a declared set of atoms in one dedicated register
 0950   tour        -                                  Not everything that goes wrong belongs in that channel
-0960   tour        refused-by-name                    Propagating: try, visible at the call site
+0960   tour        accepted emitted executed refused refused-by-name Propagating: try, visible at the call site
 0970   tour        accepted emitted executed refused refused-by-name Early exit
 0980   tour        refused                            Calls: positional first, then named
 0990   tour        accepted emitted executed refused  A return list is an anonymous struct
 1000   tour        accepted emitted executed refused  A function type is an ordinary type
 1010   tour        accepted emitted executed refused  Anonymous functions
 1020   tour        accepted emitted refused           Discarding a result must be explicit
-1030   tour        -                                  Handling
+1030   tour        accepted emitted executed refused  Handling
 1040   tour        -                                  A caller parameter is filled in by the compiler with the
 1050   tour        accepted emitted executed refused  Branch
 1060   tour        accepted emitted                   Every construct has a one-line form
@@ -212,3 +212,4 @@
 1950   spec        accepted emitted executed refused  An operand an operation cannot take
 1960   spec        accepted emitted executed          A trap stops at the operation
 1970   spec        accepted emitted executed          The first hosted path has one entry shape
+1980   spec        -                                  Declared errors are an orthogonal payload-free atom outcome

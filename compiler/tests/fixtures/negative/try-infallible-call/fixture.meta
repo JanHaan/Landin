@@ -1,0 +1,6 @@
+class: negative
+summary: try propagates only a call with a declared error outcome
+constructs: 0960
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, synthetic-32

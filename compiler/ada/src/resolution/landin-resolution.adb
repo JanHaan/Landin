@@ -161,12 +161,14 @@ package body Landin.Resolution is
      return Declaration_Sort
      is (case Of_Kind is
             when Landin.Syntax.Function_Declaration => Module_Function,
+            when Landin.Syntax.Atom_Declaration     => Module_Atom,
             --  [1795]: a type declaration names a type, and the kernel
             --  has only the module scope to name one in.
             when Landin.Syntax.Type_Declaration     => Module_Type,
             when Landin.Syntax.Variant_Case         => Case_Name,
             when Landin.Syntax.Match_Binding        => Pattern_Binding,
             when Landin.Syntax.Destructured_Name    => Result_Binding,
+            when Landin.Syntax.Recovery_Clause       => Error_Binding,
             when Landin.Syntax.Parameter            => Parameter,
             when Landin.Syntax.Named_Return         => Named_Return,
             when Landin.Syntax.Binding              =>
@@ -213,6 +215,7 @@ package body Landin.Resolution is
             Node   => Node,
             Public =>
               Kind in Landin.Syntax.Function_Declaration
+                      | Landin.Syntax.Atom_Declaration
                       | Landin.Syntax.Binding
               and then Landin.Syntax.Is_Public (Of_Tree, Node)));
 

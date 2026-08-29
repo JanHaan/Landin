@@ -206,6 +206,97 @@ package Landin.Checking is
    type Element_Count is range 0 .. 2 ** 64 - 1;
 
    ------------------------------------------------------------------
+   --  Atom sets
+   ------------------------------------------------------------------
+
+   --  [0630]/[0640]: an atom is one declaration identity and an atom type
+   --  is a nonempty set of those identities.  Set identity is structural:
+   --  source order is retained for diagnostics and dumps but neither order
+   --  nor the declaration that wrote a union makes two equal sets differ.
+   type Atom_Set_Id is range 0 .. Integer'Last;
+   No_Atom_Set : constant Atom_Set_Id := 0;
+
+   type Atom_Array is array (Positive range <>) of Declaration_Id;
+   No_Atoms : constant Atom_Array (1 .. 0) := [];
+
+   function Atom_Set_Count (Of_Table : Table) return Natural
+     with Pre => Is_Prepared (Of_Table);
+
+   function Holds (Of_Table : Table; Id : Atom_Set_Id) return Boolean
+     is (Is_Prepared (Of_Table)
+         and then Id /= No_Atom_Set
+         and then Natural (Id) <= Atom_Set_Count (Of_Table));
+
+   function Add_Atom_Set
+     (Into : in out Table; Atoms : Atom_Array) return Atom_Set_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Atoms'Length > 0
+                  and then
+                    (for all Atom of Atoms =>
+                       Atom /= No_Declaration
+                       and then Natural (Atom) <= Declaration_Limit (Into)),
+          Post => Atom_Set_Count (Into) = Atom_Set_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Atom_Set'Result);
+
+   function Atom_Count
+     (Of_Table : Table; Set_Id : Atom_Set_Id) return Natural
+     with Pre => Holds (Of_Table, Set_Id);
+
+   function Nth_Atom
+     (Of_Table : Table; Set_Id : Atom_Set_Id; Index : Positive)
+      return Declaration_Id
+     with Pre => Holds (Of_Table, Set_Id)
+                 and then Index <= Atom_Count (Of_Table, Set_Id);
+
+   function Contains_Atom
+     (Of_Table : Table; Set_Id : Atom_Set_Id; Atom : Declaration_Id)
+      return Boolean
+     with Pre => Holds (Of_Table, Set_Id)
+                 and then Atom /= No_Declaration;
+
+   function Atom_Sets_Agree
+     (Of_Table : Table; Left, Right : Atom_Set_Id) return Boolean
+     with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
+
+   function Is_Subset
+     (Of_Table : Table; Left, Right : Atom_Set_Id) return Boolean
+     with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
+
+   function Atom_Set_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Atom_Set_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Atom_Set_Of
+     (Of_Table : Table; Id : Declaration_Id) return Atom_Set_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Natural (Id) <= Declaration_Limit (Of_Table);
+
+   procedure Note_Atom_Set
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Set_Id  : Atom_Set_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Set_Id),
+          Post => Atom_Set_Of (Into, Of_Tree, Node) = Set_Id;
+
+   procedure Note_Atom_Set
+     (Into   : in out Table;
+      Id     : Declaration_Id;
+      Set_Id : Atom_Set_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Id /= No_Declaration
+                  and then Natural (Id) <= Declaration_Limit (Into)
+                  and then Holds (Into, Set_Id),
+          Post => Atom_Set_Of (Into, Id) = Set_Id;
+
+   ------------------------------------------------------------------
    --  Function signatures
    ------------------------------------------------------------------
 
@@ -218,6 +309,10 @@ package Landin.Checking is
    type Signature_Id is range 0 .. Integer'Last;
    No_Signature : constant Signature_Id := 0;
 
+   --  `! ...` exists only while whole-module inference is being solved.
+   --  Target-neutral IR receives Infallible or Concrete descriptors only.
+   type Error_Set_Form is (Infallible, Concrete, Inferred);
+
    type Signature_Part is record
       Kind    : Landin.Types.Type_Kind := Landin.Types.No_Value;
       Aggregate_Body : Declaration_Id  := No_Declaration;
@@ -229,6 +324,7 @@ package Landin.Checking is
       --  every label [1000].
       Name    : Landin.Source.Names.Name_Id :=
         Landin.Source.Names.No_Name;
+      Atoms   : Atom_Set_Id             := No_Atom_Set;
       Site    : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
    end record;
 
@@ -249,9 +345,14 @@ package Landin.Checking is
      (Into       : in out Table;
       Parameters : Signature_Part_Array;
       Results    : Signature_Part_Array;
-      Site       : Landin.Provenance.Origin) return Signature_Id
+      Site       : Landin.Provenance.Origin;
+      Errors     : Atom_Set_Id := No_Atom_Set;
+      Error_Form : Error_Set_Form := Infallible) return Signature_Id
      with Pre  => Is_Prepared (Into)
-                  and then Landin.Provenance.Is_Known (Site),
+                  and then Landin.Provenance.Is_Known (Site)
+                  and then
+                    (if Error_Form = Concrete then Holds (Into, Errors)
+                     else Errors = No_Atom_Set),
           Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
                   and then Holds (Into, Add_Signature'Result);
 
@@ -261,9 +362,14 @@ package Landin.Checking is
      (Into       : in out Table;
       Parameters : Signature_Part_Array;
       Result     : Signature_Part;
-      Site       : Landin.Provenance.Origin) return Signature_Id
+      Site       : Landin.Provenance.Origin;
+      Errors     : Atom_Set_Id := No_Atom_Set;
+      Error_Form : Error_Set_Form := Infallible) return Signature_Id
      with Pre  => Is_Prepared (Into)
-                  and then Landin.Provenance.Is_Known (Site),
+                  and then Landin.Provenance.Is_Known (Site)
+                  and then
+                    (if Error_Form = Concrete then Holds (Into, Errors)
+                     else Errors = No_Atom_Set),
           Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
                   and then Holds (Into, Add_Signature'Result);
 
@@ -334,6 +440,24 @@ package Landin.Checking is
      (Of_Table : Table; Signature : Signature_Id)
       return Landin.Provenance.Origin
      with Pre => Holds (Of_Table, Signature);
+
+   function Signature_Error_Form
+     (Of_Table : Table; Signature : Signature_Id) return Error_Set_Form
+     with Pre => Holds (Of_Table, Signature);
+
+   function Signature_Errors
+     (Of_Table : Table; Signature : Signature_Id) return Atom_Set_Id
+     with Pre => Holds (Of_Table, Signature);
+
+   procedure Finalize_Inferred_Errors
+     (Into     : in out Table;
+      Signature : Signature_Id;
+      Errors   : Atom_Set_Id)
+     with Pre  => Holds (Into, Signature)
+                  and then Signature_Error_Form (Into, Signature) = Inferred
+                  and then (Errors = No_Atom_Set or else Holds (Into, Errors)),
+          Post => Signature_Error_Form (Into, Signature) /= Inferred
+                  and then Signature_Errors (Into, Signature) = Errors;
 
    --  Descriptor identity is deliberately not equality: a written type and
    --  a declaration may describe the same signature at different source
@@ -842,6 +966,21 @@ private
       Element_Type => Landin.Provenance.Declaration_Id,
       "="          => Landin.Provenance."=");
 
+   package Atom_Set_Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Atom_Set_Id);
+
+   package Atom_Vectors is new Ada.Containers.Vectors
+     (Index_Type   => Positive,
+      Element_Type => Declaration_Id,
+      "="          => Landin.Provenance."=");
+
+   type Atom_Set_Record is record
+      Members : Run;
+   end record;
+
+   package Atom_Set_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Atom_Set_Record);
+
    package Signature_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Signature_Id);
 
@@ -882,6 +1021,8 @@ private
       Parameters : Run;
       Results    : Run;
       Site       : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
+      Errors     : Atom_Set_Id := No_Atom_Set;
+      Error_Form : Error_Set_Form := Infallible;
    end record;
 
    package Signature_Vectors is new Ada.Containers.Vectors
@@ -911,6 +1052,7 @@ private
       --  it is, and [0710] makes two aggregates one type exactly when
       --  they came from one declaration.
       Node_Bodies  : Body_Vectors.Vector;
+      Node_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Node_Signatures : Signature_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
       --  Which field a selection node names, in the same run.
@@ -920,6 +1062,9 @@ private
       Runs         : Run_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
       Bodies       : Body_Vectors.Vector;
+      Declaration_Atom_Sets : Atom_Set_Id_Vectors.Vector;
+      Atom_Sets    : Atom_Set_Vectors.Vector;
+      Atoms        : Atom_Vectors.Vector;
       Declaration_Signatures : Signature_Id_Vectors.Vector;
       Declaration_Result_Shapes : Signature_Id_Vectors.Vector;
       Signatures   : Signature_Vectors.Vector;

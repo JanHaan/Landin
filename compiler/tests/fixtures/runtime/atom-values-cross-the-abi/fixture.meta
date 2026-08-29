@@ -1,0 +1,6 @@
+class: runtime
+summary: atom identities cross module and local storage plus register and stack ABI positions
+constructs: 0100, 0630, 0640, 1210, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64

@@ -61,6 +61,16 @@ package body Landin.Syntax.Dump is
                end;
             end loop;
 
+            if Of_Kind = Call
+              and then Recovery_Of (Of_Tree, Id) /= No_Node
+            then
+               Strings.Append
+                 (Line, " recovery "
+                  & Offset
+                      (Landin.Source.Byte_Offset
+                         (Recovery_Of (Of_Tree, Id))));
+            end if;
+
             Strings.Append (Out_Text, Strings.To_String (Line));
             Strings.Append (Out_Text, ASCII.LF);
          end;

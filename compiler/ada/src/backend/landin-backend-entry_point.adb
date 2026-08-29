@@ -3,7 +3,9 @@ with Landin.Types;
 package body Landin.Backend.Entry_Point is
 
    use type Landin.IR.Declaration_Id;
+   use type Landin.IR.Atom_Set_Id;
    use type Landin.IR.Item_Kind;
+   use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
    use type Landin.Types.Type_Kind;
 
@@ -34,6 +36,11 @@ package body Landin.Backend.Entry_Point is
               and then Spelling_Of (Declared) = "main"
               and then Landin.IR.Parameter_Count (Of_Unit, Item) = 0
               and then Landin.IR.Result_Of (Of_Unit, Item) = Landin.Types.I32
+              and then Landin.IR.Signature_Of (Of_Unit, Item)
+                         /= Landin.IR.No_Signature
+              and then Landin.IR.Signature_Errors
+                (Of_Unit, Landin.IR.Signature_Of (Of_Unit, Item))
+                  = Landin.IR.No_Atom_Set
               and then Result /= Landin.IR.No_Slot
               and then Spelling_Of
                          (Landin.IR.Declares (Of_Unit, Item, Result))

@@ -1,0 +1,5 @@
+class: positive
+summary: atoms, structural unions, concrete signatures and recursive private error inference compose
+constructs: 0100, 0630, 0640, 0940, 0960, 0970, 1000, 1030, 1210
+program: program.ldn
+targets: linux-x86-64, synthetic-32

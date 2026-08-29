@@ -60,6 +60,7 @@ appears in a program: the marker is the comment.
 ### [0040] Full form: name, type, value
 
 Full form: name, type, value. Immutable by default.
+
 ```landin
 greeting: utf8 = "hello"
 
@@ -68,6 +69,7 @@ greeting: utf8 = "hello"
 ### [0050] Type inferred from the value
 
 Type inferred from the value.
+
 ```landin
 count := 7
 
@@ -76,6 +78,7 @@ count := 7
 ### [0060] Mutable binding
 
 Mutable binding.
+
 ```landin
 mut total: u32 = 0
 
@@ -88,6 +91,7 @@ may the name be pointed somewhere else, and may the thing it
 points at be written? mut on the binding answers the first.
 The type answers the second, with mut inside it, as the
 POINTERS section shows — and nothing else answers either.
+
 ```landin
 mut cursor: ptr u32 = addr first                 -- re-pointable, reads
 knob:  ptr mut u32 = addr setting                -- fixed, writes
@@ -98,6 +102,7 @@ gpioa: volatile ptr mut port = ptr(0x4002_0000)  -- fixed, writes
 ### [0080] Declaration only
 
 Declaration only. Must be assigned before use.
+
 ```landin
 mut result: u32
 
@@ -106,6 +111,7 @@ mut result: u32
 ### [0090] Exported from the module
 
 Exported from the module. Without it, module-internal.
+
 ```landin
 public version: u32 = 3
 
@@ -115,6 +121,7 @@ public version: u32 = 3
 
 Several names may share one declaration, which is the same
 form field lists already use.
+
 ```landin
 public red, green, blue: u8
 north, south, east, west: atom
@@ -129,6 +136,7 @@ Right of ':' is what fills it: a type, or (with '=') a value.
 ### [0120] Types are declared like any other value, with 'type'
 
 Types are declared like any other value, with 'type'.
+
 ```landin
 point: type = struct
     x: f32
@@ -173,6 +181,7 @@ bool, with true and false.
 
 Integer literals are untyped. They take the type of their
 context, and are checked at that point.
+
 ```landin
 tiny:  u8  = 5
 large: u64 = 5
@@ -182,6 +191,7 @@ large: u64 = 5
 ### [0200] With no context, an integer literal defaults to i32
 
 With no context, an integer literal defaults to i32.
+
 ```landin
 plain := 5
 
@@ -191,6 +201,7 @@ plain := 5
 
 Float literals are always recognisable as such. There is no
 silent slide between the two classes.
+
 ```landin
 ratio: f32 = 5.0
 -- wrong: f32 = 5     is a compile error
@@ -202,6 +213,7 @@ zero := 1 / 2         -- 0, integer division
 ### [0220] Bases, separators, exponents
 
 Bases, separators, exponents.
+
 ```landin
 hex_value := 0xDEAD_BEEF
 bin_value := 0b1010_0101
@@ -216,6 +228,7 @@ neg_exp   := 1.0e-6
 
 Hex float literals express every representable value exactly,
 including subnormals.
+
 ```landin
 pi_exact: f64 = 0x1.921fb54442d18p+1
 smallest: f32 = 0x1.0p-126
@@ -227,6 +240,7 @@ smallest: f32 = 0x1.0p-126
 IEEE special values. The sign of a literal is preserved by
 constant folding. The sign of a NaN produced by arithmetic
 is not specified.
+
 ```landin
 neg_zero:  f64 = -0.0
 pos_inf:   f64 = f64.infinity
@@ -239,6 +253,7 @@ neg_nan:   f64 = -f64.nan
 ### [0250] Character literal is a codepoint, typed u32
 
 Character literal is a codepoint, typed u32.
+
 ```landin
 letter_a := 'a'
 
@@ -250,14 +265,17 @@ Text literals are untyped too. They take utf8, []u8, utf16
 or cstring from context; with no context, utf8.
 Every literal carries a trailing NUL that the length does
 not count, so passing one to C costs nothing.
+
 ```landin
 name:  utf8    = "hello"
 cname: cstring = "hello"
 ```
+
 A literal lives in read-only storage, so a reference to one
 cannot be written through by [0070] however the binding is
 declared. Writable text is a copy into storage you asked
 for.
+
 ```landin
 -- greeting: []u8 = "abc"
 -- greeting[0] = 0x78          -- error, the literal is static
@@ -274,6 +292,7 @@ There is no octal form and no \0; write \x00. An unknown
 escape is a compile error, never silently the character.
 \xNN is only valid where bytes are meant, \u{...} only where
 text is meant, so a literal can never be invalid UTF-8.
+
 ```landin
 line  := "col\tsep\n"
 smile := "\u{1F600}"
@@ -288,6 +307,7 @@ If the content contains three, use four. Nothing is escaped.
 The indentation of the closing delimiter is stripped from
 every line, so a block can sit indented in the code and
 still start at the left margin.
+
 ```landin
 help := """
         usage: tool [options]
@@ -303,6 +323,7 @@ help := """
 Arithmetic: + - * / %
 Integer division truncates toward zero; the remainder takes
 the sign of the dividend.
+
 ```landin
 q := -7 / 2      -- -3
 r := -7 % 2      -- -1
@@ -318,6 +339,7 @@ Overflow traps. Wrapping is a separate operator: +% -% *%
 No implicit conversion. Conversion is a type applied to a
 value. If the value is known at compile time, an impossible
 conversion is a compile error; otherwise it traps.
+
 ```landin
 -- bad: u8 = u8(300)        compile error
 runtime_narrow := u8(measured)   -- traps if out of range
@@ -328,6 +350,7 @@ runtime_narrow := u8(measured)   -- traps if out of range
 
 Shifts fill with zeros beyond the width, for any amount.
 Signed >> keeps the sign. One form only.
+
 ```landin
 z := 1 << 40     -- 0 in a u32 context
 
@@ -337,6 +360,7 @@ z := 1 << 40     -- 0 in a u32 context
 
 Bitwise: & | ^ ~ << >>
 These bind TIGHTER than comparisons, unlike C.
+
 ```landin
 flag := status & 1 == 0     -- means (status & 1) == 0
 
@@ -346,6 +370,7 @@ flag := status & 1 == 0     -- means (status & 1) == 0
 
 Logical: and, or, not. Words, so '!' stays free for the
 error channel.
+
 ```landin
 ok := a < b and not done
 
@@ -371,6 +396,7 @@ On an array the length is a compile-time value; on a slice
 it is a run-time value; on a literal it is compile-time.
 The expressions in a literal measured by lenof are checked for one
 scalar element type but are not evaluated or read.
+
 ```landin
 w1 := sizeof u32
 a1 := alignof u64
@@ -388,12 +414,13 @@ the right of an assignment, written on the left.
 
 Assignment is a statement, never an expression:
 =  +=  -=  *=  /=  %=  &=  |=  ^=  <<=  >>=
-and the wrapping forms  +%=  -%=  *%=
+and the wrapping forms  +%=  -%=*%=
 
 ### [0400] No `++` and no `--`
 
 No `++` and no `--`. There are inc and dec statements, though
 `x += 1` says the same thing.
+
 ```landin
 inc total
 dec total
@@ -429,6 +456,7 @@ mut inside the type says the pointee may be written; without
 it the pointee is read-only. .val names the pointee, so it
 reads on the right of an assignment and, with mut, is an
 ordinary target on the left.
+
 ```landin
 mut value: u32 = 42
 p: ptr mut u32 = addr value
@@ -445,6 +473,7 @@ That is not a conversion and [0310] is not bent: no bit
 changes and nothing is lost, a permission is forgotten. It
 is the one relaxation the language has, it goes one way,
 and it is what makes a read-only parameter usable at all.
+
 ```landin
 add_up: (xs: []i32) -> (total: i32) = ... end
 add_up(writable_slice)           -- fine, []mut i32 relaxes to []i32
@@ -470,6 +499,7 @@ Address literal. The pointee type comes from context, and a
 register is written through, so it is a mut pointee sitting
 in an immutable binding — which is exactly the pair [0070]
 separates.
+
 ```landin
 gpio: volatile ptr mut u32 = ptr(0x4001_0000)
 
@@ -481,9 +511,11 @@ Both directions between a pointer and an integer are the
 ordinary conversion of [0700], a type applied to a value.
 No special word: this is the one conversion the language
 marks by what it costs rather than by how it is spelled.
+
 ```landin
 dma_source := u32(addr port.val.dr)
 ```
+
 What it costs: an integer that used to be a pointer has no
 origin. Build a pointer back out of one and you get
 something that borrows nothing, whose lifetime nobody
@@ -501,6 +533,7 @@ an atom and a pointer type. With one atom, the compiler represents
 it as a plain pointer with 0 for the empty case. The spelling does
 not decide how a union of several atoms and a pointer is laid out;
 R2.50 measures that case against R2.20's variant representation.
+
 ```landin
 none_found: atom
 maybe_ptr: type = none_found | ptr mut u32
@@ -518,6 +551,7 @@ indices.
 Three operations sit between pointers and slices, and core
 has them where nothing else does. Every allocator needs all
 three, and none can be written in the language proper.
+
 ```landin
 mem.offset:     (p: ptr mut u8, n: usize) -> (q: ptr mut u8)
 mem.base_of:    (T: type, s: []T) -> (p: ptr u8)
@@ -559,6 +593,7 @@ element can therefore observe an earlier write, and a failure can leave the
 written prefix changed; no hidden array-sized temporary is implied. An explicitly
 typed local may finish a nonempty written prefix with [0560]'s repeated suffix;
 the same direct formation and ordering apply.
+
 ```landin
 grid: [4]f32 = [1.0, 2.0, 3.0, 4.0]
 mut next: [4]f32
@@ -569,6 +604,7 @@ next = [grid[0], grid[1], grid[2], grid[3]]
 ### [0530] The length may be inferred from the literal
 
 The length may be inferred from the literal.
+
 ```landin
 triple := [1.0, 2.0, 3.0]        -- [3]f32
 
@@ -587,6 +623,7 @@ write the name. Pointers and 'any' have no zero image at
 all, because there is no null. Where the destination supplies
 that context, assignment writes the complete zero image as one
 value rather than spelling its parts.
+
 ```landin
 mut buffer: [256]u8 = zeroed
 buffer = zeroed                 -- clear the existing array as a whole
@@ -602,11 +639,13 @@ generic code can ask for it. It is supplied by the compiler
 rather than declared, which is the only kind of conformance
 that is: the compiler is the only thing that knows a type's
 bit patterns.
+
 ```landin
 zeroable: type = concept (T: type)
 end zeroable
 
 ```
+
 Which is what lets a shape that needs a value for storage it
 has not filled yet say so, instead of pretending — see
 small at [1350] and the reason at [0510].
@@ -614,6 +653,7 @@ small at [1350] and the reason at [0510].
 ### [0560] Repetition, for static patterns that live in flash
 
 Repetition, for static patterns that live in flash.
+
 ```landin
 pattern: [256]u8 = [256 of 0xFF]
 filled:  [256]u8 = [of 0xFF]         -- length from the type
@@ -623,6 +663,7 @@ read_header: () -> none =
 end read_header
 
 ```
+
 The repeated expression runs once, not once for every element. In the mixed form
 `[e1, ..., ek, of repeated]`, an explicitly typed local, explicitly typed module
 binding or assignment to a mutable fixed array requires `1 <= k < N`. A local or
@@ -640,6 +681,7 @@ compile-time known scalar [1940]. A counted repetition
 may also supply an inferred local or module binding's length and scalar element
 type; an untyped integer element defaults to `i32`. Assignment to an existing
 fixed array accepts an explicit count or takes it from the destination:
+
 ```landin
 flash: [4]u32 = [of 0xFFFF_FFFF]
 header_image: [8]u8 = [0x7F, 0x45, of 0]
@@ -649,6 +691,7 @@ row = [of next()]                 -- each call to next happens once
 row = [header(), of padding()]     -- prefix first, then one padding call
 
 ```
+
 A zero contextual length and a zero count in the inferred form are refused while
 [0580]'s empty-array decision remains open. A count-less inferred initializer
 and other general array value positions remain later compiler slices. Every
@@ -661,6 +704,7 @@ loader-zeroed image as omitted or `zeroed` state.
 
 Slice: a view. Pointer plus length. Copies nothing. mut
 inside the type says the elements may be written.
+
 ```landin
 view:  []f32     = grid[0..<2]      -- read-only elements
 edit:  []mut f32 = grid[0..<2]      -- writable, since grid is mut
@@ -683,12 +727,14 @@ the same shape and different rules. The first backend
 lowers them to scalar loops; real vector instructions come
 later, as an optimisation, and never on a target without
 them.
+
 ```landin
 va: [4]f32 = [1.0, 1.0, 1.0, 1.0]
 vb := va * va
 sc := va * 2.0        -- a scalar on either side is fine
 s  := reduce_add(vb)
 ```
+
 Arithmetic applies element by element between arrays of the
 same element type and the same length; differing lengths do
 not broadcast, they are a type error. Overflow traps per
@@ -727,6 +773,7 @@ attribute. Field access through an index goes straight into
 that field's array, reading a whole element gathers a copy,
 and the address of a whole element does not exist. The
 point of it is the last line: one field, contiguous.
+
 ```landin
 world: type = struct
     items: soa [4096]entity
@@ -745,6 +792,7 @@ advance: (inout w: world, dt: f32) -> none =
     --  p := addr w.items[0]     -- error: the fields are apart
 end advance
 ```
+
 Only for structs without a variant part. Layout attributes
 do not apply, because there is no single element layout.
 
@@ -755,6 +803,7 @@ do not apply, because there is no single element layout.
 Atoms: one declaration, one value, its own type. This is
 the one place where a declaration introduces a type and a
 value at once, because they coincide.
+
 ```landin
 not_found: atom
 no_access: atom
@@ -765,6 +814,7 @@ no_access: atom
 
 An enumeration is a union of atoms.
 north, south, east and west were declared at [0100].
+
 ```landin
 compass: type = north | south | east | west
 
@@ -774,15 +824,18 @@ compass: type = north | south | east | west
 
 Distinct type: same representation, different type, no
 operations inherited.
+
 ```landin
 meter:  type = distinct f32
 second: type = distinct f32
 ```
+
 meter + second is a compile error.
 
 ### [0660] Range subtype: checked at assignment and conversion
 
 Range subtype: checked at assignment and conversion.
+
 ```landin
 percent: type = u8 range 0..100
 
@@ -792,6 +845,7 @@ percent: type = u8 range 0..100
 
 Struct, block form and inline form. Same thing. The inline
 form is also the parameter, return and payload list.
+
 ```landin
 size2: type = (w: u32, h: u32)
 
@@ -800,6 +854,7 @@ size2: type = (w: u32, h: u32)
 ### [0680] Struct with a variant part
 
 Struct with a variant part. Common fields need no ceremony.
+
 ```landin
 figure: type = struct
     label: utf8
@@ -817,6 +872,7 @@ end figure
 A case with no payload is written bare. It is an atom,
 and [1700] holds wherever atoms appear, so a variant reads
 as the union it is.
+
 ```landin
 node_kind: type = struct
     kind: variant
@@ -831,13 +887,16 @@ end node_kind
 
 Construction and conversion use the same form: a type
 applied to arguments.
+
 ```landin
 origin := point(x: 0.0, y: 0.0)
 metres := meter(1.5)
 ```
+
 A variant case is built the same way: the case name applied
 to its payload. The tour showed variants being matched long
 before it showed one being built.
+
 ```landin
 mut f: figure = (label: "disc", area: 0.0, kind: circle(radius: 2.0))
 f.kind = rectangle(width: 3.0, height: 4.0)
@@ -852,6 +911,7 @@ What does not convert is a value already typed as an
 anonymous struct, a return list for instance: two anonymous
 types match when field names, types and order all match,
 and neither ever becomes a same-shaped named type.
+
 ```landin
 here: point = (x: 1.0, y: 2.0)
 pair: (quot: i32, rem: i32) = divide(10, 3)
@@ -872,6 +932,7 @@ literal by whoever writes it. The trade is still real and
 belongs to that writer — a literal with 'of' picks up a
 field added later without a word, one without it breaks
 loudly.
+
 ```landin
 cfg: control = (enable: true, mode: external, of zeroed)
 
@@ -887,6 +948,7 @@ plain number is a plain number.
 A set earns its place when its members mean something. A
 numbered bank of lines does not: sixteen output pins are
 [16]bool at 0..15, not sixteen invented atoms.
+
 ```landin
 irq_rx:  atom
 irq_tx:  atom
@@ -897,17 +959,20 @@ external: atom
 pll:      atom
 
 ```
+
 The encoding belongs to the union, not to the atom, so the
 same atom may be encoded differently in another register.
 The width is the smallest that holds the largest encoding,
 so it is usually left out; a base type is written only when
 the datasheet gives the field more room than it needs.
+
 ```landin
 polarity: type = (active_low = 0 | active_high = 1)   -- one bit
 clock_mode: type = (internal = 0 | external = 1 | pll = 4)
 divider_sel: type = u4 (by_1 = 0 | by_2 = 1)   -- four bits, as given
 
 ```
+
 A set is not a kind of its own. set(X) generates a packed
 struct of bool, one field per member of X, each sitting at
 the bit its encoding names — so membership is a field read,
@@ -920,6 +985,7 @@ A union used as a set must carry its encodings, since the
 encoding is the bit number. Leaving them out would put the
 bit assignment back at the mercy of declaration order,
 which is the hole this section closed.
+
 ```landin
 irq: type = (irq_rx = 0 | irq_tx = 1 | irq_err = 2)
 
@@ -930,6 +996,7 @@ control: type = layout(packed) struct
     divider: u12         at 16..27
 end control
 ```
+
 Bit positions are written down rather than implied by the
 order of the fields. Every bit nobody claims is reserved by
 that fact alone: it cannot be named, it survives a
@@ -946,16 +1013,19 @@ A field may be an array, which is how every real peripheral
 describes sixteen two-bit pin settings in one word. The
 element width times the count has to equal the range, and
 element zero takes the low bits.
+
 ```landin
 moder: type = layout(packed) struct
     pins: [16]pin_mode at 0..31
 end moder
 ```
+
 Indexing such a field by a value known only at run time is
 ordinary code: it is a shift by a computed amount inside a
 register image, with the same bounds check any index gets.
 On an image, that is — never straight through the volatile
 pointer, for the reason [0740] gives.
+
 ```landin
 set_pin: (inout m: moder, n: usize, mode: pin_mode) -> none =
     m.pins[n] = mode
@@ -972,6 +1042,7 @@ write-one-to-clear, clear-on-read, write-once and whatever
 the next vendor invents without the language growing a word
 for each. Writing a single field through a volatile pointer
 stays forbidden: build the whole value, write it once.
+
 ```landin
 status: register(control, read: normal, write: none,
                  reset: 0x0000_0400)
@@ -979,6 +1050,7 @@ clear:  register(set(irq), read: normal, write: one_clears,
                  reset: 0x0000_0000)
 
 ```
+
 A field of register(T, ...) type reads as a T and is
 assigned a T, and the access behaviour is checked exactly
 there: reading one whose read is 'none' is an error, and so
@@ -989,6 +1061,7 @@ whole image, change it locally, write it back whole.
 the register holds after a reset, recorded so that tools
 and readers know what they are starting from. The hardware
 puts it there, not the program.
+
 ```landin
 reset_flags: (c: volatile ptr mut control) -> none =
     c.val = (enable: true, mode: external,
@@ -1010,6 +1083,7 @@ and padding in between, so a hexdump matches the source and
 the layout does not shift under a new compiler.
 layout(optimal) lets the compiler reorder to save padding.
 layout(c) applies the C rules. Byte order is per field.
+
 ```landin
 packet: type = layout(c) struct
     kind:   u8
@@ -1024,18 +1098,22 @@ end packet
 Attributes are prefix words, from a closed set. Arguments
 are always parenthesised. Closed value sets are atoms;
 arbitrary linker names stay strings.
+
 ```text
 mut public volatile align(n) layout(c|optimal|packed)
 ```
+
 and 'at' for a bit position, which is why a field or an
 entry cannot be called that — the same goes for 'from',
 'of', 'with' and 'align' itself.
+
 ```text
 big little escaping caller fixed option
 link(section: "...", symbol: "...", keep, weak,
      inline, noinline)
 extern(c|interrupt|naked|...)
 ```
+
 packed folded into layout, naked into extern, option implies
 fixed, and the five toolchain words became one attribute with
 named arguments. Register access is data now, not keywords.
@@ -1049,6 +1127,7 @@ annotations. Instead every pointer, slice and 'any' carries
 the origin of what it refers to: static, allocated, or
 frame. Frame-origin may not be returned, and may not be
 stored where something longer-lived keeps it.
+
 ```landin
 bad: () -> (p: ptr u32) =
     x := 42
@@ -1061,6 +1140,7 @@ end bad
 
 Parameters are non-escaping by default, so a callee may use
 a pointer freely but not keep it. Keeping it is declared.
+
 ```landin
 push_front: (inout head: ptr mut node, escaping item: ptr mut node)
             -> none =
@@ -1085,9 +1165,11 @@ from is written down, because the caller cannot otherwise
 know that the thing it came from has to hold still now.
 That, and only that: whether the view may be written is the
 return type's business [0430].
+
 ```landin
 used: (T: type, l: list(T)) -> (s: []mut T from l) = ... end
 ```
+
 One accessor, not two. It hands out the widest permission
 the storage has, and a caller who wants less relaxes it by
 [0440] — 'xs: []T = vec.used(l)'. The pair of accessors that
@@ -1120,11 +1202,13 @@ The borrow of [0830] reaches across the call from there,
 with the derivation supplied by the signature instead of
 being visible in one expression. No new checking, and the
 fix is the same one: take the view again afterwards.
+
 ```landin
 xs := vec.used(numbers)
 try vec.push(numbers, a, 5)     -- error: numbers is borrowed by xs
 use(xs)
 ```
+
 Nothing is written at the call. A convention is part of the
 declaration and appears nowhere else: the compiler has it,
 and a caller that misuses what it got is told so at the
@@ -1142,6 +1226,7 @@ privilege and the same place as the promise about
 uninitialised storage — one place to audit, two promises —
 and it is what lets an allocator hand out storage that
 points into itself without the storage borrowing it.
+
 ```landin
 bump_alloc: (inout a: bump, size: usize, alignment: usize)
             -> (p: ptr mut u8) ! out_of_memory =
@@ -1168,6 +1253,7 @@ sound for a reason worth saying rather than leaving
 implicit: the block is the outermost extent, so anything
 that would outlive it passes the block on its way out, and
 the check there catches it.
+
 ```landin
 report: (data: []u8) -> none =
     arena scratch do
@@ -1189,6 +1275,7 @@ there is nothing to annotate and the fix is always nearby:
 take the view again afterwards. It only applies where the
 storage can actually move, and unchecked turns it off with
 everything else.
+
 ```landin
 grow_and_use: (inout l: list, v: i32) -> none =
     xs := l.items
@@ -1232,6 +1319,7 @@ deliberately out.
 
 A function is a value of a function type. No 'fn' keyword.
 '=' opens the body, 'end' closes it, always.
+
 ```landin
 double: (x: i32) -> (r: i32) =
     r = x * 2
@@ -1243,6 +1331,7 @@ end double
 
 A single-expression body still takes an end. The expression
 fills the named return.
+
 ```landin
 triple_it: (x: i32) -> (r: i32) = x * 3 end
 
@@ -1251,6 +1340,7 @@ triple_it: (x: i32) -> (r: i32) = x * 3 end
 ### [0890] Nothing returned
 
 Nothing returned, and never returns:
+
 ```landin
 log_it:  (m: utf8) -> none = ... end
 halt_it: () -> noreturn = loop do end loop end halt_it
@@ -1262,8 +1352,9 @@ halt_it: () -> noreturn = loop do end loop end halt_it
 Three parameter conventions, and they are about the value
 you were handed — never about what it points at, which the
 type says by [0450].
+
 | convention | what it promises |
-|---|---|
+| --- | --- |
 | `in` | I will not change the value. The default, unmarked. |
 | `inout` | I may replace it, exclusively, and the change comes back. Implies mut. |
 | `sink` | consumed. The place the caller named is dead afterwards — see [0910], since a place is not always a binding. |
@@ -1285,6 +1376,7 @@ references unconstrained; for T = ptr node it is exact.
 The origin travels with the type, so one word covers both.
 An inout argument need not be a binding. A pointer target,
 c.inner.val, is an ordinary one.
+
 ```landin
 process: (source: []u8, inout target: []u8, sink owned: buffer)
          -> (written: u32) =
@@ -1317,6 +1409,7 @@ A place sunk out of an inout parameter must be assigned
 again before the function returns, or the caller would get
 its struct back with a dead field and nobody tracking it.
 That is [0930]'s rule for named returns, applied to fields.
+
 ```landin
 release: (T: type, A: type is allocator, inout l: list(T), inout a: A)
          -> none =
@@ -1330,6 +1423,7 @@ end release
 ### [0920] Multiple named returns
 
 Multiple named returns.
+
 ```landin
 divide: (a: i32, b: i32) -> (quot: i32, rem: i32) =
     quot = a / b
@@ -1337,6 +1431,7 @@ divide: (a: i32, b: i32) -> (quot: i32, rem: i32) =
 end divide
 
 ```
+
 Two or more returns travel as one anonymous structural result aggregate. Their
 written order fixes its layout and transport; their names are its fields. A
 single return keeps its own type rather than being wrapped.
@@ -1349,6 +1444,7 @@ fail path they need not be, and the caller may not read them.
 ### [0940] Errors: a declared set of atoms in one dedicated register
 
 Errors: a declared set of atoms in one dedicated register.
+
 ```landin
 open_file: (path: utf8) -> (handle: u32) ! not_found | no_access =
     fail no_access when lenof path == 0
@@ -1356,6 +1452,12 @@ open_file: (path: utf8) -> (handle: u32) ! not_found | no_access =
 end open_file
 
 ```
+
+Atom and error sets are structural declaration-identity sets: aliases flatten,
+source order does not matter, and a singleton may widen into a union containing
+it. In the first Linux x86-64 internal convention ordinary atom values use
+dense nonzero 32-bit codes, while `%r10d` carries the error outcome and zero
+means success. The ordinary result convention is unchanged.
 
 ### [0950] Not everything that goes wrong belongs in that channel
 
@@ -1376,6 +1478,7 @@ Reporting needs somewhere to report to, and that is an
 ordinary parameter. A diagnostics sink is a capability by
 [1680]: a function that was given none cannot report, which
 is enforced by an argument list and nothing else.
+
 ```landin
 parse: (src: utf8, inout d: diagnostics)
        -> (tree: ptr node) ! out_of_memory | too_deep = ... end
@@ -1391,7 +1494,11 @@ concept entries [1260], anything exported to C — and
 anything public. A public signature is a promise, and one
 that a change three modules down can rewrite silently is
 not a promise. Inside a module, where the compiler sees
-every caller anyway, '...' is a convenience and stays.
+every caller anyway, '...' is a convenience and stays. Mutually recursive
+private routines are inferred together at their least fixed point; an empty
+inferred set is infallible. Function types and anonymous functions write a
+concrete set because their complete signature is their type.
+
 ```landin
 read_config: (path: utf8) -> (data: []u8) ! ... =
     h := try open_file(path)
@@ -1408,6 +1515,7 @@ Early exit: return and fail, each with an optional
 ### [0980] Calls: positional first, then named
 
 Calls: positional first, then named. No default values.
+
 ```landin
 r1 := divide(10, 3)
 r2 := process(source: src, target: dst, owned: buf)
@@ -1419,6 +1527,7 @@ r2 := process(source: src, target: dst, owned: buf)
 A return list is an anonymous struct, so a result can be
 bound whole and read by field, or destructured. Binding by
 name, never by position.
+
 ```landin
 whole       := divide(10, 3)
 sum         := whole.quot + whole.rem
@@ -1427,6 +1536,7 @@ sum         := whole.quot + whole.rem
 (quot, _)   := divide(30, 3)
 
 ```
+
 The call is evaluated once. Names may be selected in any order, omitted, or
 renamed after `:`; `_` explicitly ignores what is not bound. A whole result can
 also cross an `if`, `match`, or bare-block value when every fallthrough edge has
@@ -1440,11 +1550,13 @@ A function type is an ordinary type, and a function is an
 ordinary value of it, represented as a code address. There
 is no separate function-pointer type and addr is not used
 on functions: the type is written the way the signature is.
+
 ```landin
 handler: type = () -> none
 mut current: handler = default_handler
 
 ```
+
 The names written inside the signature describe its parameter and return
 positions; in a type they do not declare local names. Two function types agree
 by those positions' types, not by their labels. Function values may themselves
@@ -1454,6 +1566,7 @@ address; mutable local or module storage may later receive any address with the
 same complete signature.
 A callback is therefore a pair of that and a state pointer,
 written out because nothing is captured.
+
 ```landin
 on_byte: type = struct
     call:  (state: ptr u8, b: u8) -> none
@@ -1469,6 +1582,7 @@ its own parameters, named return and body locals, but no local, parameter or
 return from the expression's enclosing routine. State travels as an explicit
 parameter. Forming one produces a static code address; it does not execute the
 body.
+
 ```landin
 less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
 
@@ -1477,6 +1591,7 @@ less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
 ### [1020] Discarding a result must be explicit
 
 Discarding a result must be explicit.
+
 ```landin
 _ = double(5)
 
@@ -1487,6 +1602,7 @@ _ = double(5)
 Handling, not just propagating: an else clause on the call,
 binding the error atom. It either yields a value or leaves
 the function. try is sugar for the second line.
+
 ```landin
 h1 := open_file(path) else 0
 h2 := open_file(path) else (e) fail e end
@@ -1497,6 +1613,7 @@ h3 := open_file(path) else (e)
     end match
 end open_file
 ```
+
 The else clause yields a value, or transfers control out of
 the block that encloses it: return, fail, break, continue.
 That is the same rule an if-expression arm follows, so an
@@ -1505,10 +1622,18 @@ placeholder to satisfy the type.
 It does not assign to the binding it is initialising, which
 would need a rule about writing an immutable binding inside
 its own initialiser.
+The success and recovery paths may carry any enabled result shape: scalar,
+atom, function, fixed array, or struct through its ordinary caller-owned
+storage. A bound error name has the call's complete atom set and is visible
+only inside its recovery block. An exhaustive atom `match` may name every atom
+or end with one `_` arm for those left over.
+
 Being an expression, it also works in argument position:
+
 ```landin
 use(read_config(path) else (e) default_config() end)
 ```
+
 A call that can fail and whose result is discarded is an
 error. Write 'try f()' or discard through an else.
 else is for the error channel only, not for unions.
@@ -1519,6 +1644,7 @@ A caller parameter is filled in by the compiler with the
 site of the call, so assertions and logging work without
 macros. It may only be passed on from another caller
 parameter, otherwise a wrapper would report itself.
+
 ```landin
 site: type = distinct u32
 
@@ -1528,6 +1654,7 @@ assert: (cond: bool, caller where: site) -> none =
     end if
 end assert
 ```
+
 used as: assert(count > 0)
 
 ## CONTROL FLOW
@@ -1541,6 +1668,7 @@ demo_flow: (x: i32, items: []i32) -> (out: i32) =
 ### [1050] Branch
 
 Branch. 'then' closes the condition, which must be bool.
+
 ```landin
     if x > 0 then
         out = 1
@@ -1556,6 +1684,7 @@ Branch. 'then' closes the condition, which must be bool.
 
 Every construct has a one-line form. No newline is ever
 required; 'end' closes.
+
 ```landin
     if x > 0 then out = 1 end if
 
@@ -1565,6 +1694,7 @@ required; 'end' closes.
 
 A declaration is allowed in a condition. It is a plain
 type error unless it is bool.
+
 ```landin
     if ok := is_ready() then
         out = 1
@@ -1586,6 +1716,7 @@ supplies no value and needs no placeholder. Only fallthrough edges join their
 definite-assignment facts; an edge that has already left cannot prove a read on
 a surviving sibling. Statements and the final expression run in source order,
 after an `if` condition or `match` subject and only in the selected arm.
+
 ```landin
     sign := if x > 0 then 1 else -1 end if
 
@@ -1600,6 +1731,7 @@ after an `if` condition or `match` subject and only in the selected arm.
 
 Bare block, for scoping. Without a label it is simply `begin ... end`; a label
 names the block for the later control transfers that need one.
+
 ```landin
     scope: begin
         tmp := x * 2
@@ -1611,15 +1743,16 @@ names the block for the later control transfers that need one.
 ### [1100] defer runs at the end of its block, in reverse order
 
 defer runs when its block is left, in reverse order. That includes ordinary
-fallthrough and a successful return through the block; a trap is a stop and
-does not unwind anything. A nested block runs its own entries before an outer
-block's, and an entry is active only after control has reached its statement.
-The call is evaluated where it runs, not where it was written: it names places,
-and reads them then. So a defer that sinks something sinks it at the end, which
-is why the thing stays usable in between — and if a named place has been
-re-pointed by then, the defer sees what is there now. The block's final value is
-formed before these calls run. Registering one evaluates no callee or argument,
-costs nothing and reserves nothing.
+fallthrough, a successful return, or declared failure through the block; a trap
+is a stop and does not unwind anything. A nested block runs its own entries
+before an outer block's, and an entry is active only after control has reached
+its statement. The call is evaluated where it runs, not where it was written:
+it names places, and reads them then. So a defer that sinks something sinks it
+at the end, which is why the thing stays usable in between — and if a named
+place has been re-pointed by then, the defer sees what is there now. The block's
+final value or failure atom is formed before these calls run. Registering one
+evaluates no callee or argument, costs nothing and reserves nothing.
+
 ```landin
     defer cleanup()
 
@@ -1638,6 +1771,7 @@ It is its own word rather than a flavour of defer,
 because it is not the same thing: to defer is to do it
 later, and this may never be done at all. English
 calls it a contingency, or a compensating action.
+
 ```landin
     undo release(handle)
 
@@ -1646,6 +1780,7 @@ calls it a contingency, or a compensating action.
 ### [1120] Checks may be switched off for a region, visibly
 
 Checks may be switched off for a region, visibly.
+
 ```landin
     unchecked begin
         out = out + items[0]
@@ -1656,6 +1791,7 @@ Checks may be switched off for a region, visibly.
 ### [1130] Unconditional loop
 
 Unconditional loop.
+
 ```landin
     counter: loop do
         break when x == 0
@@ -1666,6 +1802,7 @@ Unconditional loop.
 ### [1140] Conditional loop
 
 Conditional loop.
+
 ```landin
     mut i: u32 = 0
     while i < 10 do
@@ -1678,6 +1815,7 @@ Conditional loop.
 ### [1150] Traversal
 
 Traversal. Bindings default to in; inout implies mut.
+
 ```landin
     for item in items do
         out += item
@@ -1701,6 +1839,7 @@ place, over a []T it is not. Over anything else that
 satisfies iterable the binding is a copy, since item at
 [1320] hands out a value — so assigning to it is an error
 rather than a silent write to nothing.
+
 ```landin
     xs := vec.used(l)               -- []mut i32
     for k in 0..<lenof xs do
@@ -1712,6 +1851,7 @@ rather than a silent write to nothing.
 ### [1170] complete runs when the loop finished without break
 
 complete runs when the loop finished without break.
+
 ```landin
     for item in items do
         break when item == 42
@@ -1725,6 +1865,7 @@ complete runs when the loop finished without break.
 
 Labels use the ordinary name form, on loops and bare
 blocks only. break and continue take one.
+
 ```landin
     outer: for a in items do
         for b in items do
@@ -1743,6 +1884,7 @@ yield the same type, and complete supplies the value for
 running out; loop do needs none, having no other exit.
 'with' is required because a bare identifier after break
 could otherwise be either a label or a value.
+
 ```landin
     found := for item in items do
         break with item when item > 40
@@ -1761,6 +1903,7 @@ them, the triangular cleanup of several fallible
 acquisitions falls out of the order instead of being
 written: the first failing frees nothing, the second
 frees one, the third frees two.
+
 ```landin
 grow: (K: type, V: type, A: type is allocator,
        inout m: map(K, V), inout a: A, want: usize)
@@ -1775,6 +1918,7 @@ grow: (K: type, V: type, A: type is allocator,
     m.keys  = nk          -- fallible follows
 end grow
 ```
+
 And the discipline it asks for, which has to be said out
 loud: undo cleans up what is still yours. Once a resource
 has been handed on, its cleanup is somebody else's, but
@@ -1799,6 +1943,7 @@ allocator.
 Pattern matching: constant patterns, case patterns with
 binding, and the wildcard. No fallthrough; list several
 labels instead. A missing case is a compile error.
+
 ```landin
 area: (f: figure) -> (a: f32) =
     a = 0.0
@@ -1824,6 +1969,7 @@ An inout binding borrows the matched value for the arm, by
 the rule at [0830]. So an arm may assign to the variant
 field it was bound out of, but only once the binding has
 had its last use, exactly as any other borrow ends.
+
 ```landin
 spill: (inout s: store, v: i32) -> none =
     match s.kind
@@ -1846,6 +1992,7 @@ end describe
 ### [1230] A concept names a bundle of requirements on a type
 
 A concept names a bundle of requirements on a type.
+
 ```landin
 ordered: type = concept (T: type)
     less: (a: T, b: T) -> (yes: bool)
@@ -1856,6 +2003,7 @@ end ordered
 ### [1240] A conformance registers one type against one concept
 
 A conformance registers one type against one concept.
+
 ```landin
 i32 is ordered (less: less_i32)
 
@@ -1869,6 +2017,7 @@ them. The binder is an ordinary parameter list — the same
 form functions take and the same form a parameterised type
 takes — so a variable may carry a constraint, and a fixed
 value parameter may appear among them.
+
 ```landin
 (T: type) list(T) is iterable (Cur: usize, Item: T,
                                first: list_first, at_end: list_at_end,
@@ -1877,6 +2026,7 @@ value parameter may appear among them.
 (A: type is allocator) counted(A) is allocator
     (alloc: counted_alloc, free: counted_free)
 ```
+
 The functions supplying the entries are generic themselves.
 Instantiating the conformance supplies their type argument
 and leaves a function of exactly the concept's shape, so
@@ -1913,6 +2063,7 @@ operation costs, is the standard library's business. The
 language checks nothing about cost and knows no vocabulary
 for it: a guarantee should not depend on how clever the
 compiler happens to be.
+
 ```landin
 indexable: type = concept (T: type, Idx: type, Item: type)
     get: (s: T, i: Idx) -> (item: Item)
@@ -1953,6 +2104,7 @@ is as good as putting N first, and at the call site N is
 deduced from whatever argument pins it down.
 Concept entries are reached through the type parameter, so
 two constrained parameters never collide: A.less, B.less.
+
 ```landin
 sort: (T: type is ordered, data: []mut T) -> none =
     for k in 1..<lenof data do
@@ -1972,6 +2124,7 @@ end sort
 
 At the call site the type is inferred from the arguments.
 Naming it explicitly stays possible.
+
 ```landin
 sort_demo: (values: []i32) -> none =
     sort(values)
@@ -2003,6 +2156,7 @@ cannot ask how big its element is cannot allocate.
 ### [1320] Traversal is a concept
 
 Traversal is a concept. This is what 'for x in s' uses.
+
 ```landin
 iterable: type = concept (T: type, Cur: type, Item: type)
     first:  (s: T) -> (c: Cur)
@@ -2021,6 +2175,7 @@ built in for integer-like types only. Anything else a type
 wants to be traversed by, it satisfies iterable for. Custom
 stepping is a library call, so the step is visible where it
 is used rather than hidden in a type.
+
 ```landin
 step_range: type (T: type) = struct
     low:  T
@@ -2030,6 +2185,7 @@ end step_range
 
 step: (T: type, low: T, high: T, by: T) -> (r: step_range(T)) = ... end
 ```
+
 used as: for i in step(0, 10, 2) do ... end for
 
 ### [1340] Concepts compose
@@ -2038,6 +2194,7 @@ Concepts compose. A combined concept is named, so a table
 is generated per (type, concept) and the value stays two
 words. Conformance is declared explicitly, even when the
 body is empty.
+
 ```landin
 drawable: type = concept (T: type)
     draw: (self: ptr T, target: ptr mut canvas) -> none
@@ -2055,6 +2212,7 @@ button is drawable  (draw:  button_draw)
 button is clickable (click: button_click)
 button is widget    (focus: button_focus)
 ```
+
 All three, because the composed declaration supplies only
 what it adds. Nothing is inherited by having the parts.
 
@@ -2064,6 +2222,7 @@ Types take parameters through a declaration form of their
 own, not through a function that returns a type — that
 would be the compile-time evaluation this language does not
 have. Substitution, not execution.
+
 ```landin
 list: type (T: type) = struct
     items: []T
@@ -2071,9 +2230,11 @@ list: type (T: type) = struct
 end list
 
 ```
+
 The parameter list is the same one everywhere: a variable
 may be constrained, and a fixed value parameter may stand
 among the type parameters.
+
 ```landin
 map: type (K: type is hashable, V: type) = struct ... end map
 small: type (T: type is zeroable, fixed N: u32) = struct ... end small
@@ -2087,6 +2248,7 @@ runs on the heap, in an arena, or on a fixed buffer with no
 dynamic allocation at all. A failing allocator makes the
 out-of-memory paths testable, which almost nobody bothers
 with in C because it is too awkward.
+
 ```landin
 allocator: type = concept (A: type)
     alloc: (inout a: A, size: usize, alignment: usize)
@@ -2097,6 +2259,7 @@ end allocator
 push: (T: type, A: type is allocator, inout l: list(T), inout a: A, v: T)
       -> none ! out_of_memory = ... end
 ```
+
 The allocator is threaded, not stored in the container, and
 the reason is stronger than visibility: a stored allocator
 makes the type list(T, A), so a list in an arena and a list
@@ -2128,6 +2291,7 @@ be put in a list that outlives the frame.
 
 Building one is explicit. The concept comes from context
 where it can; otherwise name it.
+
 ```landin
 screen: (a: arena) -> (items: []any widget) ! out_of_memory =
     b := try mem.new(T: button, a: a)
@@ -2144,6 +2308,7 @@ end screen
 Calls go through the table, with the data pointer as the
 first argument. This is the only place that reads like a
 method call.
+
 ```landin
 paint: (items: []any widget, target: ptr canvas) -> none =
     for w in items do
@@ -2186,6 +2351,7 @@ every time. Nothing else — no dots, no spaces, no case, no
 characters that some filesystem somewhere will not carry.
 The separator in source is always '/', on every host. The
 compiler turns it into whatever the filesystem wants.
+
 ```landin
 import net/http
 
@@ -2194,6 +2360,7 @@ import net/http
 ### [1430] Alias, for collisions
 
 Alias, for collisions.
+
 ```landin
 import net/http as h
 
@@ -2202,6 +2369,7 @@ import net/http as h
 ### [1440] Pull selected names into scope, by name
 
 Pull selected names into scope, by name. No wildcard.
+
 ```landin
 import net/http (get, post)
 
@@ -2216,6 +2384,7 @@ Imports are per file, so every file reads on its own.
 Values at module level must be known at compile time.
 Nothing runs before the entry point. Immutable ones can
 stay in flash; mutable ones cost RAM and are conspicuous.
+
 ```landin
 table: [4]u32 = [1, 2, 4, 8]
 mut call_count: u32 = 0
@@ -2268,6 +2437,7 @@ no dispute is fatal.
 ### [1500] Conditional compilation
 
 Conditional compilation.
+
 ```landin
 fixed if compiler.arch == arm64 then
     word_bits: u32 = 64
@@ -2283,6 +2453,7 @@ Compile-time assertion. Not a keyword: it is a builtin
 call like the rest of [1560], because the compiler is what
 has to know it, and that leaves the word 'assert' to the
 library function at [1040] where it belongs.
+
 ```landin
 compiler.assert(sizeof usize == 8)
 
@@ -2291,6 +2462,7 @@ compiler.assert(sizeof usize == 8)
 ### [1520] A compile-time value parameter
 
 A compile-time value parameter.
+
 ```landin
 make_buffer: (fixed N: u32, T: type) -> (b: [N]T) = ... end
 
@@ -2302,6 +2474,7 @@ Your own build switches. Declared, typed, with a default,
 settable from the build description. A misspelt name is a
 compile error, never a silent false. Names are global, so
 each is declared exactly once.
+
 ```landin
 option log_level: u32 = 0
 
@@ -2347,8 +2520,9 @@ modules of the reserved landin package — landin/compiler
 and its siblings — and are in scope without an import,
 which is why their bare names are not available to anyone
 else.
+
 | module | what it reaches |
-|---|---|
+| --- | --- |
 | `compiler` | target, word size, byte order, build mode, and the atomic and vector intrinsics |
 | `assembler` | inline assembly |
 | `linker` | libraries, sections, entry |
@@ -2390,11 +2564,13 @@ A C pointer may be null and a Landin pointer may not, so the
 two are not the same type and a declaration says which it
 means. malloc returns something that may be nothing, which
 is the union of [0480] and costs no bits.
+
 ```landin
 none_returned: atom
 extern(c) malloc: (n: usize) -> (p: none_returned | ptr mut u8)
 extern(c) free:   (p: ptr mut u8) -> none
 ```
+
 ptr(0) is refused, so null cannot be minted on this side
 either. Where a foreign interface hands back a pointer that
 may be null, it is declared as the union and matched on; the
@@ -2405,6 +2581,7 @@ was.
 
 Linking a static library, next to the declarations that
 need it rather than in a separate build file.
+
 ```landin
 linker.library("m")
 
@@ -2414,6 +2591,7 @@ linker.library("m")
 
 Exporting to C. No error channel crosses the boundary, so
 the error set must be empty.
+
 ```landin
 public extern(c) my_add: (a: i32, b: i32) -> (r: i32) =
     r = a + b
@@ -2424,6 +2602,7 @@ end my_add
 ### [1610] A symbol name the language's identifiers cannot spell
 
 A symbol name the language's identifiers cannot spell.
+
 ```landin
 link(symbol: "__aeabi_uidiv") udiv: (a: u32, b: u32) -> (q: u32) = ... end
 
@@ -2435,6 +2614,7 @@ Atomics are builtins, not assembly, so the compiler knows
 which memory they touch and can still allocate registers
 around them. The ordering is a compile-time atom. The
 standard library wraps these into a pleasant type.
+
 ```landin
 bump: (p: ptr u32) -> none =
     _ = compiler.atomic_add(p, 1, acq_rel)
@@ -2447,6 +2627,7 @@ end bump
 Inline assembly, for what has no builtin. Opaque to the
 compiler, which therefore assumes it may touch any memory
 and must not be reordered.
+
 ```landin
 extern(naked) reset_handler: () -> none =
     assembler.block("""
@@ -2456,6 +2637,7 @@ extern(naked) reset_handler: () -> none =
         """)
 end reset_handler
 ```
+
 'start' and not 'main': freestanding there is no main, and
 the build description names the entry [1650].
 
@@ -2466,6 +2648,7 @@ table is a struct, not an array of addresses: a function
 type is an ordinary type [1000], so a handler is written as
 one, and the first word is a stack pointer rather than a
 handler at all. 'handler' is the function type from [1000].
+
 ```landin
 vector_table: type = layout(c) struct
     stack_top: usize
@@ -2480,6 +2663,7 @@ vectors: vector_table = (
     rest:      [of default_handler]
 )
 ```
+
 Being reachable from something kept is what keeps a
 handler. The table carries keep and names them, so they
 survive by being named. extern(interrupt) does not imply
@@ -2504,6 +2688,7 @@ is handed what it may do — an allocator, an Io, a
 diagnostics log — and the entry point is the one place
 where a root is minted rather than passed. So the whole of
 main is an argument list being filled.
+
 ```landin
 public main: () -> (code: i32) =
     args := io.args()           -- []cstring, from core
@@ -2516,9 +2701,11 @@ public main: () -> (code: i32) =
     end program
 end main
 ```
+
 Which is what makes the same run testable and portable
 without it knowing: hand it a different root and it does
 not learn the difference.
+
 ```landin
 test_drops_debug: () -> none =
     mut h := io.in_memory([(name: "in.log", body: "DEBUG a\nERROR b\n")])
@@ -2531,6 +2718,7 @@ test_drops_debug: () -> none =
     end scratch
 end test_drops_debug
 ```
+
 For that to work at all, Io has to be a concept and not a
 type, so something else can satisfy it. It travels as
 'any io' rather than as a type parameter: an indirect call
@@ -2544,6 +2732,7 @@ A failed check calls a fixed, never-returning symbol.
 Two scalars, no strings: 'site' is a number the compiler
 assigns per check, and the file and line for it live in a
 side table that constrained builds simply omit.
+
 ```landin
 panic_kind: type = out_of_range | overflow | bad_conversion | unreachable
 
@@ -2604,8 +2793,9 @@ because there is nothing left for it to be.
 
 How a new feature earns its place. When a program cannot
 be written cleanly, in order:
+
 | ask, in order | then |
-|---|---|
+| --- | --- |
 | can an existing mechanism express it? | a library |
 | can the compiler work it out itself? | no syntax |
 | must the programmer say it, and does saying it generalise or remove another mechanism? | a candidate |

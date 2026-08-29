@@ -1,0 +1,6 @@
+class: negative
+summary: a broader atom union cannot be assigned to a narrower set
+constructs: 0630, 0640
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, synthetic-32

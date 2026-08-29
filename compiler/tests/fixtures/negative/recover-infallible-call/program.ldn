@@ -1,0 +1,7 @@
+leaf: () -> (value: i32) =
+    value = 1
+end leaf
+
+f: () -> (value: i32) =
+    value = leaf() else 2
+end f

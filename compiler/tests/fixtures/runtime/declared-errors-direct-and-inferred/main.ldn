@@ -1,0 +1,128 @@
+missing, denied: atom
+problems: type = missing | denied
+
+pair: type = struct
+    x: i32
+    y: i32
+end pair
+row: type = [2]i32
+holder: type = struct
+    child: pair
+    values: row
+end holder
+callback: type = (value: i32) -> (result: i32)
+mut atom_calls: i32 = 0
+
+make_error: () -> (result: problems) =
+    inc atom_calls
+    result = missing
+end make_error
+
+guarded_fail: () -> none ! problems =
+    fail make_error() when false
+end guarded_fail
+
+identity: (value: i32) -> (result: i32) =
+    result = value
+end identity
+
+add_two: (value: i32) -> (result: i32) =
+    result = value + 2
+end add_two
+
+error_value: (fails: bool) -> (result: problems) ! problems =
+    fail missing when fails
+    result = denied
+end error_value
+
+scalar: (which: i32) -> (result: i32) ! problems =
+    fail missing when which == 1
+    fail denied when which == 2
+    result = 10
+end scalar
+
+relay: (which: i32) -> (result: i32) ! ... =
+    result = scalar(which) else (error)
+        fail error
+    end
+end relay
+
+make_pair: (fails: bool) -> (result: pair) ! problems =
+    fail missing when fails
+    result = pair(x: 20, y: 22)
+end make_pair
+
+pair_forward: (fails: bool) -> (result: pair) ! ... =
+    result = try make_pair(fails)
+end pair_forward
+
+make_row: (fails: bool) -> (result: row) ! problems =
+    fail denied when fails
+    result = [20, 22]
+end make_row
+
+row_forward: (fails: bool) -> (result: row) ! ... =
+    result = try make_row(fails)
+end row_forward
+
+select: (fails: bool) -> (result: callback) ! problems =
+    fail missing when fails
+    result = identity
+end select
+
+touch: (fails: bool) -> none ! problems =
+    fail denied when fails
+end touch
+
+probe: (fails: bool) -> none ! ... =
+    try touch(fails)
+end probe
+
+left: (which: i32) -> (result: i32) ! ... =
+    fail missing when which == 1
+    result = try right(which)
+end left
+
+right: (which: i32) -> (result: i32) ! ... =
+    fail denied when which == 2
+    result = if which == 0 then 10 else try left(0) end if
+end right
+
+public main: () -> (code: i32) =
+    e0: problems = error_value(false) else missing
+    e1: problems = error_value(true) else missing
+    s0 := relay(0) else 0
+    s1 := relay(1) else (error)
+        match error
+            missing: 5
+            _: 0
+        end match
+    end
+    p0: pair = pair_forward(false) else pair(x: 0, y: 0)
+    p1: pair = pair_forward(true) else pair(x: 20, y: 22)
+    r0: row = row_forward(false) else [0, 0]
+    r1: row = row_forward(true) else [20, 22]
+    f0: callback = select(false) else add_two
+    f1: callback = select(true) else add_two
+    recursive := left(0) else 0
+    probe(false) else 0
+    guarded_fail() else 0
+    mut placed: holder = zeroed
+    placed.child = pair_forward(true) else
+        if true then pair(x: 20, y: 22)
+        else pair(x: 0, y: 0) end if
+    placed.values = row_forward(true) else [20, 22]
+    if e0 == denied and e1 == missing
+       and s0 == 10 and s1 == 5
+       and p0.x + p0.y == 42 and p1.x + p1.y == 42
+       and r0[0] + r0[1] == 42 and r1[0] + r1[1] == 42
+       and f0(42) == 42 and f1(40) == 42
+       and recursive == 10 and atom_calls == 0
+       and placed.child.x + placed.child.y == 42
+       and placed.values[0] + placed.values[1] == 42
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

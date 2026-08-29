@@ -1,0 +1,5 @@
+missing, denied: atom
+
+f: () -> none ! missing =
+    fail denied
+end f

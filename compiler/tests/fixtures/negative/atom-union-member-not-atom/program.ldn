@@ -1,0 +1,3 @@
+north: atom
+number: type = u32
+bad: type = north | number
