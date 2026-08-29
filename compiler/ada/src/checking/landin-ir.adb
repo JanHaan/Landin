@@ -1063,17 +1063,21 @@ package body Landin.IR is
    end Append;
 
    function Emit_Storage_Address
-     (Into : in out Unit;
-      Item  : Item_Id;
-      Place : Storage;
-      Site  : Landin.Provenance.Origin) return Value_Id
+     (Into        : in out Unit;
+      Item        : Item_Id;
+      Place       : Storage;
+      Site        : Landin.Provenance.Origin;
+      Field       : Natural := 0;
+      Nested_Field : Natural := 0) return Value_Id
      is (Append
            (Into, Item,
-            Instruction'(Op          => Storage_Address,
-                         Result      => Landin.Types.Usize,
-                         Site        => Site,
-                         Destination => Place,
-                         others      => <>)));
+            Instruction'(Op            => Storage_Address,
+                         Result        => Landin.Types.Usize,
+                         Site          => Site,
+                         Destination   => Place,
+                         Element_Field => Field,
+                         Nested_Part   => Nested_Field,
+                         others        => <>)));
 
    function Emit_Number
      (Into    : in out Unit;

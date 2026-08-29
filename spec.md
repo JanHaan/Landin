@@ -5667,3 +5667,34 @@ avoids both changes without introducing a source pointer.
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/array-argument-unassigned`; the generated token and IR records; and
 `runtime/array-arguments-cross-calls` on Linux x86-64.
+
+### D96 — Contextual nested storage may be an aggregate argument
+
+**The tour said** that calls evaluate argument expressions left to right
+[0410]. D90/D91 made `parent.child.array` and `parent.child` complete
+contextual storage sources, while D94/D95 initially accepted only a direct
+storage name in an aggregate argument position.
+
+**Chosen:** a flat ordinary-struct parameter may receive a depth-one ordinary
+child `parent.child`, and a fixed-array parameter may receive either
+`parent.array` or `parent.child.array`. Nominal identity or array shape must
+match exactly, and the selected child or array must be definitely assigned in
+full. Deeper paths, construction and other general aggregate expressions
+remain refused.
+
+`Storage_Address` carries the independent declaration-order parent and child
+field identities in addition to its module-or-frame storage identity. It never
+carries an offset. The backend recursively places those fields for the selected
+target before transporting the resulting address through D94/D95's one ABI
+position; the callee performs the same defensive copy into independent shaped
+parameter storage.
+
+**Why preserve the path:** flattening the child into a new datum would erase
+D86's nominal boundary, while recording the selected target offset would make
+checked IR target-specific. The existing contextual source already proves one
+complete extent, so extending its neutral path carrier to the argument boundary
+does not create an aggregate expression value.
+
+**Pinned by** the checker, lowering, malformed-IR verifier and backend public
+seams; `negative/nested-storage-argument-unassigned`; the generated token and
+IR records; and `runtime/nested-storage-arguments` on Linux x86-64.

@@ -1417,19 +1417,43 @@ package body Landin.IR.Verifier is
                         --  asks it a question.
                         case Op is
                            when Storage_Address =>
-                              if Is_Datum
-                                or else
-                                  (not Is_Whole_Aggregate
-                                     (Id, Destination_Of (Of_Unit, Id, V))
-                                   and then not Is_Whole_Array
-                                     (Id, Destination_Of
-                                            (Of_Unit, Id, V)))
-                              then
-                                 return
-                                   (Kind =>
-                                      Storage_Address_Is_Not_An_Aggregate,
-                                    Item => Id, Block => Block, Value => V);
-                              end if;
+                              declare
+                                 Place : constant Storage :=
+                                   Destination_Of (Of_Unit, Id, V);
+                                 Field : constant Natural :=
+                                   Element_Field_Of (Of_Unit, Id, V);
+                                 Nested : constant Natural :=
+                                   Nested_Field_Of (Of_Unit, Id, V);
+                                 Element : Landin.Types.Scalar_Name;
+                                 Length : Element_Total;
+                                 Bad : Fault_Kind := Nothing_Wrong;
+                              begin
+                                 if Is_Datum then
+                                    Bad :=
+                                      Storage_Address_Is_Not_An_Aggregate;
+                                 elsif Field = 0 then
+                                    if not Is_Whole_Aggregate (Id, Place)
+                                      and then not Is_Whole_Array (Id, Place)
+                                    then
+                                       Bad :=
+                                         Storage_Address_Is_Not_An_Aggregate;
+                                    end if;
+                                 elsif Nested = 0
+                                   and then Is_Whole_Aggregate_Field
+                                     (Id, Place, Field)
+                                 then
+                                    null;
+                                 else
+                                    Bad := Shape_Of
+                                      (Id, Place, Field, Element, Length,
+                                       Nested => Nested);
+                                 end if;
+
+                                 if Bad /= Nothing_Wrong then
+                                    return (Kind => Bad, Item => Id,
+                                            Block => Block, Value => V);
+                                 end if;
+                              end;
 
                            when Load | Store =>
                               if not Holds

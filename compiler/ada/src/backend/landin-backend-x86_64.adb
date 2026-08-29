@@ -738,7 +738,10 @@ package body Landin.Backend.X86_64 is
                when Landin.IR.Storage_Address =>
                   Storage_Address
                     (Landin.IR.Destination_Of (Of_Unit, Item, Value),
-                     0, "%rax");
+                     Landin.IR.Element_Field_Of (Of_Unit, Item, Value),
+                     "%rax",
+                     Nested => Landin.IR.Nested_Field_Of
+                       (Of_Unit, Item, Value));
                   Carry
                     (Landin.Targets.Byte_8, "%rax", Value_Cell (Value));
 

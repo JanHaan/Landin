@@ -927,16 +927,21 @@ package body Landin.Tests.Backend_Suite is
         (Work,
          "pair: type = struct" & LF
          & "    left: i32" & LF
+         & "    row: [2]i32" & LF
          & "    right: i32" & LF
          & "end pair" & LF
+         & "outer: type = struct" & LF
+         & "    prefix: u8" & LF
+         & "    nested: pair" & LF
+         & "end outer" & LF
          & "take: (a: i32, first: pair, c: i32, d: i32, e: i32,"
          & " f: i32, second: [2]i32) -> (r: i32) =" & LF
          & "    r = first.left + second[1]" & LF
          & "end take" & LF
          & "use: () -> (r: i32) =" & LF
-         & "    mut first: pair = zeroed" & LF
-         & "    second: [2]i32 = [6, 7]" & LF
-         & "    r = take(1, first, 2, 3, 4, 5, second)" & LF
+         & "    mut state: outer = zeroed" & LF
+         & "    r = take(1, state.nested, 2, 3, 4, 5,"
+         & " state.nested.row)" & LF
          & "end use" & LF,
          Ran);
 
@@ -954,6 +959,9 @@ package body Landin.Tests.Backend_Suite is
             Occurrences (Text, HT & "popq %rsi" & LF) = 2
               and then Occurrences (Text, HT & "rep movsb" & LF) = 2,
             "each aggregate is copied into independent callee storage");
+         Landin.Testing.Check
+           (Item, Contains (Text, HT & "addq %rdx, %rax" & LF),
+            "the nested array address follows its target-derived offset");
       end;
    end Aggregate_Arguments_Are_Copied_In_The_Callee;
 

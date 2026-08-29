@@ -670,10 +670,44 @@ package body Landin.Stages.Lowering is
                if Type_At (Of_Tree, Argument)
                     in Ty.Aggregate | Ty.Fixed_Array
                then
-                  Given (Which) :=
-                    IR.Emit_Storage_Address
-                      (Unit.all, Filling, Storage_For (Of_Tree, Argument),
-                       Site_Of (Of_Tree, Argument));
+                  declare
+                     Selected : constant Boolean :=
+                       Syn.Kind (Of_Tree, Argument) = Syn.Member_Selection;
+                     Nested : constant Boolean :=
+                       Selected
+                       and then Syn.Kind
+                         (Of_Tree, Syn.Target_Of (Of_Tree, Argument))
+                           = Syn.Member_Selection;
+                     Middle : constant Syn.Node_Id :=
+                       (if Nested
+                        then Syn.Target_Of (Of_Tree, Argument)
+                        else Syn.No_Node);
+                     Named : constant Syn.Node_Id :=
+                       (if Nested
+                        then Syn.Target_Of (Of_Tree, Middle)
+                        elsif Selected
+                        then Syn.Target_Of (Of_Tree, Argument)
+                        else Argument);
+                     Field : constant Natural :=
+                       (if Nested
+                        then Landin.Checking.Field_Index
+                          (Types.all, Of_Tree, Middle)
+                        elsif Selected
+                        then Landin.Checking.Field_Index
+                          (Types.all, Of_Tree, Argument)
+                        else 0);
+                     Child : constant Natural :=
+                       (if Nested
+                        then Landin.Checking.Field_Index
+                          (Types.all, Of_Tree, Argument)
+                        else 0);
+                  begin
+                     Given (Which) :=
+                       IR.Emit_Storage_Address
+                         (Unit.all, Filling, Storage_For (Of_Tree, Named),
+                          Site_Of (Of_Tree, Argument),
+                          Field => Field, Nested_Field => Child);
+                  end;
                else
                   Given (Which) :=
                     Lower_Expression (Of_Tree, Argument, Scope);
