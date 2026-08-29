@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 102 with evidence, 96 with neither.
+#  198 constructs, 103 with evidence, 95 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -90,7 +90,7 @@
 0740   tour        -                                  Access behaviour is data, not keywords
 0750   tour        accepted emitted executed refused  Fields keep the order you wrote them
 0760   tour        -                                  Attributes are prefix words, from a closed set
-0770   tour        -                                  There is no borrow checker and there are no lifetime
+0770   tour        accepted emitted executed          There is no borrow checker and there are no lifetime
 0780   tour        -                                  Parameters are non-escaping by default
 0790   tour        -                                  The other direction
 0800   tour        -                                  The borrow of reaches across the call from there
