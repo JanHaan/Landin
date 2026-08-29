@@ -6299,3 +6299,35 @@ suite; `negative/written-function-signature-mismatch`; the generated lexical
 and IR records through `positive/written-function-values`; and
 `runtime/written-function-values` together with the existing
 inferred-function-value runtime cases on Linux x86-64.
+
+### D118 — A subobject path is a run of steps, not a pair
+
+**The tour said** that member selection is left to right and may chain as
+`a.b.c` [0420] [1820], and puts no depth on that chain. D88--D90 implemented
+one step below a parent field and spelt it as a second scalar identity beside
+the first, which is a pair and cannot say what a third selection reached.
+
+**Chosen:** every target-neutral operation that names part of an aggregate
+carries a *path*: a run of steps, each naming a declaration-order position
+[0750] inside the run the step before it reached, and each carrying the
+one-based source-order case when the run it indexes is a variant part's
+payload rather than an ordinary field run. An empty path is the direct
+operation. The base field stays where it was, so a path of one step is
+exactly what D88--D90 already meant.
+
+The verifier walks a path against the shapes alone: every step must name a
+part the run it indexes actually has, and the part the last step reaches must
+be the kind the operation needs. The backend derives one target offset per
+step from the same placement the checker used, and adds them. No step, and no
+sum of steps, is stored in the IR.
+
+**Why a run and not more scalars:** a pair encodes a depth in its shape, so
+each further depth would be another field on every instruction, another
+parameter on every emitter and another branch in the verifier and the
+backend. A run makes depth data. It is also what makes an aggregate variant
+payload and an aggregate array element expressible without inventing a
+second nesting mechanism beside this one.
+
+**Pinned by** the lowering, verifier and backend public seams; the malformed
+case `Path_Step_Below_A_Scalar_Leaf`; and the generated IR record, which now
+names the base field and every step of every field operation.

@@ -1986,6 +1986,12 @@ declaration may name and an explicitly typed local may store and call. The
 verifier rejects malformed descriptors, mismatched function-value stores and
 indirect address/signature disagreement before the x86-64 backend sees them.
 
+The thirty-third increment generalises the target-neutral subobject path.
+Every operation that names part of an aggregate carries a run of steps rather
+than a parent/child pair, the verifier walks that run against the shapes, and
+the backend sums one derived offset per step. No source form changes; the
+recorded IR gains the base field and every step of every field operation.
+
 Function-typed module storage, struct fields, function parameters and results,
 declared-error function types and anonymous functions remain in this item.
 Further aggregate arguments and result contexts remain here too; R4.40 later
