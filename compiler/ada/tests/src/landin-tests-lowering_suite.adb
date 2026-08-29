@@ -4121,6 +4121,8 @@ package body Landin.Tests.Lowering_Suite is
          & "    take(state.nested, state.nested.row)" & LF
          & "    take_outer(state)" & LF
          & "    take_outer(zeroed)" & LF
+         & "    take_outer((prefix: 1," & LF
+         & "                nested: (value: 2, row: [3, 4])))" & LF
          & "end use" & LF
          & "take_outer: (value: outer) -> none =" & LF
          & "end take_outer" & LF,
@@ -4136,7 +4138,7 @@ package body Landin.Tests.Lowering_Suite is
            IR.Nth_Parameter (Unit, 3, 1);
          Outer_Child : constant IR.Field_Shape :=
            IR.Nth_Slot_Field_Shape (Unit, 3, Outer_Parameter, 2);
-         Child, Row : Natural := 0;
+         Child, Row, Nested_Writes : Natural := 0;
       begin
          for Position in 1 .. IR.Value_Count (Unit, 2) loop
             declare
@@ -4150,6 +4152,10 @@ package body Landin.Tests.Lowering_Suite is
                   elsif IR.Nested_Field_Of (Unit, 2, Value) = 2 then
                      Row := Row + 1;
                   end if;
+               elsif IR.Op_Of (Unit, 2, Value) = IR.Store_Field
+                 and then IR.Nested_Field_Of (Unit, 2, Value) > 0
+               then
+                  Nested_Writes := Nested_Writes + 1;
                end if;
             end;
          end loop;
@@ -4162,6 +4168,9 @@ package body Landin.Tests.Lowering_Suite is
               and then Outer_Child.Kind = IR.Aggregate_Field_Shape
               and then Outer_Child.Cases = 2,
             "the nested parameter retains its compact child field run");
+         Landin.Testing.Check
+           (Item, Nested_Writes = 1,
+            "the nested literal writes its scalar leaf by both identities");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts nested storage-address carriers");

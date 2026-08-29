@@ -1667,6 +1667,7 @@ package body Landin.Stages.Checking is
                             (Types.all, Expected, Field)
                               in Landin.Checking.Scalar_Field
                                  | Landin.Checking.Fixed_Array_Field
+                                 | Landin.Checking.Aggregate_Field
                                  | Landin.Checking.Variant_Field;
                      end loop;
 
@@ -3807,6 +3808,77 @@ package body Landin.Stages.Checking is
             return False;
          end Subtree_Was_Refused;
 
+         procedure Check_Aggregate_Field
+           (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive);
+
+         procedure Check_Aggregate_Field
+           (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive)
+         is
+            Expected : constant Res.Declaration_Id :=
+              Landin.Checking.Field_Shape_Of
+                (Types.all, Wrote, Which).Aggregate_Body;
+            Got : Ty.Type_Kind;
+         begin
+            if Static_Image then
+               Bad.Report
+                 (Item    => Bad.Unsupported_Use,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Value),
+                  Message => "a module struct image cannot yet contain an"
+                             & " ordinary-child field value",
+                  Refused => Bad.Struct_Value,
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+               return;
+            end if;
+
+            if Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal then
+               Landin.Checking.Note
+                 (Types.all, Of_Tree, Value, Ty.Aggregate);
+               Landin.Checking.Note_Body
+                 (Types.all, Of_Tree, Value, Expected);
+               return;
+            elsif Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
+               if Construction_Agrees
+                    (Of_Tree, Value, Expected,
+                     Syn.Origin (Of_Tree, Field),
+                     "this ordinary-child field")
+               then
+                  Check_Struct_Literal
+                    (Of_Tree, Value, Expected, Static_Image => False);
+               end if;
+               return;
+            elsif Is_Direct_Binding_Name (Of_Tree, Value)
+              or else Syn.Kind (Of_Tree, Value) = Syn.Member_Selection
+            then
+               Got := Selected_From (Of_Tree, Value);
+            else
+               Got := Synthesise (Of_Tree, Value);
+            end if;
+
+            if Got = Ty.Aggregate
+              and then Landin.Checking.Body_Of
+                (Types.all, Of_Tree, Value) = Expected
+            then
+               if Syn.Kind (Of_Tree, Value) = Syn.Struct_Literal then
+                  Check_Struct_Literal
+                    (Of_Tree, Value, Expected, Static_Image => False);
+               end if;
+            elsif Got /= Ty.Ill_Typed then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Of_Tree),
+                  Where   => Syn.Where (Of_Tree, Value),
+                  Message => "this is not the nominal struct type named by"
+                             & " the ordinary-child field",
+                  Note    => "[0710]: ordinary struct identity is nominal",
+                  Related => Syn.Origin (Of_Tree, Field),
+                  Because => "the child field named here",
+                  Into    => Found);
+               Landin.Checking.Refuse (Types.all, Of_Tree, Value);
+            end if;
+         end Check_Aggregate_Field;
+
          procedure Check_Array_Field
            (Field : Syn.Node_Id; Value : Syn.Node_Id; Which : Positive);
 
@@ -4171,8 +4243,7 @@ package body Landin.Stages.Checking is
                         Check_Array_Field (Field, Value, Which);
 
                      when Landin.Checking.Aggregate_Field =>
-                        raise Landin.Compiler_Defect with
-                          "a nested aggregate literal reached checking";
+                        Check_Aggregate_Field (Field, Value, Which);
 
                      when Landin.Checking.Variant_Field =>
                         Check_Variant_Value

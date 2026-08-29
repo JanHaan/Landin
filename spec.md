@@ -5929,3 +5929,32 @@ opaque one-position transport remains sufficient.
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
 `negative/nested-struct-argument-unassigned`; the generated token and IR
 records; and `runtime/nested-storage-arguments` on Linux x86-64.
+
+### D105 — Struct literal arguments may construct an ordinary child
+
+**The tour said** that a labelled struct literal evaluates fields in source
+order [0410] while an ordinary child's identity remains nominal [0710]. D104
+carried complete nested storage but left a direct outer construction refused.
+
+**Chosen:** a flat outer struct-literal argument may name its depth-one
+ordinary-child field with a bare or matching nominal child literal, contextual
+`zeroed`, or matching direct child storage. The child's scalar and fixed-array
+labels use their existing contextual forms. An explicit child constructor with
+a different nominal body is a type mismatch even when its fields coincide.
+`of zeroed` clears an omitted child as one complete padded subobject.
+
+Lowering first clears a constructed child's complete padded extent and then
+commits its labels in source order. Scalar and array operations retain both
+parent and child identities. A storage source instead copies declaration-order
+leaves into the same destination child; target offsets and padding remain
+absent from neutral IR. The finished outer temporary uses D104's ordinary
+one-position transport.
+
+**Why clear before labels:** this gives padding and an `of zeroed` omission one
+canonical all-zero image without introducing a nested aggregate value. Every
+explicit expression still runs exactly once and in source order before the
+call.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/nested-struct-literal-argument-nominal-mismatch`; the generated token
+and IR records; and `runtime/nested-storage-arguments` on Linux x86-64.

@@ -737,12 +737,14 @@ package body Landin.Stages.Lowering is
                         procedure Write_Array_Field
                           (Field         : Positive;
                            Value         : Syn.Node_Id;
+                           Nested_Field  : Natural := 0;
                            Variant_Case  : Natural := 0;
                            Payload_Field : Natural := 0);
 
                         procedure Write_Array_Field
                           (Field         : Positive;
                            Value         : Syn.Node_Id;
+                           Nested_Field  : Natural := 0;
                            Variant_Case  : Natural := 0;
                            Payload_Field : Natural := 0)
                         is
@@ -772,6 +774,7 @@ package body Landin.Stages.Lowering is
                                    (Unit.all, Filling, Temporary, Index, Held,
                                     Site_Of (Of_Tree, Element),
                                     Field => Field,
+                                    Nested_Field => Nested_Field,
                                     Variant_Case => Variant_Case,
                                     Variant_Payload_Field => Payload_Field);
                               end;
@@ -793,6 +796,7 @@ package body Landin.Stages.Lowering is
                                       (Of_Tree, Repeated, Scope),
                                     Site_Of (Of_Tree, Repeated),
                                     Field => Field,
+                                    Nested_Field => Nested_Field,
                                     Variant_Case => Variant_Case,
                                     Variant_Payload_Field => Payload_Field);
                               end;
@@ -802,7 +806,8 @@ package body Landin.Stages.Lowering is
                                    (Unit.all, Filling,
                                     (Kind => IR.Frame_Slot,
                                      Slot => Temporary),
-                                    Site_Of (Of_Tree, Value), Field => Field);
+                                    Site_Of (Of_Tree, Value), Field => Field,
+                                    Nested_Field => Nested_Field);
                               end if;
                            elsif Kind not in Syn.Array_Literal then
                               declare
@@ -847,6 +852,7 @@ package body Landin.Stages.Lowering is
                                     Source_Field => Source_Field,
                                     Source_Nested_Field => Source_Child,
                                     Destination_Field => Field,
+                                    Destination_Nested_Field => Nested_Field,
                                     Destination_Variant_Case => Variant_Case,
                                     Destination_Variant_Payload_Field =>
                                       Payload_Field);
@@ -950,7 +956,233 @@ package body Landin.Stages.Lowering is
                                  when Landin.Checking.Variant_Field =>
                                     Write_Variant_Field (Field, Value);
                                  when Landin.Checking.Aggregate_Field =>
-                                    raise Landin.Compiler_Defect;
+                                    declare
+                                       Child : constant Res.Declaration_Id :=
+                                         Landin.Checking.Field_Shape_Of
+                                           (Types.all, Id, Field)
+                                             .Aggregate_Body;
+                                       Destination : constant IR.Storage :=
+                                         (Kind => IR.Frame_Slot,
+                                          Slot => Temporary);
+                                    begin
+                                       if Syn.Kind (Of_Tree, Value)
+                                            = Syn.Struct_Literal
+                                       then
+                                          --  The child begins as its padded
+                                          --  zero image; labels then commit
+                                          --  in source order.
+                                          IR.Emit_Array_Clear
+                                            (Unit.all, Filling, Destination,
+                                             Site_Of (Of_Tree, Value),
+                                             Field => Field);
+                                          for Child_Position in
+                                            1 .. Syn.Field_Value_Count
+                                                   (Of_Tree, Value)
+                                          loop
+                                             declare
+                                                Label : constant Syn.Node_Id :=
+                                                  Syn.Nth_Field_Value
+                                                    (Of_Tree, Value,
+                                                     Child_Position);
+                                                Child_Field : constant
+                                                  Positive := Positive
+                                                    (Landin.Checking
+                                                       .Field_Index
+                                                         (Types.all, Of_Tree,
+                                                          Label));
+                                                Child_Value : constant
+                                                  Syn.Node_Id :=
+                                                    Syn.Value_Of
+                                                      (Of_Tree, Label);
+                                             begin
+                                                case Landin.Checking
+                                                  .Field_Kind_Of
+                                                    (Types.all, Child,
+                                                     Child_Field)
+                                                is
+                                                   when Landin.Checking
+                                                     .Scalar_Field =>
+                                                      IR.Emit_Store_Slot_Field
+                                                        (Unit.all, Filling,
+                                                         Temporary,
+                                                         IR.Part_Position
+                                                           (Field),
+                                                         Lower_Expression
+                                                           (Of_Tree,
+                                                            Child_Value,
+                                                            Scope),
+                                                         Site_Of
+                                                           (Of_Tree, Label),
+                                                         Nested_Field =>
+                                                           Child_Field);
+                                                   when Landin.Checking
+                                                     .Fixed_Array_Field =>
+                                                      Write_Array_Field
+                                                        (Field, Child_Value,
+                                                         Nested_Field =>
+                                                           Child_Field);
+                                                   when others =>
+                                                      raise
+                                                        Landin.Compiler_Defect;
+                                                end case;
+                                             end;
+                                          end loop;
+                                       elsif Syn.Kind (Of_Tree, Value)
+                                               = Syn.Zeroed_Literal
+                                       then
+                                          IR.Emit_Array_Clear
+                                            (Unit.all, Filling, Destination,
+                                             Site_Of (Of_Tree, Value),
+                                             Field => Field);
+                                       else
+                                          declare
+                                             Source_Child : constant Boolean :=
+                                               Syn.Kind (Of_Tree, Value)
+                                                 = Syn.Member_Selection;
+                                             Source_Named : constant
+                                               Syn.Node_Id :=
+                                                 (if Source_Child
+                                                  then Syn.Target_Of
+                                                    (Of_Tree, Value)
+                                                  else Value);
+                                             Source_Parent : constant
+                                               Natural :=
+                                                 (if Source_Child
+                                                then Landin.Checking
+                                                  .Field_Index
+                                                    (Types.all, Of_Tree,
+                                                     Value)
+                                                else 0);
+                                             Source : constant IR.Storage :=
+                                               Storage_For
+                                                 (Of_Tree, Source_Named);
+                                          begin
+                                             for Child_Field in
+                                               1 .. Landin.Checking
+                                                      .Layout_Field_Count
+                                                        (Types.all, Child)
+                                             loop
+                                                case Landin.Checking
+                                                  .Field_Kind_Of
+                                                    (Types.all, Child,
+                                                     Child_Field)
+                                                is
+                                                   when Landin.Checking
+                                                     .Scalar_Field =>
+                                                      declare
+                                                         Held : constant
+                                                           Ty.Scalar_Name :=
+                                                             Landin.Checking
+                                                               .Field_Type
+                                                                 (Types.all,
+                                                                  Child,
+                                                                  Child_Field);
+                                                         Part : constant
+                                                           IR.Part_Position :=
+                                                             IR.Part_Position
+                                                               (if
+                                                                  Source_Parent
+                                                                    = 0
+                                                                then
+                                                                  Child_Field
+                                                                else
+                                                                  Source_Parent
+                                                               );
+                                                         Nested : constant
+                                                           Natural :=
+                                                             (if Source_Parent
+                                                                   = 0
+                                                              then 0
+                                                              else
+                                                                Child_Field);
+                                                         Origin : constant
+                                                           Landin.Provenance
+                                                             .Origin :=
+                                                               Site_Of
+                                                                 (Of_Tree,
+                                                                  Value);
+                                                         Taken : IR.Value_Id;
+                                                      begin
+                                                         case Source.Kind is
+                                                            when IR
+                                                              .Module_Datum =>
+                                                               Taken := IR
+                                                             .Emit_Load_Field
+                                                                   (Unit.all,
+                                                                    Filling,
+                                                                    Source
+                                                                      .Datum,
+                                                                    Part,
+                                                                    Held,
+                                                                    Origin,
+                                                             Nested_Field =>
+                                                               Nested);
+                                                            when IR
+                                                              .Frame_Slot =>
+                                                               Taken := IR
+                                                        .Emit_Load_Slot_Field
+                                                                   (Unit.all,
+                                                                    Filling,
+                                                                    Source
+                                                                      .Slot,
+                                                                    Part,
+                                                                    Held,
+                                                                    Origin,
+                                                             Nested_Field =>
+                                                               Nested);
+                                                         end case;
+                                                         IR
+                                                       .Emit_Store_Slot_Field
+                                                         (Unit.all, Filling,
+                                                            Temporary,
+                                                            IR.Part_Position
+                                                              (Field),
+                                                            Taken, Origin,
+                                                            Nested_Field =>
+                                                              Child_Field);
+                                                      end;
+                                                   when Landin.Checking
+                                                     .Fixed_Array_Field =>
+                                                      declare
+                                                         Part : constant
+                                                           Natural :=
+                                                             (if Source_Parent
+                                                                   = 0
+                                                              then Child_Field
+                                                              else
+                                                                Source_Parent);
+                                                         Nested : constant
+                                                           Natural :=
+                                                             (if Source_Parent
+                                                                   = 0
+                                                              then 0
+                                                              else
+                                                                Child_Field);
+                                                      begin
+                                                         IR.Emit_Array_Copy
+                                                           (Unit.all, Filling,
+                                                            Source => Source,
+                                                            Destination =>
+                                                              Destination,
+                                                            Site => Site_Of
+                                                              (Of_Tree, Value),
+                                                            Source_Field =>
+                                                              Part,
+                                                            Source_Nested_Field
+                                                              => Nested,
+                                                            Destination_Field
+                                                              => Field,
+                                                       Destination_Nested_Field
+                                                         => Child_Field);
+                                                      end;
+                                                   when others =>
+                                                      raise
+                                                        Landin.Compiler_Defect;
+                                                end case;
+                                             end loop;
+                                          end;
+                                       end if;
+                                    end;
                               end case;
                            end;
                         end loop;
@@ -1000,7 +1232,12 @@ package body Landin.Stages.Lowering is
                                           Field, 1,
                                           Site_Of (Of_Tree, Argument));
                                     when Landin.Checking.Aggregate_Field =>
-                                       raise Landin.Compiler_Defect;
+                                       IR.Emit_Array_Clear
+                                         (Unit.all, Filling,
+                                          (Kind => IR.Frame_Slot,
+                                           Slot => Temporary),
+                                          Site_Of (Of_Tree, Argument),
+                                          Field => Field);
                                  end case;
                               end if;
                            end loop;
@@ -2504,9 +2741,56 @@ package body Landin.Stages.Lowering is
                                    (if Parent_Field = 0 then 0 else Field));
 
                            when Landin.Checking.Aggregate_Field =>
-                              raise Landin.Compiler_Defect with
-                                "a nested aggregate literal reached"
-                                & " lowering";
+                              declare
+                                 Child : constant Res.Declaration_Id :=
+                                   Landin.Checking.Field_Shape_Of
+                                     (Types.all, Wrote, Field).Aggregate_Body;
+                              begin
+                                 pragma Assert (Parent_Field = 0);
+                                 if Syn.Kind (Of_Tree, Value)
+                                      = Syn.Struct_Literal
+                                 then
+                                    Write_Struct_Literal
+                                      (Value, Child, Destination,
+                                       Parent_Field => Field);
+                                 elsif Syn.Kind (Of_Tree, Value)
+                                         = Syn.Zeroed_Literal
+                                 then
+                                    IR.Emit_Array_Clear
+                                      (Unit.all, Filling, Destination, Site,
+                                       Field => Field);
+                                 else
+                                    declare
+                                       Source_Child : constant Boolean :=
+                                         Syn.Kind (Of_Tree, Value)
+                                           = Syn.Member_Selection;
+                                       Source_Named : constant Syn.Node_Id :=
+                                         (if Source_Child
+                                          then Syn.Target_Of (Of_Tree, Value)
+                                          else Value);
+                                       Source_Parent : constant Natural :=
+                                         (if Source_Child
+                                          then Landin.Checking.Field_Index
+                                            (Types.all, Of_Tree, Value)
+                                          else 0);
+                                       Source : constant IR.Storage :=
+                                         Storage_For
+                                           (Of_Tree, Source_Named);
+                                    begin
+                                       for Child_Field in
+                                         1 .. Landin.Checking
+                                                .Layout_Field_Count
+                                                  (Types.all, Child)
+                                       loop
+                                          Copy_Field
+                                            (Child, Source, Destination,
+                                             Child_Field,
+                                             Source_Parent => Source_Parent,
+                                             Destination_Parent => Field);
+                                       end loop;
+                                    end;
+                                 end if;
+                              end;
 
                            when Landin.Checking.Variant_Field =>
                               Write_Variant_Value
@@ -2553,9 +2837,10 @@ package body Landin.Stages.Lowering is
                                        then 0 else Field));
 
                               when Landin.Checking.Aggregate_Field =>
-                                 raise Landin.Compiler_Defect with
-                                   "a nested aggregate fill reached"
-                                   & " lowering";
+                                 pragma Assert (Parent_Field = 0);
+                                 IR.Emit_Array_Clear
+                                   (Unit.all, Filling, Destination, Site,
+                                    Field => Field);
 
                               when Landin.Checking.Variant_Field =>
                                  --  D75's zero image selects the first case.

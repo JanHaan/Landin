@@ -24,4 +24,9 @@ public main: () -> (code: i32) =
     code = inspect(state.nested, state.nested.row)
            + inspect(zeroed, zeroed)
            + inspect_outer(state) + inspect_outer(zeroed)
+           + inspect_outer((prefix: 0,
+                            nested: (value: 5, row: [6, 7]),
+                            suffix: 0))
+           + inspect_outer((nested: state.nested, of zeroed))
+           + inspect_outer((nested: zeroed, of zeroed))
 end main
