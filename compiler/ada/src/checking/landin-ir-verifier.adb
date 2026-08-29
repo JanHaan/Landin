@@ -231,7 +231,7 @@ package body Landin.IR.Verifier is
         (Item    : Item_Id;
          Place   : Storage;
          Field   : Part_Position;
-         Nested  : Natural;
+         Nested  : Path_Step_Array;
          Element : out Landin.Types.Scalar_Name) return Fault_Kind;
 
       function Shape_Of
@@ -242,13 +242,13 @@ package body Landin.IR.Verifier is
          Length  : out Element_Total;
          Which   : Natural := 0;
          Payload_Field : Natural := 0;
-         Nested  : Natural := 0) return Fault_Kind;
+         Nested  : Path_Step_Array := No_Path_Steps) return Fault_Kind;
 
       function Scalar_Field_Of
         (Item    : Item_Id;
          Place   : Storage;
          Field   : Part_Position;
-         Nested  : Natural;
+         Nested  : Path_Step_Array;
          Element : out Landin.Types.Scalar_Name) return Fault_Kind
       is
          Shape : Field_Shape;
@@ -269,7 +269,7 @@ package body Landin.IR.Verifier is
                then
                   return Field_Out_Of_Range;
                end if;
-               if Nested = 0 then
+               if Nested'Length = 0 then
                   if not Part_Is_Scalar (Of_Unit, Place.Datum, Field) then
                      return Field_Is_Not_A_Scalar;
                   end if;
@@ -295,7 +295,7 @@ package body Landin.IR.Verifier is
                then
                   return Field_Out_Of_Range;
                end if;
-               if Nested = 0 then
+               if Nested'Length = 0 then
                   if not Slot_Part_Is_Scalar
                     (Of_Unit, Item, Place.Slot, Field)
                   then
@@ -312,16 +312,16 @@ package body Landin.IR.Verifier is
                  (Of_Unit, Item, Place.Slot, Positive (Field));
          end case;
 
-         if Shape.Kind /= Aggregate_Field_Shape
-           or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
-           or else Nested > Aggregate_Field_Count (Of_Unit, Shape)
-         then
+         --  D117: however many steps the path has, the walk is one
+         --  question asked of Landin.IR, which is the package that owns
+         --  what a step may index.
+         if not Path_Is_Valid (Of_Unit, Shape, Nested) then
             return Field_Is_Not_A_Scalar;
          end if;
 
          declare
             Leaf : constant Field_Shape :=
-              Nth_Aggregate_Field (Of_Unit, Shape, Positive (Nested));
+              Shape_At (Of_Unit, Shape, Nested);
          begin
             if Leaf.Kind /= Scalar_Field_Shape then
                return Field_Is_Not_A_Scalar;
@@ -339,13 +339,13 @@ package body Landin.IR.Verifier is
          Length  : out Element_Total;
          Which   : Natural := 0;
          Payload_Field : Natural := 0;
-         Nested  : Natural := 0) return Fault_Kind
+         Nested  : Path_Step_Array := No_Path_Steps) return Fault_Kind
       is
       begin
          Element := Landin.Types.Bool;
          Length := 0;
 
-         if Nested /= 0 then
+         if Nested'Length /= 0 then
             if Field = 0 or else Which /= 0 or else Payload_Field /= 0 then
                return Element_Field_Is_Not_An_Array;
             end if;
@@ -382,17 +382,13 @@ package body Landin.IR.Verifier is
                        (Of_Unit, Item, Place.Slot, Positive (Field));
                end case;
 
-               if Shape.Kind /= Aggregate_Field_Shape
-                 or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Shape)
-                 or else Nested > Aggregate_Field_Count (Of_Unit, Shape)
-               then
+               if not Path_Is_Valid (Of_Unit, Shape, Nested) then
                   return Element_Field_Is_Not_An_Array;
                end if;
 
                declare
                   Leaf : constant Field_Shape :=
-                    Nth_Aggregate_Field
-                      (Of_Unit, Shape, Positive (Nested));
+                    Shape_At (Of_Unit, Shape, Nested);
                begin
                   if Leaf.Kind /= Array_Field_Shape then
                      return Element_Field_Is_Not_An_Array;
@@ -1642,8 +1638,8 @@ package body Landin.IR.Verifier is
                                    Destination_Of (Of_Unit, Id, V);
                                  Field : constant Natural :=
                                    Element_Field_Of (Of_Unit, Id, V);
-                                 Nested : constant Natural :=
-                                   Nested_Field_Of (Of_Unit, Id, V);
+                                 Nested : constant Path_Step_Array :=
+                                   Path_Of (Of_Unit, Id, V);
                                  Element : Landin.Types.Scalar_Name;
                                  Length : Element_Total;
                                  Bad : Fault_Kind := Nothing_Wrong;
@@ -1658,7 +1654,7 @@ package body Landin.IR.Verifier is
                                        Bad :=
                                          Storage_Address_Is_Not_An_Aggregate;
                                     end if;
-                                 elsif Nested = 0
+                                 elsif Nested'Length = 0
                                    and then Is_Whole_Aggregate_Field
                                      (Id, Place, Field)
                                  then
@@ -1722,7 +1718,7 @@ package body Landin.IR.Verifier is
                                             (Kind => Frame_Slot,
                                              Slot => Cell),
                                             Field_Of (Of_Unit, Id, V),
-                                            Nested_Field_Of
+                                            Path_Of
                                               (Of_Unit, Id, V),
                                             Element);
                                     begin
@@ -1782,7 +1778,7 @@ package body Landin.IR.Verifier is
                                             (Kind => Module_Datum,
                                              Datum => D),
                                             Field_Of (Of_Unit, Id, V),
-                                            Nested_Field_Of
+                                            Path_Of
                                               (Of_Unit, Id, V),
                                             Element);
                                     begin
@@ -1823,7 +1819,7 @@ package body Landin.IR.Verifier is
                                       Variant_Case_Of (Of_Unit, Id, V),
                                       Variant_Payload_Field_Of
                                         (Of_Unit, Id, V),
-                                      Nested => Nested_Field_Of
+                                      Nested => Path_Of
                                         (Of_Unit, Id, V));
                               begin
                                  --  Preserve D22's public fault for field
@@ -1862,7 +1858,7 @@ package body Landin.IR.Verifier is
                                    (Id, Source_Of (Of_Unit, Id, V),
                                     Source_Field_Of (Of_Unit, Id, V),
                                     Source_Element, Source_Length,
-                                    Nested => Source_Nested_Field_Of
+                                    Nested => Source_Path_Of
                                       (Of_Unit, Id, V));
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -1876,7 +1872,7 @@ package body Landin.IR.Verifier is
                                     Variant_Case_Of (Of_Unit, Id, V),
                                     Variant_Payload_Field_Of
                                       (Of_Unit, Id, V),
-                                    Nested => Nested_Field_Of
+                                    Nested => Path_Of
                                       (Of_Unit, Id, V));
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -1999,7 +1995,7 @@ package body Landin.IR.Verifier is
                                      and then Is_Whole_Aggregate
                                        (Id, Destination))
                                     or else
-                                      (Nested_Field_Of (Of_Unit, Id, V) = 0
+                                      (Path_Depth_Of (Of_Unit, Id, V) = 0
                                        and then Is_Whole_Aggregate_Field
                                          (Id, Destination, Field)))
                                  then
@@ -2010,7 +2006,7 @@ package body Landin.IR.Verifier is
                                     Bad := Shape_Of
                                       (Id, Destination, Field,
                                        Element, Length,
-                                       Nested => Nested_Field_Of
+                                       Nested => Path_Of
                                          (Of_Unit, Id, V));
                                  end if;
 
@@ -2078,7 +2074,7 @@ package body Landin.IR.Verifier is
                                       Variant_Case_Of (Of_Unit, Id, V),
                                       Variant_Payload_Field_Of
                                         (Of_Unit, Id, V),
-                                      Nested => Nested_Field_Of
+                                      Nested => Path_Of
                                         (Of_Unit, Id, V));
                               begin
                                  if Bad /= Nothing_Wrong then
@@ -2512,7 +2508,7 @@ package body Landin.IR.Verifier is
                                       Variant_Case_Of (Of_Unit, Id, V),
                                       Variant_Payload_Field_Of
                                         (Of_Unit, Id, V),
-                                      Nested => Nested_Field_Of
+                                      Nested => Path_Of
                                         (Of_Unit, Id, V));
                               begin
                                  if Bad /= Nothing_Wrong then
@@ -2563,7 +2559,7 @@ package body Landin.IR.Verifier is
                                    Scalar_Field_Of
                                      (Id, Place,
                                       Field_Of (Of_Unit, Id, V),
-                                      Nested_Field_Of (Of_Unit, Id, V),
+                                      Path_Of (Of_Unit, Id, V),
                                       Wants);
                               begin
                                  if Bad /= Nothing_Wrong then

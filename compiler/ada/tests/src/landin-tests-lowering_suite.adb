@@ -54,6 +54,14 @@ package body Landin.Tests.Lowering_Suite is
    use type Landin.Types.Folded;
    use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
+   use type IR.Path_Step_Array;
+
+   --  D117: the path one depth-one child identity spells, so a case can
+   --  ask for it without writing the run out at every comparison.
+   function Below (Child : Natural) return IR.Path_Step_Array
+     is (if Child = 0 then IR.No_Path_Steps
+         else [1 => (Field      => IR.Part_Position (Child),
+                     Case_Index => 0)]);
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
    Names    : aliased Landin.Stages.Resolution.Instance;
@@ -3668,12 +3676,12 @@ package body Landin.Tests.Lowering_Suite is
                Op : constant IR.Opcode := IR.Op_Of (Unit, 2, Value);
             begin
                if Op in IR.Load_Field | IR.Store_Field
-                 and then IR.Nested_Field_Of (Unit, 2, Value) > 0
+                 and then IR.Path_Depth_Of (Unit, 2, Value) > 0
                then
                   Landin.Testing.Check
                     (Item,
                      IR.Field_Of (Unit, 2, Value) = 2
-                       and then IR.Nested_Field_Of (Unit, 2, Value) = 2,
+                       and then IR.Path_Of (Unit, 2, Value) = Below (2),
                      "the operation carries parent and child identities");
                   if Op = IR.Load_Field then
                      Loads := Loads + 1;
@@ -3754,12 +3762,12 @@ package body Landin.Tests.Lowering_Suite is
                Op : constant IR.Opcode := IR.Op_Of (Unit, 2, Value);
             begin
                if Op in IR.Load_Element | IR.Store_Element
-                 and then IR.Nested_Field_Of (Unit, 2, Value) > 0
+                 and then IR.Path_Depth_Of (Unit, 2, Value) > 0
                then
                   Landin.Testing.Check
                     (Item,
                      IR.Element_Field_Of (Unit, 2, Value) = 2
-                       and then IR.Nested_Field_Of (Unit, 2, Value) = 3,
+                       and then IR.Path_Of (Unit, 2, Value) = Below (3),
                      "the operation carries parent and child identities");
                   if Op = IR.Load_Element then
                      Loads := Loads + 1;
@@ -3855,12 +3863,12 @@ package body Landin.Tests.Lowering_Suite is
             begin
                if Op in IR.Store_Element | IR.Copy_Array
                         | IR.Fill_Array | IR.Clear_Array
-                 and then IR.Nested_Field_Of (Unit, 3, Value) > 0
+                 and then IR.Path_Depth_Of (Unit, 3, Value) > 0
                then
                   Landin.Testing.Check
                     (Item,
                      IR.Element_Field_Of (Unit, 3, Value) = 2
-                       and then IR.Nested_Field_Of (Unit, 3, Value) = 2,
+                       and then IR.Path_Of (Unit, 3, Value) = Below (2),
                      "the destination keeps its parent and child fields");
                   case Op is
                      when IR.Store_Element => Stores := Stores + 1;
@@ -3869,8 +3877,8 @@ package body Landin.Tests.Lowering_Suite is
                         Landin.Testing.Check
                           (Item,
                            IR.Source_Field_Of (Unit, 3, Value) = 2
-                           and then IR.Source_Nested_Field_Of
-                             (Unit, 3, Value) = 2,
+                           and then IR.Source_Path_Of (Unit, 3, Value)
+                                      = Below (2),
                            "the copy source keeps both field identities");
                      when IR.Fill_Array => Fills := Fills + 1;
                      when IR.Clear_Array => Clears := Clears + 1;
@@ -3949,28 +3957,29 @@ package body Landin.Tests.Lowering_Suite is
                   Clear := Clear + 1;
                elsif Op = IR.Store_Field
                  and then IR.Field_Of (Unit, 4, Value) = 2
-                 and then IR.Nested_Field_Of (Unit, 4, Value) = 1
+                 and then IR.Path_Of (Unit, 4, Value) = Below (1)
                then
                   Scalar_Stores := Scalar_Stores + 1;
                elsif Op = IR.Store_Element
                  and then IR.Element_Field_Of (Unit, 4, Value) = 2
-                 and then IR.Nested_Field_Of (Unit, 4, Value) = 2
+                 and then IR.Path_Of (Unit, 4, Value) = Below (2)
                then
                   Array_Stores := Array_Stores + 1;
                elsif Op = IR.Copy_Array
                  and then IR.Element_Field_Of (Unit, 4, Value) = 2
-                 and then IR.Nested_Field_Of (Unit, 4, Value) = 2
+                 and then IR.Path_Of (Unit, 4, Value) = Below (2)
                then
                   Array_Copies := Array_Copies + 1;
                   Landin.Testing.Check
                     (Item,
                      IR.Source_Field_Of (Unit, 4, Value) = 2
-                     and then IR.Source_Nested_Field_Of
-                       (Unit, 4, Value) in 0 | 2,
+                     and then (IR.Source_Path_Of (Unit, 4, Value)
+                                 = IR.No_Path_Steps
+                               or else IR.Source_Path_Of (Unit, 4, Value)
+                                         = Below (2)),
                      "each array source keeps its own parent path");
                elsif Op = IR.Copy_Array
-                 and then IR.Source_Nested_Field_Of
-                   (Unit, 4, Value) = 2
+                 and then IR.Source_Path_Of (Unit, 4, Value) = Below (2)
                then
                   Initializer_Copies := Initializer_Copies + 1;
                end if;
@@ -4147,13 +4156,13 @@ package body Landin.Tests.Lowering_Suite is
                if IR.Op_Of (Unit, 2, Value) = IR.Storage_Address
                  and then IR.Element_Field_Of (Unit, 2, Value) = 2
                then
-                  if IR.Nested_Field_Of (Unit, 2, Value) = 0 then
+                  if IR.Path_Depth_Of (Unit, 2, Value) = 0 then
                      Child := Child + 1;
-                  elsif IR.Nested_Field_Of (Unit, 2, Value) = 2 then
+                  elsif IR.Path_Of (Unit, 2, Value) = Below (2) then
                      Row := Row + 1;
                   end if;
                elsif IR.Op_Of (Unit, 2, Value) = IR.Store_Field
-                 and then IR.Nested_Field_Of (Unit, 2, Value) > 0
+                 and then IR.Path_Depth_Of (Unit, 2, Value) > 0
                then
                   Nested_Writes := Nested_Writes + 1;
                end if;

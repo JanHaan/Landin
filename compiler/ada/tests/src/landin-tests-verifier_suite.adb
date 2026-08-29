@@ -24,6 +24,13 @@ with Landin.Types;
 package body Landin.Tests.Verifier_Suite is
 
    package IR renames Landin.IR;
+
+   --  D117: the path one depth-one child identity spells, so a malformed
+   --  case can name a step without writing the run out each time.
+   function Below (Child : Natural) return IR.Path_Step_Array
+     is (if Child = 0 then IR.No_Path_Steps
+         else [1 => (Field      => IR.Part_Position (Child),
+                     Case_Index => 0)]);
    package V  renames Landin.IR.Verifier;
 
    use type IR.Element_Total;
@@ -230,6 +237,7 @@ package body Landin.Tests.Verifier_Suite is
       Storage_Address_Nested_Field_Beyond_The_Child,
       Field_Beyond_The_Aggregate,
       Nested_Field_Beyond_The_Child,
+      Path_Step_Below_A_Scalar_Leaf,
       Nested_Element_Beyond_The_Child,
       Field_Operation_Names_An_Array,
       Field_Store_Names_An_Array,
@@ -349,6 +357,7 @@ package body Landin.Tests.Verifier_Suite is
              Cases          => 1,
              Payloads_First => 1));
       elsif Harm in Nested_Field_Beyond_The_Child
+                    | Path_Step_Below_A_Scalar_Leaf
                     | Nested_Element_Beyond_The_Child
                     | Nested_Array_Copy_Source_Beyond_The_Child
                     | Storage_Address_Nested_Field_Beyond_The_Child
@@ -626,7 +635,7 @@ package body Landin.Tests.Verifier_Suite is
          when Storage_Address_Nested_Field_Beyond_The_Child =>
             N := IR.Emit_Storage_Address
               (Unit, A, (Kind => IR.Module_Datum, Datum => G), Site,
-               Field => 1, Nested_Field => 2);
+               Field => 1, Nested => Below (2));
             pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -644,7 +653,19 @@ package body Landin.Tests.Verifier_Suite is
          when Nested_Field_Beyond_The_Child =>
             N := IR.Emit_Load_Field
                    (Unit, A, G, 1, Landin.Types.U32, Site,
-                    Nested_Field => 2);
+                    Nested => Below (2));
+            pragma Assert (N /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         --  D117 lets a path have more than one step, so it also has to
+         --  refuse one that keeps going below a leaf that has no run.
+         when Path_Step_Below_A_Scalar_Leaf =>
+            N := IR.Emit_Load_Field
+                   (Unit, A, G, 1, Landin.Types.U32, Site,
+                    Nested => [(Field => 1, Case_Index => 0),
+                               (Field => 1, Case_Index => 0)]);
             pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -655,7 +676,7 @@ package body Landin.Tests.Verifier_Suite is
                    (Unit, A, Landin.Types.Usize, 1, False, Site);
             M := IR.Emit_Load_Element
                    (Unit, A, G, N, Landin.Types.U32, Site,
-                    Field => 1, Nested_Field => 2);
+                    Field => 1, Nested => Below (2));
             pragma Assert (M /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
@@ -864,7 +885,7 @@ package body Landin.Tests.Verifier_Suite is
             IR.Emit_Array_Copy
               (Unit, A, (Kind => IR.Module_Datum, Datum => G),
                (Kind => IR.Frame_Slot, Slot => Q), Site,
-               Source_Field => 1, Source_Nested_Field => 2);
+               Source_Field => 1, Source_Nested => Below (2));
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -1168,6 +1189,7 @@ package body Landin.Tests.Verifier_Suite is
           V.Element_Field_Is_Not_An_Array),
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
          (Nested_Field_Beyond_The_Child, V.Field_Is_Not_A_Scalar),
+         (Path_Step_Below_A_Scalar_Leaf, V.Field_Is_Not_A_Scalar),
          (Nested_Element_Beyond_The_Child,
           V.Element_Field_Is_Not_An_Array),
          (Field_Operation_Names_An_Array, V.Field_Is_Not_A_Scalar),
