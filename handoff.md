@@ -184,10 +184,10 @@ back into the specification, roadmap and executable evidence rather than kept
 as a second authority.
 
 **The bootstrap compiler is working.** R0's Ada chassis, R1's executable
-kernel and R2.20's aggregate/value-layout work are complete; R2.30's function,
-control, declared-error, function-field and recursive module-image increments
-have landed, and its failure-only `undo` cleanup remains active. `refine` runs
-the frontend, lowers and
+kernel, R2.20's aggregate/value-layout work and R2.30's functions, control,
+declared errors, function fields, recursive module images, computed aggregate
+elements and lexical `defer`/failure-only `undo` cleanup are complete. `refine`
+runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and
 link a hosted executable whose runtime behaviour the native x86-64 gate
 checks. macOS arm64 and Cortex-M backends and the standard library remain

@@ -13,20 +13,21 @@ One target range, and the same way of writing code across all of it: a
 Cortex-M0 with 32 KB of flash at one end, a hosted desktop application
 at the other.
 
-**Status: specification 0.1.0. R0, R1 and R2.20 are complete, and R2.30 is
-active. `refine` scans, parses, resolves names, checks types and definite
+**Status: specification 0.1.0. R0, R1, R2.20 and R2.30 are complete.
+`refine` scans, parses, resolves names, checks types and definite
 assignment, lowers and verifies target-neutral IR, emits Linux x86-64
 assembly, and can assemble and link a hosted executable. Runtime fixtures run
 those binaries on the native x86-64 gate. The enabled kernel includes scalars,
-fixed arrays, recursively nested ordinary structs, unfolded variants,
-first-class function signatures with declared atom errors, expression-valued
-non-loop control flow, and lexical `defer`/failure-only `undo`; native macOS
+fixed arrays, recursively nested ordinary structs, unfolded variants, checked
+whole aggregate elements at computed indexes, first-class function signatures
+with declared atom errors, expression-valued non-loop control flow, and lexical
+`defer`/failure-only `undo`; native macOS
 arm64, Cortex-M and the standard library remain future work.**
 
 ## What is here
 
 | file | what it is |
-|---|---|
+| --- | --- |
 | `handoff.md` | start here. The design in one page, the principles behind it, how the work is done, and which decisions must not be quietly reversed. |
 | `spec.md` | the normative specification: the grammar of the enabled kernel, the rules the tour left unsaid, and the register of decisions taken while implementing them. |
 | `tour.md` | the language explained, as a numbered "learn X in Y minutes". Teaches; does not decide. |
@@ -54,20 +55,20 @@ findings, including several that reversed a decision.
 ## Reading it online
 
 Every document here is published as a syntax-highlighted reading copy at
-**https://www.701.dev** — the tour, the specification, the running examples,
+**<https://www.701.dev>** — the tour, the specification, the running examples,
 the four prototypes, the roadmap, and the implementation notes. Every
 `[NNNN]` citation links to the construct it names, and hovering one shows what
 it says.
 
 The canonical repository the pages are generated from is at
-**https://git.sr.ht/~sinnfrei/landin**:
+**<https://git.sr.ht/~sinnfrei/landin>**:
 
 ```sh
 git clone https://git.sr.ht/~sinnfrei/landin
 ```
 
 An automatically maintained GitHub mirror is at
-**https://github.com/JanHaan/Landin**. Changes still originate on SourceHut;
+**<https://github.com/JanHaan/Landin>**. Changes still originate on SourceHut;
 the mirror copies its branches and tags.
 
 The CI gate republishes the pages as its last task on every push to `main`,
@@ -80,7 +81,7 @@ so they read what the repository says. To render or publish by hand:
 
 ## Checking
 
-```
+```sh
 python3 check.py
 ```
 
@@ -142,11 +143,10 @@ every design foundation to be settled in advance. R0's Ada 2022 bootstrap
 chassis and R1's executable language kernel are complete: the compiler builds
 on macOS arm64 and passes its full suite there when the Linux target toolchain
 is present; the pinned `linux/amd64` container and x86-64 CI run the Linux
-binaries. R2 is active; R2.20's
-target-parametric aggregate and variant representation is complete, and R2.30
-owns functions, control-flow expressions, lexical cleanup, declared errors and
-the aggregate ABI; its enabled cleanup forms are unconditional `defer` and
-failure-only `undo`.
+binaries. R2.20's target-parametric aggregate and variant representation and
+R2.30's functions, control-flow expressions, lexical cleanup, declared errors
+and internal aggregate ABI are complete. The next planned R2 item is R2.40's
+fixed parameters and compile-time substitution.
 Language and architecture questions are resolved when the first vertical
 slice needs them.
 
