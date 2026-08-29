@@ -140,7 +140,8 @@ constructed temporaries retain compact case and payload shapes across the copy;
 a complete depth-one ordinary child and its literal construction retain their
 nested field runs as well. Struct and fixed-array results use a hidden
 destination pointing to caller-owned shaped storage and copy from an independent
-named-result slot on leave. Matching calls can fill typed locals, direct or
+named-result slot on leave; runtime evidence covers flat, variant-bearing and
+depth-one nested struct shapes. Matching calls can fill typed locals, direct or
 field-qualified assignments, and named returns without an aggregate SSA value;
 a local can infer that returned nominal body or array shape as well. Calls can
 also feed returned storage directly into a matching aggregate argument, or run

@@ -1,0 +1,6 @@
+class: runtime
+summary: variant-bearing structs return with selected payloads intact
+constructs: 0680, 0690, 0770, 0930, 1800, 1810, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64
