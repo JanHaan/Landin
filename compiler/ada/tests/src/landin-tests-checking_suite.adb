@@ -1345,6 +1345,12 @@ package body Landin.Tests.Checking_Suite is
    procedure Parameterized_Structs_Intern_And_Lay_Out_Instances
      (Item : in out Landin.Testing.Context);
 
+   procedure Nominal_Layout_Requirements_Distinguish_Identity_And_Value
+     (Item : in out Landin.Testing.Context);
+
+   procedure Repeated_Invalid_Instances_Report_Each_Application
+     (Item : in out Landin.Testing.Context);
+
    procedure Invalid_Parameterized_Templates_Are_Checked_When_Unused
      (Item : in out Landin.Testing.Context);
 
@@ -1640,6 +1646,248 @@ package body Landin.Tests.Checking_Suite is
             "template bodies, fields and formals retain no instance answer");
       end;
    end Parameterized_Structs_Intern_And_Lay_Out_Instances;
+
+   procedure Nominal_Layout_Requirements_Distinguish_Identity_And_Value
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Failure
+        (Text : String; Code : String; What : String);
+
+      procedure Check_Failure
+        (Text : String; Code : String; What : String)
+      is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+      begin
+         Src := Landin.Stages.Add_Source (Work, "nominal-edge.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         declare
+            Reports : constant Landin.Diagnostics.Diagnostic_List :=
+              Landin.Stages.Report (Work);
+         begin
+            Landin.Testing.Check
+              (Item, Src /= Landin.Source.No_Source and then Ran = 3
+                and then Landin.Diagnostics.Count (Reports) = 1
+                and then Landin.Diagnostics.Code
+                  (Landin.Diagnostics.Get (Reports, 1)) = Code,
+               What);
+         end;
+      end Check_Failure;
+
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "identity-only.ldn",
+         "function_node: type (item: type) = struct" & LF
+         & "    visit: (value: function_node(item)) -> none" & LF
+         & "end function_node" & LF
+         & "ignore: (value: function_node(u8)) -> none =" & LF
+         & "end ignore" & LF
+         & "function_good: function_node(u8) = (visit: ignore)" & LF
+         & "phantom_node: type (item: type) = struct" & LF
+         & "    marker: phantom(phantom_node(item))" & LF
+         & "end phantom_node" & LF
+         & "phantom: type (item: type) = struct" & LF
+         & "    marker: u8" & LF
+         & "end phantom" & LF
+         & "phantom_good: phantom_node(u8) = zeroed" & LF
+         & "huge: type (fixed count: u64) = struct" & LF
+         & "    bytes: [count]u64" & LF
+         & "end huge" & LF
+         & "huge_is_only_an_actual:"
+         & " phantom(huge(18446744073709551615)) = zeroed" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check
+        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+         "signature and phantom references need identity but not child"
+         & " layout");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id;
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id
+         is
+            Node : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, Position);
+         begin
+            for Id in Landin.Provenance.Declaration_Id'(1)
+              .. Landin.Provenance.Declaration_Id
+                   (Landin.Resolution.Declaration_Count (Meanings.all))
+            loop
+               if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                 and then Landin.Resolution.Node_Of (Meanings.all, Id) = Node
+               then
+                  return Id;
+               end if;
+            end loop;
+            return Landin.Provenance.No_Declaration;
+         end Declaration_At;
+
+         Function_Node : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (3));
+         Phantom_Node : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (6));
+         Function_Field : constant Landin.Checking.Field_Shape :=
+           Landin.Checking.Field_Shape_Of (Types.all, Function_Node, 1);
+         Function_Parameter : constant Landin.Checking.Signature_Part :=
+           Landin.Checking.Nth_Signature_Parameter
+             (Types.all, Function_Field.Signature, 1);
+         Phantom_Instance : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Field_Shape_Of
+             (Types.all, Phantom_Node, 1).Nominal;
+         Huge_Phantom : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (8));
+         Huge_Identity : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of
+             (Types.all, Landin.Checking.Nth_Instance_Actual
+                (Types.all, Huge_Phantom, 1));
+      begin
+         Landin.Testing.Check
+           (Item, Landin.Checking.Has_Layout (Types.all, Function_Node)
+             and then Function_Parameter.Nominal = Function_Node,
+            "a recursive signature retains the canonical identity without"
+            & " becoming a value-layout edge");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Has_Layout (Types.all, Phantom_Node)
+             and then Landin.Checking.Has_Layout
+               (Types.all, Phantom_Instance)
+             and then Landin.Checking.Nominal_Of
+               (Types.all, Landin.Checking.Nth_Instance_Actual
+                  (Types.all, Phantom_Instance, 1)) = Phantom_Node,
+            "a phantom actual retains identity while only the outer marker"
+            & " contributes layout");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Has_Layout (Types.all, Huge_Phantom)
+             and then Landin.Checking.Instance_State_Of
+               (Types.all, Huge_Identity) = Landin.Checking.Instance_Unseen,
+            "an identity-only actual neither requests target layout nor"
+            & " caches an actual-dependent failure");
+      end;
+
+      Check_Failure
+        ("node: type (item: type) = struct" & LF
+         & "    children: [0]node(item)" & LF
+         & "end node" & LF
+         & "bad: node(u8)" & LF,
+         "L0313",
+         "a zero-length nominal array still follows its element layout"
+         & " edge");
+      Check_Failure
+        ("node: type (item: type) = struct" & LF
+         & "    kind: variant" & LF
+         & "        leaf |" & LF
+         & "        next: (value: node(item))" & LF
+         & "    end kind" & LF
+         & "end node" & LF
+         & "bad: node(u8)" & LF,
+         "L0313",
+         "a nominal payload remains a by-value layout edge");
+      Check_Failure
+        ("holder: type (item: type) = struct" & LF
+         & "    value: looping(item)" & LF
+         & "end holder" & LF
+         & "looping: type (item: type) = looping(item)" & LF
+         & "good: holder(u8) = zeroed" & LF,
+         "L0307",
+         "an alias cycle inside an earlier struct is not nominal recursion");
+      Check_Failure
+        ("looping: type (item: type) = looping(item)" & LF
+         & "holder: type (item: type) = struct" & LF
+         & "    value: looping(item)" & LF
+         & "end holder" & LF
+         & "good: holder(u8) = zeroed" & LF,
+         "L0307",
+         "the same alias classification is declaration-order independent");
+   end Nominal_Layout_Requirements_Distinguish_Identity_And_Value;
+
+   procedure Repeated_Invalid_Instances_Report_Each_Application
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "repeated-invalid.ldn",
+         "huge: type (fixed count: u64) = struct" & LF
+         & "    bytes: [count]u64" & LF
+         & "end huge" & LF
+         & "first: huge(18446744073709551615)" & LF
+         & "second: huge(18446744073709551615)" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      declare
+         Reports : constant Landin.Diagnostics.Diagnostic_List :=
+           Landin.Stages.Report (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         First : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 2));
+         Second : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 3));
+      begin
+         Landin.Testing.Check
+           (Item, Ran = 3 and then Landin.Diagnostics.Count (Reports) = 2
+             and then Landin.Diagnostics.Code
+               (Landin.Diagnostics.Get (Reports, 1)) = "L0300"
+             and then Landin.Diagnostics.Code
+               (Landin.Diagnostics.Get (Reports, 2)) = "L0300",
+            "one cached invalid identity replays its dependent failure");
+         Landin.Testing.Check
+           (Item, Landin.Diagnostics.Span_Of
+              (Landin.Diagnostics.Primary
+                 (Landin.Diagnostics.Get (Reports, 1)))
+                    = Landin.Syntax.Where (Of_Tree.all, First)
+             and then Landin.Diagnostics.Span_Of
+               (Landin.Diagnostics.Primary
+                  (Landin.Diagnostics.Get (Reports, 2)))
+                    = Landin.Syntax.Where (Of_Tree.all, Second)
+             and then Landin.Syntax.Where (Of_Tree.all, First)
+               /= Landin.Syntax.Where (Of_Tree.all, Second),
+            "the repeated failures retain distinguishable application"
+            & " primaries");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Nominal_Type_Count (Types.all) = 1
+             and then Landin.Checking.Instance_State_Of
+               (Types.all, Landin.Checking.Nth_Nominal_Type (Types.all, 1))
+                  = Landin.Checking.Instance_Invalid,
+            "replay retains one canonical identity and one tuple");
+      end;
+   end Repeated_Invalid_Instances_Report_Each_Application;
 
    procedure Invalid_Parameterized_Templates_Are_Checked_When_Unused
      (Item : in out Landin.Testing.Context)
@@ -5075,6 +5323,12 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "parameterized structs intern and lay out",
          Parameterized_Structs_Intern_And_Lay_Out_Instances'Access);
+      Landin.Testing.Register
+        (Into, "checking", "nominal layout edges exclude identity mentions",
+         Nominal_Layout_Requirements_Distinguish_Identity_And_Value'Access);
+      Landin.Testing.Register
+        (Into, "checking", "invalid instances replay at each application",
+         Repeated_Invalid_Instances_Report_Each_Application'Access);
       Landin.Testing.Register
         (Into, "checking", "invalid unused templates are checked",
          Invalid_Parameterized_Templates_Are_Checked_When_Unused'Access);

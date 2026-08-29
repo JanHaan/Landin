@@ -1,0 +1,5 @@
+class: positive
+summary: function signatures and phantom type actuals require nominal identity without recursive value layout
+constructs: 0670, 0710, 1000, 1350, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64
