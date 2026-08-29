@@ -2254,13 +2254,32 @@ Depends on: R2.10, R1.50
 
 Implement type and fixed parameters, substitution, constant array lengths,
 deduction and fixed conditional declarations without introducing compile-time
-execution. D135's first semantic slice now normalizes fully applied positional
-parameterized aliases to the existing scalar and fixed-array descriptors,
-including nested fixed-formal substitution; templates and formals remain
-compile-time-only. Symbolic declaration validation rejects invalid free names,
-decidable formal/result kind errors and unconditional expansion cycles even
-when a template is unused. Generic functions, deduction and fixed conditional
-declarations remain in this item.
+execution.
+
+D135's first increment now admits explicitly and fully applied parameterised
+aliases whose substituted result is an enabled scalar or fixed-array shape.
+Type applications are positional as [1350] writes them; generic call arguments
+are a separate call-matching question. Type and fixed formals are compile-time
+bindings, never runtime values, ABI positions or IR slots. The checker
+normalises an alias application before equality, layout or lowering, so this
+slice creates no nominal family identity and requires no generic routine item.
+It accepts unconstrained type formals and fixed integer formals, substitutes a
+fixed value into an array length, and refuses partial application, a wrong
+actual kind, a non-fixed bound and recursive expansion. Symbolic declaration
+validation rejects invalid free names, decidable formal or result kind errors,
+and unconditional expansion cycles even when a template is unused. Constraints
+remain R2.60's work.
+
+The next increments extend the same substitution layer to a closed fixed
+expression fold, parameterised nominal instance identities, generic routine
+instances and exact deduction from ordinary argument types, then fixed
+conditional declaration lists. Deduction does not use return context,
+constraint lookup or arithmetic inversion. Parameterised nominal types and
+generic routines receive identities derived from a template and normalised
+actual tuple rather than reusing one source declaration identity for unequal
+instances. No correctness step executes a user routine. R2.70 remains the
+owner of shared generic evidence and R4.50 the owner of choosing
+specialisation as an optimisation.
 
 Exit evidence: generic shape fixtures and negative non-fixed cases pass; no
 user code executes during compilation.
