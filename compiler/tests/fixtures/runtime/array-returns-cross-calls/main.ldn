@@ -1,0 +1,10 @@
+make: () -> (result: [3]i32) =
+    result = [19, 20, 3]
+end make
+
+public main: () -> (code: i32) =
+    mut answer: [3]i32 = make()
+    mut other: [3]i32 = make()
+    other[0] = 40
+    code = answer[0] + answer[1] + answer[2]
+end main

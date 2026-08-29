@@ -532,6 +532,10 @@ package body Landin.Stages.Checking.Flow is
 
          if not Is_Tracked (Id)
            or else State.Fields (Positive (Id), Field)
+           or else (Field = 0
+                    and then Landin.Checking.Type_Of (Types.all, Id)
+                               = Ty.Fixed_Array
+                    and then Array_Is_Assigned (Id, 0, State))
          then
             return;
          end if;

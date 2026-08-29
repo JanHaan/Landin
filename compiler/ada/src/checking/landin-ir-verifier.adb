@@ -2364,7 +2364,8 @@ package body Landin.IR.Verifier is
                                    Callee_Of (Of_Unit, Id, V);
                               begin
                                  if (if Result_Of (Of_Unit, C)
-                                          = Landin.Types.Aggregate
+                                          in Landin.Types.Aggregate
+                                             | Landin.Types.Fixed_Array
                                      then Result_Of (Of_Unit, Id, V)
                                             /= Landin.Types.No_Value
                                      else Result_Of (Of_Unit, Id, V)

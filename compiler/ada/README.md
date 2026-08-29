@@ -138,8 +138,9 @@ source order with compact suffix fills, and flat struct construction fills one
 by nominal scalar, fixed-array or variant labels. Variant-bearing storage and
 constructed temporaries retain compact case and payload shapes across the copy;
 a complete depth-one ordinary child and its literal construction retain their
-nested field runs as well. Aggregate results use a hidden destination pointing
-to caller-owned shaped storage and copy from an independent named-result slot
+nested field runs as well. Struct and fixed-array results use a hidden
+destination pointing to caller-owned shaped storage and copy from an independent
+named-result slot
 on leave. Further aggregate arguments and result contexts remain absent;
 R4.40 later completes C ABI classification.
 
