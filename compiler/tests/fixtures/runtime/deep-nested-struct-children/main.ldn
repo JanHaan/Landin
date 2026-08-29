@@ -1,0 +1,54 @@
+core: type = struct
+    value: i32
+    row: [2]i32
+end core
+
+middle: type = struct
+    lead: i32
+    inner: core
+end middle
+
+outer: type = struct
+    head: i32
+    body: middle
+    tail: i32
+end outer
+
+mut global: outer = zeroed
+
+built: () -> (result: i32) =
+    mut local: outer
+    local = outer(head: 1,
+                  body: middle(lead: 2, inner: core(value: 3, row: [4, 5])),
+                  tail: 6)
+    result = local.head + local.body.lead + local.body.inner.value
+             + local.body.inner.row[0] + local.body.inner.row[1]
+             + local.tail
+end built
+
+cleared: () -> (result: i32) =
+    mut local: outer
+    local = outer(head: 1,
+                  body: middle(lead: 2, inner: core(value: 3, row: [4, 5])),
+                  tail: 6)
+    local.body.inner = zeroed
+    result = local.head + local.body.lead + local.tail
+             + local.body.inner.value
+             + local.body.inner.row[0] + local.body.inner.row[1]
+end cleared
+
+carried: () -> (result: i32) =
+    mut local: outer
+    local = zeroed
+    local.body.inner = core(value: 2, row: [1, 1])
+    global.body = middle(lead: 5, inner: zeroed)
+    global.body.inner = local.body.inner
+    piece: core = global.body.inner
+    inferred := local.body.inner
+    result = piece.value + piece.row[0] + piece.row[1]
+             + inferred.value + inferred.row[1] + global.body.lead
+end carried
+
+public main: () -> (code: i32) =
+    code = built() + cleared() + carried()
+end main

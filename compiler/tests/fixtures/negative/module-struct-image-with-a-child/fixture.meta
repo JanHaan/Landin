@@ -1,0 +1,6 @@
+class: negative
+summary: a module struct image may not yet contain an ordinary-child field value, while the same construction is admitted inside a function
+constructs: 0670, 0700, 0750, 1795, 1830, 1940
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

@@ -1,0 +1,32 @@
+core: type = struct
+    value: i32
+    row: [2]i32
+end core
+
+middle: type = struct
+    lead: i32
+    inner: core
+end middle
+
+outer: type = struct
+    head: i32
+    body: middle
+    tail: i32
+end outer
+
+mut global: outer = zeroed
+
+compose: () -> none =
+    mut local: outer
+    local = outer(head: 1,
+                  body: middle(lead: 2, inner: core(value: 3, row: [4, 5])),
+                  tail: 6)
+    local.body.inner = zeroed
+    local.body.inner = core(value: 7, row: [8, 9])
+    global.body = middle(lead: 10, inner: zeroed)
+    global.body.inner = local.body.inner
+    piece: core = global.body.inner
+    inferred := local.body.inner
+    local.body.inner = piece
+    global.body.inner = inferred
+end compose

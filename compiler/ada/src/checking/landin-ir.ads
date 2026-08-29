@@ -611,6 +611,24 @@ package Landin.IR is
           Post => Field_Count (Into, Item)
                     = Field_Count (Into, Item)'Old + 1;
 
+   --  D118: a nested run is appended before the shape that names it, so a
+   --  run may itself hold a shape naming another run and the recursion has
+   --  no depth of its own.  The answer is where the run starts, which is
+   --  what a shape's Payloads_First carries; a caller that has a flat run
+   --  keeps using the Add_Field above, which is this said once.
+   --
+   --  A Case_Run handed to Add_Case_Run already names absolute payload
+   --  positions, because its payload run was appended first.
+   function Add_Shape_Run
+     (Into : in out Unit; Shapes : Field_Shape_Array) return Natural
+     with Post => (if Shapes'Length = 0 then Add_Shape_Run'Result = 0
+                   else Add_Shape_Run'Result > 0);
+
+   function Add_Case_Run
+     (Into : in out Unit; Runs : Case_Run_Array) return Natural
+     with Post => (if Runs'Length = 0 then Add_Case_Run'Result = 0
+                   else Add_Case_Run'Result > 0);
+
    function Nth_Field_Shape
      (Of_Unit : Unit; Item : Item_Id; Index : Positive)
       return Field_Shape

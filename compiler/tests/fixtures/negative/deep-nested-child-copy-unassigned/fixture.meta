@@ -1,0 +1,6 @@
+class: negative
+summary: copying a whole ordinary child two levels down requires that child on every arriving path
+constructs: 0080, 0420, 0670, 0710, 0750, 1910
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64

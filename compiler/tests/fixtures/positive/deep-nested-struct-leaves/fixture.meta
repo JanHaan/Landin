@@ -1,0 +1,5 @@
+class: positive
+summary: D118 selects a scalar and a fixed-array leaf through two ordinary children
+constructs: 0420, 0520, 0540, 0570, 0670, 0750, 1795, 1810, 1820
+program: program.ldn
+targets: linux-x86-64, macos-arm64
