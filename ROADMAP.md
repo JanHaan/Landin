@@ -1909,7 +1909,11 @@ compact field-qualified IR and source-order evaluation.
 The sixteenth increment admits variant-bearing struct storage as a parameter.
 The shaped callee slot retains tag, case and payload runs, while definite
 assignment requires a complete selected variant before a local crosses the
-call. Variant literal arguments remain deferred.
+call.
+
+The seventeenth increment constructs variant-labelled struct arguments in a
+shaped caller temporary. Case selection clears the unfolded part before
+source-ordered scalar or fixed-array payload writes and ordinary transport.
 
 Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.

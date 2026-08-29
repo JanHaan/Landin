@@ -5871,3 +5871,32 @@ that second authority.
 **Pinned by** the checker, flow, lowering, verifier and backend public seams;
 `negative/variant-struct-argument-unassigned`; the generated token and IR
 records; and `runtime/variant-struct-arguments` on Linux x86-64.
+
+### D103 — Struct literal arguments may select variant cases
+
+**The tour said** that a variant label selects one case and evaluates its
+payload labels in source order [0690] [0700]. D102 carried existing
+variant-bearing storage through calls but left direct argument construction
+refused.
+
+**Chosen:** a flat variant-bearing struct literal may appear directly in a
+matching parameter context. Its variant label selects a case in the fresh
+caller temporary before payload labels are committed. Scalar payloads store in
+source order; fixed-array payloads use the same literal, repetition, `zeroed`
+and storage-copy forms D101 gives ordinary array fields. `of zeroed` selects
+the first case for an omitted variant field.
+
+Selection clears the complete padded unfolded part before payload writes, so
+inactive bytes and omitted payload leaves have the all-zero image. The IR
+retains field, case and payload-field identities; target tag placement, payload
+offsets and padded extent remain backend-derived. The finished temporary then
+uses D102's unchanged one-position by-value transport.
+
+**Why construction stays in caller storage:** case and payload expressions are
+arguments and therefore belong in [0410]'s caller-side evaluation order.
+Flattening them into ABI operands would expose the selected target's unfolded
+layout and make equivalent named storage use a different convention.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/variant-literal-argument-payload-mismatch`; the generated token and
+IR records; and `runtime/variant-struct-arguments` on Linux x86-64.
