@@ -233,23 +233,26 @@ A function is a value with a body, and its returns are named.
 '=' opens the body and 'end' closes it [0870]; a body that is one
 expression still takes an end, and the expression fills the named
 return [0880]; every named return must be assigned before the
-function returns [0930]. The error channel [0940], the parameter
-conventions [0900], multiple returns [0920], 'escaping' [0780],
-generic parameters [1290] and anonymous functions [1010] are all
-described in this tour and are not enabled yet: the kernel takes
-values in and hands one value or none back.
-A function type reuses this `signature` production but has no body. The
-enabled form is infallible: declared atom-set errors remain later R2.30 work.
-Its labels are type description only and do not declare parameters or a named
-return.
+function returns [0930]. The error channel [0940], the parameter conventions [0900], multiple returns
+[0920], 'escaping' [0780] and generic parameters [1290] remain deferred. The
+enabled signature is infallible, takes values including function values, and
+hands one value including a function value, or none, back. A function type
+reuses this `signature` production but has no body. Its labels are type
+description only and do not declare parameters or a named return.
+
+An anonymous function [1010] writes that same signature and body without a
+module name. It captures no enclosing local, parameter or named return: its
+signature and body are a separate routine whose outer scope is the module.
+Forming it produces a static code address and does not execute its body.
 A body is statements, or it is the one expression that fills the
 return. One token past a leading name decides between them: ':'
 opens a binding and '=' an assignment, and anything else means the
 body is that expression. A function returning none has no
 expression form, because there is no return for one to fill.
 ```landin-grammar
-function    ::= identifier ":" signature "=" body "end" identifier?
-signature   ::= "(" parameters? ")" "->" returns
+function           ::= identifier ":" signature "=" body "end" identifier?
+anonymous_function ::= signature "=" body "end"
+signature          ::= "(" parameters? ")" "->" returns
 parameters  ::= parameter ("," parameter)*
 parameter   ::= identifier ":" type
 returns     ::= "(" identifier ":" type ")" | "none"
@@ -330,8 +333,8 @@ Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
 primary     ::= literal | array_literal | array_repetition | struct_literal
-              | construction | indexed | call | measurement
-              | "(" expression ")"
+              | construction | anonymous_function | indexed | call
+              | measurement | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
 array_repetition ::= "[" integer "of" expression "]"
                    | "[" "of" expression "]"
@@ -380,7 +383,7 @@ an inner scope means nothing until the inner ones are named.
 | scope | what it holds |
 |---|---|
 | module | every file compiled together. There is one, until [1410]'s directories arrive. |
-| signature | a function declaration's parameters and its named return [1800]. The named return is a place the body assigns [0930], so it is declared here and not in the body, and a parameter and a return may not share a name. A written function type opens no scope and its labels declare nothing. |
+| signature | a declared or anonymous function's parameters and its named return [1800]. The named return is a place the body assigns [0930], so it is declared here and not in the body, and a parameter and a return may not share a name. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
 | body | what a function runs, and one for each arm of an `if` and for its `else` [1810]. A statement run is a block and a block is what scopes [1090], so a name declared in one arm is not visible in another and not after the branch closes. |
 
 [1800]'s expression body opens no scope, because an expression
@@ -520,12 +523,12 @@ kernel has, two may be written and two may not.
 | an immutable binding | may not: [0040] makes it immutable and [0450] says it protects the value it holds |
 | a parameter | may not: the unmarked convention is [0900]'s 'in', which is the promise not to change the value |
 
-A function declaration is not a place. A local binding holding a function
-value is an ordinary place: an immutable one may be called but not replaced,
-and a mutable one may be replaced only by a value with the same complete
-signature. D117 enables explicit function-typed local storage and D113's
-inferred local storage. Function-typed module storage, struct fields,
-parameters and named returns remain refused by name [1830].
+A function declaration is not a place. A local or module binding holding a
+function value is an ordinary place: an immutable one may be called but not
+replaced, and a mutable one may be replaced only by a value with the same
+complete signature. A named function-valued return is a writable place; an
+unmarked function-valued parameter is not. Function-valued struct fields remain
+refused by name [1830].
 The value's type is the place's type [0310], and the report
 names the place as well as the value, because which of the
 two is wrong is the reader's to decide.
@@ -565,12 +568,14 @@ A call of a function returning none has no type. It is a
 statement [1810] and nothing else: nothing binds it, no
 argument is one, and [1930] cannot discard it, because there
 is no result there to discard.
-A callee is a function. It may be a declared function or a local binding whose
-value has a function type; the latter call uses the stored code address. A
-function's own name away from a call is a value of its function type [1000].
-All three positions retain one complete signature, and parameter labels are
-not part of signature agreement: parameter order and type, plus result type,
-are. A binding of any other type is not a function.
+A callee is a function. It may be a declared function or a local, module,
+parameter or named-return binding whose value has a function type; every stored
+form calls the runtime code address. A function's own name and an anonymous
+function away from a call are values of their function types [1000] [1010].
+All positions retain one complete structural signature, recursively when a
+parameter or result is itself a function. Labels are not part of agreement:
+parameter order and type, plus result type, are. A binding of any other type is
+not a function.
 A scalar type name in front of the '(' is [0700]'s
 conversion, which [0310] describes and this grammar omits,
 so [1830] refuses that by name too. It is not a misspelling
@@ -613,7 +618,13 @@ first, exactly as [1850] found with two declarations of one
 name. So it is refused, and the report names the declaration
 the chain came back to, because that is the one place in it
 the reader is standing.
-A binding with no value is known too, and what it holds is
+A declared or anonymous function is a compile-time-known code address. A module
+function binding may name either directly, or another module function binding
+whose static chain reaches one; a chain that returns to itself is refused like
+any other module-value cycle. Function code addresses have no all-zero value,
+so a function-valued module binding must write an initializer.
+
+A scalar binding with no value is known too, and what it holds is
 zero — false, for a bool. [0080] lets a binding carry no
 value and says it must be assigned before use, and that
 sentence has nothing to bite on here: [1460] says nothing
@@ -6185,8 +6196,8 @@ formation and `call *address`.
 
 Arguments, scalar or aggregate results, stack positions and hidden aggregate
 result destinations otherwise use the existing internal convention unchanged.
-D117 adds one written infallible function type. Function parameters and
-anonymous functions remain later slices.
+D117 adds one written infallible function type. D118 carries that value through
+parameters, results and static module storage and adds anonymous routines.
 
 **Why the indirect instruction retains a signature:** a runtime address alone
 cannot tell the verifier how many operands or what result convention the call
@@ -6271,9 +6282,9 @@ type, or which written storage context opens the implementation slice.
 parameter and result labels describe positions and declare nothing. It may be
 named by a type declaration and used for explicitly typed local storage; the
 local may be called indirectly and, when mutable, replaced by any function
-whose complete signature agrees. Function-typed module storage, struct fields,
-parameters and results, declared-error signatures and anonymous functions
-remain later slices.
+whose complete signature agrees. D118 extends the same descriptor to module
+storage, parameters, results and anonymous routines. Function-valued struct
+fields and declared-error signatures remain later slices.
 
 Every declared function, written function type and inferred function value
 receives a first-class target-neutral signature descriptor. Agreement compares
@@ -6475,3 +6486,56 @@ has no carrier, for the reason an ordinary child holding one has none.
 `negative/selection-from-a-scalar-element`, the malformed case
 `Element_Path_Below_A_Scalar_Element`, the generated IR record, and
 `runtime/array-of-structs` on Linux x86-64.
+### D123 — Infallible function values use one recursive carrier rule
+
+**The tour said** that a function is an ordinary code-address value [0870]
+[1000], that callbacks carry state explicitly because anonymous functions do
+not capture [1010], and that parameters and named results carry ordinary values
+[0900] [0930]. It did not say how a function type nested in another signature
+keeps its identity, which module images can hold one, or which scope a
+no-capture body can see.
+
+**Chosen:** a function may be an infallible parameter or named result. A nested
+function position contains another structural signature descriptor; agreement
+recurses through it, still ignoring labels and source sites. At the internal
+ABI boundary every function value occupies one `usize`-sized code-address
+carrier. It therefore uses the existing register/stack position, scalar return
+register and named-result slot without adding an ABI parameter or flattening
+its own parameters. Aggregate results called through such a carrier retain
+D106's hidden destination unchanged.
+
+A typed or inferred module binding may have a static function value. Its image
+must resolve through module function bindings to one declared or anonymous
+routine; there is no implicit zero code address, and a static chain that returns
+to itself is refused. Mutable module and local bindings use the same verified
+load, store and indirect-call operations.
+
+An anonymous function is a separate no-capture routine. Its signature scope
+encloses the module rather than the lexical expression scope, so it can use
+module declarations, its own parameters, named result and body locals, but no
+parameter, return or local of an enclosing routine. Lowering allocates every
+anonymous routine item before filling any routine, after declaration items and
+in source then syntax post-order. Its code address names that deterministic
+item; the x86-64 backend gives an undeclared item a deterministic assembler-local
+symbol.
+
+Declared error sets remain absent: every descriptor in this slice has only the
+existing infallible signature shape. Function-valued struct fields remain
+outside the enabled storage family.
+
+**Why one recursive descriptor and one carrier:** flattening a callback's own
+signature into its caller would make source parameter count depend on nesting
+and would break the existing stack and hidden-result convention. Treating a
+module relocation or anonymous item as its type would again make one possible
+target the authority D117 rejected. A recursive language descriptor preserves
+structural checking while one code address preserves the established ABI.
+
+**Pinned by** the syntax, no-capture resolution, checking and flow walks;
+recursive checking and IR descriptors; function parameter/result slots, static
+function datum targets, calls and verifier malformed cases; deterministic
+anonymous routine items and x86-64 local symbols; the generated lexical and IR
+records through `positive/infallible-function-values`; the negative fixtures
+`anonymous-function-captures-local`, `function-parameter-signature-mismatch`,
+`function-result-unassigned`, `module-function-without-image` and
+`module-function-image-cycle`; and `runtime/infallible-function-values` on
+Linux x86-64.

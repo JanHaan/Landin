@@ -248,6 +248,12 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
       procedure Check_Block
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id; Returns : Ty.Type_Kind);
+      procedure Check_Routine_Body
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+      procedure Check_Operands
+        (Of_Tree    : Syn.Tree;
+         Node       : Syn.Node_Id;
+         Whole_Fold : Boolean);
       procedure Infer (Id : Res.Declaration_Id);
       function Is_Known (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
         return Boolean;
@@ -455,6 +461,15 @@ package body Landin.Stages.Checking is
                           (if Aggregate_Allowed
                            then Bad.Nested_Variant_Struct
                            else Bad.Struct_Value),
+                        Into    => Found);
+                  elsif Held = Ty.Function_Value then
+                     Bad.Report
+                       (Item    => Bad.Unsupported_Use,
+                        Source  => Syn.Source_Of (Of_Tree),
+                        Where   => Syn.Where (Of_Tree, Each),
+                        Message => "a function-valued struct field is not"
+                                   & " enabled yet",
+                        Refused => Bad.Function_Value,
                         Into    => Found);
                   end if;
                end Check_Leaf;
@@ -852,19 +867,14 @@ package body Landin.Stages.Checking is
                     Landin.Checking.Array_Element
                       (Types.all, Of_Tree, Written);
                when Ty.Function_Value =>
-                  --  Function parameters and function results remain later
-                  --  R2.30 work.  The written outer type is enabled; nesting
-                  --  one here would enable ABI passage as a side effect.
-                  Bad.Report
-                    (Item    => Bad.Unsupported_Use,
-                     Source  => Syn.Source_Of (Of_Tree),
-                     Where   => Syn.Where (Of_Tree, Written),
-                     Message => "a function type as a parameter or return"
-                                & " is not enabled yet",
-                     Refused => Bad.Function_Value,
-                     Into    => Found);
-                  Landin.Checking.Refuse (Types.all, Of_Tree, Written);
-                  Valid := False;
+                  --  A function-valued position is one code-address carrier;
+                  --  its own structural descriptor remains language type
+                  --  evidence and contributes no extra ABI position.
+                  Part.Signature :=
+                    Landin.Checking.Signature_Of
+                      (Types.all, Of_Tree, Written);
+                  Valid := Valid
+                    and then Part.Signature /= Landin.Checking.No_Signature;
                when others =>
                   Valid := False;
             end case;
@@ -1274,25 +1284,29 @@ package body Landin.Stages.Checking is
               and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
                        = Syn.Zeroed_Literal;
          begin
-            --  D117 enables the written type itself and explicitly typed
-            --  local storage.  Module images cannot contain code addresses,
-            --  and passing or returning one would be the separate function-
-            --  parameter ABI slice, so those contexts retain the existing
-            --  function-value refusal.
+            --  Infallible function values use one code-address carrier in
+            --  local or module storage, parameters and named results.  Their
+            --  structural descriptor was copied by Type_At above.  Unlike a
+            --  scalar, a code address has no all-zero value, so module storage
+            --  must name its static function image explicitly.
             if Held = Ty.Function_Value
-              and then Syn.Kind (Of_Tree, Node) /= Syn.Type_Declaration
-              and then
-                (Syn.Kind (Of_Tree, Node) /= Syn.Binding
-                 or else not Is_Local_Binding (Of_Tree, Node))
+              and then Syn.Kind (Of_Tree, Node) = Syn.Binding
+              and then not Is_Local_Binding (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) = Syn.No_Node
             then
-               Bad.Report
-                 (Item    => Bad.Unsupported_Use,
-                  Source  => Syn.Source_Of (Of_Tree),
-                  Where   => Syn.Where (Of_Tree, Node),
-                  Message => "a written function type is enabled only for"
-                             & " a type declaration or local storage",
-                  Refused => Bad.Function_Value,
-                  Into    => Found);
+               if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
+                    /= Ty.Ill_Typed
+               then
+                  Bad.Report
+                    (Item    => Bad.Unsupported_Use,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Node),
+                     Message => "a module function value needs an initial"
+                                & " function address",
+                     Refused => Bad.Function_Value,
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Written);
+               end if;
                return Ty.Ill_Typed;
             end if;
 
@@ -1784,6 +1798,27 @@ package body Landin.Stages.Checking is
             return Ty.Ill_Typed;
          end if;
 
+         if Comparing
+           and then Left_Type = Ty.Function_Value
+           and then Right_Type = Ty.Function_Value
+           and then not Signatures_Agree
+             (Landin.Checking.Signature_Of (Types.all, Of_Tree, Left),
+              Landin.Checking.Signature_Of (Types.all, Of_Tree, Right))
+         then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Right),
+               Message => "these function values have different signatures",
+               Note    => "[1000]: a function value's complete signature"
+                          & " is its type",
+               Related => Syn.Origin (Of_Tree, Left),
+               Because => "the function compared here",
+               Into    => Found);
+            Landin.Checking.Refuse (Types.all, Of_Tree, Right);
+            return Ty.Ill_Typed;
+         end if;
+
          if Left_Type = Ty.Untyped_Integer
            and then Right_Type = Ty.Untyped_Integer
          then
@@ -1875,7 +1910,37 @@ package body Landin.Stages.Checking is
                Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
-               if Wants = Ty.Aggregate
+               if Wants = Ty.Function_Value then
+                  declare
+                     Got : constant Ty.Type_Kind :=
+                       Synthesise (Of_Tree, Argument);
+                  begin
+                     if Got = Ty.Function_Value
+                       and then not Signatures_Agree
+                         (Parameter.Signature,
+                          Landin.Checking.Signature_Of
+                            (Types.all, Of_Tree, Argument))
+                     then
+                        Bad.Report
+                          (Item    => Bad.Type_Mismatch,
+                           Source  => Syn.Source_Of (Of_Tree),
+                           Where   => Syn.Where (Of_Tree, Argument),
+                           Message => "this function argument has a"
+                                      & " different signature",
+                           Note    => "[1000]: a function value's complete"
+                                      & " signature is its type",
+                           Related => Parameter.Site,
+                           Because => "this function-valued parameter",
+                           Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Of_Tree, Argument);
+                     elsif Got /= Ty.Function_Value then
+                        Require
+                          (Of_Tree, Argument, Wants, Parameter.Site,
+                           "this function-valued parameter");
+                     end if;
+                  end;
+               elsif Wants = Ty.Aggregate
                  and then Syn.Kind (Of_Tree, Argument) = Syn.Struct_Literal
                then
                   declare
@@ -2045,6 +2110,9 @@ package body Landin.Stages.Checking is
          elsif Result.Kind = Ty.Fixed_Array then
             Landin.Checking.Note_Array
               (Types.all, Of_Tree, Node, Result.Length, Result.Element);
+         elsif Result.Kind = Ty.Function_Value then
+            Landin.Checking.Note_Signature
+              (Types.all, Of_Tree, Node, Result.Signature);
          end if;
          return Result.Kind;
       end Check_Call;
@@ -2919,6 +2987,17 @@ package body Landin.Stages.Checking is
                   Refused => Bad.Array_Value,
                   Into    => Found);
                return Kept (Ty.Ill_Typed);
+
+            when Syn.Anonymous_Function =>
+               declare
+                  Signature : constant Landin.Checking.Signature_Id :=
+                    Signature_At (Of_Tree, Node);
+               begin
+                  if Signature = Landin.Checking.No_Signature then
+                     return Kept (Ty.Ill_Typed);
+                  end if;
+                  return Kept (Ty.Function_Value);
+               end;
 
             when Syn.Name_Reference =>
                if Res.Verdict_Of (Meanings.all, Of_Tree, Node)
@@ -5958,6 +6037,11 @@ package body Landin.Stages.Checking is
             when Syn.Call =>
                return False;
 
+            when Syn.Anonymous_Function =>
+               --  Forming the code address does not execute or capture its
+               --  body; the body is checked as its own routine.
+               return True;
+
             --  D31 measures the literal's syntax.  Its elements are checked
             --  for one scalar shape but are not module values to be folded.
             when Syn.Len_Of =>
@@ -5975,7 +6059,7 @@ package body Landin.Stages.Checking is
                return Res.Sort_Of
                         (Meanings.all,
                          Res.Bound_To (Meanings.all, Of_Tree, Node))
-                      = Res.Module_Binding;
+                      in Res.Module_Function | Res.Module_Binding;
 
             when others =>
                for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
@@ -6034,9 +6118,11 @@ package body Landin.Stages.Checking is
                      when Syn.Element_Index    => "an array index",
                      when others               => "");
             begin
-               --  D31's operand is checked for one scalar shape, but its
-               --  expressions are not read to form the compile-time count.
-               if Syn.Kind (Of_Tree, Where) = Syn.Len_Of then
+               --  Neither a measured literal nor a static anonymous routine
+               --  executes its expression subtree to form this module image.
+               if Syn.Kind (Of_Tree, Where)
+                    in Syn.Len_Of | Syn.Anonymous_Function
+               then
                   return;
                end if;
 
@@ -6478,6 +6564,110 @@ package body Landin.Stages.Checking is
             end if;
          end;
       end Infer;
+
+      ------------------------------------------------------------
+      --  Static function-value images
+      ------------------------------------------------------------
+
+      type Function_Image_State is
+        (Function_Unseen, Function_Visiting, Function_Valid,
+         Function_Invalid);
+      Function_Images : array
+        (Res.Declaration_Id'(1)
+         .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all)))
+        of Function_Image_State := [others => Function_Unseen];
+
+      function Validate_Function_Image
+        (Id : Res.Declaration_Id) return Boolean;
+      procedure Validate_Function_Images;
+
+      function Validate_Function_Image
+        (Id : Res.Declaration_Id) return Boolean
+      is
+         Of_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Id));
+         Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
+         Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree.all, Node);
+      begin
+         case Function_Images (Id) is
+            when Function_Valid =>
+               return True;
+            when Function_Invalid =>
+               return False;
+            when Function_Visiting =>
+               Bad.Report
+                 (Item    => Bad.Not_Known_At_Compile_Time,
+                  Source  => Res.Source_Of (Meanings.all, Id),
+                  Where   => Syn.Anchor (Of_Tree.all, Node),
+                  Message => "the function address of `"
+                             & Spelled (Syn.Name (Of_Tree.all, Node))
+                             & "` is worked out from itself",
+                  Note    => "[1940]: a static value chain has to reach a"
+                             & " value rather than return to itself",
+                  Into    => Found);
+               Function_Images (Id) := Function_Invalid;
+               return False;
+            when Function_Unseen =>
+               null;
+         end case;
+
+         Function_Images (Id) := Function_Visiting;
+         if Value /= Syn.No_Node
+           and then Syn.Kind (Of_Tree.all, Value) = Syn.Anonymous_Function
+         then
+            Function_Images (Id) := Function_Valid;
+            return True;
+         end if;
+
+         if Value /= Syn.No_Node
+           and then Syn.Kind (Of_Tree.all, Value) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree.all, Value)
+                      = Res.Bound
+         then
+            declare
+               Source_Id : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree.all, Value);
+               Reaches : Boolean := False;
+            begin
+               if Res.Sort_Of (Meanings.all, Source_Id)
+                    = Res.Module_Function
+               then
+                  Reaches := True;
+               elsif Res.Sort_Of (Meanings.all, Source_Id)
+                       = Res.Module_Binding
+                 and then Landin.Checking.Type_Of (Types.all, Source_Id)
+                            = Ty.Function_Value
+               then
+                  Reaches := Validate_Function_Image (Source_Id);
+               end if;
+               Function_Images (Id) :=
+                 (if Reaches then Function_Valid else Function_Invalid);
+               return Reaches;
+            end;
+         end if;
+
+         Function_Images (Id) := Function_Invalid;
+         return False;
+      end Validate_Function_Image;
+
+      procedure Validate_Function_Images is
+      begin
+         for Id in Res.Declaration_Id'(1)
+                   .. Res.Declaration_Id
+                        (Res.Declaration_Count (Meanings.all))
+         loop
+            if Res.Sort_Of (Meanings.all, Id) = Res.Module_Binding
+              and then Landin.Checking.Type_Of (Types.all, Id)
+                         = Ty.Function_Value
+            then
+               declare
+                  Reaches : constant Boolean := Validate_Function_Image (Id);
+               begin
+                  pragma Unreferenced (Reaches);
+               end;
+            end if;
+         end loop;
+      end Validate_Function_Images;
 
       ------------------------------------------------------------
       --  R2.20: every module array or struct image reaches static storage
@@ -8050,11 +8240,6 @@ package body Landin.Stages.Checking is
       procedure Check_Operands
         (Of_Tree    : Syn.Tree;
          Node       : Syn.Node_Id;
-         Whole_Fold : Boolean);
-
-      procedure Check_Operands
-        (Of_Tree    : Syn.Tree;
-         Node       : Syn.Node_Id;
          Whole_Fold : Boolean)
       is
          Amount : Ty.Folded;
@@ -8153,6 +8338,64 @@ package body Landin.Stages.Checking is
          end;
       end Check_Operands;
 
+      --  Declared and anonymous functions share one body rule.  The latter
+      --  reaches this procedure when its expression is synthesized, while a
+      --  module declaration reaches it in pass three below.
+      procedure Check_Routine_Body
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      is
+         Result : constant Syn.Node_Id := Syn.Return_Of (Of_Tree, Node);
+         Gives : constant Ty.Type_Kind :=
+           (if Result = Syn.No_Node then Ty.No_Value
+            else Declared_As_Node (Of_Tree, Result));
+         Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Node);
+      begin
+         if Syn.Kind (Of_Tree, Runs) = Syn.Block then
+            Check_Block (Of_Tree, Runs, Gives);
+            Landin.Stages.Checking.Flow.Check_Function
+              (Context, Of_Tree, Node, Runs, Result, Found);
+         elsif Gives = Ty.Function_Value then
+            declare
+               Got : constant Ty.Type_Kind := Synthesise (Of_Tree, Runs);
+               Expected : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Signature_Of
+                   (Types.all,
+                    Declaration_At (Syn.Source_Of (Of_Tree), Result));
+            begin
+               if Got = Ty.Function_Value
+                 and then not Signatures_Agree
+                   (Expected,
+                    Landin.Checking.Signature_Of (Types.all, Of_Tree, Runs))
+               then
+                  Bad.Report
+                    (Item    => Bad.Type_Mismatch,
+                     Source  => Syn.Source_Of (Of_Tree),
+                     Where   => Syn.Where (Of_Tree, Runs),
+                     Message => "this function has a different signature",
+                     Note    => "[1000]: a function value's complete"
+                                & " signature is its type",
+                     Related => Syn.Origin (Of_Tree, Result),
+                     Because => "the return this fills",
+                     Into    => Found);
+                  Landin.Checking.Refuse (Types.all, Of_Tree, Runs);
+               elsif Got /= Ty.Function_Value then
+                  Require
+                    (Of_Tree, Runs, Gives, Syn.Origin (Of_Tree, Result),
+                     "the return this fills");
+               end if;
+            end;
+         else
+            Require
+              (Of_Tree, Runs, Gives,
+               (if Result = Syn.No_Node
+                then Syn.Origin (Of_Tree, Node)
+                else Syn.Origin (Of_Tree, Result)),
+               "the return this fills");
+         end if;
+
+         Check_Operands (Of_Tree, Runs, Whole_Fold => False);
+      end Check_Routine_Body;
+
       ------------------------------------------------------------
 
    begin
@@ -8215,9 +8458,35 @@ package body Landin.Stages.Checking is
          end if;
       end loop;
 
-      --  Module arrays and structs have no run-before-main copy.  Their
-      --  direct-name image chains therefore have to terminate at a static
-      --  image rather than returning to a declaration already being visited.
+      --  Anonymous bodies are checked only after every declaration has been
+      --  settled.  Their code address determines an inferred module binding
+      --  without executing the body, and a later body reference to that
+      --  binding is therefore not an initializer cycle.
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Nth_Source (Context, Index));
+         begin
+            for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all) loop
+               if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function then
+                  declare
+                     Held : constant Ty.Type_Kind :=
+                       Synthesise (Of_Tree.all, Node);
+                  begin
+                     if Held = Ty.Function_Value then
+                        Check_Routine_Body (Of_Tree.all, Node);
+                     end if;
+                  end;
+               end if;
+            end loop;
+         end;
+      end loop;
+
+      --  Module function values, arrays and structs have no run-before-main
+      --  copy.  Their image chains therefore have to terminate at a static
+      --  code address or data image rather than returning to a declaration
+      --  already being visited.
+      Validate_Function_Images;
       Validate_Module_Images;
 
       --  Pass three: the bodies, one tree at a time in source order.
@@ -8259,42 +8528,7 @@ package body Landin.Stages.Checking is
                            Whole_Fold => True);
 
                      when Syn.Function_Declaration =>
-                        declare
-                           Result : constant Syn.Node_Id :=
-                             Syn.Return_Of (Of_Tree.all, Node);
-                           Gives  : constant Ty.Type_Kind :=
-                             (if Result = Syn.No_Node then Ty.No_Value
-                              else Declared_As_Node (Of_Tree.all, Result));
-                           Runs   : constant Syn.Node_Id :=
-                             Syn.Body_Of (Of_Tree.all, Node);
-                        begin
-                           if Syn.Kind (Of_Tree.all, Runs) = Syn.Block then
-                              Check_Block (Of_Tree.all, Runs, Gives);
-
-                              --  [1910], over the same body: at every read,
-                              --  at every `return`, and where the body
-                              --  ends, the name has to have been assigned
-                              --  by every path that arrives there.
-                              Landin.Stages.Checking.Flow.Check_Function
-                                (Context, Of_Tree.all, Node, Runs, Result,
-                                 Found);
-                           else
-                              --  [0880]: the expression fills the named
-                              --  return, so it has the return's type.
-                              Require
-                                (Of_Tree.all, Runs, Gives,
-                                 (if Result = Syn.No_Node
-                                  then Syn.Origin (Of_Tree.all, Node)
-                                  else Syn.Origin (Of_Tree.all, Result)),
-                                 "the return this fills");
-                           end if;
-
-                           --  [1950], after the body is typed, so that an
-                           --  operand already refused earns no second
-                           --  diagnostic.
-                           Check_Operands
-                             (Of_Tree.all, Runs, Whole_Fold => False);
-                        end;
+                        Check_Routine_Body (Of_Tree.all, Node);
 
                      when others =>
                         null;

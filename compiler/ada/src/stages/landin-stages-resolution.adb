@@ -61,6 +61,9 @@ package body Landin.Stages.Resolution is
          Block   : Syn.Node_Id;
          Inside  : Landin.Resolution.Scope_Id);
 
+      procedure Resolve_Anonymous
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
       --  [1850]: one scope gives one name to one thing.  The first
       --  declaration keeps the name, so every reference binds to one thing
       --  and one duplicate is one report rather than a second entry every
@@ -123,6 +126,45 @@ package body Landin.Stages.Resolution is
          end;
       end Declare_One;
 
+      --  [1010]'s anonymous function has a static routine body and captures
+      --  nothing.  Its signature therefore encloses the module scope, not the
+      --  lexical scope of the expression that produced its code address.
+      procedure Resolve_Anonymous
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id)
+      is
+         Signature : constant Landin.Resolution.Scope_Id :=
+           Landin.Resolution.Open_Scope
+             (Meanings.all, Landin.Resolution.Signature,
+              Landin.Resolution.Program_Scope);
+         Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Node);
+      begin
+         Landin.Resolution.Record_Scope
+           (Meanings.all, Of_Tree, Node, Signature);
+
+         for Which in 1 .. Syn.Parameter_Count (Of_Tree, Node) loop
+            Declare_One
+              (Of_Tree, Syn.Nth_Parameter (Of_Tree, Node, Which), Signature);
+         end loop;
+         if Syn.Return_Of (Of_Tree, Node) /= Syn.No_Node then
+            Declare_One
+              (Of_Tree, Syn.Return_Of (Of_Tree, Node), Signature);
+         end if;
+
+         if Syn.Kind (Of_Tree, Runs) = Syn.Block then
+            declare
+               Body_Scope : constant Landin.Resolution.Scope_Id :=
+                 Landin.Resolution.Open_Scope
+                   (Meanings.all, Landin.Resolution.Block, Signature);
+            begin
+               Landin.Resolution.Record_Scope
+                 (Meanings.all, Of_Tree, Runs, Body_Scope);
+               Walk_Block (Of_Tree, Runs, Body_Scope);
+            end;
+         else
+            Resolve (Of_Tree, Runs, Signature);
+         end if;
+      end Resolve_Anonymous;
+
       --  Every use of a name is a Name_Reference node, so resolution is a
       --  walk looking for one kind rather than for identifiers in seven
       --  positions.  A Type_Name is not a use: [1790] gives the kernel
@@ -133,6 +175,11 @@ package body Landin.Stages.Resolution is
          Inside  : Landin.Resolution.Scope_Id) is
       begin
          if Node = Syn.No_Node then
+            return;
+         end if;
+
+         if Syn.Kind (Of_Tree, Node) = Syn.Anonymous_Function then
+            Resolve_Anonymous (Of_Tree, Node);
             return;
          end if;
 

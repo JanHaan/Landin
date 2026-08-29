@@ -1,0 +1,4 @@
+unary: type = (value: i32) -> (result: i32)
+
+first: unary = second
+second: unary = first

@@ -1,0 +1,5 @@
+public main: () -> (code: i32) =
+    captured := 42
+    callback := () -> (result: i32) = captured end
+    code = callback()
+end main

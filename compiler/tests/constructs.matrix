@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 103 with evidence, 95 with neither.
+#  198 constructs, 104 with evidence, 94 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -26,7 +26,7 @@
 0100   tour        -                                  Several names may share one declaration
 0110   tour        accepted emitted executed refused  Left of ':' is always the name being introduced
 0120   tour        accepted emitted refused refused-by-name Types are declared like any other value, with 'type'
-0130   tour        accepted emitted executed          Order inside a module does not matter
+0130   tour        accepted emitted executed refused  Order inside a module does not matter
 0140   tour        accepted emitted                   An inner scope may shadow an outer name
 0150   tour        refused refused-by-name            Integers: u8 u16 u32 u64 u128, i8 i16 i32 i64 i128
 0160   tour        accepted emitted executed refused  Pointer-width integers: usize, isize
@@ -101,9 +101,9 @@
 0850   tour        -                                  Volatile is exempt from the borrow rule and from every
 0860   tour        -                                  What this does not catch
 0870   tour        accepted emitted executed refused  A function is a value of a function type
-0880   tour        accepted emitted                   A single-expression body still takes an end
+0880   tour        accepted emitted executed          A single-expression body still takes an end
 0890   tour        accepted emitted                   Nothing returned
-0900   tour        refused refused-by-name            Three parameter conventions
+0900   tour        accepted emitted executed refused refused-by-name Three parameter conventions
 0910   tour        -                                  sink takes a place
 0920   tour        refused refused-by-name            Multiple named returns
 0930   tour        accepted emitted executed refused  Every named return must be assigned before return
@@ -114,7 +114,7 @@
 0980   tour        refused                            Calls: positional first, then named
 0990   tour        -                                  A return list is an anonymous struct
 1000   tour        accepted emitted executed refused  A function type is an ordinary type
-1010   tour        -                                  Anonymous functions
+1010   tour        accepted emitted executed refused  Anonymous functions
 1020   tour        accepted emitted refused           Discarding a result must be explicit
 1030   tour        -                                  Handling
 1040   tour        -                                  A caller parameter is filled in by the compiler with the

@@ -679,6 +679,9 @@ package body Landin.IR.Verifier is
       function Signature_Carrier_Count
         (Signature : Signature_Id) return Natural;
 
+      function Carrier_Kind (Part : Signature_Part)
+        return Landin.Types.Type_Kind;
+
       function Part_Agrees_With_Slot
         (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
          return Boolean;
@@ -792,17 +795,25 @@ package body Landin.IR.Verifier is
             when Landin.Types.No_Value =>
                return not Result_Part
                  or else Part.Aggregate_Body /= No_Declaration
-                 or else Part.Length /= 0;
+                 or else Part.Length /= 0
+                 or else Part.Signature /= No_Signature;
             when Landin.Types.Scalar_Name =>
                return Part.Aggregate_Body /= No_Declaration
-                 or else Part.Length /= 0;
+                 or else Part.Length /= 0
+                 or else Part.Signature /= No_Signature;
             when Landin.Types.Aggregate =>
                return Part.Aggregate_Body = No_Declaration
                  or else Natural (Part.Aggregate_Body)
                            > Declaration_Limit (Of_Unit)
-                 or else Part.Length /= 0;
+                 or else Part.Length /= 0
+                 or else Part.Signature /= No_Signature;
             when Landin.Types.Fixed_Array =>
-               return Part.Aggregate_Body /= No_Declaration;
+               return Part.Aggregate_Body /= No_Declaration
+                 or else Part.Signature /= No_Signature;
+            when Landin.Types.Function_Value =>
+               return Part.Aggregate_Body /= No_Declaration
+                 or else Part.Length /= 0
+                 or else not Holds (Of_Unit, Part.Signature);
             when others =>
                return True;
          end case;
@@ -814,6 +825,11 @@ package body Landin.IR.Verifier is
             + (if Signature_Result (Of_Unit, Signature).Kind
                     in Landin.Types.Aggregate | Landin.Types.Fixed_Array
                then 1 else 0));
+
+      function Carrier_Kind (Part : Signature_Part)
+        return Landin.Types.Type_Kind
+        is (if Part.Kind = Landin.Types.Function_Value
+            then Landin.Types.Usize else Part.Kind);
 
       function Part_Agrees_With_Slot
         (Item : Item_Id; Part : Signature_Part; Slot : Slot_Id)
@@ -831,6 +847,16 @@ package body Landin.IR.Verifier is
                              = Part.Length
                   and then Slot_Array_Element (Of_Unit, Item, Slot)
                              = Part.Element,
+               when Landin.Types.Function_Value =>
+                  not Is_Aggregate (Of_Unit, Item, Slot)
+                  and then not Is_Array (Of_Unit, Item, Slot)
+                  and then Type_Of (Of_Unit, Item, Slot)
+                             = Landin.Types.Usize
+                  and then Signature_Of (Of_Unit, Item, Slot)
+                             /= No_Signature
+                  and then Signatures_Agree
+                    (Of_Unit, Part.Signature,
+                     Signature_Of (Of_Unit, Item, Slot)),
                when others => False);
 
    begin
@@ -1128,6 +1154,32 @@ package body Landin.IR.Verifier is
                end;
             end loop;
 
+            if Kind_Of (Of_Unit, Id) = Datum
+              and then (Signature_Of (Of_Unit, Id) /= No_Signature
+                        or else Function_Target (Of_Unit, Id) /= No_Item)
+            then
+               declare
+                  Signature : constant Signature_Id :=
+                    Signature_Of (Of_Unit, Id);
+                  Target : constant Item_Id := Function_Target (Of_Unit, Id);
+               begin
+                  if not Holds (Of_Unit, Signature) then
+                     return (Kind => Signature_Out_Of_Range,
+                             Item => Id, others => <>);
+                  elsif Result_Of (Of_Unit, Id) /= Landin.Types.Usize
+                    or else not Holds (Of_Unit, Target)
+                    or else Kind_Of (Of_Unit, Target) /= Routine
+                    or else Signature_Of (Of_Unit, Target) = No_Signature
+                    or else not Signatures_Agree
+                      (Of_Unit, Signature, Signature_Of (Of_Unit, Target))
+                  then
+                     return
+                       (Kind => Function_Value_Signature_Disagrees,
+                        Item => Id, others => <>);
+                  end if;
+               end;
+            end if;
+
             if Kind_Of (Of_Unit, Id) = Routine
               and then Signature_Of (Of_Unit, Id) /= No_Signature
             then
@@ -1148,7 +1200,7 @@ package body Landin.IR.Verifier is
                                              | Landin.Types.Fixed_Array
                         then 1 else 0);
                   begin
-                     if Result_Of (Of_Unit, Id) /= Result.Kind
+                     if Result_Of (Of_Unit, Id) /= Carrier_Kind (Result)
                        or else Parameter_Count (Of_Unit, Id)
                                  /= Signature_Carrier_Count (Signature)
                      then
@@ -2409,6 +2461,34 @@ package body Landin.IR.Verifier is
                                             Value => V);
                                  end if;
 
+                                 declare
+                                    Left_Signature : constant Signature_Id :=
+                                      Signature_Of (Of_Unit, Id, L);
+                                    Right_Signature : constant Signature_Id :=
+                                      Signature_Of (Of_Unit, Id, R);
+                                 begin
+                                    if (Left_Signature = No_Signature)
+                                         /= (Right_Signature = No_Signature)
+                                      or else
+                                        (Left_Signature /= No_Signature
+                                         and then Op not in Comparison_Kind)
+                                      or else
+                                        (Left_Signature /= No_Signature
+                                         and then
+                                           (not Holds
+                                              (Of_Unit, Right_Signature)
+                                            or else not Signatures_Agree
+                                              (Of_Unit, Left_Signature,
+                                               Right_Signature)))
+                                    then
+                                       return
+                                         (Kind =>
+                                            Function_Value_Signature_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
+
                                  --  and that type back, or a bool from a
                                  --  comparison [0350].
                                  if Result_Of (Of_Unit, Id, V)
@@ -2535,16 +2615,40 @@ package body Landin.IR.Verifier is
                               end;
 
                            when Store_Datum =>
-                              if Result_Of
-                                   (Of_Unit, Datum_Of (Of_Unit, Id, V))
-                                 /= Result_Of
-                                      (Of_Unit, Id,
-                                       Nth_Operand (Of_Unit, Id, V, 1))
-                              then
-                                 return (Kind => Store_Datum_Disagrees,
-                                         Item => Id, Block => Block,
-                                         Value => V);
-                              end if;
+                              declare
+                                 Datum : constant Item_Id :=
+                                   Datum_Of (Of_Unit, Id, V);
+                                 Stored : constant Value_Id :=
+                                   Nth_Operand (Of_Unit, Id, V, 1);
+                                 Datum_Signature : constant Signature_Id :=
+                                   Signature_Of (Of_Unit, Datum);
+                                 Value_Signature : constant Signature_Id :=
+                                   Signature_Of (Of_Unit, Id, Stored);
+                              begin
+                                 if Result_Of (Of_Unit, Datum)
+                                      /= Result_Of (Of_Unit, Id, Stored)
+                                 then
+                                    return (Kind => Store_Datum_Disagrees,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 elsif (Datum_Signature = No_Signature)
+                                         /= (Value_Signature = No_Signature)
+                                   or else
+                                     (Datum_Signature /= No_Signature
+                                      and then
+                                        (not Holds
+                                           (Of_Unit, Value_Signature)
+                                         or else not Signatures_Agree
+                                           (Of_Unit, Datum_Signature,
+                                            Value_Signature)))
+                                 then
+                                    return
+                                      (Kind =>
+                                         Function_Value_Signature_Disagrees,
+                                       Item => Id, Block => Block,
+                                       Value => V);
+                                 end if;
+                              end;
 
                            when Load_Element | Store_Element =>
                               declare
@@ -2784,7 +2888,7 @@ package body Landin.IR.Verifier is
                                      then Result_Of (Of_Unit, Id, V)
                                             /= Landin.Types.No_Value
                                      else Result_Of (Of_Unit, Id, V)
-                                            /= Declared_Result.Kind)
+                                            /= Carrier_Kind (Declared_Result))
                                  then
                                     return (Kind => Result_Disagrees,
                                             Item => Id, Block => Block,
@@ -2855,13 +2959,28 @@ package body Landin.IR.Verifier is
                                          (if Parameter.Kind in
                                                Landin.Types.Aggregate
                                                  | Landin.Types.Fixed_Array
+                                                 | Landin.Types.Function_Value
                                           then Result_Of
                                                  (Of_Unit, Id, Argument)
                                                  = Landin.Types.Usize
                                           else Parameter.Kind = Result_Of
                                                    (Of_Unit, Id, Argument));
+                                       Signature_Agrees : constant Boolean :=
+                                         Parameter.Kind /=
+                                           Landin.Types.Function_Value
+                                         or else
+                                           (Holds
+                                              (Of_Unit,
+                                               Signature_Of
+                                                 (Of_Unit, Id, Argument))
+                                            and then Signatures_Agree
+                                              (Of_Unit, Parameter.Signature,
+                                               Signature_Of
+                                                 (Of_Unit, Id, Argument)));
                                     begin
-                                       if not Agrees then
+                                       if not Agrees
+                                         or else not Signature_Agrees
+                                       then
                                           return
                                             (Kind => Operands_Disagree,
                                              Item => Id, Block => Block,
@@ -2872,24 +2991,65 @@ package body Landin.IR.Verifier is
                               end;
 
                            when Leave =>
-                              --  An aggregate item hands nothing back:
-                              --  [0670]'s state is storage the fields
-                              --  describe, and a value of one is not
-                              --  lowered yet.  So only a scalar result is
-                              --  a result a leave has to carry.
+                              --  Aggregate results use caller storage.  Every
+                              --  scalar carrier, including a function code
+                              --  address, is carried by the leave itself.
                               if Result_Of (Of_Unit, Id)
                                  in Landin.Types.Scalar_Name
                                 and then Operand_Count (Of_Unit, Id, V) >= 1
-                                and then Result_Of
-                                           (Of_Unit, Id,
-                                            Nth_Operand
-                                              (Of_Unit, Id, V, 1))
-                                         /= Result_Of (Of_Unit, Id)
                               then
-                                 return
-                                   (Kind => Leave_Disagrees_With_Item,
-                                    Item => Id, Block => Block,
-                                    Value => V);
+                                 declare
+                                    Returned : constant Value_Id :=
+                                      Nth_Operand (Of_Unit, Id, V, 1);
+                                    Expected_Signature : Signature_Id :=
+                                      No_Signature;
+                                 begin
+                                    if Result_Of (Of_Unit, Id, Returned)
+                                         /= Result_Of (Of_Unit, Id)
+                                    then
+                                       return
+                                         (Kind => Leave_Disagrees_With_Item,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+
+                                    if Signature_Of (Of_Unit, Id)
+                                         /= No_Signature
+                                    then
+                                       if Kind_Of (Of_Unit, Id) = Datum then
+                                          Expected_Signature :=
+                                            Signature_Of (Of_Unit, Id);
+                                       elsif Signature_Result
+                                         (Of_Unit,
+                                          Signature_Of (Of_Unit, Id)).Kind
+                                           = Landin.Types.Function_Value
+                                       then
+                                          Expected_Signature :=
+                                            Signature_Result
+                                              (Of_Unit,
+                                               Signature_Of
+                                                 (Of_Unit, Id)).Signature;
+                                       end if;
+                                    end if;
+
+                                    if Expected_Signature /= No_Signature
+                                      and then
+                                        (not Holds
+                                           (Of_Unit,
+                                            Signature_Of
+                                              (Of_Unit, Id, Returned))
+                                         or else not Signatures_Agree
+                                           (Of_Unit, Expected_Signature,
+                                            Signature_Of
+                                              (Of_Unit, Id, Returned)))
+                                    then
+                                       return
+                                         (Kind =>
+                                            Function_Value_Signature_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
                               end if;
 
                            when others =>

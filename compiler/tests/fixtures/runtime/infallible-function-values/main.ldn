@@ -1,0 +1,49 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+maker: type = (value: i32) -> (result: pair)
+
+make_named: (value: i32) -> (result: pair) =
+    result = (left: value, right: 22)
+end make_named
+
+mut current: maker = make_named
+
+make_static: maker = (value: i32) -> (result: pair) =
+    result = (left: value + 1, right: 20)
+end
+
+pass_through: (candidate: maker) -> (result: maker) =
+    result = candidate
+    _ = result(0)
+end pass_through
+
+apply_wide: (a: i32, b: i32, c: i32, d: i32, e: i32, f: i32,
+             candidate: maker, value: i32) -> (result: pair) =
+    result = candidate(value + a + b + c + d + e + f)
+end apply_wide
+
+public main: () -> (code: i32) =
+    first := apply_wide(0, 0, 0, 0, 0, 0, current, 20)
+    current = make_static
+    replaced := current(20)
+    returned := pass_through(current)
+    from_result := returned(20)
+    from_module := make_static(20)
+    local: maker = (value: i32) -> (result: pair) =
+        result = (left: value + 2, right: 20)
+    end
+    from_anonymous := local(20)
+
+    code = 1
+    if first.left == 20 and first.right == 22
+       and replaced.left == 21 and replaced.right == 20
+       and from_result.left == 21 and from_result.right == 20
+       and from_module.left == 21 and from_module.right == 20
+       and from_anonymous.left == 22 and from_anonymous.right == 20
+    then
+        code = 42
+    end if
+end main
