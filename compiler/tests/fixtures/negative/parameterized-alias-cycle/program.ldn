@@ -1,3 +1,2 @@
 a: type (t: type) = b(t)
 b: type (t: type) = a(t)
-bad: type = a(u8)

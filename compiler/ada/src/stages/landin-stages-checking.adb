@@ -71,6 +71,14 @@ package body Landin.Stages.Checking is
         (Positive range 1 .. Positive'Max
            (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
              [others => False];
+      Template_Checked : array
+        (Positive range 1 .. Positive'Max
+           (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
+             [others => False];
+      Template_Invalid : array
+        (Positive range 1 .. Positive'Max
+           (1, Res.Declaration_Count (Meanings.all))) of Boolean :=
+             [others => False];
 
       type Type_Descriptor is record
          Kind    : Ty.Type_Kind := Ty.Ill_Typed;
@@ -79,9 +87,10 @@ package body Landin.Stages.Checking is
       end record;
 
       type Formal_Actual is record
-         Formal : Res.Declaration_Id := Res.No_Declaration;
-         Value  : Type_Descriptor;
-         Fixed  : Ty.Magnitude := 0;
+         Formal     : Res.Declaration_Id := Res.No_Declaration;
+         Value      : Type_Descriptor;
+         Fixed      : Ty.Magnitude := 0;
+         Fixed_Known : Boolean := False;
       end record;
 
       type Formal_Actual_Array is array (Positive range <>) of Formal_Actual;
@@ -393,6 +402,8 @@ package body Landin.Stages.Checking is
          Written : Syn.Node_Id;
          Actuals : Formal_Actual_Array) return Type_Descriptor;
 
+      procedure Validate_Template (Id : Res.Declaration_Id);
+
       procedure Report_Application
         (Of_Tree : Syn.Tree; At_Node : Syn.Node_Id; Message : String);
 
@@ -400,7 +411,8 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Written : Syn.Node_Id;
          Actuals : Formal_Actual_Array;
-         Valid   : out Boolean) return Ty.Magnitude;
+         Valid   : out Boolean;
+         Known   : out Boolean) return Ty.Magnitude;
 
       procedure Report_Application
         (Of_Tree : Syn.Tree; At_Node : Syn.Node_Id; Message : String) is
@@ -418,10 +430,12 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Written : Syn.Node_Id;
          Actuals : Formal_Actual_Array;
-         Valid   : out Boolean) return Ty.Magnitude
+         Valid   : out Boolean;
+         Known   : out Boolean) return Ty.Magnitude
       is
       begin
          Valid := False;
+         Known := False;
          if Syn.Kind (Of_Tree, Written) = Syn.Integer_Literal then
             declare
                Snap : constant Landin.Source.Snapshot :=
@@ -445,6 +459,7 @@ package body Landin.Stages.Checking is
                   return 0;
                end if;
                Valid := True;
+               Known := True;
                return Value;
             end;
          end if;
@@ -462,6 +477,7 @@ package body Landin.Stages.Checking is
                   for Each of Actuals loop
                      if Each.Formal = Formal then
                         Valid := True;
+                        Known := Each.Fixed_Known;
                         return Each.Fixed;
                      end if;
                   end loop;
@@ -494,7 +510,11 @@ package body Landin.Stages.Checking is
             if Got.Kind = Ty.Ill_Typed then
                --  The nested normalization already diagnosed its reason.
                Into := Invalid;
-            elsif Got.Kind in Ty.Scalar_Name | Ty.Fixed_Array then
+            elsif Got.Kind
+              in Ty.Undecided | Ty.Scalar_Name | Ty.Fixed_Array
+            then
+               --  Undecided is one symbolic type formal during declaration
+               --  validation.  A concrete application never leaves it so.
                Into := Got;
             else
                Report_Application
@@ -517,20 +537,25 @@ package body Landin.Stages.Checking is
                  (Of_Tree, Syn.Element_Of (Of_Tree, Written), Actuals);
                Value : Ty.Magnitude;
                Is_Fixed : Boolean;
+               Is_Known : Boolean;
             begin
-               if Element.Kind not in Ty.Scalar_Name then
+               Value := Fixed_Argument
+                 (Of_Tree, Syn.Bound_Of (Of_Tree, Written), Actuals,
+                  Is_Fixed, Is_Known);
+               if Element.Kind = Ty.Ill_Typed or else not Is_Fixed then
+                  return Invalid;
+               elsif Element.Kind /= Ty.Undecided
+                 and then Element.Kind not in Ty.Scalar_Name
+               then
                   Report_Application
                     (Of_Tree, Syn.Element_Of (Of_Tree, Written),
                      "an applied alias can make an array only of a scalar"
                      & " type");
                   return Invalid;
-               end if;
-
-               Value := Fixed_Argument
-                 (Of_Tree, Syn.Bound_Of (Of_Tree, Written), Actuals,
-                  Is_Fixed);
-               if not Is_Fixed then
-                  return Invalid;
+               elsif Element.Kind = Ty.Undecided or else not Is_Known then
+                  --  Symbolic formals prove the declaration's syntax and
+                  --  free names without inventing one instantiation's shape.
+                  return (Kind => Ty.Undecided, others => <>);
                end if;
 
                declare
@@ -562,6 +587,13 @@ package body Landin.Stages.Checking is
                        Length  => Landin.Checking.Element_Count (Value),
                        Element => Ty.Scalar_Name (Element.Kind));
             end;
+         end if;
+
+         if Syn.Kind (Of_Tree, Written) = Syn.Function_Type then
+            --  Its complete signature is irrelevant here: D135 can already
+            --  decide that a function descriptor is not one of its enabled
+            --  scalar or fixed-array results, without annotating the node.
+            return (Kind => Ty.Function_Value, others => <>);
          end if;
 
          if Syn.Kind (Of_Tree, Written) = Syn.Type_Reference then
@@ -672,6 +704,10 @@ package body Landin.Stages.Checking is
                      Report_Application
                        (Of_Tree, Target, "this type alias takes no arguments");
                      return Invalid;
+                  elsif Template_Invalid (Positive (Means)) then
+                     --  Declaration validation already diagnosed the
+                     --  template itself; a use is not a second source error.
+                     return Invalid;
                   end if;
                   if Syn.Type_Argument_Count (Of_Tree, Written)
                        /= Formal_Count
@@ -707,6 +743,11 @@ package body Landin.Stages.Checking is
                         Note    => "[1350]: a type alias expansion must reach"
                                    & " a concrete type",
                         Into    => Found);
+                     for Id in Generic_Expansion'Range loop
+                        if Generic_Expansion (Id) then
+                           Template_Invalid (Id) := True;
+                        end if;
+                     end loop;
                      return Invalid;
                   end if;
 
@@ -768,9 +809,11 @@ package body Landin.Stages.Checking is
                            then
                               declare
                                  Is_Fixed : Boolean;
+                                 Is_Known : Boolean;
                                  Value : constant Ty.Magnitude :=
                                    Fixed_Argument
-                                     (Of_Tree, Argument, Actuals, Is_Fixed);
+                                     (Of_Tree, Argument, Actuals,
+                                      Is_Fixed, Is_Known);
                                  Expected : constant Type_Descriptor :=
                                    Normalized_Type
                                      (Template.all,
@@ -778,8 +821,13 @@ package body Landin.Stages.Checking is
                                         (Template.all, Formal_Node),
                                       Bound);
                               begin
-                                 if not Is_Fixed then
+                                 if not Is_Fixed
+                                   or else Expected.Kind = Ty.Ill_Typed
+                                 then
                                     Good := False;
+                                 elsif Expected.Kind = Ty.Undecided then
+                                    Bound (Index).Fixed := Value;
+                                    Bound (Index).Fixed_Known := Is_Known;
                                  elsif Expected.Kind not in Ty.Integer_Name
                                  then
                                     Report_Application
@@ -787,9 +835,10 @@ package body Landin.Stages.Checking is
                                        "this fixed formal does not have an"
                                        & " integer type");
                                     Good := False;
-                                 elsif not Ty.Fits
-                                   (Value, Ty.Scalar_Name (Expected.Kind),
-                                    Facts, Negated => False)
+                                 elsif Is_Known
+                                   and then not Ty.Fits
+                                     (Value, Ty.Scalar_Name (Expected.Kind),
+                                      Facts, Negated => False)
                                  then
                                     Report_Application
                                       (Of_Tree, Argument,
@@ -798,6 +847,7 @@ package body Landin.Stages.Checking is
                                     Good := False;
                                  else
                                     Bound (Index).Fixed := Value;
+                                    Bound (Index).Fixed_Known := Is_Known;
                                  end if;
                               end;
                            end if;
@@ -822,7 +872,7 @@ package body Landin.Stages.Checking is
                            --  failure; each application reports once.
                            return Invalid;
                         elsif Result.Kind
-                          not in Ty.Scalar_Name | Ty.Fixed_Array
+                          not in Ty.Undecided | Ty.Scalar_Name | Ty.Fixed_Array
                         then
                            Report_Application
                              (Of_Tree, Written,
@@ -837,6 +887,104 @@ package body Landin.Stages.Checking is
             end;
          end;
       end Normalized_Type;
+
+      procedure Validate_Template (Id : Res.Declaration_Id) is
+         Of_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Id));
+         Declaration : constant Syn.Node_Id :=
+           Res.Node_Of (Meanings.all, Id);
+         Formal_Count : constant Natural :=
+           Syn.Type_Formal_Count (Of_Tree.all, Declaration);
+         Bound : Formal_Actual_Array (1 .. Formal_Count) :=
+           [others => (others => <>)];
+         Reports_Before : constant Natural :=
+           Landin.Diagnostics.Count (Found);
+      begin
+         pragma Assert (Formal_Count > 0);
+         if Template_Checked (Positive (Id)) then
+            return;
+         end if;
+         Template_Checked (Positive (Id)) := True;
+
+         for Index in Bound'Range loop
+            declare
+               Formal_Node : constant Syn.Node_Id :=
+                 Syn.Nth_Type_Formal
+                   (Of_Tree.all, Declaration, Index);
+            begin
+               Bound (Index).Formal := Declaration_At
+                 (Syn.Source_Of (Of_Tree.all), Formal_Node);
+               if Syn.Kind (Of_Tree.all, Formal_Node) = Syn.Type_Formal
+               then
+                  --  One symbolic type proves everything independent of its
+                  --  eventual argument and deliberately records nothing in
+                  --  Landin.Checking's node table.
+                  Bound (Index).Value :=
+                    (Kind => Ty.Undecided, others => <>);
+               end if;
+            end;
+         end loop;
+
+         --  A fixed formal's type is part of the declaration, not a fact
+         --  supplied by an application.  Reject a decidable non-integer now;
+         --  a type-formal-dependent answer remains symbolic until use.
+         for Index in Bound'Range loop
+            declare
+               Formal_Node : constant Syn.Node_Id :=
+                 Syn.Nth_Type_Formal
+                   (Of_Tree.all, Declaration, Index);
+            begin
+               if Syn.Kind (Of_Tree.all, Formal_Node) = Syn.Fixed_Formal
+               then
+                  declare
+                     Declared : constant Syn.Node_Id :=
+                       Syn.Declared_Type (Of_Tree.all, Formal_Node);
+                     Expected : constant Type_Descriptor := Normalized_Type
+                       (Of_Tree.all, Declared, Bound);
+                  begin
+                     if Expected.Kind = Ty.Ill_Typed then
+                        Template_Invalid (Positive (Id)) := True;
+                     elsif Expected.Kind /= Ty.Undecided
+                       and then Expected.Kind not in Ty.Integer_Name
+                     then
+                        Report_Application
+                          (Of_Tree.all, Declared,
+                           "this fixed formal's declared type is not an"
+                           & " integer type");
+                        Template_Invalid (Positive (Id)) := True;
+                     end if;
+                  end;
+               end if;
+            end;
+         end loop;
+
+         if not Template_Invalid (Positive (Id)) then
+            Generic_Expansion (Positive (Id)) := True;
+            declare
+               Result : constant Type_Descriptor := Normalized_Type
+                 (Of_Tree.all,
+                  Syn.Declared_Type (Of_Tree.all, Declaration), Bound);
+            begin
+               Generic_Expansion (Positive (Id)) := False;
+               if Result.Kind = Ty.Ill_Typed then
+                  Template_Invalid (Positive (Id)) := True;
+               elsif Result.Kind
+                 not in Ty.Undecided | Ty.Scalar_Name | Ty.Fixed_Array
+               then
+                  Report_Application
+                    (Of_Tree.all,
+                     Syn.Declared_Type (Of_Tree.all, Declaration),
+                     "this parameterized alias cannot produce a scalar or"
+                     & " fixed-array type");
+                  Template_Invalid (Positive (Id)) := True;
+               end if;
+            end;
+         end if;
+
+         if Landin.Diagnostics.Count (Found) > Reports_Before then
+            Template_Invalid (Positive (Id)) := True;
+         end if;
+      end Validate_Template;
 
       function Type_At
         (Of_Tree        : Syn.Tree;
@@ -12426,6 +12574,22 @@ package body Landin.Stages.Checking is
    begin
       Landin.Checking.Prepare
         (Types.all, Trees.all, Meanings.all, Spellings.all);
+
+      --  D135 declarations are checked even when no application reaches
+      --  them.  Symbolic formals leave only actual-dependent questions open;
+      --  free names, decidable formal kinds, terminal shape and unconditional
+      --  expansion cycles are properties of the declaration itself.
+      for Id in Res.Declaration_Id'(1)
+                .. Res.Declaration_Id (Res.Declaration_Count (Meanings.all))
+      loop
+         if Res.Sort_Of (Meanings.all, Id) = Res.Module_Type
+           and then Syn.Type_Formal_Count
+             (Tree_For (Res.Source_Of (Meanings.all, Id)).all,
+              Res.Node_Of (Meanings.all, Id)) /= 0
+         then
+            Validate_Template (Id);
+         end if;
+      end loop;
 
       --  Pass one: every declaration that writes its type down, over every
       --  tree, before any body is read.  [1840]'s module scope is a set and

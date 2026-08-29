@@ -231,7 +231,9 @@ what none of the four could read, lowers every function it accepted into
 parameterized aliases are compile-time-only templates: checking substitutes
 type and fixed integer actuals, including a fixed formal passed to a nested
 application, and records only the resulting ordinary scalar or fixed-array
-descriptor. Templates and formals create no IR and retain no
+descriptor. A symbolic declaration walk still rejects invalid free names,
+decidable fixed-formal/result kinds and unconditional expansion cycles in an
+unused template. Templates and formals create no IR and retain no
 instantiation-specific checking metadata.
 
 A width is a function of a type and a target description, never a property of

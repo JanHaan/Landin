@@ -7422,6 +7422,14 @@ must fit D18's target `usize`. The declaration, its body and its formals are a
 compile-time template: formals have no runtime type and no instantiation writes
 a type, length or other per-application metadata onto a template syntax node.
 
+A template is still a declaration and is validated even when never applied.
+The checker uses symbolic formals, not a guessed instantiation, to reject an
+unresolved or non-type free name, a fixed formal whose declared type is
+decidably non-integer, a result shape that is decidably neither scalar nor
+fixed array, and an unconditional alias-expansion cycle. A question whose
+answer genuinely depends on a type formal remains for application checking;
+the symbolic validation records no type or shape on the template nodes.
+
 **Why one declaration scope:** resolving while reading would make a correct
 alias depend on its formal order, while making each formal a module declaration
 would leak its name and create collisions unrelated aliases cannot share. A

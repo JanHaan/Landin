@@ -2257,7 +2257,9 @@ deduction and fixed conditional declarations without introducing compile-time
 execution. D135's first semantic slice now normalizes fully applied positional
 parameterized aliases to the existing scalar and fixed-array descriptors,
 including nested fixed-formal substitution; templates and formals remain
-compile-time-only. Generic functions, deduction and fixed conditional
+compile-time-only. Symbolic declaration validation rejects invalid free names,
+decidable formal/result kind errors and unconditional expansion cycles even
+when a template is unused. Generic functions, deduction and fixed conditional
 declarations remain in this item.
 
 Exit evidence: generic shape fixtures and negative non-fixed cases pass; no
