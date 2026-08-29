@@ -5756,3 +5756,31 @@ The temporary preserves both order and one-position transport.
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/array-literal-argument-shape-mismatch`; the generated token and IR
 records; and `runtime/array-arguments-cross-calls` on Linux x86-64.
+
+### D99 — Array repetition forms may fill an argument temporary
+
+**The tour said** that repetition evaluates its repeated expression once
+[0560], and mixed repetition evaluates its explicit prefix before that one
+suffix expression [0410]. D98's shaped caller temporary provides the same
+complete fixed-array context at an argument boundary.
+
+**Chosen:** full and mixed array repetition may appear directly in a matching
+fixed-array argument position. A written full-repetition count must equal the
+parameter length; a mixed prefix must leave at least one destination position.
+Lowering stores explicit prefix elements in source order, evaluates the repeated
+expression once, emits one compact suffix fill, and transports the temporary
+through D95's existing address convention.
+
+The fill retains a one-based first destination identity and the temporary's
+neutral length and scalar element. Neither lowering nor verified IR expands the
+repeated suffix, including for D18's target-sized lengths; target byte width and
+extent remain backend facts.
+
+**Why both forms share one rule:** their only semantic difference is the
+source-ordered explicit prefix. Giving arguments a separate repetition
+representation would duplicate the contextual assignment and initializer
+semantics without changing the ABI carrier or callee copy.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/array-repetition-argument-shape-mismatch`; the generated token and IR
+records; and `runtime/array-arguments-cross-calls` on Linux x86-64.

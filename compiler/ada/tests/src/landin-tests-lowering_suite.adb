@@ -4017,6 +4017,8 @@ package body Landin.Tests.Lowering_Suite is
          & "    answer = take(1, value) + take_array(row)" & LF
          & "             + take(0, zeroed) + take_array(zeroed)" & LF
          & "             + take_array([6, 7])" & LF
+         & "             + take_array([2 of 8])" & LF
+         & "             + take_array([9, of 10])" & LF
          & "end use" & LF
          & "take_array: (value: [2]i32) -> (answer: i32) =" & LF
          & "    answer = value[0] + value[1]" & LF
@@ -4033,7 +4035,7 @@ package body Landin.Tests.Lowering_Suite is
          Parameter : constant IR.Slot_Id := IR.Nth_Parameter (Unit, 1, 2);
          Array_Parameter : constant IR.Slot_Id :=
            IR.Nth_Parameter (Unit, 3, 1);
-         Addresses, Calls, Clears : Natural := 0;
+         Addresses, Calls, Clears, Fills : Natural := 0;
       begin
          Landin.Testing.Check
            (Item,
@@ -4059,13 +4061,16 @@ package body Landin.Tests.Lowering_Suite is
                      "each aggregate occupies one source argument position");
                elsif IR.Op_Of (Unit, 2, Value) = IR.Clear_Array then
                   Clears := Clears + 1;
+               elsif IR.Op_Of (Unit, 2, Value) = IR.Fill_Array then
+                  Fills := Fills + 1;
                end if;
             end;
          end loop;
          Landin.Testing.Check
            (Item,
-            Addresses = 5 and then Calls = 5 and then Clears = 2,
-            "zeroed arguments use cleared caller temporaries and addresses");
+            Addresses = 7 and then Calls = 7 and then Clears = 2
+              and then Fills = 2,
+            "contextual arguments use compact shaped caller temporaries");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts the internal aggregate carrier");
