@@ -215,10 +215,15 @@ package body Landin.Stages.Checking.Flow is
 
       type Assigned_Fields is array (Tracked, Tracked_Field) of Boolean;
 
+      --  D121: an element of an array of ordinary structs is assigned a
+      --  part at a time, exactly as a local struct is, so a fact names
+      --  the run inside the element as well as the position.  An empty
+      --  run is the whole element, which is what every array had before.
       type Element_Fact is record
          Declaration : Res.Declaration_Id;
          Path        : Field_Path;
          Position    : Ty.Magnitude;
+         Below       : Field_Path;
       end record;
 
       function "<" (Left, Right : Element_Fact) return Boolean
@@ -229,7 +234,11 @@ package body Landin.Stages.Checking.Flow is
                (Left.Path < Right.Path
                 or else
                   (Left.Path = Right.Path
-                   and then Left.Position < Right.Position))));
+                   and then
+                     (Left.Position < Right.Position
+                      or else
+                        (Left.Position = Right.Position
+                         and then Left.Below < Right.Below))))));
 
       package Element_Sets is new Ada.Containers.Ordered_Sets
         (Element_Type => Element_Fact);
@@ -320,7 +329,8 @@ package body Landin.Stages.Checking.Flow is
          Id      : Res.Declaration_Id;
          Path    : Field_Path;
          Position : Ty.Magnitude;
-         State   : Assigned_Set);
+         State   : Assigned_Set;
+         Below   : Field_Path := No_Path);
       procedure Require_Computed_Element
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -447,6 +457,69 @@ package body Landin.Stages.Checking.Flow is
          Id := Res.Bound_To (Meanings.all, Of_Tree, Where);
          Path := Steps;
       end Chain_Base;
+
+      --  D121: the one index in a selection chain, what reaches the array
+      --  above it, and the run inside the element below it.  The same
+      --  three questions the lowering asks, asked here so a fact names
+      --  exactly the part a write established.
+      function Chain_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+      function Chain_Above
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+      function Chain_Below
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Field_Path;
+
+      function Chain_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
+      is
+         Where : Syn.Node_Id := Node;
+      begin
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+            Where := Syn.Target_Of (Of_Tree, Where);
+         end loop;
+         if Syn.Kind (Of_Tree, Where) = Syn.Element_Index then
+            return Where;
+         end if;
+         return Syn.No_Node;
+      end Chain_Index;
+
+      function Chain_Above
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
+      is
+         Indexed : constant Syn.Node_Id := Chain_Index (Of_Tree, Node);
+      begin
+         if Indexed = Syn.No_Node then
+            return Node;
+         end if;
+         return Syn.Target_Of (Of_Tree, Indexed);
+      end Chain_Above;
+
+      function Chain_Below
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Field_Path
+      is
+         Steps : Field_Path;
+         Where : Syn.Node_Id := Node;
+      begin
+         if Chain_Index (Of_Tree, Node) = Syn.No_Node then
+            return No_Path;
+         end if;
+
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+            declare
+               Which : constant Natural :=
+                 Landin.Checking.Field_Index (Types.all, Of_Tree, Where);
+            begin
+               if Which not in 1 .. Widest_Struct then
+                  return No_Path;
+               end if;
+               Steps.Prepend (Which);
+               Where := Syn.Target_Of (Of_Tree, Where);
+            end;
+         end loop;
+         return Steps;
+      end Chain_Below;
 
       procedure Array_Base
         (Of_Tree : Syn.Tree;
@@ -692,7 +765,10 @@ package body Landin.Stages.Checking.Flow is
          --  D20: completeness is a count over the sparse facts that exist,
          --  never a walk over an array whose D18 length may fill the target.
          for Fact of State.Elements loop
-            if Fact.Declaration = Id and then Fact.Path = Path then
+            if Fact.Declaration = Id
+              and then Fact.Path = Path
+              and then Fact.Below.Is_Empty
+            then
                Assigned := Assigned + 1;
             end if;
          end loop;
@@ -793,13 +869,18 @@ package body Landin.Stages.Checking.Flow is
          Id       : Res.Declaration_Id;
          Path     : Field_Path;
          Position : Ty.Magnitude;
-         State    : Assigned_Set) is
+         State    : Assigned_Set;
+         Below    : Field_Path := No_Path) is
       begin
+         --  A fact about the whole element covers every part of it, so a
+         --  read of a part asks for either.
          if not Is_Tracked (Id)
            or else Array_Sets.Contains (State.Whole_Arrays, (Id, Path))
            or else Covered (Id, Path, State, Strictly_Above => True)
            or else Element_Sets.Contains
-                     (State.Elements, (Id, Path, Position))
+                     (State.Elements, (Id, Path, Position, No_Path))
+           or else Element_Sets.Contains
+                     (State.Elements, (Id, Path, Position, Below))
          then
             return;
          end if;
@@ -926,6 +1007,36 @@ package body Landin.Stages.Checking.Flow is
             if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                  = Ty.Ill_Typed
             then
+               return;
+            end if;
+
+            --  D121: a chain through an index reads a part of an element,
+            --  not a field of a name.
+            if Chain_Index (Of_Tree, Node) /= Syn.No_Node then
+               declare
+                  Indexed : constant Syn.Node_Id :=
+                    Chain_Index (Of_Tree, Node);
+                  Where : constant Syn.Node_Id :=
+                    Syn.Index_Of (Of_Tree, Indexed);
+                  Position : Ty.Magnitude;
+                  Id : Res.Declaration_Id;
+                  Path : Field_Path;
+               begin
+                  Read_Names (Of_Tree, Where, State);
+                  Array_Base
+                    (Of_Tree, Chain_Above (Of_Tree, Node), Id, Path);
+                  if Id /= Res.No_Declaration then
+                     if Known_Index_Value (Of_Tree, Where, Position) then
+                        Require_Element
+                          (Of_Tree, Node, Id, Path, Position, State,
+                           Below => Chain_Below (Of_Tree, Node));
+                     else
+                        Require_Computed_Element
+                          (Of_Tree, Node, Id, Path, State);
+                     end if;
+                  end if;
+               end;
+
                return;
             end if;
 
@@ -1153,7 +1264,8 @@ package body Landin.Stages.Checking.Flow is
                        and then Is_Tracked (Id)
                      then
                         Element_Sets.Include
-                          (State.Elements, (Id, Path, Position));
+                          (State.Elements,
+                           (Id, Path, Position, No_Path));
                      end if;
                   elsif Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                           /= Ty.Ill_Typed
@@ -1176,6 +1288,33 @@ package body Landin.Stages.Checking.Flow is
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
                     = Ty.Ill_Typed
                then
+                  return;
+               end if;
+
+               if Chain_Index (Of_Tree, Node) /= Syn.No_Node then
+                  declare
+                     Indexed : constant Syn.Node_Id :=
+                       Chain_Index (Of_Tree, Node);
+                     Where : constant Syn.Node_Id :=
+                       Syn.Index_Of (Of_Tree, Indexed);
+                     Position : Ty.Magnitude;
+                     Id : Res.Declaration_Id;
+                     Path : Field_Path;
+                  begin
+                     Read_Names (Of_Tree, Where, State);
+                     Array_Base
+                       (Of_Tree, Chain_Above (Of_Tree, Node), Id, Path);
+                     if Id /= Res.No_Declaration
+                       and then Is_Tracked (Id)
+                       and then Known_Index_Value (Of_Tree, Where, Position)
+                     then
+                        Element_Sets.Include
+                          (State.Elements,
+                           (Id, Path, Position,
+                            Chain_Below (Of_Tree, Node)));
+                     end if;
+                  end;
+
                   return;
                end if;
 

@@ -1,6 +1,0 @@
-class: negative
-summary: [1820] puts the brackets after the whole selection, so selecting from an index derives in no rule
-constructs: 0520, 1820, 1830
-program: program.ldn
-codes: L0010
-targets: linux-x86-64, macos-arm64

@@ -317,6 +317,20 @@ package body Landin.Stages.Lowering is
       function Roots_At_An_Aggregate_Alias
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
+      --  D121: the one index in a selection chain, when [0520]'s element
+      --  is an ordinary struct and [0420] selected into it.  Chain_Above
+      --  is everything that reaches the array; Chain_Below is every
+      --  selection inside the element, which the backend adds after the
+      --  scaled index.
+      function Chain_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+      function Chain_Above
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id;
+
+      function Chain_Below
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array;
+
       --  D75 uses D74's one variant carrier for both storage classes.
       --  Exactly one destination identity is supplied; payload leaves remain
       --  scalar or fixed-array shapes, and all offsets stay target-owned.
@@ -498,6 +512,16 @@ package body Landin.Stages.Lowering is
       function Neutral_Field
         (Wrote : Res.Declaration_Id; Field : Positive) return IR.Field_Shape;
 
+      --  One whole declaration as a neutral shape: the run of its fields,
+      --  appended before the shape that names it.
+      function Neutral_Body
+        (Wrote : Res.Declaration_Id) return IR.Field_Shape;
+
+      --  D121: the element shape a whole array's storage repeats, whether
+      --  that element is one of [1790]'s scalars or an ordinary struct.
+      function Neutral_Element
+        (Id : Res.Declaration_Id) return IR.Field_Shape;
+
       function Neutral_Shape
         (Source : Landin.Checking.Field_Shape) return IR.Field_Shape
       is
@@ -511,6 +535,23 @@ package body Landin.Stages.Lowering is
                   others  => <>);
 
             when Landin.Checking.Fixed_Array_Field =>
+               --  D121: an ordinary-struct element is one run of exactly
+               --  one shape, appended before the array shape names it.
+               if Source.Aggregate_Body /= Res.No_Declaration then
+                  declare
+                     First : constant Natural :=
+                       IR.Add_Shape_Run
+                         (Unit.all,
+                          [1 => Neutral_Body (Source.Aggregate_Body)]);
+                  begin
+                     return
+                       (Kind           => IR.Array_Field_Shape,
+                        Element        => Ty.Bool,
+                        Length         => IR.Element_Total (Source.Length),
+                        Cases          => 1,
+                        Payloads_First => First);
+                  end;
+               end if;
                return
                  (Kind    => IR.Array_Field_Shape,
                   Element => Source.Element,
@@ -518,26 +559,7 @@ package body Landin.Stages.Lowering is
                   others  => <>);
 
             when Landin.Checking.Aggregate_Field =>
-               declare
-                  Child : constant Res.Declaration_Id :=
-                    Source.Aggregate_Body;
-                  Count : constant Natural :=
-                    Landin.Checking.Layout_Field_Count (Types.all, Child);
-                  Parts : IR.Field_Shape_Array (1 .. Count) :=
-                    [others => (others => <>)];
-                  First : Natural;
-               begin
-                  for Position in 1 .. Count loop
-                     Parts (Position) := Neutral_Field (Child, Position);
-                  end loop;
-                  First := IR.Add_Shape_Run (Unit.all, Parts);
-                  return
-                    (Kind           => IR.Aggregate_Field_Shape,
-                     Element        => Ty.Bool,
-                     Length         => 1,
-                     Cases          => Count,
-                     Payloads_First => First);
-               end;
+               return Neutral_Body (Source.Aggregate_Body);
 
             when Landin.Checking.Variant_Field =>
                --  Lay_Out refuses a variant part inside a payload run, so
@@ -546,6 +568,43 @@ package body Landin.Stages.Lowering is
                  "a variant part reached shape-only lowering";
          end case;
       end Neutral_Shape;
+
+      function Neutral_Element
+        (Id : Res.Declaration_Id) return IR.Field_Shape
+      is
+         Element : constant Res.Declaration_Id :=
+           Landin.Checking.Array_Element_Body (Types.all, Id);
+      begin
+         if Element /= Res.No_Declaration then
+            return Neutral_Body (Element);
+         end if;
+         return
+           (Kind    => IR.Scalar_Field_Shape,
+            Element => Landin.Checking.Array_Element (Types.all, Id),
+            Length  => 1,
+            others  => <>);
+      end Neutral_Element;
+
+      function Neutral_Body
+        (Wrote : Res.Declaration_Id) return IR.Field_Shape
+      is
+         Count : constant Natural :=
+           Landin.Checking.Layout_Field_Count (Types.all, Wrote);
+         Parts : IR.Field_Shape_Array (1 .. Count) :=
+           [others => (others => <>)];
+         First : Natural;
+      begin
+         for Position in 1 .. Count loop
+            Parts (Position) := Neutral_Field (Wrote, Position);
+         end loop;
+         First := IR.Add_Shape_Run (Unit.all, Parts);
+         return
+           (Kind           => IR.Aggregate_Field_Shape,
+            Element        => Ty.Bool,
+            Length         => 1,
+            Cases          => Count,
+            Payloads_First => First);
+      end Neutral_Body;
 
       function Neutral_Field
         (Wrote : Res.Declaration_Id; Field : Positive) return IR.Field_Shape
@@ -666,6 +725,62 @@ package body Landin.Stages.Lowering is
          end loop;
          return Steps;
       end Chain_Steps;
+
+      function Chain_Index
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
+      is
+         Where : Syn.Node_Id := Node;
+      begin
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+            Where := Syn.Target_Of (Of_Tree, Where);
+         end loop;
+         if Syn.Kind (Of_Tree, Where) = Syn.Element_Index then
+            return Where;
+         end if;
+         return Syn.No_Node;
+      end Chain_Index;
+
+      function Chain_Above
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Syn.Node_Id
+      is
+         Indexed : constant Syn.Node_Id := Chain_Index (Of_Tree, Node);
+      begin
+         if Indexed = Syn.No_Node then
+            return Node;
+         end if;
+         return Syn.Target_Of (Of_Tree, Indexed);
+      end Chain_Above;
+
+      function Chain_Below
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array
+      is
+         Depth : Natural := 0;
+         Where : Syn.Node_Id := Node;
+      begin
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+            Depth := Depth + 1;
+            Where := Syn.Target_Of (Of_Tree, Where);
+         end loop;
+
+         if Syn.Kind (Of_Tree, Where) /= Syn.Element_Index then
+            return IR.No_Path_Steps;
+         end if;
+
+         declare
+            Steps : IR.Path_Step_Array (1 .. Depth) :=
+              [others => (others => <>)];
+            Each : Syn.Node_Id := Node;
+         begin
+            for Step in reverse Steps'Range loop
+               Steps (Step) :=
+                 (Field      => IR.Part_Position
+                    (Landin.Checking.Field_Index (Types.all, Of_Tree, Each)),
+                  Case_Index => 0);
+               Each := Syn.Target_Of (Of_Tree, Each);
+            end loop;
+            return Steps;
+         end;
+      end Chain_Below;
 
       function Chain_All_Steps
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array
@@ -789,7 +904,7 @@ package body Landin.Stages.Lowering is
             Slots (Positive (Id)) :=
               IR.Add_Array_Slot
                 (Unit.all, Filling,
-                 Landin.Checking.Array_Element (Types.all, Id),
+                 Neutral_Element (Id),
                  IR.Element_Total
                    (Landin.Checking.Array_Length (Types.all, Id)),
                  Id,
@@ -2205,27 +2320,57 @@ package body Landin.Stages.Lowering is
                --  is a field *of* decides whether the base is [1740]'s
                --  module state or a cell in this frame.
                declare
-                  Named : constant Syn.Node_Id :=
-                    Chain_Root (Of_Tree, Node);
-                  Means : constant Res.Declaration_Id :=
-                    Res.Bound_To (Meanings.all, Of_Tree, Named);
+                  --  D121: the chain may pass through one index, and
+                  --  then what it reaches is a leaf inside an element.
+                  Indexed : constant Syn.Node_Id :=
+                    Chain_Index (Of_Tree, Node);
+                  Above : constant Syn.Node_Id :=
+                    Chain_Above (Of_Tree, Node);
                   Place : constant IR.Storage :=
-                    Rooted_Storage (Of_Tree, Node);
-                  Which : constant IR.Part_Position :=
-                    IR.Part_Position (Rooted_Base (Of_Tree, Node));
+                    Rooted_Storage (Of_Tree, Above);
+                  Base : constant Natural := Rooted_Base (Of_Tree, Above);
                   Child_Steps : constant IR.Path_Step_Array :=
-                    Rooted_Steps (Of_Tree, Node);
+                    Rooted_Steps (Of_Tree, Above);
+                  Below : constant IR.Path_Step_Array :=
+                    Chain_Below (Of_Tree, Node);
                begin
-                  pragma Unreferenced (Means);
+                  if Indexed /= Syn.No_Node then
+                     declare
+                        Index : constant IR.Value_Id :=
+                          Lower_Expression
+                            (Of_Tree, Syn.Index_Of (Of_Tree, Indexed),
+                             Scope);
+                     begin
+                        case Place.Kind is
+                           when IR.Module_Datum =>
+                              return IR.Emit_Load_Element
+                                (Unit.all, Filling, Place.Datum, Index,
+                                 Scalar_At (Of_Tree, Node), Site,
+                                 Field  => Base,
+                                 Nested => Child_Steps,
+                                 Below  => Below);
+                           when IR.Frame_Slot =>
+                              return IR.Emit_Load_Slot_Element
+                                (Unit.all, Filling, Place.Slot, Index,
+                                 Scalar_At (Of_Tree, Node), Site,
+                                 Field  => Base,
+                                 Nested => Child_Steps,
+                                 Below  => Below);
+                        end case;
+                     end;
+                  end if;
+
                   case Place.Kind is
                      when IR.Module_Datum =>
                         return IR.Emit_Load_Field
-                                 (Unit.all, Filling, Place.Datum, Which,
+                                 (Unit.all, Filling, Place.Datum,
+                                  IR.Part_Position (Base),
                                   Scalar_At (Of_Tree, Node), Site,
                                   Nested => Child_Steps);
                      when IR.Frame_Slot =>
                         return IR.Emit_Load_Slot_Field
-                                 (Unit.all, Filling, Place.Slot, Which,
+                                 (Unit.all, Filling, Place.Slot,
+                                  IR.Part_Position (Base),
                                   Scalar_At (Of_Tree, Node), Site,
                                   Nested => Child_Steps);
                   end case;
@@ -3206,13 +3351,14 @@ package body Landin.Stages.Lowering is
                      else Syn.Target_Of (Of_Tree, Place));
                   Named : constant Syn.Node_Id :=
                     (if From = Syn.No_Node then Syn.No_Node
-                     else Chain_Root (Of_Tree, From));
+                     else Chain_Root (Of_Tree, Chain_Above (Of_Tree, From)));
                   Field : constant Natural :=
                     (if From = Syn.No_Node then 0
-                     else Chain_Base (Of_Tree, From));
+                     else Chain_Base (Of_Tree, Chain_Above (Of_Tree, From)));
                   Child_Steps : constant IR.Path_Step_Array :=
                     (if From = Syn.No_Node then IR.No_Path_Steps
-                     else Chain_Steps (Of_Tree, From));
+                     else Chain_Steps
+                       (Of_Tree, Chain_Above (Of_Tree, From)));
                   Means : Res.Declaration_Id;
                begin
                   if Index = IR.No_Value then
@@ -3278,8 +3424,10 @@ package body Landin.Stages.Lowering is
                     (if Syn.Kind (Of_Tree, Place) = Syn.Element_Index
                      then Syn.Target_Of (Of_Tree, Place)
                      else Place);
+                  --  D121: the chain may pass through an index, and the
+                  --  name it started from is above that.
                   Named : constant Syn.Node_Id :=
-                    Chain_Root (Of_Tree, Selected);
+                    Chain_Root (Of_Tree, Chain_Above (Of_Tree, Selected));
                   Means : constant Res.Declaration_Id :=
                     Res.Bound_To (Meanings.all, Of_Tree, Named);
                begin
@@ -3371,21 +3519,61 @@ package body Landin.Stages.Lowering is
 
                   if Syn.Kind (Of_Tree, Place) = Syn.Member_Selection then
                      declare
+                        Indexed : constant Syn.Node_Id :=
+                          Chain_Index (Of_Tree, Place);
+                        Above : constant Syn.Node_Id :=
+                          Chain_Above (Of_Tree, Place);
                         Into : constant IR.Storage :=
-                          Rooted_Storage (Of_Tree, Place);
-                        Which : constant IR.Part_Position :=
-                          IR.Part_Position (Rooted_Base (Of_Tree, Place));
+                          Rooted_Storage (Of_Tree, Above);
+                        --  Zero when the array is a name of its own,
+                        --  which is not a field position at all.
+                        Base : constant Natural :=
+                          Rooted_Base (Of_Tree, Above);
                         Child_Steps : constant IR.Path_Step_Array :=
-                          Rooted_Steps (Of_Tree, Place);
+                          Rooted_Steps (Of_Tree, Above);
+                        Below : constant IR.Path_Step_Array :=
+                          Chain_Below (Of_Tree, Place);
                      begin
+                        --  D121: writing a leaf inside an element is the
+                        --  same element operation, with the run inside
+                        --  the element after the index.
+                        if Indexed /= Syn.No_Node then
+                           declare
+                              At_Index : constant IR.Value_Id :=
+                                Lower_Expression
+                                  (Of_Tree,
+                                   Syn.Index_Of (Of_Tree, Indexed), Scope);
+                           begin
+                              case Into.Kind is
+                                 when IR.Module_Datum =>
+                                    IR.Emit_Store_Element
+                                      (Unit.all, Filling, Into.Datum,
+                                       At_Index, Value, Site,
+                                       Field  => Base,
+                                       Nested => Child_Steps,
+                                       Below  => Below);
+                                 when IR.Frame_Slot =>
+                                    IR.Emit_Store_Slot_Element
+                                      (Unit.all, Filling, Into.Slot,
+                                       At_Index, Value, Site,
+                                       Field  => Base,
+                                       Nested => Child_Steps,
+                                       Below  => Below);
+                              end case;
+                           end;
+                           return;
+                        end if;
+
                         case Into.Kind is
                            when IR.Module_Datum =>
                               IR.Emit_Store_Field
-                                (Unit.all, Filling, Into.Datum, Which,
+                                (Unit.all, Filling, Into.Datum,
+                                 IR.Part_Position (Base),
                                  Value, Site, Nested => Child_Steps);
                            when IR.Frame_Slot =>
                               IR.Emit_Store_Slot_Field
-                                (Unit.all, Filling, Into.Slot, Which,
+                                (Unit.all, Filling, Into.Slot,
+                                 IR.Part_Position (Base),
                                  Value, Site, Nested => Child_Steps);
                         end case;
                      end;
@@ -4224,8 +4412,7 @@ package body Landin.Stages.Lowering is
                            if Held = Ty.Fixed_Array then
                               IR.Set_Array
                                 (Unit.all, Made,
-                                 Landin.Checking.Array_Element
-                                   (Types.all, Id),
+                                 Neutral_Element (Id),
                                  IR.Element_Total
                                    (Landin.Checking.Array_Length
                                       (Types.all, Id)));

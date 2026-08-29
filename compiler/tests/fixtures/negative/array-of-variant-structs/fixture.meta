@@ -1,0 +1,6 @@
+class: negative
+summary: a fixed array of a struct that has a variant part has no carrier yet
+constructs: 0520, 0670, 0680, 1795
+program: program.ldn
+codes: L0304
+targets: linux-x86-64, macos-arm64

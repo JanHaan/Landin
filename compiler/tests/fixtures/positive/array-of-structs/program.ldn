@@ -1,0 +1,27 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+grid: type = struct
+    cells: [2]point
+    tail: i32
+end grid
+
+mut state: grid
+mut cells: [3]point = zeroed
+mut spare: [3]point = zeroed
+
+exercise: () -> none =
+    mut local: grid
+    mut room: [3]point
+    local = zeroed
+    room = zeroed
+    local.cells[1].x = 3
+    local.cells[1].y = local.cells[1].x
+    cells[0].x = 5
+    room[2].y = cells[0].x
+    spare = room
+    cells = spare
+    state = local
+end exercise

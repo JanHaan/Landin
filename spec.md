@@ -341,7 +341,7 @@ struct_literal ::= "(" field_value ("," field_value)*
 field_value ::= identifier ":" expression
 construction ::= identifier "(" field_value ("," field_value)*
                  ("," "of" expression)? ")"
-indexed     ::= selection ("[" expression "]")*
+indexed     ::= selection (("[" expression "]") | ("." identifier))*
 selection   ::= identifier ("." identifier)*
 call        ::= identifier "(" arguments? ")"
 measurement ::= ("sizeof" | "alignof") type | "lenof" identifier
@@ -6435,3 +6435,43 @@ selection below it is then an ordinary step of the same run.
 `negative/variant-struct-payload-mismatch`,
 `negative/variant-inside-a-nested-struct-not-enabled`, the generated IR
 record, and `runtime/variant-struct-payloads` on Linux x86-64.
+
+### D122 — A fixed array's element may be an ordinary struct
+
+**The tour said** that a fixed array is its element repeated [0520], that a
+struct's field may have any type a binding may have [0670] [0750], and it
+writes `w.items[i].x` and `xs[i].items` outright. D17 made an array's identity
+its length and its element, and every stage carried that element as one of
+[1790]'s eleven scalars.
+
+**Chosen:** [0520]'s element may be an ordinary struct. Its extent is that
+struct's own padded layout repeated, so an array adds nothing but the
+repetition, and an array of one is storage anywhere an array of a scalar is: a
+struct field, a local, and a module binding. `zeroed` clears the whole extent,
+and two arrays of the same length and the same element copy whole.
+
+`a[i].f` selects a leaf of an element and is a value and a place. [1820]'s
+`indexed` accordingly derives a selection after an index, which is what the
+tour already writes; the parser's by-name refusal of that spelling is retired.
+Definite assignment keeps a fact per known position *and* per run inside the
+element, so writing `a[0].x` establishes exactly that leaf and reading it asks
+for exactly that fact — with a fact about the whole element, or about anything
+containing the array, covering it.
+
+The neutral shape carries the element as a run of exactly one, built by
+D117/D118's own machinery; a scalar element stays where it was, so no array
+that existed before D121 changes. An indexed operation carries a second run,
+applied after the scaled index, which is the only new thing an instruction
+holds: an index is a value and cannot be a step. Two shapes are the same shape
+when they hold the same thing, not when their runs start in the same place.
+
+Two forms stay refused and name this item. A whole element is neither a value
+nor a place: the contextual forms reach one through identities alone, and an
+index is a value. And an array whose element is a struct with a variant part
+has no carrier, for the reason an ordinary child holding one has none.
+
+**Pinned by** `positive/array-of-structs`,
+`negative/whole-array-element-place`, `negative/array-of-variant-structs`,
+`negative/selection-from-a-scalar-element`, the malformed case
+`Element_Path_Below_A_Scalar_Element`, the generated IR record, and
+`runtime/array-of-structs` on Linux x86-64.

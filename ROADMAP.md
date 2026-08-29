@@ -2014,16 +2014,28 @@ its own stays refused, and so does a module image containing one: [1940] folds
 an image rather than copying it, and D67's folded run has no carrier for a
 child's own image. Both refusals name this item.
 
+The thirty-seventh increment gives a fixed array an ordinary struct element.
+Layout is that struct's padded extent repeated; whole storage is zeroed and
+copied as any array is; and `a[i].f` selects a leaf of an element, which
+[1820]'s `indexed` now derives. A whole element is not yet a value or a place,
+because an index is a value and the contextual forms reach one through
+identities alone; an array of a struct with a variant part has no carrier
+either. Both refusals name this item.
+
 Function-typed module storage, struct fields, function parameters and results,
 declared-error function types and anonymous functions remain in this item.
 Further aggregate arguments and result contexts remain here too; R4.40 later
 supplies complete C ABI classification rather than owning this internal
 convention.
-Aggregate values include the other nonzero nested-ordinary forms R2.20
-left contextual: whole nested field selection, construction and copy, deeper recursive
+D118--D122 have closed the nested-ordinary forms R2.20 left contextual:
+whole nested field selection, construction and copy, deeper recursive
 composition, aggregate variant payloads and D17's fixed arrays whose element
 is an aggregate. They reuse R2.20's neutral shape provenance rather than
-reopening its target layout.
+reopening its target layout. What those five leave for a later increment of
+this item, each refused by name and pointing here: a struct with a variant
+part as a field, a payload or an array element; a module image containing an
+ordinary-child or ordinary-payload value; and a whole array element as a
+value or a place.
 
 Error atoms remain identity without payload. This item does not invent a
 second error mechanism without executable pressure: R3.50's hosted I/O and

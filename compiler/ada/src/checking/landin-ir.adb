@@ -392,10 +392,13 @@ package body Landin.IR is
          then Array_Length (Of_Unit, Item)
          else Element_Total (Field_Count (Of_Unit, Item)));
 
+   --  D121: an array's element may be an aggregate, and then the element
+   --  at a position is not a scalar part.
    function Part_Is_Scalar
      (Of_Unit : Unit; Item : Item_Id; Index : Part_Position) return Boolean
-     is (Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
-         or else Nth_Field_Shape
+     is (if Result_Of (Of_Unit, Item) = Landin.Types.Fixed_Array
+         then Array_Element_Shape (Of_Unit, Item).Kind = Scalar_Field_Shape
+         else Nth_Field_Shape
            (Of_Unit, Item, Positive (Index)).Kind = Scalar_Field_Shape);
 
    function Nth_Part
@@ -411,15 +414,35 @@ package body Landin.IR is
       Of_Type : Landin.Types.Scalar_Name;
       Length  : Element_Total)
    is
-      Held : Item_Record := Element (Into, Item);
    begin
-      Held.Element := Of_Type;
+      Set_Array
+        (Into, Item,
+         Field_Shape'(Kind    => Scalar_Field_Shape,
+                      Element => Of_Type,
+                      Length  => 1,
+                      others  => <>),
+         Length);
+   end Set_Array;
+
+   procedure Set_Array
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Element : Field_Shape;
+      Length  : Element_Total)
+   is
+      Held : Item_Record := Landin.IR.Element (Into, Item);
+   begin
+      Held.Element := Element;
       Held.Length := Length;
       Into.Items (Positive (Item)) := Held;
    end Set_Array;
 
    function Array_Element
      (Of_Unit : Unit; Item : Item_Id) return Landin.Types.Scalar_Name
+     is (Element (Of_Unit, Item).Element.Element);
+
+   function Array_Element_Shape
+     (Of_Unit : Unit; Item : Item_Id) return Field_Shape
      is (Element (Of_Unit, Item).Element);
 
    function Array_Length
@@ -658,12 +681,30 @@ package body Landin.IR is
       Declares : Declaration_Id;
       Site     : Landin.Provenance.Origin) return Slot_Id
    is
-      Held : Item_Record := Element (Into, Item);
+   begin
+      return Add_Array_Slot
+        (Into, Item,
+         Field_Shape'(Kind    => Scalar_Field_Shape,
+                      Element => Of_Type,
+                      Length  => 1,
+                      others  => <>),
+         Length, Declares, Site);
+   end Add_Array_Slot;
+
+   function Add_Array_Slot
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Element  : Field_Shape;
+      Length   : Element_Total;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+   is
+      Held : Item_Record := Landin.IR.Element (Into, Item);
    begin
       Open_Run (Held.Slots, Natural (Into.Slots.Length));
       Into.Slots.Append
         (Slot_Record'(Array_Shape => True,
-                      Element     => Of_Type,
+                      Element     => Element,
                       Length      => Length,
                       Declaration => Declares,
                       Site        => Site,
@@ -680,6 +721,10 @@ package body Landin.IR is
    function Slot_Array_Element
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id)
       return Landin.Types.Scalar_Name
+     is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element.Element);
+
+   function Slot_Array_Element_Shape
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
      is (Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element);
 
    function Slot_Array_Length
@@ -697,8 +742,10 @@ package body Landin.IR is
    function Slot_Part_Is_Scalar
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id;
       Index : Part_Position) return Boolean
-     is (Is_Array (Of_Unit, Item, Slot)
-         or else Nth_Slot_Field_Shape
+     is (if Is_Array (Of_Unit, Item, Slot)
+         then Slot_Array_Element_Shape (Of_Unit, Item, Slot).Kind
+                = Scalar_Field_Shape
+         else Nth_Slot_Field_Shape
            (Of_Unit, Item, Slot, Positive (Index)).Kind
                    = Scalar_Field_Shape);
 
@@ -1051,6 +1098,11 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      is (Held (Of_Unit, Item, Value).Nested.Count);
 
+   function Element_Path_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Path_Step_Array
+     is (Steps_Of (Of_Unit, Held (Of_Unit, Item, Value).Below_Element));
+
    function Path_Is_Valid
      (Of_Unit : Unit; Root : Field_Shape; Path : Path_Step_Array)
       return Boolean
@@ -1059,16 +1111,25 @@ package body Landin.IR is
    begin
       for Step of Path loop
          if Step.Case_Index = 0 then
-            if Reached.Kind /= Aggregate_Field_Shape
+            --  D121: [0520] counts elements, [0750] counts fields, and a
+            --  step names whichever the run it indexes has.
+            if Reached.Kind = Array_Field_Shape then
+               if Element_Total (Step.Field) > Reached.Length then
+                  return False;
+               end if;
+               Reached := Array_Element_Shape (Of_Unit, Reached);
+            elsif Reached.Kind /= Aggregate_Field_Shape
               or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Reached)
               or else Element_Total (Step.Field)
                         > Element_Total
                             (Aggregate_Field_Count (Of_Unit, Reached))
             then
                return False;
+            else
+               Reached :=
+                 Nth_Aggregate_Field
+                   (Of_Unit, Reached, Positive (Step.Field));
             end if;
-            Reached :=
-              Nth_Aggregate_Field (Of_Unit, Reached, Positive (Step.Field));
          else
             if Reached.Kind /= Variant_Field_Shape
               or else Step.Case_Index > Reached.Cases
@@ -1103,12 +1164,14 @@ package body Landin.IR is
    begin
       for Step of Path loop
          Reached :=
-           (if Step.Case_Index = 0
-            then Nth_Aggregate_Field
-                   (Of_Unit, Reached, Positive (Step.Field))
-            else Nth_Variant_Case_Field
+           (if Step.Case_Index /= 0
+            then Nth_Variant_Case_Field
                    (Of_Unit, Reached, Step.Case_Index,
-                    Positive (Step.Field)));
+                    Positive (Step.Field))
+            elsif Reached.Kind = Array_Field_Shape
+            then Array_Element_Shape (Of_Unit, Reached)
+            else Nth_Aggregate_Field
+                   (Of_Unit, Reached, Positive (Step.Field)));
       end loop;
       return Reached;
    end Shape_At;
@@ -1221,6 +1284,126 @@ package body Landin.IR is
       return Of_Unit.Variant_Fields
         (Shape.Payloads_First + Field - 1);
    end Nth_Aggregate_Field;
+
+   function Array_Element_Is_Aggregate
+     (Of_Unit : Unit; Shape : Field_Shape) return Boolean
+   is
+   begin
+      return Shape.Cases = 1
+        and then Shape.Payloads_First > 0
+        and then Shape.Payloads_First <= Variant_Field_Shape_Count (Of_Unit);
+   end Array_Element_Is_Aggregate;
+
+   function Array_Element_Shape
+     (Of_Unit : Unit; Shape : Field_Shape) return Field_Shape
+   is
+   begin
+      if Array_Element_Is_Aggregate (Of_Unit, Shape) then
+         return Of_Unit.Variant_Fields (Shape.Payloads_First);
+      end if;
+      return
+        (Kind => Scalar_Field_Shape, Element => Shape.Element, Length => 1,
+         others => <>);
+   end Array_Element_Shape;
+
+   --  The walk carries a budget for the reason Field_Shape_Is_Malformed's
+   --  does: nothing in the vector proves a run does not name itself.
+   function Same_Shape
+     (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural)
+      return Boolean;
+
+   function Same_Shape
+     (Of_Unit : Unit; Left, Right : Field_Shape; Budget : Natural)
+      return Boolean
+   is
+   begin
+      if Left.Kind /= Right.Kind then
+         return False;
+      end if;
+
+      case Left.Kind is
+         when Scalar_Field_Shape =>
+            return Left.Element = Right.Element;
+
+         when Array_Field_Shape =>
+            if Left.Length /= Right.Length then
+               return False;
+            end if;
+            if Array_Element_Is_Aggregate (Of_Unit, Left)
+                 /= Array_Element_Is_Aggregate (Of_Unit, Right)
+            then
+               return False;
+            end if;
+            if not Array_Element_Is_Aggregate (Of_Unit, Left) then
+               return Left.Element = Right.Element;
+            end if;
+            return Budget > 0
+              and then Same_Shape
+                (Of_Unit,
+                 Array_Element_Shape (Of_Unit, Left),
+                 Array_Element_Shape (Of_Unit, Right),
+                 Budget - 1);
+
+         when Aggregate_Field_Shape =>
+            if Left.Cases /= Right.Cases
+              or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Left)
+              or else not Aggregate_Field_Run_Is_Valid (Of_Unit, Right)
+              or else Budget = 0
+            then
+               return False;
+            end if;
+            for Field in 1 .. Aggregate_Field_Count (Of_Unit, Left) loop
+               if not Same_Shape
+                 (Of_Unit,
+                  Nth_Aggregate_Field (Of_Unit, Left, Field),
+                  Nth_Aggregate_Field (Of_Unit, Right, Field),
+                  Budget - 1)
+               then
+                  return False;
+               end if;
+            end loop;
+            return True;
+
+         when Variant_Field_Shape =>
+            if Left.Element /= Right.Element
+              or else Left.Cases /= Right.Cases
+              or else Budget = 0
+            then
+               return False;
+            end if;
+            for Which in 1 .. Left.Cases loop
+               if not Variant_Case_Run_Is_Valid (Of_Unit, Left, Which)
+                 or else not Variant_Case_Run_Is_Valid
+                   (Of_Unit, Right, Which)
+                 or else Variant_Case_Field_Count (Of_Unit, Left, Which)
+                           /= Variant_Case_Field_Count
+                                (Of_Unit, Right, Which)
+               then
+                  return False;
+               end if;
+               for Payload in
+                 1 .. Variant_Case_Field_Count (Of_Unit, Left, Which)
+               loop
+                  if not Same_Shape
+                    (Of_Unit,
+                     Nth_Variant_Case_Field
+                       (Of_Unit, Left, Which, Payload),
+                     Nth_Variant_Case_Field
+                       (Of_Unit, Right, Which, Payload),
+                     Budget - 1)
+                  then
+                     return False;
+                  end if;
+               end loop;
+            end loop;
+            return True;
+      end case;
+   end Same_Shape;
+
+   function Same_Shape
+     (Of_Unit : Unit; Left, Right : Field_Shape) return Boolean
+     is (Same_Shape
+           (Of_Unit, Left, Right, Variant_Field_Shape_Count (Of_Unit) + 1));
 
    function Variant_Case_Run_Is_Valid
      (Of_Unit : Unit; Shape : Field_Shape; Which : Positive)
@@ -1590,9 +1773,11 @@ package body Landin.IR is
       Field  : Natural := 0;
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
-      Variant_Payload_Field : Natural := 0) return Value_Id
+      Variant_Payload_Field : Natural := 0;
+      Below  : Path_Step_Array := No_Path_Steps) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
+      Under : constant Run := Stored_Path (Into, Below);
       Made : Instruction :=
         Instruction'(Op     => Load_Element,
                      Result => Result,
@@ -1600,6 +1785,7 @@ package body Landin.IR is
                      Named  => Datum,
                      Element_Field => Field,
                      Nested      => Steps,
+                     Below_Element => Under,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1620,15 +1806,18 @@ package body Landin.IR is
       Field : Natural := 0;
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
-      Variant_Payload_Field : Natural := 0)
+      Variant_Payload_Field : Natural := 0;
+      Below : Path_Step_Array := No_Path_Steps)
    is
       Steps : constant Run := Stored_Path (Into, Nested);
+      Under : constant Run := Stored_Path (Into, Below);
       Made : Instruction :=
         Instruction'(Op     => Store_Element,
                      Site   => Site,
                      Named  => Datum,
                      Element_Field => Field,
                      Nested      => Steps,
+                     Below_Element => Under,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1652,9 +1841,11 @@ package body Landin.IR is
       Field  : Natural := 0;
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
-      Variant_Payload_Field : Natural := 0) return Value_Id
+      Variant_Payload_Field : Natural := 0;
+      Below  : Path_Step_Array := No_Path_Steps) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
+      Under : constant Run := Stored_Path (Into, Below);
       Made : Instruction :=
         Instruction'(Op     => Load_Element,
                      Result => Result,
@@ -1662,6 +1853,7 @@ package body Landin.IR is
                      Slot   => Slot,
                      Element_Field => Field,
                      Nested      => Steps,
+                     Below_Element => Under,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1682,15 +1874,18 @@ package body Landin.IR is
       Field : Natural := 0;
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
-      Variant_Payload_Field : Natural := 0)
+      Variant_Payload_Field : Natural := 0;
+      Below : Path_Step_Array := No_Path_Steps)
    is
       Steps : constant Run := Stored_Path (Into, Nested);
+      Under : constant Run := Stored_Path (Into, Below);
       Made : Instruction :=
         Instruction'(Op     => Store_Element,
                      Site   => Site,
                      Slot   => Slot,
                      Element_Field => Field,
                      Nested      => Steps,
+                     Below_Element => Under,
                      Variant_Case => Variant_Case,
                      Variant_Payload_Field => Variant_Payload_Field,
                      others => <>);
@@ -1726,7 +1921,10 @@ package body Landin.IR is
             return False;
          end if;
          if Field = 0 then
-            return Is_Array (Of_Unit, Item, Cell);
+            return Is_Array (Of_Unit, Item, Cell)
+              and then Path_Is_Valid
+                (Of_Unit, Slot_Array_Element_Shape (Of_Unit, Item, Cell),
+                 Element_Path_Of (Of_Unit, Item, Value));
          end if;
          if not Is_Aggregate (Of_Unit, Item, Cell)
            or else Field > Slot_Field_Count (Of_Unit, Item, Cell)
@@ -1740,36 +1938,52 @@ package body Landin.IR is
          begin
             return Path_Is_Valid (Of_Unit, Shape, Path)
               and then Shape_At (Of_Unit, Shape, Path).Kind
-                         = Array_Field_Shape;
+                         = Array_Field_Shape
+              and then Path_Is_Valid
+                (Of_Unit,
+                 Array_Element_Shape
+                   (Of_Unit, Shape_At (Of_Unit, Shape, Path)),
+                 Element_Path_Of (Of_Unit, Item, Value));
          end;
       end;
    end Slot_Element_Shape_Is_Valid;
 
-   --  The shape a slot-reaching element operation names, once its base
-   --  field and D117's path have both been followed.
+   --  The array shape a slot-reaching element operation names, once its
+   --  base field and D117's path have both been followed.
    function Slot_Element_Shape
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Field_Shape
-     is (Shape_At
-           (Of_Unit,
-            Nth_Slot_Field_Shape
-              (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
-               Positive (Element_Field_Of (Of_Unit, Item, Value))),
-            Path_Of (Of_Unit, Item, Value)));
+     is (if Element_Field_Of (Of_Unit, Item, Value) = 0
+         then Slot_Array_Element_Shape
+                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
+         else Array_Element_Shape
+                (Of_Unit,
+                 Shape_At
+                   (Of_Unit,
+                    Nth_Slot_Field_Shape
+                      (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
+                       Positive (Element_Field_Of (Of_Unit, Item, Value))),
+                    Path_Of (Of_Unit, Item, Value))));
 
    function Slot_Element_Length
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Element_Total
      is (if Element_Field_Of (Of_Unit, Item, Value) = 0
          then Slot_Array_Length
                 (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
-         else Slot_Element_Shape (Of_Unit, Item, Value).Length);
+         else Shape_At
+                (Of_Unit,
+                 Nth_Slot_Field_Shape
+                   (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot,
+                    Positive (Element_Field_Of (Of_Unit, Item, Value))),
+                 Path_Of (Of_Unit, Item, Value)).Length);
 
+   --  What the operation finally reaches: the element, and then D121's run
+   --  below it.
    function Slot_Element_Type
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Landin.Types.Scalar_Name
-     is (if Element_Field_Of (Of_Unit, Item, Value) = 0
-         then Slot_Array_Element
-                (Of_Unit, Item, Held (Of_Unit, Item, Value).Slot)
-         else Slot_Element_Shape (Of_Unit, Item, Value).Element);
+     is (Shape_At
+           (Of_Unit, Slot_Element_Shape (Of_Unit, Item, Value),
+            Element_Path_Of (Of_Unit, Item, Value)).Element);
 
    procedure Emit_Array_Copy
      (Into        : in out Unit;
