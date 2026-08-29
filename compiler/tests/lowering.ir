@@ -2614,6 +2614,151 @@ item 2 DATUM base result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 7
     2 LEAVE <- 1
+file positive/multiple-named-returns/program.ldn
+unit signatures 6 items 5
+signature 1 (i32) -> i32
+signature 2 (i32, i32) -> (i32, i32)
+signature 3 (i32, i32) -> (i32, i32)
+signature 4 (i32) -> i32
+signature 5 (i32) -> ([2]i32, struct pair, function signature 4)
+signature 6 () -> i32
+item 1 ROUTINE identity result i32 signature 1 params 1 slots 2 blocks 1 values 4
+  slot 1 value i32 param 1
+  slot 2 result i32 return
+  block 1 scope 2 SIGNATURE length 4
+    1 LOAD i32 slot 1
+    2 STORE slot 2 <- 1
+    3 LOAD i32 slot 2
+    4 LEAVE <- 3
+item 2 ROUTINE divide result struct signature 2 params 3 slots 6 blocks 1 values 13
+  slot 1 divide usize param 1
+  slot 2 a i32 param 2
+  slot 3 b i32 param 3
+  slot 4 - aggregate fields i32 i32 return
+  slot 5 - i32
+  slot 6 - i32
+  block 1 scope 4 BLOCK length 13
+    1 LOAD i32 slot 2
+    2 STORE slot 5 <- 1
+    3 LOAD i32 slot 3
+    4 LOAD i32 slot 5
+    5 DIVIDE i32 <- 4 3
+    6 STORE_FIELD slot 4 field 1 <- 5
+    7 LOAD i32 slot 2
+    8 STORE slot 6 <- 7
+    9 LOAD i32 slot 3
+    10 LOAD i32 slot 6
+    11 REMAINDER i32 <- 10 9
+    12 STORE_FIELD slot 4 field 2 <- 11
+    13 LEAVE
+item 3 DATUM forward result usize signature 3 function target 2 params 0 slots 0 blocks 1 values 2
+  block 1 scope 1 PROGRAM length 2
+    1 FUNCTION_ADDRESS usize target 2 divide signature 2
+    2 LEAVE <- 1
+item 4 ROUTINE bundle result struct signature 5 params 2 slots 6 blocks 1 values 25
+  slot 1 bundle usize param 1
+  slot 2 value i32 param 2
+  slot 3 - aggregate fields [2]i32 struct (i32,i32) usize return
+  slot 4 - i32
+  slot 5 - i32
+  slot 6 - i32
+  block 1 scope 6 BLOCK length 25
+    1 LOAD i32 slot 2
+    2 NUMBER usize 0
+    3 STORE_ELEMENT slot 3 field 1 <- 2 1
+    4 LOAD i32 slot 2
+    5 STORE slot 4 <- 4
+    6 NUMBER i32 1
+    7 LOAD i32 slot 4
+    8 ADD i32 <- 7 6
+    9 NUMBER usize 1
+    10 STORE_ELEMENT slot 3 field 1 <- 9 8
+    11 LOAD i32 slot 2
+    12 STORE slot 5 <- 11
+    13 NUMBER i32 2
+    14 LOAD i32 slot 5
+    15 ADD i32 <- 14 13
+    16 STORE_FIELD slot 3 field 2 nested 1 <- 15
+    17 LOAD i32 slot 2
+    18 STORE slot 6 <- 17
+    19 NUMBER i32 3
+    20 LOAD i32 slot 6
+    21 ADD i32 <- 20 19
+    22 STORE_FIELD slot 3 field 2 nested 2 <- 21
+    23 FUNCTION_ADDRESS usize target 1 identity signature 1
+    24 STORE_FIELD slot 3 field 3 <- 23
+    25 LEAVE
+item 5 ROUTINE use result i32 signature 6 params 0 slots 15 blocks 1 values 54
+  slot 1 result i32 return
+  slot 2 whole aggregate fields i32 i32
+  slot 3 - usize signature 3
+  slot 4 - i32
+  slot 5 - aggregate fields i32 i32
+  slot 6 - i32
+  slot 7 rich aggregate fields [2]i32 struct (i32,i32) usize
+  slot 8 - aggregate fields [2]i32 struct (i32,i32) usize
+  slot 9 - i32
+  slot 10 - i32
+  slot 11 - i32
+  slot 12 - i32
+  slot 13 - i32
+  slot 14 - i32
+  slot 15 - usize signature 4
+  block 1 scope 8 BLOCK length 54
+    1 LOAD_DATUM usize datum 3 forward
+    2 STORE slot 3 <- 1
+    3 NUMBER i32 20
+    4 STORE slot 4 <- 3
+    5 NUMBER i32 6
+    6 LOAD i32 slot 4
+    7 STORAGE_ADDRESS usize storage slot 2
+    8 LOAD usize slot 3
+    9 INDIRECT_CALL none signature 3 <- 8 7 6 5
+    10 NUMBER i32 10
+    11 STORE slot 6 <- 10
+    12 NUMBER i32 3
+    13 LOAD i32 slot 6
+    14 STORAGE_ADDRESS usize storage slot 5
+    15 CALL none callee 2 divide signature 2 <- 14 13 12
+    16 NUMBER i32 4
+    17 STORAGE_ADDRESS usize storage slot 7
+    18 CALL none callee 4 bundle signature 5 <- 17 16
+    19 NUMBER i32 5
+    20 STORAGE_ADDRESS usize storage slot 8
+    21 CALL none callee 4 bundle signature 5 <- 20 19
+    22 LOAD_FIELD i32 slot 2 field 1
+    23 STORE slot 9 <- 22
+    24 LOAD_FIELD i32 slot 2 field 2
+    25 LOAD i32 slot 9
+    26 ADD i32 <- 25 24
+    27 STORE slot 10 <- 26
+    28 LOAD_FIELD i32 slot 5 field 1
+    29 LOAD i32 slot 10
+    30 ADD i32 <- 29 28
+    31 STORE slot 11 <- 30
+    32 LOAD_FIELD i32 slot 5 field 2
+    33 LOAD i32 slot 11
+    34 ADD i32 <- 33 32
+    35 STORE slot 12 <- 34
+    36 NUMBER usize 1
+    37 LOAD_ELEMENT i32 slot 7 field 1 <- 36
+    38 LOAD i32 slot 12
+    39 ADD i32 <- 38 37
+    40 STORE slot 13 <- 39
+    41 LOAD_FIELD i32 slot 7 field 2 nested 1
+    42 LOAD i32 slot 13
+    43 ADD i32 <- 42 41
+    44 STORE slot 14 <- 43
+    45 LOAD_FIELD usize slot 8 field 3
+    46 STORE slot 15 <- 45
+    47 NUMBER i32 6
+    48 LOAD usize slot 15
+    49 INDIRECT_CALL i32 signature 4 <- 48 47
+    50 LOAD i32 slot 14
+    51 ADD i32 <- 50 49
+    52 STORE slot 1 <- 51
+    53 LOAD i32 slot 1
+    54 LEAVE <- 53
 file positive/name-shadows-an-outer-one/program.ldn
 unit signatures 1 items 2
 signature 1 (u32) -> u32

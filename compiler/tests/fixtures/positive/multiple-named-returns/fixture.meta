@@ -1,0 +1,5 @@
+class: positive
+summary: multiple named returns form one structural result and bind by name
+constructs: 0880, 0920, 0930, 0990, 1000, 1800, 1840, 1910, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64

@@ -35,8 +35,8 @@ package body Landin.Syntax.Parser is
    --  in it deliberately: a broken statement must resume at the next
    --  branch or at the body's `end` rather than run past it.
    Statement_Anchor : constant Tok.Kind_Set :=
-     [Tok.Kw_Mut | Tok.Identifier | Tok.Underscore | Tok.Kw_Inc
-        | Tok.Kw_Dec | Tok.Kw_Return | Tok.Kw_If | Tok.Kw_Elsif
+     [Tok.Kw_Mut | Tok.Identifier | Tok.Underscore | Tok.Left_Paren
+        | Tok.Kw_Inc | Tok.Kw_Dec | Tok.Kw_Return | Tok.Kw_If | Tok.Kw_Elsif
         | Tok.Kw_Else | Tok.Kw_End | Tok.Kw_Public
         | Tok.End_Of_Input => True,
       others => False];
@@ -219,6 +219,7 @@ package body Landin.Syntax.Parser is
             function Ahead (Distance : Tok.Token_Index)
               return Tok.Token_Kind;
             function After_Selectors return Tok.Token_Kind;
+            function Starts_Destructuring return Boolean;
             function Here return Landin.Source.Span;
             function Point return Landin.Source.Span;
             function After_Previous return Landin.Source.Span;
@@ -301,6 +302,7 @@ package body Landin.Syntax.Parser is
             function Parse_Binding
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
+            function Parse_Destructuring return Node_Id;
             function Parse_Function
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
@@ -379,6 +381,44 @@ package body Landin.Syntax.Parser is
                end loop;
                return False;
             end Starts_Signature;
+
+            --  [0990]'s destructuring binding is the only statement that
+            --  begins with `(`.  Its contents are labels and optional local
+            --  names, never expressions, and the `:=` after the balanced
+            --  list distinguishes it from every parenthesized value.
+            function Starts_Destructuring return Boolean is
+               Step : Tok.Token_Index := 1;
+            begin
+               if Peek /= Tok.Left_Paren then
+                  return False;
+               end if;
+
+               loop
+                  if Ahead (Step) = Tok.Underscore then
+                     Step := Step + 1;
+                  elsif Ahead (Step) = Tok.Identifier then
+                     Step := Step + 1;
+                     if Ahead (Step) = Tok.Colon then
+                        Step := Step + 1;
+                        if Ahead (Step) not in Tok.Identifier | Tok.Underscore
+                        then
+                           return False;
+                        end if;
+                        Step := Step + 1;
+                     end if;
+                  else
+                     return False;
+                  end if;
+
+                  if Ahead (Step) = Tok.Comma then
+                     Step := Step + 1;
+                  elsif Ahead (Step) = Tok.Right_Paren then
+                     return Ahead (Step + 1) = Tok.Colon_Equal;
+                  else
+                     return False;
+                  end if;
+               end loop;
+            end Starts_Destructuring;
 
             function After_Selectors return Tok.Token_Kind is
                Step  : Tok.Token_Index := 1;
@@ -1803,6 +1843,120 @@ package body Landin.Syntax.Parser is
                   Mutable  => Mutable);
             end Parse_Binding;
 
+            --  destructuring_binding ::= "(" destructured_field
+            --    ("," destructured_field)* ")" ":=" expression [0990]
+            --  destructured_field ::= identifier (":" (identifier | "_"))?
+            --                       | "_"
+            function Parse_Destructuring return Node_Id is
+               Start  : constant Landin.Source.Span := Here;
+               Fields : Slot_Vectors.Vector;
+               Value  : Node_Id := No_Node;
+               Kept   : Boolean;
+            begin
+               Advance;
+               loop
+                  if Peek = Tok.Underscore then
+                     declare
+                        At_Under : constant Landin.Source.Span := Here;
+                     begin
+                        Advance;
+                        Fields.Append
+                          (Add
+                             (Of_Kind  => Result_Wildcard,
+                              At_Token => At_Under,
+                              Extent   => At_Under));
+                     end;
+                  elsif Peek = Tok.Identifier then
+                     declare
+                        At_Field : constant Landin.Source.Span := Here;
+                        Field_Name : constant Landin.Source.Names.Name_Id :=
+                          Named_Here;
+                        Local : Node_Id := No_Node;
+                        Local_Name : Landin.Source.Names.Name_Id := Field_Name;
+                        Local_At : Landin.Source.Span := At_Field;
+                     begin
+                        Advance;
+                        if Peek = Tok.Colon then
+                           Advance;
+                           if Peek = Tok.Underscore then
+                              Advance;
+                              Local_Name := Landin.Source.Names.No_Name;
+                           elsif Peek = Tok.Identifier then
+                              Local_At := Here;
+                              Local_Name := Named_Here;
+                              Advance;
+                           else
+                              Complain
+                                (Item    => Syn.Name_Expected,
+                                 Where   => Here,
+                                 Message => "a renamed result field needs a"
+                                            & " local name or `_`",
+                                 Note    => "[0990]: binding is by result"
+                                            & " name, optionally renamed");
+                              Local_Name := Landin.Source.Names.No_Name;
+                           end if;
+                        end if;
+
+                        if Local_Name /= Landin.Source.Names.No_Name then
+                           Local := Add
+                             (Of_Kind  => Destructured_Name,
+                              At_Token => Local_At,
+                              Extent   => Local_At,
+                              Named    => Local_Name);
+                        end if;
+                        Fields.Append
+                          (Add
+                             (Of_Kind  => Destructured_Field,
+                              At_Token => At_Field,
+                              Extent   => Join (At_Field, After_Previous),
+                              Children => [Local],
+                              Named    => Field_Name));
+                     end;
+                  else
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => Here,
+                        Message => "a result binding names a returned field"
+                                   & " or writes `_`",
+                        Note    => "[0990]: result destructuring binds by"
+                                   & " name, never by position");
+                     Resync (List_Anchor);
+                     exit;
+                  end if;
+
+                  exit when Peek /= Tok.Comma;
+                  Advance;
+               end loop;
+
+               Kept := Expect
+                 (Wanted  => Tok.Right_Paren,
+                  Message => "a result binding closes its names with `)`",
+                  Note    => "[0990]: `(name: local, _) := result`",
+                  Related => Start,
+                  Because => "opened here");
+               pragma Unreferenced (Kept);
+
+               if Expect
+                 (Wanted  => Tok.Colon_Equal,
+                  Message => "a result binding reads its value after `:=`",
+                  Note    => "[0990]: `(name: local, _) := result`",
+                  Related => Start,
+                  Because => "this result binding")
+               then
+                  Value := Parse_Expression;
+               end if;
+
+               declare
+                  Head : constant Slot_List (1 .. 1) := [Value];
+               begin
+                  return Add
+                    (Of_Kind  => Destructuring_Binding,
+                     At_Token => Start,
+                     Extent   => Join (Start, After_Previous),
+                     Children => Head & To_List (Fields));
+               end;
+            end Parse_Destructuring;
+
             ------------------------------------------------------------
             --  Functions                                        [1800]
             ------------------------------------------------------------
@@ -1857,17 +2011,19 @@ package body Landin.Syntax.Parser is
                   Named    => Named);
             end Parse_Parameter;
 
-            --  returns ::= "(" identifier ":" type ")" | "none"   [1800]
+            --  returns ::= "(" named_return ("," named_return)* ")"
+            --              | "none"                              [1800]
+            --  named_return ::= identifier ":" type
             --
-            --  No_Node is `none`, which is [1800]'s reading: a function
-            --  returning none has no return for an expression body to
-            --  fill.  Returns_At is where a reader looks when `return`
-            --  carries a value it may not.
+            --  No_Node is `none`.  Every nonempty return list has its own
+            --  node so signatures can carry [0920]'s ordered positions
+            --  without confusing them with the trailing parameter run.
             function Parse_Returns
               (Declared_At : Landin.Source.Span;
                Returns_At  : out Landin.Source.Span) return Node_Id
             is
-               Start : constant Landin.Source.Span := Here;
+               Start   : constant Landin.Source.Span := Here;
+               Results : Slot_Vectors.Vector;
             begin
                Returns_At := Start;
 
@@ -1878,74 +2034,69 @@ package body Landin.Syntax.Parser is
 
                if not Expect
                         (Wanted  => Tok.Left_Paren,
-                         Message => "a return is named, or `none`",
-                         Note    => "[1800]: returns ::= `(` identifier"
-                                    & " `:` type `)` | `none`",
+                         Message => "returns are named, or `none`",
+                         Note    => "[1800]: returns ::= `(` named_return"
+                                    & " (`,` named_return)* `)` | `none`",
                          Related => Declared_At,
                          Because => "declared here")
                then
                   return No_Node;
                end if;
 
-               declare
-                  Named     : Landin.Source.Names.Name_Id;
-                  At_Name   : constant Landin.Source.Span :=
-                    Parse_Declared_Name (Named);
-                  Type_Node : Node_Id;
-               begin
-                  if Expect
-                       (Wanted  => Tok.Colon,
-                        Message => "a named return names its type after"
-                                   & " `:`",
-                        Note    => "[1800]: returns ::= `(` identifier"
-                                   & " `:` type `)` | `none`",
-                        Related => At_Name,
-                        Because => "the return")
-                  then
-                     Type_Node := Parse_Type (False, At_Name);
-                  else
-                     Type_Node := Add (Error_Type, After_Previous);
-                  end if;
-
-                  --  [0920]: multiple named returns are described in the
-                  --  tour and this grammar takes one return or none.
-                  if Peek = Tok.Comma then
-                     Refuse
-                       (Item    => Syn.Multiple_Returns,
-                        Where   => Here,
-                        Message => "a second named return belongs to"
-                                   & " multiple returns");
-
-                     while Peek = Tok.Comma loop
-                        Advance;
-                        Resync (List_Anchor);
-                     end loop;
-                  end if;
-
-                  if not Expect
-                           (Wanted  => Tok.Right_Paren,
-                            Message => "a named return is closed with `)`",
-                            Note    => "[1800]: returns ::= `(` identifier"
-                                       & " `:` type `)` | `none`",
-                            Related => At_Name,
-                            Because => "the return")
-                  then
-                     Resync (List_Anchor);
-
-                     if Peek = Tok.Right_Paren then
-                        Advance;
+               loop
+                  declare
+                     Named     : Landin.Source.Names.Name_Id;
+                     At_Name   : constant Landin.Source.Span :=
+                       Parse_Declared_Name (Named);
+                     Type_Node : Node_Id;
+                  begin
+                     if Expect
+                          (Wanted  => Tok.Colon,
+                           Message => "a named return names its type after"
+                                      & " `:`",
+                           Note    => "[1800]: named_return ::= identifier"
+                                      & " `:` type",
+                           Related => At_Name,
+                           Because => "the return")
+                     then
+                        Type_Node := Parse_Type (False, At_Name);
+                     else
+                        Type_Node := Add (Error_Type, After_Previous);
                      end if;
+
+                     Results.Append
+                       (Add
+                          (Of_Kind  => Named_Return,
+                           At_Token => At_Name,
+                           Extent   => Join (At_Name, After_Previous),
+                           Children => [Type_Node],
+                           Named    => Named));
+                  end;
+
+                  exit when Peek /= Tok.Comma;
+                  Advance;
+               end loop;
+
+               if not Expect
+                        (Wanted  => Tok.Right_Paren,
+                         Message => "the named returns close with `)`",
+                         Note    => "[1800]: returns ::= `(` named_return"
+                                    & " (`,` named_return)* `)` | `none`",
+                         Related => Start,
+                         Because => "opened here")
+               then
+                  Resync (List_Anchor);
+                  if Peek = Tok.Right_Paren then
+                     Advance;
                   end if;
+               end if;
 
-                  Returns_At := Join (Start, After_Previous);
-
-                  return Add
-                    (Of_Kind  => Named_Return,
-                     At_Token => At_Name,
-                     Extent   => Returns_At,
-                     Children => [Type_Node],
-                     Named    => Named);
-               end;
+               Returns_At := Join (Start, After_Previous);
+               return Add
+                 (Of_Kind  => Return_List,
+                  At_Token => Start,
+                  Extent   => Returns_At,
+                  Children => To_List (Results));
             end Parse_Returns;
 
             --  body ::= block                                     [1800]
@@ -2383,6 +2534,10 @@ package body Landin.Syntax.Parser is
                --  value-bearing block.
                function Clearly_A_Statement return Boolean is
                begin
+                  if Starts_Destructuring then
+                     return True;
+                  end if;
+
                   if Peek in Tok.Kw_Mut | Tok.Kw_Inc | Tok.Kw_Dec
                              | Tok.Underscore | Tok.Kw_Return
                              | Tok.Kw_Public
@@ -2448,6 +2603,7 @@ package body Landin.Syntax.Parser is
                         Mark_Reported;
                         Advance;
                      elsif Pre.Begins_Statement (Peek)
+                       or else Starts_Destructuring
                        or else Peek = Tok.Kw_Public
                        or else Peek not in Tok.Kernel_Kind
                      then
@@ -2605,6 +2761,16 @@ package body Landin.Syntax.Parser is
                   when Tok.Kw_Mut =>
                      return Parse_Binding
                        (False, Landin.Source.Empty_Span);
+
+                  when Tok.Left_Paren =>
+                     if Starts_Destructuring then
+                        return Parse_Destructuring;
+                     end if;
+                     Advance;
+                     Resync_Statement;
+                     return Add
+                       (Error_Statement, Start,
+                        Join (Start, After_Previous));
 
                   when Tok.Identifier =>
                      if Named_Here = Match_Id then

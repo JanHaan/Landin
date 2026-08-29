@@ -129,7 +129,8 @@ package body Landin.Tests.Verifier_Suite is
              Element        => Landin.Types.U8,
              Length         => 1,
              Cases          => 2,
-             Payloads_First => 1),
+             Payloads_First => 1,
+             others         => <>),
             Cases => [(First => 0, Count => 0),
                       (First => 1, Count => 1)],
             Payloads => [(Kind    => IR.Scalar_Field_Shape,
@@ -158,7 +159,8 @@ package body Landin.Tests.Verifier_Suite is
              Element        => Landin.Types.U8,
              Length         => 1,
              Cases          => 2,
-             Payloads_First => 1),
+             Payloads_First => 1,
+             others         => <>),
             Cases => [(First => 0, Count => 0),
                       (First => 1, Count => 1)],
             Payloads => [(Kind    => IR.Array_Field_Shape,
@@ -398,7 +400,8 @@ package body Landin.Tests.Verifier_Suite is
              Element        => Landin.Types.I8,
              Length         => 1,
              Cases          => 1,
-             Payloads_First => 1));
+             Payloads_First => 1,
+             others         => <>));
       elsif Harm in Nested_Field_Beyond_The_Child
                     | Path_Step_Below_A_Scalar_Leaf
                     | Variant_Path_Reaches_A_Scalar
@@ -412,7 +415,8 @@ package body Landin.Tests.Verifier_Suite is
              Element        => Landin.Types.Bool,
              Length         => 1,
              Cases          => 1,
-             Payloads_First => 1),
+             Payloads_First => 1,
+             others         => <>),
             IR.No_Case_Runs,
             [(Kind    => IR.Scalar_Field_Shape,
               Element => Landin.Types.U32,
@@ -466,7 +470,8 @@ package body Landin.Tests.Verifier_Suite is
              Element        => Landin.Types.U8,
              Length         => 1,
              Cases          => Natural'Last,
-             Payloads_First => 1));
+             Payloads_First => 1,
+             others         => <>));
       elsif Harm = Slot_Scalar_Length_Is_Not_One then
          IR.Add_Slot_Field
            (Unit, A, T,
@@ -571,7 +576,8 @@ package body Landin.Tests.Verifier_Suite is
                  Element        => Landin.Types.Bool,
                  Length         => 1,
                  Cases          => Natural'Last,
-                 Payloads_First => 1)],
+                 Payloads_First => 1,
+                 others         => <>)],
                Landin.Types.Usize, Site,
                Payloads =>
                  [(Kind    => IR.Scalar_Field_Shape,
@@ -590,7 +596,8 @@ package body Landin.Tests.Verifier_Suite is
                  Element        => Landin.Types.I8,
                  Length         => 1,
                  Cases          => 1,
-                 Payloads_First => 1)],
+                 Payloads_First => 1,
+                 others         => <>)],
                Landin.Types.Usize, Site,
                Cases => [(First => 0, Count => 0)]);
             pragma Assert (N /= IR.No_Value);
@@ -605,7 +612,8 @@ package body Landin.Tests.Verifier_Suite is
                  Element        => Landin.Types.U8,
                  Length         => 1,
                  Cases          => Natural'Last,
-                 Payloads_First => 1)],
+                 Payloads_First => 1,
+                 others         => <>)],
                Landin.Types.Usize, Site,
                Cases => [(First => 0, Count => 0)]);
             pragma Assert (N /= IR.No_Value);
@@ -1453,7 +1461,8 @@ package body Landin.Tests.Verifier_Suite is
                 Element        => Landin.Types.U8,
                 Length         => 1,
                 Cases          => 2,
-                Payloads_First => 1),
+                Payloads_First => 1,
+                others         => <>),
                Cases => [(First => 0, Count => 0),
                          (First => 1, Count => 1)],
                Payloads =>
@@ -1480,7 +1489,8 @@ package body Landin.Tests.Verifier_Suite is
                 Element        => Landin.Types.U8,
                 Length         => 1,
                 Cases          => 1,
-                Payloads_First => 1),
+                Payloads_First => 1,
+                others         => <>),
                Cases => [(First => 0, Count => 0)],
                Payloads => IR.No_Field_Shapes);
          else
@@ -1572,7 +1582,8 @@ package body Landin.Tests.Verifier_Suite is
                 Element        => Landin.Types.U8,
                 Length         => 1,
                 Cases          => 1,
-                Payloads_First => 1),
+                Payloads_First => 1,
+                others         => <>),
                Cases => [(First => 0, Count => 0)],
                Payloads => IR.No_Field_Shapes);
             Block := IR.Add_Block
@@ -1878,7 +1889,8 @@ package body Landin.Tests.Verifier_Suite is
              Element        => Landin.Types.U8,
              Length         => 1,
              Cases          => 1,
-             Payloads_First => 1),
+             Payloads_First => 1,
+             others         => <>),
             Cases => [(First => 0, Count => 0)],
             Payloads => IR.No_Field_Shapes);
          IR.Set_Aggregate_Image
@@ -1907,7 +1919,8 @@ package body Landin.Tests.Verifier_Suite is
              Element        => Landin.Types.U8,
              Length         => 1,
              Cases          => 1,
-             Payloads_First => 1),
+             Payloads_First => 1,
+             others         => <>),
             Cases => [(First => 1, Count => 1)],
             Payloads =>
               [(Kind    => IR.Scalar_Field_Shape,
@@ -1947,7 +1960,8 @@ package body Landin.Tests.Verifier_Suite is
              Element        => Landin.Types.U8,
              Length         => 1,
              Cases          => 1,
-             Payloads_First => 1),
+             Payloads_First => 1,
+             others         => <>),
             Cases => [(First => 1, Count => 1)],
             Payloads =>
               [(Kind    => IR.Array_Field_Shape,
@@ -1987,7 +2001,8 @@ package body Landin.Tests.Verifier_Suite is
              Element        => Landin.Types.U8,
              Length         => 1,
              Cases          => 1,
-             Payloads_First => 1),
+             Payloads_First => 1,
+             others         => <>),
             Cases => [(First => 0, Count => 0)],
             Payloads => IR.No_Field_Shapes);
          IR.Set_Aggregate_Image
@@ -2438,6 +2453,107 @@ package body Landin.Tests.Verifier_Suite is
       end;
    end Malformed_Image_Runs_Are_Rejected;
 
+   procedure Malformed_Multiple_Results_Are_Rejected
+     (Item : in out Landin.Testing.Context);
+
+   procedure Malformed_Multiple_Results_Are_Rejected
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Finish_Routine
+        (Unit : in out IR.Unit;
+         Routine : IR.Item_Id;
+         Site : Landin.Provenance.Origin);
+
+      procedure Finish_Routine
+        (Unit : in out IR.Unit;
+         Routine : IR.Item_Id;
+         Site : Landin.Provenance.Origin)
+      is
+         Block : constant IR.Block_Id := IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+      begin
+         IR.Enter (Unit, Routine, Block);
+         IR.Emit_Leave (Unit, Routine, IR.No_Value, Site);
+         IR.Leave_Block (Unit, Routine);
+      end Finish_Routine;
+   begin
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Signature : IR.Signature_Id;
+         Routine : IR.Item_Id;
+         Hidden, Result : IR.Slot_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Signature := IR.Add_Signature_With_Results
+           (Unit, IR.No_Signature_Parts,
+            [(Kind => Landin.Types.U32, others => <>),
+             (Kind => Landin.Types.Bool, others => <>)]);
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.Aggregate, Site);
+         IR.Set_Signature (Unit, Routine, Signature);
+         Hidden := IR.Add_Parameter
+           (Unit, Routine, Landin.Types.Usize, 1, Site);
+         pragma Unreferenced (Hidden);
+         Result := IR.Add_Aggregate_Slot
+           (Unit, Routine, IR.No_Declaration, Site);
+         IR.Add_Slot_Field (Unit, Routine, Result, Landin.Types.U32);
+         IR.Set_Result_Slot (Unit, Routine, Result);
+         Finish_Routine (Unit, Routine, Site);
+         Expect
+           (Item, V.Check (Unit), V.Routine_Signature_Disagrees,
+            "a multiple-result slot must carry every result field");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Expected, Other, Signature : IR.Signature_Id;
+         Routine : IR.Item_Id;
+         Hidden, Result : IR.Slot_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Expected := IR.Add_Signature
+           (Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.U32, others => <>));
+         Other := IR.Add_Signature
+           (Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.Bool, others => <>));
+         Signature := IR.Add_Signature_With_Results
+           (Unit, IR.No_Signature_Parts,
+            [(Kind => Landin.Types.Function_Value,
+              Signature => Expected, others => <>),
+             (Kind => Landin.Types.U32, others => <>)]);
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.Aggregate, Site);
+         IR.Set_Signature (Unit, Routine, Signature);
+         Hidden := IR.Add_Parameter
+           (Unit, Routine, Landin.Types.Usize, 1, Site);
+         pragma Unreferenced (Hidden);
+         Result := IR.Add_Aggregate_Slot
+           (Unit, Routine, IR.No_Declaration, Site);
+         IR.Add_Slot_Field
+           (Unit, Routine, Result,
+            (Kind => IR.Scalar_Field_Shape,
+             Element => Landin.Types.Usize,
+             Length => 1,
+             Signature => Other,
+             others => <>));
+         IR.Add_Slot_Field (Unit, Routine, Result, Landin.Types.U32);
+         IR.Set_Result_Slot (Unit, Routine, Result);
+         Finish_Routine (Unit, Routine, Site);
+         Expect
+           (Item, V.Check (Unit), V.Routine_Signature_Disagrees,
+            "a function-valued result field retains its nested signature");
+      end;
+   end Malformed_Multiple_Results_Are_Rejected;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -2458,6 +2574,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "malformed image runs are rejected",
          Malformed_Image_Runs_Are_Rejected'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "malformed multiple results are rejected",
+         Malformed_Multiple_Results_Are_Rejected'Access);
    end Register;
 
 end Landin.Tests.Verifier_Suite;

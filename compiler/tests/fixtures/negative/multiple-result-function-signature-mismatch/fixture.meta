@@ -1,0 +1,5 @@
+class: negative
+summary: a function value's structural signature includes every result position
+constructs: 0920, 1000, 1800, 1890
+program: program.ldn
+codes: L0301

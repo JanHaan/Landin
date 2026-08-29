@@ -1,0 +1,31 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+unary: type = (value: i32) -> (result: i32)
+division: type = (a: i32, b: i32) -> (quot: i32, rem: i32)
+
+identity: (value: i32) -> (result: i32) = value end identity
+
+divide: (a: i32, b: i32) -> (quot: i32, rem: i32) =
+    quot = a / b
+    rem = a % b
+end divide
+
+forward: division = divide
+
+bundle: (value: i32) -> (numbers: [2]i32, record: pair, callback: unary) =
+    numbers = [value, value + 1]
+    record = (left: value + 2, right: value + 3)
+    callback = identity
+end bundle
+
+use: () -> (result: i32) =
+    whole := forward(20, 6)
+    (rem: residue, quot, _) := divide(10, 3)
+    rich := bundle(4)
+    (callback: action) := bundle(5)
+    result = whole.quot + whole.rem + quot + residue
+             + rich.numbers[1] + rich.record.left + action(6)
+end use

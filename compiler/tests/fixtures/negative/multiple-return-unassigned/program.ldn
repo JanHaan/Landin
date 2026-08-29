@@ -1,0 +1,5 @@
+bad: (early: bool) -> (left: i32, right: i32) =
+    left = 1
+    return when early
+    right = 2
+end bad

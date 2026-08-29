@@ -1,0 +1,114 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+choice: type = struct
+    prefix: i32
+    kind: variant
+        empty |
+        number: (value: i32) |
+        pair_value: (left: i32, right: i32)
+    end kind
+end choice
+
+unary: type = (value: i32) -> (result: i32)
+division: type = (a: i32, b: i32) -> (quot: i32, rem: i32)
+renamed_division: type = (left: i32, right: i32) -> (first: i32, second: i32)
+
+double: (value: i32) -> (result: i32) = value * 2 end double
+
+make_choice: (value: i32) -> (result: choice) =
+    result = zeroed
+    result.kind = pair_value(left: value, right: value + 1)
+end make_choice
+
+inspect_choice: (value: choice) -> (result: i32) =
+    match value.kind
+        empty: result = 0
+        number(held): result = held
+        pair_value(left, right): result = left + right
+    end match
+end inspect_choice
+
+divide: (a: i32, b: i32) -> (quot: i32, rem: i32) =
+    quot = a / b
+    rem = a % b
+end divide
+
+relay: (a: i32, b: i32) -> (quot: i32, rem: i32) =
+    divide(a, b)
+end relay
+
+choose: (early: bool, a: i32, b: i32) -> (quot: i32, rem: i32) =
+    quot = 9
+    rem = 8
+    return when early
+    quot = a / b
+    rem = a % b
+end choose
+
+apply: (operation: division, a: i32, b: i32) -> (quot: i32, rem: i32) =
+    operation(a, b)
+end apply
+
+mixed: (value: i32) -> (code: i32, values: [2]i32, record: pair, records: [2]pair, selected: choice, callback: unary) =
+    code = value
+    values = [value, value + 1]
+    record = (left: value + 2, right: value + 3)
+    records = zeroed
+    records[0].left = value + 4
+    records[1].right = value + 5
+    selected = make_choice(value)
+    callback = double
+end mixed
+
+public main: () -> (code: i32) =
+    direct := divide(20, 6)
+    mut replaced := divide(1, 1)
+    replaced = relay(25, 7)
+    (rem: residue, quot, _) := relay(10, 3)
+
+    indirect: renamed_division = divide
+    renamed := indirect(14, 4)
+
+    chosen := if direct.rem == 2 then
+        choose(false, 22, 5)
+    else
+        divide(1, 1)
+    end if
+
+    through := apply(divide, 17, 5)
+    anonymous_function: division =
+        (a: i32, b: i32) -> (quot: i32, rem: i32) =
+            quot = a / b
+            rem = a % b
+        end
+    anonymous := anonymous_function(18, 5)
+
+    all := mixed(30)
+    (values: numbers, record: held, records: pair_array,
+     selected: selection, callback: call, code: mixed_code) := mixed(40)
+
+    if direct.quot == 3 and direct.rem == 2
+       and replaced.quot == 3 and replaced.rem == 4
+       and quot == 3 and residue == 1
+       and renamed.first == 3 and renamed.second == 2
+       and chosen.quot == 4 and chosen.rem == 2
+       and through.quot == 3 and through.rem == 2
+       and anonymous.quot == 3 and anonymous.rem == 3
+       and all.code == 30 and all.values[0] == 30 and all.values[1] == 31
+       and all.record.left == 32 and all.record.right == 33
+       and all.records[0].left == 34 and all.records[1].right == 35
+       and inspect_choice(all.selected) == 61
+       and numbers[0] == 40 and numbers[1] == 41
+       and held.left == 42 and held.right == 43
+       and pair_array[0].left == 44 and pair_array[1].right == 45
+       and inspect_choice(selection) == 81
+       and call(4) == 8 and mixed_code == 40
+    then
+        code = 0
+    else
+        code = 1
+    end if
+end main

@@ -1,0 +1,15 @@
+first: () -> (left: i32, right: i32) =
+    left = 1
+    right = 2
+end first
+second: () -> (one: i32, two: i32) =
+    one = 1
+    two = 2
+end second
+bad: (choose: bool) -> none =
+    value := if choose then
+        first()
+    else
+        second()
+    end if
+end bad

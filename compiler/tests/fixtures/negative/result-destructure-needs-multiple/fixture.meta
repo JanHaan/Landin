@@ -1,0 +1,5 @@
+class: negative
+summary: destructuring requires an anonymous multiple-result aggregate
+constructs: 0920, 0990, 1810, 1920
+program: program.ldn
+codes: L0301
