@@ -1,0 +1,33 @@
+tagged: type = struct
+    kind: variant
+        leaf |
+        pair: (first: i32, second: i32)
+    end kind
+end tagged
+
+holder: type = struct
+    lead: i32
+    inside: tagged
+end holder
+
+carrier: type = struct
+    which: variant
+        empty |
+        wrapped: (value: tagged)
+    end which
+end carrier
+
+mut state: holder
+mut boxed: carrier
+
+exercise: () -> none =
+    mut local: holder
+    local = zeroed
+    local.inside.kind = pair(first: 3, second: 4)
+    state = local
+    boxed.which = wrapped(value: local.inside)
+    match state.inside.kind
+        leaf: local.lead = 0
+        pair(first, second): local.lead = first + second
+    end match
+end exercise

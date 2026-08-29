@@ -4769,7 +4769,7 @@ boundary. All were declined.
 **Pinned by** the parser, resolution, lowering, verifier and target-layout
 public seams; `positive/variant-part-measured`;
 `negative/variant-part-empty`; `negative/variant-case-duplicate`;
-`negative/variant-inside-a-nested-struct-not-enabled`;
+`negative/array-of-a-variant-bearing-struct`;
 `negative/variant-case-value-not-enabled`;
 `negative/variant-return-unassigned`; the generated construct, token, IR and
 target-layout records; the backend seam against both target descriptions; and
@@ -6488,7 +6488,7 @@ selection below it is then an ordinary step of the same run.
 
 **Pinned by** `positive/variant-struct-payload`,
 `negative/variant-struct-payload-mismatch`,
-`negative/variant-inside-a-nested-struct-not-enabled`, the generated IR
+`negative/array-of-a-variant-bearing-struct`, the generated IR
 record, and `runtime/variant-struct-payloads` on Linux x86-64.
 
 ### D122 — A fixed array's element may be an ordinary struct
@@ -6526,7 +6526,8 @@ index is a value. And an array whose element is a struct with a variant part
 has no carrier, for the reason an ordinary child holding one has none.
 
 **Pinned by** `positive/array-of-structs`,
-`negative/whole-array-element-place`, `negative/array-of-variant-structs`,
+`negative/whole-array-element-place`,
+`negative/array-of-a-variant-bearing-struct`,
 `negative/selection-from-a-scalar-element`, the malformed case
 `Element_Path_Below_A_Scalar_Element`, the generated IR record, and
 `runtime/array-of-structs` on Linux x86-64.
@@ -6687,3 +6688,38 @@ declined.
 `runtime/control-expression-function-values` on Linux x86-64, together with
 the IR, lowering, verifier and backend public-seam cases and the generated IR
 record.
+
+### D126 — A variant part is reached by a run like any other part
+
+**The tour said** that a struct's field may have any type a binding may have
+[0670] [0750], and that a variant part is one of the things a struct declares
+[0680]. D86--D122 admitted an ordinary struct as a field, a variant payload
+and an array element, but only when it had no variant part of its own: every
+variant operation named its part by one base field, and a part below that
+field had no way to be said.
+
+**Chosen:** the five variant operations — select, tag load, payload load,
+payload store and whole-part copy — carry D118's run down to the part, exactly
+as every other operation already does. An empty run is D74's variant part of
+the storage itself, which is where all five started. A copy names each
+endpoint separately, for the reason an array copy does: the two parts have one
+shape but need not sit in the same place.
+
+So a struct with a variant part may be an ordinary child, and may be a variant
+payload; a match subject may be any chain that reaches a variant part,
+including one rooted at D121's payload alias; and the arm's own aliases carry
+that run with them.
+
+Composing a run and a selected case fixes their order. The run reaches the
+part, and the case is then selected *inside* the part, so the payload offset
+is the reached part's own and not the base field's. A run *below* a selected
+payload is a `Case_Index` step of the same run, so nothing is ever added after
+the payload and one order suffices.
+
+An array element is still refused: a run reaches a part by identities, and an
+index is a value. D127 gives an element a place and admits it there.
+
+**Pinned by** `positive/nested-variant-parts`,
+`negative/array-of-a-variant-bearing-struct`, the malformed case
+`Variant_Path_Reaches_A_Scalar`, the generated IR record, and
+`runtime/nested-variant-parts` on Linux x86-64.

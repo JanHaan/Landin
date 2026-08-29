@@ -2061,15 +2061,23 @@ fixed-array, ordinary-struct, variant-match, early-exit and source-order paths.
 Further aggregate arguments and result contexts remain here too; R4.40 later
 supplies complete C ABI classification rather than owning this internal
 convention.
+The thirty-seventh increment gives the five variant operations D118's run, so
+a variant part sits wherever an ordinary struct may: inside an ordinary child
+and inside a variant payload. A match subject may be any chain that reaches
+one, including a chain rooted at a payload alias. Composing a run and a
+selected case fixes their order — the run reaches the part, the case is
+selected inside it — and a run below a payload is a case step of the same run,
+so nothing follows the payload.
+
 D118--D122 have closed the nested-ordinary forms R2.20 left contextual:
 whole nested field selection, construction and copy, deeper recursive
-composition, aggregate variant payloads and D17's fixed arrays whose element
-is an aggregate. They reuse R2.20's neutral shape provenance rather than
-reopening its target layout. What those five leave for a later increment of
-this item, each refused by name and pointing here: a struct with a variant
-part as a field, a payload or an array element; a module image containing an
-ordinary-child or ordinary-payload value; and a whole array element as a
-value or a place.
+composition, aggregate variant payloads, D17's fixed arrays whose element
+is an aggregate, and a variant part anywhere a struct may sit. They reuse
+R2.20's neutral shape provenance rather than reopening its target layout.
+What they leave for a later increment of this item, each refused by name and
+pointing here: a module image containing an ordinary-child or
+ordinary-payload value; and a whole array element as a value or a place,
+which is also what a variant part inside an element waits for.
 
 Error atoms remain identity without payload. This item does not invent a
 second error mechanism without executable pressure: R3.50's hosted I/O and

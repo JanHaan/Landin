@@ -225,7 +225,8 @@ package body Landin.IR.Verifier is
          Which         : Natural;
          Payload_Field : Natural;
          Shape         : out Field_Shape;
-         Leaf          : out Field_Shape) return Fault_Kind;
+         Leaf          : out Field_Shape;
+         Nested        : Path_Step_Array := No_Path_Steps) return Fault_Kind;
 
       function Scalar_Field_Of
         (Item    : Item_Id;
@@ -407,7 +408,8 @@ package body Landin.IR.Verifier is
                Shape, Leaf : Field_Shape;
                Bad : constant Fault_Kind :=
                  Variant_Shape_Of
-                   (Item, Place, Field, Which, Payload_Field, Shape, Leaf);
+                   (Item, Place, Field, Which, Payload_Field, Shape, Leaf,
+                    Nested);
             begin
                if Bad /= Nothing_Wrong then
                   return Bad;
@@ -591,7 +593,8 @@ package body Landin.IR.Verifier is
          Which         : Natural;
          Payload_Field : Natural;
          Shape         : out Field_Shape;
-         Leaf          : out Field_Shape) return Fault_Kind
+         Leaf          : out Field_Shape;
+         Nested        : Path_Step_Array := No_Path_Steps) return Fault_Kind
       is
       begin
          Shape := (others => <>);
@@ -628,6 +631,13 @@ package body Landin.IR.Verifier is
                Shape := Nth_Slot_Field_Shape
                  (Of_Unit, Item, Place.Slot, Positive (Field));
          end case;
+
+         --  D126: the variant part may sit below that base field, and the
+         --  walk down to it is the one Landin.IR owns.
+         if not Path_Is_Valid (Of_Unit, Shape, Nested) then
+            return Variant_Field_Is_Not_A_Variant;
+         end if;
+         Shape := Shape_At (Of_Unit, Shape, Nested);
 
          if Shape.Kind /= Variant_Field_Shape then
             return Variant_Field_Is_Not_A_Variant;
@@ -2015,7 +2025,8 @@ package body Landin.IR.Verifier is
                                  Bad := Variant_Shape_Of
                                    (Id, Source_Of (Of_Unit, Id, V),
                                     Source_Field_Of (Of_Unit, Id, V),
-                                    0, 0, Source_Shape, Leaf);
+                                    0, 0, Source_Shape, Leaf,
+                                    Source_Path_Of (Of_Unit, Id, V));
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
@@ -2024,7 +2035,8 @@ package body Landin.IR.Verifier is
                                  Bad := Variant_Shape_Of
                                    (Id, Destination_Of (Of_Unit, Id, V),
                                     Element_Field_Of (Of_Unit, Id, V),
-                                    0, 0, Destination_Shape, Leaf);
+                                    0, 0, Destination_Shape, Leaf,
+                                    Path_Of (Of_Unit, Id, V));
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
                                             Block => Block, Value => V);
@@ -2153,7 +2165,8 @@ package body Landin.IR.Verifier is
                                        then Variant_Payload_Field_Of
                                          (Of_Unit, Id, V)
                                        else 0),
-                                      Shape, Leaf);
+                                      Shape, Leaf,
+                                      Path_Of (Of_Unit, Id, V));
                               begin
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -2776,7 +2789,8 @@ package body Landin.IR.Verifier is
                                       Variant_Case_Of (Of_Unit, Id, V),
                                       Variant_Payload_Field_Of
                                         (Of_Unit, Id, V),
-                                      Shape, Leaf);
+                                      Shape, Leaf,
+                                      Path_Of (Of_Unit, Id, V));
                               begin
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -2807,7 +2821,8 @@ package body Landin.IR.Verifier is
                                       Variant_Case_Of (Of_Unit, Id, V),
                                       Variant_Payload_Field_Of
                                         (Of_Unit, Id, V),
-                                      Shape, Leaf);
+                                      Shape, Leaf,
+                                      Path_Of (Of_Unit, Id, V));
                               begin
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,
@@ -2834,7 +2849,8 @@ package body Landin.IR.Verifier is
                                    Variant_Shape_Of
                                      (Id, Source_Of (Of_Unit, Id, V),
                                       Element_Field_Of (Of_Unit, Id, V),
-                                      0, 0, Shape, Leaf);
+                                      0, 0, Shape, Leaf,
+                                      Path_Of (Of_Unit, Id, V));
                               begin
                                  if Bad /= Nothing_Wrong then
                                     return (Kind => Bad, Item => Id,

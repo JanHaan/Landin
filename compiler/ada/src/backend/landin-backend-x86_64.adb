@@ -412,6 +412,13 @@ package body Landin.Backend.X86_64 is
          function Stored_Field_Shape
            (Place : Landin.IR.Storage; Field : Positive)
             return Landin.IR.Field_Shape;
+         --  D126: the part a variant operation reaches, which is its base
+         --  field and then whatever run [0420] composed below it.
+         function Reached_Shape
+           (Place  : Landin.IR.Storage;
+            Field  : Positive;
+            Nested : Landin.IR.Path_Step_Array)
+            return Landin.IR.Field_Shape;
 
          function Path_Offset
            (Shape : Landin.IR.Field_Shape;
@@ -427,15 +434,14 @@ package body Landin.Backend.X86_64 is
               Landin.IR.No_Path_Steps) return Landin.IR.Element_Total
          is
          begin
-            if Nested'Length > 0 then
-               return Landin.IR.Shape_At
-                 (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
-                  Nested).Length;
-            end if;
             if Payload_Field > 0 then
                return Landin.IR.Nth_Variant_Case_Field
-                 (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
+                 (Of_Unit, Reached_Shape (Place, Positive (Field), Nested),
                   Positive (Which), Positive (Payload_Field)).Length;
+            end if;
+            if Nested'Length > 0 then
+               return Reached_Shape
+                 (Place, Positive (Field), Nested).Length;
             end if;
             return
               (case Place.Kind is
@@ -456,6 +462,14 @@ package body Landin.Backend.X86_64 is
          --  D121: the shape of one element of the array an operation
          --  reaches.  A scalar element answers as itself, so every caller
          --  that only wants a width still gets one.
+         function Reached_Shape
+           (Place  : Landin.IR.Storage;
+            Field  : Positive;
+            Nested : Landin.IR.Path_Step_Array)
+            return Landin.IR.Field_Shape
+         is (Landin.IR.Shape_At
+               (Of_Unit, Stored_Field_Shape (Place, Field), Nested));
+
          function Element_Shape_Of
            (Place         : Landin.IR.Storage;
             Field         : Natural;
@@ -465,19 +479,18 @@ package body Landin.Backend.X86_64 is
               Landin.IR.No_Path_Steps) return Landin.IR.Field_Shape
          is
          begin
-            if Nested'Length > 0 then
-               return Landin.IR.Array_Element_Shape
-                 (Of_Unit,
-                  Landin.IR.Shape_At
-                    (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
-                     Nested));
-            end if;
             if Payload_Field > 0 then
                return Landin.IR.Array_Element_Shape
                  (Of_Unit,
                   Landin.IR.Nth_Variant_Case_Field
-                    (Of_Unit, Stored_Field_Shape (Place, Positive (Field)),
+                    (Of_Unit,
+                     Reached_Shape (Place, Positive (Field), Nested),
                      Positive (Which), Positive (Payload_Field)));
+            end if;
+            if Nested'Length > 0 then
+               return Landin.IR.Array_Element_Shape
+                 (Of_Unit,
+                  Reached_Shape (Place, Positive (Field), Nested));
             end if;
             case Place.Kind is
                when Landin.IR.Module_Datum =>
@@ -572,18 +585,18 @@ package body Landin.Backend.X86_64 is
                      & ", " & Register);
             end case;
 
-            --  The base field first, then the case this operation
-            --  selected, then D118's path below whichever of the two it
-            --  reached.  The order is the order the source composed the
-            --  selections in, and each addend is derived here.
-            if Payload_Field > 0 then
+            --  The base field first, then D118's run down to the part the
+            --  operation names, and then the case it selected inside that
+            --  part.  D126 is what makes the run come before the case: the
+            --  variant part may sit below the base field, and its payload
+            --  offset is its own shape's and not the base field's.  A run
+            --  *below* a selected payload is a Case_Index step of the same
+            --  run, so nothing is ever added after the payload.
+            if Nested'Length > 0 and then Field > 0 then
                declare
-                  Shape : constant Landin.IR.Field_Shape :=
-                    Stored_Field_Shape (Place, Positive (Field));
                   At_Offset : constant Landin.Targets.Byte_Count :=
-                    Landin.Backend.Variant_Payload_Field_Offset
-                      (Of_Unit, Shape, Positive (Which),
-                       Positive (Payload_Field), Facts);
+                    Path_Offset
+                      (Stored_Field_Shape (Place, Positive (Field)), Nested);
                begin
                   if At_Offset > 0 then
                      Emit
@@ -596,17 +609,13 @@ package body Landin.Backend.X86_64 is
                end;
             end if;
 
-            if Nested'Length > 0 then
+            if Payload_Field > 0 then
                declare
-                  Root : constant Landin.IR.Field_Shape :=
-                    (if Payload_Field > 0
-                     then Landin.IR.Nth_Variant_Case_Field
-                            (Of_Unit,
-                             Stored_Field_Shape (Place, Positive (Field)),
-                             Positive (Which), Positive (Payload_Field))
-                     else Stored_Field_Shape (Place, Positive (Field)));
                   At_Offset : constant Landin.Targets.Byte_Count :=
-                    Path_Offset (Root, Nested);
+                    Landin.Backend.Variant_Payload_Field_Offset
+                      (Of_Unit,
+                       Reached_Shape (Place, Positive (Field), Nested),
+                       Positive (Which), Positive (Payload_Field), Facts);
                begin
                   if At_Offset > 0 then
                      Emit
@@ -1084,18 +1093,30 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Source_Of (Of_Unit, Item, Value);
                      Destination : constant Landin.IR.Storage :=
                        Landin.IR.Destination_Of (Of_Unit, Item, Value);
+                     --  D126: the two endpoints have one shape and need
+                     --  not sit in the same place, so each names its own.
                      Field : constant Positive := Positive
+                       (Landin.IR.Source_Field_Of
+                          (Of_Unit, Item, Value));
+                     Into_Field : constant Positive := Positive
                        (Landin.IR.Element_Field_Of
                           (Of_Unit, Item, Value));
+                     From_Nested : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Source_Path_Of (Of_Unit, Item, Value);
+                     Into_Nested : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Shape : constant Landin.IR.Field_Shape :=
-                       Stored_Field_Shape (Source, Field);
+                       Reached_Shape (Source, Field, From_Nested);
                      Bytes : Landin.Targets.Byte_Count;
                      Alignment : Landin.Targets.Byte_Alignment;
                   begin
                      Landin.Backend.Field_Extent
                        (Of_Unit, Shape, Facts, Bytes, Alignment);
-                     Storage_Address (Destination, Field, "%rdi");
-                     Storage_Address (Source, Field, "%rsi");
+                     Storage_Address
+                       (Destination, Into_Field, "%rdi",
+                        Nested => Into_Nested);
+                     Storage_Address
+                       (Source, Field, "%rsi", Nested => From_Nested);
                      Emit
                        ("movabsq $"
                         & Trimmed
@@ -1140,12 +1161,15 @@ package body Landin.Backend.X86_64 is
                      Field : constant Positive := Positive
                        (Landin.IR.Element_Field_Of
                           (Of_Unit, Item, Value));
+                     Nested : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Shape : constant Landin.IR.Field_Shape :=
-                       Stored_Field_Shape (Source, Field);
+                       Reached_Shape (Source, Field, Nested);
                      Held : constant Held_Size :=
                        Size_Of (Shape.Element, Facts);
                   begin
-                     Storage_Address (Source, Field, "%rcx");
+                     Storage_Address
+                       (Source, Field, "%rcx", Nested => Nested);
                      Carry (Held, "(%rcx)", Value_Cell (Value));
                   end;
 
@@ -1156,8 +1180,10 @@ package body Landin.Backend.X86_64 is
                      Field : constant Positive := Positive
                        (Landin.IR.Element_Field_Of
                           (Of_Unit, Item, Value));
+                     Nested : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Shape : constant Landin.IR.Field_Shape :=
-                       Stored_Field_Shape (Source, Field);
+                       Reached_Shape (Source, Field, Nested);
                      Which : constant Positive := Positive
                        (Landin.IR.Variant_Case_Of
                           (Of_Unit, Item, Value));
@@ -1173,7 +1199,8 @@ package body Landin.Backend.X86_64 is
                      Held : constant Held_Size :=
                        Size_Of (Leaf.Element, Facts);
                   begin
-                     Storage_Address (Source, Field, "%rcx");
+                     Storage_Address
+                       (Source, Field, "%rcx", Nested => Nested);
                      if At_Offset > 0 then
                         Emit
                           ("movabsq $"
@@ -1192,8 +1219,10 @@ package body Landin.Backend.X86_64 is
                      Field : constant Positive := Positive
                        (Landin.IR.Element_Field_Of
                           (Of_Unit, Item, Value));
+                     Nested : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Shape : constant Landin.IR.Field_Shape :=
-                       Stored_Field_Shape (Destination, Field);
+                       Reached_Shape (Destination, Field, Nested);
                      Size : Landin.Targets.Byte_Count;
                      Alignment : Landin.Targets.Byte_Alignment;
                      Tag : constant Natural :=
@@ -1204,7 +1233,8 @@ package body Landin.Backend.X86_64 is
                   begin
                      Landin.Backend.Field_Extent
                        (Of_Unit, Shape, Facts, Size, Alignment);
-                     Storage_Address (Destination, Field, "%rdi");
+                     Storage_Address
+                       (Destination, Field, "%rdi", Nested => Nested);
                      Emit
                        ("movabsq $"
                         & Trimmed
@@ -1215,7 +1245,8 @@ package body Landin.Backend.X86_64 is
 
                      --  rep stosb advances %rdi, so form the part base
                      --  again before writing the source-order tag.
-                     Storage_Address (Destination, Field, "%rcx");
+                     Storage_Address
+                       (Destination, Field, "%rcx", Nested => Nested);
                      Emit
                        ("mov" & Suffix (Held) & " $"
                         & Trimmed (Natural'Image (Tag)) & ", (%rcx)");
@@ -1228,8 +1259,10 @@ package body Landin.Backend.X86_64 is
                      Field : constant Positive := Positive
                        (Landin.IR.Element_Field_Of
                           (Of_Unit, Item, Value));
+                     Nested : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Path_Of (Of_Unit, Item, Value);
                      Shape : constant Landin.IR.Field_Shape :=
-                       Stored_Field_Shape (Destination, Field);
+                       Reached_Shape (Destination, Field, Nested);
                      Which : constant Positive :=
                        Positive
                          (Landin.IR.Variant_Case_Of
@@ -1247,7 +1280,8 @@ package body Landin.Backend.X86_64 is
                      Held : constant Held_Size :=
                        Size_Of (Leaf.Element, Facts);
                   begin
-                     Storage_Address (Destination, Field, "%rcx");
+                     Storage_Address
+                       (Destination, Field, "%rcx", Nested => Nested);
                      if At_Offset > 0 then
                         Emit
                           ("movabsq $"

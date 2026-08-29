@@ -2703,6 +2703,56 @@ item 3 ROUTINE exercise result none signature 1 params 0 slots 2 blocks 1 values
     12 NUMBER u8 4
     13 STORE_FIELD slot 2 field 3 <- 12
     14 LEAVE
+file positive/nested-variant-parts/program.ldn
+unit signatures 1 items 3
+signature 1 () -> none
+item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 i32
+  field 2 struct (variant u8 cases2 () (i32,i32))
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM boxed result struct params 0 slots 0 blocks 1 values 1
+  field 1 variant u8 cases2 () (struct (variant u8 cases2 () (i32,i32)))
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 ROUTINE exercise result none signature 1 params 0 slots 3 blocks 5 values 29
+  slot 1 local aggregate fields i32 struct (variant u8 cases2 () (i32,i32))
+  slot 2 - u8
+  slot 3 - i32
+  block 1 scope 3 BLOCK length 17
+    1 CLEAR_ARRAY destination slot 1
+    2 SELECT_VARIANT destination slot 1 field 2 nested 1 case 2
+    3 NUMBER i32 3
+    4 STORE_VARIANT_FIELD destination slot 1 field 2 nested 1 case 2 payload field 1 <- 3
+    5 NUMBER i32 4
+    6 STORE_VARIANT_FIELD destination slot 1 field 2 nested 1 case 2 payload field 2 <- 5
+    7 LOAD_FIELD i32 slot 1 field 1
+    8 STORE_FIELD datum 1 state field 1 <- 7
+    9 COPY_VARIANT from slot 1 field 2 nested 1 to datum 1 state field 2 nested 1
+    10 SELECT_VARIANT destination datum 2 boxed field 1 case 2
+    11 COPY_VARIANT from slot 1 field 2 nested 1 to datum 2 boxed field 1 case 2 nested 1 nested 1
+    12 LOAD_VARIANT_TAG u8 from datum 1 state field 2 nested 1
+    13 STORE slot 2 <- 12
+    14 LOAD u8 slot 2
+    15 NUMBER u8 0
+    16 EQUAL_TO bool <- 14 15
+    17 BRANCH target 2 alternative 3 <- 16
+  block 2 scope 4 BLOCK length 3
+    18 NUMBER i32 0
+    19 STORE_FIELD slot 1 field 1 <- 18
+    20 JUMP target 4
+  block 3 scope 3 BLOCK length 1
+    21 JUMP target 5
+  block 4 scope 3 BLOCK length 1
+    29 LEAVE
+  block 5 scope 5 BLOCK length 7
+    22 LOAD_VARIANT_FIELD i32 from datum 1 state field 2 nested 1 case 2 payload field 1
+    23 STORE slot 3 <- 22
+    24 LOAD_VARIANT_FIELD i32 from datum 1 state field 2 nested 1 case 2 payload field 2
+    25 LOAD i32 slot 3
+    26 ADD i32 <- 25 24
+    27 STORE_FIELD slot 1 field 1 <- 26
+    28 JUMP target 4
 file positive/no-final-line-end/program.ldn
 unit signatures 0 items 1
 item 1 DATUM a result u32 params 0 slots 0 blocks 1 values 2

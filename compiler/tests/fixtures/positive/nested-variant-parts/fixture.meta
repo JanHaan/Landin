@@ -1,0 +1,5 @@
+class: positive
+summary: D126 puts a variant part inside an ordinary child and inside a variant payload, and reaches each through one run
+constructs: 0420, 0670, 0680, 0700, 0710, 0750, 1795, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64

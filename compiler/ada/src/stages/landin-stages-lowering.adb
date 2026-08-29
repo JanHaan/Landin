@@ -209,10 +209,16 @@ package body Landin.Stages.Lowering is
       --  copied frame locals.  The declaration identity is arm-local; the
       --  source storage and three source-order identities remain target
       --  neutral until the backend derives an offset.
+      --  D126: the variant part the arm matched may sit below the name,
+      --  so the alias keeps the base field and the subject node the run
+      --  down to it is read from.  A node and not a stored run, because a
+      --  run is unconstrained and an alias lives inside one arm of one
+      --  match in one tree.
       type Payload_Alias is record
          Active        : Boolean := False;
          Source        : IR.Storage;
          Field         : Natural := 0;
+         Subject       : Syn.Node_Id := Syn.No_Node;
          Which         : Natural := 0;
          Payload_Field : Natural := 0;
       end record;
@@ -944,6 +950,14 @@ package body Landin.Stages.Lowering is
          return Chain_Base (Of_Tree, Node);
       end Rooted_Base;
 
+      --  The run that reaches the variant part an alias names, from its
+      --  base field.  Empty when the part is the base field itself.
+      function Alias_Steps
+        (Of_Tree : Syn.Tree; Alias : Payload_Alias)
+         return IR.Path_Step_Array
+        is (if Alias.Subject = Syn.No_Node then IR.No_Path_Steps
+            else Rooted_Steps (Of_Tree, Alias.Subject));
+
       function Rooted_Steps
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Path_Step_Array
       is
@@ -955,7 +969,7 @@ package body Landin.Stages.Lowering is
                  (Declared (Res.Bound_To (Meanings.all, Of_Tree, Root)));
             begin
                return Payload_Steps
-                 (IR.No_Path_Steps, Positive (Alias.Which),
+                 (Alias_Steps (Of_Tree, Alias), Positive (Alias.Which),
                   Positive (Alias.Payload_Field))
                  & Chain_All_Steps (Of_Tree, Node);
             end;
@@ -2583,6 +2597,7 @@ package body Landin.Stages.Lowering is
                                 (Unit.all, Filling, Alias.Source.Datum,
                                  Index, Scalar_At (Of_Tree, Node), Site,
                                  Field => Alias.Field,
+                                 Nested => Alias_Steps (Of_Tree, Alias),
                                  Variant_Case => Alias.Which,
                                  Variant_Payload_Field =>
                                    Alias.Payload_Field);
@@ -2591,6 +2606,7 @@ package body Landin.Stages.Lowering is
                                 (Unit.all, Filling, Alias.Source.Slot,
                                  Index, Scalar_At (Of_Tree, Node), Site,
                                  Field => Alias.Field,
+                                 Nested => Alias_Steps (Of_Tree, Alias),
                                  Variant_Case => Alias.Which,
                                  Variant_Payload_Field =>
                                    Alias.Payload_Field);
@@ -2739,7 +2755,8 @@ package body Landin.Stages.Lowering is
                           (Unit.all, Filling, Alias.Source,
                            Positive (Alias.Field), Positive (Alias.Which),
                            Positive (Alias.Payload_Field),
-                           Scalar_At (Of_Tree, Node), Site);
+                           Scalar_At (Of_Tree, Node), Site,
+                           Nested => Alias_Steps (Of_Tree, Alias));
                      end;
                   end if;
 
@@ -2932,24 +2949,25 @@ package body Landin.Stages.Lowering is
            Site_Of (Of_Tree, Node);
          Subject : constant Syn.Node_Id :=
            Syn.Match_Subject (Of_Tree, Node);
-         Named : constant Syn.Node_Id :=
+         --  D126: the variant part may sit below the name.  Holder is the
+         --  struct that declares it, Named is the name the chain started
+         --  from, and Base/Steps is the run down to the part.
+         Holder : constant Syn.Node_Id :=
            Syn.Target_Of (Of_Tree, Subject);
-         Means : constant Res.Declaration_Id :=
-           Res.Bound_To (Meanings.all, Of_Tree, Named);
          Wrote : constant Res.Declaration_Id :=
-           Landin.Checking.Body_Of (Types.all, Of_Tree, Named);
+           Landin.Checking.Body_Of (Types.all, Of_Tree, Holder);
          Field : constant Positive := Positive
            (Landin.Checking.Field_Index (Types.all, Of_Tree, Subject));
+         Base : constant Positive :=
+           Positive (Rooted_Base (Of_Tree, Subject));
+         Steps : constant IR.Path_Step_Array :=
+           Rooted_Steps (Of_Tree, Subject);
          Shape : constant Landin.Checking.Field_Shape :=
            Landin.Checking.Field_Shape_Of (Types.all, Wrote, Field);
          Tag_Type : constant Ty.Integer_Name :=
            Ty.Integer_Name (Shape.Element);
          Source : constant IR.Storage :=
-           (if Res.Sort_Of (Meanings.all, Means) = Res.Module_Binding
-            then (Kind => IR.Module_Datum,
-                  Datum => IR.Item_For (Unit.all, Means))
-            else (Kind => IR.Frame_Slot,
-                  Slot => Slot_For (Of_Tree, Named, Means)));
+           Rooted_Storage (Of_Tree, Subject);
          Saved_Tag : constant IR.Slot_Id :=
            IR.Add_Slot
              (Unit.all, Filling, Shape.Element, Res.No_Declaration,
@@ -2975,7 +2993,8 @@ package body Landin.Stages.Lowering is
                   Aliases (Declared (Id)) :=
                     (Active        => True,
                      Source        => Source,
-                     Field         => Field,
+                     Field         => Base,
+                     Subject       => Subject,
                      Which         => Which,
                      Payload_Field => Payload);
                end;
@@ -2998,7 +3017,9 @@ package body Landin.Stages.Lowering is
          declare
             Loaded : constant IR.Value_Id :=
               IR.Emit_Variant_Tag_Load
-                (Unit.all, Filling, Source, Field, Shape.Element, Site);
+                (Unit.all, Filling, Source, Base, Shape.Element, Site,
+                 Nested => Steps);
+
          begin
             IR.Emit_Store
               (Unit.all, Filling, Saved_Tag, Loaded, Site);
@@ -3172,11 +3193,17 @@ package body Landin.Stages.Lowering is
                   Variant_Case : Natural := 0;
                   Variant_Payload_Field : Natural := 0);
 
+               --  D126: the variant part may sit below the base field,
+               --  so the place is a base and D118's run down to it.  Wrote
+               --  and Field stay the checker's identity for the part, which
+               --  is what the case and payload shapes are looked up by.
                procedure Write_Variant_Value
                  (Value       : Syn.Node_Id;
                   Wrote       : Res.Declaration_Id;
                   Field       : Positive;
-                  Destination : IR.Storage);
+                  Destination : IR.Storage;
+                  Base        : Positive;
+                  Steps       : IR.Path_Step_Array := IR.No_Path_Steps);
 
                --  D119: the literal fills a place, which is a base field
                --  and D118's run below it.  A labelled child is the same
@@ -3282,12 +3309,19 @@ package body Landin.Stages.Lowering is
                         end;
 
                      when Landin.Checking.Variant_Field =>
+                        --  D126: a variant part inside a child is copied
+                        --  by the same one operation, one place deeper on
+                        --  each side.  The two places have one shape and
+                        --  need not sit in the same place.
                         IR.Emit_Variant_Copy
                           (Unit.all, Filling,
-                           Source      => Source,
-                           Destination => Destination,
-                           Field       => Field,
-                           Site        => Site);
+                           Source        => Source,
+                           Destination   => Destination,
+                           Field         => From_Field,
+                           Site          => Site,
+                           Source_Nested => From_Steps,
+                           Destination_Field  => Into_Field,
+                           Destination_Nested => Into_Steps);
                   end case;
                end Copy_Field;
 
@@ -3482,7 +3516,9 @@ package body Landin.Stages.Lowering is
                  (Value       : Syn.Node_Id;
                   Wrote       : Res.Declaration_Id;
                   Field       : Positive;
-                  Destination : IR.Storage)
+                  Destination : IR.Storage;
+                  Base        : Positive;
+                  Steps       : IR.Path_Step_Array := IR.No_Path_Steps)
                is
                   Which : constant Positive := Positive
                     (Landin.Checking.Field_Index
@@ -3493,7 +3529,8 @@ package body Landin.Stages.Lowering is
                   --  every inactive byte have [0540]'s zero image before
                   --  labelled scalar expressions are committed.
                   IR.Emit_Variant_Select
-                    (Unit.all, Filling, Destination, Field, Which, Site);
+                    (Unit.all, Filling, Destination, Base, Which, Site,
+                     Nested => Steps);
 
                   if Syn.Kind (Of_Tree, Value) /= Syn.Struct_Literal then
                      return;
@@ -3524,8 +3561,8 @@ package body Landin.Stages.Lowering is
                                  if Current /= IR.No_Block then
                                     IR.Emit_Variant_Field_Store
                                       (Unit.all, Filling, Destination,
-                                       Field, Which, Payload_Field, Held,
-                                       Site);
+                                       Base, Which, Payload_Field, Held,
+                                       Site, Nested => Steps);
                                  end if;
                               end;
 
@@ -3536,7 +3573,8 @@ package body Landin.Stages.Lowering is
                               --  complete padded part before any label ran.
                               Write_Array_Value
                                 (Syn.Value_Of (Of_Tree, Label), Destination,
-                                 Field, Variant_Case => Which,
+                                 Base, Path => Steps,
+                                 Variant_Case => Which,
                                  Variant_Payload_Field => Payload_Field);
 
                            when Landin.Checking.Aggregate_Field =>
@@ -3549,8 +3587,7 @@ package body Landin.Stages.Lowering is
                                  Into_Steps :
                                    constant IR.Path_Step_Array :=
                                      Payload_Steps
-                                       (IR.No_Path_Steps, Which,
-                                        Payload_Field);
+                                       (Steps, Which, Payload_Field);
                                  Given : constant Syn.Node_Id :=
                                    Syn.Value_Of (Of_Tree, Label);
                               begin
@@ -3559,7 +3596,7 @@ package body Landin.Stages.Lowering is
                                  then
                                     Write_Struct_Literal
                                       (Given, Child, Destination,
-                                       Base  => Field,
+                                       Base  => Base,
                                        Steps => Into_Steps);
                                  elsif Syn.Kind (Of_Tree, Given)
                                          = Syn.Zeroed_Literal
@@ -3588,7 +3625,7 @@ package body Landin.Stages.Lowering is
                                              Part,
                                              Source_Base => Source_Base,
                                              Source_Steps => Source_Steps,
-                                             Destination_Base => Field,
+                                             Destination_Base => Base,
                                              Destination_Steps =>
                                                Into_Steps);
                                        end loop;
@@ -3736,8 +3773,13 @@ package body Landin.Stages.Lowering is
                               end;
 
                            when Landin.Checking.Variant_Field =>
+                              --  D126: a labelled variant part is one
+                              --  place deeper, like every other label.
                               Write_Variant_Value
-                                (Value, Wrote, Field, Destination);
+                                (Value, Wrote, Field, Destination,
+                                 Base  => Descended_Base (Base, Field),
+                                 Steps =>
+                                   Descended_Steps (Base, Steps, Field));
                         end case;
                         exit when Current = IR.No_Block;
                      end;
@@ -3790,7 +3832,9 @@ package body Landin.Stages.Lowering is
                                  --  D75's zero image selects the first case.
                                  IR.Emit_Variant_Select
                                    (Unit.all, Filling, Destination,
-                                    Field, 1, Site);
+                                    Descended_Base (Base, Field), 1, Site,
+                                    Nested =>
+                                      Descended_Steps (Base, Steps, Field));
                            end case;
                         end if;
                      end loop;
@@ -3861,6 +3905,7 @@ package body Landin.Stages.Lowering is
                                 (Unit.all, Filling, Alias.Source.Datum,
                                  Index, Scalar_At (Of_Tree, Place), Site,
                                  Field => Alias.Field,
+                                 Nested => Alias_Steps (Of_Tree, Alias),
                                  Variant_Case => Alias.Which,
                                  Variant_Payload_Field =>
                                    Alias.Payload_Field);
@@ -3869,6 +3914,7 @@ package body Landin.Stages.Lowering is
                                 (Unit.all, Filling, Alias.Source.Slot,
                                  Index, Scalar_At (Of_Tree, Place), Site,
                                  Field => Alias.Field,
+                                 Nested => Alias_Steps (Of_Tree, Alias),
                                  Variant_Case => Alias.Which,
                                  Variant_Payload_Field =>
                                    Alias.Payload_Field);
@@ -3933,6 +3979,7 @@ package body Landin.Stages.Lowering is
                                    (Unit.all, Filling, Alias.Source.Datum,
                                     Index, Value, Site,
                                     Field => Alias.Field,
+                                    Nested => Alias_Steps (Of_Tree, Alias),
                                     Variant_Case => Alias.Which,
                                     Variant_Payload_Field =>
                                       Alias.Payload_Field);
@@ -3941,6 +3988,7 @@ package body Landin.Stages.Lowering is
                                    (Unit.all, Filling, Alias.Source.Slot,
                                     Index, Value, Site,
                                     Field => Alias.Field,
+                                    Nested => Alias_Steps (Of_Tree, Alias),
                                     Variant_Case => Alias.Which,
                                     Variant_Payload_Field =>
                                       Alias.Payload_Field);
@@ -3948,8 +3996,10 @@ package body Landin.Stages.Lowering is
                         else
                            IR.Emit_Variant_Field_Store
                              (Unit.all, Filling, Alias.Source,
-                              Positive (Alias.Field), Positive (Alias.Which),
-                              Positive (Alias.Payload_Field), Value, Site);
+                              Positive (Alias.Field),
+                              Positive (Alias.Which),
+                              Positive (Alias.Payload_Field), Value, Site,
+                              Nested => Alias_Steps (Of_Tree, Alias));
                         end if;
                         return;
                      end;
@@ -4485,14 +4535,23 @@ package body Landin.Stages.Lowering is
                         declare
                            Place : constant Syn.Node_Id :=
                              Syn.Target_Of (Of_Tree, Stmt);
-                           Named : constant Syn.Node_Id :=
+                           --  D126: the variant part may sit below the
+                           --  name; Wrote is the body that declares it and
+                           --  Base/Steps is the run that reaches it.
+                           Holder : constant Syn.Node_Id :=
                              Syn.Target_Of (Of_Tree, Place);
+                           Named : constant Syn.Node_Id :=
+                             Chain_Root (Of_Tree, Place);
                            Wrote : constant Res.Declaration_Id :=
                              Landin.Checking.Body_Of
-                               (Types.all, Of_Tree, Named);
+                               (Types.all, Of_Tree, Holder);
                            Field : constant Positive := Positive
                              (Landin.Checking.Field_Index
                                 (Types.all, Of_Tree, Place));
+                           Base : constant Positive :=
+                             Positive (Chain_Base (Of_Tree, Place));
+                           Steps : constant IR.Path_Step_Array :=
+                             Chain_Steps (Of_Tree, Place);
                         begin
                            pragma Assert
                              (Landin.Checking.Field_Kind_Of
@@ -4500,7 +4559,8 @@ package body Landin.Stages.Lowering is
                                 = Landin.Checking.Variant_Field);
                            Write_Variant_Value
                              (Syn.Value_Of (Of_Tree, Stmt), Wrote, Field,
-                              Storage_For (Of_Tree, Named));
+                              Storage_For (Of_Tree, Named),
+                              Base => Base, Steps => Steps);
                         end;
 
                      --  [0710]'s copy visits the same fields in [0750]'s

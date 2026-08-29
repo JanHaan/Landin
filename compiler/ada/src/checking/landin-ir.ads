@@ -1581,12 +1581,14 @@ package Landin.IR is
                           in Copy_Array | Copy_Variant;
 
    --  D90's fixed-array field below Source_Field_Of, generalised by D118
-   --  into a run of steps.  An empty path keeps D20/D50's direct source.
+   --  into a run of steps, and by D126 given to a variant copy's source.
+   --  An empty path keeps D20/D50's direct source.
    function Source_Path_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
       return Path_Step_Array
      with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value) = Copy_Array;
+                 and then Op_Of (Of_Unit, Item, Value)
+                          in Copy_Array | Copy_Variant;
 
    function Destination_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
@@ -1647,7 +1649,10 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Storage_Address | Load_Field | Store_Field
                              | Load_Element | Store_Element
-                             | Copy_Array | Clear_Array | Fill_Array;
+                             | Copy_Array | Clear_Array | Fill_Array
+                             | Copy_Variant | Select_Variant
+                             | Load_Variant_Tag | Load_Variant_Field
+                             | Store_Variant_Field;
 
    --  D121's run below the element an indexed operation reaches.  Empty
    --  when the element is itself the scalar the operation names; a step
@@ -1668,7 +1673,10 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                           in Storage_Address | Load_Field | Store_Field
                              | Load_Element | Store_Element
-                             | Copy_Array | Clear_Array | Fill_Array;
+                             | Copy_Array | Clear_Array | Fill_Array
+                             | Copy_Variant | Select_Variant
+                             | Load_Variant_Tag | Load_Variant_Field
+                             | Store_Variant_Field;
 
    --  Walking one of those paths down from the shape its base field has.
    --  Valid says every step names a part the run it indexes actually has;
@@ -2161,13 +2169,22 @@ package Landin.IR is
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
 
+   --  D126 lets the variant part sit below the base field, so each of
+   --  these five carries D118's run down to it.  An empty run is D74's
+   --  variant part of the storage itself, which is where every one of
+   --  them started.  A copy names each endpoint separately, for the reason
+   --  an array copy does: the two parts have one shape but need not sit in
+   --  the same place.
    procedure Emit_Variant_Copy
      (Into        : in out Unit;
       Item        : Item_Id;
       Source      : Storage;
       Destination : Storage;
       Field       : Positive;
-      Site        : Landin.Provenance.Origin)
+      Site        : Landin.Provenance.Origin;
+      Source_Nested : Path_Step_Array := No_Path_Steps;
+      Destination_Field : Positive := 1;
+      Destination_Nested : Path_Step_Array := No_Path_Steps)
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
 
@@ -2202,7 +2219,8 @@ package Landin.IR is
       Destination : Storage;
       Field      : Positive;
       Which      : Positive;
-      Site       : Landin.Provenance.Origin)
+      Site       : Landin.Provenance.Origin;
+      Nested     : Path_Step_Array := No_Path_Steps)
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site);
 
@@ -2212,7 +2230,8 @@ package Landin.IR is
       Source : Storage;
       Field  : Positive;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site),
           Post => Holds (Into, Item, Emit_Variant_Tag_Load'Result);
@@ -2225,7 +2244,8 @@ package Landin.IR is
       Which        : Positive;
       Payload_Field : Positive;
       Result       : Landin.Types.Scalar_Name;
-      Site         : Landin.Provenance.Origin) return Value_Id
+      Site         : Landin.Provenance.Origin;
+      Nested       : Path_Step_Array := No_Path_Steps) return Value_Id
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site),
           Post => Holds (Into, Item, Emit_Variant_Field_Load'Result);
@@ -2238,7 +2258,8 @@ package Landin.IR is
       Which        : Positive;
       Payload_Field : Positive;
       Value        : Value_Id;
-      Site         : Landin.Provenance.Origin)
+      Site         : Landin.Provenance.Origin;
+      Nested       : Path_Step_Array := No_Path_Steps)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);

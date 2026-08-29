@@ -181,6 +181,14 @@ package body Landin.Stages.Checking is
       --  source a place rather than a value.
       function Chain_Names_Storage
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      function Is_Aggregate_Alias_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      --  D126: whether a selection chain [0420] starts at a name that
+      --  resolved.  Deliberately wider than Chain_Names_Storage: a named
+      --  return, a parameter and D121's payload alias all hold a variant
+      --  part, and none of them is a binding.
+      function Chain_Starts_At_A_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Admit_Variant_Field
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Synthesise_Binary
@@ -461,10 +469,11 @@ package body Landin.Stages.Checking is
                         --  a child is laid out the same way, because the
                         --  extent of a field is the child's own layout and
                         --  the path that reaches through it is a run.
+                        --  D126 drops the last one: a child holding a
+                        --  variant part is reached by the same run, which
+                        --  every variant operation now carries.
                         if Child_Body /= Res.No_Declaration
                           and then Landin.Checking.Has_Layout
-                            (Types.all, Child_Body)
-                          and then not Landin.Checking.Has_Variant_Part
                             (Types.all, Child_Body)
                         then
                            Into :=
@@ -484,23 +493,17 @@ package body Landin.Stages.Checking is
                   if Held = Ty.Aggregate
                     and then Into.Kind /= Landin.Checking.Aggregate_Field
                   then
-                     --  D119/D121 admit an ordinary child and an ordinary
-                     --  payload; what is left is a struct that has a
-                     --  variant part of its own.
+                     --  D119/D121/D126 admit an ordinary child and an
+                     --  ordinary payload, variant part and all.  What is
+                     --  left is a body the checker could not lay out,
+                     --  which has already reported why.
                      Bad.Report
                        (Item    => Bad.Unsupported_Use,
                         Source  => Syn.Source_Of (Of_Tree),
                         Where   => Syn.Where (Of_Tree, Each),
-                        Message =>
-                          (if Aggregate_Allowed
-                           then "a struct with a variant part is not a"
-                                & " field or a payload yet"
-                           else "a field of a struct type is not"
-                                & " enabled yet"),
-                        Refused =>
-                          (if Aggregate_Allowed
-                           then Bad.Nested_Variant_Struct
-                           else Bad.Struct_Value),
+                        Message => "a field of a struct type is not"
+                                   & " enabled yet",
+                        Refused => Bad.Struct_Value,
                         Into    => Found);
                   elsif Held = Ty.Function_Value then
                      Bad.Report
@@ -622,8 +625,8 @@ package body Landin.Stages.Checking is
                --  D121: [0520]'s element may be an ordinary struct.  Its
                --  extent is that struct's own already-computed layout, so
                --  the only thing an array adds is the repetition.  One
-               --  that has a variant part has no carrier yet, for the
-               --  reason an ordinary child holding one has none.
+               --  with a variant part waits for D127: a variant operation
+               --  reaches its part by a run, and an index is a value.
                Element_Body : constant Res.Declaration_Id :=
                  (if Held = Ty.Aggregate
                   then Landin.Checking.Body_Of (Types.all, Of_Tree, Element)
@@ -658,7 +661,7 @@ package body Landin.Stages.Checking is
                            else "an array of this is not enabled yet"),
                         Refused =>
                           (if Held = Ty.Aggregate
-                           then Bad.Nested_Variant_Struct
+                           then Bad.Variant_Inside_An_Element
                            else Bad.Array_Element),
                         Into    => Found);
                   end if;
@@ -1577,7 +1580,7 @@ package body Landin.Stages.Checking is
                        (Types.all, Of_Tree.all, Written));
                end if;
 
-               --  D117: a type alias and explicitly typed local carry the
+               --  D118: a type alias and explicitly typed local carry the
                --  descriptor written by their type position.  This is
                --  independent of whichever function value later fills it.
                if Held = Ty.Function_Value then
@@ -2495,7 +2498,7 @@ package body Landin.Stages.Checking is
          return Syn.Kind (Of_Tree, Where) = Syn.Element_Index;
       end Names_An_Element;
 
-      function Chain_Names_Storage
+      function Chain_Starts_At_A_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
       is
          Where : Syn.Node_Id := Node;
@@ -2504,10 +2507,27 @@ package body Landin.Stages.Checking is
             Where := Syn.Target_Of (Of_Tree, Where);
          end loop;
          return Syn.Kind (Of_Tree, Where) = Syn.Name_Reference
-           and then Res.Verdict_Of (Meanings.all, Of_Tree, Where) = Res.Bound
-           and then Res.Sort_Of
-             (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Where))
-               in Res.Module_Binding | Res.Local_Binding;
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Where) = Res.Bound;
+      end Chain_Starts_At_A_Name;
+
+      function Chain_Names_Storage
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Where : Syn.Node_Id := Node;
+      begin
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+            Where := Syn.Target_Of (Of_Tree, Where);
+         end loop;
+         --  D121's alias for an ordinary-struct payload names storage the
+         --  same way a binding does, so a chain may start at one.
+         return Is_Aggregate_Alias_Name (Of_Tree, Where)
+           or else (Syn.Kind (Of_Tree, Where) = Syn.Name_Reference
+                    and then Res.Verdict_Of
+                      (Meanings.all, Of_Tree, Where) = Res.Bound
+                    and then Res.Sort_Of
+                      (Meanings.all,
+                       Res.Bound_To (Meanings.all, Of_Tree, Where))
+                        in Res.Module_Binding | Res.Local_Binding);
       end Chain_Names_Storage;
 
       function Admit_Array_Field
@@ -2599,10 +2619,10 @@ package body Landin.Stages.Checking is
          declare
             From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
          begin
-            if Syn.Kind (Of_Tree, From) /= Syn.Name_Reference
-              or else Res.Verdict_Of (Meanings.all, Of_Tree, From)
-                        /= Res.Bound
-            then
+            --  D126: the variant part may sit below however many
+            --  selections [0420] composed, so what this asks is whether
+            --  the chain starts at a bound name and not how long it is.
+            if not Chain_Starts_At_A_Name (Of_Tree, From) then
                return False;
             end if;
 
@@ -2711,8 +2731,6 @@ package body Landin.Stages.Checking is
 
       --  Whether this node directly names a binding that owns runtime storage.
       function Is_Direct_Binding_Name
-        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
-      function Is_Aggregate_Alias_Name
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
 
       function Is_Direct_Binding_Name

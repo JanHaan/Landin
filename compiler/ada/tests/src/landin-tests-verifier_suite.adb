@@ -238,6 +238,7 @@ package body Landin.Tests.Verifier_Suite is
       Field_Beyond_The_Aggregate,
       Nested_Field_Beyond_The_Child,
       Path_Step_Below_A_Scalar_Leaf,
+      Variant_Path_Reaches_A_Scalar,
       Element_Path_Below_A_Scalar_Element,
       Nested_Element_Beyond_The_Child,
       Field_Operation_Names_An_Array,
@@ -399,6 +400,7 @@ package body Landin.Tests.Verifier_Suite is
              Payloads_First => 1));
       elsif Harm in Nested_Field_Beyond_The_Child
                     | Path_Step_Below_A_Scalar_Leaf
+                    | Variant_Path_Reaches_A_Scalar
                     | Nested_Element_Beyond_The_Child
                     | Nested_Array_Copy_Source_Beyond_The_Child
                     | Storage_Address_Nested_Field_Beyond_The_Child
@@ -726,6 +728,18 @@ package body Landin.Tests.Verifier_Suite is
                    (Unit, A, E, N, Landin.Types.U32, Site,
                     Below => Below (1));
             pragma Assert (M /= IR.No_Value);
+            N := IR.Emit_Load (Unit, A, S, Site);
+            IR.Emit_Leave (Unit, A, N, Site);
+            IR.Leave_Block (Unit, A);
+
+         --  D126 lets a variant operation name its part through a run,
+         --  so it also has to refuse one whose run reaches something that
+         --  is not a variant part.  G's field 1 holds one U32 child.
+         when Variant_Path_Reaches_A_Scalar =>
+            N := IR.Emit_Variant_Tag_Load
+                   (Unit, A, (Kind => IR.Module_Datum, Datum => G), 1,
+                    Landin.Types.U8, Site, Nested => Below (1));
+            pragma Assert (N /= IR.No_Value);
             N := IR.Emit_Load (Unit, A, S, Site);
             IR.Emit_Leave (Unit, A, N, Site);
             IR.Leave_Block (Unit, A);
@@ -1251,6 +1265,8 @@ package body Landin.Tests.Verifier_Suite is
          (Field_Beyond_The_Aggregate, V.Field_Out_Of_Range),
          (Nested_Field_Beyond_The_Child, V.Field_Is_Not_A_Scalar),
          (Path_Step_Below_A_Scalar_Leaf, V.Field_Is_Not_A_Scalar),
+         (Variant_Path_Reaches_A_Scalar,
+          V.Variant_Field_Is_Not_A_Variant),
          (Element_Path_Below_A_Scalar_Element,
           V.Element_Field_Is_Not_An_Array),
          (Nested_Element_Beyond_The_Child,
