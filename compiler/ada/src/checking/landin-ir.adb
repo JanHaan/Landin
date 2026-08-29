@@ -2062,8 +2062,13 @@ package body Landin.IR is
       Source      : Storage;
       Destination : Storage;
       Field       : Positive;
-      Site        : Landin.Provenance.Origin)
+      Site        : Landin.Provenance.Origin;
+      Source_Nested : Path_Step_Array := No_Path_Steps;
+      Destination_Field : Positive := 1;
+      Destination_Nested : Path_Step_Array := No_Path_Steps)
    is
+      From  : constant Run := Stored_Path (Into, Source_Nested);
+      Steps : constant Run := Stored_Path (Into, Destination_Nested);
       Where : constant Value_Id :=
         Append
           (Into, Item,
@@ -2071,8 +2076,10 @@ package body Landin.IR is
                         Site          => Site,
                         Source        => Source,
                         Source_Field  => Field,
+                        Source_Nested => From,
                         Destination   => Destination,
-                        Element_Field => Field,
+                        Element_Field => Destination_Field,
+                        Nested        => Steps,
                         others        => <>));
    begin
       pragma Assert (Where /= No_Value);
@@ -2138,8 +2145,10 @@ package body Landin.IR is
       Destination : Storage;
       Field       : Positive;
       Which       : Positive;
-      Site        : Landin.Provenance.Origin)
+      Site        : Landin.Provenance.Origin;
+      Nested      : Path_Step_Array := No_Path_Steps)
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Where : constant Value_Id :=
         Append
           (Into, Item,
@@ -2147,6 +2156,7 @@ package body Landin.IR is
                         Site          => Site,
                         Destination   => Destination,
                         Element_Field => Field,
+                        Nested        => Steps,
                         Variant_Case  => Which,
                         others        => <>));
    begin
@@ -2159,8 +2169,10 @@ package body Landin.IR is
       Source : Storage;
       Field  : Positive;
       Result : Landin.Types.Scalar_Name;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
    begin
       return Append
         (Into, Item,
@@ -2169,6 +2181,7 @@ package body Landin.IR is
                       Site          => Site,
                       Source        => Source,
                       Element_Field => Field,
+                      Nested        => Steps,
                       others        => <>));
    end Emit_Variant_Tag_Load;
 
@@ -2180,8 +2193,10 @@ package body Landin.IR is
       Which         : Positive;
       Payload_Field : Positive;
       Result        : Landin.Types.Scalar_Name;
-      Site          : Landin.Provenance.Origin) return Value_Id
+      Site          : Landin.Provenance.Origin;
+      Nested        : Path_Step_Array := No_Path_Steps) return Value_Id
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
    begin
       return Append
         (Into, Item,
@@ -2190,6 +2205,7 @@ package body Landin.IR is
                       Site                  => Site,
                       Source                => Source,
                       Element_Field         => Field,
+                      Nested                => Steps,
                       Variant_Case          => Which,
                       Variant_Payload_Field => Payload_Field,
                       others                => <>));
@@ -2203,13 +2219,16 @@ package body Landin.IR is
       Which         : Positive;
       Payload_Field : Positive;
       Value         : Value_Id;
-      Site          : Landin.Provenance.Origin)
+      Site          : Landin.Provenance.Origin;
+      Nested        : Path_Step_Array := No_Path_Steps)
    is
+      Steps : constant Run := Stored_Path (Into, Nested);
       Made : Instruction :=
         Instruction'(Op                    => Store_Variant_Field,
                      Site                  => Site,
                      Destination           => Destination,
                      Element_Field         => Field,
+                     Nested                => Steps,
                      Variant_Case          => Which,
                      Variant_Payload_Field => Payload_Field,
                      others                => <>);

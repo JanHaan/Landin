@@ -367,12 +367,14 @@ package body Landin.IR.Dump is
                  & Trimmed
                      (Natural'Image
                         (Source_Field_Of (Of_Unit, Item, Value)))
+                 & Source_Path_Qualifier
                  & " to "
                  & Endpoint (Destination_Of (Of_Unit, Item, Value))
                  & " field "
                  & Trimmed
                      (Natural'Image
-                        (Element_Field_Of (Of_Unit, Item, Value)));
+                        (Element_Field_Of (Of_Unit, Item, Value)))
+                 & Path_Qualifier;
 
             when Clear_Array =>
                return Lead & " destination "
@@ -408,7 +410,8 @@ package body Landin.IR.Dump is
                  & " field "
                  & Trimmed
                      (Natural'Image
-                        (Element_Field_Of (Of_Unit, Item, Value)));
+                        (Element_Field_Of (Of_Unit, Item, Value)))
+                 & Path_Qualifier;
 
             when Load_Variant_Field =>
                return Lead & " from "
@@ -417,6 +420,7 @@ package body Landin.IR.Dump is
                  & Trimmed
                      (Natural'Image
                         (Element_Field_Of (Of_Unit, Item, Value)))
+                 & Path_Qualifier
                  & " case "
                  & Trimmed
                      (Natural'Image
@@ -434,6 +438,7 @@ package body Landin.IR.Dump is
                  & Trimmed
                      (Natural'Image
                         (Element_Field_Of (Of_Unit, Item, Value)))
+                 & Path_Qualifier
                  & " case "
                  & Trimmed
                      (Natural'Image
@@ -446,6 +451,7 @@ package body Landin.IR.Dump is
                  & Trimmed
                      (Natural'Image
                         (Element_Field_Of (Of_Unit, Item, Value)))
+                 & Path_Qualifier
                  & " case "
                  & Trimmed
                      (Natural'Image
