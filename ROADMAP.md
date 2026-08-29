@@ -1967,6 +1967,10 @@ equality and proves indirect aggregate results plus register/stack arguments
 reuse the direct internal convention without counting the code address as a
 source parameter.
 
+The thirtieth increment closes ordinary control-flow evidence for aggregate
+calls: completion contributes a normal whole-place assignment fact, branch
+joins intersect it, and guarded-return continuing edges preserve it.
+
 Written function types, function parameters and anonymous functions remain in
 this item. Further aggregate arguments and result contexts remain here too; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.

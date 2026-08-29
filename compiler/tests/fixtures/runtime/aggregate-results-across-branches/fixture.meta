@@ -1,0 +1,6 @@
+class: runtime
+summary: aggregate call destinations remain definitely assigned across a branch join
+constructs: 0050, 0670, 1050, 1890, 1920
+program: main.ldn
+status: 42
+targets: linux-x86-64

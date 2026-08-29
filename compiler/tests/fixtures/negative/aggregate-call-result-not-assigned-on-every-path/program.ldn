@@ -1,0 +1,17 @@
+pair: type = struct
+    value: i32
+end pair
+
+make: (value: i32) -> (result: pair) =
+    result = (value: value)
+end make
+
+bad: () -> (result: i32) =
+    mut chosen: pair
+    if true then
+        chosen = make(42)
+    else
+        _ = 0
+    end if
+    result = chosen.value
+end bad
