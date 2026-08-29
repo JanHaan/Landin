@@ -1896,7 +1896,10 @@ package body Landin.IR.Verifier is
             if Nominal_Of (Of_Unit, Id) /= No_Nominal_Type
               and then
                 (Result_Of (Of_Unit, Id) /= Landin.Types.Aggregate
-                 or else not Holds (Of_Unit, Nominal_Of (Of_Unit, Id)))
+                 or else not Holds (Of_Unit, Nominal_Of (Of_Unit, Id))
+                 or else
+                   (Kind_Of (Of_Unit, Id) = Routine
+                    and then Signature_Of (Of_Unit, Id) = No_Signature))
             then
                return (Kind => Nominal_Metadata_Malformed,
                        Item => Id, others => <>);
@@ -2097,6 +2100,12 @@ package body Landin.IR.Verifier is
                      if Result_Of (Of_Unit, Id) /= Carrier
                        or else Parameter_Count (Of_Unit, Id)
                                  /= Signature_Carrier_Count (Signature)
+                       or else
+                         (if Count = 1
+                               and then Result.Kind = Landin.Types.Aggregate
+                          then Nominal_Of (Of_Unit, Id) /= Result.Nominal
+                          else Nominal_Of (Of_Unit, Id)
+                                 /= No_Nominal_Type)
                      then
                         return (Kind => Routine_Signature_Disagrees,
                                 Item => Id, others => <>);
@@ -2190,14 +2199,20 @@ package body Landin.IR.Verifier is
             declare
                Id : constant Item_Id := Item_Id (Which);
             begin
-               if Kind_Of (Of_Unit, Id) = Datum
-                 and then Nominal_Of (Of_Unit, Id) /= No_Nominal_Type
-               then
-                  Bad := Register
-                    ((Kind    => Item_Aggregate_Source,
-                      Item    => Id,
-                      Nominal => Nominal_Of (Of_Unit, Id),
-                      others  => <>));
+               if Nominal_Of (Of_Unit, Id) /= No_Nominal_Type then
+                  Bad :=
+                    (if Kind_Of (Of_Unit, Id) = Datum
+                     then Register
+                       ((Kind    => Item_Aggregate_Source,
+                         Item    => Id,
+                         Nominal => Nominal_Of (Of_Unit, Id),
+                         others  => <>))
+                     else Register
+                       ((Kind    => Slot_Aggregate_Source,
+                         Item    => Id,
+                         Slot    => Result_Slot (Of_Unit, Id),
+                         Nominal => Nominal_Of (Of_Unit, Id),
+                         others  => <>)));
                   if Bad /= Nothing_Wrong then
                      return (Kind => Bad, Item => Id, others => <>);
                   end if;
