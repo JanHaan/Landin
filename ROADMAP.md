@@ -1941,6 +1941,10 @@ The twenty-third increment qualifies that hidden destination with neutral
 field identities. Struct calls can fill an ordinary child, and array calls can
 fill direct or nested array fields without an intermediate aggregate copy.
 
+The twenty-fourth increment lets a local infer a returned struct's nominal
+body or a returned array's scalar shape. Its fresh inferred slot becomes the
+same hidden destination; module call inference remains forbidden.
+
 Further aggregate arguments and result contexts remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
