@@ -1949,6 +1949,10 @@ The twenty-fifth increment composes result and argument boundaries. An inner
 aggregate call fills a shaped caller temporary before the outer call transports
 its address and performs the ordinary defensive parameter copy.
 
+The twenty-sixth increment gives an explicitly discarded aggregate call a
+shaped temporary lifetime through completion, then drops it without reading a
+field or forming an aggregate IR value.
+
 Further aggregate arguments and result contexts remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20

@@ -13,6 +13,7 @@ score: (value: [3]i32) -> (result: i32) =
 end score
 
 public main: () -> (code: i32) =
+    _ = make()
     mut answer := forward()
     mut other: [3]i32 = make()
     other[0] = 40
