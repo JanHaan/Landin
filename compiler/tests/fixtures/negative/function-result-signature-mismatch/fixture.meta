@@ -1,0 +1,5 @@
+class: negative
+summary: a function-valued named result requires its complete nested signature
+constructs: 0880, 0930, 1000, 1800, 1890
+program: program.ldn
+codes: L0301

@@ -1,0 +1,5 @@
+class: negative
+summary: mutable module function storage rejects a replacement with another signature
+constructs: 0060, 1000, 1790, 1890, 1900, 1940
+program: program.ldn
+codes: L0301

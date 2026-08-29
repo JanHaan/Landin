@@ -15,6 +15,8 @@ make_static: maker = (value: i32) -> (result: pair) =
     result = (left: value + 1, right: 20)
 end
 
+static_alias: maker = make_static
+
 pass_through: (candidate: maker) -> (result: maker) =
     result = candidate
     _ = result(0)
@@ -32,6 +34,7 @@ public main: () -> (code: i32) =
     returned := pass_through(current)
     from_result := returned(20)
     from_module := make_static(20)
+    from_alias := static_alias(20)
     local: maker = (value: i32) -> (result: pair) =
         result = (left: value + 2, right: 20)
     end
@@ -42,6 +45,7 @@ public main: () -> (code: i32) =
        and replaced.left == 21 and replaced.right == 20
        and from_result.left == 21 and from_result.right == 20
        and from_module.left == 21 and from_module.right == 20
+       and from_alias.left == 21 and from_alias.right == 20
        and from_anonymous.left == 22 and from_anonymous.right == 20
     then
         code = 42

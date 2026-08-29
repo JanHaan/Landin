@@ -6536,6 +6536,8 @@ function datum targets, calls and verifier malformed cases; deterministic
 anonymous routine items and x86-64 local symbols; the generated lexical and IR
 records through `positive/infallible-function-values`; the negative fixtures
 `anonymous-function-captures-local`, `function-parameter-signature-mismatch`,
-`function-result-unassigned`, `module-function-without-image` and
-`module-function-image-cycle`; and `runtime/infallible-function-values` on
+`function-result-signature-mismatch`, `function-result-unassigned`,
+`module-function-replacement-signature-mismatch`,
+`module-function-without-image` and `module-function-image-cycle`; and
+`runtime/infallible-function-values` on
 Linux x86-64.
