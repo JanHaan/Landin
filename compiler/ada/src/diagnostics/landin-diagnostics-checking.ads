@@ -99,8 +99,6 @@ package Landin.Diagnostics.Checking is
    --  name resolved to.
    type Refused_Use is
      (Scalar_Conversion,
-      Function_Value,
-      Call_Of_A_Binding,
       --  A type name the tour writes and [1790] omits.  These were the
       --  parser's until [1795] let a type position hold a declared name:
       --  once any identifier may stand there, whether one names a type
@@ -110,9 +108,8 @@ package Landin.Diagnostics.Checking is
       Text_Type,
       --  [0670] declares one.  R2.20 admits contextual storage, copies,
       --  zero images and labelled literals but not a general aggregate
-      --  value; R2.30 separately owns carrying one through the ABI.
+      --  value.
       Struct_Value,
-      Struct_ABI,
       --  D74 lays out and measures [0680]'s declaration, D75 gives it
       --  storage and a zero image, and D76 admits contextual case writes;
       --  a general variant value remains refused.
@@ -133,13 +130,10 @@ package Landin.Diagnostics.Checking is
      return Landin.Tokens.Construct_Reference
      is (case Item is
             when Scalar_Conversion  => "[0700]",
-            when Function_Value     => "[1000]",
-            when Call_Of_A_Binding  => "[1000]",
             when Wide_Integer_Type  => "[0150]",
             when Float_Type         => "[0170]",
             when Text_Type          => "[0600]",
-            when Struct_Value
-               | Struct_ABI         => "[0670]",
+            when Struct_Value       => "[0670]",
             when Variant_Value      => "[0680]",
             when Whole_Element_Aggregate => "[0520]",
             when Array_Value        => "[0520]",
@@ -190,20 +184,16 @@ package Landin.Diagnostics.Checking is
 private
 
    --  Where the roadmap says each becomes available.  R2.20 owns the
-   --  remaining scalar conversion and general aggregate-value contexts;
-   --  R2.30 owns function values and aggregate ABI passage.
+   --  remaining scalar conversion and general aggregate-value contexts.
    function Enabled_By (Item : Refused_Use) return String
      is (case Item is
             when Scalar_Conversion => "R2.20",
-            when Function_Value
-               | Call_Of_A_Binding => "R2.30",
             --  R4.10 closes the hosted construct matrix, which is where
             --  the wide integers, the floats and the text views arrive.
             when Wide_Integer_Type
                | Float_Type
                | Text_Type         => "R4.10",
-            when Struct_ABI
-               | Whole_Element_Aggregate => "R2.30",
+            when Whole_Element_Aggregate => "R2.30",
             when Struct_Value
                | Variant_Value
                | Array_Value

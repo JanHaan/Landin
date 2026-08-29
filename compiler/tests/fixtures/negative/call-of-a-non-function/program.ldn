@@ -1,0 +1,4 @@
+f: () -> none =
+    value := 1
+    value()
+end f
