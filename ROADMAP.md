@@ -2112,10 +2112,10 @@ while resolution remains source ordered at the statement. Cleanup calls lower
 to the existing direct or indirect internal convention, including register and
 stack arguments, function values, stored aggregate arguments and caller-owned
 aggregate results. The neutral exit selector already distinguishes normal,
-successful-return, future failure and structured-transfer edges from a trap,
-which never unwinds. Its failure-only cleanup policy is reserved for `undo`;
-the spelling remains refused until this item's declared-error increment
-supplies a failure edge, and R4.10 still owns every loop transfer.
+successful-return, failure and structured-transfer edges from a trap, which
+never unwinds. D129 reserves its failure-only cleanup policy for `undo`, while
+the forty-ninth increment supplies that spelling and R4.10 still owns every
+loop transfer.
 
 The forty-sixth increment enables payload-free atoms and declared errors.
 Atom declarations mint identity; aliases and unions flatten to structural sets,
@@ -2132,8 +2132,8 @@ atom codes and reserves `%r10d`, with zero for success, without consuming an
 ordinary argument or result position. Positive, negative, generated-IR and
 Linux runtime evidence covers module/local values, recursive inference,
 register/stack calls, direct/indirect calls, recovery and propagation. Failure
-edges run every active deferred cleanup under the existing exit selector;
-`undo` remains the next failure-only cleanup spelling.
+edges run every active deferred cleanup under the existing exit selector and
+provide the failure-only edge consumed by the forty-ninth increment.
 
 The forty-seventh increment completes the function-value storage form D117 and
 D123 retained: an ordinary or variant-payload struct field carries one `usize`
@@ -2163,9 +2163,21 @@ synthetic-32 and Linux x86-64 widths, internal gaps, inactive variant tails and
 aggregate tail padding. Linux runtime evidence mutates copied nested and
 payload storage independently.
 
-`undo` remains the outstanding R2.30 increment. It reuses D129's lexical exit
-selector and the failure edges delivered by D130; until that increment lands,
-the spelling remains refused by name and this item remains active.
+The forty-ninth increment enables `undo` on the failure-only edge established
+by the forty-sixth. A reached statement joins the same lexical cleanup stack as
+`defer`, so all applicable calls execute in one reverse registration order,
+inner frame before outer. Direct and guarded `fail`, a failed `try`, and failure
+arriving through deeper calls select undo while leaving `if`, exhaustive
+`match`, bare `begin` and function blocks. Ordinary fallthrough, successful
+return, a call recovered inside the block, structured transfer and trap stop do
+not. Resolution remains source ordered; indirect callee and argument evaluation
+is delayed until the selected edge, and definite assignment is checked against
+that execution state. Lowering saves the declared atom across the ordinary
+cleanup calls and then emits the existing failure terminator. Direct and
+indirect calls, register and stack arguments, fixed arrays, aggregates and
+anonymous multiple results retain their ordinary target-neutral convention and
+caller-owned discard temporary, leaving the verifier and x86 backend no
+unwind-specific form. R4.10 remains the owner of loops and their transfers.
 
 Further aggregate arguments and result contexts remain here too; R4.40 later
 supplies complete C ABI classification rather than owning this internal
@@ -2192,8 +2204,9 @@ results, multiple named structural results and by-name destructuring, static
 and mutable module addresses, no-capture anonymous routines, function-valued
 ordinary and variant-payload fields through nested and indexed storage,
 expression-valued non-loop controls, lexical reverse-order deferred cleanup,
-late direct and indirect cleanup arguments, more arguments than the
-register-only stopgap accepted and every enabled control-flow exit path.
+failure-only undo interleaved with defer, late direct and indirect cleanup
+arguments, more arguments than the register-only stopgap accepted and every
+enabled control-flow exit path.
 Malformed IR also proves
 that a runtime address, malformed recursive image descriptor or static routine
 target cannot substitute for its neutral descriptor. Recursive module image

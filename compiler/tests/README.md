@@ -30,7 +30,7 @@ by-name refusal is a row that item has to answer for. Regenerate it with
 Fixture classes, and the directory each uses:
 
 | class | directory | what it covers |
-|---|---|---|
+| --- | --- | --- |
 | unit | `unit` | a note of one behaviour an implementation-side case covers |
 | positive | `positive` | a program that must be accepted |
 | negative | `negative` | a program that must be rejected, with the report it must produce |
@@ -79,12 +79,13 @@ only the kernel the compiler implements today:
 The kernel still does not have loops, so these examples deliberately use
 recursion and module-level arrays. R2.30 now also accepts internal aggregate
 parameters and results, expression-valued `if`, exhaustive `match`, bare
-`begin` blocks, lexical `defer`, and recursively folded module images whose
-ordinary children or ordinary variant payloads retain independent target-laid-
-out storage; their dedicated fixtures exercise caller-owned scalar, fixed-array
-and struct join storage, reverse-order cleanup across normal and successful-
-return edges, and recursive static images on 32- and 64-bit target facts. On
-Linux x86-64, compile one of the
+`begin` blocks, lexical `defer`, failure-only `undo`, and recursively folded
+module images whose ordinary children or ordinary variant payloads retain
+independent target-laid-out storage. Their dedicated fixtures exercise
+caller-owned scalar, fixed-array and struct join storage, reverse-order cleanup
+across normal, successful-return and declared-failure edges with traps excluded,
+and recursive static images on 32- and 64-bit target facts. On Linux x86-64,
+compile one of the
 recursive examples from the repository root with:
 
 ```sh
@@ -104,7 +105,7 @@ and checks all four on every push.
 `fixture.meta` is `key: value` lines, with `#` comments and blank lines.
 
 | key | required | meaning |
-|---|---|---|
+| --- | --- | --- |
 | `class` | yes | must match the directory the fixture sits in |
 | `summary` | yes | one line, what the fixture proves |
 | `program` | no | the `.ldn` program the fixture runs |
@@ -211,7 +212,7 @@ everywhere.
 ## What the harness does with them
 
 | class | today |
-|---|---|
+| --- | --- |
 | unit | a note of what an implementation-side case covers; the case itself lives in `compiler/ada/tests` |
 | negative, end-to-end | executed: `refine` is run with `args`, and its bytes and exit status are compared with `expect` and `status` |
 | runtime | executed: `refine` compiles and links `program`, the result is run, and its own exit status is compared with `status` — or, with `traps: yes`, it is held to having ended without returning one |

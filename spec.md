@@ -40,7 +40,7 @@ and a quoted word or sign in one of them stands for the single token
 spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
 enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin',
-'match' and 'defer' remain
+'match', 'defer' and 'undo' remain
 ordinary names everywhere their contextual productions do not meet them.
 A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
@@ -283,7 +283,7 @@ named_return ::= identifier ":" type
 body        ::= block
 block       ::= statement* | value_statement* expression
 value_statement ::= binding | destructuring_binding | assignment
-                  | increment | discard | call | defer | try
+                  | increment | discard | call | defer | undo | try
                   | "return" "when" expression
                   | "fail" expression "when" expression
                   | if | match | bare_block
@@ -312,10 +312,11 @@ returning none has nothing to bind and [1020] wants a result
 discarded on purpose rather than by omission. A call whose result is dropped
 that way is the one place the kernel accepts an ordinary expression standing
 alone. A standalone `try call` explicitly propagates its failure and discards
-any successful result. `defer` registers one call when its statement is reached
-and evaluates the callee and arguments only on the applicable exits from its
-lexical block [1100]. It is a statement rather than an expression and so cannot
-supply a block's final value. A match is D77's exhaustive tag selection or
+any successful result. `defer` and `undo` each register one call when their
+statement is reached and evaluate the callee and arguments only on applicable
+exits from the lexical block [1100] [1110]. They are statements rather than
+expressions and so cannot supply a block's final value. A match is D77's
+exhaustive tag selection or
 [0640]'s exhaustive atom-set selection. A variant subject is one directly
 selected variant part and each case arm carries one statement or one
 expression; a bare `begin` block makes a multi-statement arm. D78 extends the
@@ -330,12 +331,13 @@ the binding it belongs to is.
 
 ```landin-grammar
 statement   ::= binding | destructuring_binding | assignment | increment
-              | discard | call | defer | try | return | fail
+              | discard | call | defer | undo | try | return | fail
               | if | match | bare_block
 assignment  ::= place "=" expression
 increment   ::= ("inc" | "dec") place
 discard     ::= "_" "=" expression
 defer       ::= "defer" call
+undo        ::= "undo" call
 return      ::= "return" ("when" expression)?
 fail        ::= "fail" expression ("when" expression)?
 try         ::= "try" call
@@ -7028,11 +7030,10 @@ a delayed read is unassigned is refused even when the normal end assigns it.
 The neutral selector has five edge kinds: ordinary fallthrough, successful
 return, failure propagation, structured transfer, and trap stop. A deferred
 call applies to every language edge that unwinds a block and never to a trap;
-a failure cleanup applies only to failure propagation. The latter is the
-substrate for [1110], not its implementation: `undo` remains refused by name
-until R2.30's declared-error work supplies `fail` and propagation edges, and
-R4.10 still owns the loop transfers. No trap unwinds, whether it occurs in the
-body, in a final expression, or while a cleanup call is running.
+a failure cleanup applies only to failure propagation. D133 enables that
+failure-only policy as [1110]'s `undo`, while R4.10 still owns every loop
+transfer. No trap unwinds, whether it occurs in the body, in a final expression,
+or while a cleanup call is running.
 
 Cleanup has no target-specific IR form. Once selected, a call lowers through
 the existing direct or indirect convention, including register and stack
@@ -7054,7 +7055,7 @@ Both were declined.
 **Pinned by** `positive/defer-evaluates-at-exit`,
 `negative/defer-cannot-see-later-local`,
 `negative/defer-read-not-assigned-on-return`,
-`negative/defer-needs-call`, `negative/undo-remains-refused`,
+`negative/defer-needs-call`,
 `runtime/defer-cleanups-follow-control-edges`,
 `runtime/defer-call-shapes`, and `runtime/defer-does-not-unwind-traps` on Linux
 x86-64, together with the parser, checker/flow, IR policy, lowering/verifier and
@@ -7157,7 +7158,7 @@ D118's path rather than a field-specific calling convention.
 `function-field-unassigned`, `function-variant-payload-signature-mismatch`, and
 `module-function-field-without-image`; the malformed aggregate-image verifier
 case; the generated construct, lexical and IR records; and
-`runtime/function-valued-struct-fields` on Linux x86-64
+`runtime/function-valued-struct-fields` on Linux x86-64.
 
 ### D132 — A folded aggregate image recursively contains aggregate fields
 
@@ -7236,3 +7237,69 @@ ordinary child can point into it.
 malformed-image verifier cases, the lowering and 32-/64-bit backend seams, the
 generated lexical and IR records, and
 `runtime/recursive-module-images-are-laid-out-and-distinct` on Linux x86-64.
+
+### D133 — Undo is selected only while declared failure leaves its block
+
+**The tour said** that `undo` is registered lexically, runs in reverse order
+only when failure leaves its block, includes a failed `try` and failure from a
+deeper call, and excludes return, transfer and panic [1110]. It did not say how
+a caller's recovery divides the failing callee from its own block, how undo and
+defer registrations interleave, which state delayed arguments read, or how the
+failure atom survives calls made while unwinding.
+
+**Chosen:** reaching `undo call(...)` appends a failure-only entry to D129's
+current lexical cleanup frame. It resolves the call immediately in source
+order but evaluates neither its callee nor any argument. The entry becomes
+active only after the statement is reached. When it is selected, its indirect
+callee and arguments are evaluated late, left to right, from the state at that
+failure edge, and the entry is removed before evaluation begins.
+
+A direct or taken guarded `fail`, or a `try` whose call reports failure,
+creates a failure-propagation edge. The latter includes an atom produced by any
+depth of failing calls. Such an edge does not join a selected `if`, exhaustive
+`match`, or bare `begin` block: it runs reached entries in every lexical frame
+it leaves, innermost frame first. Within one frame all cleanup registrations
+remain in one stack. Reverse registration order selects every applicable
+entry, so defer and undo calls interleave on failure; normal fallthrough and a
+successful return select only defer. A caller's call-site `else` handles the
+failure without leaving the caller's block and therefore does not select that
+block's undo entries. Undo entries in the failing callee have already run as
+the failure left the callee.
+
+Undo never applies to ordinary fallthrough, successful return, structured
+transfer, or trap stop. No trap is converted to declared failure and no trap
+unwinds, including one raised while evaluating a cleanup. R4.10 still owns
+loops and their transfers, so this decision enables none of them.
+
+Definite assignment uses only the failure edges on which an undo call actually
+runs. A delayed argument may consequently be unassigned on every normal,
+successful-return or locally recovered edge, but must be assigned on each
+propagating failure edge that reaches its registration. The failing atom is
+formed and stored before cleanup begins, then reloaded for the eventual failure
+terminator after all normally completing applicable calls. Cleanup evaluation
+cannot accidentally replace the failure being propagated.
+
+Undo introduces no target-specific IR or runtime registration. A selected
+entry lowers as the same ordinary direct or indirect call as defer, including
+register and stack arguments, fixed-array and enabled aggregate values, and
+function-valued callees. A discarded fixed-array, nominal aggregate, or
+anonymous multiple-result aggregate receives an ordinary caller-owned shaped
+temporary. The verifier therefore checks the resulting calls, storage,
+failure carrier and terminator under existing rules, and the x86 backend owns
+only their established calling convention.
+
+**The alternatives:** keep a second undo stack, which would place every undo
+before or after every defer instead of preserving lexical reverse order; run
+undo for every non-normal exit, which would make return a failure and could not
+distinguish a locally recovered call; or capture the callee and arguments at
+registration. The first changes source order, the second erases the declared
+failure edge [0970], and the third contradicts [1110]'s delayed compensating
+action. All were declined.
+
+**Pinned by** `positive/undo-evaluates-on-failure`,
+`negative/undo-cannot-see-later-local`, `negative/undo-needs-call`,
+`negative/undo-read-not-assigned-on-failure`,
+`runtime/undo-cleanups-follow-failure-edges`, `runtime/undo-call-shapes`, and
+`runtime/undo-does-not-unwind-traps` on Linux x86-64, together with the parser,
+checker/flow, cleanup-policy, lowering/verifier and x86 backend public-seam
+cases and the generated lexical, construct and IR records.

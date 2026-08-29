@@ -1296,9 +1296,8 @@ package body Landin.Tests.IR_Suite is
    end A_Control_Join_Crosses_Through_Caller_Storage;
 
    --  The exit selector is deliberately neutral semantic data rather than
-   --  an x86 branch kind or a cleanup opcode.  `undo` is still refused by
-   --  the parser, but its eventual failure-only policy is fixed beside the
-   --  defer policy before either flow or lowering consumes it.
+   --  an x86 branch kind or a cleanup opcode.  Defer and undo share this
+   --  policy before flow or lowering selects either registered call.
    procedure Cleanup_Exit_Selection_Is_Target_Neutral
      (Item : in out Landin.Testing.Context);
 
@@ -1335,8 +1334,13 @@ package body Landin.Tests.IR_Suite is
             Landin.Cleanup.Normal_Fallthrough)
          and then not Landin.Cleanup.Applies
            (Landin.Cleanup.Failure_Undo,
-            Landin.Cleanup.Successful_Return),
-         "the future undo policy selects failure edges alone");
+            Landin.Cleanup.Successful_Return)
+         and then not Landin.Cleanup.Applies
+           (Landin.Cleanup.Failure_Undo,
+            Landin.Cleanup.Structured_Transfer)
+         and then not Landin.Cleanup.Applies
+           (Landin.Cleanup.Failure_Undo, Landin.Cleanup.Trap_Stop),
+         "undo selects failure propagation and no other exit");
    end Cleanup_Exit_Selection_Is_Target_Neutral;
 
    procedure Register (Into : in out Landin.Testing.Registry) is

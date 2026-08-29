@@ -718,6 +718,86 @@ package body Landin.Tests.Parser_Suite is
    end Defer_Statements_Retain_Their_Calls;
 
    ------------------------------------------------------------------
+   --  [1110]: failure-only cleanup syntax
+   ------------------------------------------------------------------
+
+   procedure Undo_Statements_Retain_Their_Calls
+     (Item : in out Landin.Testing.Context);
+
+   procedure Undo_Statements_Retain_Their_Calls
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("undo.ldn",
+           "cleanup: (value: i32) -> none =" & ASCII.LF
+           & "    _ = value" & ASCII.LF
+           & "end cleanup" & ASCII.LF
+           & "f: () -> none =" & ASCII.LF
+           & "    undo cleanup(42)" & ASCII.LF
+           & "end f" & ASCII.LF);
+      Seen : Natural := 0;
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "an undo call parses cleanly");
+
+         for Node in Landin.Syntax.Node_Id'(1)
+                     .. Landin.Syntax.Last_Node (Parsed)
+         loop
+            if Landin.Syntax.Kind (Parsed, Node)
+                 = Landin.Syntax.Undo_Statement
+            then
+               Seen := Seen + 1;
+               declare
+                  Call : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Undo_Call (Parsed, Node);
+               begin
+                  Landin.Testing.Check
+                    (Item,
+                     Landin.Syntax.Kind (Parsed, Call) = Landin.Syntax.Call
+                     and then Landin.Syntax.Argument_Count (Parsed, Call) = 1,
+                     "the undo node retains its one call and argument");
+               end;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Seen, 1, "one undo statement was built");
+
+      declare
+         Codes : Unbounded.Unbounded_String;
+         Total, Nodes : Natural;
+         Held : Boolean;
+      begin
+         Read_And_Parse
+           ("cleanup: () -> none = end cleanup" & ASCII.LF
+            & "f: () -> none = undo cleanup end f" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Nodes > 0,
+            "a malformed undo call still yields a sound tree");
+         Landin.Testing.Check_Equal
+           (Item, Total, 1, "the malformed undo reports once");
+         Landin.Testing.Check_Equal
+           (Item, Unbounded.To_String (Codes), "L0103",
+            "the missing undo call parentheses keep the token diagnostic");
+      end;
+   end Undo_Statements_Retain_Their_Calls;
+
+   ------------------------------------------------------------------
    --  Recovery, on input nothing derives
    ------------------------------------------------------------------
 
@@ -1114,6 +1194,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "defer statements retain their calls",
          Defer_Statements_Retain_Their_Calls'Access);
+      Landin.Testing.Register
+        (Into, "parser", "undo statements retain their calls",
+         Undo_Statements_Retain_Their_Calls'Access);
       Landin.Testing.Register
         (Into, "parser", "survives every truncation",
          Survives_Every_Truncation'Access);

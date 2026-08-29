@@ -1,0 +1,5 @@
+class: negative
+summary: an undo call resolves in source order even though it runs on a later failure
+program: program.ldn
+codes: L0201
+constructs: 0110, 1110, 1800, 1810, 1840, 1860

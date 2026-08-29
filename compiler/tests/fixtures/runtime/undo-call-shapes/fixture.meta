@@ -1,0 +1,6 @@
+class: runtime
+summary: undo evaluates late indirect stack aggregate and multiple-result calls on propagated failure
+program: main.ldn
+status: 42
+constructs: 0410, 0520, 0670, 0710, 0870, 0920, 0940, 0960, 0970, 1000, 1110, 1800, 1810, 1920
+targets: linux-x86-64

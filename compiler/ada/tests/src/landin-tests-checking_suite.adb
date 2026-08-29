@@ -3347,6 +3347,101 @@ package body Landin.Tests.Checking_Suite is
         (Item, Array_Calls, 1, "the direct array call was typed");
    end Deferred_Calls_Are_Typed_At_Registration;
 
+   --  [1110] has the same late call shape as defer.  Registration still
+   --  fixes direct/indirect signatures and caller-owned stored result shape,
+   --  including D128's anonymous multiple-result aggregate.
+   procedure Undo_Calls_Are_Typed_At_Registration
+     (Item : in out Landin.Testing.Context);
+
+   procedure Undo_Calls_Are_Typed_At_Registration
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+      None_Calls, Array_Calls, Multiple_Calls : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "undo-types.ldn",
+         "sink: (value: i32) -> none = _ = value end sink" & LF
+         & "make_row: () -> (result: [2]i32) =" & LF
+         & "    result = [19, 23]" & LF
+         & "end make_row" & LF
+         & "make_multiple: () -> (left: i32, right: i32) =" & LF
+         & "    left = 19" & LF
+         & "    right = 23" & LF
+         & "end make_multiple" & LF
+         & "use: () -> none =" & LF
+         & "    callback := sink" & LF
+         & "    undo callback(42)" & LF
+         & "    undo make_row()" & LF
+         & "    undo make_multiple()" & LF
+         & "end use" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "indirect and stored-result undo calls are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Undo_Statement
+            then
+               declare
+                  Call : constant Landin.Syntax.Node_Id :=
+                    Landin.Syntax.Undo_Call (Of_Tree.all, Node);
+               begin
+                  case Landin.Checking.Type_Of
+                    (Types.all, Of_Tree.all, Call)
+                  is
+                     when Landin.Types.No_Value =>
+                        None_Calls := None_Calls + 1;
+                     when Landin.Types.Fixed_Array =>
+                        Array_Calls := Array_Calls + 1;
+                     when Landin.Types.Aggregate =>
+                        if Landin.Checking.Result_Shape_Of
+                             (Types.all, Of_Tree.all, Call)
+                               /= Landin.Checking.No_Signature
+                          and then Landin.Checking.Signature_Result_Count
+                            (Types.all,
+                             Landin.Checking.Result_Shape_Of
+                               (Types.all, Of_Tree.all, Call)) = 2
+                        then
+                           Multiple_Calls := Multiple_Calls + 1;
+                        end if;
+                     when others =>
+                        Landin.Testing.Fail
+                          (Item, "an undo call lost its checked result");
+                  end case;
+               end;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, None_Calls, 1, "the indirect no-value undo call was typed");
+      Landin.Testing.Check_Equal
+        (Item, Array_Calls, 1, "the fixed-array undo result was typed");
+      Landin.Testing.Check_Equal
+        (Item, Multiple_Calls, 1,
+         "the multiple-result undo call retained its structural shape");
+   end Undo_Calls_Are_Typed_At_Registration;
+
    --  Definite assignment is asked where a registered call executes.  The
    --  accepted program assigns after registration and even fills its named
    --  result while evaluating a cleanup argument; the rejected one has an
@@ -3402,6 +3497,95 @@ package body Landin.Tests.Checking_Suite is
          & "end f" & LF,
          Accepted => False);
    end Deferred_Reads_Use_Each_Exit_State;
+
+   --  [1110]: delayed reads are required on direct and propagated failure
+   --  edges alone.  Success, return, and a locally recovered call never run
+   --  undo and therefore lend it no spurious assignment requirement.
+   procedure Undo_Reads_Use_Only_Failure_States
+     (Item : in out Landin.Testing.Context);
+
+   procedure Undo_Reads_Use_Only_Failure_States
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Text : String; Accepted : Boolean);
+
+      procedure Check_Source (Text : String; Accepted : Boolean) is
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran : Natural;
+         Src : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "undo-flow.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 3, "the flow checker ran");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) /= Accepted,
+            "undo reads use only failure-edge assignment facts");
+      end Check_Source;
+
+      Prelude : constant String :=
+        "bad: atom" & LF
+        & "problem: type = bad" & LF
+        & "sink: (value: i32) -> none = _ = value end sink" & LF
+        & "leaf: () -> none ! problem = fail bad end leaf" & LF;
+   begin
+      Check_Source
+        (Prelude
+         & "f: () -> none ! problem =" & LF
+         & "    mut local: i32" & LF
+         & "    undo sink(local)" & LF
+         & "    return" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        (Prelude
+         & "f: () -> none ! problem =" & LF
+         & "    mut local: i32" & LF
+         & "    undo sink(local)" & LF
+         & "    local = 42" & LF
+         & "    fail bad" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        (Prelude
+         & "f: () -> none ! problem =" & LF
+         & "    mut local: i32" & LF
+         & "    undo sink(local)" & LF
+         & "    fail bad" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        (Prelude
+         & "f: () -> none ! problem =" & LF
+         & "    mut local: i32" & LF
+         & "    undo sink(local)" & LF
+         & "    local = 42" & LF
+         & "    try leaf()" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        (Prelude
+         & "f: () -> none ! problem =" & LF
+         & "    mut local: i32" & LF
+         & "    undo sink(local)" & LF
+         & "    try leaf()" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        (Prelude
+         & "f: () -> none ! problem =" & LF
+         & "    mut local: i32" & LF
+         & "    undo sink(local)" & LF
+         & "    leaf() else 0" & LF
+         & "    return" & LF
+         & "end f" & LF,
+         Accepted => True);
+   end Undo_Reads_Use_Only_Failure_States;
 
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
@@ -3517,8 +3701,14 @@ package body Landin.Tests.Checking_Suite is
         (Into, "checking", "deferred calls are typed at registration",
          Deferred_Calls_Are_Typed_At_Registration'Access);
       Landin.Testing.Register
+        (Into, "checking", "undo calls are typed at registration",
+         Undo_Calls_Are_Typed_At_Registration'Access);
+      Landin.Testing.Register
         (Into, "checking", "deferred reads use each exit state",
          Deferred_Reads_Use_Each_Exit_State'Access);
+      Landin.Testing.Register
+        (Into, "checking", "undo reads use only failure states",
+         Undo_Reads_Use_Only_Failure_States'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);

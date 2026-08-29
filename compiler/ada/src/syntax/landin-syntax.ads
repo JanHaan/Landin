@@ -110,6 +110,9 @@ package Landin.Syntax is
       --  position and evaluated only when an applicable edge leaves the
       --  lexical block.
       Defer_Statement,
+      --  [1110].  It has the same registered-call shape as defer, but its
+      --  cleanup kind is selected only by failure propagation.
+      Undo_Statement,
       Return_Statement,
       --  [0970]'s second early exit.  Its first slot is the atom and its
       --  second the optional `when` condition.
@@ -481,13 +484,29 @@ package Landin.Syntax is
                           in Binding | Destructuring_Binding | Assignment
                              | Discard | Field_Value | Fail_Statement;
 
-   --  [1100]'s call.  This is deliberately not Value_Of: reaching a defer
-   --  statement registers syntax and evaluates no value at that point.
+   --  [1100]/[1110]'s registered call.  This is deliberately not Value_Of:
+   --  reaching either cleanup statement records syntax and evaluates no
+   --  value at that point.
+   function Cleanup_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id)
+                             in Defer_Statement | Undo_Statement,
+          Post => Contains (Of_Tree, Cleanup_Call'Result)
+                  and then Kind (Of_Tree, Cleanup_Call'Result) = Call;
+
+   --  The construct-specific views keep callers that care which policy was
+   --  registered from having to treat the common slot layout as public.
    function Deferred_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) = Defer_Statement,
           Post => Contains (Of_Tree, Deferred_Call'Result)
                   and then Kind (Of_Tree, Deferred_Call'Result) = Call;
+
+   function Undo_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Undo_Statement,
+          Post => Contains (Of_Tree, Undo_Call'Result)
+                  and then Kind (Of_Tree, Undo_Call'Result) = Call;
 
    --  `place` [1810], the one an assignment writes or an increment steps,
    --  and what a selection [1820] selects from.

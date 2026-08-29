@@ -7768,13 +7768,13 @@ package body Landin.Stages.Checking is
                   end if;
                end;
 
-            when Syn.Defer_Statement =>
-               --  [1100]: type the registered call where it is written, but
-               --  leave every definite-assignment read to the exit point at
-               --  which its callee and arguments are actually evaluated.
+            when Syn.Defer_Statement | Syn.Undo_Statement =>
+               --  [1100]/[1110]: type the registered call where it is
+               --  written, but leave every definite-assignment read to the
+               --  selected exit where its callee and arguments run.
                declare
                   Got : constant Ty.Type_Kind :=
-                    Synthesise (Of_Tree, Syn.Deferred_Call (Of_Tree, Node));
+                    Synthesise (Of_Tree, Syn.Cleanup_Call (Of_Tree, Node));
                begin
                   pragma Unreferenced (Got);
                end;

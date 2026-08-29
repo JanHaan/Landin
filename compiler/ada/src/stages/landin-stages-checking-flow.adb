@@ -310,8 +310,8 @@ package body Landin.Stages.Checking.Flow is
         (Falls_Through => True, Returns => False);
 
       --  A lexical cleanup stack contains syntax, not evaluated arguments.
-      --  Reaching a defer appends its call; an applicable block edge walks
-      --  the active entries in reverse and only then evaluates each call.
+      --  Reaching defer or undo appends its call; an applicable block edge
+      --  walks active entries in reverse and only then evaluates each call.
       --  Active is cleared before an entry runs so a return from one of its
       --  arguments unwinds the still-pending entries without repeating it.
       type Cleanup_Entry is record
@@ -2072,14 +2072,18 @@ package body Landin.Stages.Checking.Flow is
                      Flow_Expression
                        (Of_Tree, Item, Result, State, Step);
 
-                  when Syn.Defer_Statement =>
+                  when Syn.Defer_Statement | Syn.Undo_Statement =>
                      --  Registration reads no callee or argument.  The
                      --  syntactic call is checked against the DA state at
                      --  each edge on which it actually runs.
                      Cleanup_Stack.Append
                        (Cleanup_Entry'
-                          (Kind   => Cleanup.Deferred_Call,
-                           Call   => Syn.Deferred_Call (Of_Tree, Item),
+                          (Kind   =>
+                             (if Syn.Kind (Of_Tree, Item)
+                                   = Syn.Undo_Statement
+                              then Cleanup.Failure_Undo
+                              else Cleanup.Deferred_Call),
+                           Call   => Syn.Cleanup_Call (Of_Tree, Item),
                            Active => True));
 
                   when Syn.Fail_Statement =>

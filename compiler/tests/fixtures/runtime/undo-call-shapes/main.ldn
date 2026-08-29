@@ -1,0 +1,98 @@
+bad: atom
+problem: type = bad
+
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+mut stack_seen: i32 = 0
+mut aggregate_seen: i32 = 0
+mut returned_seen: i32 = 0
+mut pair_made: i32 = 0
+mut row_made: i32 = 0
+mut multiple_made: i32 = 0
+mut selected_seen: i32 = 0
+
+select_one: () -> none =
+    selected_seen = 1
+end select_one
+
+select_two: () -> none =
+    selected_seen = 2
+end select_two
+
+sum_eight: (a: i32, b: i32, c: i32, d: i32, e: i32, f: i32,
+            g: i32, h: i32) -> none =
+    stack_seen = a + b + c + d + e + f + g + h
+end sum_eight
+
+observe: (value: pair, row: [2]i32) -> none =
+    aggregate_seen = value.left + value.right + row[0] + row[1]
+end observe
+
+observe_pair: (value: pair) -> none =
+    returned_seen = value.left + value.right
+end observe_pair
+
+make_pair: (seed: i32) -> (result: pair) =
+    pair_made = seed
+    result.left = seed
+    result.right = seed + 1
+end make_pair
+
+make_row: (seed: i32) -> (result: [2]i32) =
+    row_made = seed
+    result = [seed, seed + 1]
+end make_row
+
+make_multiple: (seed: i32) -> (left: i32, right: i32) =
+    multiple_made = seed
+    left = seed
+    right = seed + 1
+end make_multiple
+
+failure: () -> none ! problem =
+    fail bad
+end failure
+
+exercise: () -> none ! ... =
+    mut last: i32 = 1
+    mut value: pair = pair(left: 1, right: 1)
+    mut row: [2]i32 = [1, 1]
+    sum := sum_eight
+    observer := observe
+    mut selected := select_one
+
+    undo selected()
+    undo sum(1, 1, 1, 1, 1, 1, 1, last)
+    undo observer(value, row)
+    undo observe_pair(make_pair(20))
+    undo make_row(30)
+    undo make_pair(40)
+    undo make_multiple(50)
+
+    last = 35
+    value.left = 19
+    value.right = 23
+    row[0] = 20
+    row[1] = 22
+    selected = select_two
+    try failure()
+end exercise
+
+public main: () -> (code: i32) =
+    exercise() else 0
+    if stack_seen == 42
+      and aggregate_seen == 84
+      and returned_seen == 41
+      and pair_made == 20
+      and row_made == 30
+      and multiple_made == 50
+      and selected_seen == 2
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
