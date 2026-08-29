@@ -1833,7 +1833,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Finite,
-                     Offset => 0, Count => 1, Value => 0)),
+                     Offset => 0, Count => 1, Value => 0, others => <>)),
             Landin.Types.Folded_Array'(1 => 2 ** 32));
          Finish (Unit, Datum, Site);
          Expect
@@ -1931,10 +1931,10 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Selected,
-                     Offset => 0, Count => 1, Value => 1)),
+                     Offset => 0, Count => 1, Value => 1, others => <>)),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Absent,
-                     Offset => 0, Count => 0, Value => 13)),
+                     Offset => 0, Count => 0, Value => 13, others => <>)),
             Landin.Types.Folded_Array'(1 .. 0 => 0));
          Finish (Unit, Datum, Site);
          Expect
@@ -1972,10 +1972,10 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Selected,
-                     Offset => 0, Count => 1, Value => 1)),
+                     Offset => 0, Count => 1, Value => 1, others => <>)),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Hybrid,
-                     Offset => 0, Count => 1, Value => 7)),
+                     Offset => 0, Count => 1, Value => 7, others => <>)),
             Landin.Types.Folded_Array'(1 => 5));
          Finish (Unit, Datum, Site);
          Expect
@@ -2009,7 +2009,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Selected,
-                     Offset => 0, Count => 0, Value => 2)),
+                     Offset => 0, Count => 0, Value => 2, others => <>)),
             Landin.Types.Folded_Array'(1 .. 0 => 0));
          Finish (Unit, Datum, Site);
          Expect
@@ -2065,7 +2065,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Finite,
-                     Offset => 0, Count => 1, Value => 0)),
+                     Offset => 0, Count => 1, Value => 0, others => <>)),
             Landin.Types.Folded_Array'(1 => 1));
          Finish (Unit, Datum, Site);
          Expect
@@ -2095,7 +2095,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Finite,
-                     Offset => 0, Count => 1, Value => 0)),
+                     Offset => 0, Count => 1, Value => 0, others => <>)),
             Landin.Types.Folded_Array'(1 => 300));
          Finish (Unit, Datum, Site);
          Expect
@@ -2120,7 +2120,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 1),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Finite,
-                     Offset => 0, Count => 1, Value => 0)),
+                     Offset => 0, Count => 1, Value => 0, others => <>)),
             Landin.Types.Folded_Array'(1 => 1));
          Finish (Unit, Datum, Site);
          Expect
@@ -2150,7 +2150,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Repeated,
-                     Offset => 0, Count => 0, Value => 0)),
+                     Offset => 0, Count => 0, Value => 0, others => <>)),
             Landin.Types.Folded_Array'(1 .. 0 => 0));
          Finish (Unit, Datum, Site);
          Expect
@@ -2180,7 +2180,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Hybrid,
-                     Offset => 0, Count => 2, Value => 1)),
+                     Offset => 0, Count => 2, Value => 1, others => <>)),
             Landin.Types.Folded_Array'(1, 2));
          Finish (Unit, Datum, Site);
          Expect
@@ -2210,7 +2210,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Repeated,
-                     Offset => 0, Count => 0, Value => 2 ** 32)),
+                     Offset => 0, Count => 0, Value => 2 ** 32, others => <>)),
             Landin.Types.Folded_Array'(1 .. 0 => 0));
          Finish (Unit, Datum, Site);
          Expect
@@ -2244,7 +2244,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Absent,
-                     Offset => 0, Count => 0, Value => 1)),
+                     Offset => 0, Count => 0, Value => 1, others => <>)),
             Landin.Types.Folded_Array'(1 .. 0 => 0));
          Finish (Unit, Datum, Site);
          Expect
@@ -2274,7 +2274,7 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Finite,
-                     Offset => 0, Count => 1, Value => 1)),
+                     Offset => 0, Count => 1, Value => 1, others => <>)),
             Landin.Types.Folded_Array'(1 => 7));
          Finish (Unit, Datum, Site);
          Expect
@@ -2304,13 +2304,63 @@ package body Landin.Tests.Verifier_Suite is
            (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
             IR.Aggregate_Field_Image_Array'
               (1 => (Form => IR.Repeated,
-                     Offset => 0, Count => 0, Value => 2)),
+                     Offset => 0, Count => 0, Value => 2, others => <>)),
             Landin.Types.Folded_Array'(1 .. 0 => 0));
          Finish (Unit, Datum, Site);
          Expect
            (Item, V.Check (Unit, Landin.Targets.Linux_X86_64),
             V.Aggregate_Field_Image_Value_Does_Not_Fit,
             "a repeated bool pattern must remain zero or one");
+      end;
+
+      --  D131: a static function field is a routine relocation, not a
+      --  folded integer.  Its target must carry the field's descriptor.
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
+         Expected, Other : IR.Signature_Id;
+         Target, Datum : IR.Item_Id;
+         Parameter : IR.Slot_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Expected := IR.Add_Signature
+           (Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.No_Value, others => <>));
+         Other := IR.Add_Signature
+           (Unit,
+            [(Kind => Landin.Types.I32, others => <>)],
+            (Kind => Landin.Types.No_Value, others => <>));
+         Target := IR.Add_Item
+           (Unit, IR.Routine, IR.No_Declaration,
+            Landin.Types.No_Value, Site);
+         IR.Set_Signature (Unit, Target, Other);
+         Parameter := IR.Add_Parameter
+           (Unit, Target, Landin.Types.I32, 1, Site);
+         pragma Unreferenced (Parameter);
+         Finish (Unit, Target, Site);
+
+         Datum := IR.Add_Item
+           (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site);
+         IR.Add_Field
+           (Unit, Datum,
+            (Kind => IR.Scalar_Field_Shape,
+             Element => Landin.Types.Usize,
+             Length => 1,
+             Signature => Expected,
+             others => <>));
+         IR.Set_Aggregate_Image
+           (Unit, Datum, Landin.Types.Folded_Array'(1 => 0),
+            IR.Aggregate_Field_Image_Array'
+              (1 => (Target => Target, others => <>)),
+            Landin.Types.Folded_Array'(1 .. 0 => 0));
+         Finish (Unit, Datum, Site);
+         Expect
+           (Item, V.Check (Unit),
+            V.Function_Value_Signature_Disagrees,
+            "a function-field relocation retains its signature");
       end;
    end Malformed_Aggregate_Images_Are_Rejected;
 

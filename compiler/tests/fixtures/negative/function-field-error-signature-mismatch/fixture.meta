@@ -1,0 +1,5 @@
+class: negative
+summary: a function-valued field includes the declared atom error set in its structural signature
+constructs: 0630, 0670, 0700, 0940, 1000, 1790, 1890
+program: program.ldn
+codes: L0301

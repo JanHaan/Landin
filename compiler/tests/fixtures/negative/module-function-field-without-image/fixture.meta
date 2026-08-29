@@ -1,0 +1,5 @@
+class: negative
+summary: module storage containing a function field needs an explicit static routine image
+constructs: 0060, 0670, 1000, 1460, 1790, 1940
+program: program.ldn
+codes: L0301

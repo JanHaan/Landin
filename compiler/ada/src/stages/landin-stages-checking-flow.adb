@@ -1543,7 +1543,12 @@ package body Landin.Stages.Checking.Flow is
                   Syn.Origin (Of_Tree, Node), State, Edges, Needs_Value);
 
             when Syn.Call =>
-               Edges := Fallthrough_Edge;
+               --  D131: a direct declaration needs no runtime read, but an
+               --  indirect callee is an ordinary function value and may be a
+               --  field or indexed field with its own DA and control edges.
+               Flow_Expression
+                 (Of_Tree, Syn.Callee_Of (Of_Tree, Node), Result,
+                  State, Edges, Whole_As);
                for Index in 1 .. Syn.Argument_Count (Of_Tree, Node) loop
                   exit when not Edges.Falls_Through;
                   declare

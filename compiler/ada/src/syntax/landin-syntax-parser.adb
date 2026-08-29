@@ -349,6 +349,9 @@ package body Landin.Syntax.Parser is
             function Parse_Call
               (Name_At : Landin.Source.Span;
                Named   : Landin.Source.Names.Name_Id) return Node_Id;
+            function Parse_Call
+              (Callee : Node_Id;
+               Starts : Landin.Source.Span) return Node_Id;
             function Previous return Landin.Source.Span;
 
             ------------------------------------------------------------
@@ -4100,9 +4103,21 @@ package body Landin.Syntax.Parser is
                         end;
                      end if;
 
-                     --  selection ::= identifier ("." identifier)*
-                     return Parse_Selectors
-                       (Add (Name_Reference, At_Item, Named => Named));
+                     --  A selected function field is still a runtime value.
+                     --  Parentheses after the complete selection call that
+                     --  value; construction remains the direct-name branch
+                     --  above because a field cannot name a type.
+                     declare
+                        Selected : constant Node_Id :=
+                          Parse_Selectors
+                            (Add
+                               (Name_Reference, At_Item, Named => Named));
+                     begin
+                        if Peek = Tok.Left_Paren then
+                           return Parse_Call (Selected, At_Item);
+                        end if;
+                        return Selected;
+                     end;
                   end;
                end if;
 
@@ -4249,18 +4264,15 @@ package body Landin.Syntax.Parser is
                end;
             end Parse_Struct_Literal;
 
-            --  call ::= identifier "(" arguments? ")"             [1820]
+            --  call ::= indexed "(" arguments? ")"                [1820]
             --
-            --  The callee is a Name_Reference and not a field, so every
-            --  use of a name is one kind of node and R1.50 resolves by
-            --  filtering one kind rather than walking seven positions.
+            --  A direct callee remains a Name_Reference.  D131 also lets the
+            --  complete selection be a function value, without resolving a
+            --  field name in lexical scope or selecting from the call itself.
             function Parse_Call
               (Name_At : Landin.Source.Span;
                Named   : Landin.Source.Names.Name_Id) return Node_Id
             is
-               Callee   : Node_Id := No_Node;
-               Recovery : Node_Id := No_Node;
-               Args     : Slot_Vectors.Vector;
             begin
                --  D72: a labelled argument run is [0700]'s construction,
                --  not a call.  The leading name is resolved as a type and
@@ -4289,17 +4301,27 @@ package body Landin.Syntax.Parser is
                   end;
                end if;
 
-               Callee := Add (Name_Reference, Name_At, Named => Named);
+               return Parse_Call
+                 (Add (Name_Reference, Name_At, Named => Named), Name_At);
+            end Parse_Call;
+
+            function Parse_Call
+              (Callee : Node_Id;
+               Starts : Landin.Source.Span) return Node_Id
+            is
+               Recovery : Node_Id := No_Node;
+               Args     : Slot_Vectors.Vector;
+            begin
                if not Expect
                         (Wanted  => Tok.Left_Paren,
                          Message => "a call opens its arguments with `(`",
-                         Note    => "[1820]: call ::= identifier `(`"
+                         Note    => "[1820]: call ::= callable `(`"
                                     & " arguments? `)`",
-                         Related => Name_At,
-                         Because => "the name called")
+                         Related => Starts,
+                         Because => "the value called")
                then
                   return Add
-                    (Error_Expression, Name_At, Children => [Callee]);
+                    (Error_Expression, Starts, Children => [Callee]);
                end if;
 
                --  The all-`of` spelling remains the same named refusal as a
@@ -4312,7 +4334,7 @@ package body Landin.Syntax.Parser is
                then
                   Refuse
                     (Item    => Syn.Struct_All_Of,
-                     Where   => Name_At,
+                     Where   => Starts,
                      Message => "an all-`of` construction is not enabled"
                                 & " yet");
                   Resync_Parentheses;
@@ -4322,8 +4344,8 @@ package body Landin.Syntax.Parser is
                   end loop;
 
                   return Add
-                    (Error_Expression, Name_At,
-                     Join (Name_At, After_Previous), [Callee]);
+                    (Error_Expression, Starts,
+                     Join (Starts, After_Previous), [Callee]);
                end if;
 
                if Peek /= Tok.Right_Paren then
@@ -4343,10 +4365,10 @@ package body Landin.Syntax.Parser is
                if not Expect
                         (Wanted  => Tok.Right_Paren,
                          Message => "a call's arguments are never closed",
-                         Note    => "[1820]: call ::= identifier `(`"
+                         Note    => "[1820]: call ::= callable `(`"
                                     & " arguments? `)`",
-                         Related => Name_At,
-                         Because => "the name called")
+                         Related => Starts,
+                         Because => "the value called")
                then
                   Resync (List_Anchor);
 
@@ -4429,8 +4451,8 @@ package body Landin.Syntax.Parser is
                begin
                   return Add
                     (Of_Kind  => Call,
-                     At_Token => Name_At,
-                     Extent   => Join (Name_At, After_Previous),
+                     At_Token => Starts,
+                     Extent   => Join (Starts, After_Previous),
                      Children => Head & To_List (Args),
                      Recovers => Recovery);
                end;

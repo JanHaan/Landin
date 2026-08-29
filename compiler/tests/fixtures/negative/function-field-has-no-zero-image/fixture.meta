@@ -1,0 +1,5 @@
+class: negative
+summary: a struct containing a function-valued field has no all-bits-zero image
+constructs: 0060, 0540, 0670, 1000, 1790, 1810
+program: program.ldn
+codes: L0301

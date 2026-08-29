@@ -378,19 +378,19 @@ package body Landin.IR.Verifier is
       begin
          case Place.Kind is
             when Module_Datum =>
-               if Result_Of (Of_Unit, Place.Datum)
-                    = Landin.Types.Fixed_Array
-               then
-                  return No_Signature;
-               end if;
-               Root := Nth_Field_Shape
-                 (Of_Unit, Place.Datum, Positive (Field));
+               Root :=
+                 (if Result_Of (Of_Unit, Place.Datum)
+                       = Landin.Types.Fixed_Array
+                  then Array_Element_Shape (Of_Unit, Place.Datum)
+                  else Nth_Field_Shape
+                    (Of_Unit, Place.Datum, Positive (Field)));
             when Frame_Slot =>
-               if Is_Array (Of_Unit, Item, Place.Slot) then
-                  return No_Signature;
-               end if;
-               Root := Nth_Slot_Field_Shape
-                 (Of_Unit, Item, Place.Slot, Positive (Field));
+               Root :=
+                 (if Is_Array (Of_Unit, Item, Place.Slot)
+                  then Slot_Array_Element_Shape
+                    (Of_Unit, Item, Place.Slot)
+                  else Nth_Slot_Field_Shape
+                    (Of_Unit, Item, Place.Slot, Positive (Field)));
          end case;
          return Shape_At (Of_Unit, Root, Nested).Signature;
       end Scalar_Field_Signature;
@@ -405,19 +405,19 @@ package body Landin.IR.Verifier is
       begin
          case Place.Kind is
             when Module_Datum =>
-               if Result_Of (Of_Unit, Place.Datum)
-                    = Landin.Types.Fixed_Array
-               then
-                  return No_Atom_Set;
-               end if;
-               Root := Nth_Field_Shape
-                 (Of_Unit, Place.Datum, Positive (Field));
+               Root :=
+                 (if Result_Of (Of_Unit, Place.Datum)
+                       = Landin.Types.Fixed_Array
+                  then Array_Element_Shape (Of_Unit, Place.Datum)
+                  else Nth_Field_Shape
+                    (Of_Unit, Place.Datum, Positive (Field)));
             when Frame_Slot =>
-               if Is_Array (Of_Unit, Item, Place.Slot) then
-                  return No_Atom_Set;
-               end if;
-               Root := Nth_Slot_Field_Shape
-                 (Of_Unit, Item, Place.Slot, Positive (Field));
+               Root :=
+                 (if Is_Array (Of_Unit, Item, Place.Slot)
+                  then Slot_Array_Element_Shape
+                    (Of_Unit, Item, Place.Slot)
+                  else Nth_Slot_Field_Shape
+                    (Of_Unit, Item, Place.Slot, Positive (Field)));
          end case;
          return Shape_At (Of_Unit, Root, Nested).Atoms;
       end Scalar_Field_Atoms;
@@ -1005,6 +1005,25 @@ package body Landin.IR.Verifier is
         return Landin.Types.Type_Kind
         is (if Part.Kind = Landin.Types.Function_Value
             then Landin.Types.Usize else Part.Kind);
+
+      function Function_Metadata_Agrees
+        (Left, Right : Signature_Id) return Boolean
+        is ((Left = No_Signature and then Right = No_Signature)
+            or else
+              (Holds (Of_Unit, Left)
+               and then Holds (Of_Unit, Right)
+               and then Signatures_Agree (Of_Unit, Left, Right)));
+
+      function Image_Target_Agrees
+        (Shape : Field_Shape; Target : Item_Id) return Boolean
+        is (Shape.Kind = Scalar_Field_Shape
+            and then Shape.Signature /= No_Signature
+            and then Holds (Of_Unit, Target)
+            and then Kind_Of (Of_Unit, Target) = Routine
+            and then Holds (Of_Unit, Signature_Of (Of_Unit, Target))
+            and then Signatures_Agree
+              (Of_Unit, Shape.Signature,
+               Signature_Of (Of_Unit, Target)));
 
       function Atom_Metadata_Agrees
         (Left, Right : Atom_Set_Id) return Boolean
@@ -1774,6 +1793,8 @@ package body Landin.IR.Verifier is
                     Aggregate_Image_Value_Does_Not_Fit;
                   Variant_Fault : constant Fault_Kind :=
                     Aggregate_Image_On_Variant_Field;
+                  Function_Fault : constant Fault_Kind :=
+                    Function_Value_Signature_Disagrees;
 
                   function Fits
                     (Held : Landin.Types.Folded;
@@ -1794,6 +1815,7 @@ package body Landin.IR.Verifier is
                      begin
                         if Shape.Kind = Variant_Field_Shape then
                            if Held /= 0
+                             or else Image.Target /= No_Item
                              or else Image.Offset /= Expected_Payloads
                            then
                               return
@@ -1851,7 +1873,25 @@ package body Landin.IR.Verifier is
                                           return
                                             (Kind => Scalar_Fault,
                                              Item => Id, others => <>);
+                                       elsif Leaf.Signature /= No_Signature
+                                         and then
+                                           (Payload_Image.Value /= 0
+                                            or else not Image_Target_Agrees
+                                              (Leaf,
+                                               Payload_Image.Target))
+                                       then
+                                          return
+                                            (Kind => Function_Fault,
+                                             Item => Id, others => <>);
+                                       elsif Leaf.Signature = No_Signature
+                                         and then
+                                           Payload_Image.Target /= No_Item
+                                       then
+                                          return
+                                            (Kind => Function_Fault,
+                                             Item => Id, others => <>);
                                        elsif Check_Image
+                                         and then Leaf.Signature = No_Signature
                                          and then not Fits
                                            (Payload_Image.Value,
                                             Leaf.Element)
@@ -1865,6 +1905,11 @@ package body Landin.IR.Verifier is
                                          (Kind => Field_Shape_Malformed,
                                           Item => Id, others => <>);
                                     else
+                                       if Payload_Image.Target /= No_Item then
+                                          return
+                                            (Kind => Function_Fault,
+                                             Item => Id, others => <>);
+                                       end if;
                                        case Payload_Image.Form is
                                           when Absent =>
                                              if Payload_Image.Count /= 0
@@ -1972,7 +2017,24 @@ package body Landin.IR.Verifier is
                                 (Kind =>
                                    Aggregate_Field_Image_On_Scalar_Field,
                                  Item => Id, others => <>);
-                           elsif Check_Image then
+                           elsif Shape.Signature /= No_Signature
+                             and then
+                               (Held /= 0
+                                or else not Image_Target_Agrees
+                                  (Shape, Image.Target))
+                           then
+                              return
+                                (Kind => Function_Fault,
+                                 Item => Id, others => <>);
+                           elsif Shape.Signature = No_Signature
+                             and then Image.Target /= No_Item
+                           then
+                              return
+                                (Kind => Function_Fault,
+                                 Item => Id, others => <>);
+                           elsif Check_Image
+                             and then Shape.Signature = No_Signature
+                           then
                               if not Fits (Held, Shape.Element) then
                                  return
                                    (Kind =>
@@ -1981,7 +2043,11 @@ package body Landin.IR.Verifier is
                               end if;
                            end if;
                         else
-                           if Image.Offset /= Expected
+                           if Image.Target /= No_Item then
+                              return
+                                (Kind => Function_Fault,
+                                 Item => Id, others => <>);
+                           elsif Image.Offset /= Expected
                              or else Expected > Elements
                              or else Image.Count > Elements - Expected
                            then
@@ -3288,31 +3354,46 @@ package body Landin.IR.Verifier is
                                        Value => V);
                                  end if;
 
-                                 if Op = Load_Element then
-                                    if Result_Of (Of_Unit, Id, V)
-                                       /= Shape_At
-                                            (Of_Unit, Element,
-                                             Element_Path_Of
-                                               (Of_Unit, Id, V)).Element
+                                 declare
+                                    Leaf : constant Field_Shape :=
+                                      Shape_At
+                                        (Of_Unit, Element,
+                                         Element_Path_Of (Of_Unit, Id, V));
+                                    Value : constant Value_Id :=
+                                      (if Op = Load_Element then V
+                                       else Nth_Operand
+                                         (Of_Unit, Id, V, 2));
+                                 begin
+                                    if Result_Of (Of_Unit, Id, Value)
+                                         /= Leaf.Element
                                     then
                                        return
-                                         (Kind => Result_Disagrees,
+                                         (Kind =>
+                                            (if Op = Load_Element
+                                             then Result_Disagrees
+                                             else Store_Datum_Disagrees),
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    elsif not Function_Metadata_Agrees
+                                      (Leaf.Signature,
+                                       Signature_Of
+                                         (Of_Unit, Id, Value))
+                                    then
+                                       return
+                                         (Kind =>
+                                            Function_Value_Signature_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    elsif not Atom_Metadata_Agrees
+                                      (Leaf.Atoms,
+                                       Atom_Set_Of (Of_Unit, Id, Value))
+                                    then
+                                       return
+                                         (Kind => Atom_Metadata_Disagrees,
                                           Item => Id, Block => Block,
                                           Value => V);
                                     end if;
-                                 elsif Result_Of
-                                         (Of_Unit, Id,
-                                          Nth_Operand (Of_Unit, Id, V, 2))
-                                       /= Shape_At
-                                            (Of_Unit, Element,
-                                             Element_Path_Of
-                                               (Of_Unit, Id, V)).Element
-                                 then
-                                    return
-                                      (Kind => Store_Datum_Disagrees,
-                                       Item => Id, Block => Block,
-                                       Value => V);
-                                 end if;
+                                 end;
                               end;
 
                            when Store_Field =>
@@ -3422,6 +3503,25 @@ package body Landin.IR.Verifier is
                                     return
                                       (Kind => Variant_Payload_Value_Disagrees,
                                        Item => Id, Block => Block, Value => V);
+                                 elsif not Function_Metadata_Agrees
+                                   (Leaf.Signature,
+                                    Signature_Of
+                                      (Of_Unit, Id,
+                                       Nth_Operand (Of_Unit, Id, V, 1)))
+                                 then
+                                    return
+                                      (Kind =>
+                                         Function_Value_Signature_Disagrees,
+                                       Item => Id, Block => Block, Value => V);
+                                 elsif not Atom_Metadata_Is_Subset
+                                   (Atom_Set_Of
+                                      (Of_Unit, Id,
+                                       Nth_Operand (Of_Unit, Id, V, 1)),
+                                    Leaf.Atoms)
+                                 then
+                                    return
+                                      (Kind => Atom_Metadata_Disagrees,
+                                       Item => Id, Block => Block, Value => V);
                                  end if;
                               end;
 
@@ -3452,6 +3552,21 @@ package body Landin.IR.Verifier is
                                     return
                                       (Kind =>
                                          Variant_Payload_Result_Disagrees,
+                                       Item => Id, Block => Block, Value => V);
+                                 elsif not Function_Metadata_Agrees
+                                   (Leaf.Signature,
+                                    Signature_Of (Of_Unit, Id, V))
+                                 then
+                                    return
+                                      (Kind =>
+                                         Function_Value_Signature_Disagrees,
+                                       Item => Id, Block => Block, Value => V);
+                                 elsif not Atom_Metadata_Agrees
+                                   (Leaf.Atoms,
+                                    Atom_Set_Of (Of_Unit, Id, V))
+                                 then
+                                    return
+                                      (Kind => Atom_Metadata_Disagrees,
                                        Item => Id, Block => Block, Value => V);
                                  end if;
                               end;

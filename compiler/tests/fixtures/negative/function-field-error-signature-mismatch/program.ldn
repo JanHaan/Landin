@@ -1,0 +1,10 @@
+problem: atom
+handler: type = () -> none ! problem
+box: type = struct
+    callback: handler
+end box
+
+infallible: () -> none =
+end infallible
+
+state: box = (callback: infallible)

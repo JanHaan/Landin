@@ -1,0 +1,9 @@
+handler: type = () -> none
+box: type = struct
+    callback: handler
+    count: i32
+end box
+
+run: () -> none =
+    local: box = (count: 1, of zeroed)
+end run

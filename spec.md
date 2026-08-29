@@ -374,7 +374,9 @@ what 'a.b' named.
 An index [0570] binds the same way and for the same reason, and it
 takes what a selection named: 'a[i]' and 'a.b[i]' are both written
 and neither derives from a call, because nothing selects from one
-[1820] and nothing indexes one either.
+[1820] and nothing indexes one either. A call may consume that complete
+selection as its callee, which is how a function-valued field is called;
+the call itself still cannot be selected or indexed.
 An ordinary-struct literal is [0710]'s nonempty run of labelled field values,
 optionally followed by [0720]'s contextual fill. D64--D71 state the contexts
 that admit it. D72's construction prefixes the same run with the ordinary
@@ -407,7 +409,7 @@ construction ::= identifier "(" field_value ("," field_value)*
                  ("," "of" expression)? ")"
 indexed     ::= selection (("[" expression "]") | ("." identifier))*
 selection   ::= identifier ("." identifier)*
-call        ::= identifier "(" arguments? ")" recovery?
+call        ::= indexed "(" arguments? ")" recovery?
 recovery    ::= "else" expression
               | "else" "(" identifier ")" block "end"
 measurement ::= ("sizeof" | "alignof") type | "lenof" identifier
@@ -615,8 +617,9 @@ not places. A function declaration is not a place. A local or module binding hol
 function value is an ordinary place: an immutable one may be called but not
 replaced, and a mutable one may be replaced only by a value with the same
 complete signature. A named function-valued return is a writable place; an
-unmarked function-valued parameter is not. Function-valued struct fields remain
-refused by name [1830].
+unmarked function-valued parameter is not. A function-valued struct field is an
+ordinary subobject place: the root binding decides mutability, and replacement
+requires that field's complete recursive signature.
 The value's type is the place's type [0310], and the report
 names the place as well as the value, because which of the
 two is wrong is the reader's to decide.
@@ -632,7 +635,9 @@ be assigned before the function returns. In a body those are
 one question and this is its shape: at every read of a name,
 at every `return`, and where a body ends, each applicable name has to
 have been assigned by every path that arrives there. For multiple results the
-question is asked independently of every named return.
+question is asked independently of every named return. Aggregate fields retain
+independent facts, including a function field read as the callee of a call; the
+callee expression is checked before any argument expression.
 No condition is believed. A name assigned in one arm of an
 'if' and not in another is not assigned after it, and 'if
 true then r = 1 end if' leaves r unassigned, because a
@@ -676,9 +681,11 @@ with one named return has that return's type. A call with two or more has
 [0990]'s anonymous structural aggregate; its fields are selected and
 destructured by the return names. The orthogonal declared error outcome is
 unchanged at every result count: a failing call is still tried or recovered.
-A callee is a function. It may be a declared function or a local, module,
-parameter or named-return binding whose value has a function type; every stored
-form calls the runtime code address. A function's own name and an anonymous
+A callee is a function. It may be a declared function; a local, module,
+parameter or named-return binding; or a selected ordinary or variant-payload
+struct field whose value has a function type. The complete callee expression is
+evaluated before the arguments, and every stored form calls the runtime code
+address. A function's own name and an anonymous
 function away from a call are values of their function types [1000] [1010].
 All positions retain one complete structural signature, recursively when a
 parameter or result is itself a function. Labels are not part of function
@@ -744,7 +751,12 @@ A declared or anonymous function is a compile-time-known code address. A module
 function binding may name either directly, or another module function binding
 whose static chain reaches one; a chain that returns to itself is refused like
 any other module-value cycle. Function code addresses have no all-zero value,
-so a function-valued module binding must write an initializer.
+so a function-valued module binding must write an initializer. A function field
+in a static struct or selected variant image is a target-neutral relocation to
+such a declared or anonymous routine, not an integer fold. Copying a complete
+module struct image copies that relocation while retaining distinct storage.
+A module aggregate whose active all-zero shape contains a function field must
+therefore write an explicit static image too.
 
 An atom-valued module binding must name an initializer. There is no zero atom,
 and the zero carrier pattern reserved by [1980] is not a source value.
@@ -6703,9 +6715,9 @@ in source then syntax post-order. Its code address names that deterministic
 item; the x86-64 backend gives an undeclared item a deterministic assembler-local
 symbol.
 
-Declared error sets remain absent: every descriptor in this slice has only the
-existing infallible signature shape. Function-valued struct fields remain
-outside the enabled storage family.
+Declared error sets remain absent from this increment and arrive at D130.
+Function-valued struct fields are not enabled by this decision alone; D131
+composes this carrier with the aggregate storage family.
 
 **Why one recursive descriptor and one carrier:** flattening a callback's own
 signature into its caller would make source parameter count depend on nesting
@@ -7090,3 +7102,59 @@ fixtures, `runtime/atom-values-cross-the-abi`,
 `runtime/declared-errors-direct-and-inferred`,
 `runtime/declared-errors-indirect-abi`, the malformed-error verifier case, and
 the generated lexical, construct and IR records.
+
+### D131 — A function-valued field is one signature-carrying address leaf
+
+**The tour said** that a function is an ordinary code-address value [0870]
+[1000], that a struct field may have any ordinary type [0670], and illustrated
+a callback as a function field plus explicit state [1000]. D117 and D123 kept
+function-valued struct fields as the remaining R2.30 storage form while the
+aggregate path and image carriers were still being established.
+
+**Chosen:** an ordinary struct field or variant payload field may have a
+concrete function type. Its runtime representation is D123's one `usize` code
+address, while its complete recursive descriptor — including declared errors —
+remains target-neutral type evidence on the checked and IR field shape.
+Construction, individual assignment, whole-struct copy, aggregate parameters
+and results, nested ordinary children, variant payload aliases, and arrays
+whose element is such a struct all reuse their existing storage and path
+operations. This does not separately enable a fixed array whose element is a
+function value.
+
+A selection of that field is an ordinary function value and a call callee.
+The complete callee selection, including a computed array index, is evaluated
+and checked for definite assignment before any argument. Every call through a
+field is indirect at runtime even when its current image names a declared
+routine; direct calls to declarations keep their existing instruction.
+Replacing a mutable field requires structural signature agreement, and the
+root binding still decides whether the field is writable.
+
+A function address has no all-zero value [0540]. A struct, active variant case,
+or nonempty array of structs containing one therefore has a zero image only
+when every field selected by that zero image does. An omitted module image,
+whole `zeroed`, or trailing `of zeroed` cannot invent a null callback. A static
+module struct or selected payload may instead carry a declared function, a
+no-capture anonymous function, or a static function-binding chain. Neutral IR
+records one routine relocation on that scalar field; whole module-image copies
+copy the relocation into distinct storage. The verifier proves the relocation
+target and every field/element/payload load and store against the field's
+recursive descriptor before the Linux x86-64 backend emits a symbol or an
+indirect call.
+
+**Why retain a descriptor beside one machine word:** flattening the callback's
+own parameters into its containing struct would make layout depend on what the
+address can be called with rather than what the value occupies. Erasing the
+descriptor would instead let a whole aggregate copy or an indexed field load
+turn a deterministic type mismatch into an indirect ABI mismatch. The same
+carrier-plus-descriptor rule at every storage depth is D123 composed with
+D118's path rather than a field-specific calling convention.
+
+**Pinned by** `positive/function-valued-struct-fields`;
+`negative/function-field-assignment-signature-mismatch`,
+`function-field-cannot-be-filled-with-zeroed`,
+`function-field-construction-signature-mismatch`,
+`function-field-error-signature-mismatch`, `function-field-has-no-zero-image`,
+`function-field-unassigned`, `function-variant-payload-signature-mismatch`, and
+`module-function-field-without-image`; the malformed aggregate-image verifier
+case; the generated construct, lexical and IR records; and
+`runtime/function-valued-struct-fields` on Linux x86-64.

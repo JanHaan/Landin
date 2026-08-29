@@ -1,0 +1,9 @@
+handler: type = () -> none
+box: type = struct
+    callback: handler
+end box
+
+clear: () -> none =
+    mut local: box
+    local = zeroed
+end clear

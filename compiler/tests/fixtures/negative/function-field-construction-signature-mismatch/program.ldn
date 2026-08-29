@@ -1,0 +1,10 @@
+handler: type = (x: i32) -> (r: i32)
+box: type = struct
+    callback: handler
+end box
+
+wrong: (x: bool) -> (r: i32) =
+    r = 0
+end wrong
+
+state: box = (callback: wrong)

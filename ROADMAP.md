@@ -2051,8 +2051,6 @@ scope directly inside the module, capture no enclosing routine declaration and
 lower after module items in deterministic source/post-order to backend-local
 routine symbols.
 
-Function-valued struct fields remain in this item.
-
 The thirty-ninth increment replaces the flow checker's Boolean exit summary
 with explicit fallthrough and return-compatible edge facts. Only continuing
 states participate in definite-assignment joins; guarded and unconditional
@@ -2135,6 +2133,19 @@ register/stack calls, direct/indirect calls, recovery and propagation. Failure
 edges run every active deferred cleanup under the existing exit selector;
 `undo` remains the next failure-only cleanup spelling.
 
+The forty-seventh increment completes the function-value storage form D117 and
+D123 retained: an ordinary or variant-payload struct field carries one `usize`
+code address plus its complete recursive signature descriptor. Construction,
+field replacement, whole copy, aggregate arguments/results, nested children,
+payload aliases and arrays of such structs all reuse the existing neutral paths
+and internal ABI. A selected field is evaluated before its call arguments and
+has its own definite-assignment fact. Static module struct and selected-payload
+images carry verified routine relocations through named, anonymous or static
+binding chains; no omitted, whole-zero or trailing-zero image may invent a null
+function address. Linux runtime evidence crosses direct declarations and
+indirect field calls, module mutation, computed indexes, failing signatures and
+caller-owned aggregate storage.
+
 Further aggregate arguments and result contexts remain here too; R4.40 later
 supplies complete C ABI classification rather than owning this internal
 convention.
@@ -2159,7 +2170,8 @@ does not.
 Exit evidence: ABI tests cover ordinary and failing calls, aggregate values,
 inferred and explicitly typed indirect calls, function-valued parameters and
 results, multiple named structural results and by-name destructuring, static
-and mutable module addresses, no-capture anonymous routines,
+and mutable module addresses, no-capture anonymous routines, function-valued
+ordinary and variant-payload fields through nested and indexed storage,
 expression-valued non-loop controls, lexical reverse-order deferred cleanup,
 late direct and indirect cleanup arguments, more arguments than the
 register-only stopgap accepted and every enabled control-flow exit path.

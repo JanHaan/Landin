@@ -878,8 +878,8 @@ package body Landin.Stages.Lowering is
       function Neutral_Body
         (Wrote : Res.Declaration_Id) return IR.Field_Shape;
 
-      --  One field of D128's anonymous result aggregate.  Function values
-      --  remain one `usize`-shaped field while retaining their signature.
+      --  One field of D128's anonymous result aggregate.  D131 gives a
+      --  nominal aggregate the same one `usize` field plus its signature.
       function Neutral_Result_Part
         (Part : Landin.Checking.Signature_Part) return IR.Field_Shape;
 
@@ -903,10 +903,14 @@ package body Landin.Stages.Lowering is
          case Source.Kind is
             when Landin.Checking.Scalar_Field =>
                return
-                 (Kind    => IR.Scalar_Field_Shape,
-                  Element => Source.Element,
-                  Length  => 1,
-                  others  => <>);
+                 (Kind      => IR.Scalar_Field_Shape,
+                  Element   => Source.Element,
+                  Length    => 1,
+                  Signature =>
+                    (if Source.Signature /= Landin.Checking.No_Signature
+                     then Signature_For (Source.Signature)
+                     else IR.No_Signature),
+                  others    => <>);
 
             when Landin.Checking.Fixed_Array_Field =>
                --  D121: an ordinary-struct element is one run of exactly
@@ -1731,14 +1735,26 @@ package body Landin.Stages.Lowering is
          Site : constant Landin.Provenance.Origin :=
            Site_Of (Of_Tree, Node);
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
+         Named : constant Boolean :=
+           Syn.Kind (Of_Tree, Callee) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
+             = Res.Bound;
          Means : constant Res.Declaration_Id :=
-           Res.Bound_To (Meanings.all, Of_Tree, Callee);
+           (if Named
+            then Res.Bound_To (Meanings.all, Of_Tree, Callee)
+            else Res.No_Declaration);
+         Direct : constant Boolean :=
+           Named
+           and then Res.Sort_Of (Meanings.all, Means)
+             = Res.Module_Function;
          Source_Signature : constant Landin.Checking.Signature_Id :=
-           Landin.Checking.Signature_Of (Types.all, Means);
+           (if Named
+            then Landin.Checking.Signature_Of (Types.all, Means)
+            else Landin.Checking.Signature_Of
+              (Types.all, Of_Tree, Callee));
          Signature : constant IR.Signature_Id :=
            Signature_For (Source_Signature);
-         Indirect : constant Boolean :=
-           Res.Sort_Of (Meanings.all, Means) /= Res.Module_Function;
+         Indirect : constant Boolean := not Direct;
          Target : constant IR.Item_Id :=
            (if Indirect then IR.No_Item
             else IR.Item_For (Unit.all, Means));
@@ -2255,13 +2271,26 @@ package body Landin.Stages.Lowering is
                                                    when Landin.Checking
                                                      .Scalar_Field =>
                                                       declare
+                                                         Shape : constant
+                                                           Landin.Checking
+                                                             .Field_Shape :=
+                                                           Landin.Checking
+                                                             .Field_Shape_Of
+                                                               (Types.all,
+                                                                Child,
+                                                                Child_Field);
                                                          Held : constant
                                                            Ty.Scalar_Name :=
-                                                             Landin.Checking
-                                                               .Field_Type
-                                                                 (Types.all,
-                                                                  Child,
-                                                                  Child_Field);
+                                                             Shape.Element;
+                                                         Signature : constant
+                                                           IR.Signature_Id :=
+                                                           (if
+                                                              Shape.Signature
+                                                                /= 0
+                                                            then Signature_For
+                                                              (Shape.Signature)
+                                                            else
+                                                              IR.No_Signature);
                                                          Part : constant
                                                            IR.Part_Position :=
                                                              IR.Part_Position
@@ -2301,7 +2330,9 @@ package body Landin.Stages.Lowering is
                                                                     Held,
                                                                     Origin,
                                                              Nested =>
-                                                               Below (Nested));
+                                                               Below (Nested),
+                                                             Signature =>
+                                                               Signature);
                                                             when IR
                                                               .Frame_Slot =>
                                                                Taken := IR
@@ -2314,7 +2345,9 @@ package body Landin.Stages.Lowering is
                                                                     Held,
                                                                     Origin,
                                                              Nested =>
-                                                               Below (Nested));
+                                                               Below (Nested),
+                                                             Signature =>
+                                                               Signature);
                                                          end case;
                                                          IR
                                                        .Emit_Store_Slot_Field
@@ -2903,12 +2936,24 @@ package body Landin.Stages.Lowering is
                              (Types.all, Declared, Field)
                            is
                               when Landin.Checking.Scalar_Field =>
-                                 Fields (Field) :=
-                                   (Kind    => IR.Scalar_Field_Shape,
-                                    Element => Landin.Checking.Field_Type
-                                      (Types.all, Declared, Field),
-                                    Length  => 1,
-                                    others  => <>);
+                                 declare
+                                    Shape : constant
+                                      Landin.Checking.Field_Shape :=
+                                        Landin.Checking.Field_Shape_Of
+                                          (Types.all, Declared, Field);
+                                 begin
+                                    Fields (Field) :=
+                                      (Kind      => IR.Scalar_Field_Shape,
+                                       Element   => Shape.Element,
+                                       Length    => 1,
+                                       Signature =>
+                                         (if Shape.Signature /=
+                                               Landin.Checking.No_Signature
+                                          then Signature_For
+                                            (Shape.Signature)
+                                          else IR.No_Signature),
+                                       others    => <>);
+                                 end;
 
                               when Landin.Checking.Fixed_Array_Field =>
                                  Fields (Field) :=
@@ -3314,14 +3359,16 @@ package body Landin.Stages.Lowering is
                                  Scalar_At (Of_Tree, Node), Site,
                                  Field  => Base,
                                  Nested => Child_Steps,
-                                 Below  => Below);
+                                 Below  => Below,
+                                 Signature => Value_Signature);
                            when IR.Frame_Slot =>
                               return IR.Emit_Load_Slot_Element
                                 (Unit.all, Filling, Place.Slot, Index,
                                  Scalar_At (Of_Tree, Node), Site,
                                  Field  => Base,
                                  Nested => Child_Steps,
-                                 Below  => Below);
+                                 Below  => Below,
+                                 Signature => Value_Signature);
                         end case;
                      end;
                   end if;
@@ -3374,7 +3421,8 @@ package body Landin.Stages.Lowering is
                              (Unit.all, Filling, Alias.Source,
                               Positive (Alias.Field), Positive (Alias.Which),
                               Positive (Alias.Payload_Field), Carrier, Site,
-                              Nested => Alias_Steps (Of_Tree, Alias));
+                              Nested => Alias_Steps (Of_Tree, Alias),
+                              Signature => Signature);
                         end if;
                         case Alias.Source.Kind is
                            when IR.Module_Datum =>
@@ -4052,9 +4100,15 @@ package body Landin.Stages.Lowering is
                   is
                      when Landin.Checking.Scalar_Field =>
                         declare
-                           Held : constant Ty.Scalar_Name :=
-                             Landin.Checking.Field_Type
+                           Shape : constant Landin.Checking.Field_Shape :=
+                             Landin.Checking.Field_Shape_Of
                                (Types.all, Wrote, Field);
+                           Held : constant Ty.Scalar_Name := Shape.Element;
+                           Signature : constant IR.Signature_Id :=
+                             (if Shape.Signature /=
+                                   Landin.Checking.No_Signature
+                              then Signature_For (Shape.Signature)
+                              else IR.No_Signature);
                            Taken : IR.Value_Id;
                         begin
                            --  D127: a field operation names one part and
@@ -4070,7 +4124,8 @@ package body Landin.Stages.Lowering is
                                       Held, Site,
                                       Nested =>
                                         Leaf_Steps
-                                          (From_Field, From_Steps));
+                                          (From_Field, From_Steps),
+                                      Signature => Signature);
                               when IR.Frame_Slot =>
                                  Taken :=
                                    IR.Emit_Load_Slot_Field
@@ -4079,7 +4134,8 @@ package body Landin.Stages.Lowering is
                                       Held, Site,
                                       Nested =>
                                         Leaf_Steps
-                                          (From_Field, From_Steps));
+                                          (From_Field, From_Steps),
+                                      Signature => Signature);
                            end case;
 
                            case Destination.Kind is
@@ -6782,6 +6838,41 @@ package body Landin.Stages.Lowering is
             Value : out Ty.Folded;
             Known : out Boolean);
 
+         function Static_Field_Target
+           (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return IR.Item_Id;
+
+         function Static_Field_Target
+           (Of_Tree : Syn.Tree; Value : Syn.Node_Id) return IR.Item_Id
+         is
+         begin
+            if Syn.Kind (Of_Tree, Value) = Syn.Anonymous_Function then
+               return Anonymous_Item (Of_Tree, Value);
+            elsif Syn.Kind (Of_Tree, Value) = Syn.Name_Reference
+              and then Res.Verdict_Of (Meanings.all, Of_Tree, Value)
+                = Res.Bound
+            then
+               declare
+                  Source_Id : constant Res.Declaration_Id :=
+                    Res.Bound_To (Meanings.all, Of_Tree, Value);
+               begin
+                  if Res.Sort_Of (Meanings.all, Source_Id)
+                       = Res.Module_Function
+                  then
+                     return IR.Item_For (Unit.all, Source_Id);
+                  elsif Res.Sort_Of (Meanings.all, Source_Id)
+                          = Res.Module_Binding
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Source_Id) = Ty.Function_Value
+                  then
+                     return Static_Function_Target (Source_Id);
+                  end if;
+               end;
+            end if;
+
+            raise Landin.Compiler_Defect with
+              "a static function field has no routine target";
+         end Static_Field_Target;
+
          --  A per-datum guard against the fold following a [1940] cycle
          --  the checker's own fold guard did not report.  Deliberately a
          --  distinct set from Where above, because Fold_Scalar_Datum can
@@ -7754,20 +7845,25 @@ package body Landin.Stages.Lowering is
                           IR.Nth_Field_Shape (Unit.all, Item, Which);
                      begin
                         if Shape.Kind = IR.Scalar_Field_Shape then
-                           declare
-                              Held  : Ty.Folded;
-                              Known : Boolean;
-                           begin
-                              Fold_Constant
-                                (Of_Tree, Value, Held, Known);
-                              if not Known then
-                                 raise Landin.Compiler_Defect with
-                                   "a module struct literal field the"
-                                   & " checker accepted did not fold at"
-                                   & " lowering";
-                              end if;
-                              Values (Which) := Held;
-                           end;
+                           if Shape.Signature /= IR.No_Signature then
+                              Images (Which).Target :=
+                                Static_Field_Target (Of_Tree, Value);
+                           else
+                              declare
+                                 Held  : Ty.Folded;
+                                 Known : Boolean;
+                              begin
+                                 Fold_Constant
+                                   (Of_Tree, Value, Held, Known);
+                                 if not Known then
+                                    raise Landin.Compiler_Defect with
+                                      "a module struct literal field the"
+                                      & " checker accepted did not fold at"
+                                      & " lowering";
+                                 end if;
+                                 Values (Which) := Held;
+                              end;
+                           end if;
                         elsif Shape.Kind = IR.Variant_Field_Shape then
                            declare
                               Selected : constant Positive :=
@@ -7785,7 +7881,8 @@ package body Landin.Stages.Lowering is
                                 (Form   => IR.Selected,
                                  Offset => Payload_Cursor,
                                  Count  => Payload_Count,
-                                 Value  => Ty.Folded (Selected));
+                                 Value  => Ty.Folded (Selected),
+                                 others => <>);
 
                               if Syn.Kind (Of_Tree, Value)
                                    = Syn.Struct_Literal
@@ -7824,22 +7921,36 @@ package body Landin.Stages.Lowering is
                                         /= Syn.No_Node
                                     then
                                        declare
-                                          Held : Ty.Folded;
-                                          Known : Boolean;
+                                          Given : constant Syn.Node_Id :=
+                                            Syn.Value_Of
+                                              (Of_Tree,
+                                               Payload_Nodes (Payload));
                                        begin
-                                          Fold_Constant
-                                            (Of_Tree,
-                                             Syn.Value_Of
-                                               (Of_Tree,
-                                                Payload_Nodes (Payload)),
-                                             Held, Known);
-                                          if not Known then
-                                             raise Landin.Compiler_Defect
-                                               with "a module variant"
-                                               & " payload the checker"
-                                               & " accepted did not fold";
+                                          if Leaf.Signature /=
+                                               IR.No_Signature
+                                          then
+                                             Image.Target :=
+                                               Static_Field_Target
+                                                 (Of_Tree, Given);
+                                          else
+                                             declare
+                                                Held : Ty.Folded;
+                                                Known : Boolean;
+                                             begin
+                                                Fold_Constant
+                                                  (Of_Tree, Given,
+                                                   Held, Known);
+                                                if not Known then
+                                                   raise
+                                                     Landin.Compiler_Defect
+                                                     with "a module variant"
+                                                     & " payload the checker"
+                                                     & " accepted did not"
+                                                     & " fold";
+                                                end if;
+                                                Image.Value := Held;
+                                             end;
                                           end if;
-                                          Image.Value := Held;
                                        end;
                                     elsif Leaf.Kind = IR.Array_Field_Shape
                                       and then Payload_Nodes (Payload)
