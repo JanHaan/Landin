@@ -1923,10 +1923,14 @@ The nineteenth increment constructs an ordinary child inside an outer literal
 argument. Bare or matching nominal literals, zero images and direct storage
 copies retain parent/child identities in the shaped caller temporary.
 
-The twentieth increment adds aggregate results. One hidden internal parameter
+The twentieth increment adds struct results. One hidden internal parameter
 names caller-owned shaped storage; the callee keeps an independent named-result
 slot and copies its complete target-derived extent on leave. Calls therefore
 carry no aggregate IR value and do not expose target ABI classification.
+
+The twenty-first increment applies the same caller-owned convention to fixed
+arrays. Their result slot retains only scalar element type and length, and
+whole-array definite assignment reaches every successful leave.
 
 Further aggregate arguments and result contexts remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.

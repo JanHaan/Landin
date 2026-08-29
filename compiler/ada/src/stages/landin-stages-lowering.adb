@@ -660,8 +660,9 @@ package body Landin.Stages.Lowering is
          Their_Node : constant Syn.Node_Id :=
            Res.Node_Of (Meanings.all, Means);
          Count : constant Natural := Syn.Argument_Count (Of_Tree, Node);
-         Returns_Aggregate : constant Boolean :=
-           Type_At (Of_Tree, Node) = Ty.Aggregate;
+         Returns_Stored : constant Boolean :=
+           Type_At (Of_Tree, Node)
+             in Ty.Aggregate | Ty.Fixed_Array;
          Given : array (1 .. Positive'Max (1, Count)) of IR.Value_Id :=
            [others => IR.No_Value];
          Saved : array (1 .. Positive'Max (1, Count)) of IR.Slot_Id :=
@@ -1395,7 +1396,7 @@ package body Landin.Stages.Lowering is
             end if;
          end loop;
 
-         if Returns_Aggregate then
+         if Returns_Stored then
             pragma Assert (Destination /= IR.No_Slot);
             Hidden := IR.Emit_Storage_Address
               (Unit.all, Filling,
@@ -1405,11 +1406,11 @@ package body Landin.Stages.Lowering is
          Made :=
            IR.Emit_Call
              (Unit.all, Filling, Target,
-              (if Returns_Aggregate then Ty.No_Value
+              (if Returns_Stored then Ty.No_Value
                else Type_At (Of_Tree, Node)),
               Site);
 
-         if Returns_Aggregate then
+         if Returns_Stored then
             IR.Add_Argument (Unit.all, Filling, Made, Hidden);
          end if;
 
@@ -3172,8 +3173,17 @@ package body Landin.Stages.Lowering is
                         elsif Landin.Checking.Type_Of (Types.all, Id)
                                 = Ty.Fixed_Array
                         then
-                           if Syn.Kind (Of_Tree, Value)
-                                = Syn.Array_Literal
+                           if Syn.Kind (Of_Tree, Value) = Syn.Call then
+                              declare
+                                 Ignored : constant IR.Value_Id :=
+                                   Lower_Call
+                                     (Of_Tree, Value, Scope,
+                                      Destination => Where);
+                              begin
+                                 pragma Unreferenced (Ignored);
+                              end;
+                           elsif Syn.Kind (Of_Tree, Value)
+                                   = Syn.Array_Literal
                            then
                               --  D23/D25: a literal has exactly the finite
                               --  element run the source wrote.  Lower and
@@ -3698,7 +3708,7 @@ package body Landin.Stages.Lowering is
          --  D106's first internal parameter is an unspellable pointer to
          --  caller-owned result storage.  Source parameters follow it through
          --  the same register/stack run.
-         if Gives_Type = Ty.Aggregate then
+         if Gives_Type in Ty.Aggregate | Ty.Fixed_Array then
             declare
                Ignored : constant IR.Slot_Id :=
                  IR.Add_Parameter

@@ -1723,7 +1723,9 @@ package body Landin.Backend.X86_64 is
                               & Value_Cell (Operand (1)) & ", "
                               & Accumulator (Held));
                      end;
-                  elsif Result = Landin.Types.Aggregate then
+                  elsif Result in Landin.Types.Aggregate
+                                   | Landin.Types.Fixed_Array
+                  then
                      declare
                         Return_Address : constant Landin.IR.Slot_Id :=
                           Landin.IR.Nth_Parameter (Of_Unit, Item, 1);

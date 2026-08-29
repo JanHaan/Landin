@@ -421,7 +421,8 @@ package Landin.IR is
                             or else (Kind = Routine
                                      and then Result
                                               in Landin.Types.No_Value
-                                                 | Landin.Types.Aggregate)
+                                                 | Landin.Types.Aggregate
+                                                 | Landin.Types.Fixed_Array)
                             or else (Kind = Datum
                                      and then Result
                                               in Landin.Types.Aggregate
@@ -1163,6 +1164,8 @@ package Landin.IR is
                   and then
                     (if Result_Of (Into, Item) = Landin.Types.Aggregate
                      then Is_Aggregate (Into, Item, Slot)
+                     elsif Result_Of (Into, Item) = Landin.Types.Fixed_Array
+                     then Is_Array (Into, Item, Slot)
                      else Type_Of (Into, Item, Slot)
                             = Result_Of (Into, Item)),
           Post => Result_Slot (Into, Item) = Slot;
