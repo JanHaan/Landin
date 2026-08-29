@@ -1,0 +1,6 @@
+class: runtime
+summary: a variant part inside an array element is selected, written, copied whole and matched at a known position, and the neighbouring element keeps its own tag
+constructs: 0520, 0670, 0680, 0700, 0710, 0750, 1810, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

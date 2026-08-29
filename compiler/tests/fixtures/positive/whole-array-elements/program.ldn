@@ -1,0 +1,56 @@
+point: type = struct
+    x: i32
+    y: i32
+end point
+
+inner: type = struct
+    lo: i32
+    hi: i32
+end inner
+
+nest: type = struct
+    head: i32
+    part: inner
+    span: [2]i32
+end nest
+
+grid: type = struct
+    cells: [2]point
+    tail: i32
+end grid
+
+origin := point(x: 1, y: 2)
+mut room: [3]point = zeroed
+mut rows: [2]nest = zeroed
+mut state: grid
+
+made: () -> (p: point) =
+    p = origin
+end made
+
+taken: (p: point) -> (r: i32) =
+    r = p.x
+end taken
+
+places: () -> none =
+    room[0] = origin
+    room[1] = point(x: 3, y: 4)
+    room[2] = room[0]
+    state = zeroed
+    state.cells[1] = origin
+    rows[1] = zeroed
+    rows[1].head = 5
+    rows[1].part.lo = 6
+    rows[0].part = rows[1].part
+end places
+
+values: () -> (r: i32) =
+    piece: point = room[1]
+    mut local: [2]point = zeroed
+    mut spare: nest
+    local[0] = piece
+    local[1] = made()
+    spare = rows[1]
+    held: point = local[0]
+    r = held.x + local[1].y + spare.head + taken(local[0])
+end values

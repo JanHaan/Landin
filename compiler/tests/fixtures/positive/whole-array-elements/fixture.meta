@@ -1,0 +1,5 @@
+class: positive
+summary: D127 makes a whole array element at a known position a value and a place, in module and local storage and in a struct's array field, including as a call destination and a call argument
+constructs: 0520, 0540, 0670, 0700, 0710, 0750, 1810
+program: program.ldn
+targets: linux-x86-64, macos-arm64

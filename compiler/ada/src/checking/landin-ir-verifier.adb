@@ -247,6 +247,12 @@ package body Landin.IR.Verifier is
          Payload_Field : Natural := 0;
          Nested  : Path_Step_Array := No_Path_Steps) return Fault_Kind;
 
+      function Root_Shape_Of
+        (Item  : Item_Id;
+         Place : Storage;
+         Field : Natural;
+         Shape : out Field_Shape) return Boolean;
+
       function Scalar_Field_Of
         (Item    : Item_Id;
          Place   : Storage;
@@ -279,13 +285,14 @@ package body Landin.IR.Verifier is
                   Element := Nth_Part (Of_Unit, Place.Datum, Field);
                   return Nothing_Wrong;
                end if;
-               if Result_Of (Of_Unit, Place.Datum)
-                    /= Landin.Types.Aggregate
-               then
-                  return Field_Is_Not_A_Scalar;
-               end if;
-               Shape := Nth_Field_Shape
-                 (Of_Unit, Place.Datum, Positive (Field));
+               --  D127: for an array the base is [0520]'s element
+               --  position, so the run starts at the element's shape.
+               Shape :=
+                 (if Result_Of (Of_Unit, Place.Datum)
+                       = Landin.Types.Fixed_Array
+                  then Array_Element_Shape (Of_Unit, Place.Datum)
+                  else Nth_Field_Shape
+                    (Of_Unit, Place.Datum, Positive (Field)));
 
             when Frame_Slot =>
                if not Holds (Of_Unit, Item, Place.Slot) then
@@ -308,11 +315,11 @@ package body Landin.IR.Verifier is
                     (Of_Unit, Item, Place.Slot, Field);
                   return Nothing_Wrong;
                end if;
-               if not Is_Aggregate (Of_Unit, Item, Place.Slot) then
-                  return Field_Is_Not_A_Scalar;
-               end if;
-               Shape := Nth_Slot_Field_Shape
-                 (Of_Unit, Item, Place.Slot, Positive (Field));
+               Shape :=
+                 (if Is_Array (Of_Unit, Item, Place.Slot)
+                  then Slot_Array_Element_Shape (Of_Unit, Item, Place.Slot)
+                  else Nth_Slot_Field_Shape
+                    (Of_Unit, Item, Place.Slot, Positive (Field)));
          end case;
 
          --  D118: however many steps the path has, the walk is one
@@ -349,41 +356,17 @@ package body Landin.IR.Verifier is
          Length := 0;
 
          if Nested'Length /= 0 then
-            if Field = 0 or else Which /= 0 or else Payload_Field /= 0 then
+            if Which /= 0 or else Payload_Field /= 0 then
                return Element_Field_Is_Not_An_Array;
             end if;
             declare
                Shape : Field_Shape;
             begin
-               case Place.Kind is
-                  when Module_Datum =>
-                     if not Holds (Of_Unit, Place.Datum)
-                       or else Kind_Of (Of_Unit, Place.Datum) /= Datum
-                     then
-                        return Named_Item_Is_Not_A_Datum;
-                     end if;
-                     if Result_Of (Of_Unit, Place.Datum)
-                          /= Landin.Types.Aggregate
-                       or else Field > Field_Count (Of_Unit, Place.Datum)
-                     then
-                        return Element_Field_Out_Of_Range;
-                     end if;
-                     Shape := Nth_Field_Shape
-                       (Of_Unit, Place.Datum, Positive (Field));
-
-                  when Frame_Slot =>
-                     if not Holds (Of_Unit, Item, Place.Slot) then
-                        return Slot_Out_Of_Range;
-                     end if;
-                     if not Is_Aggregate (Of_Unit, Item, Place.Slot)
-                       or else Field >
-                         Slot_Field_Count (Of_Unit, Item, Place.Slot)
-                     then
-                        return Element_Field_Out_Of_Range;
-                     end if;
-                     Shape := Nth_Slot_Field_Shape
-                       (Of_Unit, Item, Place.Slot, Positive (Field));
-               end case;
+               --  D127: a run may start at whole array storage as well as
+               --  at a base field.
+               if not Root_Shape_Of (Item, Place, Field, Shape) then
+                  return Element_Field_Out_Of_Range;
+               end if;
 
                if not Path_Is_Valid (Of_Unit, Shape, Nested) then
                   return Element_Field_Is_Not_An_Array;
@@ -508,6 +491,91 @@ package body Landin.IR.Verifier is
       --  These predicates are deliberately safe on invented identities; a
       --  false answer falls
       --  through Shape_Of, which owns the precise existing storage fault.
+      --  D127: where a run starts.  A positive base field is that field's
+      --  shape; base zero is storage that is itself an array, said as one
+      --  shape so a run may start there too.  False when the storage is
+      --  not what the base field claims; the caller's own fault covers it.
+      function Root_Shape_Of
+        (Item  : Item_Id;
+         Place : Storage;
+         Field : Natural;
+         Shape : out Field_Shape) return Boolean
+      is
+      begin
+         Shape := (others => <>);
+         case Place.Kind is
+            when Module_Datum =>
+               if not Holds (Of_Unit, Place.Datum)
+                 or else Kind_Of (Of_Unit, Place.Datum) /= Datum
+               then
+                  return False;
+               end if;
+               if Field = 0 then
+                  if Result_Of (Of_Unit, Place.Datum)
+                       /= Landin.Types.Fixed_Array
+                  then
+                     return False;
+                  end if;
+                  Shape := Whole_Array_Shape (Of_Unit, Place.Datum);
+                  return True;
+               end if;
+               --  D127: on an array the base is [0520]'s element
+               --  position, so the run starts at the element.
+               if Result_Of (Of_Unit, Place.Datum)
+                    = Landin.Types.Fixed_Array
+               then
+                  if Element_Total (Field)
+                       > Array_Length (Of_Unit, Place.Datum)
+                  then
+                     return False;
+                  end if;
+                  Shape := Array_Element_Shape (Of_Unit, Place.Datum);
+                  return True;
+               end if;
+               if Result_Of (Of_Unit, Place.Datum)
+                    /= Landin.Types.Aggregate
+                 or else Field > Field_Count (Of_Unit, Place.Datum)
+               then
+                  return False;
+               end if;
+               Shape := Nth_Field_Shape
+                 (Of_Unit, Place.Datum, Positive (Field));
+               return True;
+
+            when Frame_Slot =>
+               if not Holds (Of_Unit, Item, Place.Slot) then
+                  return False;
+               end if;
+               if Field = 0 then
+                  if not Is_Array (Of_Unit, Item, Place.Slot) then
+                     return False;
+                  end if;
+                  Shape := Whole_Slot_Array_Shape
+                    (Of_Unit, Item, Place.Slot);
+                  return True;
+               end if;
+               if Is_Array (Of_Unit, Item, Place.Slot) then
+                  if Element_Total (Field)
+                       > Slot_Array_Length (Of_Unit, Item, Place.Slot)
+                  then
+                     return False;
+                  end if;
+                  Shape := Slot_Array_Element_Shape
+                    (Of_Unit, Item, Place.Slot);
+                  return True;
+               end if;
+               if not Is_Aggregate (Of_Unit, Item, Place.Slot)
+                 or else Field
+                           > Slot_Field_Count (Of_Unit, Item, Place.Slot)
+               then
+                  return False;
+               end if;
+               Shape := Nth_Slot_Field_Shape
+                 (Of_Unit, Item, Place.Slot, Positive (Field));
+               return True;
+         end case;
+      end Root_Shape_Of;
+
       function Is_Whole_Aggregate
         (Item : Item_Id; Place : Storage) return Boolean
       is
@@ -549,34 +617,16 @@ package body Landin.IR.Verifier is
       is
          Base : Field_Shape;
       begin
-         if Field = 0 then
+         --  D127: base zero with a run is whole array storage the run
+         --  starts at; base zero with no run is the storage itself, which
+         --  Is_Whole_Aggregate answers.
+         if Field = 0 and then Path'Length = 0 then
             return False;
          end if;
 
-         case Place.Kind is
-            when Module_Datum =>
-               if not Holds (Of_Unit, Place.Datum)
-                 or else Kind_Of (Of_Unit, Place.Datum) /= Datum
-                 or else Result_Of (Of_Unit, Place.Datum)
-                           /= Landin.Types.Aggregate
-                 or else Field > Field_Count (Of_Unit, Place.Datum)
-               then
-                  return False;
-               end if;
-               Base := Nth_Field_Shape
-                 (Of_Unit, Place.Datum, Positive (Field));
-
-            when Frame_Slot =>
-               if not Holds (Of_Unit, Item, Place.Slot)
-                 or else not Is_Aggregate (Of_Unit, Item, Place.Slot)
-                 or else Field
-                           > Slot_Field_Count (Of_Unit, Item, Place.Slot)
-               then
-                  return False;
-               end if;
-               Base := Nth_Slot_Field_Shape
-                 (Of_Unit, Item, Place.Slot, Positive (Field));
-         end case;
+         if not Root_Shape_Of (Item, Place, Field, Base) then
+            return False;
+         end if;
 
          return Path_Is_Valid (Of_Unit, Base, Path)
            and then Shape_At (Of_Unit, Base, Path).Kind
@@ -600,37 +650,22 @@ package body Landin.IR.Verifier is
          Shape := (others => <>);
          Leaf := (others => <>);
 
-         case Place.Kind is
-            when Module_Datum =>
-               if not Holds (Of_Unit, Place.Datum)
-                 or else Kind_Of (Of_Unit, Place.Datum) /= Datum
-               then
-                  return Named_Item_Is_Not_A_Datum;
-               end if;
-               if Result_Of (Of_Unit, Place.Datum)
-                    /= Landin.Types.Aggregate
-                 or else Field = 0
-                 or else Field > Field_Count (Of_Unit, Place.Datum)
-               then
-                  return Variant_Field_Out_Of_Range;
-               end if;
-               Shape := Nth_Field_Shape
-                 (Of_Unit, Place.Datum, Positive (Field));
-
-            when Frame_Slot =>
-               if not Holds (Of_Unit, Item, Place.Slot) then
-                  return Slot_Out_Of_Range;
-               end if;
-               if not Is_Aggregate (Of_Unit, Item, Place.Slot)
-                 or else Field = 0
-                 or else Field > Slot_Field_Count
-                   (Of_Unit, Item, Place.Slot)
-               then
-                  return Variant_Field_Out_Of_Range;
-               end if;
-               Shape := Nth_Slot_Field_Shape
-                 (Of_Unit, Item, Place.Slot, Positive (Field));
-         end case;
+         --  D127: where the run starts is one question for every
+         --  operation, and an array element is a base like a field.
+         if Field = 0 or else not Root_Shape_Of (Item, Place, Field, Shape)
+         then
+            return
+              (case Place.Kind is
+                  when Module_Datum =>
+                    (if Holds (Of_Unit, Place.Datum)
+                       and then Kind_Of (Of_Unit, Place.Datum) = Datum
+                     then Variant_Field_Out_Of_Range
+                     else Named_Item_Is_Not_A_Datum),
+                  when Frame_Slot =>
+                    (if Holds (Of_Unit, Item, Place.Slot)
+                     then Variant_Field_Out_Of_Range
+                     else Slot_Out_Of_Range));
+         end if;
 
          --  D126: the variant part may sit below that base field, and the
          --  walk down to it is the one Landin.IR owns.
@@ -2113,6 +2148,8 @@ package body Landin.IR.Verifier is
                               begin
                                  if not
                                    ((Field = 0
+                                     and then Path_Of (Of_Unit, Id, V)'Length
+                                                = 0
                                      and then Is_Whole_Aggregate
                                        (Id, Destination))
                                     or else Is_Whole_Aggregate_Field

@@ -732,6 +732,16 @@ package Landin.IR is
                  and then Result_Of (Of_Unit, Item)
                           = Landin.Types.Fixed_Array;
 
+   --  D127: the whole of an array item, said as one field shape, so a run
+   --  may start at storage that is itself an array exactly as it starts at
+   --  a field that is one.  The element shape it names was appended when
+   --  the array was set, so this fabricates nothing.
+   function Whole_Array_Shape
+     (Of_Unit : Unit; Item : Item_Id) return Field_Shape
+     with Pre => Holds (Of_Unit, Item)
+                 and then Result_Of (Of_Unit, Item)
+                          = Landin.Types.Fixed_Array;
+
    function Array_Length
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
      with Pre => Holds (Of_Unit, Item)
@@ -1158,6 +1168,11 @@ package Landin.IR is
                  and then Is_Array (Of_Unit, Item, Slot);
 
    function Slot_Array_Element_Shape
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
+     with Pre => Holds (Of_Unit, Item, Slot)
+                 and then Is_Array (Of_Unit, Item, Slot);
+
+   function Whole_Slot_Array_Shape
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
      with Pre => Holds (Of_Unit, Item, Slot)
                  and then Is_Array (Of_Unit, Item, Slot);
@@ -2478,7 +2493,10 @@ private
       Fields      : Run;
       --  D121: the element's own shape.  A scalar element is a
       --  Scalar_Field_Shape, which is what every array before D121 had.
+      --  D127 also keeps where an aggregate element sits in the shared
+      --  run, so the whole array can be said as one shape.
       Element     : Field_Shape;
+      Element_Run : Natural                  := 0;
       Length      : Element_Total             := 0;
       Signature   : Signature_Id              := No_Signature;
       Declaration : Declaration_Id            := No_Declaration;
@@ -2511,8 +2529,9 @@ private
       Fields      : Run;
       --  [0520]'s shape, when Result says the item is an array.  D121
       --  lets that element be an aggregate, so it is a shape and not a
-      --  scalar name.
+      --  scalar name; D127 keeps where it sits in the shared run.
       Element     : Field_Shape;
+      Element_Run : Natural                  := 0;
       Length      : Element_Total             := 0;
       --  D24's source-order static image is one Folded value per position.
       --  D34 instead stores one value and marks it repeated; neither an
