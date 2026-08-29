@@ -908,6 +908,9 @@ package body Landin.Stages.Checking is
             Is_Array_Parameter : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Parameter;
+            Is_Array_Return : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Syn.Kind (Of_Tree, Node) = Syn.Named_Return;
             Is_Zeroed_State : constant Boolean :=
               Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) = Syn.No_Node
@@ -1027,6 +1030,12 @@ package body Landin.Stages.Checking is
                         = Res.Bound))
               and then Landin.Checking.Body_Of
                 (Types.all, Of_Tree, Written) /= Res.No_Declaration;
+            Is_Array_Call_Init : constant Boolean :=
+              Held = Ty.Fixed_Array
+              and then Is_Local_Binding (Of_Tree, Node)
+              and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                       = Syn.Call;
             Is_Struct_Call_Init : constant Boolean :=
               Held = Ty.Aggregate
               and then Is_Local_Binding (Of_Tree, Node)
@@ -1138,7 +1147,9 @@ package body Landin.Stages.Checking is
               and then not Is_Module_Literal_Init
               and then not Is_Module_Zeroed_Init
               and then not Is_Local_Zeroed_Init
+              and then not Is_Array_Call_Init
               and then not Is_Array_Parameter
+              and then not Is_Array_Return
             then
                if Landin.Checking.Type_Of (Types.all, Of_Tree, Written)
                   = Ty.Undecided
@@ -1857,6 +1868,15 @@ package body Landin.Stages.Checking is
                Landin.Checking.Note_Body
                  (Types.all, Of_Tree, Node,
                   Landin.Checking.Body_Of
+                    (Types.all, Their_Tree.all,
+                     Syn.Declared_Type (Their_Tree.all, Result)));
+            elsif Gives = Ty.Fixed_Array then
+               Landin.Checking.Note_Array
+                 (Types.all, Of_Tree, Node,
+                  Landin.Checking.Array_Length
+                    (Types.all, Their_Tree.all,
+                     Syn.Declared_Type (Their_Tree.all, Result)),
+                  Landin.Checking.Array_Element
                     (Types.all, Their_Tree.all,
                      Syn.Declared_Type (Their_Tree.all, Result)));
             end if;

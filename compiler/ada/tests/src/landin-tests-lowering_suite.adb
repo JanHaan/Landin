@@ -4268,7 +4268,13 @@ package body Landin.Tests.Lowering_Suite is
          & "end make" & LF
          & "use: () -> none =" & LF
          & "    mut answer: pair = make()" & LF
-         & "end use" & LF,
+         & "end use" & LF
+         & "make_row: () -> (result: [2]i32) =" & LF
+         & "    result = [19, 23]" & LF
+         & "end make_row" & LF
+         & "use_row: () -> none =" & LF
+         & "    mut answer: [2]i32 = make_row()" & LF
+         & "end use_row" & LF,
          Ran);
 
       Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
@@ -4299,6 +4305,13 @@ package body Landin.Tests.Lowering_Suite is
               and then IR.Result_Of (Unit, 2, Call) = Landin.Types.No_Value
               and then IR.Operand_Count (Unit, 2, Call) = 1,
             "the call transports no aggregate as an IR value");
+         Landin.Testing.Check
+           (Item,
+            IR.Result_Of (Unit, 3) = Landin.Types.Fixed_Array
+              and then IR.Parameter_Count (Unit, 3) = 1
+              and then IR.Is_Array
+                (Unit, 3, IR.Result_Slot (Unit, 3)),
+            "the same hidden convention retains a fixed-array result shape");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts the aggregate result convention");

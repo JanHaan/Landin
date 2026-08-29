@@ -5991,3 +5991,30 @@ one-position internal convention without either error.
 `negative/struct-return-unassigned` and `negative/variant-return-unassigned`;
 the generated token and IR records; and `runtime/struct-returns-cross-calls` on
 Linux x86-64.
+
+### D107 — Fixed arrays use the same caller-owned result convention
+
+**The tour said** that a fixed array's identity is its element type and length
+[0520], and D17 keeps that shape independent of any target byte extent. D106's
+hidden destination therefore has all the information an array result needs as
+well as a struct result.
+
+**Chosen:** a function may name a fixed-array return, assign it through the
+existing whole-array contextual forms, and initialize a matching typed local
+from its call. One leading unspellable `usize` parameter points at the caller's
+shaped array slot. On leave the callee copies exactly `length * element-size`
+bytes from its independent result slot. The call itself still returns no IR
+value.
+
+Definite assignment records a whole-array fact for the named return; assigning
+known elements independently also suffices once every position is covered.
+The neutral result slot carries element type and length, never the selected
+target's byte count.
+
+**Why share D106:** a second array-specific return channel would make source
+aggregate category, rather than lifetime and target classification, decide the
+ABI. Both are fixed-size by-value storage and need the same caller lifetime.
+
+**Pinned by** the checker, flow, lowering, verifier and backend public seams;
+`negative/array-return-unassigned`; the generated token and IR records; and
+`runtime/array-returns-cross-calls` on Linux x86-64.

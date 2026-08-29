@@ -1,0 +1,6 @@
+class: negative
+summary: every path must assign a fixed-array named return before leaving
+constructs: 0520, 0930, 1800, 1810, 1910
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64
