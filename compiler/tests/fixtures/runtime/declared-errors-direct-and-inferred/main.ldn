@@ -12,6 +12,21 @@ holder: type = struct
 end holder
 callback: type = (value: i32) -> (result: i32)
 mut atom_calls: i32 = 0
+mut cleanup_trace: i32 = 0
+
+mark_cleanup: (value: i32) -> none =
+    cleanup_trace = cleanup_trace * 10 + value
+end mark_cleanup
+
+cleanup_leaf: (fails: bool) -> none ! problems =
+    defer mark_cleanup(1)
+    fail denied when fails
+end cleanup_leaf
+
+cleanup_wrap: () -> none ! ... =
+    defer mark_cleanup(2)
+    try cleanup_leaf(true)
+end cleanup_wrap
 
 make_error: () -> (result: problems) =
     inc atom_calls
@@ -21,6 +36,21 @@ end make_error
 guarded_fail: () -> none ! problems =
     fail make_error() when false
 end guarded_fail
+
+multi_fallback: () -> (status: problems, value: i32) =
+    status = denied
+    value = 42
+end multi_fallback
+
+multi: (fails: bool) -> (status: problems, value: i32) ! problems =
+    fail missing when fails
+    status = denied
+    value = 42
+end multi
+
+multi_forward: (fails: bool) -> (status: problems, value: i32) ! ... =
+    try multi(fails)
+end multi_forward
 
 identity: (value: i32) -> (result: i32) =
     result = value
@@ -91,6 +121,8 @@ end right
 public main: () -> (code: i32) =
     e0: problems = error_value(false) else missing
     e1: problems = error_value(true) else missing
+    m0 := multi_forward(false) else multi_fallback()
+    m1 := multi_forward(true) else multi_fallback()
     s0 := relay(0) else 0
     s1 := relay(1) else (error)
         match error
@@ -107,17 +139,21 @@ public main: () -> (code: i32) =
     recursive := left(0) else 0
     probe(false) else 0
     guarded_fail() else 0
+    cleanup_wrap() else 0
     mut placed: holder = zeroed
     placed.child = pair_forward(true) else
         if true then pair(x: 20, y: 22)
         else pair(x: 0, y: 0) end if
     placed.values = row_forward(true) else [20, 22]
     if e0 == denied and e1 == missing
+       and m0.status == denied and m0.value == 42
+       and m1.status == denied and m1.value == 42
        and s0 == 10 and s1 == 5
        and p0.x + p0.y == 42 and p1.x + p1.y == 42
        and r0[0] + r0[1] == 42 and r1[0] + r1[1] == 42
        and f0(42) == 42 and f1(40) == 42
        and recursive == 10 and atom_calls == 0
+       and cleanup_trace == 12
        and placed.child.x + placed.child.y == 42
        and placed.values[0] + placed.values[1] == 42
     then

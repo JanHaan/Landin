@@ -870,17 +870,19 @@ infallible.
 
 `fail atom` leaves by the error outcome and carries no successful result. The
 atom's possible set must be a subset of the routine's finalized declared set.
-A fail path need not assign the named successful result. `when` evaluates its
+A fail path need not assign the named successful returns. `when` evaluates its
 condition first; only the taken edge evaluates the atom and fails. `try call`
 evaluates the call once and propagates its error unchanged; its success value,
-including a function, fixed array or enabled aggregate, has the ordinary call
-shape. A failing call written without `try` or call-site `else` is refused.
+including a function, fixed array, nominal aggregate or anonymous
+multiple-result aggregate, has the ordinary call shape. A failing call written
+without `try` or call-site `else` is refused.
 
 Call-site `else` handles only a nonempty declared error set. Its optional name
 is an immutable atom value scoped to the recovery block and typed as that
 complete set. The successful call edge and every recovery edge that falls
-through must supply the same complete scalar, atom, function, array or nominal
-aggregate shape. A recovery edge may instead `return` or `fail`; it then
+through must supply the same complete scalar, atom, function, array, nominal
+aggregate or anonymous multiple-result aggregate shape. A recovery edge may
+instead `return` or `fail`; it then
 supplies no placeholder and does not participate in the value join. Atom
 `match` is exhaustive over the subject's structural set; one final `_` arm may cover
 all members not named explicitly, and atom arms bind no payload.

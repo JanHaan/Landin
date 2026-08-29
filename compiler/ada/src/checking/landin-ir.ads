@@ -343,6 +343,9 @@ package Landin.IR is
       --  Nonzero only when a scalar-shaped `usize` field carries a function
       --  value inside D128's anonymous result aggregate.
       Signature : Signature_Id              := 0;
+      --  Nonzero only when a scalar-shaped `u32` field carries an atom value
+      --  inside [0990]'s anonymous result aggregate.
+      Atoms     : Atom_Set_Id               := 0;
    end record;
 
    type Field_Shape_Array is array (Positive range <>) of Field_Shape;
