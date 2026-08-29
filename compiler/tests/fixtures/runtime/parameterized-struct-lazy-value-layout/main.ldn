@@ -1,0 +1,16 @@
+cell: type (item: type) = struct
+    value: item
+end cell
+wrapper: type (item: type) = struct
+    value: item
+end wrapper
+single: wrapper(cell(i32)) = (value: (value: 10))
+nested: wrapper(wrapper(cell(i32))) = (value: (value: (value: 11)))
+row: wrapper([2]cell(i32)) = zeroed
+public main: () -> (code: i32) =
+    if row.value[0].value == 0 and row.value[1].value == 0 then
+        code = single.value.value + nested.value.value.value + 21
+    else
+        code = 1
+    end if
+end main

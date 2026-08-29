@@ -1,0 +1,7 @@
+huge: type (fixed count: u64) = struct
+    bytes: [count]u64
+end huge
+wrapper: type (item: type) = struct
+    value: item
+end wrapper
+bad: wrapper(huge(18446744073709551615))

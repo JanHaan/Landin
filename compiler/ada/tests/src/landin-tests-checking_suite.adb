@@ -1345,6 +1345,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Parameterized_Structs_Intern_And_Lay_Out_Instances
      (Item : in out Landin.Testing.Context);
 
+   procedure Identity_Actuals_Materialize_At_Value_Uses
+     (Item : in out Landin.Testing.Context);
+
    procedure Nominal_Layout_Requirements_Distinguish_Identity_And_Value
      (Item : in out Landin.Testing.Context);
 
@@ -1647,6 +1650,117 @@ package body Landin.Tests.Checking_Suite is
       end;
    end Parameterized_Structs_Intern_And_Lay_Out_Instances;
 
+   procedure Identity_Actuals_Materialize_At_Value_Uses
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "lazy-value-layout.ldn",
+         "cell: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end cell" & LF
+         & "wrapper: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end wrapper" & LF
+         & "good: wrapper(cell(u8)) = (value: (value: 1))" & LF
+         & "nested: wrapper(wrapper(cell(u8))) ="
+         & " (value: (value: (value: 2)))" & LF
+         & "row: wrapper([2]cell(u8)) = zeroed" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check
+        (Item, Ran = 3 and then not Landin.Stages.Failed (Work),
+         "identity-only descriptors are promoted at substituted value uses");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id;
+
+         function Declaration_At (Position : Positive)
+           return Landin.Provenance.Declaration_Id
+         is
+            Node : constant Landin.Syntax.Node_Id :=
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, Position);
+         begin
+            for Id in Landin.Provenance.Declaration_Id'(1)
+              .. Landin.Provenance.Declaration_Id
+                   (Landin.Resolution.Declaration_Count (Meanings.all))
+            loop
+               if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+                 and then Landin.Resolution.Node_Of (Meanings.all, Id) = Node
+               then
+                  return Id;
+               end if;
+            end loop;
+            return Landin.Provenance.No_Declaration;
+         end Declaration_At;
+
+         Good : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (3));
+         Nested : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (4));
+         Row : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Declaration_At (5));
+         Cell : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Field_Shape_Of (Types.all, Good, 1).Nominal;
+         Cell_Body : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 1));
+         Wrapper_Body : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Of_Tree.all,
+              Landin.Syntax.Nth_Declaration (Of_Tree.all, 2));
+      begin
+         Landin.Testing.Check
+           (Item, Landin.Checking.Nominal_Type_Count (Types.all) = 4
+             and then Landin.Checking.Has_Layout (Types.all, Cell)
+             and then Landin.Checking.Has_Layout (Types.all, Good)
+             and then Landin.Checking.Has_Layout (Types.all, Nested)
+             and then Landin.Checking.Has_Layout (Types.all, Row),
+            "nested promotion reuses four canonical identities with layouts");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Field_Shape_Of
+              (Types.all, Nested, 1).Nominal = Good
+             and then Landin.Checking.Field_Kind_Of (Types.all, Row, 1)
+               = Landin.Checking.Fixed_Array_Field
+             and then Landin.Checking.Field_Array_Length
+               (Types.all, Row, 1) = 2
+             and then Landin.Checking.Field_Shape_Of
+               (Types.all, Row, 1).Nominal = Cell,
+            "nominal and nominal-array actuals retain their promoted shape");
+         Landin.Testing.Check
+           (Item, Landin.Checking.Type_Of
+              (Types.all, Of_Tree.all, Cell_Body) = Landin.Types.Undecided
+             and then Landin.Checking.Type_Of
+               (Types.all, Of_Tree.all, Wrapper_Body)
+                  = Landin.Types.Undecided
+             and then Landin.Checking.Type_Of
+               (Types.all, Of_Tree.all,
+                Landin.Syntax.Declared_Type
+                  (Of_Tree.all,
+                   Landin.Syntax.Nth_Field
+                     (Of_Tree.all, Wrapper_Body, 1)))
+                       = Landin.Types.Undecided,
+            "lazy promotion writes no answer onto either template AST");
+      end;
+   end Identity_Actuals_Materialize_At_Value_Uses;
+
    procedure Nominal_Layout_Requirements_Distinguish_Identity_And_Value
      (Item : in out Landin.Testing.Context)
    is
@@ -1821,6 +1935,36 @@ package body Landin.Tests.Checking_Suite is
          & "good: holder(u8) = zeroed" & LF,
          "L0307",
          "the same alias classification is declaration-order independent");
+      Check_Failure
+        ("wrapper: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end wrapper" & LF
+         & "node: type (item: type) = struct" & LF
+         & "    next: wrapper(node(item))" & LF
+         & "end node" & LF
+         & "bad: node(u8)" & LF,
+         "L0313",
+         "promoting a currently building actual reports nominal recursion");
+      Check_Failure
+        ("huge: type (fixed count: u64) = struct" & LF
+         & "    bytes: [count]u64" & LF
+         & "end huge" & LF
+         & "wrapper: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end wrapper" & LF
+         & "bad: wrapper(huge(18446744073709551615))" & LF,
+         "L0300",
+         "a nominal actual checks target extent only at its value use");
+      Check_Failure
+        ("cell: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end cell" & LF
+         & "wrapper: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end wrapper" & LF
+         & "bad: wrapper([18446744073709551615]cell(u64))" & LF,
+         "L0300",
+         "a used array actual materializes its nominal element before D18");
    end Nominal_Layout_Requirements_Distinguish_Identity_And_Value;
 
    procedure Repeated_Invalid_Instances_Report_Each_Application
@@ -5323,6 +5467,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "parameterized structs intern and lay out",
          Parameterized_Structs_Intern_And_Lay_Out_Instances'Access);
+      Landin.Testing.Register
+        (Into, "checking", "identity actuals materialize at value uses",
+         Identity_Actuals_Materialize_At_Value_Uses'Access);
       Landin.Testing.Register
         (Into, "checking", "nominal layout edges exclude identity mentions",
          Nominal_Layout_Requirements_Distinguish_Identity_And_Value'Access);
