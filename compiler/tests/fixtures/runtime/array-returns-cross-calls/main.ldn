@@ -2,8 +2,10 @@ make: () -> (result: [3]i32) =
     result = [19, 20, 3]
 end make
 
+forward: () -> (result: [3]i32) = make() end forward
+
 public main: () -> (code: i32) =
-    mut answer: [3]i32 = make()
+    mut answer: [3]i32 = forward()
     mut other: [3]i32 = make()
     other[0] = 40
     code = answer[0] + answer[1] + answer[2]
