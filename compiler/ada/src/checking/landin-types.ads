@@ -78,7 +78,11 @@ package Landin.Types is
       --  here either, and for the opposite reason: D17 makes an array
       --  structural, so its identity is a length and an element type and
       --  those are two more facts than a Type_Kind holds.
-      Fixed_Array);
+      Fixed_Array,
+      --  [0870]/[1000]: a runtime code address.  D113 first carries the
+      --  signature declaration separately in Landin.Checking, as aggregate
+      --  nominal identity is carried separately above.
+      Function_Value);
 
    subtype Scalar_Name is Type_Kind range U8 .. Bool;
 
@@ -88,7 +92,7 @@ package Landin.Types is
 
    --  A type a value can actually have, which is what an expression node
    --  must end the pass with when its subtree is sound.
-   subtype Settled is Type_Kind range Untyped_Integer .. Fixed_Array;
+   subtype Settled is Type_Kind range Untyped_Integer .. Function_Value;
 
    function Spelling (Item : Scalar_Name) return String
      is (case Item is

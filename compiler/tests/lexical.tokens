@@ -10268,7 +10268,7 @@ file negative/float-type-not-enabled/program.ldn tokens 5
   7 10 f32
   11 12 =
   13 14 1
-file negative/function-used-as-a-value/program.ldn tokens 24
+file negative/function-value-type-mismatch/program.ldn tokens 24
   0 1 g
   1 2 :
   3 4 (
