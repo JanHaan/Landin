@@ -1774,8 +1774,10 @@ package body Landin.Stages.Checking is
                elsif Wants in Ty.Aggregate | Ty.Fixed_Array
                  and then Syn.Kind (Of_Tree, Argument)
                             in Syn.Name_Reference | Syn.Member_Selection
+                               | Syn.Call
                  and then
-                   (Syn.Kind (Of_Tree, Argument) = Syn.Name_Reference
+                   (Syn.Kind (Of_Tree, Argument)
+                      in Syn.Name_Reference | Syn.Call
                     or else Wants = Ty.Fixed_Array
                     or else Syn.Kind
                       (Of_Tree, Syn.Target_Of (Of_Tree, Argument))
@@ -1783,9 +1785,11 @@ package body Landin.Stages.Checking is
                then
                   declare
                      Got : constant Ty.Type_Kind :=
-                       (if Wants = Ty.Fixed_Array
-                           and then Syn.Kind (Of_Tree, Argument)
-                                      = Syn.Member_Selection
+                       (if Syn.Kind (Of_Tree, Argument) = Syn.Call
+                        then Synthesise (Of_Tree, Argument)
+                        elsif Wants = Ty.Fixed_Array
+                          and then Syn.Kind (Of_Tree, Argument)
+                                     = Syn.Member_Selection
                         then (if Admit_Array_Field (Of_Tree, Argument)
                               then Ty.Fixed_Array else Ty.Ill_Typed)
                         else Selected_From (Of_Tree, Argument));

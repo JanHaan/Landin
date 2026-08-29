@@ -687,7 +687,50 @@ package body Landin.Stages.Lowering is
                if Type_At (Of_Tree, Argument)
                     in Ty.Aggregate | Ty.Fixed_Array
                then
-                  if Syn.Kind (Of_Tree, Argument) = Syn.Zeroed_Literal then
+                  if Syn.Kind (Of_Tree, Argument) = Syn.Call then
+                     declare
+                        Parameter : constant Syn.Node_Id :=
+                          Syn.Nth_Parameter
+                            (Their_Tree.all, Their_Node, Which);
+                        Id : constant Res.Declaration_Id :=
+                          Declaration_At
+                            (Syn.Source_Of (Their_Tree.all), Parameter);
+                        Temporary : IR.Slot_Id;
+                        Ignored : IR.Value_Id;
+                     begin
+                        if Type_At (Of_Tree, Argument) = Ty.Aggregate then
+                           Temporary := IR.Add_Aggregate_Slot
+                             (Unit.all, Filling, Res.No_Declaration,
+                              Site_Of (Of_Tree, Argument));
+                           for Field in
+                             1 .. Landin.Checking.Layout_Field_Count
+                                    (Types.all, Id)
+                           loop
+                              Add_Stored_Field
+                                (Id, Field, Slot => Temporary);
+                           end loop;
+                        else
+                           Temporary := IR.Add_Array_Slot
+                             (Unit.all, Filling,
+                              Landin.Checking.Array_Element (Types.all, Id),
+                              IR.Element_Total
+                                (Landin.Checking.Array_Length
+                                   (Types.all, Id)),
+                              Res.No_Declaration,
+                              Site_Of (Of_Tree, Argument));
+                        end if;
+                        Ignored := Lower_Call
+                          (Of_Tree, Argument, Scope,
+                           Destination => Temporary);
+                        pragma Unreferenced (Ignored);
+                        Given (Which) := IR.Emit_Storage_Address
+                          (Unit.all, Filling,
+                           (Kind => IR.Frame_Slot, Slot => Temporary),
+                           Site_Of (Of_Tree, Argument));
+                     end;
+                  elsif Syn.Kind (Of_Tree, Argument)
+                          = Syn.Zeroed_Literal
+                  then
                      declare
                         Parameter : constant Syn.Node_Id :=
                           Syn.Nth_Parameter

@@ -2,5 +2,5 @@ class: runtime
 summary: a fixed array returns into independent caller-owned storage
 constructs: 0520, 0530, 0930, 1800, 1810, 1920
 program: main.ldn
-status: 84
+status: 126
 targets: linux-x86-64

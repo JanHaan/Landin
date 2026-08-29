@@ -1,0 +1,18 @@
+left: type = struct
+    value: i32
+end left
+
+right: type = struct
+    value: i32
+end right
+
+make: () -> (result: right) =
+    result = (value: 1)
+end make
+
+consume: (value: left) -> none =
+end consume
+
+bad: () -> none =
+    consume(make())
+end bad
