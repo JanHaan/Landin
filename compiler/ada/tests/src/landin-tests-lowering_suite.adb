@@ -5000,6 +5000,75 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Statement_Controls_Keep_Final_None_Calls;
 
+   --  D124 permits a control value whose every reachable edge returns.  It
+   --  has no answer to carry and no continuing predecessor, so D125 must not
+   --  leave an unreachable merge block merely to give lowering somewhere to
+   --  continue.  The verifier's reachability rule pins that boundary.
+   procedure All_Return_Controls_Create_No_Join_Block
+     (Item : in out Landin.Testing.Context);
+
+   procedure All_Return_Controls_Create_No_Join_Block
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "choice: type = struct" & LF
+         & "    kind: variant" & LF
+         & "        left |" & LF
+         & "        right" & LF
+         & "    end kind" & LF
+         & "end choice" & LF
+         & "if_exit: (flag: bool) -> (result: i32) =" & LF
+         & "    result = 42" & LF
+         & "    result = if flag then" & LF
+         & "        return" & LF
+         & "    else" & LF
+         & "        return" & LF
+         & "    end if" & LF
+         & "end if_exit" & LF
+         & "bare_exit: () -> (result: i32) =" & LF
+         & "    result = 42" & LF
+         & "    result = begin" & LF
+         & "        return" & LF
+         & "    end" & LF
+         & "end bare_exit" & LF
+         & "match_exit: (selected: choice) -> (result: i32) =" & LF
+         & "    result = 42" & LF
+         & "    result = match selected.kind" & LF
+         & "        left: return" & LF
+         & "        right: return" & LF
+         & "    end match" & LF
+         & "end match_exit" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "all-return controls are lowered without a placeholder answer");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+      begin
+         Landin.Testing.Check_Equal
+           (Item, IR.Block_Count (Unit, 1), 4,
+            "the if has only its reached test, arm and else blocks");
+         Landin.Testing.Check_Equal
+           (Item, IR.Block_Count (Unit, 2), 2,
+            "the bare block has only its entry and reached body");
+         Landin.Testing.Check_Equal
+           (Item, IR.Block_Count (Unit, 3), 4,
+            "the match has only its reached dispatch and arm blocks");
+         Check_Terminators (Item, Unit, "all-return control expressions");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier sees no orphan join after an all-return control");
+      end;
+   end All_Return_Controls_Create_No_Join_Block;
+
    ------------------------------------------------------------------
    --  The recorded artefact
    ------------------------------------------------------------------
@@ -5540,6 +5609,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "statement controls keep final none calls",
          Statement_Controls_Keep_Final_None_Calls'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "all-return controls create no join block",
+         All_Return_Controls_Create_No_Join_Block'Access);
       Landin.Testing.Register
         (Into, "lowering", "a struct literal becomes ordered field writes",
          A_Struct_Literal_Becomes_Ordered_Field_Writes'Access);
