@@ -17,4 +17,5 @@ public main: () -> (code: i32) =
     mut state: outer = zeroed
     state.nested = (value: 5, row: [6, 7])
     code = inspect(state.nested, state.nested.row)
+           + inspect(zeroed, zeroed)
 end main
