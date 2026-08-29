@@ -256,9 +256,13 @@ package Landin.IR is
       Less_Or_Equal,
       Greater_Than,
       Greater_Or_Equal,
+      --  [0870]: a routine's target-neutral code identity, lowered to one
+      --  target code address.
+      Function_Address,
       --  [1920]: every parameter named once and in order, and the type
       --  of the named return, or no value at all.
       Call,
+      Indirect_Call,
       --  The terminators.  Leave is [1810]'s `return`, which "carries no
       --  value" in the source because the named return is a place
       --  [0930]; here it carries what that place held, because what a
@@ -1501,7 +1505,8 @@ package Landin.IR is
    function Callee_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Item_Id
      with Pre => Holds (Of_Unit, Item, Value)
-                 and then Op_Of (Of_Unit, Item, Value) = Call;
+                 and then Op_Of (Of_Unit, Item, Value)
+                   in Function_Address | Call | Indirect_Call;
 
    function Target_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Block_Id
@@ -2024,19 +2029,30 @@ package Landin.IR is
    --  right, and every instruction that computes one is already above
    --  this one in the block, so the run below is only the order [1920]
    --  names the parameters in.
+   function Emit_Function_Address
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Target : Item_Id;
+      Site  : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Holds (Into, Item)
+                  and then Holds (Into, Target)
+                  and then Kind_Of (Into, Target) = Routine;
+
    function Emit_Call
      (Into   : in out Unit;
       Item   : Item_Id;
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Indirect : Boolean := False) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Callee)
                   and then (Result in Landin.Types.Scalar_Name
                             or else Result = Landin.Types.No_Value)
                   and then Landin.Provenance.Is_Known (Site),
-          Post => Emitted (Into, Item, Emit_Call'Result, Call)
-                  and then Operand_Count (Into, Item, Emit_Call'Result) = 0;
+          Post => Emitted
+                    (Into, Item, Emit_Call'Result,
+                     (if Indirect then Indirect_Call else Call));
 
    procedure Add_Argument
      (Into  : in out Unit;
@@ -2044,7 +2060,8 @@ package Landin.IR is
       Call  : Value_Id;
       Value : Value_Id)
      with Pre  => Holds (Into, Item, Call)
-                  and then Op_Of (Into, Item, Call) = Landin.IR.Call
+                  and then Op_Of (Into, Item, Call)
+                    in Landin.IR.Call | Landin.IR.Indirect_Call
                   and then Holds (Into, Item, Value)
                   and then Call = Value_Id (Value_Count (Into, Item)),
           Post => Operand_Count (Into, Item, Call)

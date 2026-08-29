@@ -562,14 +562,17 @@ package body Landin.Stages.Lowering is
             return Slots (Positive (Id));
          end if;
 
-         if Held not in Ty.Scalar_Name then
+         if Held not in Ty.Scalar_Name | Ty.Function_Value then
             raise Landin.Compiler_Defect with
-              "a declaration reached the lowering with no scalar type";
+              "a declaration reached the lowering with no storable type";
          end if;
 
          Slots (Positive (Id)) :=
            IR.Add_Slot
-             (Unit.all, Filling, Held, Id, Site_Of (Of_Tree, Node));
+             (Unit.all, Filling,
+              (if Held = Ty.Function_Value then Ty.Usize
+               else Ty.Scalar_Name (Held)),
+              Id, Site_Of (Of_Tree, Node));
          return Slots (Positive (Id));
       end Slot_For;
 
@@ -658,7 +661,11 @@ package body Landin.Stages.Lowering is
          Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Node);
          Means : constant Res.Declaration_Id :=
            Res.Bound_To (Meanings.all, Of_Tree, Callee);
-         Target : constant IR.Item_Id := IR.Item_For (Unit.all, Means);
+         Signature : constant Res.Declaration_Id :=
+           Landin.Checking.Body_Of (Types.all, Means);
+         Target : constant IR.Item_Id := IR.Item_For (Unit.all, Signature);
+         Indirect : constant Boolean :=
+           Res.Sort_Of (Meanings.all, Means) /= Res.Module_Function;
          Their_Tree : constant not null access constant Syn.Tree :=
            Tree_For (Res.Source_Of (Meanings.all, Means));
          Their_Node : constant Syn.Node_Id :=
@@ -672,8 +679,18 @@ package body Landin.Stages.Lowering is
          Saved : array (1 .. Positive'Max (1, Count)) of IR.Slot_Id :=
            [others => IR.No_Slot];
          Hidden : IR.Value_Id := IR.No_Value;
+         Callee_Saved : IR.Slot_Id := IR.No_Slot;
+         Callee_Value : IR.Value_Id := IR.No_Value;
          Made : IR.Value_Id;
       begin
+         if Indirect then
+            Callee_Saved := IR.Add_Slot
+              (Unit.all, Filling, Ty.Usize, Res.No_Declaration, Site);
+            IR.Emit_Store
+              (Unit.all, Filling, Callee_Saved,
+               Lower_Expression (Of_Tree, Callee, Scope), Site);
+         end if;
+
          --  [0410] fixes argument evaluation left to right.  Every argument
          --  with another after it crosses through a slot before that later
          --  expression runs: a short circuit there can change blocks, and
@@ -1452,12 +1469,21 @@ package body Landin.Stages.Lowering is
                Nested_Field => Destination_Child);
          end if;
 
+         if Indirect then
+            Callee_Value :=
+              IR.Emit_Load (Unit.all, Filling, Callee_Saved, Site);
+         end if;
+
          Made :=
            IR.Emit_Call
              (Unit.all, Filling, Target,
               (if Returns_Stored then Ty.No_Value
                else Type_At (Of_Tree, Node)),
-              Site);
+              Site, Indirect => Indirect);
+
+         if Indirect then
+            IR.Add_Argument (Unit.all, Filling, Made, Callee_Value);
+         end if;
 
          if Returns_Stored then
             IR.Add_Argument (Unit.all, Filling, Made, Hidden);
@@ -2048,6 +2074,14 @@ package body Landin.Stages.Lowering is
                            Positive (Alias.Payload_Field),
                            Scalar_At (Of_Tree, Node), Site);
                      end;
+                  end if;
+
+                  if Res.Sort_Of (Meanings.all, Means)
+                     = Res.Module_Function
+                  then
+                     return IR.Emit_Function_Address
+                       (Unit.all, Filling,
+                        IR.Item_For (Unit.all, Means), Site);
                   end if;
 
                   if Res.Sort_Of (Meanings.all, Means)

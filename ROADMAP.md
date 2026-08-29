@@ -1958,7 +1958,13 @@ aggregate shape R2.20 enables: flat and array-bearing structs, unfolded
 variants, depth-one ordinary children and fixed arrays all retain independent
 caller storage across repeated calls.
 
-Further aggregate arguments and result contexts remain in this item; R4.40 later supplies
+The twenty-eighth increment makes a direct function name an inferred local code
+address and calls it indirectly. Verified IR retains the source signature as
+type evidence while the backend calls the runtime address; mutable replacement
+and the existing scalar/aggregate ABI paths share that convention.
+
+Written function types, function parameters and anonymous functions remain in
+this item. Further aggregate arguments and result contexts remain here too; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
 left contextual: whole nested field selection, construction and copy, deeper recursive

@@ -1784,15 +1784,30 @@ package body Landin.IR is
       return Append (Into, Item, Made);
    end Emit_Binary;
 
+   function Emit_Function_Address
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Target : Item_Id;
+      Site  : Landin.Provenance.Origin) return Value_Id
+     is (Append
+           (Into, Item,
+            Instruction'(Op => Function_Address,
+                         Result => Landin.Types.Usize,
+                         Site => Site,
+                         Named => Target,
+                         others => <>)));
+
    function Emit_Call
      (Into   : in out Unit;
       Item   : Item_Id;
       Callee : Item_Id;
       Result : Landin.Types.Type_Kind;
-      Site   : Landin.Provenance.Origin) return Value_Id
+      Site   : Landin.Provenance.Origin;
+      Indirect : Boolean := False) return Value_Id
      is (Append
            (Into, Item,
-            Instruction'(Op        => Call,
+            Instruction'(Op        =>
+                           (if Indirect then Indirect_Call else Call),
                          Result    => Result,
                          Site      => Site,
                          Named     => Callee,

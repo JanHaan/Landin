@@ -6145,3 +6145,32 @@ throw away its result.
 generated token and IR records; and the explicit discards in
 `runtime/struct-returns-cross-calls` and `runtime/array-returns-cross-calls` on
 Linux x86-64.
+
+### D113 — An inferred function value is a code address
+
+**The tour said** that a function is an ordinary value represented as a code
+address [0870] [1000]. The first executable slice does not need written function
+types to preserve that identity: a direct function name supplies its complete
+signature when a local uses `:=`.
+
+**Chosen:** a local may infer a function value from a direct function name,
+store that value, replace a mutable binding with another function value, and
+call the binding indirectly. The inferred binding retains the original
+signature declaration as its checking identity. Neutral IR materializes a
+`Function_Address` naming a routine item and `Indirect_Call` names that same
+signature while taking the runtime code address as its first operand. The
+Linux backend emits RIP-relative address formation and `call *address`.
+
+Arguments, scalar or aggregate results, stack positions and hidden aggregate
+result destinations otherwise use the existing internal convention unchanged.
+Written function types, function parameters and anonymous functions remain
+later slices.
+
+**Why the indirect instruction retains a signature:** a runtime address alone
+cannot tell the verifier how many operands or what result convention the call
+uses. Naming the source signature is target-neutral type evidence, not a claim
+that the runtime target is statically known.
+
+**Pinned by** the checker, lowering, verifier and backend public seams;
+`negative/function-value-type-mismatch`; the generated token and IR records;
+and `runtime/inferred-function-values` on Linux x86-64.

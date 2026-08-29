@@ -100,7 +100,7 @@
 0840   tour        -                                  Origins join to the shortest-lived part
 0850   tour        -                                  Volatile is exempt from the borrow rule and from every
 0860   tour        -                                  What this does not catch
-0870   tour        refused                            A function is a value of a function type
+0870   tour        accepted emitted executed refused  A function is a value of a function type
 0880   tour        accepted emitted                   A single-expression body still takes an end
 0890   tour        accepted emitted                   Nothing returned
 0900   tour        refused refused-by-name            Three parameter conventions
@@ -113,7 +113,7 @@
 0970   tour        refused-by-name                    Early exit
 0980   tour        refused                            Calls: positional first, then named
 0990   tour        -                                  A return list is an anonymous struct
-1000   tour        refused                            A function type is an ordinary type
+1000   tour        accepted emitted executed refused  A function type is an ordinary type
 1010   tour        -                                  Anonymous functions
 1020   tour        accepted emitted refused           Discarding a result must be explicit
 1030   tour        -                                  Handling

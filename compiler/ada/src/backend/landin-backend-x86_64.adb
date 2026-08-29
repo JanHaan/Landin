@@ -1613,7 +1613,14 @@ package body Landin.Backend.X86_64 is
                      Emit ("movb %al, " & Value_Cell (Value));
                   end;
 
-               when Landin.IR.Call =>
+               when Landin.IR.Function_Address =>
+                  Emit
+                    ("leaq "
+                     & Symbol (Landin.IR.Callee_Of (Of_Unit, Item, Value))
+                     & "(%rip), %rax");
+                  Emit ("movq %rax, " & Value_Cell (Value));
+
+               when Landin.IR.Call | Landin.IR.Indirect_Call =>
                   --  [1920] names every parameter once and in order, so the
                   --  operands are already the argument list.  The first six
                   --  scalars fill the internal convention's integer
@@ -1629,8 +1636,13 @@ package body Landin.Backend.X86_64 is
                        Landin.IR.Callee_Of (Of_Unit, Item, Value);
                      Gives : constant Landin.Types.Type_Kind :=
                        Landin.IR.Result_Of (Of_Unit, Item, Value);
+                     Indirect : constant Boolean :=
+                       Landin.IR.Op_Of (Of_Unit, Item, Value)
+                         = Landin.IR.Indirect_Call;
+                     Offset : constant Natural :=
+                       (if Indirect then 1 else 0);
                      Count : constant Natural :=
-                       Landin.IR.Operand_Count (Of_Unit, Item, Value);
+                       Landin.IR.Operand_Count (Of_Unit, Item, Value) - Offset;
                      Stack_Bytes : constant Landin.Targets.Byte_Count :=
                        (if Count <= Register_Arguments then 0
                         else Landin.Targets.Align_Up
@@ -1650,7 +1662,7 @@ package body Landin.Backend.X86_64 is
                      for Index in 1 .. Count loop
                         declare
                            Argument : constant Landin.IR.Value_Id :=
-                             Operand (Index);
+                             Operand (Index + Offset);
                            Held : constant Held_Size :=
                              Size_Of_Value (Argument);
                         begin
@@ -1671,7 +1683,11 @@ package body Landin.Backend.X86_64 is
                         end;
                      end loop;
 
-                     Emit ("call " & Symbol (Callee));
+                     if Indirect then
+                        Emit ("call *" & Value_Cell (Operand (1)));
+                     else
+                        Emit ("call " & Symbol (Callee));
+                     end if;
 
                      if Stack_Bytes > 0 then
                         Emit ("addq $"
@@ -2192,7 +2208,8 @@ package body Landin.Backend.X86_64 is
                      when Landin.IR.Leave =>
                         Answer := Of_Value (Operand_Of (Value, 1));
 
-                     when Landin.IR.Call | Landin.IR.Storage_Address
+                     when Landin.IR.Function_Address | Landin.IR.Call
+                        | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
                         | Landin.IR.Store_Datum
                         | Landin.IR.Load_Field | Landin.IR.Store_Field
                         | Landin.IR.Load_Element | Landin.IR.Store_Element
