@@ -22,6 +22,10 @@ package body Landin.IR.Verifier is
                "a signature's parameters are not where its run says they are",
             when Signature_Part_Malformed =>
                "a signature carries a malformed target-neutral type part",
+            when Nominal_Metadata_Malformed =>
+               "an item or slot carries invalid nominal aggregate metadata",
+            when Nominal_Shape_Disagrees =>
+               "one nominal identity denotes two structural aggregate shapes",
             when Item_Without_A_Block =>
                "an item has no block, so it describes nothing",
             when Item_Still_Building  =>
@@ -1052,6 +1056,40 @@ package body Landin.IR.Verifier is
       function Signature_Part_Is_Malformed
         (Part : Signature_Part) return Boolean;
 
+      type Aggregate_Source_Kind is
+        (No_Aggregate_Source, Item_Aggregate_Source,
+         Slot_Aggregate_Source, Nested_Aggregate_Source);
+
+      type Aggregate_Source is record
+         Kind    : Aggregate_Source_Kind := No_Aggregate_Source;
+         Item    : Item_Id := No_Item;
+         Slot    : Slot_Id := No_Slot;
+         Shape   : Field_Shape := (others => <>);
+         Nominal : Nominal_Type_Id := No_Nominal_Type;
+      end record;
+
+      type Aggregate_Source_Array is
+        array (Positive range <>) of Aggregate_Source;
+
+      Canonical_Nominals : Aggregate_Source_Array
+        (1 .. Positive'Max (1, Nominal_Type_Count (Of_Unit))) :=
+          [others => (others => <>)];
+
+      function Source_Field_Count
+        (Source : Aggregate_Source) return Natural;
+
+      function Nth_Source_Field
+        (Source : Aggregate_Source; Field : Positive) return Field_Shape;
+
+      function Sources_Agree
+        (Left, Right : Aggregate_Source) return Boolean;
+
+      function Register (Source : Aggregate_Source) return Fault_Kind;
+
+      function Register_Shape
+        (Shape : Field_Shape;
+         Budget : Natural) return Fault_Kind;
+
       function Signature_Carrier_Count
         (Signature : Signature_Id) return Natural;
 
@@ -1271,6 +1309,135 @@ package body Landin.IR.Verifier is
                return True;
          end case;
       end Signature_Part_Is_Malformed;
+
+      function Source_Field_Count (Source : Aggregate_Source) return Natural
+        is (case Source.Kind is
+               when Item_Aggregate_Source =>
+                  Field_Count (Of_Unit, Source.Item),
+               when Slot_Aggregate_Source =>
+                  Slot_Field_Count (Of_Unit, Source.Item, Source.Slot),
+               when Nested_Aggregate_Source =>
+                  Aggregate_Field_Count (Of_Unit, Source.Shape),
+               when No_Aggregate_Source => 0);
+
+      function Nth_Source_Field
+        (Source : Aggregate_Source; Field : Positive) return Field_Shape
+        is (case Source.Kind is
+               when Item_Aggregate_Source =>
+                  Nth_Field_Shape (Of_Unit, Source.Item, Field),
+               when Slot_Aggregate_Source =>
+                  Nth_Slot_Field_Shape
+                    (Of_Unit, Source.Item, Source.Slot, Field),
+               when Nested_Aggregate_Source =>
+                  Nth_Aggregate_Field (Of_Unit, Source.Shape, Field),
+               when No_Aggregate_Source => (others => <>));
+
+      function Sources_Agree
+        (Left, Right : Aggregate_Source) return Boolean
+      is
+      begin
+         if Left.Nominal /= Right.Nominal
+           or else Source_Field_Count (Left) /= Source_Field_Count (Right)
+         then
+            return False;
+         end if;
+
+         for Field in 1 .. Source_Field_Count (Left) loop
+            if not Same_Shape
+              (Of_Unit,
+               Nth_Source_Field (Left, Field),
+               Nth_Source_Field (Right, Field))
+            then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end Sources_Agree;
+
+      function Register (Source : Aggregate_Source) return Fault_Kind
+      is
+      begin
+         if Source.Kind = No_Aggregate_Source
+           or else not Holds (Of_Unit, Source.Nominal)
+         then
+            return Nominal_Metadata_Malformed;
+         end if;
+
+         --  Identities are opaque, so find the registry position through
+         --  its public enumeration rather than recovering its representation.
+         --  The scan is bounded by the unit's nominal count in every build.
+         for Position in 1 .. Nominal_Type_Count (Of_Unit) loop
+            if Nth_Nominal_Type (Of_Unit, Position) = Source.Nominal then
+               if Canonical_Nominals (Position).Kind = No_Aggregate_Source
+               then
+                  Canonical_Nominals (Position) := Source;
+               elsif not Sources_Agree
+                 (Canonical_Nominals (Position), Source)
+               then
+                  return Nominal_Shape_Disagrees;
+               end if;
+               return Nothing_Wrong;
+            end if;
+         end loop;
+         return Nominal_Metadata_Malformed;
+      end Register;
+
+      function Register_Shape
+        (Shape : Field_Shape;
+         Budget : Natural) return Fault_Kind
+      is
+         Bad : Fault_Kind;
+      begin
+         if Budget = 0 then
+            return Field_Shape_Malformed;
+         end if;
+
+         case Shape.Kind is
+            when Scalar_Field_Shape =>
+               return Nothing_Wrong;
+
+            when Array_Field_Shape =>
+               if not Array_Element_Is_Aggregate (Of_Unit, Shape) then
+                  return Nothing_Wrong;
+               end if;
+               return Register_Shape
+                 (Array_Element_Shape (Of_Unit, Shape), Budget - 1);
+
+            when Aggregate_Field_Shape =>
+               Bad := Register
+                 ((Kind    => Nested_Aggregate_Source,
+                   Shape   => Shape,
+                   Nominal => Shape.Nominal,
+                   others  => <>));
+               if Bad /= Nothing_Wrong then
+                  return Bad;
+               end if;
+               for Field in 1 .. Aggregate_Field_Count (Of_Unit, Shape) loop
+                  Bad := Register_Shape
+                    (Nth_Aggregate_Field (Of_Unit, Shape, Field), Budget - 1);
+                  if Bad /= Nothing_Wrong then
+                     return Bad;
+                  end if;
+               end loop;
+               return Nothing_Wrong;
+
+            when Variant_Field_Shape =>
+               for Which in 1 .. Shape.Cases loop
+                  for Field in
+                    1 .. Variant_Case_Field_Count (Of_Unit, Shape, Which)
+                  loop
+                     Bad := Register_Shape
+                       (Nth_Variant_Case_Field
+                          (Of_Unit, Shape, Which, Field),
+                        Budget - 1);
+                     if Bad /= Nothing_Wrong then
+                        return Bad;
+                     end if;
+                  end loop;
+               end loop;
+               return Nothing_Wrong;
+         end case;
+      end Register_Shape;
 
       function Signature_Carrier_Count
         (Signature : Signature_Id) return Natural
@@ -1726,6 +1893,15 @@ package body Landin.IR.Verifier is
          declare
             Id : constant Item_Id := Item_Id (Which);
          begin
+            if Nominal_Of (Of_Unit, Id) /= No_Nominal_Type
+              and then
+                (Result_Of (Of_Unit, Id) /= Landin.Types.Aggregate
+                 or else not Holds (Of_Unit, Nominal_Of (Of_Unit, Id)))
+            then
+               return (Kind => Nominal_Metadata_Malformed,
+                       Item => Id, others => <>);
+            end if;
+
             if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate then
                for Field in 1 .. Field_Count (Of_Unit, Id) loop
                   declare
@@ -1740,9 +1916,28 @@ package body Landin.IR.Verifier is
                      end if;
                   end;
                end loop;
+            elsif Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array
+              and then Field_Shape_Is_Malformed
+                (Array_Element_Shape (Of_Unit, Id),
+                 Aggregate_Allowed => True)
+            then
+               return (Kind => Field_Shape_Malformed,
+                       Item => Id, others => <>);
             end if;
 
             for Slot in 1 .. Slot_Count (Of_Unit, Id) loop
+               if Nominal_Of (Of_Unit, Id, Slot_Id (Slot))
+                    /= No_Nominal_Type
+                 and then
+                   (not Is_Aggregate (Of_Unit, Id, Slot_Id (Slot))
+                    or else not Holds
+                      (Of_Unit,
+                       Nominal_Of (Of_Unit, Id, Slot_Id (Slot))))
+               then
+                  return (Kind => Nominal_Metadata_Malformed,
+                          Item => Id, others => <>);
+               end if;
+
                if Is_Address (Of_Unit, Id, Slot_Id (Slot))
                  and then
                    (Is_Aggregate (Of_Unit, Id, Slot_Id (Slot))
@@ -1774,6 +1969,14 @@ package body Landin.IR.Verifier is
                         end if;
                      end;
                   end loop;
+               elsif Is_Array (Of_Unit, Id, Slot_Id (Slot))
+                 and then Field_Shape_Is_Malformed
+                   (Slot_Array_Element_Shape
+                      (Of_Unit, Id, Slot_Id (Slot)),
+                    Aggregate_Allowed => True)
+               then
+                  return (Kind => Field_Shape_Malformed,
+                          Item => Id, others => <>);
                end if;
 
                declare
@@ -1960,6 +2163,123 @@ package body Landin.IR.Verifier is
             end if;
          end;
       end loop;
+
+      --  Measurement runs are also structural aggregate occurrences.  Check
+      --  every stored shape before the nominal-consistency walk indexes a
+      --  nested run; orphaned shapes are harmless but may not be malformed.
+      for Shape of Of_Unit.Measurement_Fields loop
+         if Field_Shape_Is_Malformed
+           (Shape, Aggregate_Allowed => True)
+         then
+            return (Kind => Field_Shape_Malformed, others => <>);
+         end if;
+      end loop;
+
+      --  One target-neutral nominal identity denotes one structural field
+      --  tree wherever it occurs.  Record the first root, then compare every
+      --  item, slot, nested field, array element, checked address and
+      --  measurement occurrence against it.  Same_Shape and Register_Shape
+      --  carry bounds derived only from finite IR vectors; no target layout
+      --  participates in identity.
+      declare
+         Bad : Fault_Kind;
+         Budget : constant Natural :=
+           Variant_Field_Shape_Count (Of_Unit) + 1;
+      begin
+         for Which in 1 .. Item_Count (Of_Unit) loop
+            declare
+               Id : constant Item_Id := Item_Id (Which);
+            begin
+               if Kind_Of (Of_Unit, Id) = Datum
+                 and then Nominal_Of (Of_Unit, Id) /= No_Nominal_Type
+               then
+                  Bad := Register
+                    ((Kind    => Item_Aggregate_Source,
+                      Item    => Id,
+                      Nominal => Nominal_Of (Of_Unit, Id),
+                      others  => <>));
+                  if Bad /= Nothing_Wrong then
+                     return (Kind => Bad, Item => Id, others => <>);
+                  end if;
+               end if;
+
+               if Result_Of (Of_Unit, Id) = Landin.Types.Aggregate then
+                  for Field in 1 .. Field_Count (Of_Unit, Id) loop
+                     Bad := Register_Shape
+                       (Nth_Field_Shape (Of_Unit, Id, Field), Budget);
+                     if Bad /= Nothing_Wrong then
+                        return (Kind => Bad, Item => Id, others => <>);
+                     end if;
+                  end loop;
+               elsif Result_Of (Of_Unit, Id) = Landin.Types.Fixed_Array then
+                  Bad := Register_Shape
+                    (Array_Element_Shape (Of_Unit, Id), Budget);
+                  if Bad /= Nothing_Wrong then
+                     return (Kind => Bad, Item => Id, others => <>);
+                  end if;
+               end if;
+
+               for Slot in 1 .. Slot_Count (Of_Unit, Id) loop
+                  declare
+                     Slot_Id_Value : constant Slot_Id := Slot_Id (Slot);
+                  begin
+                     if Nominal_Of (Of_Unit, Id, Slot_Id_Value)
+                          /= No_Nominal_Type
+                     then
+                        Bad := Register
+                          ((Kind    => Slot_Aggregate_Source,
+                            Item    => Id,
+                            Slot    => Slot_Id_Value,
+                            Nominal =>
+                              Nominal_Of (Of_Unit, Id, Slot_Id_Value),
+                            others  => <>));
+                        if Bad /= Nothing_Wrong then
+                           return (Kind => Bad, Item => Id, others => <>);
+                        end if;
+                     end if;
+
+                     if Is_Aggregate (Of_Unit, Id, Slot_Id_Value) then
+                        for Field in
+                          1 .. Slot_Field_Count
+                                 (Of_Unit, Id, Slot_Id_Value)
+                        loop
+                           Bad := Register_Shape
+                             (Nth_Slot_Field_Shape
+                                (Of_Unit, Id, Slot_Id_Value, Field),
+                              Budget);
+                           if Bad /= Nothing_Wrong then
+                              return
+                                (Kind => Bad, Item => Id, others => <>);
+                           end if;
+                        end loop;
+                     elsif Is_Array (Of_Unit, Id, Slot_Id_Value) then
+                        Bad := Register_Shape
+                          (Slot_Array_Element_Shape
+                             (Of_Unit, Id, Slot_Id_Value),
+                           Budget);
+                        if Bad /= Nothing_Wrong then
+                           return (Kind => Bad, Item => Id, others => <>);
+                        end if;
+                     elsif Is_Address (Of_Unit, Id, Slot_Id_Value) then
+                        Bad := Register_Shape
+                          (Address_Shape (Of_Unit, Id, Slot_Id_Value),
+                           Budget);
+                        if Bad /= Nothing_Wrong then
+                           return (Kind => Bad, Item => Id, others => <>);
+                        end if;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+
+         for Shape of Of_Unit.Measurement_Fields loop
+            Bad := Register_Shape (Shape, Budget);
+            if Bad /= Nothing_Wrong then
+               return (Kind => Bad, others => <>);
+            end if;
+         end loop;
+      end;
 
       for Which in 1 .. Item_Count (Of_Unit) loop
          declare

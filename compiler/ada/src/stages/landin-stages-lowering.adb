@@ -266,8 +266,8 @@ package body Landin.Stages.Lowering is
          if Source = Landin.Checking.No_Nominal_Type then
             return IR.No_Nominal_Type;
          end if;
-         Position := Positive
-           (Landin.Checking.Nominal_Identities.Position (Source));
+         Position := Landin.Checking.Nominal_Identities.Position
+           (Types.all, Source);
          if Nominals (Position) = IR.No_Nominal_Type then
             raise Landin.Compiler_Defect with
               "a checker nominal identity was not mapped before lowering";

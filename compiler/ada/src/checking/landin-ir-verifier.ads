@@ -59,6 +59,8 @@ package Landin.IR.Verifier is
       Atom_Set_Malformed,
       Signature_Runs_Overlap,
       Signature_Part_Malformed,
+      Nominal_Metadata_Malformed,
+      Nominal_Shape_Disagrees,
       --  An item.
       Item_Without_A_Block,
       Item_Still_Building,

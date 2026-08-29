@@ -34,6 +34,7 @@ package body Landin.Tests.Verifier_Suite is
    package V  renames Landin.IR.Verifier;
 
    use type IR.Element_Total;
+   use type IR.Nominal_Type_Id;
    use type IR.Value_Id;
    use type Landin.Types.Folded;
    use type V.Fault_Kind;
@@ -275,6 +276,242 @@ package body Landin.Tests.Verifier_Suite is
             "same-layout nominal parameters remain unequal");
       end;
    end Same_Layout_Nominals_Do_Not_Agree_In_Signatures;
+
+   procedure Nominal_Root_Metadata_Is_Checked
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nominal_Root_Metadata_Is_Checked
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Unit : IR.Unit;
+         Nominal : IR.Nominal_Type_Id;
+         Routine : IR.Item_Id;
+         Slot : IR.Slot_Id;
+      begin
+         IR.Prepare (Unit, Meanings.all);
+         Nominal := IR.Add_Nominal_Type (Unit, 4);
+         Landin.Testing.Check
+           (Item,
+            IR.Nominal_Identities.Nth (Unit, 2) = IR.No_Nominal_Type,
+            "IR enumeration cannot construct an identity outside the unit");
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.No_Value, Site);
+         Slot := IR.Add_Slot
+           (Unit, Routine, Landin.Types.U32, 2, Site);
+
+         Landin.IR.Testing_Support.Overwrite_Item_Nominal
+           (Unit, Routine, Nominal);
+         Expect
+           (Item, V.Check (Unit), V.Nominal_Metadata_Malformed,
+            "a nonaggregate item cannot carry nominal metadata");
+
+         Landin.IR.Testing_Support.Overwrite_Item_Nominal
+           (Unit, Routine, IR.No_Nominal_Type);
+         Landin.IR.Testing_Support.Overwrite_Slot_Nominal
+           (Unit, Routine, Slot, Nominal);
+         Expect
+           (Item, V.Check (Unit), V.Nominal_Metadata_Malformed,
+            "a nonaggregate slot cannot carry nominal metadata");
+      end;
+   end Nominal_Root_Metadata_Is_Checked;
+
+   procedure Nominal_Shapes_Are_Canonical
+     (Item : in out Landin.Testing.Context);
+
+   procedure Nominal_Shapes_Are_Canonical
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+
+         procedure Finish_Datum
+           (Unit : in out IR.Unit; Datum : IR.Item_Id);
+
+         procedure Finish_Datum
+           (Unit : in out IR.Unit; Datum : IR.Item_Id)
+         is
+            Block : constant IR.Block_Id :=
+              IR.Add_Block
+                (Unit, Datum, Landin.Resolution.Program_Scope, Site);
+         begin
+            IR.Enter (Unit, Datum, Block);
+            IR.Emit_Leave (Unit, Datum, IR.No_Value, Site);
+            IR.Leave_Block (Unit, Datum);
+         end Finish_Datum;
+
+         procedure Add_Nested_Field
+           (Unit    : in out IR.Unit;
+            Datum   : IR.Item_Id;
+            Nominal : IR.Nominal_Type_Id;
+            Scalar  : Landin.Types.Scalar_Name);
+
+         procedure Add_Nested_Field
+           (Unit    : in out IR.Unit;
+            Datum   : IR.Item_Id;
+            Nominal : IR.Nominal_Type_Id;
+            Scalar  : Landin.Types.Scalar_Name) is
+         begin
+            IR.Add_Field
+              (Unit, Datum,
+               (Kind           => IR.Aggregate_Field_Shape,
+                Cases          => 1,
+                Payloads_First => 1,
+                Nominal        => Nominal,
+                others         => <>),
+               Cases => IR.No_Case_Runs,
+               Payloads =>
+                 [1 => (Kind => IR.Scalar_Field_Shape,
+                        Element => Scalar, others => <>)]);
+         end Add_Nested_Field;
+      begin
+         declare
+            Unit : IR.Unit;
+            Left_Nominal, Right_Nominal : IR.Nominal_Type_Id;
+            Left, Right : IR.Item_Id;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Left_Nominal := IR.Add_Nominal_Type (Unit, 3);
+            Right_Nominal := IR.Add_Nominal_Type (Unit, 4);
+            Left := IR.Add_Item
+              (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site,
+               Left_Nominal);
+            Right := IR.Add_Item
+              (Unit, IR.Datum, 2, Landin.Types.Aggregate, Site,
+               Right_Nominal);
+            IR.Add_Field (Unit, Left, Landin.Types.U32);
+            IR.Add_Field (Unit, Right, Landin.Types.U32);
+            Finish_Datum (Unit, Left);
+            Finish_Datum (Unit, Right);
+
+            Expect
+              (Item, V.Check (Unit), V.Nothing_Wrong,
+               "unequal nominal identities may have equal field trees");
+         end;
+
+         declare
+            Unit : IR.Unit;
+            Nominal : IR.Nominal_Type_Id;
+            Left, Right : IR.Item_Id;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Nominal := IR.Add_Nominal_Type (Unit, 3);
+            Left := IR.Add_Item
+              (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site, Nominal);
+            Right := IR.Add_Item
+              (Unit, IR.Datum, 2, Landin.Types.Aggregate, Site, Nominal);
+            IR.Add_Field (Unit, Left, Landin.Types.U8);
+            IR.Add_Field (Unit, Right, Landin.Types.U16);
+            Finish_Datum (Unit, Left);
+            Finish_Datum (Unit, Right);
+
+            Expect
+              (Item, V.Check (Unit), V.Nominal_Shape_Disagrees,
+               "one nominal identity cannot name two root field trees");
+         end;
+
+         declare
+            Unit : IR.Unit;
+            Nominal : IR.Nominal_Type_Id;
+            Datum, Routine : IR.Item_Id;
+            Slot : IR.Slot_Id;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Nominal := IR.Add_Nominal_Type (Unit, 3);
+            Datum := IR.Add_Item
+              (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site, Nominal);
+            Routine := IR.Add_Item
+              (Unit, IR.Routine, 2, Landin.Types.No_Value, Site);
+            Slot := IR.Add_Aggregate_Slot
+              (Unit, Routine, IR.No_Declaration, Site, Nominal);
+            IR.Add_Field (Unit, Datum, Landin.Types.U8);
+            IR.Add_Slot_Field (Unit, Routine, Slot, Landin.Types.U16);
+            Finish_Datum (Unit, Datum);
+            Finish_Datum (Unit, Routine);
+
+            Expect
+              (Item, V.Check (Unit), V.Nominal_Shape_Disagrees,
+               "item and slot roots cannot disagree for one nominal identity");
+         end;
+
+         declare
+            Unit : IR.Unit;
+            Parent, Child : IR.Nominal_Type_Id;
+            Left, Right : IR.Item_Id;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Parent := IR.Add_Nominal_Type (Unit, 3);
+            Child := IR.Add_Nominal_Type (Unit, 4);
+            Left := IR.Add_Item
+              (Unit, IR.Datum, 1, Landin.Types.Aggregate, Site, Parent);
+            Right := IR.Add_Item
+              (Unit, IR.Datum, 2, Landin.Types.Aggregate, Site, Parent);
+            Add_Nested_Field (Unit, Left, Child, Landin.Types.U8);
+            Add_Nested_Field (Unit, Right, Child, Landin.Types.U16);
+            Finish_Datum (Unit, Left);
+            Finish_Datum (Unit, Right);
+
+            Expect
+              (Item, V.Check (Unit), V.Nominal_Shape_Disagrees,
+               "nested occurrences retain one nominal field tree");
+         end;
+
+         declare
+            Unit : IR.Unit;
+            Child : IR.Nominal_Type_Id;
+            Left, Right : IR.Item_Id;
+            Left_First, Right_First : Natural;
+         begin
+            IR.Prepare (Unit, Meanings.all);
+            Child := IR.Add_Nominal_Type (Unit, 4);
+            Left := IR.Add_Item
+              (Unit, IR.Datum, 1, Landin.Types.Fixed_Array, Site);
+            Right := IR.Add_Item
+              (Unit, IR.Datum, 2, Landin.Types.Fixed_Array, Site);
+            Left_First := IR.Add_Shape_Run
+              (Unit, [1 => (Kind => IR.Scalar_Field_Shape,
+                            Element => Landin.Types.U8, others => <>)]);
+            IR.Set_Array
+              (Unit, Left,
+               (Kind           => IR.Aggregate_Field_Shape,
+                Cases          => 1,
+                Payloads_First => Left_First,
+                Nominal        => Child,
+                others         => <>),
+               2);
+            Right_First := IR.Add_Shape_Run
+              (Unit, [1 => (Kind => IR.Scalar_Field_Shape,
+                            Element => Landin.Types.U16, others => <>)]);
+            IR.Set_Array
+              (Unit, Right,
+               (Kind           => IR.Aggregate_Field_Shape,
+                Cases          => 1,
+                Payloads_First => Right_First,
+                Nominal        => Child,
+                others         => <>),
+               2);
+            Finish_Datum (Unit, Left);
+            Finish_Datum (Unit, Right);
+
+            Expect
+              (Item, V.Check (Unit), V.Nominal_Shape_Disagrees,
+               "array element occurrences retain one nominal field tree");
+         end;
+      end;
+   end Nominal_Shapes_Are_Canonical;
 
    ------------------------------------------------------------------
 
@@ -3123,6 +3360,12 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "same-layout nominals disagree",
          Same_Layout_Nominals_Do_Not_Agree_In_Signatures'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "nominal root metadata is checked",
+         Nominal_Root_Metadata_Is_Checked'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "nominal shapes are canonical",
+         Nominal_Shapes_Are_Canonical'Access);
       Landin.Testing.Register
         (Into, "verifier", "malformed shapes are rejected",
          Malformed_Shapes_Are_Rejected'Access);

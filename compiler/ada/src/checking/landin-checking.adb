@@ -3,11 +3,24 @@ package body Landin.Checking is
    package body Nominal_Identities is
       function None return Id is (0);
 
-
       function From_Position (Position : Positive) return Id
         is (Id (Position));
 
-      function Position (Of_Id : Id) return Natural is (Natural (Of_Id));
+      function Nth (Of_Table : Table; Position : Positive) return Id
+        is (if Position <= Natural (Of_Table.Nominal_Templates.Length)
+            then From_Position (Position) else None);
+
+      function Holds (Of_Table : Table; Of_Id : Id) return Boolean
+        is (Of_Table.Ready
+            and then Of_Id /= None
+            and then Natural (Of_Id)
+                       <= Natural (Of_Table.Nominal_Templates.Length));
+
+      function Position (Of_Table : Table; Of_Id : Id) return Positive is
+         pragma Unreferenced (Of_Table);
+      begin
+         return Positive (Of_Id);
+      end Position;
    end Nominal_Identities;
 
    use type Landin.Source.Source_Id;
@@ -110,8 +123,8 @@ package body Landin.Checking is
                Into.Layouts.Append (Aggregate_Layout'(others => <>));
                declare
                   Made : constant Nominal_Type_Id :=
-                    Nominal_Identities.From_Position
-                      (Into.Nominal_Templates.Last_Index);
+                    Nominal_Identities.Nth
+                      (Into, Into.Nominal_Templates.Last_Index);
                begin
                   Into.Empty_Nominals (Positive (Id)) := Made;
                   Into.Declaration_Nominals (Positive (Id)) := Made;
@@ -171,22 +184,15 @@ package body Landin.Checking is
 
    function Nth_Nominal_Type
      (Of_Table : Table; Position : Positive) return Nominal_Type_Id
-   is
-      pragma Unreferenced (Of_Table);
-   begin
-      return Nominal_Identities.From_Position (Position);
-   end Nth_Nominal_Type;
+     is (Nominal_Identities.Nth (Of_Table, Position));
 
    function Holds (Of_Table : Table; Id : Nominal_Type_Id) return Boolean
-     is (Of_Table.Ready
-         and then Id /= No_Nominal_Type
-         and then Nominal_Identities.Position (Id)
-                    <= Nominal_Type_Count (Of_Table));
+     is (Nominal_Identities.Holds (Of_Table, Id));
 
    function Template_Of
      (Of_Table : Table; Id : Nominal_Type_Id) return Declaration_Id
      is (Of_Table.Nominal_Templates
-           (Positive (Nominal_Identities.Position (Id))));
+           (Nominal_Identities.Position (Of_Table, Id)));
 
    function Empty_Nominal_Instance
      (Of_Table : Table; Template : Declaration_Id) return Nominal_Type_Id
@@ -673,13 +679,14 @@ package body Landin.Checking is
 
    function Has_Layout (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
-     is (Id /= No_Nominal_Type
-         and then Of_Table.Layouts (Nominal_Identities.Position (Id)).Ready);
+     is (Holds (Of_Table, Id)
+         and then Of_Table.Layouts
+           (Nominal_Identities.Position (Of_Table, Id)).Ready);
 
    function Layout_Field_Count (Of_Table : Table; Id : Nominal_Type_Id)
      return Natural
      is (Of_Table.Layouts
-           (Nominal_Identities.Position (Id)).Count);
+           (Nominal_Identities.Position (Of_Table, Id)).Count);
 
    procedure Lay_Out
      (Into  : in out Table;
@@ -903,7 +910,7 @@ package body Landin.Checking is
       end;
 
       Built.Ready := True;
-      Into.Layouts (Nominal_Identities.Position (Id)) := Built;
+      Into.Layouts (Nominal_Identities.Position (Into, Id)) := Built;
       Fits := True;
    end Lay_Out;
 
@@ -936,7 +943,7 @@ package body Landin.Checking is
       return Field_Shape
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Id));
+        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
    begin
       return Of_Table.Field_Shapes (Layout.Shape_First + Field - 1);
    end Field_Shape_Of;
@@ -975,7 +982,7 @@ package body Landin.Checking is
       Field    : Positive) return Landin.Targets.Byte_Count
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Id));
+        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
    begin
       return Of_Table.Field_Offsets (Layout.First + Field - 1);
    end Field_Offset;
@@ -986,7 +993,7 @@ package body Landin.Checking is
       Field    : Positive) return Landin.Types.Scalar_Name
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Id));
+        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
    begin
       return Of_Table.Field_Shapes
         (Layout.Shape_First + Field - 1).Element;
@@ -998,7 +1005,7 @@ package body Landin.Checking is
       Field    : Positive) return Field_Kind
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Id));
+        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
    begin
       return Of_Table.Field_Shapes
         (Layout.Shape_First + Field - 1).Kind;
@@ -1010,7 +1017,7 @@ package body Landin.Checking is
       Field    : Positive) return Element_Count
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Id));
+        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
    begin
       return Of_Table.Field_Shapes
         (Layout.Shape_First + Field - 1).Length;
@@ -1022,7 +1029,7 @@ package body Landin.Checking is
       Field    : Positive) return Landin.Types.Scalar_Name
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Nominal_Identities.Position (Id));
+        Of_Table.Layouts (Nominal_Identities.Position (Of_Table, Id));
    begin
       return Of_Table.Field_Shapes
         (Layout.Shape_First + Field - 1).Element;
@@ -1032,19 +1039,19 @@ package body Landin.Checking is
      return Landin.Targets.Byte_Count
      is (Landin.Targets.Extent_Of
            (Of_Table.Layouts
-              (Nominal_Identities.Position (Id)).Placed));
+              (Nominal_Identities.Position (Of_Table, Id)).Placed));
 
    function Layout_Alignment (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Alignment
      is (Landin.Targets.Alignment_Of
            (Of_Table.Layouts
-              (Nominal_Identities.Position (Id)).Placed));
+              (Nominal_Identities.Position (Of_Table, Id)).Placed));
 
    function Layout_Size (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Count
      is (Landin.Targets.Size_Of
            (Of_Table.Layouts
-              (Nominal_Identities.Position (Id)).Placed));
+              (Nominal_Identities.Position (Of_Table, Id)).Placed));
 
    function Field_Index
      (Of_Table : Table;

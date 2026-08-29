@@ -78,9 +78,12 @@ package Landin.Checking is
    No_Declaration : constant Declaration_Id :=
      Landin.Provenance.No_Declaration;
 
+   type Table is tagged limited private;
+
    --  A nominal type is a checker-owned instance identity, distinct from
    --  the source declaration that supplies its template and owns storage.
-   --  Callers may compare identities but cannot construct one.  The enabled
+   --  Callers may compare identities and retrieve identities held by a table,
+   --  but cannot construct one from an integer.  The enabled
    --  nonparameterized struct is the canonical empty-actual instance of its
    --  template declaration; later R2.40 increments extend the same table
    --  with normalized actual tuples.
@@ -88,10 +91,13 @@ package Landin.Checking is
       type Id is private;
 
       function None return Id;
-      function From_Position (Position : Positive) return Id;
-      function Position (Of_Id : Id) return Natural;
+      function Nth (Of_Table : Table; Position : Positive) return Id;
+      function Holds (Of_Table : Table; Of_Id : Id) return Boolean;
+      function Position (Of_Table : Table; Of_Id : Id) return Positive
+        with Pre => Holds (Of_Table, Of_Id);
    private
       type Id is range 0 .. Integer'Last;
+      function From_Position (Position : Positive) return Id;
    end Nominal_Identities;
 
    subtype Nominal_Type_Id is Nominal_Identities.Id;
@@ -105,8 +111,6 @@ package Landin.Checking is
    --  scope and nothing else, and it is public because the stage that
    --  reports the cycle is the one that has to see it.
    type Progress is (Untouched, Underway, Settled);
-
-   type Table is tagged limited private;
 
    ------------------------------------------------------------------
    --  Building
@@ -819,14 +823,19 @@ package Landin.Checking is
       Nominal : Nominal_Type_Id)
      with Pre  => Is_Prepared (Into)
                   and then Covers (Into, Of_Tree)
-                  and then Landin.Syntax.Contains (Of_Tree, Node),
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then (Nominal = No_Nominal_Type
+                            or else Holds (Into, Nominal)),
           Post => Array_Element_Nominal (Into, Of_Tree, Node) = Nominal;
 
    procedure Note_Array_Element_Nominal
      (Into  : in out Table;
       Id      : Declaration_Id;
       Nominal : Nominal_Type_Id)
-     with Pre  => Is_Prepared (Into) and then Contains (Into, Id),
+     with Pre  => Is_Prepared (Into)
+                  and then Contains (Into, Id)
+                  and then (Nominal = No_Nominal_Type
+                            or else Holds (Into, Nominal)),
           Post => Array_Element_Nominal (Into, Id) = Nominal;
 
    procedure Note_Array
