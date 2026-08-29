@@ -11,7 +11,7 @@
 #
 #  A construct with no evidence and no refusal is this
 #  item's to answer for; see ROADMAP.md R1.90.
-#  198 constructs, 105 with evidence, 93 with neither.
+#  198 constructs, 106 with evidence, 92 with neither.
 #
 #  id    defined in  evidence
 0010   tour        accepted emitted                   Line comment, to end of line
@@ -105,14 +105,14 @@
 0890   tour        accepted emitted                   Nothing returned
 0900   tour        accepted emitted executed refused refused-by-name Three parameter conventions
 0910   tour        -                                  sink takes a place
-0920   tour        refused refused-by-name            Multiple named returns
+0920   tour        accepted emitted executed refused  Multiple named returns
 0930   tour        accepted emitted executed refused  Every named return must be assigned before return
 0940   tour        refused                            Errors: a declared set of atoms in one dedicated register
 0950   tour        -                                  Not everything that goes wrong belongs in that channel
 0960   tour        refused-by-name                    Propagating: try, visible at the call site
-0970   tour        refused-by-name                    Early exit
+0970   tour        accepted emitted executed refused refused-by-name Early exit
 0980   tour        refused                            Calls: positional first, then named
-0990   tour        -                                  A return list is an anonymous struct
+0990   tour        accepted emitted executed refused  A return list is an anonymous struct
 1000   tour        accepted emitted executed refused  A function type is an ordinary type
 1010   tour        accepted emitted executed refused  Anonymous functions
 1020   tour        accepted emitted refused           Discarding a result must be explicit

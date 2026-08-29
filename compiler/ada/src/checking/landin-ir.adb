@@ -57,23 +57,46 @@ package body Landin.IR is
    function Signature_Count (Of_Unit : Unit) return Natural
      is (Natural (Of_Unit.Signatures.Length));
 
+   function Add_Signature_With_Results
+     (Into       : in out Unit;
+      Parameters : Signature_Part_Array;
+      Results    : Signature_Part_Array) return Signature_Id
+   is
+      Made : Signature_Record :=
+        (Parameters => (First => 0, Count => 0),
+         Results    => (First => 0, Count => 0));
+
+      procedure Append (Parts : Signature_Part_Array; To_Run : in out Run);
+
+      procedure Append (Parts : Signature_Part_Array; To_Run : in out Run) is
+      begin
+         if Parts'Length > 0 then
+            To_Run.First := Natural (Into.Signature_Parts.Length);
+            for Part of Parts loop
+               Into.Signature_Parts.Append (Part);
+               To_Run.Count := To_Run.Count + 1;
+            end loop;
+         end if;
+      end Append;
+   begin
+      Append (Parameters, Made.Parameters);
+      Append (Results, Made.Results);
+      Into.Signatures.Append (Made);
+      return Signature_Id (Into.Signatures.Last_Index);
+   end Add_Signature_With_Results;
+
    function Add_Signature
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
       Result     : Signature_Part) return Signature_Id
    is
-      Made : Signature_Record :=
-        (Parameters => (First => 0, Count => 0), Result => Result);
    begin
-      if Parameters'Length > 0 then
-         Made.Parameters.First := Natural (Into.Signature_Parts.Length);
-         for Part of Parameters loop
-            Into.Signature_Parts.Append (Part);
-            Made.Parameters.Count := Made.Parameters.Count + 1;
-         end loop;
+      if Result.Kind = Landin.Types.No_Value then
+         return Add_Signature_With_Results
+           (Into, Parameters, No_Signature_Parts);
       end if;
-      Into.Signatures.Append (Made);
-      return Signature_Id (Into.Signatures.Last_Index);
+      return Add_Signature_With_Results
+        (Into, Parameters, Signature_Part_Array'[1 => Result]);
    end Add_Signature;
 
    function Signature_Parameter_Count
@@ -90,9 +113,29 @@ package body Landin.IR is
       return Of_Unit.Signature_Parts (Parameters.First + Index);
    end Nth_Signature_Parameter;
 
+   function Signature_Result_Count
+     (Of_Unit : Unit; Signature : Signature_Id) return Natural
+     is (Of_Unit.Signatures (Positive (Signature)).Results.Count);
+
+   function Nth_Signature_Result
+     (Of_Unit : Unit; Signature : Signature_Id; Index : Positive)
+      return Signature_Part
+   is
+      Results : constant Run :=
+        Of_Unit.Signatures (Positive (Signature)).Results;
+   begin
+      return Of_Unit.Signature_Parts (Results.First + Index);
+   end Nth_Signature_Result;
+
    function Signature_Result
      (Of_Unit : Unit; Signature : Signature_Id) return Signature_Part
-     is (Of_Unit.Signatures (Positive (Signature)).Result);
+   is
+   begin
+      if Signature_Result_Count (Of_Unit, Signature) = 0 then
+         return (Kind => Landin.Types.No_Value, others => <>);
+      end if;
+      return Nth_Signature_Result (Of_Unit, Signature, 1);
+   end Signature_Result;
 
    function Signatures_Agree
      (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
@@ -106,7 +149,9 @@ package body Landin.IR is
                   when Landin.Types.Aggregate =>
                      A.Aggregate_Body = B.Aggregate_Body,
                   when Landin.Types.Fixed_Array =>
-                     A.Length = B.Length and then A.Element = B.Element,
+                     A.Length = B.Length
+                     and then A.Element = B.Element
+                     and then A.Aggregate_Body = B.Aggregate_Body,
                   when Landin.Types.Function_Value =>
                      Holds (Of_Unit, A.Signature)
                      and then Holds (Of_Unit, B.Signature)
@@ -116,9 +161,8 @@ package body Landin.IR is
    begin
       if Signature_Parameter_Count (Of_Unit, Left)
            /= Signature_Parameter_Count (Of_Unit, Right)
-        or else not Parts_Agree
-          (Signature_Result (Of_Unit, Left),
-           Signature_Result (Of_Unit, Right))
+        or else Signature_Result_Count (Of_Unit, Left)
+           /= Signature_Result_Count (Of_Unit, Right)
       then
          return False;
       end if;
@@ -126,6 +170,14 @@ package body Landin.IR is
          if not Parts_Agree
            (Nth_Signature_Parameter (Of_Unit, Left, Index),
             Nth_Signature_Parameter (Of_Unit, Right, Index))
+         then
+            return False;
+         end if;
+      end loop;
+      for Index in 1 .. Signature_Result_Count (Of_Unit, Left) loop
+         if not Parts_Agree
+           (Nth_Signature_Result (Of_Unit, Left, Index),
+            Nth_Signature_Result (Of_Unit, Right, Index))
          then
             return False;
          end if;
@@ -475,7 +527,8 @@ package body Landin.IR is
          Length         => Element (Of_Unit, Item).Length,
          Cases          =>
            (if Element (Of_Unit, Item).Element_Run = 0 then 0 else 1),
-         Payloads_First => Element (Of_Unit, Item).Element_Run);
+         Payloads_First => Element (Of_Unit, Item).Element_Run,
+         others         => <>);
 
    function Array_Length
      (Of_Unit : Unit; Item : Item_Id) return Element_Total
@@ -775,7 +828,8 @@ package body Landin.IR is
                  (Slot_At (Of_Unit, Item, Slot)).Element_Run = 0
             then 0 else 1),
          Payloads_First =>
-           Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element_Run);
+           Of_Unit.Slots (Slot_At (Of_Unit, Item, Slot)).Element_Run,
+         others => <>);
 
    function Slot_Array_Length
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Element_Total
@@ -1088,11 +1142,15 @@ package body Landin.IR is
       Instruction_Held : constant Instruction :=
         Held (Of_Unit, Item, Value);
    begin
-      if Instruction_Held.Op in Function_Address | Load | Load_Datum then
+      if Instruction_Held.Op
+           in Function_Address | Load | Load_Datum | Load_Field
+      then
          return Instruction_Held.Signature;
       end if;
       if Instruction_Held.Op in Call | Indirect_Call
         and then Holds (Of_Unit, Instruction_Held.Signature)
+        and then Signature_Result_Count
+          (Of_Unit, Instruction_Held.Signature) = 1
       then
          declare
             Result : constant Signature_Part :=
@@ -1392,7 +1450,15 @@ package body Landin.IR is
 
       case Left.Kind is
          when Scalar_Field_Shape =>
-            return Left.Element = Right.Element;
+            return Left.Element = Right.Element
+              and then
+                ((Left.Signature = No_Signature
+                    and then Right.Signature = No_Signature)
+                 or else
+                   (Holds (Of_Unit, Left.Signature)
+                    and then Holds (Of_Unit, Right.Signature)
+                    and then Signatures_Agree
+                      (Of_Unit, Left.Signature, Right.Signature)));
 
          when Array_Field_Shape =>
             if Left.Length /= Right.Length then
@@ -1744,7 +1810,8 @@ package body Landin.IR is
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+      Nested : Path_Step_Array := No_Path_Steps;
+      Signature : Signature_Id := No_Signature) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
    begin
@@ -1756,6 +1823,7 @@ package body Landin.IR is
                       Named       => Datum,
                       Part        => Field,
                       Nested      => Steps,
+                      Signature   => Signature,
                       others      => <>));
    end Emit_Load_Field;
 
@@ -1766,7 +1834,8 @@ package body Landin.IR is
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+      Nested : Path_Step_Array := No_Path_Steps;
+      Signature : Signature_Id := No_Signature) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
    begin
@@ -1778,6 +1847,7 @@ package body Landin.IR is
                       Slot        => Slot,
                       Part        => Field,
                       Nested      => Steps,
+                      Signature   => Signature,
                       others      => <>));
    end Emit_Load_Slot_Field;
 

@@ -35,12 +35,14 @@
 --
 --  A declaration's type is the type of the VALUE its name denotes.  D113
 --  makes a function name and an inferred Function_Value; D117 adds a written
---  function type and D118 carries recursively nested descriptors through
---  storage, parameters, results and anonymous routines.  Type_Kind says that
+--  function type and D123 carries recursively nested descriptors through
+--  storage, parameters, results and anonymous routines.  D128 gives each
+--  descriptor an ordered result run and gives a two-or-more result value its
+--  anonymous structural shape.  Type_Kind says that
 --  category and this table carries the complete signature descriptor beside
 --  each relevant node and declaration.  It never substitutes the declaration
---  of one possible callee for that type evidence.  A call's type is its
---  descriptor's named result; `-> none` is No_Value.
+--  of one possible callee for that type evidence.  A call's type is its one
+--  result, its anonymous aggregate result run, or No_Value for `-> none`.
 --
 --  Nothing here holds a diagnostic and nothing here decides a rule.  A
 --  mismatch is two type values that are not equal; the codes belong to
@@ -222,6 +224,11 @@ package Landin.Checking is
       Length  : Element_Count          := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Signature : Signature_Id         := No_Signature;
+      --  A result label is source-level shape for [0990].  Parameter labels
+      --  may be retained too, but signature agreement deliberately ignores
+      --  every label [1000].
+      Name    : Landin.Source.Names.Name_Id :=
+        Landin.Source.Names.No_Name;
       Site    : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
    end record;
 
@@ -238,6 +245,18 @@ package Landin.Checking is
          and then Id /= No_Signature
          and then Natural (Id) <= Signature_Count (Of_Table));
 
+   function Add_Signature
+     (Into       : in out Table;
+      Parameters : Signature_Part_Array;
+      Results    : Signature_Part_Array;
+      Site       : Landin.Provenance.Origin) return Signature_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Signature'Result);
+
+   --  Compatibility for builders of the former zero-or-one result shape.
+   --  No_Value denotes an empty result run; every other part makes one.
    function Add_Signature
      (Into       : in out Table;
       Parameters : Signature_Part_Array;
@@ -293,9 +312,23 @@ package Landin.Checking is
                  and then Index <= Signature_Parameter_Count
                                      (Of_Table, Signature);
 
+   function Signature_Result_Count
+     (Of_Table : Table; Signature : Signature_Id) return Natural
+     with Pre => Holds (Of_Table, Signature);
+
+   function Nth_Signature_Result
+     (Of_Table : Table; Signature : Signature_Id; Index : Positive)
+      return Signature_Part
+     with Pre => Holds (Of_Table, Signature)
+                 and then Index <= Signature_Result_Count
+                                     (Of_Table, Signature);
+
+   --  The former zero-or-one query.  It returns No_Value for an empty run
+   --  and is only valid as a language result when the count is at most one.
    function Signature_Result
      (Of_Table : Table; Signature : Signature_Id) return Signature_Part
-     with Pre => Holds (Of_Table, Signature);
+     with Pre => Holds (Of_Table, Signature)
+                 and then Signature_Result_Count (Of_Table, Signature) <= 1;
 
    function Signature_Origin
      (Of_Table : Table; Signature : Signature_Id)
@@ -309,6 +342,55 @@ package Landin.Checking is
    function Signatures_Agree
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean
      with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
+
+   --  A call with two or more named returns has an anonymous structural
+   --  aggregate shape.  This side table carries the source signature whose
+   --  result run names and types are that shape; ordinary nominal aggregates
+   --  continue to use Body_Of.
+   function Result_Shape_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Signature_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Result_Shape_Of
+     (Of_Table : Table; Id : Declaration_Id) return Signature_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Natural (Id) <= Declaration_Limit (Of_Table);
+
+   procedure Note_Result_Shape
+     (Into     : in out Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id;
+      Signature : Signature_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Signature)
+                  and then Signature_Result_Count (Into, Signature) > 1,
+          Post => Result_Shape_Of (Into, Of_Tree, Node) = Signature;
+
+   procedure Note_Result_Shape
+     (Into      : in out Table;
+      Id        : Declaration_Id;
+      Signature : Signature_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Id /= No_Declaration
+                  and then Natural (Id) <= Declaration_Limit (Into)
+                  and then Holds (Into, Signature)
+                  and then Signature_Result_Count (Into, Signature) > 1,
+          Post => Result_Shape_Of (Into, Id) = Signature;
+
+   --  Whole anonymous result values compare names and ordered part types.
+   --  Function signatures use Signatures_Agree above, which compares the
+   --  same ordered types while ignoring labels [1000].
+   function Result_Shapes_Agree
+     (Of_Table : Table; Left, Right : Signature_Id) return Boolean
+     with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right)
+                 and then Signature_Result_Count (Of_Table, Left) > 1
+                 and then Signature_Result_Count (Of_Table, Right) > 1;
 
    --  Field order is declaration order [0750].  D45 adds one compact
    --  fixed-array leaf, D74 an unfolded variant part, and D86 a
@@ -798,7 +880,7 @@ private
 
    type Signature_Record is record
       Parameters : Run;
-      Result     : Signature_Part;
+      Results    : Run;
       Site       : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
    end record;
 
@@ -830,6 +912,7 @@ private
       --  they came from one declaration.
       Node_Bodies  : Body_Vectors.Vector;
       Node_Signatures : Signature_Id_Vectors.Vector;
+      Node_Result_Shapes : Signature_Id_Vectors.Vector;
       --  Which field a selection node names, in the same run.
       Node_Fields  : Index_Vectors.Vector;
       Node_Shapes  : Shape_Vectors.Vector;
@@ -838,6 +921,7 @@ private
       Declarations : Settlement_Vectors.Vector;
       Bodies       : Body_Vectors.Vector;
       Declaration_Signatures : Signature_Id_Vectors.Vector;
+      Declaration_Result_Shapes : Signature_Id_Vectors.Vector;
       Signatures   : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
       Layouts      : Layout_Vectors.Vector;

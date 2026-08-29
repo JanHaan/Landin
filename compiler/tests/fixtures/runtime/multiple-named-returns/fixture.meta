@@ -1,0 +1,6 @@
+class: runtime
+summary: multiple scalar aggregate and function results cross direct indirect early and control-flow calls
+constructs: 0410, 0520, 0710, 0880, 0920, 0930, 0970, 0990, 1000, 1010, 1050, 1800, 1810, 1820, 1910, 1920, 1970
+targets: linux-x86-64
+program: main.ldn
+status: 0

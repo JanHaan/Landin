@@ -27,6 +27,7 @@ package body Landin.Stages.Checking.Flow is
    use type Landin.Types.Magnitude;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Field_Kind;
+   use type Landin.Checking.Signature_Id;
    use type Res.Verdict;
    use type Res.Declaration_Sort;
    use type Landin.Source.Source_Id;
@@ -149,6 +150,9 @@ package body Landin.Stages.Checking.Flow is
                      Most :=
                        Natural'Max
                          (Most, Syn.Field_Count (Of_Tree.all, Node));
+                  elsif Syn.Kind (Of_Tree.all, Node) = Syn.Return_List then
+                     Most := Natural'Max
+                       (Most, Syn.Slot_Count (Of_Tree.all, Node));
                   end if;
                end loop;
             end;
@@ -352,6 +356,10 @@ package body Landin.Stages.Checking.Flow is
          State     : Assigned_Set;
          Message   : String;
          Field     : Tracked_Field := 0);
+      procedure Require_Returns_Assigned
+        (At_Span : Landin.Source.Span;
+         State   : Assigned_Set;
+         Message : String);
       procedure Require_Element
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
@@ -682,6 +690,31 @@ package body Landin.Stages.Checking.Flow is
          end;
       end Require_Assigned;
 
+      procedure Require_Returns_Assigned
+        (At_Span : Landin.Source.Span;
+         State   : Assigned_Set;
+         Message : String) is
+      begin
+         for Which in 1 .. Syn.Return_Count (Of_Tree, Function_Node) loop
+            declare
+               Returned : constant Syn.Node_Id :=
+                 Syn.Nth_Return (Of_Tree, Function_Node, Which);
+               Id : constant Res.Declaration_Id :=
+                 Declaration_At (Syn.Source_Of (Of_Tree), Returned);
+            begin
+               if Id = Res.No_Declaration
+                 or else Landin.Checking.Type_Of (Types.all, Id)
+                           /= Ty.Ill_Typed
+               then
+                  Require_Assigned
+                    (Syn.Source_Of (Of_Tree), At_Span, Id, State,
+                     Message & " `" & Spelled (Syn.Name (Of_Tree, Returned))
+                     & "`");
+               end if;
+            end;
+         end loop;
+      end Require_Returns_Assigned;
+
       --  The body that holds the part a run reaches, and the shape of
       --  that part.  One walk down the declaration-order shapes, which is
       --  the same walk Landin.IR.Shape_At does over neutral ones.
@@ -693,10 +726,20 @@ package body Landin.Stages.Checking.Flow is
         (Id : Res.Declaration_Id; Path : Field_Path)
          return Res.Declaration_Id
       is
+         Shape : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Result_Shape_Of (Types.all, Id);
          Where : Res.Declaration_Id :=
            Landin.Checking.Body_Of (Types.all, Id);
+         First : Positive := 1;
       begin
-         for Step in 1 .. Natural (Path.Length) - 1 loop
+         if Shape /= Landin.Checking.No_Signature
+           and then not Path.Is_Empty
+         then
+            Where := Landin.Checking.Nth_Signature_Result
+              (Types.all, Shape, Positive (Path (1))).Aggregate_Body;
+            First := 2;
+         end if;
+         for Step in First .. Natural (Path.Length) - 1 loop
             Where := Landin.Checking.Field_Shape_Of
               (Types.all, Where, Path (Step)).Aggregate_Body;
          end loop;
@@ -753,6 +796,16 @@ package body Landin.Stages.Checking.Flow is
             return Landin.Checking.Array_Length (Types.all, Id);
          end if;
 
+         if Landin.Checking.Result_Shape_Of (Types.all, Id)
+              /= Landin.Checking.No_Signature
+           and then Natural (Path.Length) = 1
+         then
+            return Landin.Checking.Nth_Signature_Result
+              (Types.all,
+               Landin.Checking.Result_Shape_Of (Types.all, Id),
+               Positive (Path (1))).Length;
+         end if;
+
          return Landin.Checking.Field_Array_Length
                   (Types.all, Held_By (Id, Path), Last (Path));
       end Array_Length_For;
@@ -760,13 +813,29 @@ package body Landin.Stages.Checking.Flow is
       function Array_Label
         (Id : Res.Declaration_Id; Path : Field_Path) return String
       is
+         Shape : constant Landin.Checking.Signature_Id :=
+           Landin.Checking.Result_Shape_Of (Types.all, Id);
          Where : Res.Declaration_Id :=
            Landin.Checking.Body_Of (Types.all, Id);
          Text  : Unbounded.Unbounded_String :=
            Unbounded.To_Unbounded_String
              (Spelled (Res.Name_Of (Meanings.all, Id)));
+         First : Positive := 1;
       begin
-         for Step in 1 .. Natural (Path.Length) loop
+         if Shape /= Landin.Checking.No_Signature
+           and then not Path.Is_Empty
+         then
+            declare
+               Part : constant Landin.Checking.Signature_Part :=
+                 Landin.Checking.Nth_Signature_Result
+                   (Types.all, Shape, Positive (Path (1)));
+            begin
+               Unbounded.Append (Text, "." & Spelled (Part.Name));
+               Where := Part.Aggregate_Body;
+               First := 2;
+            end;
+         end if;
+         for Step in First .. Natural (Path.Length) loop
             Unbounded.Append (Text, "." & Field_Named (Where, Path (Step)));
             if Step < Natural (Path.Length) then
                Where := Landin.Checking.Field_Shape_Of
@@ -1781,6 +1850,11 @@ package body Landin.Stages.Checking.Flow is
                         end if;
                      end;
 
+                  when Syn.Destructuring_Binding =>
+                     Flow_Expression
+                       (Of_Tree, Syn.Destructured_Value (Of_Tree, Item),
+                        Result, State, Step, Initializer_Source);
+
                   when Syn.Assignment =>
                      if Landin.Checking.Type_Of
                           (Types.all, Of_Tree,
@@ -1836,16 +1910,10 @@ package body Landin.Stages.Checking.Flow is
                         State, Step);
 
                      if Step.Falls_Through then
-                        if Result = Res.No_Declaration
-                          or else Landin.Checking.Type_Of (Types.all, Result)
-                                  /= Ty.Ill_Typed
-                        then
-                           Require_Assigned
-                             (Syn.Source_Of (Of_Tree),
-                              Syn.Anchor (Of_Tree, Item), Result, State,
-                              "this returns and no path that arrives assigned"
-                              & " the return");
-                        end if;
+                        Require_Returns_Assigned
+                          (Syn.Anchor (Of_Tree, Item), State,
+                           "this returns and no path that arrives assigned"
+                           & " the return");
 
                         Step.Returns := True;
                         Step.Falls_Through :=
@@ -1889,8 +1957,12 @@ package body Landin.Stages.Checking.Flow is
       end Flow_Block;
 
       Result_Id : constant Res.Declaration_Id :=
-        (if Result_Node = Syn.No_Node then Res.No_Declaration
-         else Declaration_At (Syn.Source_Of (Of_Tree), Result_Node));
+        (if Result_Node = Syn.No_Node
+           or else Syn.Return_Count (Of_Tree, Function_Node) = 0
+         then Res.No_Declaration
+         else Declaration_At
+           (Syn.Source_Of (Of_Tree),
+            Syn.Nth_Return (Of_Tree, Function_Node, 1)));
       State : Assigned_Set := Nothing_Assigned;
       Edges : Edge_Facts;
    begin
@@ -1905,16 +1977,11 @@ package body Landin.Stages.Checking.Flow is
 
       if Syn.Kind (Of_Tree, Body_Node) = Syn.Block
         and then Edges.Falls_Through
-        and then
-          (Result_Id = Res.No_Declaration
-           or else Landin.Checking.Type_Of (Types.all, Result_Id)
-                   /= Ty.Ill_Typed)
       then
-         Require_Assigned
-           (Syn.Source_Of (Of_Tree), Syn.Anchor (Of_Tree, Function_Node),
-            Result_Id, State,
-            "this function can reach its `end`"
-            & " without assigning the return");
+         Require_Returns_Assigned
+           (Syn.Anchor (Of_Tree, Function_Node), State,
+            "this function can reach its `end` without assigning the"
+            & " return");
       end if;
    end Check_Function;
 

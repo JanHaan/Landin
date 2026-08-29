@@ -1,0 +1,5 @@
+class: negative
+summary: two named returns cannot declare one name in their signature scope
+constructs: 0920, 1840, 1850
+program: program.ldn
+codes: L0200

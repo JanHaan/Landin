@@ -1,0 +1,5 @@
+wanted: type = () -> (left: i32, right: i32)
+wrong: () -> (only: i32) = 1 end wrong
+bad: () -> none =
+    operation: wanted = wrong
+end bad

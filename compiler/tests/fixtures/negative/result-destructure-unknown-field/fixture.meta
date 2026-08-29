@@ -1,0 +1,5 @@
+class: negative
+summary: result destructuring binds only fields the return list names
+constructs: 0920, 0990, 1810, 1920
+program: program.ldn
+codes: L0308

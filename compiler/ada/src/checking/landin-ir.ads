@@ -328,6 +328,9 @@ package Landin.IR is
       Length  : Element_Total               := 1;
       Cases   : Natural                     := 0;
       Payloads_First : Natural              := 0;
+      --  Nonzero only when a scalar-shaped `usize` field carries a function
+      --  value inside D128's anonymous result aggregate.
+      Signature : Signature_Id              := 0;
    end record;
 
    type Field_Shape_Array is array (Positive range <>) of Field_Shape;
@@ -367,9 +370,10 @@ package Landin.IR is
    No_Value : constant Value_Id := 0;
    No_Signature : constant Signature_Id := 0;
 
-   --  D117's target-neutral callable shape.  Aggregate bodies are nominal
-   --  source identities, arrays retain only their length and scalar element,
-   --  and a function-valued position refers to another structural descriptor.
+   --  D117/D128's target-neutral callable shape.  Parameter and result runs
+   --  contain these parts; aggregate bodies are nominal source identities,
+   --  arrays retain their length and element identity, and a function-valued
+   --  position refers to another structural descriptor.
    --  A backend may derive a carrier convention from these facts; no register,
    --  byte width or target offset is represented here.
    type Signature_Part is record
@@ -438,6 +442,14 @@ package Landin.IR is
      is (Id /= No_Signature
          and then Natural (Id) <= Signature_Count (Of_Unit));
 
+   function Add_Signature_With_Results
+     (Into       : in out Unit;
+      Parameters : Signature_Part_Array;
+      Results    : Signature_Part_Array) return Signature_Id
+     with Pre  => Is_Prepared (Into),
+          Post => Signature_Count (Into) = Signature_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Signature_With_Results'Result);
+
    function Add_Signature
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
@@ -457,9 +469,21 @@ package Landin.IR is
                  and then Index <= Signature_Parameter_Count
                                      (Of_Unit, Signature);
 
+   function Signature_Result_Count
+     (Of_Unit : Unit; Signature : Signature_Id) return Natural
+     with Pre => Holds (Of_Unit, Signature);
+
+   function Nth_Signature_Result
+     (Of_Unit : Unit; Signature : Signature_Id; Index : Positive)
+      return Signature_Part
+     with Pre => Holds (Of_Unit, Signature)
+                 and then Index <= Signature_Result_Count
+                                     (Of_Unit, Signature);
+
    function Signature_Result
      (Of_Unit : Unit; Signature : Signature_Id) return Signature_Part
-     with Pre => Holds (Of_Unit, Signature);
+     with Pre => Holds (Of_Unit, Signature)
+                 and then Signature_Result_Count (Of_Unit, Signature) <= 1;
 
    function Signatures_Agree
      (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
@@ -1350,8 +1374,9 @@ package Landin.IR is
                   and then Index <= Parameter_Count (Of_Unit, Item),
           Post => Holds (Of_Unit, Item, Nth_Parameter'Result);
 
-   --  Which slot is [1800]'s named return.  No_Slot for `-> none` and
-   --  for a datum.
+   --  Which slot is [1800]'s result: the named place for one return or
+   --  D128's anonymous aggregate slot for several.  No_Slot for `-> none`
+   --  and for a datum.
    procedure Set_Result_Slot
      (Into : in out Unit; Item : Item_Id; Slot : Slot_Id)
      with Pre  => Holds (Into, Item)
@@ -2031,9 +2056,12 @@ package Landin.IR is
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+      Nested : Path_Step_Array := No_Path_Steps;
+      Signature : Signature_Id := No_Signature) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Datum)
+                  and then (Signature = No_Signature
+                            or else Holds (Into, Signature))
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted (Into, Item, Emit_Load_Field'Result, Load_Field);
 
@@ -2045,9 +2073,12 @@ package Landin.IR is
       Field  : Part_Position;
       Result : Landin.Types.Scalar_Name;
       Site   : Landin.Provenance.Origin;
-      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+      Nested : Path_Step_Array := No_Path_Steps;
+      Signature : Signature_Id := No_Signature) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Slot)
+                  and then (Signature = No_Signature
+                            or else Holds (Into, Signature))
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted
                     (Into, Item, Emit_Load_Slot_Field'Result, Load_Field);
@@ -2566,7 +2597,7 @@ private
 
    type Signature_Record is record
       Parameters : Run;
-      Result     : Signature_Part;
+      Results    : Run;
    end record;
 
    package Signature_Vectors is new Ada.Containers.Vectors

@@ -166,6 +166,7 @@ package body Landin.Resolution is
             when Landin.Syntax.Type_Declaration     => Module_Type,
             when Landin.Syntax.Variant_Case         => Case_Name,
             when Landin.Syntax.Match_Binding        => Pattern_Binding,
+            when Landin.Syntax.Destructured_Name    => Result_Binding,
             when Landin.Syntax.Parameter            => Parameter,
             when Landin.Syntax.Named_Return         => Named_Return,
             when Landin.Syntax.Binding              =>
