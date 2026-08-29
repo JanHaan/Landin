@@ -263,6 +263,119 @@ package body Landin.Tests.Resolution_Suite is
       end;
    end Variant_Cases_Are_Module_Visible_Identities;
 
+   --  D135 collects the complete list before resolving any fixed formal
+   --  type or the alias body, so the first formal may be used by the second
+   --  and both are visible in `[count]element` regardless of their order.
+   procedure Type_Formals_Have_One_Collected_Scope
+     (Item : in out Landin.Testing.Context);
+
+   procedure Type_Formals_Have_One_Collected_Scope
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Id    : Landin.Source.Source_Id;
+   begin
+      Id := Landin.Stages.Add_Source
+        (Work, "formals.ldn",
+         "bytes: type (element: type, fixed count: element) = [count]element"
+         & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 2, "the resolver ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a type alias resolves its collected formals");
+
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Id);
+         Alias : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Of_Tree.all, 1);
+         Element : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Type_Formal (Of_Tree.all, Alias, 1);
+         Count : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Type_Formal (Of_Tree.all, Alias, 2);
+         Count_Type : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type (Of_Tree.all, Count);
+         Alias_Body : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type (Of_Tree.all, Alias);
+         Bound : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Bound_Of (Of_Tree.all, Alias_Body);
+         Element_Use : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Element_Of (Of_Tree.all, Alias_Body);
+         Formal_Scope : constant Landin.Resolution.Scope_Id :=
+           Landin.Resolution.Scope_At (Meanings.all, Of_Tree.all, Alias);
+         Element_Declaration : Landin.Resolution.Declaration_Id :=
+           Landin.Resolution.No_Declaration;
+         Count_Declaration : Landin.Resolution.Declaration_Id :=
+           Landin.Resolution.No_Declaration;
+      begin
+         for Decl in Landin.Resolution.Declaration_Id'(1)
+                       .. Landin.Resolution.Declaration_Id
+                            (Landin.Resolution.Declaration_Count
+                               (Meanings.all))
+         loop
+            if Landin.Resolution.Source_Of (Meanings.all, Decl) = Id then
+               if Landin.Resolution.Node_Of
+                    (Meanings.all, Decl) = Element
+               then
+                  Element_Declaration := Decl;
+               elsif Landin.Resolution.Node_Of
+                    (Meanings.all, Decl) = Count
+               then
+                  Count_Declaration := Decl;
+               end if;
+            end if;
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Sort_Of (Meanings.all, Formal_Scope)
+              = Landin.Resolution.Type_Declaration
+              and then Landin.Resolution.Scope_Of
+                (Meanings.all, Element_Declaration) = Formal_Scope
+              and then Landin.Resolution.Scope_Of
+                (Meanings.all, Count_Declaration) = Formal_Scope,
+            "the alias owns one scope containing both formals");
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Sort_Of (Meanings.all, Element_Declaration)
+              = Landin.Resolution.Type_Parameter
+              and then Landin.Resolution.Sort_Of
+                (Meanings.all, Count_Declaration)
+                  = Landin.Resolution.Fixed_Parameter,
+            "the formal declarations retain their kinds");
+         Landin.Testing.Check
+           (Item,
+            Landin.Resolution.Verdict_Of
+              (Meanings.all, Of_Tree.all, Count_Type)
+                = Landin.Resolution.Bound
+              and then Landin.Resolution.Bound_To
+                (Meanings.all, Of_Tree.all, Count_Type)
+                  = Element_Declaration
+              and then Landin.Resolution.Verdict_Of
+                (Meanings.all, Of_Tree.all, Bound)
+                  = Landin.Resolution.Bound
+              and then Landin.Resolution.Bound_To
+                (Meanings.all, Of_Tree.all, Bound) = Count_Declaration
+              and then Landin.Resolution.Verdict_Of
+                (Meanings.all, Of_Tree.all, Element_Use)
+                  = Landin.Resolution.Bound
+              and then Landin.Resolution.Bound_To
+                (Meanings.all, Of_Tree.all, Element_Use)
+                  = Element_Declaration,
+            "later resolution sees every collected formal");
+      end;
+   end Type_Formals_Have_One_Collected_Scope;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -274,6 +387,9 @@ package body Landin.Tests.Resolution_Suite is
       Landin.Testing.Register
         (Into, "resolution", "variant cases are module visible identities",
          Variant_Cases_Are_Module_Visible_Identities'Access);
+      Landin.Testing.Register
+        (Into, "resolution", "type formals have one collected scope",
+         Type_Formals_Have_One_Collected_Scope'Access);
    end Register;
 
 end Landin.Tests.Resolution_Suite;

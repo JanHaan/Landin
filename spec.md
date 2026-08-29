@@ -102,7 +102,7 @@ that one is the tokeniser's. The other is in the rule itself: a
 name that starts with '_' needs something after it, so the lone
 '_' is the discard of [1020] and nothing may be called it. The
 kernel
-reserves twenty-five words; the reserved set of the whole language is
+reserves twenty-six words; the reserved set of the whole language is
 larger, and each word joins it with the construct that introduces
 it, so a program that avoids a construct never trips over its
 keyword. Type names are not among them: u32 and bool are ordinary
@@ -117,7 +117,7 @@ keyword     ::= "mut" | "public" | "if" | "then" | "elsif" | "else"
               | "end" | "return" | "when" | "inc" | "dec" | "none"
               | "true" | "false" | "and" | "or" | "not"
               | "sizeof" | "alignof" | "type" | "struct" | "zeroed"
-              | "atom" | "fail" | "try"
+              | "atom" | "fail" | "fixed" | "try"
 
 ```
 
@@ -198,14 +198,21 @@ predeclares; the grammar spells them out because they are the
 only ones a program does not have to declare for itself.
 An array [0520] is a type position too, and its length is part
 of it: the bound is [1770]'s integer, written in whatever base,
-and the element is a type like any other.
+or D135's fixed formal, and the element is a type like any other.
+A parameterized alias is a type position through its positional application;
+its substitution is deliberately a later R2.40 increment.
 
 ```landin-grammar
 binding       ::= "mut"? identifier ":" type ("=" expression)?
                 | "mut"? identifier ":=" expression
-type          ::= function_type | array_type | scalar_name | identifier
+type          ::= function_type | array_type | type_application | scalar_name
+                | identifier
 function_type ::= signature
-array_type    ::= "[" integer "]" type
+array_type    ::= "[" array_bound "]" type
+array_bound   ::= integer | identifier
+type_application ::= identifier "(" type_argument
+                     ("," type_argument)* ")"
+type_argument ::= type | integer
 scalar_name   ::= "u8" | "u16" | "u32" | "u64"
                 | "i8" | "i16" | "i32" | "i64"
                 | "usize" | "isize" | "bool"
@@ -230,8 +237,12 @@ declaration per name per scope [1850] and a name that names
 nothing is refused [1860] both hold for it unchanged.
 
 ```landin-grammar
-type_declaration ::= identifier ":" "type" "="
-                     (atom_union | type | struct_body)
+type_declaration ::= identifier ":" "type"
+                     ("=" (atom_union | type | struct_body)
+                     | type_formals "=" type)
+type_formals    ::= "(" type_formal ("," type_formal)* ")"
+type_formal     ::= identifier ":" "type"
+                  | "fixed" identifier ":" type
 atom_union      ::= identifier "|" identifier ("|" identifier)*
 struct_body      ::= "struct" member+ "end" identifier?
 member           ::= field | variant_part
@@ -7372,3 +7383,36 @@ meanings. All were declined.
 verifier case, the generated IR record, and
 `runtime/computed-aggregate-elements`, `runtime/r230-composition`, and
 `runtime/r230-composition-trap` on Linux x86-64.
+
+### D135 — Parameterized aliases collect their formals before their bodies
+
+**The tour said** that type and fixed parameters are compile-time [1290], that
+a type takes them through its own declaration rather than a function [1350],
+and that `fixed` marks compile-time knowledge [1490]. It did not settle the
+binder spelling, the scope that owns those names, or whether textual order
+could make a fixed formal's declared type resolve differently.
+
+**Chosen:** a parameterized alias is written `name: type (t: type, fixed n:
+u32) = rhs`, with `fixed` before its name. `fixed` is reserved. Its arguments
+are positional: a type application is `name(type_argument, ...)`, where an
+argument is a type or an integer for a fixed formal. A fixed formal may supply
+an array bound, so `[n]t` is an alias body. This increment admits only aliases
+with formals: a parameterized struct and every generic function remain outside
+the enabled kernel.
+
+One type-declaration scope contains all of the formals. The resolver collects
+the complete formal list into that scope before it resolves any fixed formal's
+declared type or the alias right-hand side. Thus a formal may name one written
+later, but the formals do not escape to the module or another declaration.
+The syntax and name bindings are retained now; compile-time substitution,
+argument agreement and concrete array lengths remain later R2.40 checking
+work.
+
+**Why one declaration scope:** resolving while reading would make a correct
+alias depend on its formal order, while making each formal a module declaration
+would leak its name and create collisions unrelated aliases cannot share. A
+function-shaped type maker would instead introduce execution where [1350]
+requires substitution. All were declined.
+
+**Pinned by** the parser and resolution public-seam cases, and the generated
+lexical and construct records.

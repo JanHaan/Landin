@@ -91,7 +91,8 @@ package Landin.Syntax is
       Atom_Declaration,
       --  [1795].  A declaration and not a binding: what it names is a
       --  type rather than a value, and [1790]'s `mut` and `:=` forms
-      --  have nothing to say about one.
+      --  have nothing to say about one.  Its trailing run is D135's
+      --  type and fixed formals.
       Type_Declaration,
       Binding,
       --  [0990]'s by-name local binding of selected fields from one
@@ -214,6 +215,10 @@ package Landin.Syntax is
       --  the kernel predeclares because those are known to the parser and
       --  this one is a name only resolution can answer for.
       Type_Reference,
+      --  D135's positional application of a parameterized alias.  Its
+      --  first slot names the applied type; its trailing run is the written
+      --  type and fixed arguments in order.
+      Type_Application,
       --  [0640]'s nonempty union of atom types.  Its trailing run is the
       --  referenced atom or atom-union names in written order; checking
       --  turns that run into a set, so order is not type identity.
@@ -240,7 +245,11 @@ package Landin.Syntax is
       --  declarations, while the part and payload field names are labels.
       Variant_Part,
       Variant_Case,
-      --  The parts that are none of the above.
+      --  The parts that are none of the above.  D135's formals are
+      --  declarations inside a type declaration's own scope; a type formal
+      --  carries no child, while a fixed formal carries its declared type.
+      Type_Formal,
+      Fixed_Formal,
       Parameter,
       Named_Return,
       If_Arm,
@@ -294,8 +303,9 @@ package Landin.Syntax is
    function Has_Name (Of_Kind : Node_Kind) return Boolean
      is (Of_Kind in Function_Declaration | Atom_Declaration | Binding
                     | Parameter | Named_Return | Name_Reference | Type_Name
-                    | Type_Declaration | Type_Reference | Field
-                    | Variant_Part | Variant_Case | Destructured_Field
+                    | Type_Declaration | Type_Reference | Type_Formal
+                    | Fixed_Formal | Field | Variant_Part | Variant_Case
+                    | Destructured_Field
                     | Destructured_Name | Recovery_Clause | Match_Binding
                     | Member_Selection | Field_Value);
 
@@ -473,7 +483,23 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                           in Binding | Parameter | Named_Return
-                             | Type_Declaration | Field;
+                             | Type_Declaration | Fixed_Formal | Field;
+
+   --  D135's ordered formals are visible to the declared type and RHS of
+   --  a parameterized alias.  Type_Formal and Fixed_Formal distinguish the
+   --  two source forms; only the latter has Declared_Type.
+   function Type_Formal_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Type_Declaration;
+
+   function Nth_Type_Formal
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Type_Declaration
+                  and then Index <= Type_Formal_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Type_Formal'Result)
+                  and then Kind (Of_Tree, Nth_Type_Formal'Result)
+                             in Type_Formal | Fixed_Formal;
 
    --  The value a binding is given, a place is assigned, a discard throws
    --  away, or a labelled struct field supplies.  No_Node for a binding
@@ -708,6 +734,25 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Call
                   and then Index <= Argument_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Argument'Result);
+
+   --  D135's applied alias and its positional type/fixed argument run.
+   function Applied_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Type_Application,
+          Post => Contains (Of_Tree, Applied_Type'Result)
+                  and then Kind (Of_Tree, Applied_Type'Result)
+                             in Type_Name | Type_Reference | Type_Application;
+
+   function Type_Argument_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Type_Application;
+
+   function Nth_Type_Argument
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Type_Application
+                  and then Index <= Type_Argument_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Type_Argument'Result);
 
    function Atom_Member_Count
      (Of_Tree : Tree; Id : Node_Id) return Natural

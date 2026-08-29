@@ -1171,6 +1171,103 @@ package body Landin.Tests.Parser_Suite is
          "every negative fixture that names codes was run");
    end Reports_Carry_The_Pinned_Codes;
 
+   --  D135's first increment is syntax-only: aliases hold both formal
+   --  kinds, array bounds can name a fixed formal, and applications retain
+   --  the positional mix without pretending substitution exists yet.
+   procedure Parameterized_Type_Aliases_Are_Parsed
+     (Item : in out Landin.Testing.Context);
+
+   procedure Parameterized_Type_Aliases_Are_Parsed
+     (Item : in out Landin.Testing.Context)
+   is
+      Sources : Landin.Source.Sets.Source_Set;
+      Names   : Landin.Source.Names.Table;
+      Stream  : Landin.Tokens.Token_Stream;
+      Found   : Landin.Diagnostics.Diagnostic_List;
+      Id      : constant Landin.Source.Source_Id :=
+        Sources.Add
+          ("aliases.ldn",
+           "bytes: type (t: type, fixed n: u32) = [n]t" & ASCII.LF
+           & "four: type = bytes(u8, 4)" & ASCII.LF);
+   begin
+      Landin.Tokens.Lexer.Lex (Sources.Get (Id), Names, Stream);
+      Landin.Diagnostics.Lexical.Report (Stream, Found);
+
+      declare
+         Parsed : constant Landin.Syntax.Tree :=
+           Landin.Syntax.Parser.Parse (Stream, Names, Found);
+         Bytes : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Parsed, 1);
+         T : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Type_Formal (Parsed, Bytes, 1);
+         N : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Type_Formal (Parsed, Bytes, 2);
+         Alias_Body : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type (Parsed, Bytes);
+         Application : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Declared_Type
+             (Parsed, Landin.Syntax.Nth_Declaration (Parsed, 2));
+      begin
+         Landin.Testing.Check_Equal
+           (Item, Landin.Diagnostics.Count (Found), 0,
+            "parameterized aliases parse without a syntax report");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Syntax.Type_Formal_Count (Parsed, Bytes), 2,
+            "the alias retains both formals");
+         Landin.Testing.Check
+           (Item, Landin.Syntax.Kind (Parsed, T) = Landin.Syntax.Type_Formal
+             and then Landin.Syntax.Kind (Parsed, N)
+                        = Landin.Syntax.Fixed_Formal,
+            "the formal kinds retain type and fixed spelling");
+         Landin.Testing.Check
+           (Item, Landin.Syntax.Kind
+             (Parsed, Landin.Syntax.Declared_Type (Parsed, N))
+                = Landin.Syntax.Type_Name,
+            "a fixed formal retains its declared type");
+         Landin.Testing.Check
+           (Item,
+            Landin.Syntax.Kind (Parsed, Alias_Body)
+              = Landin.Syntax.Array_Type
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Bound_Of (Parsed, Alias_Body))
+                  = Landin.Syntax.Name_Reference
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Element_Of (Parsed, Alias_Body))
+                  = Landin.Syntax.Type_Reference,
+            "the alias body retains fixed and type formal uses");
+         Landin.Testing.Check
+           (Item, Landin.Syntax.Kind (Parsed, Application)
+                    = Landin.Syntax.Type_Application
+             and then Landin.Syntax.Type_Argument_Count (Parsed, Application)
+                        = 2
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Applied_Type (Parsed, Application))
+                  = Landin.Syntax.Type_Reference
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Nth_Type_Argument
+                  (Parsed, Application, 1)) = Landin.Syntax.Type_Name
+             and then Landin.Syntax.Kind
+               (Parsed, Landin.Syntax.Nth_Type_Argument
+                  (Parsed, Application, 2)) = Landin.Syntax.Integer_Literal,
+            "the application retains its positional type and fixed arguments");
+      end;
+
+      declare
+         Codes : Unbounded.Unbounded_String;
+         Total : Natural;
+         Nodes : Natural;
+         Held  : Boolean;
+      begin
+         Read_And_Parse
+           ("f: (fixed n: u32) -> none = end f" & ASCII.LF,
+            Codes, Total, Nodes, Held);
+         Landin.Testing.Check
+           (Item, Held and then Nodes > 0
+             and then Unbounded.To_String (Codes) = "L0010",
+            "fixed function parameters remain refused");
+      end;
+   end Parameterized_Type_Aliases_Are_Parsed;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -1206,6 +1303,9 @@ package body Landin.Tests.Parser_Suite is
       Landin.Testing.Register
         (Into, "parser", "deep nesting is reported",
          Deep_Nesting_Is_Reported'Access);
+      Landin.Testing.Register
+        (Into, "parser", "parses parameterized type aliases",
+         Parameterized_Type_Aliases_Are_Parsed'Access);
       Landin.Testing.Register
         (Into, "parser", "reports carry the pinned codes",
          Reports_Carry_The_Pinned_Codes'Access);
