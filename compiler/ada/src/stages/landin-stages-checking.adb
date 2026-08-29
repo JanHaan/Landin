@@ -1656,19 +1656,20 @@ package body Landin.Stages.Checking is
                        Landin.Checking.Body_Of
                          (Types.all, Their_Tree.all,
                           Syn.Declared_Type (Their_Tree.all, Parameter));
-                     Scalar_Only : Boolean := True;
+                     Leaf_Only : Boolean := True;
                   begin
                      for Field in
                        1 .. Landin.Checking.Layout_Field_Count
                               (Types.all, Expected)
                      loop
-                        Scalar_Only := Scalar_Only
+                        Leaf_Only := Leaf_Only
                           and then Landin.Checking.Field_Kind_Of
                             (Types.all, Expected, Field)
-                              = Landin.Checking.Scalar_Field;
+                              in Landin.Checking.Scalar_Field
+                                 | Landin.Checking.Fixed_Array_Field;
                      end loop;
 
-                     if Scalar_Only
+                     if Leaf_Only
                        and then Construction_Agrees
                          (Of_Tree, Argument, Expected,
                           Syn.Origin (Their_Tree.all, Parameter),

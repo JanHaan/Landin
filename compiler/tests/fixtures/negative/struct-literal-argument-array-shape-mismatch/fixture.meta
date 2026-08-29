@@ -1,0 +1,6 @@
+class: negative
+summary: an array field in a struct literal argument must match its declared shape
+constructs: 0520, 0670, 0700, 1920
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

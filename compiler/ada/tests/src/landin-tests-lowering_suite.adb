@@ -4004,14 +4004,17 @@ package body Landin.Tests.Lowering_Suite is
         (Work,
          "pair: type = struct" & LF
          & "    left: i32" & LF
+         & "    row: [2]i32" & LF
          & "    right: i32" & LF
          & "end pair" & LF
          & "take: (prefix: i32, value: pair) -> (answer: i32) =" & LF
-         & "    answer = prefix + value.left + value.right" & LF
+         & "    answer = prefix + value.left + value.row[0]" & LF
+         & "             + value.row[1] + value.right" & LF
          & "end take" & LF
          & "use: () -> (answer: i32) =" & LF
          & "    mut value: pair" & LF
          & "    value.left = 2" & LF
+         & "    value.row = [4, 5]" & LF
          & "    value.right = 3" & LF
          & "    row: [2]i32 = [4, 5]" & LF
          & "    answer = take(1, value) + take_array(row)" & LF
@@ -4021,6 +4024,9 @@ package body Landin.Tests.Lowering_Suite is
          & "             + take_array([9, of 10])" & LF
          & "             + score((x: 11, y: 12))" & LF
          & "             + score(point(y: 13, of zeroed))" & LF
+         & "             + take(0, (left: 1, row: [2, 3], right: 4))" & LF
+         & "             + take(0, pair(left: 1, row: [2 of 3],"
+         & " right: 4))" & LF
          & "end use" & LF
          & "take_array: (value: [2]i32) -> (answer: i32) =" & LF
          & "    answer = value[0] + value[1]" & LF
@@ -4049,7 +4055,7 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Testing.Check
            (Item,
             IR.Is_Aggregate (Unit, 1, Parameter)
-              and then IR.Slot_Field_Count (Unit, 1, Parameter) = 2,
+              and then IR.Slot_Field_Count (Unit, 1, Parameter) = 3,
             "the struct parameter keeps its target-neutral shape");
          Landin.Testing.Check
            (Item,
@@ -4077,8 +4083,8 @@ package body Landin.Tests.Lowering_Suite is
          end loop;
          Landin.Testing.Check
            (Item,
-            Addresses = 9 and then Calls = 9 and then Clears = 2
-              and then Fills = 2,
+            Addresses = 11 and then Calls = 11 and then Clears = 2
+              and then Fills = 3,
             "contextual arguments use compact shaped caller temporaries");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
