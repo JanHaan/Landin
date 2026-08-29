@@ -1501,7 +1501,7 @@ LANDING_IDS = ["0040", "0870", "0940"]
 
 FENCE_OPEN = re.compile(r"^```landin\s*$")
 ROADMAP_ITEM = re.compile(
-    r"^### (R\d+\.\d+) — (.+)\n"
+    r"^### (R\d+\.\d+) — (.+)\n\n?"
     r"Status: (planned|active|blocked|complete)$", re.M)
 
 

@@ -2249,7 +2249,7 @@ layout facts.
 
 ### R2.40 — Implement fixed parameters and compile-time substitution
 
-Status: planned
+Status: active
 Depends on: R2.10, R1.50
 
 Implement type and fixed parameters, substitution, constant array lengths,
