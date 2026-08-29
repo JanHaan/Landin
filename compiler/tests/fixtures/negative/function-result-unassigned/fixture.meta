@@ -1,0 +1,5 @@
+class: negative
+summary: a function-valued named result must be assigned on every successful path
+constructs: 0930, 1000, 1800, 1910
+program: program.ldn
+codes: L0302

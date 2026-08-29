@@ -34,8 +34,9 @@
 --  rather than a diagnostic.
 --
 --  A declaration's type is the type of the VALUE its name denotes.  D113
---  makes a function name and an inferred local Function_Value; D117 adds a
---  written function type for explicit local storage.  Type_Kind says that
+--  makes a function name and an inferred Function_Value; D117 adds a written
+--  function type and D118 carries recursively nested descriptors through
+--  storage, parameters, results and anonymous routines.  Type_Kind says that
 --  category and this table carries the complete signature descriptor beside
 --  each relevant node and declaration.  It never substitutes the declaration
 --  of one possible callee for that type evidence.  A call's type is its
@@ -209,9 +210,9 @@ package Landin.Checking is
    --  D117: a function value carries a signature descriptor, never the
    --  declaration of one routine that happened to supply it.  The identity
    --  is dense within one compilation.  Each part retains only language
-   --  type identity: a scalar name, [0710]'s nominal aggregate body, or
-   --  D17's array shape.  No width, offset, register or target byte appears
-   --  here.
+   --  type identity: a scalar name, [0710]'s nominal aggregate body, D17's
+   --  array shape, or another structural signature for a function-valued
+   --  position.  No width, offset, register or target byte appears here.
    type Signature_Id is range 0 .. Integer'Last;
    No_Signature : constant Signature_Id := 0;
 
@@ -220,6 +221,7 @@ package Landin.Checking is
       Aggregate_Body : Declaration_Id  := No_Declaration;
       Length  : Element_Count          := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
+      Signature : Signature_Id         := No_Signature;
       Site    : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
    end record;
 

@@ -1,0 +1,5 @@
+class: negative
+summary: a static module function image chain must reach a routine address
+constructs: 0130, 1000, 1790, 1940
+program: program.ldn
+codes: L0305

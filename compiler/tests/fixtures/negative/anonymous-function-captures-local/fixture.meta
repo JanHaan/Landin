@@ -1,0 +1,5 @@
+class: negative
+summary: an anonymous function cannot capture an enclosing local
+constructs: 0050, 1010, 1840, 1860
+program: program.ldn
+codes: L0201

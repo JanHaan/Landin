@@ -1,0 +1,6 @@
+class: runtime
+summary: infallible function values cross static storage, parameters, results, stack arguments, aggregates and anonymous routines
+constructs: 0050, 0060, 0870, 0880, 0900, 0930, 1000, 1010, 1790, 1800, 1840, 1900, 1910, 1920, 1940
+program: main.ldn
+status: 42
+targets: linux-x86-64

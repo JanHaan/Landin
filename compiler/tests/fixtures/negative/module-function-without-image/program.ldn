@@ -1,0 +1,3 @@
+unary: type = (value: i32) -> (result: i32)
+
+mut callback: unary

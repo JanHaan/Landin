@@ -1,0 +1,4 @@
+unary: type = (value: i32) -> (result: i32)
+
+missing: () -> (result: unary) =
+end missing

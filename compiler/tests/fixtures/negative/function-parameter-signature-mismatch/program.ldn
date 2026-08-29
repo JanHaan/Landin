@@ -1,0 +1,9 @@
+unary: type = (value: i32) -> (result: i32)
+
+pair: (left: i32, right: i32) -> (result: i32) = left + right end pair
+
+accept: (callback: unary) -> none = end accept
+
+bad: () -> none =
+    accept(pair)
+end bad

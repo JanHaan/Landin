@@ -296,6 +296,7 @@ package body Landin.Syntax.Parser is
             function Parse_Function
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
+            function Parse_Anonymous_Function return Node_Id;
             function Parse_Parameter return Node_Id;
             function Parse_Returns
               (Declared_At : Landin.Source.Span;
@@ -315,6 +316,9 @@ package body Landin.Syntax.Parser is
             function Parse_Match (Context : Frame) return Node_Id;
             function Parse_Expression
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id;
+            function Parse_Expression_From
+              (Seed : Node_Id;
+               Min  : Pre.Level := Pre.Level_Expression) return Node_Id;
             function Parse_Unary return Node_Id;
             function Parse_Primary return Node_Id;
             function Parse_Struct_Literal
@@ -341,6 +345,30 @@ package body Landin.Syntax.Parser is
             --  are the same production, so what tells a place from an
             --  expression is the token after the whole chain and never
             --  the one after the name.
+            function Starts_Signature return Boolean;
+
+            --  A parenthesized expression, a struct literal and a function
+            --  signature share `(`.  The arrow after the balanced list is
+            --  the unambiguous discriminator, including nested function
+            --  types inside the list.
+            function Starts_Signature return Boolean is
+               Step  : Tok.Token_Index := 1;
+               Level : Positive := 1;
+            begin
+               while Ahead (Step) /= Tok.End_Of_Input loop
+                  if Ahead (Step) = Tok.Left_Paren then
+                     Level := Level + 1;
+                  elsif Ahead (Step) = Tok.Right_Paren then
+                     if Level = 1 then
+                        return Ahead (Step + 1) = Tok.Minus_Greater;
+                     end if;
+                     Level := Level - 1;
+                  end if;
+                  Step := Step + 1;
+               end loop;
+               return False;
+            end Starts_Signature;
+
             function After_Selectors return Tok.Token_Kind is
                Step  : Tok.Token_Index := 1;
                Depth : Natural := 0;
@@ -1051,29 +1079,6 @@ package body Landin.Syntax.Parser is
             is
                At_Type : constant Landin.Source.Span := Here;
 
-               --  A parenthesised struct body and a function type have the
-               --  same first token.  The token after the balanced parameter
-               --  list decides without consuming either form, including a
-               --  nested function type inside that list.
-               function Starts_Function_Type return Boolean;
-
-               function Starts_Function_Type return Boolean is
-                  Step  : Tok.Token_Index := 1;
-                  Depth : Positive := 1;
-               begin
-                  while Ahead (Step) /= Tok.End_Of_Input loop
-                     if Ahead (Step) = Tok.Left_Paren then
-                        Depth := Depth + 1;
-                     elsif Ahead (Step) = Tok.Right_Paren then
-                        if Depth = 1 then
-                           return Ahead (Step + 1) = Tok.Minus_Greater;
-                        end if;
-                        Depth := Depth - 1;
-                     end if;
-                     Step := Step + 1;
-                  end loop;
-                  return False;
-               end Starts_Function_Type;
             begin
                Type_Refused := False;
 
@@ -1098,7 +1103,7 @@ package body Landin.Syntax.Parser is
                --  type.  Parameter and return names describe the signature;
                --  they do not introduce declarations at the use site.
                if Peek = Tok.Left_Paren then
-                  if Starts_Function_Type then
+                  if Starts_Signature then
                      declare
                         Params       : Slot_Vectors.Vector;
                         Returns_Node : Node_Id := No_Node;
@@ -1979,6 +1984,8 @@ package body Landin.Syntax.Parser is
 
                         if Peek = Tok.Kw_End then
                            return Called;
+                        elsif Pre.Is_Binary (Peek) then
+                           return Parse_Expression_From (Called);
                         end if;
 
                         return Parse_Block (Context, Seed => Called);
@@ -2142,6 +2149,111 @@ package body Landin.Syntax.Parser is
                      Exported => Exported);
                end;
             end Parse_Function;
+
+            --  anonymous_function ::= signature `=` body `end`   [1010]
+            --
+            --  The arrow after the balanced opening list distinguishes this
+            --  from a parenthesized expression and a labelled struct literal.
+            function Parse_Anonymous_Function return Node_Id is
+               Start        : constant Landin.Source.Span := Here;
+               Params       : Slot_Vectors.Vector;
+               Returns_Node : Node_Id := No_Node;
+               Returns_At   : Landin.Source.Span :=
+                 Landin.Source.Empty_Span;
+               Body_Node    : Node_Id := No_Node;
+               Context      : Frame;
+            begin
+               if Too_Deep (Start) then
+                  Advance;
+                  Resync (List_Anchor);
+                  return Add (Error_Expression, Start,
+                              Join (Start, After_Previous));
+               end if;
+
+               Depth := Depth + 1;
+               Advance;
+               if Peek /= Tok.Right_Paren then
+                  loop
+                     declare
+                        Before : constant Tok.Token_Index := Index;
+                     begin
+                        Params.Append (Parse_Parameter);
+                        exit when Index = Before;
+                     end;
+                     exit when Peek /= Tok.Comma;
+                     Advance;
+                  end loop;
+               end if;
+
+               if not Expect
+                 (Wanted  => Tok.Right_Paren,
+                  Message => "the anonymous function's parameter list is"
+                             & " never closed",
+                  Note    => "[1010]: an anonymous function begins with its"
+                             & " complete signature",
+                  Related => Start,
+                  Because => "opened here")
+               then
+                  Resync (List_Anchor);
+                  if Peek = Tok.Right_Paren then
+                     Advance;
+                  end if;
+               end if;
+
+               if Expect
+                 (Wanted  => Tok.Minus_Greater,
+                  Message => "an anonymous function says what it returns"
+                             & " after `->`",
+                  Note    => "[1010]: the signature precedes `=` and the body",
+                  Related => Start,
+                  Because => "the anonymous function")
+               then
+                  Returns_Node := Parse_Returns (Start, Returns_At);
+               end if;
+
+               Context :=
+                 (Owner   => Start,
+                  Result  => Returns_At,
+                  Returns => Returns_Node /= No_Node);
+
+               if Expect
+                 (Wanted  => Tok.Equal,
+                  Message => "an anonymous function's body opens with `=`",
+                  Note    => "[1010]: `=` opens the body and `end` closes it",
+                  Related => Start,
+                  Because => "the anonymous function")
+               then
+                  Body_Node := Parse_Body (Context);
+               else
+                  Body_Node := Add (Error_Statement, After_Previous);
+               end if;
+
+               if Peek = Tok.Kw_End then
+                  Advance;
+               else
+                  Complain
+                    (Item    => Syn.Unclosed_Construct,
+                     Where   => After_Previous,
+                     Message => "this anonymous function is never closed",
+                     Note    => "[1010]: an anonymous function closes with"
+                                & " `end`",
+                     Related => Start,
+                     Because => "opened here",
+                     Gate    => False);
+               end if;
+
+               Depth := Depth - 1;
+               declare
+                  Head : constant Slot_List (1 .. 2) :=
+                    [Returns_Node, Body_Node];
+               begin
+                  return Add
+                    (Of_Kind  => Anonymous_Function,
+                     At_Token => Start,
+                     Extent   => Join (Start, After_Previous),
+                     Children => Head & To_List (Params));
+               end;
+            end Parse_Anonymous_Function;
 
             ------------------------------------------------------------
             --  Statements                                       [1810]
@@ -2706,7 +2818,15 @@ package body Landin.Syntax.Parser is
             function Parse_Expression
               (Min : Pre.Level := Pre.Level_Expression) return Node_Id
             is
-               Left    : Node_Id := Parse_Unary;
+            begin
+               return Parse_Expression_From (Parse_Unary, Min);
+            end Parse_Expression;
+
+            function Parse_Expression_From
+              (Seed : Node_Id;
+               Min  : Pre.Level := Pre.Level_Expression) return Node_Id
+            is
+               Left    : Node_Id := Seed;
                Chained : Boolean := False;
                First   : Landin.Source.Span := Landin.Source.Empty_Span;
             begin
@@ -2788,7 +2908,7 @@ package body Landin.Syntax.Parser is
                end if;
 
                return Left;
-            end Parse_Expression;
+            end Parse_Expression_From;
 
             --  unary ::= ("-" | "~" | "not")* primary             [1820]
             function Parse_Unary return Node_Id is
@@ -3115,6 +3235,10 @@ package body Landin.Syntax.Parser is
                end if;
 
                if Peek = Tok.Left_Paren then
+                  if Starts_Signature then
+                     return Parse_Anonymous_Function;
+                  end if;
+
                   --  D64 replaces D63's labelled refusal with [0710]'s real
                   --  field-value run.  The all-`of` form remains outside the
                   --  grammar; `of` is contextual just as it is in [0560].

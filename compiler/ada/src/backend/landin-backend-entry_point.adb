@@ -2,6 +2,7 @@ with Landin.Types;
 
 package body Landin.Backend.Entry_Point is
 
+   use type Landin.IR.Declaration_Id;
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Slot_Id;
    use type Landin.Types.Type_Kind;
@@ -28,6 +29,7 @@ package body Landin.Backend.Entry_Point is
                else Landin.IR.No_Slot);
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine
+              and then Declared /= Landin.IR.No_Declaration
               and then Landin.Resolution.Is_Public (Meanings, Declared)
               and then Spelling_Of (Declared) = "main"
               and then Landin.IR.Parameter_Count (Of_Unit, Item) = 0

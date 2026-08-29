@@ -1438,7 +1438,11 @@ mut current: handler = default_handler
 ```
 The names written inside the signature describe its parameter and return
 positions; in a type they do not declare local names. Two function types agree
-by those positions' types, not by their labels.
+by those positions' types, not by their labels. Function values may themselves
+be parameters and named returns, so that structural comparison is recursive.
+A module binding initialized by a named or anonymous function is a static code
+address; mutable local or module storage may later receive any address with the
+same complete signature.
 A callback is therefore a pair of that and a state pointer,
 written out because nothing is captured.
 ```landin
@@ -1451,8 +1455,11 @@ end on_byte
 
 ### [1010] Anonymous functions
 
-Anonymous functions. No capture: they see only their
-parameters. State travels as an explicit parameter.
+Anonymous functions. No capture: their routine may use module declarations,
+its own parameters, named return and body locals, but no local, parameter or
+return from the expression's enclosing routine. State travels as an explicit
+parameter. Forming one produces a static code address; it does not execute the
+body.
 ```landin
 less_i32 := (a: i32, b: i32) -> (yes: bool) = a < b end
 

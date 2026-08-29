@@ -2022,8 +2022,18 @@ because an index is a value and the contextual forms reach one through
 identities alone; an array of a struct with a variant part has no carrier
 either. Both refusals name this item.
 
-Function-typed module storage, struct fields, function parameters and results,
-declared-error function types and anonymous functions remain in this item.
+The thirty-eighth increment makes infallible function signatures recursive and
+carries one code-address value through parameters, named results and typed or
+inferred module storage. Static module chains resolve to declared or anonymous
+routine items and have no implicit zero image. Mutable module replacement,
+stack-position callbacks, function-returning calls and aggregate results all
+reuse the existing internal convention. Anonymous functions open a signature
+scope directly inside the module, capture no enclosing routine declaration and
+lower after module items in deterministic source/post-order to backend-local
+routine symbols.
+
+Function-valued struct fields and declared-error function types remain in this
+item.
 Further aggregate arguments and result contexts remain here too; R4.40 later
 supplies complete C ABI classification rather than owning this internal
 convention.
@@ -2045,10 +2055,11 @@ needed detail, or record language-evolution work when that program proves it
 does not.
 
 Exit evidence: ABI tests cover ordinary and failing calls, aggregate values,
-inferred and explicitly typed indirect calls, more arguments than the
-register-only stopgap accepted and every control-flow exit path. Malformed IR
-also proves that a runtime address cannot substitute for its neutral signature
-descriptor.
+inferred and explicitly typed indirect calls, function-valued parameters and
+results, static and mutable module addresses, no-capture anonymous routines,
+more arguments than the register-only stopgap accepted and every control-flow
+exit path. Malformed IR also proves that a runtime address, nested descriptor or
+static routine target cannot substitute for its neutral signature descriptor.
 
 ### R2.40 — Implement fixed parameters and compile-time substitution
 Status: planned

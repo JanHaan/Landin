@@ -149,6 +149,52 @@ package body Landin.Stages.Lowering is
 
       Slots : Slot_Map := No_Slots;
 
+      type Item_Map is array (Declared) of IR.Item_Id;
+      Static_Function_Targets : Item_Map := [others => IR.No_Item];
+      Finding_Static_Function : array (Declared) of Boolean :=
+        [others => False];
+
+      function Total_Syntax_Nodes return Natural;
+
+      function Total_Syntax_Nodes return Natural is
+         Total : Natural := 0;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            Total := Total + Syn.Node_Count
+              (Tree_For (Nth_Source (Context, Index)).all);
+         end loop;
+         return Total;
+      end Total_Syntax_Nodes;
+
+      type Anonymous_Entry is record
+         Source : Landin.Source.Source_Id := Landin.Source.No_Source;
+         Node   : Syn.Node_Id             := Syn.No_Node;
+         Item   : IR.Item_Id              := IR.No_Item;
+      end record;
+
+      Anonymous_Routines : array
+        (1 .. Positive'Max (1, Total_Syntax_Nodes)) of Anonymous_Entry :=
+          [others => (others => <>)];
+      Anonymous_Count : Natural := 0;
+
+      function Anonymous_Item
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id;
+
+      function Anonymous_Item
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Item_Id
+      is
+      begin
+         for Index in 1 .. Anonymous_Count loop
+            if Anonymous_Routines (Index).Source = Syn.Source_Of (Of_Tree)
+              and then Anonymous_Routines (Index).Node = Node
+            then
+               return Anonymous_Routines (Index).Item;
+            end if;
+         end loop;
+         raise Landin.Compiler_Defect with
+           "an anonymous function has no deterministic routine item";
+      end Anonymous_Item;
+
       subtype Source_Signature is Positive range
         1 .. Positive'Max
                (1, Landin.Checking.Signature_Count (Types.all));
@@ -209,7 +255,11 @@ package body Landin.Stages.Lowering is
            is (Kind    => Part.Kind,
                Aggregate_Body => Part.Aggregate_Body,
                Length  => IR.Element_Total (Part.Length),
-               Element => Part.Element);
+               Element => Part.Element,
+               Signature =>
+                 (if Part.Kind = Ty.Function_Value
+                  then Signature_For (Part.Signature)
+                  else IR.No_Signature));
       begin
          if Signatures (Positive (Source)) /= IR.No_Signature then
             return Signatures (Positive (Source));
@@ -388,9 +438,12 @@ package body Landin.Stages.Lowering is
       is
          Held : constant Ty.Type_Kind := Type_At (Of_Tree, Node);
       begin
+         if Held = Ty.Function_Value then
+            return Ty.Usize;
+         end if;
          if Held not in Ty.Scalar_Name then
             raise Landin.Compiler_Defect with
-              "an expression reached the lowering with no scalar type";
+              "an expression reached the lowering with no scalar carrier";
          end if;
 
          return Held;
@@ -1764,7 +1817,13 @@ package body Landin.Stages.Lowering is
                        (if Type_At (Of_Tree, Argument)
                               in Ty.Aggregate | Ty.Fixed_Array
                         then Ty.Usize else Scalar_At (Of_Tree, Argument)),
-                       Res.No_Declaration, Site_Of (Of_Tree, Argument));
+                       Res.No_Declaration, Site_Of (Of_Tree, Argument),
+                       Signature =>
+                         (if Type_At (Of_Tree, Argument) = Ty.Function_Value
+                          then Signature_For
+                            (Landin.Checking.Signature_Of
+                               (Types.all, Of_Tree, Argument))
+                          else IR.No_Signature));
                   IR.Emit_Store
                     (Unit.all, Filling, Saved (Which), Given (Which),
                      Site_Of (Of_Tree, Argument));
@@ -1800,12 +1859,14 @@ package body Landin.Stages.Lowering is
             then IR.Emit_Indirect_Call
               (Unit.all, Filling, Signature,
                (if Returns_Stored then Ty.No_Value
-                else Type_At (Of_Tree, Node)),
+                elsif Type_At (Of_Tree, Node) = Ty.Function_Value
+                then Ty.Usize else Type_At (Of_Tree, Node)),
                Site)
             else IR.Emit_Call
               (Unit.all, Filling, Target,
                (if Returns_Stored then Ty.No_Value
-                else Type_At (Of_Tree, Node)),
+                elsif Type_At (Of_Tree, Node) = Ty.Function_Value
+                then Ty.Usize else Type_At (Of_Tree, Node)),
                Site));
 
          if Indirect then
@@ -2375,6 +2436,10 @@ package body Landin.Stages.Lowering is
                                   Nested => Child_Steps);
                   end case;
                end;
+
+            when Syn.Anonymous_Function =>
+               return IR.Emit_Function_Address
+                 (Unit.all, Filling, Anonymous_Item (Of_Tree, Node), Site);
 
             when Syn.Name_Reference =>
                declare
@@ -4152,8 +4217,14 @@ package body Landin.Stages.Lowering is
             else Landin.Checking.Type_Of
               (Types.all, Declaration_At (Src, Gives)));
          Result : IR.Slot_Id := IR.No_Slot;
+         Owner : constant Res.Declaration_Id :=
+           (if Syn.Kind (Of_Tree, Node) = Syn.Function_Declaration
+            then Declaration_At (Src, Node) else Res.No_Declaration);
       begin
-         Filling := IR.Item_For (Unit.all, Declaration_At (Src, Node));
+         Filling :=
+           (if Owner = Res.No_Declaration
+            then Anonymous_Item (Of_Tree, Node)
+            else IR.Item_For (Unit.all, Owner));
          Slots := No_Slots;
 
          --  D106's first internal parameter is an unspellable pointer to
@@ -4163,8 +4234,7 @@ package body Landin.Stages.Lowering is
             declare
                Ignored : constant IR.Slot_Id :=
                  IR.Add_Parameter
-                   (Unit.all, Filling, Ty.Usize,
-                    Declaration_At (Src, Node), Site);
+                   (Unit.all, Filling, Ty.Usize, Owner, Site);
             begin
                pragma Unreferenced (Ignored);
             end;
@@ -4199,11 +4269,17 @@ package body Landin.Stages.Lowering is
                        IR.Element_Total
                          (Landin.Checking.Array_Length (Types.all, Id)),
                        Id, Site_Of (Of_Tree, Param));
-               elsif Held in Ty.Scalar_Name then
+               elsif Held in Ty.Scalar_Name | Ty.Function_Value then
                   Slots (Positive (Id)) :=
                     IR.Add_Parameter
-                      (Unit.all, Filling, Held, Id,
-                       Site_Of (Of_Tree, Param));
+                      (Unit.all, Filling,
+                       (if Held = Ty.Function_Value then Ty.Usize else Held),
+                       Id, Site_Of (Of_Tree, Param),
+                       Signature =>
+                         (if Held = Ty.Function_Value
+                          then Signature_For
+                            (Landin.Checking.Signature_Of (Types.all, Id))
+                          else IR.No_Signature));
                else
                   raise Landin.Compiler_Defect with
                     "a parameter reached the lowering with no storable type";
@@ -4272,6 +4348,62 @@ package body Landin.Stages.Lowering is
       --  [1940]: a module value
       ------------------------------------------------------------
 
+      function Static_Function_Target
+        (Id : Res.Declaration_Id) return IR.Item_Id;
+
+      function Static_Function_Target
+        (Id : Res.Declaration_Id) return IR.Item_Id
+      is
+         Of_Tree : constant not null access constant Syn.Tree :=
+           Tree_For (Res.Source_Of (Meanings.all, Id));
+         Node : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
+         Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree.all, Node);
+      begin
+         if Static_Function_Targets (Positive (Id)) /= IR.No_Item then
+            return Static_Function_Targets (Positive (Id));
+         end if;
+         if Finding_Static_Function (Positive (Id)) then
+            raise Landin.Compiler_Defect with
+              "a static function image cycle reached lowering";
+         end if;
+         Finding_Static_Function (Positive (Id)) := True;
+
+         if Value /= Syn.No_Node
+           and then Syn.Kind (Of_Tree.all, Value) = Syn.Anonymous_Function
+         then
+            Static_Function_Targets (Positive (Id)) :=
+              Anonymous_Item (Of_Tree.all, Value);
+         elsif Value /= Syn.No_Node
+           and then Syn.Kind (Of_Tree.all, Value) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree.all, Value)
+                      = Res.Bound
+         then
+            declare
+               Source_Id : constant Res.Declaration_Id :=
+                 Res.Bound_To (Meanings.all, Of_Tree.all, Value);
+            begin
+               if Res.Sort_Of (Meanings.all, Source_Id)
+                    = Res.Module_Function
+               then
+                  Static_Function_Targets (Positive (Id)) :=
+                    IR.Item_For (Unit.all, Source_Id);
+               elsif Res.Sort_Of (Meanings.all, Source_Id)
+                       = Res.Module_Binding
+               then
+                  Static_Function_Targets (Positive (Id)) :=
+                    Static_Function_Target (Source_Id);
+               end if;
+            end;
+         end if;
+
+         Finding_Static_Function (Positive (Id)) := False;
+         if Static_Function_Targets (Positive (Id)) = IR.No_Item then
+            raise Landin.Compiler_Defect with
+              "a module function value has no static routine target";
+         end if;
+         return Static_Function_Targets (Positive (Id));
+      end Static_Function_Target;
+
       --  A datum's block describes its value.  [1460] says nothing runs
       --  before the entry point, so this is not code and R1.80 reads it
       --  rather than executing it.
@@ -4288,7 +4420,7 @@ package body Landin.Stages.Lowering is
          Value : constant Syn.Node_Id := Syn.Value_Of (Of_Tree, Node);
          Answer : IR.Value_Id;
       begin
-         if Held not in Ty.Scalar_Name
+         if Held not in Ty.Scalar_Name | Ty.Function_Value
            and then Held not in Ty.Aggregate | Ty.Fixed_Array
          then
             raise Landin.Compiler_Defect with
@@ -4317,7 +4449,15 @@ package body Landin.Stages.Lowering is
          --  none.  So the block carries the scope the resolver read it in.
          Open (Fresh (Of_Tree, Node, Res.Program_Scope));
 
-         if Value = Syn.No_Node
+         if Held = Ty.Function_Value then
+            declare
+               Target : constant IR.Item_Id := Static_Function_Target (Id);
+            begin
+               IR.Set_Function_Target (Unit.all, Filling, Target);
+               Answer :=
+                 IR.Emit_Function_Address (Unit.all, Filling, Target, Site);
+            end;
+         elsif Value = Syn.No_Node
            or else Syn.Kind (Of_Tree, Value) = Syn.Zeroed_Literal
          then
             --  D10: a binding with no value holds zero, false for a bool.
@@ -4386,7 +4526,9 @@ package body Landin.Stages.Lowering is
                         begin
                            Made :=
                              IR.Add_Item
-                               (Unit.all, IR.Routine, Id, Held,
+                               (Unit.all, IR.Routine, Id,
+                                (if Held = Ty.Function_Value
+                                 then Ty.Usize else Held),
                                 Site_Of (Of_Tree.all, Node));
                            IR.Set_Signature
                              (Unit.all, Made,
@@ -4402,8 +4544,18 @@ package body Landin.Stages.Lowering is
                         begin
                            Made :=
                              IR.Add_Item
-                               (Unit.all, IR.Datum, Id, Held,
+                               (Unit.all, IR.Datum, Id,
+                                (if Held = Ty.Function_Value
+                                 then Ty.Usize else Held),
                                 Site_Of (Of_Tree.all, Node));
+
+                           if Held = Ty.Function_Value then
+                              IR.Set_Signature
+                                (Unit.all, Made,
+                                 Signature_For
+                                   (Landin.Checking.Signature_Of
+                                      (Types.all, Id)));
+                           end if;
 
                            --  [0520]'s shape: one element and a count,
                            --  because an array is its element repeated
@@ -4444,6 +4596,47 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
+      --  Anonymous routines follow every declaration item, in source order
+      --  and then syntax post-order.  That order is independent of traversal
+      --  recursion and gives each no-capture function one deterministic item
+      --  before any address can name it.
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Nth_Source (Context, Index));
+            Src : constant Landin.Source.Source_Id :=
+              Syn.Source_Of (Of_Tree.all);
+         begin
+            for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all) loop
+               if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function then
+                  declare
+                     Gives : constant Syn.Node_Id :=
+                       Syn.Return_Of (Of_Tree.all, Node);
+                     Held : constant Ty.Type_Kind :=
+                       (if Gives = Syn.No_Node then Ty.No_Value
+                        else Landin.Checking.Type_Of
+                          (Types.all, Declaration_At (Src, Gives)));
+                     Made : constant IR.Item_Id :=
+                       IR.Add_Item
+                         (Unit.all, IR.Routine, Res.No_Declaration,
+                          (if Held = Ty.Function_Value
+                           then Ty.Usize else Held),
+                          Site_Of (Of_Tree.all, Node));
+                  begin
+                     IR.Set_Signature
+                       (Unit.all, Made,
+                        Signature_For
+                          (Landin.Checking.Signature_Of
+                             (Types.all, Of_Tree.all, Node)));
+                     Anonymous_Count := Anonymous_Count + 1;
+                     Anonymous_Routines (Anonymous_Count) :=
+                       (Source => Src, Node => Node, Item => Made);
+                  end;
+               end if;
+            end loop;
+         end;
+      end loop;
+
       --  Pass two: fill them, one at a time.  An item's slots, blocks and
       --  instructions are runs in shared vectors, and Landin.IR.Open_Run
       --  refuses an interleaved fill.
@@ -4471,6 +4664,17 @@ package body Landin.Stages.Lowering is
                   end case;
                end;
             end loop;
+         end;
+      end loop;
+
+      for Index in 1 .. Anonymous_Count loop
+         declare
+            Routine_Entry : Anonymous_Entry renames
+              Anonymous_Routines (Index);
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Routine_Entry.Source);
+         begin
+            Lower_Routine (Of_Tree.all, Routine_Entry.Node);
          end;
       end loop;
 

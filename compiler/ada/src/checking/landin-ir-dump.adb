@@ -69,6 +69,9 @@ package body Landin.IR.Dump is
                when Landin.Types.Fixed_Array =>
                   "[" & Trimmed (Element_Total'Image (Part.Length)) & "]"
                   & Landin.Types.Spelling (Part.Element),
+               when Landin.Types.Function_Value =>
+                  "function signature "
+                  & Trimmed (Signature_Id'Image (Part.Signature)),
                when others => "invalid");
 
       --  D74/D75 use one target-neutral shape spelling for measurement,
@@ -591,6 +594,10 @@ package body Landin.IR.Dump is
                       & Trimmed
                           (Signature_Id'Image
                              (Signature_Of (Of_Unit, Id))))
+                 & (if Function_Target (Of_Unit, Id) = No_Item then ""
+                    else " function target "
+                      & Trimmed
+                          (Item_Id'Image (Function_Target (Of_Unit, Id))))
                  & " params "
                  & Trimmed (Natural'Image (Parameter_Count (Of_Unit, Id)))
                  & " slots "
