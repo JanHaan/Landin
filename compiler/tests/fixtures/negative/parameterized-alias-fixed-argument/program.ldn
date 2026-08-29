@@ -1,0 +1,2 @@
+bytes: type (t: type, fixed n: u32) = [n]t
+bad: type = bytes(u8, u8)

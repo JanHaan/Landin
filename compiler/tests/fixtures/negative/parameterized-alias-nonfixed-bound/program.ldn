@@ -1,0 +1,2 @@
+bad: type (n: type, t: type) = [n]t
+use: type = bad(u32, u8)

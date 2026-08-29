@@ -199,8 +199,9 @@ only ones a program does not have to declare for itself.
 An array [0520] is a type position too, and its length is part
 of it: the bound is [1770]'s integer, written in whatever base,
 or D135's fixed formal, and the element is a type like any other.
-A parameterized alias is a type position through its positional application;
-its substitution is deliberately a later R2.40 increment.
+A parameterized alias is a type position through its fully applied positional
+application. D135 substitutes it during checking and normalizes it to the same
+scalar or fixed-array descriptor that direct syntax would produce.
 
 ```landin-grammar
 binding       ::= "mut"? identifier ":" type ("=" expression)?
@@ -462,6 +463,7 @@ an inner scope means nothing until the inner ones are named.
 | scope | what it holds |
 | --- | --- |
 | module | every file compiled together. There is one, until [1410]'s directories arrive. |
+| type declaration | D135's complete ordered formal list. The scope encloses the module and is visible in every fixed formal's declared type and in the alias body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
 | signature | a declared or anonymous function's parameters and named returns [1800]. Every named return is a place the body assigns [0930], so each is declared here and not in the body; parameters and returns share one namespace. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
 | body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; one for every bare `begin` block; and one for a call-site recovery [1810] [1030]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings and a recovery error name live only in their block. |
 
@@ -7404,9 +7406,21 @@ One type-declaration scope contains all of the formals. The resolver collects
 the complete formal list into that scope before it resolves any fixed formal's
 declared type or the alias right-hand side. Thus a formal may name one written
 later, but the formals do not escape to the module or another declaration.
-The syntax and name bindings are retained now; compile-time substitution,
-argument agreement and concrete array lengths remain later R2.40 checking
-work.
+
+A fully applied alias is normalized during checking. A type formal accepts a
+scalar or fixed-array type descriptor. A fixed formal has an integer type and
+accepts an integer literal; when one parameterized alias applies another, its
+fixed formal may pass that compile-time integer onward. Substitution therefore
+covers a scalar body, a fixed-array body such as `[n]t`, and nested alias
+applications without adding a new runtime type category. The resulting scalar
+or fixed-array descriptor is the descriptor direct syntax already uses.
+
+A parameterized alias named without arguments, an application with the wrong
+arity or argument kind, a bound that is neither a literal nor a fixed formal,
+and recursive expansion are refused. The substituted byte extent of an array
+must fit D18's target `usize`. The declaration, its body and its formals are a
+compile-time template: formals have no runtime type and no instantiation writes
+a type, length or other per-application metadata onto a template syntax node.
 
 **Why one declaration scope:** resolving while reading would make a correct
 alias depend on its formal order, while making each formal a module declaration
@@ -7414,5 +7428,9 @@ would leak its name and create collisions unrelated aliases cannot share. A
 function-shaped type maker would instead introduce execution where [1350]
 requires substitution. All were declined.
 
-**Pinned by** the parser and resolution public-seam cases, and the generated
-lexical and construct records.
+**Pinned by** the parser, resolution, checking and lowering public-seam cases;
+`positive/parameterized-type-alias-scalar`,
+`positive/parameterized-type-alias-fixed-array`; the
+`negative/parameterized-alias-*` and `negative/parameterized-atom-union`
+fixtures; the generated lexical, construct and IR records; and
+`runtime/parameterized-type-alias-fixed-array` on Linux x86-64.

@@ -1,0 +1,2 @@
+bytes: type (t: type, fixed n: u64) = [n]t
+bad: type = bytes(u64, 2305843009213693952)

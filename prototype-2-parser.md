@@ -41,12 +41,14 @@ public entry: type = struct
 end entry
 
 ```
+
 A concept and not a type, for the reason prototype 4 later found
 out the hard way about Io: a concrete type means nothing else can
 be put in its place, and then a test cannot collect what a run
 reported. It also took a type parameter out of every function that
 reports, since none of them has to name the log's capacity any
 more.
+
 ```landin
 public log: type = concept (D: type)
     note:   (inout d: D, where: text.position, kind: severity,
@@ -55,10 +57,12 @@ public log: type = concept (D: type)
 end log
 
 ```
+
 One implementation: a fixed-capacity list, because this runs in a
 place where an unbounded one would be the wrong shape. Overflow is
 not an error: past the limit it counts and stops storing, since
 the twentieth message helps nobody.
+
 ```landin
 public bounded: type (fixed N: u32) = struct
     notes:   [N]entry
@@ -87,9 +91,11 @@ bounded_failed: (d: bounded(N), fixed N: u32) -> (yes: bool) =
 end bounded_failed
 
 ```
+
 A constructor and not zeroed: severity is a named value set, and
 [0540] does not let one of those be written as zeroed, nor an
 aggregate holding one. So the empty note has to be spelt.
+
 ```landin
 blank: entry = (where: text.nowhere, kind: warning, what: "")
 
@@ -101,9 +107,11 @@ end new_log
                                   failed: bounded_failed)
 
 ```
+
 And a second one, so the concept is doing work rather than
 posturing: print them as they arrive, for a tool that has
 somewhere to print to.
+
 ```landin
 public streaming: type = struct
     where_to: io.file
@@ -154,9 +162,11 @@ public open: (src: utf8) -> (l: lexer) =
 end open
 
 ```
+
 No error channel here at all. A character the lexer does not know
 becomes a bad_char token and the file goes on. Lexing is one of
 the places where failing is simply the wrong answer.
+
 ```landin
 public next: (inout l: lexer) -> (t: token) =
     skip_blanks(l)
@@ -198,9 +208,11 @@ import config/lex
 import config/diag
 
 ```
+
 These are the failures that end the parse. There are exactly two,
 and neither is a syntax mistake: syntax mistakes are reported and
 recovered from. That distinction is the whole design.
+
 ```landin
 public out_of_memory: atom
 public too_deep:      atom
@@ -307,10 +319,12 @@ parse_entry: (inout p: parser, inout d: any diag.log,
             fail too_deep when p.depth >= max_depth
             inc p.depth
 ```
+
 defer and not a plain dec: the try below can leave,
 and the caller recovers from too_deep and carries on,
 so a depth that was not put back would leak upward
 and every later group would look too deep.
+
 ```landin
             defer dec p.depth
             items := try parse_group(p, d, a)
@@ -376,10 +390,12 @@ import config/parse
 import config/diag
 
 ```
+
 The world is a parameter, not a module member: naming it 'io'
 here would shadow the module of the same name and every call in
 the body would read a field of the parameter instead. arena is
 built in, so there is nothing to import for it.
+
 ```landin
 run: (inout w: any io.world, path: utf8) -> (code: i32) =
     code = 0
@@ -404,8 +420,10 @@ run: (inout w: any io.world, path: utf8) -> (code: i32) =
         end parse_file
 
 ```
+
 Both views of one value: the concept for reporting, the
 concrete type for reading back what was stored.
+
 ```landin
         for i in 0..<notes.stored do
             n := notes.notes[i]
@@ -426,6 +444,7 @@ concrete type for reading back what was stored.
 end run
 
 ```
+
 What the scratch arena does here is worth spelling out. Every
 string the parser cut out of the source, every node it built and
 every formatted message live in it, and not one of them is freed

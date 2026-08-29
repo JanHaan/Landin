@@ -1,0 +1,4 @@
+identity: type (t: type) = t
+byte: type = identity(u8)
+row: type = identity([3]u16)
+value: identity(u8) = 7
