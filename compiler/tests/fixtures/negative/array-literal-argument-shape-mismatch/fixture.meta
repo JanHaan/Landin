@@ -1,0 +1,6 @@
+class: negative
+summary: an array literal argument must fill its parameter length exactly
+constructs: 0520, 1920
+program: program.ldn
+codes: L0301
+targets: linux-x86-64, macos-arm64

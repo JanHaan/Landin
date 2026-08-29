@@ -1889,6 +1889,10 @@ Lowering clears a fresh shaped caller temporary and transports its address
 through the same convention, so no second all-zero ABI rule or general
 aggregate expression is introduced.
 
+The twelfth increment lets a fixed-array parameter context type an array
+literal. Its elements fill a shaped caller temporary in source order before
+that same one-position transport and defensive callee copy.
+
 Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
