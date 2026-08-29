@@ -1915,6 +1915,10 @@ The seventeenth increment constructs variant-labelled struct arguments in a
 shaped caller temporary. Case selection clears the unfolded part before
 source-ordered scalar or fixed-array payload writes and ordinary transport.
 
+The eighteenth increment admits a complete struct parameter containing one
+ordinary child. Its compact child field run remains nested in the parameter
+slot, and definite assignment requires that whole child before transport.
+
 Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20

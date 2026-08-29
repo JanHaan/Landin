@@ -4119,7 +4119,11 @@ package body Landin.Tests.Lowering_Suite is
          & "use: () -> none =" & LF
          & "    mut state: outer = zeroed" & LF
          & "    take(state.nested, state.nested.row)" & LF
-         & "end use" & LF,
+         & "    take_outer(state)" & LF
+         & "    take_outer(zeroed)" & LF
+         & "end use" & LF
+         & "take_outer: (value: outer) -> none =" & LF
+         & "end take_outer" & LF,
          Ran);
 
       Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
@@ -4128,6 +4132,10 @@ package body Landin.Tests.Lowering_Suite is
          "nested aggregate argument paths are accepted");
       declare
          Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Outer_Parameter : constant IR.Slot_Id :=
+           IR.Nth_Parameter (Unit, 3, 1);
+         Outer_Child : constant IR.Field_Shape :=
+           IR.Nth_Slot_Field_Shape (Unit, 3, Outer_Parameter, 2);
          Child, Row : Natural := 0;
       begin
          for Position in 1 .. IR.Value_Count (Unit, 2) loop
@@ -4148,6 +4156,12 @@ package body Landin.Tests.Lowering_Suite is
          Landin.Testing.Check
            (Item, Child = 1 and then Row = 1,
             "child and array arguments retain both path identities");
+         Landin.Testing.Check
+           (Item,
+            IR.Is_Aggregate (Unit, 3, Outer_Parameter)
+              and then Outer_Child.Kind = IR.Aggregate_Field_Shape
+              and then Outer_Child.Cases = 2,
+            "the nested parameter retains its compact child field run");
          Landin.Testing.Check
            (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
             "the verifier accepts nested storage-address carriers");
