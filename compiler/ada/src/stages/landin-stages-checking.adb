@@ -1286,8 +1286,8 @@ package body Landin.Stages.Checking is
          Node    : constant Syn.Node_Id := Res.Node_Of (Meanings.all, Id);
       begin
          if Syn.Kind (Of_Tree.all, Node) = Syn.Function_Declaration then
-            --  [1920]: a function is not a value the kernel can spell.
-            return Ty.Not_Typed;
+            Landin.Checking.Note_Body (Types.all, Id, Id);
+            return Ty.Function_Value;
          end if;
 
          declare
@@ -2696,21 +2696,11 @@ package body Landin.Stages.Checking is
                   declare
                      Held : constant Ty.Type_Kind := Settled_Type (Means);
                   begin
-                     --  [1920]: a function's name anywhere but in front of a
-                     --  `(` is a function value [1000], which [1790]'s type
-                     --  rule does not spell.
-                     if Held = Ty.Not_Typed then
-                        Bad.Report
-                          (Item    => Bad.Unsupported_Use,
-                           Source  => Syn.Source_Of (Of_Tree),
-                           Where   => Syn.Where (Of_Tree, Node),
-                           Message => "`"
-                                      & Spelled (Syn.Name (Of_Tree, Node))
-                                      & "` names a function, and a function"
-                                      & " used as a value is not enabled yet",
-                           Refused => Bad.Function_Value,
-                           Into    => Found);
-                        return Kept (Ty.Ill_Typed);
+                     if Held = Ty.Function_Value then
+                        Landin.Checking.Note_Body
+                          (Types.all, Of_Tree, Node,
+                           Landin.Checking.Body_Of (Types.all, Means));
+                        return Kept (Ty.Function_Value);
                      end if;
 
                      --  [1740]'s state of [0670]'s type is storage a program
@@ -2997,10 +2987,9 @@ package body Landin.Stages.Checking is
                   declare
                      Means : constant Res.Declaration_Id :=
                        Res.Bound_To (Meanings.all, Of_Tree, Callee);
+                     Held : constant Ty.Type_Kind := Settled_Type (Means);
                   begin
-                     --  [1920]: a callee is a function.  A name bound to a
-                     --  binding is not one.
-                     if Settled_Type (Means) /= Ty.Not_Typed then
+                     if Held /= Ty.Function_Value then
                         Bad.Report
                           (Item    => Bad.Unsupported_Use,
                            Source  => Syn.Source_Of (Of_Tree),
@@ -3015,7 +3004,10 @@ package body Landin.Stages.Checking is
                         return Kept (Ty.Ill_Typed);
                      end if;
 
-                     return Kept (Check_Call (Of_Tree, Node, Means));
+                     return Kept
+                       (Check_Call
+                          (Of_Tree, Node,
+                           Landin.Checking.Body_Of (Types.all, Means)));
                   end;
                end;
 
@@ -5979,6 +5971,13 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Array_Length
                        (Types.all, Of_Tree.all, Value),
                      Landin.Checking.Array_Element
+                       (Types.all, Of_Tree.all, Value));
+               end if;
+
+               if Got = Ty.Function_Value then
+                  Landin.Checking.Note_Body
+                    (Types.all, Id,
+                     Landin.Checking.Body_Of
                        (Types.all, Of_Tree.all, Value));
                end if;
 

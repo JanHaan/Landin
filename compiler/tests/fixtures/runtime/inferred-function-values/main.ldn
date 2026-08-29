@@ -1,0 +1,8 @@
+double: (value: i32) -> (result: i32) = value * 2 end double
+triple: (value: i32) -> (result: i32) = value * 3 end triple
+
+public main: () -> (code: i32) =
+    mut current := double
+    current = triple
+    code = current(14)
+end main

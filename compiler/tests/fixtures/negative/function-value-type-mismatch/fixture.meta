@@ -1,0 +1,6 @@
+class: negative
+summary: a function value cannot fill an integer named return
+constructs: 0870, 1000, 1800, 1920
+program: program.ldn
+targets: linux-x86-64, macos-arm64
+codes: L0301

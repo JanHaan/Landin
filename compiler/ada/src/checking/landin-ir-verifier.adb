@@ -170,7 +170,7 @@ package body Landin.IR.Verifier is
             when Store_Datum   => 1,
             when Unary_Kind    => 1,
             when Binary_Kind   => 2,
-            when Call          => 0,
+            when Function_Address | Call | Indirect_Call => 0,
             when Jump          => 0,
             when Branch        => 1,
             when Leave         => 0);
@@ -1993,6 +1993,10 @@ package body Landin.IR.Verifier is
                                     Parameter_Count
                                       (Of_Unit,
                                        Callee_Of (Of_Unit, Id, V)),
+                                 when Indirect_Call =>
+                                    Parameter_Count
+                                      (Of_Unit,
+                                       Callee_Of (Of_Unit, Id, V)) + 1,
                                  when Leave =>
                                     (if Result_Of (Of_Unit, Id)
                                         in Landin.Types.Scalar_Name
@@ -2358,7 +2362,16 @@ package body Landin.IR.Verifier is
                                          Value => V);
                               end if;
 
-                           when Call =>
+                           when Function_Address =>
+                              if Result_Of (Of_Unit, Id, V)
+                                   /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                           when Call | Indirect_Call =>
                               declare
                                  C : constant Item_Id :=
                                    Callee_Of (Of_Unit, Id, V);
@@ -2376,6 +2389,17 @@ package body Landin.IR.Verifier is
                                             Value => V);
                                  end if;
 
+                                 if Op = Indirect_Call
+                                   and then Result_Of
+                                     (Of_Unit, Id,
+                                      Nth_Operand (Of_Unit, Id, V, 1))
+                                       /= Landin.Types.Usize
+                                 then
+                                    return (Kind => Operands_Disagree,
+                                            Item => Id, Block => Block,
+                                            Value => V);
+                                 end if;
+
                                  --  [1920]: each argument has its
                                  --  parameter's type, in order.
                                  for P in
@@ -2385,7 +2409,10 @@ package body Landin.IR.Verifier is
                                        Parameter : constant Slot_Id :=
                                          Nth_Parameter (Of_Unit, C, P);
                                        Argument : constant Value_Id :=
-                                         Nth_Operand (Of_Unit, Id, V, P);
+                                         Nth_Operand
+                                           (Of_Unit, Id, V,
+                                            P + (if Op = Indirect_Call
+                                                 then 1 else 0));
                                        Agrees : constant Boolean :=
                                          (if Is_Aggregate
                                                (Of_Unit, C, Parameter)

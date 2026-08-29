@@ -147,7 +147,10 @@ a local can infer that returned nominal body or array shape as well. Calls can
 also feed returned storage directly into a matching aggregate argument, or run
 to completion in a shaped temporary before explicit discard. Further aggregate
 arguments and result contexts remain absent;
-R4.40 later completes C ABI classification.
+R4.40 later completes C ABI classification. An inferred local function value
+is represented by a target code address and called through verified
+`Indirect_Call` IR; written function types and function parameters remain
+absent.
 
 What is reachable is the path around it. `--emit=asm` writes the assembly and
 `--emit=exe` assembles and links it through the driver
