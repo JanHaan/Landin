@@ -1,0 +1,26 @@
+core: type = struct
+    value: i32
+    row: [3]u8
+end core
+
+middle: type = struct
+    lead: u16
+    inner: core
+end middle
+
+outer: type = struct
+    head: u8
+    body: middle
+    tail: u8
+end outer
+
+mut global: outer = zeroed
+
+reach: () -> none =
+    mut local: outer
+    local = zeroed
+    local.body.inner.value = 7
+    local.body.inner.row[1] = 5
+    global.body.inner.value = local.body.inner.value
+    global.body.inner.row[2] = local.body.inner.row[1]
+end reach

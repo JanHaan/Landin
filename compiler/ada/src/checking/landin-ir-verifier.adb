@@ -525,29 +525,54 @@ package body Landin.IR.Verifier is
               Holds (Of_Unit, Item, Place.Slot)
               and then Is_Array (Of_Unit, Item, Place.Slot));
 
+      --  D91 recognised one whole child at the base field; D119 lets the
+      --  path go on before the part it reaches has to be one.  The base
+      --  field is proved to exist before the path is walked, and the walk
+      --  is Landin.IR's own, so an invented identity answers False here
+      --  rather than reaching an accessor.
       function Is_Whole_Aggregate_Field
-        (Item : Item_Id; Place : Storage; Field : Natural) return Boolean
+        (Item : Item_Id; Place : Storage; Field : Natural;
+         Path : Path_Step_Array := No_Path_Steps) return Boolean;
+
+      function Is_Whole_Aggregate_Field
+        (Item : Item_Id; Place : Storage; Field : Natural;
+         Path : Path_Step_Array := No_Path_Steps) return Boolean
       is
-        (Field > 0
-         and then
-           (case Place.Kind is
-               when Module_Datum =>
-                 Holds (Of_Unit, Place.Datum)
-                 and then Kind_Of (Of_Unit, Place.Datum) = Datum
-                 and then Result_Of (Of_Unit, Place.Datum)
-                            = Landin.Types.Aggregate
-                 and then Field <= Field_Count (Of_Unit, Place.Datum)
-                 and then Nth_Field_Shape
-                   (Of_Unit, Place.Datum, Positive (Field)).Kind
-                     = Aggregate_Field_Shape,
-               when Frame_Slot =>
-                 Holds (Of_Unit, Item, Place.Slot)
-                 and then Is_Aggregate (Of_Unit, Item, Place.Slot)
-                 and then Field <=
-                   Slot_Field_Count (Of_Unit, Item, Place.Slot)
-                 and then Nth_Slot_Field_Shape
-                   (Of_Unit, Item, Place.Slot, Positive (Field)).Kind
-                     = Aggregate_Field_Shape));
+         Base : Field_Shape;
+      begin
+         if Field = 0 then
+            return False;
+         end if;
+
+         case Place.Kind is
+            when Module_Datum =>
+               if not Holds (Of_Unit, Place.Datum)
+                 or else Kind_Of (Of_Unit, Place.Datum) /= Datum
+                 or else Result_Of (Of_Unit, Place.Datum)
+                           /= Landin.Types.Aggregate
+                 or else Field > Field_Count (Of_Unit, Place.Datum)
+               then
+                  return False;
+               end if;
+               Base := Nth_Field_Shape
+                 (Of_Unit, Place.Datum, Positive (Field));
+
+            when Frame_Slot =>
+               if not Holds (Of_Unit, Item, Place.Slot)
+                 or else not Is_Aggregate (Of_Unit, Item, Place.Slot)
+                 or else Field
+                           > Slot_Field_Count (Of_Unit, Item, Place.Slot)
+               then
+                  return False;
+               end if;
+               Base := Nth_Slot_Field_Shape
+                 (Of_Unit, Item, Place.Slot, Positive (Field));
+         end case;
+
+         return Path_Is_Valid (Of_Unit, Base, Path)
+           and then Shape_At (Of_Unit, Base, Path).Kind
+                      = Aggregate_Field_Shape;
+      end Is_Whole_Aggregate_Field;
 
       --  D76's two operations share one release-safe shape gate.  Storage,
       --  top-level field, variant kind, case run and optional payload field
@@ -630,8 +655,15 @@ package body Landin.IR.Verifier is
       --  D86 introduced this carrier for measurements; D87 uses the same
       --  target-neutral shape for datum and slot storage.  Prove every run
       --  and leaf before any accessor reads it, in every build mode.
+      --  A run may hold a shape naming another run, and nothing in the
+      --  vector proves that naming is acyclic, so the walk carries a
+      --  budget: a well-formed nesting cannot be deeper than the number
+      --  of shapes there are, and anything deeper is a cycle rather than
+      --  a program.  D118 is what makes the walk recursive at all.
       function Field_Shape_Is_Malformed
-        (Shape : Field_Shape; Aggregate_Allowed : Boolean := False)
+        (Shape : Field_Shape;
+         Aggregate_Allowed : Boolean := False;
+         Budget : Natural := 0)
         return Boolean;
 
       function Signature_Part_Is_Malformed
@@ -645,9 +677,14 @@ package body Landin.IR.Verifier is
          return Boolean;
 
       function Field_Shape_Is_Malformed
-        (Shape : Field_Shape; Aggregate_Allowed : Boolean := False)
+        (Shape : Field_Shape;
+         Aggregate_Allowed : Boolean := False;
+         Budget : Natural := 0)
         return Boolean
       is
+         Left : constant Natural :=
+           (if Budget = 0 then Variant_Field_Shape_Count (Of_Unit) + 1
+            else Budget);
       begin
          if Shape.Kind = Scalar_Field_Shape then
             return Shape.Length /= 1
@@ -664,22 +701,18 @@ package body Landin.IR.Verifier is
                return True;
             end if;
 
+            if Left = 0 then
+               return True;
+            end if;
+
             for Field in 1 .. Aggregate_Field_Count (Of_Unit, Shape) loop
-               declare
-                  Leaf : constant Field_Shape :=
-                    Nth_Aggregate_Field (Of_Unit, Shape, Field);
-               begin
-                  if Leaf.Kind not in
-                       Scalar_Field_Shape | Array_Field_Shape
-                    or else Leaf.Cases /= 0
-                    or else Leaf.Payloads_First /= 0
-                    or else
-                      (Leaf.Kind = Scalar_Field_Shape
-                       and then Leaf.Length /= 1)
-                  then
-                     return True;
-                  end if;
-               end;
+               if Field_Shape_Is_Malformed
+                    (Nth_Aggregate_Field (Of_Unit, Shape, Field),
+                     Aggregate_Allowed => True,
+                     Budget => Left - 1)
+               then
+                  return True;
+               end if;
             end loop;
 
             return False;
@@ -1994,10 +2027,9 @@ package body Landin.IR.Verifier is
                                    ((Field = 0
                                      and then Is_Whole_Aggregate
                                        (Id, Destination))
-                                    or else
-                                      (Path_Depth_Of (Of_Unit, Id, V) = 0
-                                       and then Is_Whole_Aggregate_Field
-                                         (Id, Destination, Field)))
+                                    or else Is_Whole_Aggregate_Field
+                                      (Id, Destination, Field,
+                                       Path_Of (Of_Unit, Id, V)))
                                  then
                                     --  Arrays and positive aggregate array
                                     --  fields retain their exact D49 checks.

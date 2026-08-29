@@ -167,6 +167,15 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Ty.Type_Kind;
       function Admit_Array_Field
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      --  D117/D118: whether a selection chain [0420] starts at a bound
+      --  name.  The depth is the source's; nothing here fixes one.
+      function Selects_From_A_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
+      --  The same chain, when what it started from is runtime storage: a
+      --  module binding or a local.  This is what makes a contextual copy
+      --  source a place rather than a value.
+      function Chain_Names_Storage
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Admit_Variant_Field
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean;
       function Synthesise_Binary
@@ -391,12 +400,14 @@ package body Landin.Stages.Checking is
                             (Types.all, Of_Tree,
                              Syn.Declared_Type (Of_Tree, Each));
                      begin
+                        --  D118 drops D86's depth limit: a child holding
+                        --  a child is laid out the same way, because the
+                        --  extent of a field is the child's own layout and
+                        --  the path that reaches through it is a run.
                         if Child_Body /= Res.No_Declaration
                           and then Landin.Checking.Has_Layout
                             (Types.all, Child_Body)
                           and then not Landin.Checking.Has_Variant_Part
-                            (Types.all, Child_Body)
-                          and then not Landin.Checking.Has_Aggregate_Field
                             (Types.all, Child_Body)
                         then
                            Into :=
@@ -897,28 +908,11 @@ package body Landin.Stages.Checking is
             Held : constant Ty.Type_Kind := Type_At (Of_Tree, Nominal);
          begin
             if Held = Ty.Aggregate then
-               declare
-                  Wrote : constant Res.Declaration_Id :=
-                    Landin.Checking.Body_Of (Types.all, Of_Tree, Nominal);
-               begin
-                  if Landin.Checking.Has_Layout (Types.all, Wrote)
-                    and then Landin.Checking.Has_Aggregate_Field
-                      (Types.all, Wrote)
-                  then
-                     Bad.Report
-                       (Item    => Bad.Unsupported_Use,
-                        Source  => Syn.Source_Of (Of_Tree),
-                        Where   => Syn.Where (Of_Tree, Nominal),
-                        Message => "a nested-struct value is not enabled"
-                                   & " yet",
-                        Refused => Bad.Struct_Value,
-                        Into    => Found);
-                     Landin.Checking.Refuse
-                       (Types.all, Of_Tree, Literal);
-                     return Res.No_Declaration;
-                  end if;
-                  return Wrote;
-               end;
+               --  D119: a construction whose body has an ordinary child is
+               --  admitted, because Check_Aggregate_Field already checks a
+               --  labelled child value against that child's own body and
+               --  the lowering fills it one place deeper.
+               return Landin.Checking.Body_Of (Types.all, Of_Tree, Nominal);
             elsif Held = Ty.Ill_Typed then
                --  Type_At either reported the missing/refused type or
                --  inherited its earlier owner.  Mark the enclosing value so
@@ -1073,60 +1067,25 @@ package body Landin.Stages.Checking is
             --  deferred: none of them is a Name_Reference.  An inferred
             --  direct-name binding has no Written node and is admitted
             --  separately by Infer.
+            --  D118: the source may sit under however many selections
+            --  [0420] composed; a module image still takes only a direct
+            --  name or one field of one, because D70 folds it rather than
+            --  copying at run time.
             Is_Direct_Name_Init : constant Boolean :=
               Held = Ty.Fixed_Array
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Chain_Names_Storage
+                (Of_Tree, Syn.Value_Of (Of_Tree, Node))
               and then
-                ((Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                    = Syn.Name_Reference
-                  and then Res.Verdict_Of
-                    (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                      = Res.Bound
-                  and then Res.Sort_Of
-                    (Meanings.all,
-                     Res.Bound_To
-                       (Meanings.all, Of_Tree,
-                        Syn.Value_Of (Of_Tree, Node)))
-                      in Res.Module_Binding | Res.Local_Binding)
-                 or else
-                   (Syn.Kind
-                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                        = Syn.Member_Selection
-                    and then Syn.Kind
-                      (Of_Tree,
-                       Syn.Target_Of
-                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
-                        = Syn.Name_Reference
-                    and then Res.Verdict_Of
-                      (Meanings.all, Of_Tree,
-                       Syn.Target_Of
-                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
-                        = Res.Bound
-                    and then Res.Sort_Of
-                      (Meanings.all,
-                       Res.Bound_To
-                         (Meanings.all, Of_Tree,
-                          Syn.Target_Of
-                            (Of_Tree, Syn.Value_Of (Of_Tree, Node))))
-                        in Res.Module_Binding | Res.Local_Binding)
-                 or else
-                   (Is_Local_Binding (Of_Tree, Node)
-                    and then Syn.Kind
-                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                        = Syn.Member_Selection
-                    and then Syn.Kind
-                      (Of_Tree,
-                       Syn.Target_Of
-                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
-                        = Syn.Member_Selection
-                    and then Syn.Kind
-                      (Of_Tree,
-                       Syn.Target_Of
-                         (Of_Tree,
-                          Syn.Target_Of
-                            (Of_Tree, Syn.Value_Of (Of_Tree, Node))))
-                        = Syn.Name_Reference));
+                (Is_Local_Binding (Of_Tree, Node)
+                 or else Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                           /= Syn.Member_Selection
+                 or else Syn.Kind
+                   (Of_Tree,
+                    Syn.Target_Of
+                      (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
+                     = Syn.Name_Reference);
             --  D55/D60: a written local or module struct type supplies the
             --  nominal context for one initializer copied directly from
             --  storage.  The module form copies a static image rather than
@@ -1137,33 +1096,12 @@ package body Landin.Stages.Checking is
               Held = Ty.Aggregate
               and then Syn.Kind (Of_Tree, Node) = Syn.Binding
               and then Syn.Value_Of (Of_Tree, Node) /= Syn.No_Node
+              and then Chain_Names_Storage
+                (Of_Tree, Syn.Value_Of (Of_Tree, Node))
               and then
-                ((Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                    = Syn.Name_Reference
-                  and then Res.Verdict_Of
-                    (Meanings.all, Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                      = Res.Bound
-                  and then Res.Sort_Of
-                    (Meanings.all,
-                     Res.Bound_To
-                       (Meanings.all, Of_Tree,
-                        Syn.Value_Of (Of_Tree, Node)))
-                      in Res.Module_Binding | Res.Local_Binding)
-                 or else
-                   (Is_Local_Binding (Of_Tree, Node)
-                    and then Syn.Kind
-                      (Of_Tree, Syn.Value_Of (Of_Tree, Node))
-                        = Syn.Member_Selection
-                    and then Syn.Kind
-                      (Of_Tree,
-                       Syn.Target_Of
-                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
-                        = Syn.Name_Reference
-                    and then Res.Verdict_Of
-                      (Meanings.all, Of_Tree,
-                       Syn.Target_Of
-                         (Of_Tree, Syn.Value_Of (Of_Tree, Node)))
-                        = Res.Bound))
+                (Is_Local_Binding (Of_Tree, Node)
+                 or else Syn.Kind (Of_Tree, Syn.Value_Of (Of_Tree, Node))
+                           = Syn.Name_Reference)
               and then Landin.Checking.Body_Of
                 (Types.all, Of_Tree, Written) /= Res.No_Declaration;
             Is_Array_Call_Init : constant Boolean :=
@@ -2290,6 +2228,32 @@ package body Landin.Stages.Checking is
          return Synthesise (Of_Tree, Node);
       end Selected_From;
 
+      function Selects_From_A_Name
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Where : Syn.Node_Id := Node;
+      begin
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+            Where := Syn.Target_Of (Of_Tree, Where);
+         end loop;
+         return Syn.Kind (Of_Tree, Where) = Syn.Name_Reference;
+      end Selects_From_A_Name;
+
+      function Chain_Names_Storage
+        (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
+      is
+         Where : Syn.Node_Id := Node;
+      begin
+         while Syn.Kind (Of_Tree, Where) = Syn.Member_Selection loop
+            Where := Syn.Target_Of (Of_Tree, Where);
+         end loop;
+         return Syn.Kind (Of_Tree, Where) = Syn.Name_Reference
+           and then Res.Verdict_Of (Meanings.all, Of_Tree, Where) = Res.Bound
+           and then Res.Sort_Of
+             (Meanings.all, Res.Bound_To (Meanings.all, Of_Tree, Where))
+               in Res.Module_Binding | Res.Local_Binding;
+      end Chain_Names_Storage;
+
       function Admit_Array_Field
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return Boolean
       is
@@ -2309,15 +2273,11 @@ package body Landin.Stages.Checking is
          if Syn.Kind (Of_Tree, Node) = Syn.Member_Selection then
             declare
                From : constant Syn.Node_Id := Syn.Target_Of (Of_Tree, Node);
-               Direct : constant Boolean :=
-                 Syn.Kind (Of_Tree, From) = Syn.Name_Reference;
-               Depth_One : constant Boolean :=
-                 Syn.Kind (Of_Tree, From) = Syn.Member_Selection
-                 and then Syn.Kind
-                   (Of_Tree, Syn.Target_Of (Of_Tree, From))
-                     = Syn.Name_Reference;
             begin
-               if Direct or else Depth_One then
+               --  D118: the array field may sit under however many
+               --  selections [0420] composed, so the question is whether
+               --  the chain starts at a name and not how long it is.
+               if Selects_From_A_Name (Of_Tree, From) then
                   declare
                      Held : constant Ty.Type_Kind :=
                        Selected_From (Of_Tree, From);
@@ -6153,6 +6113,10 @@ package body Landin.Stages.Checking is
                else Ty.Ill_Typed);
             Direct_Name : constant Boolean :=
               Named_Storage and then Named_Type = Ty.Fixed_Array;
+            --  D118: a local may infer from a source however many
+            --  selections reach it.  A module binding still takes only a
+            --  direct name or one field of one, because its initializer is
+            --  a folded image rather than a copy.
             Direct_Field : constant Boolean :=
               Syn.Kind (Of_Tree.all, Value) = Syn.Member_Selection
               and then
@@ -6166,9 +6130,7 @@ package body Landin.Stages.Checking is
               and then Res.Sort_Of (Meanings.all, Id) = Res.Local_Binding
               and then Syn.Kind (Of_Tree.all, Value)
                          = Syn.Member_Selection
-              and then Syn.Kind
-                (Of_Tree.all, Syn.Target_Of (Of_Tree.all, Value))
-                  = Syn.Name_Reference
+              and then Chain_Names_Storage (Of_Tree.all, Value)
               and then Selected_From (Of_Tree.all, Value) = Ty.Aggregate;
             Direct_Struct : constant Boolean :=
               (Named_Storage

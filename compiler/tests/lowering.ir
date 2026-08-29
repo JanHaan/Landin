@@ -285,6 +285,91 @@ item 1 DATUM limit result u32 params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 NUMBER u32 4096
     2 LEAVE <- 1
+file positive/deep-nested-struct-children/program.ldn
+unit items 2
+item 1 DATUM global result struct params 0 slots 0 blocks 1 values 1
+  field 1 i32
+  field 2 struct (i32,struct (i32,[2]i32))
+  field 3 i32
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 ROUTINE compose result none params 0 slots 3 blocks 1 values 42
+  slot 1 local aggregate fields i32 struct (i32,struct (i32,[2]i32)) i32
+  slot 2 piece aggregate fields i32 [2]i32
+  slot 3 inferred aggregate fields i32 [2]i32
+  block 1 scope 3 BLOCK length 42
+    1 NUMBER i32 1
+    2 STORE_FIELD slot 1 field 1 <- 1
+    3 NUMBER i32 2
+    4 STORE_FIELD slot 1 field 2 nested 1 <- 3
+    5 NUMBER i32 3
+    6 STORE_FIELD slot 1 field 2 nested 2 nested 1 <- 5
+    7 NUMBER i32 4
+    8 NUMBER usize 0
+    9 STORE_ELEMENT slot 1 field 2 nested 2 nested 2 <- 8 7
+    10 NUMBER i32 5
+    11 NUMBER usize 1
+    12 STORE_ELEMENT slot 1 field 2 nested 2 nested 2 <- 11 10
+    13 NUMBER i32 6
+    14 STORE_FIELD slot 1 field 3 <- 13
+    15 CLEAR_ARRAY destination slot 1 field 2 nested 2
+    16 NUMBER i32 7
+    17 STORE_FIELD slot 1 field 2 nested 2 nested 1 <- 16
+    18 NUMBER i32 8
+    19 NUMBER usize 0
+    20 STORE_ELEMENT slot 1 field 2 nested 2 nested 2 <- 19 18
+    21 NUMBER i32 9
+    22 NUMBER usize 1
+    23 STORE_ELEMENT slot 1 field 2 nested 2 nested 2 <- 22 21
+    24 NUMBER i32 10
+    25 STORE_FIELD datum 1 global field 2 nested 1 <- 24
+    26 CLEAR_ARRAY destination datum 1 global field 2 nested 2
+    27 LOAD_FIELD i32 slot 1 field 2 nested 2 nested 1
+    28 STORE_FIELD datum 1 global field 2 nested 2 nested 1 <- 27
+    29 COPY_ARRAY from slot 1 field 2 nested 2 nested 2 to datum 1 global field 2 nested 2 nested 2
+    30 LOAD_FIELD i32 datum 1 global field 2 nested 2 nested 1
+    31 STORE_FIELD slot 2 field 1 <- 30
+    32 COPY_ARRAY from datum 1 global field 2 nested 2 nested 2 to slot 2 field 2
+    33 LOAD_FIELD i32 slot 1 field 2 nested 2 nested 1
+    34 STORE_FIELD slot 3 field 1 <- 33
+    35 COPY_ARRAY from slot 1 field 2 nested 2 nested 2 to slot 3 field 2
+    36 LOAD_FIELD i32 slot 2 field 1
+    37 STORE_FIELD slot 1 field 2 nested 2 nested 1 <- 36
+    38 COPY_ARRAY from slot 2 field 2 to slot 1 field 2 nested 2 nested 2
+    39 LOAD_FIELD i32 slot 3 field 1
+    40 STORE_FIELD datum 1 global field 2 nested 2 nested 1 <- 39
+    41 COPY_ARRAY from slot 3 field 2 to datum 1 global field 2 nested 2 nested 2
+    42 LEAVE
+file positive/deep-nested-struct-leaves/program.ldn
+unit items 2
+item 1 DATUM global result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 struct (u16,struct (i32,[3]u8))
+  field 3 u8
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 ROUTINE reach result none params 0 slots 3 blocks 1 values 17
+  slot 1 local aggregate fields u8 struct (u16,struct (i32,[3]u8)) u8
+  slot 2 - usize
+  slot 3 - usize
+  block 1 scope 3 BLOCK length 17
+    1 CLEAR_ARRAY destination slot 1
+    2 NUMBER i32 7
+    3 STORE_FIELD slot 1 field 2 nested 2 nested 1 <- 2
+    4 NUMBER usize 1
+    5 STORE slot 2 <- 4
+    6 NUMBER u8 5
+    7 LOAD usize slot 2
+    8 STORE_ELEMENT slot 1 field 2 nested 2 nested 2 <- 7 6
+    9 LOAD_FIELD i32 slot 1 field 2 nested 2 nested 1
+    10 STORE_FIELD datum 1 global field 2 nested 2 nested 1 <- 9
+    11 NUMBER usize 2
+    12 STORE slot 3 <- 11
+    13 NUMBER usize 1
+    14 LOAD_ELEMENT u8 slot 1 field 2 nested 2 nested 2 <- 13
+    15 LOAD usize slot 3
+    16 STORE_ELEMENT datum 1 global field 2 nested 2 nested 2 <- 15 14
+    17 LEAVE
 file positive/discard-of-a-value/program.ldn
 unit signatures 1 items 1
 signature 1 () -> none

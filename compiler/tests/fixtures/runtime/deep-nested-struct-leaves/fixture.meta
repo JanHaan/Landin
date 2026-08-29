@@ -1,0 +1,6 @@
+class: runtime
+summary: two ordinary children carry scalar and fixed-array leaf reads and writes through module and local storage
+constructs: 0420, 0520, 0540, 0570, 0670, 0750, 1810, 1820, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

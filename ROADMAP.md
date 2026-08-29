@@ -1992,6 +1992,21 @@ than a parent/child pair, the verifier walks that run against the shapes, and
 the backend sums one derived offset per step. No source form changes; the
 recorded IR gains the base field and every step of every field operation.
 
+The thirty-fourth increment removes the depth from ordinary nesting. A struct
+field may be a struct that has one, layout recurses through the child's own
+already-computed extent, and every scalar or fixed-array leaf is a value and a
+place however many selections reach it. Definite assignment keeps one fact per
+part named by the run, and a fact about a part follows from a fact about
+anything containing it. A whole child below depth one, and a variant part
+inside a child, remain refused.
+
+The thirty-fifth increment gives a whole ordinary child the assignment forms
+it has at depth one, at any depth: `zeroed`, a matching literal or nominal
+construction, a storage copy, an explicitly typed local initializer and local
+inference. A nominal construction whose body has an ordinary child is
+admitted. A module binding's static image containing a child value remains
+refused, because [1940] folds an image rather than copying it.
+
 Function-typed module storage, struct fields, function parameters and results,
 declared-error function types and anonymous functions remain in this item.
 Further aggregate arguments and result contexts remain here too; R4.40 later

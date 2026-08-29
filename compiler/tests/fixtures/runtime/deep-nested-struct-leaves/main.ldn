@@ -1,0 +1,46 @@
+core: type = struct
+    value: i32
+    row: [3]i32
+end core
+
+middle: type = struct
+    lead: i32
+    inner: core
+end middle
+
+outer: type = struct
+    head: i32
+    body: middle
+    tail: i32
+end outer
+
+mut global: outer = zeroed
+
+leaves: () -> (result: i32) =
+    mut local: outer
+    local = zeroed
+    local.head = 1
+    local.tail = 2
+    local.body.lead = 12
+    local.body.inner.value = 19
+    local.body.inner.row[0] = 4
+    local.body.inner.row[1] = 6
+    local.body.inner.row[2] = 8
+    global.body.inner.value = local.body.inner.value
+    global.body.inner.row[1] = local.body.inner.row[2]
+    result = global.body.inner.value + global.body.inner.row[1]
+             + local.head + local.tail + local.body.lead
+end leaves
+
+neighbours: () -> (result: i32) =
+    mut local: outer
+    local = zeroed
+    local.body.inner.value = 5
+    result = local.head + local.tail + local.body.lead
+             + local.body.inner.row[0] + local.body.inner.row[1]
+             + local.body.inner.row[2]
+end neighbours
+
+public main: () -> (code: i32) =
+    code = leaves() + neighbours()
+end main

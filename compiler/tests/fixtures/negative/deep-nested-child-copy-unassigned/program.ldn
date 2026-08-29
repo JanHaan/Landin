@@ -1,0 +1,18 @@
+core: type = struct
+    value: i32
+end core
+
+middle: type = struct
+    inner: core
+end middle
+
+outer: type = struct
+    body: middle
+end outer
+
+mut global: outer = zeroed
+
+copy_out: () -> none =
+    mut local: outer
+    global.body.inner = local.body.inner
+end copy_out
