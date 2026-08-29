@@ -1,0 +1,12 @@
+handler: type = (x: i32) -> (r: i32)
+box: type = struct
+    callback: handler
+end box
+
+right: (x: i32) -> (r: i32) = x end right
+wrong: (x: i32) -> (r: bool) = true end wrong
+
+replace: () -> none =
+    mut local: box = (callback: right)
+    local.callback = wrong
+end replace

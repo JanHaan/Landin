@@ -2720,9 +2720,12 @@ package body Landin.Backend.X86_64 is
                                 (Directive
                                    (Size_Of (Leaf.Element, Facts))
                                  & " "
-                                 & Trimmed
-                                     (Landin.Types.Folded'Image
-                                        (Payload_Image.Value)));
+                                 & (if Leaf.Signature /=
+                                         Landin.IR.No_Signature
+                                    then Symbol (Payload_Image.Target)
+                                    else Trimmed
+                                      (Landin.Types.Folded'Image
+                                         (Payload_Image.Value))));
                            elsif Payload_Image.Form = Landin.IR.Finite then
                               for Position in 1 .. Payload_Image.Count loop
                                  Emit
@@ -2811,10 +2814,12 @@ package body Landin.Backend.X86_64 is
                elsif Shape.Kind = Landin.IR.Scalar_Field_Shape then
                   Emit
                     (Directive (Size_Of (Shape.Element, Facts)) & " "
-                     & Trimmed
-                         (Landin.Types.Folded'Image
-                            (Landin.IR.Nth_Field_Image
-                               (Of_Unit, Item, Field))));
+                     & (if Shape.Signature /= Landin.IR.No_Signature
+                        then Symbol (Image.Target)
+                        else Trimmed
+                          (Landin.Types.Folded'Image
+                             (Landin.IR.Nth_Field_Image
+                                (Of_Unit, Item, Field)))));
                elsif Image.Form = Landin.IR.Finite then
                   for Position in 1 .. Image.Count loop
                      Emit

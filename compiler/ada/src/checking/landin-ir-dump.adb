@@ -109,6 +109,9 @@ package body Landin.IR.Dump is
          case Shape.Kind is
             when Scalar_Field_Shape =>
                return Landin.Types.Spelling (Shape.Element)
+                 & (if Shape.Signature = No_Signature then ""
+                    else " signature "
+                      & Trimmed (Signature_Id'Image (Shape.Signature)))
                  & Atom_Set_Text (Shape.Atoms);
             when Array_Field_Shape =>
                --  D121: the element may be an ordinary struct, and then it
@@ -815,10 +818,15 @@ package body Landin.IR.Dump is
                                       ("    payload "
                                        & Trimmed
                                            (Natural'Image (Payload))
-                                       & " image "
-                                       & Trimmed
-                                           (Landin.Types.Folded'Image
-                                              (Payload_Image.Value)));
+                                       & (if Leaf.Signature /= No_Signature
+                                          then " function target "
+                                            & Trimmed
+                                              (Item_Id'Image
+                                                 (Payload_Image.Target))
+                                          else " image "
+                                            & Trimmed
+                                              (Landin.Types.Folded'Image
+                                                 (Payload_Image.Value))));
                                  elsif Payload_Image.Form = Absent then
                                     Put
                                       ("    payload "
@@ -869,6 +877,11 @@ package body Landin.IR.Dump is
                               end;
                            end loop;
                         end;
+                     elsif Image.Target /= No_Item then
+                        Put
+                          ("  field " & Trimmed (Natural'Image (F))
+                           & " function target "
+                           & Trimmed (Item_Id'Image (Image.Target)));
                      elsif Image.Form /= Absent then
                         if Image.Form in Finite | Hybrid then
                            for P in 1 .. Image.Count loop

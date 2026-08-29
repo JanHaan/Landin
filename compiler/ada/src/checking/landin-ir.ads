@@ -340,8 +340,8 @@ package Landin.IR is
       Length  : Element_Total               := 1;
       Cases   : Natural                     := 0;
       Payloads_First : Natural              := 0;
-      --  Nonzero only when a scalar-shaped `usize` field carries a function
-      --  value inside D128's anonymous result aggregate.
+      --  Nonzero when a scalar-shaped `usize` field carries a function
+      --  value inside D128's anonymous result or D131's nominal aggregate.
       Signature : Signature_Id              := 0;
       --  Nonzero only when a scalar-shaped `u32` field carries an atom value
       --  inside [0990]'s anonymous result aggregate.
@@ -389,7 +389,8 @@ package Landin.IR is
    type Atom_Array is array (Positive range <>) of Declaration_Id;
    No_Atoms : constant Atom_Array (1 .. 0) := [];
 
-   --  D117/D128's target-neutral callable shape.  Parameter and result runs
+   --  D117/D128/D131's target-neutral callable shape.  Parameter and result
+   --  runs
    --  contain these parts; aggregate bodies are nominal source identities,
    --  arrays retain their length and element identity, and a function-valued
    --  position refers to another structural descriptor.
@@ -860,6 +861,10 @@ package Landin.IR is
       Offset : Natural              := 0;
       Count  : Natural              := 0;
       Value  : Landin.Types.Folded  := 0;
+      --  A routine relocation for a scalar function field.  The folded
+      --  placeholder stays zero; the verifier proves this target's recursive
+      --  signature against the field shape before a backend emits a symbol.
+      Target : Item_Id              := No_Item;
    end record;
 
    type Aggregate_Field_Image_Array is
@@ -2249,7 +2254,8 @@ package Landin.IR is
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0;
-      Below  : Path_Step_Array := No_Path_Steps) return Value_Id
+      Below  : Path_Step_Array := No_Path_Steps;
+      Signature : Signature_Id := No_Signature) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Datum)
                   and then Holds (Into, Item, Index)
@@ -2291,7 +2297,8 @@ package Landin.IR is
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0;
-      Below  : Path_Step_Array := No_Path_Steps) return Value_Id
+      Below  : Path_Step_Array := No_Path_Steps;
+      Signature : Signature_Id := No_Signature) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then Holds (Into, Item, Slot)
                   and then Holds (Into, Item, Index)
@@ -2409,7 +2416,8 @@ package Landin.IR is
       Payload_Field : Positive;
       Result       : Landin.Types.Scalar_Name;
       Site         : Landin.Provenance.Origin;
-      Nested       : Path_Step_Array := No_Path_Steps) return Value_Id
+      Nested       : Path_Step_Array := No_Path_Steps;
+      Signature    : Signature_Id := No_Signature) return Value_Id
      with Pre => Is_Emitting (Into, Item)
                  and then Landin.Provenance.Is_Known (Site),
           Post => Holds (Into, Item, Emit_Variant_Field_Load'Result);

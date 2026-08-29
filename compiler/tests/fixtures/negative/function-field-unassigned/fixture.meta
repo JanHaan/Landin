@@ -1,0 +1,5 @@
+class: negative
+summary: calling an unassigned function-valued field reads that field's independent definite-assignment fact
+constructs: 0060, 0420, 0670, 0870, 1000, 1790, 1910, 1920
+program: program.ldn
+codes: L0302

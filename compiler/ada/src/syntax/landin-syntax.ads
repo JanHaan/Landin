@@ -672,9 +672,8 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Block;
 
-   --  `call ::= identifier "(" arguments? ")"` [1820].  The callee is a
-   --  Name_Reference and not a field, so every use of a name is one kind of
-   --  node; when R2 makes a callee an expression, nothing above changes.
+   --  `call ::= indexed "(" arguments? ")"` [1820].  A direct callee stays
+   --  one Name_Reference; D131 also carries a complete field selection here.
    function Callee_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) = Call,
