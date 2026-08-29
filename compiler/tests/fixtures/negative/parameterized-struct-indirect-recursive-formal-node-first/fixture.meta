@@ -1,5 +1,5 @@
 class: negative
-summary: symbolic validation rejects unused recursion through another template's used formal
+summary: unused recursion through a later used-formal wrapper is declaration-order independent
 constructs: 0670, 0710, 1350, 1795
 program: program.ldn
 targets: linux-x86-64, macos-arm64

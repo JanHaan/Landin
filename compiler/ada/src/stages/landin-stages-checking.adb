@@ -1,3 +1,4 @@
+with Ada.Containers.Vectors;
 with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
@@ -94,6 +95,9 @@ package body Landin.Stages.Checking is
       --  payload or array element needs the latter even at length zero.
       type Type_Requirement is (Identity_Only, Value_Layout);
 
+      type Symbolic_Layout_Id is range 0 .. Integer'Last;
+      No_Symbolic_Layout : constant Symbolic_Layout_Id := 0;
+
       type Type_Descriptor is record
          Kind    : Ty.Type_Kind := Ty.Ill_Typed;
          Length  : Landin.Checking.Element_Count := 0;
@@ -106,6 +110,9 @@ package body Landin.Stages.Checking is
            Landin.Checking.No_Atom_Set;
          Signature : Landin.Checking.Signature_Id :=
            Landin.Checking.No_Signature;
+         --  A transient declaration-validation obligation.  It belongs to
+         --  this Run invocation, never to syntax or the canonical key.
+         Symbolic : Symbolic_Layout_Id := No_Symbolic_Layout;
       end record;
 
       type Formal_Actual is record
@@ -116,6 +123,26 @@ package body Landin.Stages.Checking is
       end record;
 
       type Formal_Actual_Array is array (Positive range <>) of Formal_Actual;
+
+      package Formal_Actual_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Formal_Actual);
+
+      type Symbolic_Layout_Kind is
+        (Symbolic_Nominal_Layout, Symbolic_Array_Layout);
+
+      type Symbolic_Layout is record
+         Kind     : Symbolic_Layout_Kind := Symbolic_Nominal_Layout;
+         Template : Res.Declaration_Id := Res.No_Declaration;
+         First    : Natural := 0;
+         Count    : Natural := 0;
+         Element  : Type_Descriptor;
+      end record;
+
+      package Symbolic_Layout_Vectors is new Ada.Containers.Vectors
+        (Index_Type => Positive, Element_Type => Symbolic_Layout);
+
+      Symbolic_Actuals : Formal_Actual_Vectors.Vector;
+      Symbolic_Layouts : Symbolic_Layout_Vectors.Vector;
 
       ------------------------------------------------------------
 
@@ -442,6 +469,13 @@ package body Landin.Stages.Checking is
 
       function Descriptor_For
         (Actual : Landin.Checking.Actual_Key) return Type_Descriptor;
+
+      function Remember_Symbolic_Nominal
+        (Template : Res.Declaration_Id;
+         Actuals  : Formal_Actual_Array) return Symbolic_Layout_Id;
+
+      function Remember_Symbolic_Array
+        (Element : Type_Descriptor) return Symbolic_Layout_Id;
 
       function Require_Value_Layout
         (Descriptor  : Type_Descriptor;
@@ -959,6 +993,37 @@ package body Landin.Stages.Checking is
          end case;
       end Descriptor_For;
 
+      function Remember_Symbolic_Nominal
+        (Template : Res.Declaration_Id;
+         Actuals  : Formal_Actual_Array) return Symbolic_Layout_Id
+      is
+         First : constant Natural :=
+           Natural (Symbolic_Actuals.Length) + 1;
+      begin
+         for Actual of Actuals loop
+            Symbolic_Actuals.Append (Actual);
+         end loop;
+         Symbolic_Layouts.Append
+           (Symbolic_Layout'(Kind     => Symbolic_Nominal_Layout,
+             Template => Template,
+             First    => First,
+             Count    => Actuals'Length,
+             Element  => (others => <>)));
+         return Symbolic_Layout_Id (Symbolic_Layouts.Last_Index);
+      end Remember_Symbolic_Nominal;
+
+      function Remember_Symbolic_Array
+        (Element : Type_Descriptor) return Symbolic_Layout_Id is
+      begin
+         Symbolic_Layouts.Append
+           (Symbolic_Layout'(Kind     => Symbolic_Array_Layout,
+             Template => Res.No_Declaration,
+             First    => 0,
+             Count    => 0,
+             Element  => Element));
+         return Symbolic_Layout_Id (Symbolic_Layouts.Last_Index);
+      end Remember_Symbolic_Array;
+
       function Require_Value_Layout
         (Descriptor  : Type_Descriptor;
          Of_Tree     : Syn.Tree;
@@ -971,6 +1036,10 @@ package body Landin.Stages.Checking is
          procedure Ensure_Nominal
            (Instance : Landin.Checking.Nominal_Type_Id;
             Valid    : out Boolean);
+
+         procedure Ensure_Symbolic
+           (Id    : Symbolic_Layout_Id;
+            Valid : out Boolean);
 
          procedure Report_Recursion
            (Template_Tree : Syn.Tree; Struct_Node : Syn.Node_Id);
@@ -1086,10 +1155,66 @@ package body Landin.Stages.Checking is
             end if;
          end Ensure_Nominal;
 
+         procedure Ensure_Symbolic
+           (Id    : Symbolic_Layout_Id;
+            Valid : out Boolean)
+         is
+            Layout : constant Symbolic_Layout :=
+              Symbolic_Layouts (Positive (Id));
+         begin
+            if Layout.Kind = Symbolic_Array_Layout then
+               if Layout.Element.Symbolic /= No_Symbolic_Layout then
+                  Ensure_Symbolic (Layout.Element.Symbolic, Valid);
+               elsif Layout.Element.Kind = Ty.Aggregate then
+                  Ensure_Nominal (Layout.Element.Nominal, Valid);
+               else
+                  Valid := True;
+               end if;
+               return;
+            end if;
+
+            declare
+               Template_Tree : constant not null access constant Syn.Tree :=
+                 Tree_For (Res.Source_Of (Meanings.all, Layout.Template));
+               Declaration : constant Syn.Node_Id :=
+                 Res.Node_Of (Meanings.all, Layout.Template);
+               Struct_Node : constant Syn.Node_Id :=
+                 Syn.Declared_Type (Template_Tree.all, Declaration);
+               Bound : Formal_Actual_Array (1 .. Layout.Count) :=
+                 [others => (others => <>)];
+               Was_Expanding : constant Boolean :=
+                 Generic_Expansion (Positive (Layout.Template));
+            begin
+               pragma Assert
+                 (Syn.Kind (Template_Tree.all, Struct_Node) = Syn.Struct_Body);
+
+               if Was_Expanding then
+                  Report_Recursion (Template_Tree.all, Struct_Node);
+                  Valid := False;
+                  return;
+               end if;
+
+               for Index in Bound'Range loop
+                  Bound (Index) := Symbolic_Actuals
+                    (Positive (Layout.First + Index - 1));
+               end loop;
+
+               Generic_Expansion (Positive (Layout.Template)) := True;
+               Build_Struct_Instance
+                 (Template_Tree.all, Struct_Node,
+                  Landin.Checking.No_Nominal_Type, Bound,
+                  Landin.Provenance.No_Origin, Valid);
+               Generic_Expansion (Positive (Layout.Template)) :=
+                 Was_Expanding;
+            end;
+         end Ensure_Symbolic;
+
          Result : Type_Descriptor := Descriptor;
          Valid  : Boolean := True;
       begin
-         if Descriptor.Kind = Ty.Aggregate then
+         if Descriptor.Symbolic /= No_Symbolic_Layout then
+            Ensure_Symbolic (Descriptor.Symbolic, Valid);
+         elsif Descriptor.Kind = Ty.Aggregate then
             Ensure_Nominal (Descriptor.Nominal, Valid);
          elsif Descriptor.Kind = Ty.Fixed_Array then
             if Descriptor.Element_Nominal
@@ -1247,9 +1372,16 @@ package body Landin.Stages.Checking is
                   end if;
                   return Invalid;
                elsif Element.Kind = Ty.Undecided or else not Is_Known then
-                  --  Symbolic formals prove the declaration's syntax and
-                  --  free names without inventing one instantiation's shape.
-                  return (Kind => Ty.Undecided, others => <>);
+                  --  Retain a nominal element obligation across an
+                  --  identity-only array actual.  A plain type formal still
+                  --  remains wholly unknown and carries no guessed shape.
+                  return
+                    (Kind     => Ty.Undecided,
+                     Symbolic =>
+                       (if Element.Symbolic = No_Symbolic_Layout
+                        then No_Symbolic_Layout
+                        else Remember_Symbolic_Array (Element)),
+                     others   => <>);
                end if;
 
                Value := Ty.Magnitude (Folded_Value);
@@ -1779,13 +1911,19 @@ package body Landin.Stages.Checking is
 
                               if not Concrete then
                                  if Requirement = Identity_Only then
-                                    Valid := True;
-                                 else
-                                    Build_Struct_Instance
-                                      (Template.all, Struct_Node,
-                                       Landin.Checking.No_Nominal_Type, Bound,
-                                       This_Application, Valid);
+                                    Generic_Expansion (Positive (Means)) :=
+                                      Was_Expanding;
+                                    return
+                                      (Kind     => Ty.Undecided,
+                                       Symbolic => Remember_Symbolic_Nominal
+                                         (Means, Bound),
+                                       others   => <>);
                                  end if;
+
+                                 Build_Struct_Instance
+                                   (Template.all, Struct_Node,
+                                    Landin.Checking.No_Nominal_Type, Bound,
+                                    This_Application, Valid);
                                  Generic_Expansion (Positive (Means)) :=
                                    Was_Expanding;
                                  return
