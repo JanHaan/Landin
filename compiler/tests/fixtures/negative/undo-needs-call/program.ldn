@@ -2,5 +2,5 @@ cleanup: () -> none =
 end cleanup
 
 f: () -> none =
-    undo cleanup()
+    undo cleanup
 end f

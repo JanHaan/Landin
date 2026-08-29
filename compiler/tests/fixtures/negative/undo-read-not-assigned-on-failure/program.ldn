@@ -1,0 +1,12 @@
+bad: atom
+problem: type = bad
+
+sink: (value: i32) -> none =
+    _ = value
+end sink
+
+f: () -> none ! problem =
+    mut local: i32
+    undo sink(local)
+    fail bad
+end f

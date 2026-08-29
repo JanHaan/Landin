@@ -4736,6 +4736,77 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Deferred_Calls_Follow_The_Normal_Path_After_Traps;
 
+   --  [1110] reaches x86 only as calls placed on the neutral failure block.
+   --  They retain lexical reverse order before the dedicated error carrier
+   --  is restored, while a successful return emits no undo call at all.
+   procedure Undo_Calls_Precede_Only_The_Failure_Carrier
+     (Item : in out Landin.Testing.Context);
+
+   procedure Undo_Calls_Precede_Only_The_Failure_Carrier
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "bad: atom" & LF
+         & "problem: type = bad" & LF
+         & "first: () -> none = end first" & LF
+         & "second: () -> none = end second" & LF
+         & "failure_only: () -> none ! problem =" & LF
+         & "    undo first()" & LF
+         & "    undo second()" & LF
+         & "    fail bad" & LF
+         & "end failure_only" & LF
+         & "success: () -> none ! problem =" & LF
+         & "    undo first()" & LF
+         & "    return" & LF
+         & "end success" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "failure-only cleanup reaches backend-ready IR");
+
+      declare
+         Whole : constant String := Emitted (Work);
+         Failure_At : constant Positive :=
+           Positive (Index (Whole, "failure_only:" & LF));
+         Success_At : constant Positive :=
+           Positive (Index (Whole, "success:" & LF));
+         Failure_Text : constant String :=
+           Whole (Failure_At .. Success_At - 1);
+         Success_Text : constant String := Whole (Success_At .. Whole'Last);
+         Second_At : constant Natural :=
+           Index (Failure_Text, HT & "call second" & LF);
+         First_At : constant Natural :=
+           Index (Failure_Text, HT & "call first" & LF);
+         Error_At : constant Natural :=
+           Index (Failure_Text, ", %r10d" & LF);
+      begin
+         Landin.Testing.Check
+           (Item,
+            Second_At > 0 and then First_At > Second_At
+              and then Error_At > First_At,
+            "reverse undo calls finish before failure propagation");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Failure_Text, HT & "call second" & LF), 1,
+            "the later undo emits once on failure");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Failure_Text, HT & "call first" & LF), 1,
+            "the earlier undo emits once on failure");
+         Landin.Testing.Check
+           (Item,
+            not Contains (Success_Text, HT & "call first" & LF)
+              and then not Contains
+                (Success_Text, HT & "call second" & LF),
+            "a successful return contains no undo call");
+      end;
+   end Undo_Calls_Precede_Only_The_Failure_Carrier;
+
    ------------------------------------------------------------------
    --  The frame
    ------------------------------------------------------------------
@@ -4904,6 +4975,9 @@ package body Landin.Tests.Backend_Suite is
       Landin.Testing.Register
         (Into, "backend", "deferred calls follow normal paths after traps",
          Deferred_Calls_Follow_The_Normal_Path_After_Traps'Access);
+      Landin.Testing.Register
+        (Into, "backend", "undo calls precede only the failure carrier",
+         Undo_Calls_Precede_Only_The_Failure_Carrier'Access);
       Landin.Testing.Register
         (Into, "backend", "unsigned add uses carry to trap",
          Unsigned_Add_Uses_Carry_To_Trap'Access);

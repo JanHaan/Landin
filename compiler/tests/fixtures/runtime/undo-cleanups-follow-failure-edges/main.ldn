@@ -1,0 +1,112 @@
+bad: atom
+problem: type = bad
+
+mut trace: i32 = 0
+
+mark: (value: i32) -> none =
+    trace = trace * 10 + value
+end mark
+
+leaf: (fails: bool) -> none ! problem =
+    fail bad when fails
+end leaf
+
+normal: () -> none ! problem =
+    undo mark(1)
+    defer mark(2)
+end normal
+
+successful_return: () -> none ! problem =
+    undo mark(1)
+    defer mark(2)
+    return
+end successful_return
+
+handled: () -> none ! problem =
+    undo mark(1)
+    defer mark(2)
+    leaf(true) else 0
+end handled
+
+direct_failure: () -> none ! problem =
+    defer mark(1)
+    undo mark(2)
+    fail bad
+end direct_failure
+
+propagated_failure: () -> none ! ... =
+    defer mark(1)
+    undo mark(2)
+    begin
+        defer mark(3)
+        undo mark(4)
+        try leaf(true)
+    end
+end propagated_failure
+
+if_value_failure: () -> none ! ... =
+    _ = if true then
+        undo mark(5)
+        fail bad when true
+        1
+    else
+        2
+    end if
+end if_value_failure
+
+match_value_failure: () -> none ! ... =
+    _ = match bad
+        bad: begin
+            undo mark(6)
+            fail bad when true
+            1
+        end
+    end match
+end match_value_failure
+
+unreached_registration: () -> none ! problem =
+    undo mark(1)
+    fail bad
+    undo mark(2)
+end unreached_registration
+
+public main: () -> (code: i32) =
+    normal() else 0
+    normal_ok: bool = trace == 2
+
+    trace = 0
+    successful_return() else 0
+    return_ok: bool = trace == 2
+
+    trace = 0
+    handled() else 0
+    handled_ok: bool = trace == 2
+
+    trace = 0
+    direct_failure() else 0
+    direct_ok: bool = trace == 21
+
+    trace = 0
+    propagated_failure() else 0
+    propagated_ok: bool = trace == 4321
+
+    trace = 0
+    if_value_failure() else 0
+    if_value_ok: bool = trace == 5
+
+    trace = 0
+    match_value_failure() else 0
+    match_value_ok: bool = trace == 6
+
+    trace = 0
+    unreached_registration() else 0
+    reached_ok: bool = trace == 1
+
+    if normal_ok and return_ok and handled_ok and direct_ok
+      and propagated_ok and if_value_ok and match_value_ok and reached_ok
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

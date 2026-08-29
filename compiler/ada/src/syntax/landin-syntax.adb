@@ -17,7 +17,7 @@ package body Landin.Syntax is
             when Assignment               => 2,
             when Increment | Decrement    => 1,
             when Discard                  => 1,
-            when Defer_Statement          => 1,
+            when Defer_Statement | Undo_Statement => 1,
             when Return_Statement         => 1,
             when Fail_Statement           => 2,
             when If_Statement             => 1,
@@ -164,8 +164,14 @@ package body Landin.Syntax is
    function Target_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
 
-   function Deferred_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
+   function Cleanup_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
+
+   function Deferred_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Cleanup_Call (Of_Tree, Id));
+
+   function Undo_Call (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Cleanup_Call (Of_Tree, Id));
 
    function Condition_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id,

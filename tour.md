@@ -1779,16 +1779,22 @@ evaluates no callee or argument, costs nothing and reserves nothing.
 
 ### [1110] undo is the same machinery under a condition
 
-undo is the same machinery under a condition. It is
-registered when control reaches it, runs in reverse
-order at the end of its block, and runs only if the
-block is left by fail — which includes a try that
-propagates and a fail arriving from deeper in. Not on
-return, not on break, and not on a panic, since panics
-do not unwind.
-It is its own word rather than a flavour of defer,
-because it is not the same thing: to defer is to do it
-later, and this may never be done at all. English
+undo is the same machinery under a condition. It is registered when control
+reaches it and runs only if declared failure leaves its block — a direct fail,
+a try that propagates, or failure arriving through a deeper call. Nested blocks
+run inner entries first. Within one block defer and undo share one registration
+order, so the applicable calls interleave in lexical reverse order rather than
+forming two batches. Like defer, an undo evaluates its callee and arguments
+only when it runs, in source order, and therefore sees their late values.
+
+Ordinary fallthrough and a successful return skip undo. A call-site else that
+recovers locally does not leave the caller's block and skips its undo entries;
+entries in the failing callee have already run before its failure arrives for
+recovery. Break does not select undo, and neither does a panic: panics stop and
+do not unwind anything.
+
+It is its own word rather than a flavour of defer, because it is not the same
+thing: to defer is to do it later, and this may never be done at all. English
 calls it a contingency, or a compensating action.
 
 ```landin

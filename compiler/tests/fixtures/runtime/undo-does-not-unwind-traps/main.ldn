@@ -1,0 +1,10 @@
+mut divisor: i32 = 0
+
+make_safe: () -> none =
+    divisor = 1
+end make_safe
+
+public main: () -> (code: i32) =
+    undo make_safe()
+    code = 42 / divisor
+end main

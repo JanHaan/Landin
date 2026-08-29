@@ -1,0 +1,4 @@
+class: positive
+summary: undo reads its late arguments only on direct and propagated failure edges
+program: program.ldn
+constructs: 0080, 0940, 0960, 0970, 1030, 1110, 1800, 1810, 1910, 1920
