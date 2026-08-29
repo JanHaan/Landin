@@ -1937,6 +1937,10 @@ directly into a typed local, direct assignment or named return, including an
 expression body. Each source call boundary keeps its by-value copy without an
 aggregate SSA value.
 
+The twenty-third increment qualifies that hidden destination with neutral
+field identities. Struct calls can fill an ordinary child, and array calls can
+fill direct or nested array fields without an intermediate aggregate copy.
+
 Further aggregate arguments and result contexts remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20
