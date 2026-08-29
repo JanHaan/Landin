@@ -14,7 +14,7 @@ end make
 forward: () -> (result: pair) = make(19, 23) end forward
 
 public main: () -> (code: i32) =
-    mut answer: pair = forward()
+    mut answer := forward()
     mut other: pair = make(1, 2)
     other.left = 40
     mut storage: holder = zeroed

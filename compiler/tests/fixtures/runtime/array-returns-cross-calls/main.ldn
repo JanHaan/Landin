@@ -9,7 +9,7 @@ end make
 forward: () -> (result: [3]i32) = make() end forward
 
 public main: () -> (code: i32) =
-    mut answer: [3]i32 = forward()
+    mut answer := forward()
     mut other: [3]i32 = make()
     other[0] = 40
     mut storage: holder = zeroed

@@ -141,7 +141,8 @@ a complete depth-one ordinary child and its literal construction retain their
 nested field runs as well. Struct and fixed-array results use a hidden
 destination pointing to caller-owned shaped storage and copy from an independent
 named-result slot on leave. Matching calls can fill typed locals, direct or
-field-qualified assignments, and named returns without an aggregate SSA value.
+field-qualified assignments, and named returns without an aggregate SSA value;
+a local can infer that returned nominal body or array shape as well.
 Further aggregate
 arguments and result contexts remain absent;
 R4.40 later completes C ABI classification.
