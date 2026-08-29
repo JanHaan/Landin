@@ -1,0 +1,5 @@
+class: positive
+summary: a module struct image recursively carries an ordinary-child construction
+constructs: 0670, 0700, 0750, 1795, 1940
+program: program.ldn
+targets: linux-x86-64, synthetic-32

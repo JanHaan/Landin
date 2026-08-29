@@ -2527,6 +2527,25 @@ item 2 DATUM flag result bool params 0 slots 0 blocks 1 values 2
   block 1 scope 1 PROGRAM length 2
     1 TRUTH bool false
     2 LEAVE <- 1
+file positive/module-struct-image-with-a-child/program.ldn
+unit signatures 1 items 2
+signature 1 () -> none
+item 1 DATUM module_value result struct params 0 slots 0 blocks 1 values 1
+  field 1 struct (u32)
+  field 2 u8
+  image 0 2
+  field 1 nested
+  field 1.1 image 1
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 ROUTINE f result none signature 1 params 0 slots 1 blocks 1 values 5
+  slot 1 local_value aggregate fields struct (u32) u8
+  block 1 scope 3 BLOCK length 5
+    1 NUMBER u32 3
+    2 STORE_FIELD slot 1 field 1 nested 1 <- 1
+    3 NUMBER u8 4
+    4 STORE_FIELD slot 1 field 2 <- 3
+    5 LEAVE
 file positive/module-struct-inferred-from-name/program.ldn
 unit signatures 1 items 5
 signature 1 () -> usize
@@ -3504,6 +3523,113 @@ item 1 ROUTINE f result i32 signature 1 params 0 slots 3 blocks 1 values 12
     10 STORE slot 1 <- 9
     11 LOAD i32 slot 1
     12 LEAVE <- 11
+file positive/recursive-module-images/program.ldn
+unit signatures 2 items 7
+signature 1 () -> usize
+signature 2 () -> usize
+item 1 DATUM state result struct params 0 slots 0 blocks 1 values 1
+  field 1 struct (u8,struct (usize,u8,usize signature 1),u16)
+  field 2 variant u8 cases2 () (struct (u8,struct (usize,u8,usize signature 1),u16))
+  field 3 usize
+  image 0 0 29
+  field 1 nested
+  field 1.1 image 11
+  field 1.2 nested
+  field 1.2.1 image 42
+  field 1.2.2 image 7
+  field 1.2.3 function target 7
+  field 1.3 image 17
+  field 2 case 2
+    payload 1 nested
+    payload 1.1 image 13
+    payload 1.2 nested
+    payload 1.2.1 image 42
+    payload 1.2.2 image 7
+    payload 1.2.3 function target 7
+    payload 1.3 image 19
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 2 DATUM copy result struct params 0 slots 0 blocks 1 values 1
+  field 1 struct (u8,struct (usize,u8,usize signature 1),u16)
+  field 2 variant u8 cases2 () (struct (u8,struct (usize,u8,usize signature 1),u16))
+  field 3 usize
+  image 0 0 29
+  field 1 nested
+  field 1.1 image 11
+  field 1.2 nested
+  field 1.2.1 image 42
+  field 1.2.2 image 7
+  field 1.2.3 function target 7
+  field 1.3 image 17
+  field 2 case 2
+    payload 1 nested
+    payload 1.1 image 13
+    payload 1.2 nested
+    payload 1.2.1 image 42
+    payload 1.2.2 image 7
+    payload 1.2.3 function target 7
+    payload 1.3 image 19
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 3 DATUM inferred result struct params 0 slots 0 blocks 1 values 1
+  field 1 struct (u8,struct (usize,u8,usize signature 1),u16)
+  field 2 variant u8 cases2 () (struct (u8,struct (usize,u8,usize signature 1),u16))
+  field 3 usize
+  image 0 0 47
+  field 1 nested
+  field 1.1 image 31
+  field 1.2 nested
+  field 1.2.1 image 37
+  field 1.2.2 image 41
+  field 1.2.3 function target 7
+  field 1.3 image 43
+  field 2 case 2
+    payload 1 nested
+    payload 1.1 image 11
+    payload 1.2 nested
+    payload 1.2.1 image 42
+    payload 1.2.2 image 7
+    payload 1.2.3 function target 7
+    payload 1.3 image 17
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 4 DATUM packet_image result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 struct (usize,u8,usize signature 1)
+  field 3 u16
+  image 11 0 17
+  field 2 nested
+  field 2.1 image 42
+  field 2.2 image 7
+  field 2.3 function target 7
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 5 DATUM copied_packet result struct params 0 slots 0 blocks 1 values 1
+  field 1 u8
+  field 2 struct (usize,u8,usize signature 1)
+  field 3 u16
+  image 13 0 19
+  field 2 nested
+  field 2.1 image 42
+  field 2.2 image 7
+  field 2.3 function target 7
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 6 DATUM source_word result struct params 0 slots 0 blocks 1 values 1
+  field 1 usize
+  field 2 u8
+  field 3 usize signature 1
+  image 42 7 0
+  field 3 function target 7
+  block 1 scope 1 PROGRAM length 1
+    1 LEAVE
+item 7 ROUTINE answer result usize signature 2 params 0 slots 1 blocks 1 values 4
+  slot 1 r usize return
+  block 1 scope 2 SIGNATURE length 4
+    1 NUMBER usize 42
+    2 STORE slot 1 <- 1
+    3 LOAD usize slot 1
+    4 LEAVE <- 3
 file positive/return-bare/program.ldn
 unit signatures 1 items 1
 signature 1 () -> none
