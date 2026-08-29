@@ -1,0 +1,5 @@
+class: positive
+summary: mutually recursive ordinary structs connected only by function signatures have finite pointer-carrier layouts
+constructs: 0670, 0710, 1000, 1795
+program: program.ldn
+targets: linux-x86-64, macos-arm64

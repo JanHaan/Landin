@@ -1,0 +1,7 @@
+cell: type (item: type) = struct
+    value: item
+end cell
+
+pass: (value: cell(u8)) -> (result: cell(u8)) =
+    result = value
+end pass

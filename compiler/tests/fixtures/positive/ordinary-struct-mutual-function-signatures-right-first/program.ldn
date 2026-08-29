@@ -1,0 +1,6 @@
+right: type = struct
+    exchange: (value: left) -> (result: left)
+end right
+left: type = struct
+    exchange: (value: right) -> (result: right)
+end left

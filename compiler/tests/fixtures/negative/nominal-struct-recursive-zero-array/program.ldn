@@ -1,0 +1,3 @@
+node: type = struct
+    children: [0]node
+end node
