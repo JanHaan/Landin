@@ -161,6 +161,100 @@ package body Landin.IR.Dump is
          end case;
       end Shape_Text;
 
+      procedure Put_Recursive_Image
+        (Item   : Item_Id;
+         Prefix : String;
+         Shape  : Field_Shape;
+         Image  : Aggregate_Field_Image);
+
+      procedure Put_Recursive_Image
+        (Item   : Item_Id;
+         Prefix : String;
+         Shape  : Field_Shape;
+         Image  : Aggregate_Field_Image)
+      is
+         Rendered : Unbounded.Unbounded_String;
+      begin
+         case Shape.Kind is
+            when Scalar_Field_Shape =>
+               Put
+                 (Prefix
+                  & (if Shape.Signature /= No_Signature
+                     then " function target "
+                       & Trimmed (Item_Id'Image (Image.Target))
+                     else " image "
+                       & Trimmed
+                           (Landin.Types.Folded'Image (Image.Value))));
+
+            when Array_Field_Shape =>
+               if Image.Form = Absent then
+                  Put (Prefix & " zeroed");
+                  return;
+               end if;
+               if Image.Form in Finite | Hybrid then
+                  for Position in 1 .. Image.Count loop
+                     if Position /= 1 then
+                        Unbounded.Append (Rendered, " ");
+                     end if;
+                     Unbounded.Append
+                       (Rendered,
+                        Trimmed
+                          (Landin.Types.Folded'Image
+                             (Nth_Descriptor_Element
+                                (Of_Unit, Item, Image,
+                                 Part_Position (Position)))));
+                  end loop;
+               end if;
+               if Image.Form in Repeated | Hybrid then
+                  if Image.Form = Hybrid then
+                     Unbounded.Append (Rendered, " ");
+                  end if;
+                  Unbounded.Append
+                    (Rendered,
+                     "repeat "
+                     & Trimmed
+                         (Landin.Types.Folded'Image (Image.Value)));
+               end if;
+               Put (Prefix & " image " & Unbounded.To_String (Rendered));
+
+            when Aggregate_Field_Shape =>
+               if Image.Form = Absent then
+                  Put (Prefix & " zeroed");
+               else
+                  Put (Prefix & " nested");
+                  for Child in 1 .. Image.Count loop
+                     Put_Recursive_Image
+                       (Item,
+                        Prefix & "."
+                        & Trimmed (Natural'Image (Child)),
+                        Nth_Aggregate_Field (Of_Unit, Shape, Child),
+                        Descendant_Image_Of
+                          (Of_Unit, Item, Image, Child));
+                  end loop;
+               end if;
+
+            when Variant_Field_Shape =>
+               if Image.Form = Absent then
+                  Put (Prefix & " zeroed");
+               else
+                  Put
+                    (Prefix & " case "
+                     & Trimmed
+                         (Landin.Types.Folded'Image (Image.Value)));
+                  for Payload in 1 .. Image.Count loop
+                     Put_Recursive_Image
+                       (Item,
+                        Prefix & " payload "
+                        & Trimmed (Natural'Image (Payload)),
+                        Nth_Variant_Case_Field
+                          (Of_Unit, Shape, Positive (Image.Value), Payload),
+                        Descendant_Image_Of
+                          (Of_Unit, Item, Image, Payload));
+                  end loop;
+               end if;
+         end case;
+      end Put_Recursive_Image;
+
       --  Every operand of every opcode, in one run, whatever the opcode.
       function Operands (Item : Item_Id; Value : Value_Id) return String;
 
@@ -790,7 +884,12 @@ package body Landin.IR.Dump is
                        Field_Image_Of (Of_Unit, Id, F);
                      Rendered : Unbounded.Unbounded_String;
                   begin
-                     if Image.Form = Selected then
+                     if Image.Form = Nested then
+                        Put_Recursive_Image
+                          (Id,
+                           "  field " & Trimmed (Natural'Image (F)),
+                           Nth_Field_Shape (Of_Unit, Id, F), Image);
+                     elsif Image.Form = Selected then
                         Put
                           ("  field " & Trimmed (Natural'Image (F))
                            & " case "
@@ -827,6 +926,13 @@ package body Landin.IR.Dump is
                                             & Trimmed
                                               (Landin.Types.Folded'Image
                                                  (Payload_Image.Value))));
+                                 elsif Payload_Image.Form = Nested then
+                                    Put_Recursive_Image
+                                      (Id,
+                                       "    payload "
+                                       & Trimmed
+                                           (Natural'Image (Payload)),
+                                       Leaf, Payload_Image);
                                  elsif Payload_Image.Form = Absent then
                                     Put
                                       ("    payload "

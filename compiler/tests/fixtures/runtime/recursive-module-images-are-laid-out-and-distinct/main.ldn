@@ -1,0 +1,81 @@
+callback: type = () -> (r: usize)
+
+word: type = struct
+    value: usize
+    code: u8
+    run: callback
+end word
+word_alias: type = word
+
+packet: type = struct
+    head: u8
+    child: word_alias
+    tail: u16
+end packet
+
+envelope: type = struct
+    nested: packet
+    kind: variant
+        empty |
+        carry: (data: packet)
+    end kind
+    marker: usize
+end envelope
+
+state: envelope = envelope(
+    marker: 29,
+    kind: carry(data: copied_packet),
+    nested: packet_image)
+mut copy: envelope = state
+inferred := envelope(
+    nested: packet(head: 31,
+                   child: word(value: 37, code: 41, run: answer),
+                   tail: 43),
+    kind: carry(data: packet_image),
+    marker: 47)
+
+packet_image: packet = packet(
+    tail: 17,
+    child: source_word,
+    head: 11)
+copied_packet: packet = packet(
+    head: 13,
+    child: packet_image.child,
+    tail: 19)
+source_word: word = word(value: 42, code: 7, run: answer)
+
+answer: () -> (r: usize) = 42 end
+
+public main: () -> (code: i32) =
+    mut observed: i32 = 0
+    match state.kind
+        empty: observed = 1
+        carry(data):
+            if state.nested.child.value == 42
+              and state.nested.child.code == 7
+              and state.nested.child.run() == 42
+              and state.nested.head == 11
+              and state.nested.tail == 17
+              and data.child.value == 42
+              and data.child.run() == 42
+              and data.head == 13
+              and data.tail == 19
+              and state.marker == 29
+              and inferred.nested.child.value == 37
+            then
+                observed = 42
+            else
+                observed = 2
+            end if
+    end match
+    copy.nested.child.value = 99
+    match copy.kind
+        empty: observed = 3
+        carry(inout data): data.child.value = 100
+    end match
+    if state.nested.child.value == 42 and observed == 42 then
+        code = 42
+    else
+        code = 4
+    end if
+end main

@@ -1,0 +1,10 @@
+leaf: type = struct
+    value: u32
+end leaf
+
+holder: type = struct
+    child: leaf
+end holder
+
+first: holder = holder(child: second.child)
+second: holder = holder(child: first.child)

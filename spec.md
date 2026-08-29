@@ -5561,7 +5561,7 @@ reconstruct it; carrying a target byte extent would make the IR target-specific.
 
 **Pinned by** the checking, lowering and verifier public seams;
 `positive/measurement-of-nested-struct-field`;
-`negative/module-struct-image-with-a-child`; the generated layout, token
+`positive/module-struct-image-with-a-child`; the generated layout, token
 and IR records; and
 `runtime/nested-struct-measurements-answer-for-the-target` on Linux x86-64.
 
@@ -5606,7 +5606,7 @@ ABI work owns the remaining nonzero/general-value boundary.
 **Pinned by** the lowering, verifier and backend public seams;
 `positive/nested-struct-zero-storage`;
 `negative/struct-with-a-struct-field`;
-`negative/module-struct-image-with-a-child`; the generated token and IR
+`positive/module-struct-image-with-a-child`; the generated token and IR
 records; and `runtime/nested-struct-zero-storage-keeps-neighbours` on Linux
 x86-64.
 
@@ -6592,9 +6592,9 @@ nominal construction whose body has an ordinary child is admitted, because the
 labelled child value is already checked against that child's own body.
 
 The root binding decides mutability, and the child remains no general
-expression value: no operand, no discard, and no module image. A module
-binding's initializer still takes only a direct name or one field of one,
-because [1940] folds it rather than copying it.
+expression value: no operand and no discard. D132 later gives a module
+initializer the same contextual child forms by recursively folding their
+static image rather than turning the child into a general value.
 
 Lowering keeps one notion of place — a base field and D118's run below it —
 and descends into it. A literal fills a place; a copy visits the same fields
@@ -6610,7 +6610,7 @@ and an expression lifetime that none of these assignments wants.
 
 **Pinned by** `positive/deep-nested-struct-children`,
 `negative/deep-nested-child-copy-unassigned`,
-`negative/module-struct-image-with-a-child`, the generated IR record, and
+`positive/module-struct-image-with-a-child`, the generated IR record, and
 `runtime/deep-nested-struct-children` on Linux x86-64.
 
 ### D121 — A variant case payload may be an ordinary struct
@@ -6630,8 +6630,8 @@ The payload is reached by D118's run: the case a step names is what says the
 run it indexes is a payload run rather than an ordinary field run. No opcode
 is added, and the two payload operations D76/D78 introduced keep their exact
 meaning for a scalar leaf. A payload struct that has a variant part of its own
-is refused, and so is a module image containing an ordinary-struct payload
-value: [1940] folds an image rather than copying one.
+is refused. D132 later admits an ordinary-struct payload in a module image by
+recursively folding that payload's own image.
 
 **Why the alias is a struct and not a second kind of binding:** D78's alias
 already denotes storage; making it denote a struct's storage rather than a
@@ -7157,4 +7157,82 @@ D118's path rather than a field-specific calling convention.
 `function-field-unassigned`, `function-variant-payload-signature-mismatch`, and
 `module-function-field-without-image`; the malformed aggregate-image verifier
 case; the generated construct, lexical and IR records; and
-`runtime/function-valued-struct-fields` on Linux x86-64.
+`runtime/function-valued-struct-fields` on Linux x86-64
+
+### D132 — A folded aggregate image recursively contains aggregate fields
+
+**The tour said** that a module binding already has its value before the entry
+point [1460], that a struct literal takes its nominal context from its use
+[0710], and that fields retain source order while each target supplies widths,
+alignment and padding [0750]. D120 admitted an ordinary child as a contextual
+runtime value and D121 did the same for an ordinary-struct variant payload, but
+both kept the corresponding module image refused because D67/D81 could carry
+only scalar and compact fixed-array leaves.
+
+**Chosen:** a labelled or nominal module construction may give an ordinary
+child, at any depth, exactly D120's contextual forms: `zeroed`, a matching
+labelled or nominal construction, a direct module struct image, or one directly
+selected ordinary child of matching nominal type. A selected variant case may
+give an ordinary-struct payload the same forms. Written and inferred module
+constructions share the rule. Type aliases preserve the declaration that owns
+the child, and every copied image owns distinct storage.
+
+These forms remain contextual. They do not make a child or payload a general
+operand, discard or independently evaluated aggregate expression. An omitted
+field, `of zeroed`, explicit `zeroed`, or a copied absent source has the absent
+all-zero image. A written nested construction remains a written image even
+when all of its folds are zero, as D24 and D66 require.
+
+The target-neutral aggregate image keeps D66's flat top-level fold run and
+extends D67/D81's descriptor run with `Nested`. Its `Offset` and `Count` select
+one contiguous declaration-order run of direct child descriptors after the
+top-level descriptors. A child descriptor may itself be `Nested` or
+`Selected`; scalar descendants carry one fold or D131 routine relocation in
+their descriptor, while fixed-array descendants retain `Absent`, `Finite`,
+`Repeated` or `Hybrid` and share the item's existing fold run. `Selected` and `Nested` offsets count
+descriptors; finite and hybrid offsets count folds. Neither run contains a
+target width, byte offset, padding byte or host representation.
+
+Direct image names and selected-child sources join the existing
+per-declaration static-image graph. Forward references and aliases are followed
+before an image is gathered. A path that returns to a declaration reports
+L0305 once, including a cycle that alternates ordinary-child selections,
+variant payloads and whole aggregate aliases; invalid members or nominal
+mismatches retain their contextual owner and add no graph diagnostic.
+
+The verifier first proves both item-owned vector partitions. It then walks the
+recursive descriptor tree with monotonically increasing descriptor and fold
+cursors: each direct-child count must match its neutral shape, every offset is
+canonical and in range, every descriptor is consumed once, every ordinary
+scalar or compact array fold fits the selected target, and every D131 routine
+relocation agrees with its recursive signature. A nested form on another field
+kind, a skipped or backward descriptor run, an unconsumed descendant, a wrong
+child count, and a 32-bit-only range failure are ordinary release-build IR
+faults before a backend accessor runs.
+
+The backend recursively replays the same neutral field and selected-payload
+shapes used for runtime layout. It writes scalar folds or routine symbols at
+this target's widths, emits compact array forms, and derives every internal gap, inactive variant
+tail and aggregate tail as zero padding. Thus one image may contain a `.long`
+`usize` child and occupy 20 bytes under the synthetic 32-bit facts while the
+same IR contains a `.quad` child and occupies 40 bytes on Linux x86-64. No
+startup code, target image blob or recursive aggregate SSA value is introduced.
+
+A nonzero module array image whose element is an ordinary struct remains the
+separate array-literal value boundary: D132 adds recursion at ordinary fields
+and ordinary variant payloads, not a per-element aggregate image carrier.
+
+**Why one recursive descriptor run:** flattening child leaves into their parent
+would erase nominal boundaries and variant ownership; target byte blobs would
+duplicate images per target; startup stores would contradict [1460]; and one
+new vector per depth would encode an implementation limit. The existing
+item-owned descriptor partition already represents a recursive shape once an
+ordinary child can point into it.
+
+**Pinned by** `positive/module-struct-image-with-a-child`,
+`positive/recursive-module-images`,
+`negative/recursive-module-image-cycle`,
+`negative/recursive-module-image-nominal-mismatch`, the recursive aggregate
+malformed-image verifier cases, the lowering and 32-/64-bit backend seams, the
+generated lexical and IR records, and
+`runtime/recursive-module-images-are-laid-out-and-distinct` on Linux x86-64.

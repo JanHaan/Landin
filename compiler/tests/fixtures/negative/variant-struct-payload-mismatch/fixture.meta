@@ -1,6 +1,6 @@
 class: negative
-summary: an ordinary-struct payload field takes only its own nominal type, and a module image of one is still refused
+summary: an ordinary-struct payload field takes only its own nominal type in runtime and module contexts
 constructs: 0670, 0680, 0710, 0750, 1795, 1940
 program: program.ldn
-codes: L0304, L0301
-targets: linux-x86-64, macos-arm64
+codes: L0301
+targets: linux-x86-64, synthetic-32

@@ -2596,6 +2596,15 @@ package body Landin.Backend.X86_64 is
 
       procedure Emit_Aggregate_Image_Datum (Item : Landin.IR.Item_Id);
 
+      procedure Emit_Recursive_Aggregate_Image_Datum
+        (Item : Landin.IR.Item_Id);
+
+      function Shape_Contains_Aggregate
+        (Shape : Landin.IR.Field_Shape) return Boolean;
+
+      function Item_Image_Contains_Aggregate
+        (Item : Landin.IR.Item_Id) return Boolean;
+
       procedure Emit_Array_Datum (Item : Landin.IR.Item_Id);
 
       procedure Emit_Reserved
@@ -2619,6 +2628,338 @@ package body Landin.Backend.X86_64 is
             Landin.Targets.Alignment_Of (Placed));
       end Emit_Aggregate_Datum;
 
+      function Shape_Contains_Aggregate
+        (Shape : Landin.IR.Field_Shape) return Boolean
+      is
+      begin
+         if Shape.Kind = Landin.IR.Aggregate_Field_Shape then
+            return True;
+         elsif Shape.Kind = Landin.IR.Array_Field_Shape
+           and then Landin.IR.Array_Element_Is_Aggregate (Of_Unit, Shape)
+         then
+            return Shape_Contains_Aggregate
+              (Landin.IR.Array_Element_Shape (Of_Unit, Shape));
+         elsif Shape.Kind = Landin.IR.Variant_Field_Shape then
+            for Variant_Case in 1 .. Shape.Cases loop
+               for Payload in
+                 1 .. Landin.IR.Variant_Case_Field_Count
+                        (Of_Unit, Shape, Variant_Case)
+               loop
+                  if Shape_Contains_Aggregate
+                    (Landin.IR.Nth_Variant_Case_Field
+                       (Of_Unit, Shape, Variant_Case, Payload))
+                  then
+                     return True;
+                  end if;
+               end loop;
+            end loop;
+         end if;
+         return False;
+      end Shape_Contains_Aggregate;
+
+      function Item_Image_Contains_Aggregate
+        (Item : Landin.IR.Item_Id) return Boolean
+      is
+      begin
+         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
+            if Shape_Contains_Aggregate
+              (Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Item_Image_Contains_Aggregate;
+
+      --  D132 emits the recursively indexed descriptor tree by replaying
+      --  each ordinary-child and selected-payload placement against this
+      --  target.  Descriptors carry no byte offsets: every gap and tail below
+      --  is derived here and emitted as zero.
+      procedure Emit_Recursive_Aggregate_Image_Datum
+        (Item : Landin.IR.Item_Id)
+      is
+         Placed : Landin.Targets.Placement;
+         Ignored : Landin.Targets.Byte_Count;
+         Written : Landin.Targets.Byte_Count := 0;
+
+         procedure Emit_Zero (Bytes : Landin.Targets.Byte_Count);
+
+         procedure Emit_Field
+           (Shape : Landin.IR.Field_Shape;
+            Image : Landin.IR.Aggregate_Field_Image;
+            Flat  : Landin.Types.Folded;
+            Top   : Boolean := False);
+
+         procedure Emit_Children
+           (Shape  : Landin.IR.Field_Shape;
+            Parent : Landin.IR.Aggregate_Field_Image);
+
+         procedure Emit_Array
+           (Shape : Landin.IR.Field_Shape;
+            Image : Landin.IR.Aggregate_Field_Image);
+
+         procedure Emit_Variant
+           (Shape : Landin.IR.Field_Shape;
+            Image : Landin.IR.Aggregate_Field_Image);
+
+         procedure Emit_Zero (Bytes : Landin.Targets.Byte_Count) is
+         begin
+            if Bytes > 0 then
+               Emit
+                 (".zero "
+                  & Trimmed (Landin.Targets.Byte_Count'Image (Bytes)));
+            end if;
+         end Emit_Zero;
+
+         procedure Emit_Array
+           (Shape : Landin.IR.Field_Shape;
+            Image : Landin.IR.Aggregate_Field_Image)
+         is
+            Field_Size : Landin.Targets.Byte_Count;
+            Field_Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            Landin.Backend.Field_Extent
+              (Of_Unit, Shape, Facts, Field_Size, Field_Alignment);
+            pragma Unreferenced (Field_Alignment);
+
+            if Landin.IR.Array_Element_Is_Aggregate (Of_Unit, Shape) then
+               Emit_Zero (Field_Size);
+            elsif Image.Form = Landin.IR.Finite then
+               for Position in 1 .. Image.Count loop
+                  Emit
+                    (Directive (Size_Of (Shape.Element, Facts)) & " "
+                     & Trimmed
+                         (Landin.Types.Folded'Image
+                            (Landin.IR.Nth_Descriptor_Element
+                               (Of_Unit, Item, Image,
+                                Landin.IR.Part_Position (Position)))));
+               end loop;
+            elsif Image.Form
+                    in Landin.IR.Repeated | Landin.IR.Hybrid
+            then
+               if Image.Form = Landin.IR.Hybrid then
+                  for Position in 1 .. Image.Count loop
+                     Emit
+                       (Directive (Size_Of (Shape.Element, Facts)) & " "
+                        & Trimmed
+                            (Landin.Types.Folded'Image
+                               (Landin.IR.Nth_Descriptor_Element
+                                  (Of_Unit, Item, Image,
+                                   Landin.IR.Part_Position (Position)))));
+                  end loop;
+               end if;
+               Emit
+                 (".rept "
+                  & Trimmed
+                      (Landin.IR.Element_Total'Image
+                         (Shape.Length
+                          - Landin.IR.Element_Total (Image.Count))));
+               Emit
+                 (Directive (Size_Of (Shape.Element, Facts)) & " "
+                  & Trimmed (Landin.Types.Folded'Image (Image.Value)));
+               Emit (".endr");
+            elsif Image.Form = Landin.IR.Absent then
+               Emit_Zero (Field_Size);
+            else
+               raise Landin.Compiler_Defect with
+                 "a malformed recursive array image reached x86-64";
+            end if;
+         end Emit_Array;
+
+         procedure Emit_Variant
+           (Shape : Landin.IR.Field_Shape;
+            Image : Landin.IR.Aggregate_Field_Image)
+         is
+            Field_Size : Landin.Targets.Byte_Count;
+            Field_Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            Landin.Backend.Field_Extent
+              (Of_Unit, Shape, Facts, Field_Size, Field_Alignment);
+            pragma Unreferenced (Field_Alignment);
+
+            if Image.Form = Landin.IR.Absent then
+               Emit_Zero (Field_Size);
+               return;
+            end if;
+
+            if Image.Form /= Landin.IR.Selected then
+               raise Landin.Compiler_Defect with
+                 "a malformed recursive variant image reached x86-64";
+            end if;
+
+            declare
+               Selected : constant Positive := Positive (Image.Value);
+               In_Field : Landin.Targets.Byte_Count :=
+                 Landin.Targets.Byte_Count
+                   (Landin.Targets.Bytes (Size_Of (Shape.Element, Facts)));
+            begin
+               Emit
+                 (Directive (Size_Of (Shape.Element, Facts)) & " "
+                  & Trimmed (Natural'Image (Natural (Selected) - 1)));
+
+               for Payload in 1 .. Image.Count loop
+                  declare
+                     Leaf : constant Landin.IR.Field_Shape :=
+                       Landin.IR.Nth_Variant_Case_Field
+                         (Of_Unit, Shape, Selected, Payload);
+                     Payload_Image : constant
+                       Landin.IR.Aggregate_Field_Image :=
+                         Landin.IR.Descendant_Image_Of
+                           (Of_Unit, Item, Image, Payload);
+                     At_Payload : constant Landin.Targets.Byte_Count :=
+                       Landin.Backend.Variant_Payload_Field_Offset
+                         (Of_Unit, Shape, Selected, Payload, Facts);
+                     Payload_Size : Landin.Targets.Byte_Count;
+                     Payload_Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Field_Extent
+                       (Of_Unit, Leaf, Facts, Payload_Size,
+                        Payload_Alignment);
+                     pragma Unreferenced (Payload_Alignment);
+                     if At_Payload > In_Field then
+                        Emit_Zero (At_Payload - In_Field);
+                     end if;
+                     Emit_Field
+                       (Leaf, Payload_Image, Payload_Image.Value);
+                     In_Field := At_Payload + Payload_Size;
+                  end;
+               end loop;
+
+               if Field_Size > In_Field then
+                  Emit_Zero (Field_Size - In_Field);
+               end if;
+            end;
+         end Emit_Variant;
+
+         procedure Emit_Children
+           (Shape  : Landin.IR.Field_Shape;
+            Parent : Landin.IR.Aggregate_Field_Image)
+         is
+            Child_Placement : Landin.Targets.Placement :=
+              Landin.Targets.Empty_Placement;
+            Child_Written : Landin.Targets.Byte_Count := 0;
+            Child_Size : Landin.Targets.Byte_Count;
+            Child_Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            for Child in 1 .. Parent.Count loop
+               declare
+                  Leaf : constant Landin.IR.Field_Shape :=
+                    Landin.IR.Nth_Aggregate_Field
+                      (Of_Unit, Shape, Child);
+                  Image : constant Landin.IR.Aggregate_Field_Image :=
+                    Landin.IR.Descendant_Image_Of
+                      (Of_Unit, Item, Parent, Child);
+                  At_Child : Landin.Targets.Byte_Count;
+               begin
+                  Landin.Backend.Field_Extent
+                    (Of_Unit, Leaf, Facts, Child_Size, Child_Alignment);
+                  Landin.Targets.Place
+                    (Child_Placement, Child_Size, Child_Alignment, At_Child);
+                  if At_Child > Child_Written then
+                     Emit_Zero (At_Child - Child_Written);
+                  end if;
+                  Emit_Field (Leaf, Image, Image.Value);
+                  Child_Written := At_Child + Child_Size;
+               end;
+            end loop;
+
+            if Landin.Targets.Size_Of (Child_Placement) > Child_Written then
+               Emit_Zero
+                 (Landin.Targets.Size_Of (Child_Placement) - Child_Written);
+            end if;
+         end Emit_Children;
+
+         procedure Emit_Field
+           (Shape : Landin.IR.Field_Shape;
+            Image : Landin.IR.Aggregate_Field_Image;
+            Flat  : Landin.Types.Folded;
+            Top   : Boolean := False)
+         is
+            Field_Size : Landin.Targets.Byte_Count;
+            Field_Alignment : Landin.Targets.Byte_Alignment;
+         begin
+            case Shape.Kind is
+               when Landin.IR.Scalar_Field_Shape =>
+                  Emit
+                    (Directive (Size_Of (Shape.Element, Facts)) & " "
+                     & (if Shape.Signature /= Landin.IR.No_Signature
+                        then Symbol (Image.Target)
+                        else Trimmed
+                          (Landin.Types.Folded'Image
+                             ((if Top then Flat else Image.Value)))));
+
+               when Landin.IR.Array_Field_Shape =>
+                  Emit_Array (Shape, Image);
+
+               when Landin.IR.Aggregate_Field_Shape =>
+                  if Image.Form = Landin.IR.Absent then
+                     Landin.Backend.Field_Extent
+                       (Of_Unit, Shape, Facts, Field_Size,
+                        Field_Alignment);
+                     Emit_Zero (Field_Size);
+                  elsif Image.Form = Landin.IR.Nested then
+                     Emit_Children (Shape, Image);
+                  else
+                     raise Landin.Compiler_Defect with
+                       "a malformed nested image reached x86-64";
+                  end if;
+
+               when Landin.IR.Variant_Field_Shape =>
+                  Emit_Variant (Shape, Image);
+            end case;
+         end Emit_Field;
+      begin
+         Place_Fields (Item, Placed, 0, Ignored);
+
+         if Is_Public_Item (Item) then
+            Put (Character'Val (9) & ".globl " & Symbol (Item));
+         end if;
+         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put
+           (Character'Val (9) & ".align "
+            & Trimmed
+                (Landin.Targets.Byte_Alignment'Image
+                   (Landin.Targets.Alignment_Of (Placed))));
+         Put (Symbol (Item) & ":");
+
+         for Field in 1 .. Landin.IR.Field_Count (Of_Unit, Item) loop
+            declare
+               Shape : constant Landin.IR.Field_Shape :=
+                 Landin.IR.Nth_Field_Shape (Of_Unit, Item, Field);
+               Image : constant Landin.IR.Aggregate_Field_Image :=
+                 Landin.IR.Field_Image_Of (Of_Unit, Item, Field);
+               Field_Size : Landin.Targets.Byte_Count;
+               Field_Alignment : Landin.Targets.Byte_Alignment;
+               At_Field : Landin.Targets.Byte_Count;
+               Field_Placement : Landin.Targets.Placement;
+            begin
+               Place_Fields
+                 (Item, Field_Placement,
+                  Landin.IR.Element_Total (Field), At_Field);
+               Landin.Backend.Field_Extent
+                 (Of_Unit, Shape, Facts, Field_Size, Field_Alignment);
+               pragma Unreferenced (Field_Placement, Field_Alignment);
+               if At_Field > Written then
+                  Emit_Zero (At_Field - Written);
+               end if;
+               Emit_Field
+                 (Shape, Image,
+                  Landin.IR.Nth_Field_Image (Of_Unit, Item, Field),
+                  Top => True);
+               Written := At_Field + Field_Size;
+            end;
+         end loop;
+
+         if Landin.Targets.Size_Of (Placed) > Written then
+            Emit_Zero (Landin.Targets.Size_Of (Placed) - Written);
+         end if;
+         Put
+           (Character'Val (9) & ".size " & Symbol (Item) & ", "
+            & Trimmed
+                (Landin.Targets.Byte_Count'Image
+                   (Landin.Targets.Size_Of (Placed))));
+      end Emit_Recursive_Aggregate_Image_Datum;
+
       --  D66 keeps the written aggregate image target-neutral: one fold per
       --  declaration-order field.  Replay the shared placement here to insert
       --  this target's padding, write scalar fields at their target widths,
@@ -2629,6 +2970,11 @@ package body Landin.Backend.X86_64 is
          Ignored : Landin.Targets.Byte_Count;
          Written : Landin.Targets.Byte_Count := 0;
       begin
+         if Item_Image_Contains_Aggregate (Item) then
+            Emit_Recursive_Aggregate_Image_Datum (Item);
+            return;
+         end if;
+
          Place_Fields (Item, Placed, 0, Ignored);
 
          if Is_Public_Item (Item) then

@@ -1,0 +1,47 @@
+callback: type = () -> (r: usize)
+
+word: type = struct
+    value: usize
+    code: u8
+    run: callback
+end word
+word_alias: type = word
+
+packet: type = struct
+    head: u8
+    child: word_alias
+    tail: u16
+end packet
+
+envelope: type = struct
+    nested: packet
+    kind: variant
+        empty |
+        carry: (data: packet)
+    end kind
+    marker: usize
+end envelope
+
+state: envelope = envelope(
+    marker: 29,
+    kind: carry(data: copied_packet),
+    nested: packet_image)
+copy: envelope = state
+inferred := envelope(
+    nested: packet(head: 31,
+                   child: word(value: 37, code: 41, run: answer),
+                   tail: 43),
+    kind: carry(data: packet_image),
+    marker: 47)
+
+packet_image: packet = packet(
+    tail: 17,
+    child: source_word,
+    head: 11)
+copied_packet: packet = packet(
+    head: 13,
+    child: packet_image.child,
+    tail: 19)
+source_word: word = word(value: 42, code: 7, run: answer)
+
+answer: () -> (r: usize) = 42 end

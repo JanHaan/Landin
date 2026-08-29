@@ -54,11 +54,11 @@ replaced.
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Checking` | what type every node and declaration has, including structural atom/error sets, nominal aggregate identity, structural fixed-array and anonymous result shapes, aggregate element identity, recursive first-class target-neutral function signatures on values and aggregate fields, ordered result runs, and scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout | decide a rule, or ask the host for a width |
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/future-undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
-| `Landin.IR` | the target-neutral instructions: items, slots, blocks and values; atom-set descriptors, atom identities, orthogonal call-failure slots and failure exits; recursive callable signature descriptors with ordered result runs on declared or anonymous routines, static function datums, code addresses, function-value slots, aggregate fields and calls; scalar, compact fixed-array, unfolded variant, anonymous result and recursively nested ordinary shapes; a fixed array's element shape; folded aggregate images, routine relocations and compact payload segments; and arbitrary-depth neutral paths through contextual, variant and indexed-element operations, starting at a base part or at whole array storage | hold a scope tree, name a machine, ask a width, or hold an offset, register or padding byte |
-| `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and target-aware fit of static images | diagnose source, repair malformed IR, or choose backend policy |
+| `Landin.IR` | the target-neutral instructions: items, slots, blocks and values; atom-set descriptors, atom identities, orthogonal call-failure slots and failure exits; recursive callable signature descriptors with ordered result runs on declared or anonymous routines, static function datums, code addresses, function-value slots, aggregate fields and calls; scalar, compact fixed-array, unfolded variant, anonymous result and recursively nested ordinary shapes; a fixed array's element shape; recursively indexed folded aggregate images, routine relocations and compact child/payload segments; and arbitrary-depth neutral paths through contextual, variant and indexed-element operations, starting at a base part or at whole array storage | hold a scope tree, name a machine, ask a width, or hold an offset, register or padding byte |
+| `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and recursive image descriptors, plus target-aware fit of every static fold | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
-| `Landin.Backend.X86_64` | the assembly text for one target, every register in it, and the target-width scalar, finite-array, compact repetition and selected-variant directives and padding for written aggregate images | decide a layout, write a file, or run a tool |
+| `Landin.Backend.X86_64` | the assembly text for one target, every register in it, and the target-width scalar, finite-array, compact repetition, nested-child and selected-variant directives and padding for recursively written aggregate images | decide a layout, write a file, or run a tool |
 | `Landin.Backend.Toolchain` | the one command line that finishes a compilation, and the triplet it is found by | know what ELF is, invoke a linker directly, or search a PATH |
 | `Landin.Backend.Entry_Point` | [1970]'s one hosted entry shape, asked of the IR | raise a defect for a module that simply has no `main` |
 | `Landin.Diagnostics` | codes, severities, labels, notes, ordering | render, or own the catalogue of codes |
@@ -120,12 +120,13 @@ what owns the pipeline.
 `Landin.Backend.X86_64` emits assembly for every operation in the enabled
 kernel: scalar constants and arithmetic, expression-valued non-loop control
 flow and calls; module and
-local fixed-array indexing, copying, clearing and filling; and depth-one
-ordinary structs with scalar or fixed-array fields, whole copies and clears,
-compact folded module images, unfolded variant fields with contextual
-construction, inspection and whole copies, plus contextual construction, assignment and local initialization or inference
-from one nested ordinary child, and scalar-field, fixed-array-element or contextual
-whole-array operations through it. That is every
+local fixed-array indexing, copying, clearing and filling; and recursively
+nested ordinary structs with scalar, fixed-array, ordinary-child and unfolded
+variant fields, contextual construction, inspection, whole copies and clears,
+and arbitrary-depth scalar, array, child, payload and known-element paths.
+Folded module images recursively contain ordinary-child and ordinary-payload
+images in a neutral descriptor tree; only the selected target supplies their
+widths, offsets and padding. That is every
 opcode `Landin.IR`
 spells, so the case that dispatches them is exhaustive: a new opcode fails to
 compile rather than raising `Compiler_Defect` at run time. R2.30's internal

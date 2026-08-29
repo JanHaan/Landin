@@ -1,0 +1,5 @@
+class: positive
+summary: recursive module images carry aliased ordinary children, function relocations and ordinary variant payloads through forward image copies
+constructs: 0670, 0680, 0700, 0710, 0750, 0870, 1000, 1740, 1795, 1940
+program: program.ldn
+targets: linux-x86-64, synthetic-32
