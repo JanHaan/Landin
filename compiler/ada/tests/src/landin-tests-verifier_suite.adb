@@ -73,6 +73,19 @@ package body Landin.Tests.Verifier_Suite is
       Site := (Source => Written, Where => Landin.Source.Empty_Span);
    end Ready;
 
+   function Test_Nominal (Unit : in out IR.Unit)
+     return IR.Nominal_Type_Id;
+
+   function Test_Nominal (Unit : in out IR.Unit)
+     return IR.Nominal_Type_Id
+   is
+   begin
+      if IR.Nominal_Type_Count (Unit) = 0 then
+         return IR.Add_Nominal_Type (Unit, 1);
+      end if;
+      return IR.Nth_Nominal_Type (Unit, 1);
+   end Test_Nominal;
+
    procedure Expect
      (Item  : in out Landin.Testing.Context;
       Found : V.Fault;
@@ -211,6 +224,58 @@ package body Landin.Tests.Verifier_Suite is
 
    ------------------------------------------------------------------
    --  One damaged shape per case.
+   ------------------------------------------------------------------
+
+   procedure Same_Layout_Nominals_Do_Not_Agree_In_Signatures
+     (Item : in out Landin.Testing.Context);
+
+   procedure Same_Layout_Nominals_Do_Not_Agree_In_Signatures
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Site : Landin.Provenance.Origin;
+   begin
+      Ready (Work, Site);
+      declare
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Unit : IR.Unit;
+         Left, Right : IR.Nominal_Type_Id;
+         Routine : IR.Item_Id;
+         Parameter : IR.Slot_Id;
+         Signature : IR.Signature_Id;
+         Block : IR.Block_Id;
+         Value : IR.Value_Id;
+      begin
+         IR.Prepare (Unit, Meanings.all);
+         Left := IR.Add_Nominal_Type (Unit, 1);
+         Right := IR.Add_Nominal_Type (Unit, 2);
+         Signature := IR.Add_Signature
+           (Unit,
+            [1 => (Kind => Landin.Types.Aggregate,
+                   Nominal => Left, others => <>)],
+            (Kind => Landin.Types.U32, others => <>));
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         IR.Set_Signature (Unit, Routine, Signature);
+         Parameter := IR.Add_Aggregate_Parameter
+           (Unit, Routine, 2, Site, Right);
+         IR.Add_Slot_Field (Unit, Routine, Parameter, Landin.Types.U32);
+         Block := IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Routine, Block);
+         Value := IR.Emit_Number
+           (Unit, Routine, Landin.Types.U32, 1, False, Site);
+         IR.Emit_Leave (Unit, Routine, Value, Site);
+         IR.Leave_Block (Unit, Routine);
+
+         Expect
+           (Item, V.Check (Unit), V.Routine_Signature_Disagrees,
+            "same-layout nominal parameters remain unequal");
+      end;
+   end Same_Layout_Nominals_Do_Not_Agree_In_Signatures;
+
    ------------------------------------------------------------------
 
    type Damage is
@@ -416,6 +481,7 @@ package body Landin.Tests.Verifier_Suite is
              Length         => 1,
              Cases          => 1,
              Payloads_First => 1,
+             Nominal        => Test_Nominal (Unit),
              others         => <>),
             IR.No_Case_Runs,
             [(Kind    => IR.Scalar_Field_Shape,
@@ -577,6 +643,7 @@ package body Landin.Tests.Verifier_Suite is
                  Length         => 1,
                  Cases          => Natural'Last,
                  Payloads_First => 1,
+                 Nominal        => Test_Nominal (Unit),
                  others         => <>)],
                Landin.Types.Usize, Site,
                Payloads =>
@@ -1801,6 +1868,7 @@ package body Landin.Tests.Verifier_Suite is
              Length         => 1,
              Cases          => 1,
              Payloads_First => 1,
+             Nominal        => Test_Nominal (Unit),
              others         => <>),
             IR.No_Case_Runs,
             [(Kind    => IR.Scalar_Field_Shape,
@@ -2513,6 +2581,7 @@ package body Landin.Tests.Verifier_Suite is
              Length         => 1,
              Cases          => 1,
              Payloads_First => 1,
+             Nominal        => Test_Nominal (Unit),
              others         => <>),
             IR.No_Case_Runs,
             [(Kind      => IR.Scalar_Field_Shape,
@@ -3024,6 +3093,7 @@ package body Landin.Tests.Verifier_Suite is
             Length => 1,
             Cases => 1,
             Payloads_First => First,
+            Nominal => Test_Nominal (Unit),
             others => <>);
          Address := IR.Add_Address_Slot
            (Unit, Routine, Shape, Site);
@@ -3050,6 +3120,9 @@ package body Landin.Tests.Verifier_Suite is
       Landin.Testing.Register
         (Into, "verifier", "a sound unit is accepted",
          A_Sound_Unit_Is_Accepted'Access);
+      Landin.Testing.Register
+        (Into, "verifier", "same-layout nominals disagree",
+         Same_Layout_Nominals_Do_Not_Agree_In_Signatures'Access);
       Landin.Testing.Register
         (Into, "verifier", "malformed shapes are rejected",
          Malformed_Shapes_Are_Rejected'Access);

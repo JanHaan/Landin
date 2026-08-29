@@ -87,7 +87,7 @@ package body Landin.IR.Dump is
                when Landin.Types.Scalar_Name =>
                   Shown (Part.Kind) & Atom_Set_Text (Part.Atoms),
                when Landin.Types.Aggregate =>
-                  "struct " & Named (Part.Aggregate_Body),
+                  "struct " & Named (Template_Of (Of_Unit, Part.Nominal)),
                when Landin.Types.Fixed_Array =>
                   "[" & Trimmed (Element_Total'Image (Part.Length)) & "]"
                   & Landin.Types.Spelling (Part.Element),
