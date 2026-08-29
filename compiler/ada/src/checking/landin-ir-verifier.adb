@@ -314,7 +314,7 @@ package body Landin.IR.Verifier is
                  (Of_Unit, Item, Place.Slot, Positive (Field));
          end case;
 
-         --  D117: however many steps the path has, the walk is one
+         --  D118: however many steps the path has, the walk is one
          --  question asked of Landin.IR, which is the package that owns
          --  what a step may index.
          if not Path_Is_Valid (Of_Unit, Shape, Nested) then

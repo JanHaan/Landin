@@ -1,0 +1,142 @@
+mut calls: i32 = 0
+
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+bump: () -> (value: i32) =
+    calls = calls + 1
+    value = 7
+end bump
+
+identity: (value: i32) -> (result: i32) =
+    result = value
+end identity
+
+take_pair: (value: pair) -> (result: i32) =
+    result = value.left
+end take_pair
+
+write: (leave: bool) -> (result: i32) =
+    mut row: [1]i32 = [0]
+    row[if leave then
+        result = 42
+        return
+    else
+        0
+    end if] = bump()
+    result = calls
+end write
+
+short: (skip: bool) -> (result: i32) =
+    result = 40
+    _ = skip or begin
+        result = 42
+        return
+    end
+    result = result + 2
+end short
+
+binary_exit: () -> (result: i32) =
+    result = 42
+    one: i32 = 1
+    result = one + begin
+        return
+    end
+end binary_exit
+
+left_exit: () -> (result: i32) =
+    result = 42
+    one: i32 = 1
+    result = begin
+        return
+    end + one
+end left_exit
+
+unary_exit: () -> (result: i32) =
+    result = 42
+    result = -begin
+        return
+    end
+end unary_exit
+
+argument_exit: () -> (result: i32) =
+    result = 42
+    result = identity(begin
+        return
+    end)
+end argument_exit
+
+condition_exit: () -> (result: i32) =
+    result = 42
+    if begin
+        return
+    end then
+        result = 1
+    end if
+end condition_exit
+
+guard_exit: () -> (result: i32) =
+    result = 42
+    return when begin
+        return
+    end
+    result = 1
+end guard_exit
+
+array_exit: () -> (result: i32) =
+    result = 42
+    values: [1]i32 = [begin
+        return
+    end]
+    result = values[0]
+end array_exit
+
+array_assignment_exit: () -> (result: i32) =
+    result = 42
+    mut values: [1]i32 = [0]
+    values = [begin
+        return
+    end]
+    result = values[0]
+end array_assignment_exit
+
+struct_exit: () -> (result: i32) =
+    result = 42
+    value: pair = pair(left: begin
+        return
+    end, right: 1)
+    result = value.right
+end struct_exit
+
+struct_argument_exit: () -> (result: i32) =
+    result = 42
+    result = take_pair(pair(left: begin
+        return
+    end, right: 1))
+end struct_argument_exit
+
+public main: () -> (code: i32) =
+    first: i32 = write(true)
+    if first == 42
+      and calls == 0
+      and write(false) == 1
+      and short(true) == 42
+      and short(false) == 42
+      and binary_exit() == 42
+      and left_exit() == 42
+      and unary_exit() == 42
+      and argument_exit() == 42
+      and condition_exit() == 42
+      and guard_exit() == 42
+      and array_exit() == 42
+      and array_assignment_exit() == 42
+      and struct_exit() == 42
+      and struct_argument_exit() == 42
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

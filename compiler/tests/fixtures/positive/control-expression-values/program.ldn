@@ -1,0 +1,45 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+choose_scalar: (take_left: bool) -> (result: i32) =
+    if take_left then
+        19 + 23
+    else
+        begin
+            value: i32 = 21
+            value + value
+        end
+    end if
+end choose_scalar
+
+choose_pair: (take_left: bool) -> (result: pair) =
+    if take_left then
+        pair(left: 19, right: 23)
+    else
+        pair(left: 21, right: 21)
+    end if
+end choose_pair
+
+choose_row: (take_left: bool) -> (result: [3]i32) =
+    if take_left then
+        [19, 20, 3]
+    else
+        [14, 14, 14]
+    end if
+end choose_row
+
+score_pair: (value: pair) -> (result: i32) =
+    result = value.left + value.right
+end score_pair
+
+exercise: (take_left: bool) -> (result: i32) =
+    local := choose_pair(take_left)
+    mut row: [3]i32 = zeroed
+    row = if take_left then choose_row(true) else [14, 14, 14] end if
+    _ = if take_left then choose_pair(true) else local end if
+    result = choose_scalar(take_left)
+             + score_pair(if take_left then local else choose_pair(false) end if)
+             + row[0]
+end exercise

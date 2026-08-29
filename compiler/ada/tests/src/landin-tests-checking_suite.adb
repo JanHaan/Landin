@@ -26,6 +26,7 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Field_Kind;
+   use type Landin.Checking.Signature_Id;
    use type Landin.Types.Type_Kind;
 
    Frontend : aliased Landin.Stages.Syntax.Instance;
@@ -3071,6 +3072,197 @@ package body Landin.Tests.Checking_Suite is
         (Item, Seen, 1, "one selected field image was checked");
    end Module_Struct_Field_Image_Carries_Source_Shape;
 
+   --  D124 carries one complete scalar or stored shape onto the control
+   --  node itself, including through a nested bare block.  Lowering can then
+   --  allocate its join without rediscovering source syntax.
+   procedure Control_Expression_Values_Carry_Their_Shapes
+     (Item : in out Landin.Testing.Context);
+
+   procedure Control_Expression_Values_Carry_Their_Shapes
+     (Item : in out Landin.Testing.Context)
+   is
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+      Scalars, Functions, Arrays, Aggregates : Natural := 0;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "control-shapes.ldn",
+         "point: type = struct" & LF
+         & "    x: i32" & LF
+         & "    y: i32" & LF
+         & "end point" & LF
+         & "unary: type = (value: i32) -> (result: i32)" & LF
+         & "increment: (value: i32) -> (result: i32) =" & LF
+         & "    value + 1" & LF
+         & "end increment" & LF
+         & "identity: (value: i32) -> (result: i32) =" & LF
+         & "    value" & LF
+         & "end identity" & LF
+         & "make_function: (left: bool) -> (result: unary) =" & LF
+         & "    if left then increment else begin identity end end if" & LF
+         & "end make_function" & LF
+         & "make_point: (left: bool) -> (result: point) =" & LF
+         & "    if left then" & LF
+         & "        point(x: 19, y: 23)" & LF
+         & "    else" & LF
+         & "        begin" & LF
+         & "            point(x: 21, y: 21)" & LF
+         & "        end" & LF
+         & "    end if" & LF
+         & "end make_point" & LF
+         & "make_row: (left: bool) -> (result: [2]u16) =" & LF
+         & "    if left then [11, 13] else [17, 19] end if" & LF
+         & "end make_row" & LF
+         & "make_scalar: (left: bool) -> (result: i32) =" & LF
+         & "    if left then begin 19 + 23 end else 42 end if" & LF
+         & "end make_scalar" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "scalar, function, fixed-array and nominal controls are accepted");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 in Landin.Syntax.If_Statement | Landin.Syntax.Bare_Block
+            then
+               case Landin.Checking.Type_Of
+                 (Types.all, Of_Tree.all, Node)
+               is
+                  when Landin.Types.Aggregate =>
+                     Aggregates := Aggregates + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Body_Of
+                          (Types.all, Of_Tree.all, Node)
+                            /= Landin.Provenance.No_Declaration,
+                        "an aggregate control node keeps nominal identity");
+                  when Landin.Types.Fixed_Array =>
+                     Arrays := Arrays + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Array_Length
+                          (Types.all, Of_Tree.all, Node) = 2
+                        and then Landin.Checking.Array_Element
+                          (Types.all, Of_Tree.all, Node) = Landin.Types.U16,
+                        "an array control node keeps length and element");
+                  when Landin.Types.Function_Value =>
+                     Functions := Functions + 1;
+                     Landin.Testing.Check
+                       (Item,
+                        Landin.Checking.Signature_Of
+                          (Types.all, Of_Tree.all, Node)
+                            /= Landin.Checking.No_Signature,
+                        "a function control node keeps its signature");
+                  when Landin.Types.I32 =>
+                     Scalars := Scalars + 1;
+                  when others =>
+                     Landin.Testing.Fail
+                       (Item, "a control node lost its contextual type");
+               end case;
+            end if;
+         end loop;
+      end;
+
+      Landin.Testing.Check_Equal
+        (Item, Aggregates, 2,
+         "the aggregate if and its nested bare block carry identity");
+      Landin.Testing.Check_Equal
+        (Item, Arrays, 1, "the array if carries one structural shape");
+      Landin.Testing.Check_Equal
+        (Item, Functions, 2,
+         "the function if and its nested bare block carry a signature");
+      Landin.Testing.Check_Equal
+        (Item, Scalars, 2,
+         "the scalar if and its nested bare block carry i32");
+   end Control_Expression_Values_Carry_Their_Shapes;
+
+   --  The flow pass is part of checking's stage.  These paired programs
+   --  distinguish a return-compatible edge from the fallthrough state: an
+   --  assignment on the surviving edge is retained, while one made only on
+   --  the returned edge cannot be borrowed afterward.
+   procedure Control_Edges_Merge_Only_Fallthrough
+     (Item : in out Landin.Testing.Context);
+
+   procedure Control_Edges_Merge_Only_Fallthrough
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Source (Text : String; Accepted : Boolean);
+
+      procedure Check_Source (Text : String; Accepted : Boolean) is
+         Work  : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran   : Natural;
+         Src   : Landin.Source.Source_Id;
+         pragma Unreferenced (Src);
+      begin
+         Src := Landin.Stages.Add_Source (Work, "control-edges.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check_Equal (Item, Ran, 3, "the flow checker ran");
+         Landin.Testing.Check
+           (Item, Landin.Stages.Failed (Work) /= Accepted,
+            "only fallthrough assignment facts reach the following read");
+      end Check_Source;
+
+      Prefix : constant String :=
+        "f: (condition: bool) -> (result: i32) =" & LF
+        & "    mut local: i32" & LF
+        & "    _ = if condition then" & LF;
+   begin
+      Check_Source
+        (Prefix
+         & "        result = 41" & LF
+         & "        return" & LF
+         & "    else" & LF
+         & "        local = 42" & LF
+         & "        0" & LF
+         & "    end if" & LF
+         & "    result = local" & LF
+         & "end f" & LF,
+         Accepted => True);
+      Check_Source
+        (Prefix
+         & "        local = 42" & LF
+         & "        result = 41" & LF
+         & "        return" & LF
+         & "    else" & LF
+         & "        0" & LF
+         & "    end if" & LF
+         & "    result = local" & LF
+         & "end f" & LF,
+         Accepted => False);
+      Check_Source
+        ("f: (condition: bool) -> (result: i32) =" & LF
+         & "    mut local: i32" & LF
+         & "    _ = condition and begin" & LF
+         & "        local = 42" & LF
+         & "        true" & LF
+         & "    end" & LF
+         & "    result = local" & LF
+         & "end f" & LF,
+         Accepted => False);
+   end Control_Edges_Merge_Only_Fallthrough;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
       Landin.Testing.Register
@@ -3175,6 +3367,12 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "a struct field image carries source shape",
          Module_Struct_Field_Image_Carries_Source_Shape'Access);
+      Landin.Testing.Register
+        (Into, "checking", "control expression values carry their shapes",
+         Control_Expression_Values_Carry_Their_Shapes'Access);
+      Landin.Testing.Register
+        (Into, "checking", "control edges merge only fallthrough",
+         Control_Edges_Merge_Only_Fallthrough'Access);
       Landin.Testing.Register
         (Into, "checking", "declared structs follow target layout",
          Declared_Structs_Follow_Target_Layout'Access);

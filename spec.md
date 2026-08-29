@@ -39,7 +39,8 @@ produces nothing of its own. Every other rule reads the tokens that remain,
 and a quoted word or sign in one of them stands for the single token
 spelled that way. A quoted word is not thereby reserved: when [1760]'s
 keyword rule omits it, the token is an identifier whose spelling the
-enclosing production recognises. Thus 'of', 'lenof' and 'variant' remain
+enclosing production recognises. Thus 'of', 'lenof', 'variant', 'begin' and
+'match' remain
 ordinary names everywhere their contextual productions do not meet them.
 A token is as long as it can be, comments excepted, whose
 opener decides [1780]: 'inc' followed by 'x' with nothing between them is
@@ -244,11 +245,16 @@ An anonymous function [1010] writes that same signature and body without a
 module name. It captures no enclosing local, parameter or named return: its
 signature and body are a separate routine whose outer scope is the module.
 Forming it produces a static code address and does not execute its body.
-A body is statements, or it is the one expression that fills the
-return. One token past a leading name decides between them: ':'
-opens a binding and '=' an assignment, and anything else means the
-body is that expression. A function returning none has no
-expression form, because there is no return for one to fill.
+A body is one block. Its statements run in source order and an optional final
+expression fills the named return. One token past a leading name decides
+between a first statement and a direct expression: ':' opens a binding and '='
+an assignment, and anything else means the body begins with its value. A
+function returning none has no expression form, because there is no return for
+one to fill.
+An unguarded `return` has no fallthrough edge, so it can end a statement-only
+block but cannot be read as the prefix of that block's final expression. This
+also keeps `return 1` the refused payload spelling [1810]. A guarded return may
+prefix a final expression because its untaken edge continues.
 ```landin-grammar
 function           ::= identifier ":" signature "=" body "end" identifier?
 anonymous_function ::= signature "=" body "end"
@@ -256,7 +262,10 @@ signature          ::= "(" parameters? ")" "->" returns
 parameters  ::= parameter ("," parameter)*
 parameter   ::= identifier ":" type
 returns     ::= "(" identifier ":" type ")" | "none"
-body        ::= statement* | expression
+body        ::= block
+block       ::= statement* | value_statement* expression
+value_statement ::= binding | assignment | increment | discard | call
+                  | "return" "when" expression | if | match | bare_block
 
 ```
 
@@ -278,8 +287,11 @@ discarded on purpose rather than by omission. A call whose result
 is dropped that way is the one place the kernel accepts an
 expression standing alone.
 A match is D77's exhaustive tag selection. Its subject is one directly
-selected variant part and each case arm carries one statement; D78 extends
-the arm with positional payload bindings.
+selected variant part and each case arm carries one statement or one
+expression; a bare `begin` block makes a multi-statement arm. D78 extends the
+arm with positional payload bindings. An `if`, a `match`, and a bare `begin`
+block retain their statement forms and also occupy expression positions under
+[1820].
 A place is [1820]'s indexed selection, so a binding, a field of a struct, or
 an enabled array element is written
 and stepped exactly as the binding holding it is. What may be
@@ -287,18 +299,20 @@ written is [1900]'s and not this rule's: a field is writable when
 the binding it belongs to is.
 ```landin-grammar
 statement   ::= binding | assignment | increment | discard | call
-              | return | if | match
+              | return | if | match | bare_block
 assignment  ::= place "=" expression
 increment   ::= ("inc" | "dec") place
 discard     ::= "_" "=" expression
 return      ::= "return" ("when" expression)?
-if          ::= "if" expression "then" statement*
-                ("elsif" expression "then" statement*)*
-                ("else" statement*)?
+if          ::= "if" expression "then" block
+                ("elsif" expression "then" block)*
+                ("else" block)?
                 "end" "if"
 match       ::= "match" expression match_arm+ "end" "match"
-match_arm  ::= identifier ("(" match_binding ("," match_binding)* ")")? ":" statement
+match_arm   ::= identifier ("(" match_binding ("," match_binding)* ")")?
+                ":" (statement | expression)
 match_binding ::= "inout"? identifier
+bare_block  ::= "begin" block "end"
 place       ::= indexed
 
 ```
@@ -329,12 +343,19 @@ An ordinary-struct literal is [0710]'s nonempty run of labelled field values,
 optionally followed by [0720]'s contextual fill. D64--D71 state the contexts
 that admit it. D72's construction prefixes the same run with the ordinary
 struct type it builds; the all-fill spelling remains refused by name.
+An `if`, exhaustive `match`, or bare `begin` block is also a primary. Its
+conditions or subject run first, then exactly the selected block runs in source
+order. In a value context the final expression of every edge that can fall
+through supplies the answer; an edge that returns supplies none. D124 gives the
+complete edge and type rule, and D125 gives its storage representation. These
+three non-loop controls do not enable R4.10's loops, `break`, or `continue`.
 Evaluation order is left to right and fixed [0410], so the table
 decides what binds, never what runs first.
 ```landin-grammar
 primary     ::= literal | array_literal | array_repetition | struct_literal
               | construction | anonymous_function | indexed | call
-              | measurement | "(" expression ")"
+              | measurement
+              | if | match | bare_block | "(" expression ")"
 array_literal ::= "[" expression ("," expression)* "]"
 array_repetition ::= "[" integer "of" expression "]"
                    | "[" "of" expression "]"
@@ -384,15 +405,15 @@ an inner scope means nothing until the inner ones are named.
 |---|---|
 | module | every file compiled together. There is one, until [1410]'s directories arrive. |
 | signature | a declared or anonymous function's parameters and its named return [1800]. The named return is a place the body assigns [0930], so it is declared here and not in the body, and a parameter and a return may not share a name. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
-| body | what a function runs, and one for each arm of an `if` and for its `else` [1810]. A statement run is a block and a block is what scopes [1090], so a name declared in one arm is not visible in another and not after the branch closes. |
+| body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; and one for every bare `begin` block [1810]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings live in their arm's scope. |
 
-[1800]'s expression body opens no scope, because an expression
-declares nothing.
+[1800]'s direct final expression opens no additional scope inside its function
+body, because an expression declares nothing.
 Order matters in a body and does not in a module. [0130]'s set
 is a set of declarations, so a module name may be used above
-the line that introduces it; [1810]'s statement* is a sequence,
-so a local is visible to the statements after it and its own
-value is read before its name exists [0110].
+the line that introduces it; [1800]'s block is a sequence, so a local is visible
+to the statements and final expression after it and its own value is read
+before its name exists [0110].
 
 ### [1850] One scope gives one name to one thing
 
@@ -459,6 +480,8 @@ kernel these positions give a literal a type:
 - the type of the place an assignment writes [1810]
 - the type of the parameter an argument fills [1800]
 - the named return's type, for an expression body [0880]
+- the result expected from an `if`, `match`, or bare `begin` expression; that
+  same complete context reaches every fallthrough answer
 - the element type of a contextual array literal or repetition
 - the field type of a contextual labelled struct literal
 - the other operand's type, for a binary operator
@@ -469,6 +492,11 @@ kernel these positions give a literal a type:
 
 and two give none: the inferred form [0050] and a discard
 [1020], where [0200]'s i32 is what is left.
+With no surrounding context, the first written answer of a control expression
+supplies its scalar type, fixed-array element and extent, or nominal aggregate
+body; every other answer must have that same complete shape. An edge that
+returns without an answer is not a second answer and does not participate in
+inference.
 A context reaches inward through [1820]'s arithmetic,
 bitwise, shift and unary levels and stops at a comparison
 and at the logical words. What those give back is a bool
@@ -551,6 +579,17 @@ checker that read the condition to decide this would be
 running the program in order to check it.
 'return when' is a return [1810], so what the function hands
 back is assigned above it and not below.
+A control-flow edge has two independent facts: whether it can fall through and
+whether it can return. Only fallthrough states meet at an `if` or `match` join;
+a returned arm neither lends nor removes assignment facts on a surviving arm.
+Every reachable fallthrough edge of a control expression must reach its block's
+final expression, and every such expression has the one complete type and shape
+from [1880]. An early-return edge needs no joined value, but it still requires
+the named return to be assigned at that edge. A guarded return has both facts:
+its taken edge returns and its untaken edge continues with the incoming
+assignment state. The unevaluated side of `and` or `or` is likewise a
+fallthrough edge: a return from the right operand cannot erase that skip edge,
+and assignments made only on the right do not survive their join.
 A module binding is not this. [1460] says a value at module
 level is known when the compiler reads it, so one written
 with no value has no such value, and it is the read that is
@@ -706,6 +745,11 @@ How the surrounding system reports the trap is not Landin
 program behaviour. An operating system's signal, exception,
 status or other encoding is not stable across targets or
 compiler releases and a program may not depend on it.
+The same no-continuation rule applies to a `return` nested in an expression.
+For example, an index expression runs before the selected element is read and,
+on the left of an assignment, before its right-hand expression [0410]. If that
+index returns, neither later action occurs; facts from that edge do not reach a
+join.
 The Linux x86-64 backend deliberately emits `ud2` when it
 must trap. It does not inherit the accidental fault or value
 of the machine instruction used for the operation.
@@ -6358,15 +6402,15 @@ over declarations. A scalar leaf and a fixed-array leaf are a value and a
 place at any depth, and a fixed-array leaf keeps every contextual assignment
 form it has at depth one.
 
-Definite assignment keeps one fact per part, named by D117's run rather than
+Definite assignment keeps one fact per part, named by D118's run rather than
 by a parent and a child. A fact about a part follows from a fact about
 anything containing it, which is now "a fact named by a shorter run with the
 same steps"; branch joins intersect the runs and apply that same containment
-rule from either side. A whole child at depth two or more is D119's, and a
-variant part inside a child is D120's; both remain refused here.
+rule from either side. A whole child at depth two or more is D120's, and a
+variant part inside a child is D121's; both remain refused here.
 
 Lowering resolves a selection chain once, into the name it started from, the
-first selection's field and D117's run of the rest. The verifier walks a
+first selection's field and D118's run of the rest. The verifier walks a
 nested field run recursively, under a budget the vector's own length gives, so
 a run that named itself is refused rather than followed.
 
@@ -6384,7 +6428,7 @@ no rule forbids.
 
 **The tour said** that a whole ordinary struct may be zeroed, constructed and
 copied [0540] [0700] [0710]. D91 gave those forms to one named child of a
-parent; D118 then let a child hold a child, which left the deeper one with
+parent; D119 then let a child hold a child, which left the deeper one with
 leaves but no whole.
 
 **Chosen:** `a.b.c…` naming an ordinary child is a contextual aggregate
@@ -6400,7 +6444,7 @@ expression value: no operand, no discard, and no module image. A module
 binding's initializer still takes only a direct name or one field of one,
 because [1940] folds it rather than copying it.
 
-Lowering keeps one notion of place — a base field and D117's run below it —
+Lowering keeps one notion of place — a base field and D118's run below it —
 and descends into it. A literal fills a place; a copy visits the same fields
 in [0750]'s order one place deeper on each side; `zeroed` is one whole-part
 clear whose extent the backend derives from the shape the run reaches. The
@@ -6430,7 +6474,7 @@ labelled literal or nominal construction, and a copy from storage of the same
 nominal type — and a match arm's positional alias for it names the whole
 struct, so its fields are read and written the way any struct's are.
 
-The payload is reached by D117's run: the case a step names is what says the
+The payload is reached by D118's run: the case a step names is what says the
 run it indexes is a payload run rather than an ordinary field run. No opcode
 is added, and the two payload operations D76/D78 introduced keep their exact
 meaning for a scalar leaf. A payload struct that has a variant part of its own
@@ -6470,8 +6514,8 @@ for exactly that fact — with a fact about the whole element, or about anything
 containing the array, covering it.
 
 The neutral shape carries the element as a run of exactly one, built by
-D117/D118's own machinery; a scalar element stays where it was, so no array
-that existed before D121 changes. An indexed operation carries a second run,
+D118/D119's own machinery; a scalar element stays where it was, so no array
+that existed before D122 changes. An indexed operation carries a second run,
 applied after the scaled index, which is the only new thing an instruction
 holds: an index is a value and cannot be a step. Two shapes are the same shape
 when they hold the same thing, not when their runs start in the same place.
@@ -6541,3 +6585,105 @@ records through `positive/infallible-function-values`; the negative fixtures
 `module-function-without-image` and `module-function-image-cycle`; and
 `runtime/infallible-function-values` on
 Linux x86-64.
+
+### D124 — Control values distinguish fallthrough from return-compatible edges
+
+**The tour said** that a block has the value of its last expression [1080],
+that an arm which leaves needs no placeholder [1030], and that every named
+return is assigned before return [0930]. It did not say which flow facts survive
+when value-producing and returning arms meet, nor how one rule covers an `if`,
+an exhaustive `match`, and a bare block without believing a condition [1910].
+
+**Chosen:** `if`, exhaustive `match`, and bare `begin` blocks are expressions as
+well as their existing statement forms. A block is its source-ordered statement
+run followed by an optional final expression. In a value context, every
+reachable edge that falls through must produce that final value. An edge that
+returns is compatible without producing one, but [0930] still requires the
+function's named result on that edge. A reached `if` with no `else` has an
+untaken fallthrough edge and therefore cannot produce a value there.
+
+Every control edge carries the independent facts `Falls_Through` and `Returns`.
+Only states on fallthrough edges participate in a definite-assignment join; a
+returned edge cannot lend its assignments to a surviving sibling. A guarded
+return carries both facts because its untaken edge continues. Short-circuit
+`and` and `or` retain the left-hand skip edge when the right returns. The same
+walk applies when control appears inside a condition, index, operand, argument,
+assignment value, direct function result, or another control block, preserving
+[0410]'s source order and stopping later actions after an unconditional return.
+
+One surrounding context reaches every fallthrough answer. It includes the
+complete fixed-array element body and extent, nominal aggregate body or D123
+recursive function signature, not merely the broad `Fixed_Array`, `Aggregate`
+or function-value kind. Without a surrounding context the first written answer
+supplies that complete shape and every other answer must agree. Each arm and
+bare block retains [1840]'s own lexical scope. This decision introduces no loop
+syntax or loop edge: R4.10 still owns `loop`, `while`, `for`, `break`, and
+`continue`.
+
+**Why two facts rather than one exited Boolean:** one Boolean cannot distinguish
+"no path reaches the join" from "this construct may return but also has a
+continuing edge". Treating either as the other loses guarded-return assignment
+facts or admits a value-less fallthrough. Explicit facts make both the value
+obligation and the definite-assignment merge consequences of the same edge.
+
+**The alternative:** give every syntactic arm a value regardless of whether it
+returns, or merge assignment states before removing returned edges. The first
+invents unreachable placeholders and contradicts [1030]; the second lets one
+path prove a read on another. Both were declined.
+
+**Pinned by** `positive/control-expression-values`,
+`negative/if-expression-missing-else`,
+`negative/control-expression-fallthrough-without-value`,
+`negative/control-expression-branch-type-mismatch`,
+`negative/control-expression-function-signature-mismatch`,
+`negative/control-expression-early-return-needs-result`,
+`negative/control-expression-fallthrough-does-not-borrow-returned-facts`,
+`negative/bare-block-unclosed`, `negative/bare-block-scope-does-not-leak`,
+`runtime/match-expressions-produce-values`,
+`runtime/control-expression-function-values`, and
+`runtime/control-expression-edges-keep-source-order` on Linux x86-64, together
+with the parser, checker, flow and IR public-seam cases.
+
+### D125 — A control join writes storage owned by its consumer
+
+**The tour said** that a branch-chosen value has one joined origin [0840], while
+R2.20's aggregate decisions keep layout out of checked shapes and D106 returns
+aggregates through caller-owned storage. It did not supply a target-neutral
+value carrier for a join, especially when an array or struct is not one scalar
+IR value.
+
+**Chosen:** the operation consuming a control expression owns its join storage.
+A scalar control uses one unnamed scalar slot and loads it after all fallthrough
+edges meet. A function value uses the same code-address carrier in a slot that
+retains D123's signature. A fixed array or enabled aggregate uses a caller-owned
+slot carrying its complete neutral shape; each selected fallthrough block fills
+that same destination. A typed binding, assignment, named result, or aggregate
+call result can be the destination directly. An argument, explicit discard, or
+other context with no named destination receives one fresh shaped temporary for
+the duration of that operation.
+
+No branch-local pseudo-value, aggregate SSA value, target offset, byte extent,
+or implicit full-size copy crosses the join. An early return writes no joined
+answer and follows D116's active named-result exit. The verifier sees ordinary
+stores, copies, addresses, branches and terminators over declared slot shapes;
+the backend alone lays out a selected target's cell. Linux x86-64 consequently
+passes the one joined aggregate address after the join and derives every copy
+extent from target facts.
+
+**Why the consumer owns it:** choosing storage before branching makes the
+hidden lifetime and cost belong to the source operation that needs the value,
+allows contextual literals and aggregate-returning calls to construct in
+place, and reuses ordinary scalar, function and stored-shape representations
+without making target layout a checker concern.
+
+**The alternative:** introduce phi values for scalars and a separate aggregate
+value graph, or construct one full temporary per arm and copy again at the
+join. The first freezes two representations and needs target-sized aggregate
+values; the second hides branch-count-dependent storage and copies. Both were
+declined.
+
+**Pinned by** `positive/control-expression-values`,
+`runtime/control-expression-aggregate-joins` and
+`runtime/control-expression-function-values` on Linux x86-64, together with
+the IR, lowering, verifier and backend public-seam cases and the generated IR
+record.

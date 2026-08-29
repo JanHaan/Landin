@@ -1,0 +1,3 @@
+f: () -> (result: i32) =
+    begin
+        42

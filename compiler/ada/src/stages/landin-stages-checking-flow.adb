@@ -173,7 +173,7 @@ package body Landin.Stages.Checking.Flow is
 
       subtype Tracked_Field is Natural range 0 .. Widest_Struct;
 
-      --  D117's neutral path, on this side of the compiler: the run of
+      --  D118's neutral path, on this side of the compiler: the run of
       --  declaration-order field identities from a tracked name down to
       --  the part a fact is about.  An empty run is the name itself, one
       --  step is a field of it, and [0420] puts no limit on the rest.
@@ -288,6 +288,21 @@ package body Landin.Stages.Checking.Flow is
          Whole_Arrays => Array_Sets.Empty_Set,
          Nested       => Nested_Sets.Empty_Set);
 
+      --  D124 replaces the old Boolean "this block exits" summary.  A
+      --  guarded return has both edges, an unconditional return only the
+      --  second, and a value-producing block only needs an answer on the
+      --  first.  The assignment state below always describes that explicit
+      --  fallthrough edge; returned edges have already been validated where
+      --  the return occurred.
+      type Edge_Facts is record
+         Falls_Through : Boolean := False;
+         Returns       : Boolean := False;
+      end record;
+
+      No_Edges : constant Edge_Facts := (others => False);
+      Fallthrough_Edge : constant Edge_Facts :=
+        (Falls_Through => True, Returns => False);
+
       --  Which declarations [1910] is about.  A parameter arrives assigned
       --  and a module binding is [1940]'s, so what is left is a local
       --  declared with no value and the named return.
@@ -309,13 +324,27 @@ package body Landin.Stages.Checking.Flow is
          Node     : Syn.Node_Id;
          State    : Assigned_Set;
          Whole_As : Whole_Array_Read := Assignment_Source);
+      procedure Flow_Expression
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Result  : Res.Declaration_Id;
+         State   : in out Assigned_Set;
+         Edges   : out Edge_Facts;
+         Whole_As : Whole_Array_Read := Assignment_Source);
+      function Contains_Control
+        (Of_Tree : Syn.Tree; Root : Syn.Node_Id) return Boolean;
       procedure Flow_Block
         (Of_Tree : Syn.Tree;
          Block   : Syn.Node_Id;
          Result  : Res.Declaration_Id;
          Owner   : Landin.Provenance.Origin;
          State   : in out Assigned_Set;
-         Exits   : out Boolean);
+         Edges   : out Edge_Facts;
+         Needs_Value : Boolean := False);
+      procedure Merge
+        (Into   : in out Assigned_Set;
+         First  : Boolean;
+         Branch : Assigned_Set);
       procedure Require_Assigned
         (At_Source : Landin.Source.Source_Id;
          At_Span   : Landin.Source.Span;
@@ -356,7 +385,7 @@ package body Landin.Stages.Checking.Flow is
 
       --  Whether a fact about this part already follows from one about
       --  something containing it.  [0540]'s whole-storage forms make that
-      --  the ordinary case, and D117 makes "containing" mean "named by a
+      --  the ordinary case, and D118 makes "containing" mean "named by a
       --  shorter run with the same steps".  The run itself counts, so a
       --  caller asking about a whole child gets the same answer either
       --  way; Strictly_Above asks about the containers alone.
@@ -910,6 +939,112 @@ package body Landin.Stages.Checking.Flow is
          end;
       end Require_Element;
 
+      --  Definite assignment meets only fallthrough states.  The compact
+      --  whole-array and whole-child facts imply their sparse descendants,
+      --  so their intersection retains the same representation bridges the
+      --  former statement-only branch merge used.
+      procedure Merge
+        (Into   : in out Assigned_Set;
+         First  : Boolean;
+         Branch : Assigned_Set)
+      is
+      begin
+         if First then
+            Into := Branch;
+            return;
+         end if;
+
+         declare
+            Left   : constant Assigned_Set := Into;
+            Merged : Assigned_Set :=
+              (Fields       => Left.Fields,
+               Elements     => Element_Sets.Intersection
+                                 (Left.Elements, Branch.Elements),
+               Whole_Arrays => Array_Sets.Intersection
+                                 (Left.Whole_Arrays,
+                                  Branch.Whole_Arrays),
+               Nested       => Nested_Sets.Intersection
+                                 (Left.Nested, Branch.Nested));
+         begin
+            for Which in Tracked loop
+               for Part in Tracked_Field loop
+                  Merged.Fields (Which, Part) :=
+                    Left.Fields (Which, Part)
+                    and Branch.Fields (Which, Part);
+               end loop;
+            end loop;
+
+            for Whole of Left.Whole_Arrays loop
+               if not Array_Sets.Contains (Branch.Whole_Arrays, Whole) then
+                  for Fact of Branch.Elements loop
+                     if Fact.Declaration = Whole.Declaration
+                       and then Fact.Path = Whole.Path
+                     then
+                        Element_Sets.Include (Merged.Elements, Fact);
+                     end if;
+                  end loop;
+               end if;
+            end loop;
+
+            for Whole of Branch.Whole_Arrays loop
+               if not Array_Sets.Contains (Left.Whole_Arrays, Whole) then
+                  for Fact of Left.Elements loop
+                     if Fact.Declaration = Whole.Declaration
+                       and then Fact.Path = Whole.Path
+                     then
+                        Element_Sets.Include (Merged.Elements, Fact);
+                     end if;
+                  end loop;
+               end if;
+            end loop;
+
+            for Fact of Branch.Elements loop
+               if Covered (Fact.Declaration, Fact.Path, Left,
+                           Strictly_Above => True)
+               then
+                  Element_Sets.Include (Merged.Elements, Fact);
+               end if;
+            end loop;
+            for Fact of Left.Elements loop
+               if Covered (Fact.Declaration, Fact.Path, Branch,
+                           Strictly_Above => True)
+               then
+                  Element_Sets.Include (Merged.Elements, Fact);
+               end if;
+            end loop;
+            for Whole of Branch.Whole_Arrays loop
+               if Covered (Whole.Declaration, Whole.Path, Left,
+                           Strictly_Above => True)
+               then
+                  Array_Sets.Include (Merged.Whole_Arrays, Whole);
+               end if;
+            end loop;
+            for Whole of Left.Whole_Arrays loop
+               if Covered (Whole.Declaration, Whole.Path, Branch,
+                           Strictly_Above => True)
+               then
+                  Array_Sets.Include (Merged.Whole_Arrays, Whole);
+               end if;
+            end loop;
+            for Fact of Branch.Nested loop
+               if Covered (Fact.Declaration, Fact.Path, Left,
+                           Strictly_Above => True)
+               then
+                  Nested_Sets.Include (Merged.Nested, Fact);
+               end if;
+            end loop;
+            for Fact of Left.Nested loop
+               if Covered (Fact.Declaration, Fact.Path, Branch,
+                           Strictly_Above => True)
+               then
+                  Nested_Sets.Include (Merged.Nested, Fact);
+               end if;
+            end loop;
+
+            Into := Merged;
+         end;
+      end Merge;
+
       --  Every read in an expression.  A place an assignment writes is not
       --  a read and is not walked here; `inc` is both and is walked.
       procedure Read_Names
@@ -1115,133 +1250,305 @@ package body Landin.Stages.Checking.Flow is
          end loop;
       end Read_Names;
 
+      function Contains_Control
+        (Of_Tree : Syn.Tree; Root : Syn.Node_Id) return Boolean
+      is
+      begin
+         if Root = Syn.No_Node then
+            return False;
+         end if;
+
+         if Syn.Kind (Of_Tree, Root)
+              in Syn.If_Statement | Syn.Match_Statement | Syn.Bare_Block
+         then
+            return True;
+         end if;
+
+         for Position in 1 .. Syn.Slot_Count (Of_Tree, Root) loop
+            if Contains_Control
+                 (Of_Tree, Syn.Slot (Of_Tree, Root, Position))
+            then
+               return True;
+            end if;
+         end loop;
+         return False;
+      end Contains_Control;
+
+      procedure Flow_Expression
+        (Of_Tree : Syn.Tree;
+         Node    : Syn.Node_Id;
+         Result  : Res.Declaration_Id;
+         State   : in out Assigned_Set;
+         Edges   : out Edge_Facts;
+         Whole_As : Whole_Array_Read := Assignment_Source)
+      is
+         Needs_Value : constant Boolean :=
+           Node /= Syn.No_Node
+           and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
+             in Ty.Scalar_Name | Ty.Fixed_Array | Ty.Aggregate
+                | Ty.Function_Value;
+      begin
+         if Node = Syn.No_Node then
+            Edges := Fallthrough_Edge;
+            return;
+         end if;
+
+         Edges := No_Edges;
+
+         case Syn.Kind (Of_Tree, Node) is
+            when Syn.If_Statement =>
+               declare
+                  Remaining : Assigned_Set := State;
+                  Merged    : Assigned_Set := Nothing_Assigned;
+                  Any_Path  : Boolean := False;
+                  Can_Test  : Boolean := True;
+                  Returned  : Boolean := False;
+               begin
+                  for Arm in 1 .. Syn.Arm_Count (Of_Tree, Node) loop
+                     exit when not Can_Test;
+                     declare
+                        This : constant Syn.Node_Id :=
+                          Syn.Nth_Arm (Of_Tree, Node, Arm);
+                        Test_Edges : Edge_Facts;
+                     begin
+                        Flow_Expression
+                          (Of_Tree, Syn.Condition_Of (Of_Tree, This),
+                           Result, Remaining, Test_Edges);
+                        Returned := Returned or Test_Edges.Returns;
+                        Can_Test := Test_Edges.Falls_Through;
+
+                        if Can_Test then
+                           declare
+                              Branch : Assigned_Set := Remaining;
+                              Branch_Edges : Edge_Facts;
+                           begin
+                              Flow_Block
+                                (Of_Tree, Syn.Body_Of (Of_Tree, This),
+                                 Result, Syn.Origin (Of_Tree, Node),
+                                 Branch, Branch_Edges, Needs_Value);
+                              Returned := Returned or Branch_Edges.Returns;
+                              if Branch_Edges.Falls_Through then
+                                 Merge (Merged, not Any_Path, Branch);
+                                 Any_Path := True;
+                              end if;
+                           end;
+                        end if;
+                     end;
+                  end loop;
+
+                  if Can_Test then
+                     if Syn.Else_Body (Of_Tree, Node) /= Syn.No_Node then
+                        declare
+                           Branch : Assigned_Set := Remaining;
+                           Branch_Edges : Edge_Facts;
+                        begin
+                           Flow_Block
+                             (Of_Tree, Syn.Else_Body (Of_Tree, Node),
+                              Result, Syn.Origin (Of_Tree, Node),
+                              Branch, Branch_Edges, Needs_Value);
+                           Returned := Returned or Branch_Edges.Returns;
+                           if Branch_Edges.Falls_Through then
+                              Merge (Merged, not Any_Path, Branch);
+                              Any_Path := True;
+                           end if;
+                        end;
+                     else
+                        if Needs_Value then
+                           Bad.Report
+                             (Item    => Bad.Type_Mismatch,
+                              Source  => Syn.Source_Of (Of_Tree),
+                              Where   => Syn.Where (Of_Tree, Node),
+                              Message => "this value-producing `if` has a"
+                                         & " fallthrough path with no value",
+                              Note    => "D124: every fallthrough edge of a"
+                                         & " control expression produces its"
+                                         & " joined value",
+                              Related => Syn.Origin
+                                (Of_Tree,
+                                 Syn.Condition_Of
+                                   (Of_Tree,
+                                    Syn.Nth_Arm (Of_Tree, Node, 1))),
+                              Because => "this condition has an untaken"
+                                         & " edge",
+                              Into    => Found);
+                        end if;
+                        Merge (Merged, not Any_Path, Remaining);
+                        Any_Path := True;
+                     end if;
+                  end if;
+
+                  if Any_Path then
+                     State := Merged;
+                  end if;
+                  Edges :=
+                    (Falls_Through => Any_Path, Returns => Returned);
+               end;
+
+            when Syn.Match_Statement =>
+               declare
+                  Subject_Edges : Edge_Facts;
+               begin
+                  Flow_Expression
+                    (Of_Tree, Syn.Match_Subject (Of_Tree, Node),
+                     Result, State, Subject_Edges);
+                  if not Subject_Edges.Falls_Through then
+                     Edges := Subject_Edges;
+                     return;
+                  end if;
+
+                  declare
+                     Incoming : constant Assigned_Set := State;
+                     Merged   : Assigned_Set := Nothing_Assigned;
+                     Any_Path : Boolean := False;
+                     Returned : Boolean := Subject_Edges.Returns;
+                  begin
+                     for Arm in
+                       1 .. Syn.Match_Arm_Count (Of_Tree, Node)
+                     loop
+                        declare
+                           This : constant Syn.Node_Id :=
+                             Syn.Nth_Match_Arm (Of_Tree, Node, Arm);
+                           Branch : Assigned_Set := Incoming;
+                           Branch_Edges : Edge_Facts;
+                        begin
+                           Flow_Block
+                             (Of_Tree, Syn.Body_Of (Of_Tree, This),
+                              Result, Syn.Origin (Of_Tree, Node),
+                              Branch, Branch_Edges, Needs_Value);
+                           Returned := Returned or Branch_Edges.Returns;
+                           if Branch_Edges.Falls_Through then
+                              Merge (Merged, not Any_Path, Branch);
+                              Any_Path := True;
+                           end if;
+                        end;
+                     end loop;
+
+                     if Any_Path then
+                        State := Merged;
+                     end if;
+                     Edges :=
+                       (Falls_Through => Any_Path, Returns => Returned);
+                  end;
+               end;
+
+            when Syn.Bare_Block =>
+               Flow_Block
+                 (Of_Tree, Syn.Body_Of (Of_Tree, Node), Result,
+                  Syn.Origin (Of_Tree, Node), State, Edges, Needs_Value);
+
+            when Syn.Logical_And | Syn.Logical_Or =>
+               --  [0340]/[0410]: after the left operand falls through, one
+               --  edge skips the right and one evaluates it.  A return from
+               --  the right therefore cannot erase the skip edge or lend
+               --  right-only assignment facts to it.
+               Flow_Expression
+                 (Of_Tree, Syn.Left_Of (Of_Tree, Node), Result,
+                  State, Edges, Whole_As);
+               if Edges.Falls_Through then
+                  declare
+                     Skipped : constant Assigned_Set := State;
+                     Taken   : Assigned_Set := State;
+                     Right_Edges : Edge_Facts;
+                     Returned : constant Boolean := Edges.Returns;
+                  begin
+                     Flow_Expression
+                       (Of_Tree, Syn.Right_Of (Of_Tree, Node), Result,
+                        Taken, Right_Edges, Whole_As);
+                     State := Skipped;
+                     if Right_Edges.Falls_Through then
+                        Merge (State, False, Taken);
+                     end if;
+                     Edges :=
+                       (Falls_Through => True,
+                        Returns => Returned or Right_Edges.Returns);
+                  end;
+               end if;
+
+            when Syn.Element_Index =>
+               --  [0410]: an index runs before the selected element is
+               --  read.  A control-valued index may return, so only its
+               --  fallthrough edge reaches the assignment fact check.
+               declare
+                  From  : constant Syn.Node_Id :=
+                    Syn.Target_Of (Of_Tree, Node);
+                  Where : constant Syn.Node_Id :=
+                    Syn.Index_Of (Of_Tree, Node);
+                  Position : Ty.Magnitude;
+                  Id : Res.Declaration_Id;
+                  Path : Field_Path;
+               begin
+                  Flow_Expression
+                    (Of_Tree, Where, Result, State, Edges);
+                  if not Edges.Falls_Through then
+                     return;
+                  end if;
+
+                  Array_Base (Of_Tree, From, Id, Path);
+                  if Id /= Res.No_Declaration
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree, Node) /= Ty.Ill_Typed
+                  then
+                     if Known_Index_Value (Of_Tree, Where, Position) then
+                        Require_Element
+                          (Of_Tree, Node, Id, Path, Position, State);
+                     else
+                        Require_Computed_Element
+                          (Of_Tree, Node, Id, Path, State);
+                     end if;
+                  elsif Landin.Checking.Type_Of
+                          (Types.all, Of_Tree, Node) /= Ty.Ill_Typed
+                    and then Syn.Kind (Of_Tree, From)
+                                   /= Syn.Name_Reference
+                  then
+                     Read_Names (Of_Tree, From, State);
+                  end if;
+               end;
+
+            when others =>
+               if not Contains_Control (Of_Tree, Node) then
+                  Read_Names (Of_Tree, Node, State, Whole_As);
+                  Edges := Fallthrough_Edge;
+                  return;
+               end if;
+
+               --  A control expression nested under an ordinary operator,
+               --  call or literal is evaluated in slot/source order.  A
+               --  returned edge stops later operands; only the surviving
+               --  fallthrough state reaches them.
+               Edges := Fallthrough_Edge;
+               for Position in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
+                  exit when not Edges.Falls_Through;
+                  declare
+                     Part : Edge_Facts;
+                  begin
+                     Flow_Expression
+                       (Of_Tree, Syn.Slot (Of_Tree, Node, Position),
+                        Result, State, Part, Whole_As);
+                     Edges.Returns := Edges.Returns or Part.Returns;
+                     Edges.Falls_Through := Part.Falls_Through;
+                  end;
+               end loop;
+         end case;
+      end Flow_Expression;
+
       procedure Flow_Block
         (Of_Tree : Syn.Tree;
          Block   : Syn.Node_Id;
          Result  : Res.Declaration_Id;
          Owner   : Landin.Provenance.Origin;
          State   : in out Assigned_Set;
-         Exits   : out Boolean)
+         Edges   : out Edge_Facts;
+         Needs_Value : Boolean := False)
       is
-         procedure Mark (Node : Syn.Node_Id);
-         procedure Merge
-           (Into   : in out Assigned_Set;
-            First  : Boolean;
-            Branch : Assigned_Set);
-
-         procedure Merge
-           (Into   : in out Assigned_Set;
-            First  : Boolean;
-            Branch : Assigned_Set) is
-         begin
-            if First then
-               Into := Branch;
-               return;
-            end if;
-
-            declare
-               Left   : constant Assigned_Set := Into;
-               Merged : Assigned_Set :=
-                 (Fields       => Left.Fields,
-                  Elements     => Element_Sets.Intersection
-                                    (Left.Elements, Branch.Elements),
-                  Whole_Arrays => Array_Sets.Intersection
-                                    (Left.Whole_Arrays,
-                                     Branch.Whole_Arrays),
-                  Nested       => Nested_Sets.Intersection
-                                    (Left.Nested, Branch.Nested));
-            begin
-               for Which in Tracked loop
-                  for Part in Tracked_Field loop
-                     Merged.Fields (Which, Part) :=
-                       Left.Fields (Which, Part)
-                       and Branch.Fields (Which, Part);
-                  end loop;
-               end loop;
-
-               --  D20 gives a whole-array fact the meaning of every sparse
-               --  element fact.  Intersecting whole with sparse therefore
-               --  keeps the sparse side; intersecting two sparse states is
-               --  the ordinary set intersection above.
-               for Whole of Left.Whole_Arrays loop
-                  if not Array_Sets.Contains (Branch.Whole_Arrays, Whole)
-                  then
-                     for Fact of Branch.Elements loop
-                        if Fact.Declaration = Whole.Declaration
-                          and then Fact.Path = Whole.Path
-                        then
-                           Element_Sets.Include (Merged.Elements, Fact);
-                        end if;
-                     end loop;
-                  end if;
-               end loop;
-
-               for Whole of Branch.Whole_Arrays loop
-                  if not Array_Sets.Contains (Left.Whole_Arrays, Whole) then
-                     for Fact of Left.Elements loop
-                        if Fact.Declaration = Whole.Declaration
-                          and then Fact.Path = Whole.Path
-                        then
-                           Element_Sets.Include (Merged.Elements, Fact);
-                        end if;
-                     end loop;
-                  end if;
-               end loop;
-
-               --  D89 gives assigning anything containing an array the
-               --  meaning of every element fact below it, and D88 the same
-               --  for a nested scalar leaf.  D117 makes "containing" mean
-               --  "named by a shorter run", so one question covers both and
-               --  covers a chain of any depth.
-               for Fact of Branch.Elements loop
-                  if Covered (Fact.Declaration, Fact.Path, Left,
-                              Strictly_Above => True)
-                  then
-                     Element_Sets.Include (Merged.Elements, Fact);
-                  end if;
-               end loop;
-               for Fact of Left.Elements loop
-                  if Covered (Fact.Declaration, Fact.Path, Branch,
-                              Strictly_Above => True)
-                  then
-                     Element_Sets.Include (Merged.Elements, Fact);
-                  end if;
-               end loop;
-               for Whole of Branch.Whole_Arrays loop
-                  if Covered (Whole.Declaration, Whole.Path, Left,
-                              Strictly_Above => True)
-                  then
-                     Array_Sets.Include (Merged.Whole_Arrays, Whole);
-                  end if;
-               end loop;
-               for Whole of Left.Whole_Arrays loop
-                  if Covered (Whole.Declaration, Whole.Path, Branch,
-                              Strictly_Above => True)
-                  then
-                     Array_Sets.Include (Merged.Whole_Arrays, Whole);
-                  end if;
-               end loop;
-               for Fact of Branch.Nested loop
-                  if Covered (Fact.Declaration, Fact.Path, Left,
-                              Strictly_Above => True)
-                  then
-                     Nested_Sets.Include (Merged.Nested, Fact);
-                  end if;
-               end loop;
-               for Fact of Left.Nested loop
-                  if Covered (Fact.Declaration, Fact.Path, Branch,
-                              Strictly_Above => True)
-                  then
-                     Nested_Sets.Include (Merged.Nested, Fact);
-                  end if;
-               end loop;
-
-               Into := Merged;
-            end;
-         end Merge;
+         procedure Mark
+           (Node              : Syn.Node_Id;
+            Index_Was_Checked : Boolean := False);
 
          --  A place written is assigned from here on.
-         procedure Mark (Node : Syn.Node_Id) is
+         procedure Mark
+           (Node              : Syn.Node_Id;
+            Index_Was_Checked : Boolean := False)
+         is
          begin
             if Node /= Syn.No_Node
               and then Syn.Kind (Of_Tree, Node) = Syn.Element_Index
@@ -1257,7 +1564,9 @@ package body Landin.Stages.Checking.Flow is
                begin
                   --  Reaching an element destination reads its index even
                   --  though it does not read the element being selected.
-                  Read_Names (Of_Tree, Where, State);
+                  if not Index_Was_Checked then
+                     Read_Names (Of_Tree, Where, State);
+                  end if;
                   Array_Base (Of_Tree, From, Id, Path);
                   if Id /= Res.No_Declaration
                     and then Landin.Checking.Type_Of (Types.all, Of_Tree, Node)
@@ -1446,216 +1755,156 @@ package body Landin.Stages.Checking.Flow is
             end if;
          end Mark;
       begin
-         Exits := False;
+         Edges := Fallthrough_Edge;
 
          for Index in 1 .. Syn.Statement_Count (Of_Tree, Block) loop
-            --  Nothing after an exit is reached, so nothing after one is
-            --  asked about.
-            exit when Exits;
+            exit when not Edges.Falls_Through;
 
             declare
                Item : constant Syn.Node_Id :=
                  Syn.Nth_Statement (Of_Tree, Block, Index);
+               Step : Edge_Facts := Fallthrough_Edge;
             begin
                case Syn.Kind (Of_Tree, Item) is
                   when Syn.Binding =>
-                     --  [0110]: the value is read before the name exists,
-                     --  so the read is checked and then the name is
-                     --  assigned -- or not, if there is no value.
-                     --  A local declared *with* a value is not tracked at
-                     --  all, so there is nothing to mark: [1910] is about
-                     --  the form [0080] describes, which has none.  D21
-                     --  cites itself when a whole-array source is not
-                     --  assigned, because that is what the reader is doing.
-                     --  A declaration settled Ill_Typed is the binding-side
-                     --  twin of an assignment's refused target below:
-                     --  Check_Statement already returned after its owning
-                     --  report, so the statement cannot execute and reads
-                     --  nothing for definite assignment.
                      declare
                         Id : constant Res.Declaration_Id :=
-                          Declaration_At
-                            (Syn.Source_Of (Of_Tree), Item);
+                          Declaration_At (Syn.Source_Of (Of_Tree), Item);
                      begin
                         if Id = Res.No_Declaration
                           or else Landin.Checking.Type_Of (Types.all, Id)
                                     /= Ty.Ill_Typed
                         then
-                           Read_Names
-                             (Of_Tree, Syn.Value_Of (Of_Tree, Item), State,
-                              Whole_As => Initializer_Source);
+                           Flow_Expression
+                             (Of_Tree, Syn.Value_Of (Of_Tree, Item), Result,
+                              State, Step, Initializer_Source);
                         end if;
                      end;
 
                   when Syn.Assignment =>
-                     --  A refused destination owns the assignment report.
-                     --  Check_Assignment marks the unvisited value ill-typed,
-                     --  but a composite value still has children; do not walk
-                     --  those children and add definite-assignment reports for
-                     --  a statement that cannot be executed.  This also keeps
-                     --  D52's immutable-root L0303 first and alone when a
-                     --  literal element names the same local field.
                      if Landin.Checking.Type_Of
                           (Types.all, Of_Tree,
                            Syn.Target_Of (Of_Tree, Item)) /= Ty.Ill_Typed
                      then
-                        Read_Names
-                          (Of_Tree, Syn.Value_Of (Of_Tree, Item), State);
+                        declare
+                           Place : constant Syn.Node_Id :=
+                             Syn.Target_Of (Of_Tree, Item);
+                           Checked_Index : constant Boolean :=
+                             Syn.Kind (Of_Tree, Place) = Syn.Element_Index;
+                        begin
+                           if Checked_Index then
+                              Flow_Expression
+                                (Of_Tree, Syn.Index_Of (Of_Tree, Place),
+                                 Result, State, Step);
+                           end if;
 
-                        --  D16: writing one field assigns that field and
-                        --  says nothing about the others, and reaching it is
-                        --  not a read of the struct it is in.
-                        Mark (Syn.Target_Of (Of_Tree, Item));
+                           if Step.Falls_Through then
+                              declare
+                                 Value_Edges : Edge_Facts;
+                              begin
+                                 Flow_Expression
+                                   (Of_Tree, Syn.Value_Of (Of_Tree, Item),
+                                    Result, State, Value_Edges);
+                                 Step.Returns :=
+                                   Step.Returns or Value_Edges.Returns;
+                                 Step.Falls_Through :=
+                                   Value_Edges.Falls_Through;
+                              end;
+                           end if;
+
+                           if Step.Falls_Through then
+                              Mark
+                                (Place,
+                                 Index_Was_Checked => Checked_Index);
+                           end if;
+                        end;
                      end if;
 
                   when Syn.Increment | Syn.Decrement =>
-                     --  [0400]: `inc x` is `x += 1`, so it reads x too.
-                     Read_Names (Of_Tree, Syn.Target_Of (Of_Tree, Item),
-                                 State);
+                     Flow_Expression
+                       (Of_Tree, Syn.Target_Of (Of_Tree, Item), Result,
+                        State, Step);
 
-                  when Syn.Discard | Syn.Call =>
-                     Read_Names (Of_Tree, Item, State);
+                  when Syn.Discard | Syn.Call | Syn.If_Statement
+                     | Syn.Match_Statement | Syn.Bare_Block =>
+                     Flow_Expression
+                       (Of_Tree, Item, Result, State, Step);
 
                   when Syn.Return_Statement =>
-                     Read_Names (Of_Tree, Syn.Condition_Of (Of_Tree, Item),
-                                 State);
-                     --  A refused named return is no executable destination.
-                     --  Its ABI report owns the declaration; do not follow it
-                     --  with an assignment report at each `return`.
-                     if Result = Res.No_Declaration
-                       or else Landin.Checking.Type_Of (Types.all, Result)
-                               /= Ty.Ill_Typed
-                     then
-                        Require_Assigned
-                          (Syn.Source_Of (Of_Tree),
-                           Syn.Anchor (Of_Tree, Item), Result, State,
-                           "this returns and no path that arrives assigned"
-                           & " the return");
-                     end if;
+                     Flow_Expression
+                       (Of_Tree, Syn.Condition_Of (Of_Tree, Item), Result,
+                        State, Step);
 
-                     --  [1910]: a `return when` is a return, and the flow
-                     --  after it is reachable because the guard may be
-                     --  false.  A bare one ends the block.
-                     if Syn.Condition_Of (Of_Tree, Item) = Syn.No_Node then
-                        Exits := True;
-                     end if;
-
-                  when Syn.If_Statement =>
-                     declare
-                        Merged   : Assigned_Set := Nothing_Assigned;
-                        Any_Path : Boolean := False;
-                        All_Exit : Boolean := True;
-                     begin
-                        for Arm in 1 .. Syn.Arm_Count (Of_Tree, Item) loop
-                           declare
-                              This : constant Syn.Node_Id :=
-                                Syn.Nth_Arm (Of_Tree, Item, Arm);
-                              Branch : Assigned_Set := State;
-                              Left   : Boolean;
-                           begin
-                              Read_Names
-                                (Of_Tree,
-                                 Syn.Condition_Of (Of_Tree, This), State);
-                              Flow_Block
-                                (Of_Tree, Syn.Body_Of (Of_Tree, This),
-                                 Result, Owner, Branch, Left);
-
-                              if not Left then
-                                 Merge (Merged, not Any_Path, Branch);
-                                 Any_Path := True;
-                                 All_Exit := False;
-                              end if;
-                           end;
-                        end loop;
-
-                        if Syn.Else_Body (Of_Tree, Item) /= Syn.No_Node
+                     if Step.Falls_Through then
+                        if Result = Res.No_Declaration
+                          or else Landin.Checking.Type_Of (Types.all, Result)
+                                  /= Ty.Ill_Typed
                         then
-                           declare
-                              Branch : Assigned_Set := State;
-                              Left   : Boolean;
-                           begin
-                              Flow_Block
-                                (Of_Tree, Syn.Else_Body (Of_Tree, Item),
-                                 Result, Owner, Branch, Left);
-
-                              if not Left then
-                                 Merge (Merged, not Any_Path, Branch);
-                                 Any_Path := True;
-                                 All_Exit := False;
-                              end if;
-                           end;
-                        else
-                           --  [1910]: no condition is believed, so a
-                           --  branch with no `else` has a path that runs
-                           --  none of its arms and changes nothing.
-                           Merge (Merged, not Any_Path, State);
-                           Any_Path := True;
-                           All_Exit := False;
+                           Require_Assigned
+                             (Syn.Source_Of (Of_Tree),
+                              Syn.Anchor (Of_Tree, Item), Result, State,
+                              "this returns and no path that arrives assigned"
+                              & " the return");
                         end if;
 
-                        if Any_Path then
-                           State := Merged;
-                        end if;
-
-                        Exits := All_Exit;
-                     end;
-
-                  when Syn.Match_Statement =>
-                     declare
-                        Merged   : Assigned_Set := Nothing_Assigned;
-                        Any_Path : Boolean := False;
-                        All_Exit : Boolean := True;
-                     begin
-                        --  The tag is one incoming-state read.  Exhaustive
-                        --  checking means every runtime path then enters
-                        --  exactly one sibling arm.
-                        Read_Names
-                          (Of_Tree, Syn.Match_Subject (Of_Tree, Item), State);
-
-                        for Arm in
-                          1 .. Syn.Match_Arm_Count (Of_Tree, Item)
-                        loop
-                           declare
-                              This : constant Syn.Node_Id :=
-                                Syn.Nth_Match_Arm (Of_Tree, Item, Arm);
-                              Branch : Assigned_Set := State;
-                              Left   : Boolean;
-                           begin
-                              Flow_Block
-                                (Of_Tree, Syn.Body_Of (Of_Tree, This),
-                                 Result, Owner, Branch, Left);
-                              if not Left then
-                                 Merge (Merged, not Any_Path, Branch);
-                                 Any_Path := True;
-                                 All_Exit := False;
-                              end if;
-                           end;
-                        end loop;
-
-                        if Any_Path then
-                           State := Merged;
-                        end if;
-                        Exits := All_Exit;
-                     end;
+                        Step.Returns := True;
+                        Step.Falls_Through :=
+                          Syn.Condition_Of (Of_Tree, Item) /= Syn.No_Node;
+                     end if;
 
                   when others =>
                      null;
                end case;
+
+               Edges.Returns := Edges.Returns or Step.Returns;
+               Edges.Falls_Through := Step.Falls_Through;
             end;
          end loop;
+
+         if Edges.Falls_Through
+           and then Syn.Block_Value (Of_Tree, Block) /= Syn.No_Node
+         then
+            declare
+               Value_Edges : Edge_Facts;
+            begin
+               Flow_Expression
+                 (Of_Tree, Syn.Block_Value (Of_Tree, Block), Result,
+                  State, Value_Edges);
+               Edges.Returns := Edges.Returns or Value_Edges.Returns;
+               Edges.Falls_Through := Value_Edges.Falls_Through;
+            end;
+         elsif Edges.Falls_Through and then Needs_Value then
+            Bad.Report
+              (Item    => Bad.Type_Mismatch,
+               Source  => Syn.Source_Of (Of_Tree),
+               Where   => Syn.Where (Of_Tree, Block),
+               Message => "this control block can fall through without"
+                          & " producing a value",
+               Note    => "D124: an early return needs no joined value, but"
+                          & " every fallthrough edge does",
+               Related => Owner,
+               Because => "this control expression needs a value",
+               Into    => Found);
+         end if;
       end Flow_Block;
 
       Result_Id : constant Res.Declaration_Id :=
         (if Result_Node = Syn.No_Node then Res.No_Declaration
          else Declaration_At (Syn.Source_Of (Of_Tree), Result_Node));
       State : Assigned_Set := Nothing_Assigned;
-      Exits : Boolean;
+      Edges : Edge_Facts;
    begin
-      Flow_Block
-        (Of_Tree, Body_Node, Result_Id,
-         Syn.Origin (Of_Tree, Function_Node), State, Exits);
+      if Syn.Kind (Of_Tree, Body_Node) = Syn.Block then
+         Flow_Block
+           (Of_Tree, Body_Node, Result_Id,
+            Syn.Origin (Of_Tree, Function_Node), State, Edges);
+      else
+         Flow_Expression
+           (Of_Tree, Body_Node, Result_Id, State, Edges);
+      end if;
 
-      if not Exits
+      if Syn.Kind (Of_Tree, Body_Node) = Syn.Block
+        and then Edges.Falls_Through
         and then
           (Result_Id = Res.No_Declaration
            or else Landin.Checking.Type_Of (Types.all, Result_Id)

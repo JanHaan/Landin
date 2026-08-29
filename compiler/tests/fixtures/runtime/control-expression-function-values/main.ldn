@@ -1,0 +1,44 @@
+unary: type = (value: i32) -> (result: i32)
+
+increment: (value: i32) -> (result: i32) =
+    value + 1
+end increment
+
+identity: (value: i32) -> (result: i32) =
+    value
+end identity
+
+choose: (take_increment: bool) -> (result: unary) =
+    if take_increment then
+        increment
+    else
+        begin
+            identity
+        end
+    end if
+end choose
+
+apply: (candidate: unary, value: i32) -> (result: i32) =
+    result = candidate(value)
+end apply
+
+public main: () -> (code: i32) =
+    selected := choose(true)
+    mut stored: unary = begin
+        if false then
+            increment
+        else
+            (value: i32) -> (result: i32) =
+                value
+            end
+        end if
+    end
+
+    code = 1
+    if selected(41) == 42
+      and stored(42) == 42
+      and apply(if false then identity else increment end if, 41) == 42
+    then
+        code = 42
+    end if
+end main

@@ -1,0 +1,6 @@
+class: runtime
+summary: expression returns stop later scalar and aggregate consumers while short-circuit skip edges survive
+program: main.ldn
+status: 42
+constructs: 0060, 0080, 0340, 0410, 0520, 0570, 0670, 0710, 0750, 0930, 1050, 1080, 1800, 1810, 1820, 1910, 1920, 1960
+targets: linux-x86-64
