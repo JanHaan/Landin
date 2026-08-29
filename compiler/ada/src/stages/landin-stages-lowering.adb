@@ -715,6 +715,87 @@ package body Landin.Stages.Lowering is
                            (Kind => IR.Frame_Slot, Slot => Temporary),
                            Site_Of (Of_Tree, Argument));
                      end;
+                  elsif Syn.Kind (Of_Tree, Argument) = Syn.Struct_Literal
+                  then
+                     declare
+                        Parameter : constant Syn.Node_Id :=
+                          Syn.Nth_Parameter
+                            (Their_Tree.all, Their_Node, Which);
+                        Id : constant Res.Declaration_Id :=
+                          Declaration_At
+                            (Syn.Source_Of (Their_Tree.all), Parameter);
+                        Count : constant Natural :=
+                          Landin.Checking.Layout_Field_Count (Types.all, Id);
+                        type Seen_Array is
+                          array (Positive range <>) of Boolean;
+                        Seen : Seen_Array (1 .. Count) := [others => False];
+                        Temporary : constant IR.Slot_Id :=
+                          IR.Add_Aggregate_Slot
+                            (Unit.all, Filling, Res.No_Declaration,
+                             Site_Of (Of_Tree, Argument));
+                     begin
+                        for Field in 1 .. Count loop
+                           Add_Stored_Field
+                             (Id, Field, Slot => Temporary);
+                        end loop;
+
+                        for Position in
+                          1 .. Syn.Field_Value_Count (Of_Tree, Argument)
+                        loop
+                           declare
+                              Label : constant Syn.Node_Id :=
+                                Syn.Nth_Field_Value
+                                  (Of_Tree, Argument, Position);
+                              Field : constant Positive := Positive
+                                (Landin.Checking.Field_Index
+                                   (Types.all, Of_Tree, Label));
+                              Value : constant IR.Value_Id :=
+                                Lower_Expression
+                                  (Of_Tree,
+                                   Syn.Value_Of (Of_Tree, Label), Scope);
+                           begin
+                              Seen (Field) := True;
+                              IR.Emit_Store_Slot_Field
+                                (Unit.all, Filling, Temporary,
+                                 IR.Part_Position (Field), Value,
+                                 Site_Of (Of_Tree, Label));
+                           end;
+                        end loop;
+
+                        if Syn.Struct_Fill (Of_Tree, Argument)
+                             /= Syn.No_Node
+                        then
+                           for Field in Seen'Range loop
+                              if not Seen (Field) then
+                                 declare
+                                    Held : constant Ty.Scalar_Name :=
+                                      Landin.Checking.Field_Type
+                                        (Types.all, Id, Field);
+                                    Zero : IR.Value_Id;
+                                 begin
+                                    if Held = Ty.Bool then
+                                       Zero := IR.Emit_Truth
+                                         (Unit.all, Filling, False,
+                                          Site_Of (Of_Tree, Argument));
+                                    else
+                                       Zero := IR.Emit_Number
+                                         (Unit.all, Filling, Held, 0, False,
+                                          Site_Of (Of_Tree, Argument));
+                                    end if;
+                                    IR.Emit_Store_Slot_Field
+                                      (Unit.all, Filling, Temporary,
+                                       IR.Part_Position (Field), Zero,
+                                       Site_Of (Of_Tree, Argument));
+                                 end;
+                              end if;
+                           end loop;
+                        end if;
+
+                        Given (Which) := IR.Emit_Storage_Address
+                          (Unit.all, Filling,
+                           (Kind => IR.Frame_Slot, Slot => Temporary),
+                           Site_Of (Of_Tree, Argument));
+                     end;
                   elsif Syn.Kind (Of_Tree, Argument)
                           in Syn.Array_Literal | Syn.Array_Repetition
                              | Syn.Mixed_Array_Repetition

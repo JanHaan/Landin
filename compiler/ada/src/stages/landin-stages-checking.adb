@@ -1648,7 +1648,43 @@ package body Landin.Stages.Checking is
                Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
-               if Wants = Ty.Fixed_Array
+               if Wants = Ty.Aggregate
+                 and then Syn.Kind (Of_Tree, Argument) = Syn.Struct_Literal
+               then
+                  declare
+                     Expected : constant Res.Declaration_Id :=
+                       Landin.Checking.Body_Of
+                         (Types.all, Their_Tree.all,
+                          Syn.Declared_Type (Their_Tree.all, Parameter));
+                     Scalar_Only : Boolean := True;
+                  begin
+                     for Field in
+                       1 .. Landin.Checking.Layout_Field_Count
+                              (Types.all, Expected)
+                     loop
+                        Scalar_Only := Scalar_Only
+                          and then Landin.Checking.Field_Kind_Of
+                            (Types.all, Expected, Field)
+                              = Landin.Checking.Scalar_Field;
+                     end loop;
+
+                     if Scalar_Only
+                       and then Construction_Agrees
+                         (Of_Tree, Argument, Expected,
+                          Syn.Origin (Their_Tree.all, Parameter),
+                          "this parameter")
+                     then
+                        Check_Struct_Literal
+                          (Of_Tree, Argument, Expected,
+                           Static_Image => False);
+                     else
+                        Require
+                          (Of_Tree, Argument, Wants,
+                           Syn.Origin (Their_Tree.all, Parameter),
+                           "this parameter");
+                     end if;
+                  end;
+               elsif Wants = Ty.Fixed_Array
                  and then Syn.Kind (Of_Tree, Argument)
                             in Syn.Array_Literal | Syn.Array_Repetition
                                | Syn.Mixed_Array_Repetition
