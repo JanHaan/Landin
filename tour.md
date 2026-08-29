@@ -586,7 +586,11 @@ and R3.30, not guessed as a prerequisite to the first front end.
 
 ### [0520] Array: a value
 
-Array: a value. Assignment copies. Size is part of the type.
+Array: a value. Assignment copies. Size is part of the type. A whole element
+of aggregate type is the same value and place whether its index is written as a
+known position or computed at run time. A computed index is evaluated and
+bounds-checked once before the element is used; this does not expose a pointer
+or change the array's by-value copies.
 An array literal assigned to existing storage is formed there in written order:
 each element is evaluated and written before the next one begins. A later
 element can therefore observe an earlier write, and a failure can leave the
@@ -1765,9 +1769,11 @@ defer runs when its block is left, in reverse order. That includes ordinary
 fallthrough, a successful return, or declared failure through the block; a trap
 is a stop and does not unwind anything. A nested block runs its own entries
 before an outer block's, and an entry is active only after control has reached
-its statement. The call is evaluated where it runs, not where it was written:
-it names places, and reads them then. So a defer that sinks something sinks it
-at the end, which is why the thing stays usable in between — and if a named
+its statement. The complete call is evaluated where it runs, not where it was
+written: a direct or indirect callee, including a selected function field, and
+then its arguments. It names places, and reads them then. So a defer that sinks
+something sinks it at the end, which is why the thing stays usable in between —
+and if a named
 place has been re-pointed by then, the defer sees what is there now. The block's
 final value or failure atom is formed before these calls run. Registering one
 evaluates no callee or argument, costs nothing and reserves nothing.

@@ -411,10 +411,13 @@ package Landin.IR is
 
    No_Signature_Parts : constant Signature_Part_Array (1 .. 0) := [];
 
-   --  An array copy reaches either a module datum or a slot in the frame of
-   --  the item containing the instruction.  A discriminant prevents an
-   --  Item_Id and a Slot_Id from becoming interchangeable integers.
-   type Storage_Kind is (Module_Datum, Frame_Slot);
+   --  A storage operation reaches a module datum, an ordinary frame slot,
+   --  or an internal address kept in a frame slot.  The last form is not a
+   --  source pointer: it is the checked address of a computed aggregate
+   --  array element, retained across control-flow blocks so [0410] can
+   --  evaluate the destination before its value.  A discriminant prevents
+   --  item, ordinary-slot and address-slot identities from mixing.
+   type Storage_Kind is (Module_Datum, Frame_Slot, Runtime_Address);
 
    type Storage (Kind : Storage_Kind := Module_Datum) is record
       case Kind is
@@ -422,6 +425,8 @@ package Landin.IR is
             Datum : Item_Id := No_Item;
          when Frame_Slot =>
             Slot : Slot_Id := No_Slot;
+         when Runtime_Address =>
+            Address : Slot_Id := No_Slot;
       end case;
    end record;
 
@@ -1290,6 +1295,33 @@ package Landin.IR is
    function Is_Aggregate
      (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
      with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+
+   --  An unspellable checked storage address.  The slot itself is one
+   --  `usize` carrier, while Address_Shape records the complete neutral
+   --  shape reached by the bounds-checked computation.  Runtime_Address
+   --  endpoints may name only one of these slots.
+   function Add_Address_Slot
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Shape  : Field_Shape;
+      Site   : Landin.Provenance.Origin) return Slot_Id
+     with Pre  => Holds (Into, Item)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Slot_Count (Into, Item) = Slot_Count (Into, Item)'Old + 1
+                  and then Holds (Into, Item, Add_Address_Slot'Result)
+                  and then Is_Address
+                    (Into, Item, Add_Address_Slot'Result)
+                  and then Address_Shape
+                    (Into, Item, Add_Address_Slot'Result) = Shape;
+
+   function Is_Address
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item) and then Holds (Of_Unit, Item, Slot);
+
+   function Address_Shape
+     (Of_Unit : Unit; Item : Item_Id; Slot : Slot_Id) return Field_Shape
+     with Pre => Holds (Of_Unit, Item, Slot)
+                 and then Is_Address (Of_Unit, Item, Slot);
 
    --  A fixed-array cell carries the repeated element once and its target-
    --  width length, never a length-sized field run.
@@ -2505,16 +2537,28 @@ package Landin.IR is
       Place       : Storage;
       Site        : Landin.Provenance.Origin;
       Field       : Natural := 0;
-      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+      Nested      : Path_Step_Array := No_Path_Steps;
+      Index       : Value_Id := No_Value) return Value_Id
      with Pre  => Is_Emitting (Into, Item)
                   and then (case Place.Kind is
                                when Module_Datum => Holds (Into, Place.Datum),
                                when Frame_Slot => Holds
-                                 (Into, Item, Place.Slot))
+                                 (Into, Item, Place.Slot),
+                               when Runtime_Address => Holds
+                                 (Into, Item, Place.Address)
+                                 and then Is_Address
+                                   (Into, Item, Place.Address))
+                  and then (Index = No_Value
+                            or else Holds (Into, Item, Index))
                   and then Landin.Provenance.Is_Known (Site),
           Post => Emitted
                     (Into, Item, Emit_Storage_Address'Result,
                      Storage_Address);
+
+   function Storage_Address_Has_Index
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Storage_Address;
 
    --  Result is stated by the caller and not derived from the operand,
    --  so a mutation can make it disagree and the verifier can say so.
@@ -2725,6 +2769,7 @@ private
       First_Measurement_Field : Natural        := 0;
       Measurement_Field_Total : Natural        := 0;
       Aggregate_Measurement : Boolean          := False;
+      Indexed_Address : Boolean                := False;
       Negated     : Boolean                   := False;
       Truth       : Boolean                   := False;
    end record;
@@ -2745,6 +2790,9 @@ private
       Length      : Element_Total             := 0;
       Signature   : Signature_Id              := No_Signature;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
+      --  True only for Add_Address_Slot.  Element then describes the
+      --  complete target-neutral shape reached by its stored address.
+      Addressed   : Boolean                   := False;
       Declaration : Declaration_Id            := No_Declaration;
       Site        : Landin.Provenance.Origin  :=
                       Landin.Provenance.No_Origin;

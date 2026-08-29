@@ -286,6 +286,9 @@ package body Landin.IR.Dump is
                  & " " & Item_Named (Place.Datum);
             when Frame_Slot =>
                return "slot " & Trimmed (Slot_Id'Image (Place.Slot));
+            when Runtime_Address =>
+               return "address slot "
+                 & Trimmed (Slot_Id'Image (Place.Address));
          end case;
       end Endpoint;
 
@@ -420,7 +423,8 @@ package body Landin.IR.Dump is
                       & Trimmed
                           (Natural'Image
                              (Element_Field_Of (Of_Unit, Item, Value))))
-                 & Path_Qualifier;
+                 & Path_Qualifier
+                 & Operands (Item, Value);
 
             when Load_Datum | Store_Datum =>
                declare

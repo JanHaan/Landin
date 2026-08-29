@@ -54,7 +54,7 @@ replaced.
 | `Landin.Types` | the scalar names and value categories, their widths, and ordinary scalar storage size against a target | hold a machine fact of its own, or ask the host for one |
 | `Landin.Checking` | what type every node and declaration has, including structural atom/error sets, nominal aggregate identity, structural fixed-array and anonymous result shapes, aggregate element identity, recursive first-class target-neutral function signatures on values and aggregate fields, ordered result runs, and scalar/fixed-array/unfolded-variant/recursively nested ordinary runtime layout | decide a rule, or ask the host for a width |
 | `Landin.Cleanup` | target-neutral exit kinds and the defer/undo applicability policy | parse a cleanup, track definite assignment, emit a call, or name a target |
-| `Landin.IR` | the target-neutral instructions: items, slots, blocks and values; atom-set descriptors, atom identities, orthogonal call-failure slots and failure exits; recursive callable signature descriptors with ordered result runs on declared or anonymous routines, static function datums, code addresses, function-value slots, aggregate fields and calls; scalar, compact fixed-array, unfolded variant, anonymous result and recursively nested ordinary shapes; a fixed array's element shape; recursively indexed folded aggregate images, routine relocations and compact child/payload segments; and arbitrary-depth neutral paths through contextual, variant and indexed-element operations, starting at a base part or at whole array storage | hold a scope tree, name a machine, ask a width, or hold an offset, register or padding byte |
+| `Landin.IR` | the target-neutral instructions: items, slots, blocks and values; atom-set descriptors, atom identities, orthogonal call-failure slots and failure exits; recursive callable signature descriptors with ordered result runs on declared or anonymous routines, static function datums, code addresses, function-value slots, aggregate fields and calls; scalar, compact fixed-array, unfolded variant, anonymous result and recursively nested ordinary shapes; a fixed array's element shape; recursively indexed folded aggregate images, routine relocations and compact child/payload segments; arbitrary-depth neutral paths through contextual, variant and indexed-element operations; and checked internal addresses for whole aggregate elements at computed indexes | hold a scope tree, name a machine, ask a width, or hold an offset, register or padding byte |
 | `Landin.IR.Verifier` | release-build well-formedness of a completed Unit, including atom/error set membership, descriptor/carrier, multiple-result slot and static function-image agreement, call-failure slots and exits, valid neutral subobject paths and recursive image descriptors, plus target-aware fit of every static fold | diagnose source, repair malformed IR, or choose backend policy |
 | `Landin.IR.Dump` | canonical human-readable text for a Unit | be a stable interface, a reader, or a serialisation |
 | `Landin.Backend` | where a routine's cells live, the recursive target extent of one neutral field shape, where a scalar or fixed-array leaf at any path depth sits inside an aggregate datum or slot, how wide one element of an array of either is, and the target-byte replay of scalar, fixed-array and unfolded variant runs | name a machine, choose a register, or ask the host a width |
@@ -78,7 +78,7 @@ replaced.
 | `Landin.Stages.Resolution` | the order the trees are walked in | own the resolution table, or a code |
 | `Landin.Stages.Checking` | the three type passes and checking-stage diagnostic order | own a table, a code, or a width |
 | `Landin.Stages.Checking.Flow` | definite assignment, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
-| `Landin.Stages.Lowering` | the walk that builds and verifies the IR, including caller-owned scalar and shaped control joins plus reverse-order cleanup calls on selected exits, and refusing to run on a refused program | own the Unit, work out a scope, derive target layout, or raise a diagnostic |
+| `Landin.Stages.Lowering` | the walk that builds and verifies the IR, including caller-owned scalar and shaped control joins, checked computed-element address slots, plus reverse-order cleanup calls on selected exits, and refusing to run on a refused program | own the Unit, work out a scope, derive target layout, or raise a diagnostic |
 | `Landin.Driver` | argument and `--emit` classification, pipeline orchestration, output/toolchain selection and the result | implement a language rule |
 | `Refine` | printing and the exit status | contain a decision |
 
@@ -123,7 +123,10 @@ flow and calls; module and
 local fixed-array indexing, copying, clearing and filling; and recursively
 nested ordinary structs with scalar, fixed-array, ordinary-child and unfolded
 variant fields, contextual construction, inspection, whole copies and clears,
-and arbitrary-depth scalar, array, child, payload and known-element paths.
+and arbitrary-depth scalar, array, child, payload and known- and
+computed-element paths. A computed whole aggregate element is bounds-checked
+once and retained as an internal shaped address; it remains a
+source value/place rather than exposing a pointer.
 Folded module images recursively contain ordinary-child and ordinary-payload
 images in a neutral descriptor tree; only the selected target supplies their
 widths, offsets and padding. That is every
@@ -155,8 +158,8 @@ signature. Explicit fallthrough and return facts make only continuing arms
 fill one consumer-owned neutral join slot; returning arms use the ordinary
 named-result exit, and no condition is believed. A typed binding, assignment
 or return supplies storage directly, while an argument or discard owns a fresh
-shaped temporary. Beyond those control-expression consumers, further aggregate
-arguments and result contexts remain absent; R4.40 later completes C ABI
+shaped temporary. Every aggregate argument and result context enabled by the
+kernel uses that internal convention; R4.40 later completes the separate C ABI
 classification. Inferred and explicitly typed local or module function values
 are represented by target code addresses and called through verified
 `Indirect_Call` IR. A first-class recursive neutral descriptor, not a concrete
@@ -187,7 +190,9 @@ owned aggregate convention and add one neutral failure slot. `try`, `fail`, and
 call-site `else` become explicit control edges, including recovery values and
 exhaustive atom matches. Active deferred cleanups and failure-only undo entries
 run in one lexical reverse order before a failure leaves their blocks; only
-defer runs on normal and successful-return exits, and traps unwind neither. On
+defer runs on normal and successful-return exits, and traps unwind neither.
+Cleanup syntax retains the ordinary complete callee, so a selected function
+field is evaluated late with its arguments. On
 Linux x86-64 ordinary atoms use dense nonzero 32-bit
 codes and the normal argument/`%eax` result positions; `%r10d` is the dedicated
 error carrier, with zero meaning success. It consumes no source parameter or
@@ -214,8 +219,8 @@ lexical deferred and failure-only undo cleanup, declared atom errors and source
 order, register/stack and recursive calls, folded module values, fixed arrays,
 ordinary structs and their target-derived module and frame layouts on the
 hardware the backend emits for. A host without the target toolchain fails
-rather than silently skipping that evidence. The active
-R2 items own extensions to the semantic and representation core; later target
+rather than silently skipping that evidence. The later R2 items own extensions
+to the semantic and representation core; later target
 and ABI work remains with the roadmap items that name it.
 
 The native path sits behind the whole frontend: `refine` scans and parses every

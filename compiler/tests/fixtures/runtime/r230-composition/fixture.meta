@@ -1,0 +1,6 @@
+class: runtime
+summary: R2.30 errors multiple results function fields controls cleanups stack arguments and enabled exits compose in one program
+constructs: 0410, 0520, 0670, 0870, 0920, 0930, 0940, 0960, 0970, 0990, 1000, 1020, 1030, 1050, 1080, 1090, 1100, 1110, 1210, 1800, 1810, 1920, 1980
+program: main.ldn
+targets: linux-x86-64
+status: 42

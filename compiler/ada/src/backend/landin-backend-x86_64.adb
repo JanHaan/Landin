@@ -507,20 +507,7 @@ package body Landin.Backend.X86_64 is
             if Nested'Length > 0 then
                return Reached_Shape (Place, Field, Nested).Length;
             end if;
-            return
-              (case Place.Kind is
-                  when Landin.IR.Module_Datum =>
-                    (if Field = 0
-                     then Landin.IR.Array_Length (Of_Unit, Place.Datum)
-                     else Landin.IR.Nth_Field_Shape
-                       (Of_Unit, Place.Datum, Positive (Field)).Length),
-                  when Landin.IR.Frame_Slot =>
-                    (if Field = 0
-                     then Landin.IR.Slot_Array_Length
-                       (Of_Unit, Item, Place.Slot)
-                     else Landin.IR.Nth_Slot_Field_Shape
-                       (Of_Unit, Item, Place.Slot,
-                        Positive (Field)).Length));
+            return Root_Shape_Of (Place, Field).Length;
          end Array_Length_Of;
 
          --  D127: where a run starts.  A positive base field is that
@@ -536,7 +523,10 @@ package body Landin.Backend.X86_64 is
                         Landin.IR.Whole_Array_Shape (Of_Unit, Place.Datum),
                       when Landin.IR.Frame_Slot =>
                         Landin.IR.Whole_Slot_Array_Shape
-                          (Of_Unit, Item, Place.Slot)));
+                          (Of_Unit, Item, Place.Slot),
+                      when Landin.IR.Runtime_Address =>
+                        Landin.IR.Address_Shape
+                          (Of_Unit, Item, Place.Address)));
 
          function Part_Shape_Of
            (Place : Landin.IR.Storage; Which : Landin.IR.Part_Position)
@@ -553,7 +543,20 @@ package body Landin.Backend.X86_64 is
                    then Landin.IR.Slot_Array_Element_Shape
                      (Of_Unit, Item, Place.Slot)
                    else Landin.IR.Nth_Slot_Field_Shape
-                     (Of_Unit, Item, Place.Slot, Positive (Which))));
+                     (Of_Unit, Item, Place.Slot, Positive (Which))),
+                when Landin.IR.Runtime_Address =>
+                  (if Landin.IR.Address_Shape
+                        (Of_Unit, Item, Place.Address).Kind
+                        = Landin.IR.Array_Field_Shape
+                   then Landin.IR.Array_Element_Shape
+                     (Of_Unit,
+                      Landin.IR.Address_Shape
+                        (Of_Unit, Item, Place.Address))
+                   else Landin.IR.Nth_Aggregate_Field
+                     (Of_Unit,
+                      Landin.IR.Address_Shape
+                        (Of_Unit, Item, Place.Address),
+                      Positive (Which))));
 
          --  D121: the shape of one element of the array an operation
          --  reaches.  A scalar element answers as itself, so every caller
@@ -607,6 +610,9 @@ package body Landin.Backend.X86_64 is
                     (Of_Unit,
                      Landin.IR.Nth_Slot_Field_Shape
                        (Of_Unit, Item, Place.Slot, Positive (Field)));
+               when Landin.IR.Runtime_Address =>
+                  return Landin.IR.Array_Element_Shape
+                    (Of_Unit, Root_Shape_Of (Place, Field));
             end case;
          end Element_Shape_Of;
 
@@ -679,6 +685,29 @@ package body Landin.Backend.X86_64 is
                              (Of_Unit, Item, Layout, Place.Slot,
                               Landin.IR.Part_Position (Field), Facts)))
                      & ", " & Register);
+               when Landin.IR.Runtime_Address =>
+                  Emit ("movq " & Slot_Cell (Place.Address) & ", "
+                        & Register);
+                  if Field > 0 then
+                     declare
+                        At_Offset : constant Landin.Targets.Byte_Count :=
+                          Path_Offset
+                            (Landin.IR.Address_Shape
+                               (Of_Unit, Item, Place.Address),
+                             [1 =>
+                                (Field => Landin.IR.Part_Position (Field),
+                                 Case_Index => 0)]);
+                     begin
+                        if At_Offset > 0 then
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (At_Offset))
+                              & ", %rdx");
+                           Emit ("addq %rdx, " & Register);
+                        end if;
+                     end;
+                  end if;
             end case;
 
             --  The base field first, then D118's run down to the part the
@@ -738,7 +767,11 @@ package body Landin.Backend.X86_64 is
                         = Landin.Types.Aggregate,
                     when Landin.IR.Frame_Slot =>
                       Landin.IR.Is_Aggregate
-                        (Of_Unit, Item, Place.Slot));
+                        (Of_Unit, Item, Place.Slot),
+                    when Landin.IR.Runtime_Address =>
+                      Landin.IR.Address_Shape
+                        (Of_Unit, Item, Place.Address).Kind
+                        = Landin.IR.Aggregate_Field_Shape);
          begin
             --  D91 clears one whole child; D119 clears one however far
             --  down the path went; D127 lets that run start at whole array
@@ -787,6 +820,18 @@ package body Landin.Backend.X86_64 is
                        (Of_Unit, Item, Place.Slot, Facts, Size, Alignment);
                      return Size;
                   end;
+               when Landin.IR.Runtime_Address =>
+                  declare
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Field_Extent
+                       (Of_Unit,
+                        Landin.IR.Address_Shape
+                          (Of_Unit, Item, Place.Address),
+                        Facts, Size, Alignment);
+                     return Size;
+                  end;
             end case;
          end Whole_Clear_Extent;
 
@@ -800,7 +845,13 @@ package body Landin.Backend.X86_64 is
                    (Of_Unit, Place.Datum, Field),
                when Landin.IR.Frame_Slot =>
                  Landin.IR.Nth_Slot_Field_Shape
-                   (Of_Unit, Item, Place.Slot, Field));
+                   (Of_Unit, Item, Place.Slot, Field),
+               when Landin.IR.Runtime_Address =>
+                 Landin.IR.Nth_Aggregate_Field
+                   (Of_Unit,
+                    Landin.IR.Address_Shape
+                      (Of_Unit, Item, Place.Address),
+                    Field));
 
          --  How far into one field the whole of D118's path reaches.  Each
          --  ordinary step replays [0750]'s placement over the run the step
@@ -988,14 +1039,70 @@ package body Landin.Backend.X86_64 is
                      & ", " & Value_Cell (Value));
 
                when Landin.IR.Storage_Address =>
-                  Storage_Address
-                    (Landin.IR.Destination_Of (Of_Unit, Item, Value),
-                     Landin.IR.Element_Field_Of (Of_Unit, Item, Value),
-                     "%rax",
-                     Nested => Landin.IR.Path_Of
-                       (Of_Unit, Item, Value));
-                  Carry
-                    (Landin.Targets.Byte_8, "%rax", Value_Cell (Value));
+                  declare
+                     Place : constant Landin.IR.Storage :=
+                       Landin.IR.Destination_Of (Of_Unit, Item, Value);
+                     Field : constant Natural :=
+                       Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
+                     Nested : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Path_Of (Of_Unit, Item, Value);
+                  begin
+                     if not Landin.IR.Storage_Address_Has_Index
+                       (Of_Unit, Item, Value)
+                     then
+                        Storage_Address
+                          (Place, Field, "%rax", Nested => Nested);
+                        Carry
+                          (Landin.Targets.Byte_8, "%rax",
+                           Value_Cell (Value));
+                     else
+                        Storage_Address
+                          (Place, Field, "%rcx", Nested => Nested);
+                        declare
+                           Index : constant Landin.IR.Value_Id :=
+                             Operand (1);
+                           Length : constant Landin.IR.Element_Total :=
+                             Array_Length_Of
+                               (Place, Field, Nested => Nested);
+                           Stride : constant Landin.Targets.Byte_Count :=
+                             Element_Bytes_Of
+                               (Place, Field, Nested => Nested);
+                           Safe : constant String :=
+                             Value_Label (Value) & "_index";
+                        begin
+                           Emit ("movq " & Value_Cell (Index) & ", %rax");
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.IR.Element_Total'Image (Length))
+                              & ", %rdx");
+                           Emit ("cmpq %rdx, %rax");
+                           Emit ("jb " & Safe);
+                           Emit ("ud2");
+                           Put (Safe & ":");
+                           if Stride <= 2 ** 31 - 1 then
+                              Emit
+                                ("imulq $"
+                                 & Trimmed
+                                     (Landin.Targets.Byte_Count'Image
+                                        (Stride))
+                                 & ", %rax, %rax");
+                           else
+                              Emit
+                                ("movabsq $"
+                                 & Trimmed
+                                     (Landin.Targets.Byte_Count'Image
+                                        (Stride))
+                                 & ", %rdx");
+                              Emit ("imulq %rdx, %rax");
+                           end if;
+                           Emit ("addq %rax, %rcx");
+                           Carry
+                             (Landin.Targets.Byte_8, "%rcx",
+                              Value_Cell (Value));
+                        end;
+                     end if;
+                  end;
 
                when Landin.IR.Load =>
                   declare

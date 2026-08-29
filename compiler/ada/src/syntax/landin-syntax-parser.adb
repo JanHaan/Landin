@@ -3017,14 +3017,12 @@ package body Landin.Syntax.Parser is
                            Advance;
 
                            if Peek = Tok.Identifier then
-                              declare
-                                 At_Name : constant Landin.Source.Span := Here;
-                                 Named   : constant
-                                   Landin.Source.Names.Name_Id := Named_Here;
-                              begin
-                                 Advance;
-                                 Call_Node := Parse_Call (At_Name, Named);
-                              end;
+                              --  A cleanup delays the complete callee
+                              --  expression, not only a direct name.  Reuse
+                              --  the ordinary primary walk so a selected
+                              --  function field and its indexes retain the
+                              --  same call syntax and source order.
+                              Call_Node := Parse_Primary;
                            else
                               Complain
                                 (Item    => Syn.Expression_Expected,
@@ -3045,7 +3043,12 @@ package body Landin.Syntax.Parser is
                                    /= Error_Expression
                               then
                                  Complain
-                                   (Item    => Syn.Expression_Expected,
+                                   (Item    =>
+                                      (if Kind (Result, Call_Node)
+                                            in Name_Reference
+                                               | Member_Selection
+                                       then Syn.Token_Expected
+                                       else Syn.Expression_Expected),
                                     Where   => Where (Result, Call_Node),
                                     Message => "`" & Cleanup_Name
                                                & "` registers a call, not a"
