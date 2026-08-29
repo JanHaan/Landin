@@ -1,0 +1,31 @@
+choice: type = struct
+    prefix: u8
+    kind: variant
+        leaf |
+        pair: (first: u8, second: u8) |
+        row: (values: [2]u8)
+    end kind
+    tail: u8
+end choice
+
+inspect: (value: choice) -> (result: i32) =
+    match value.kind
+        leaf: result = 1
+        pair(first, second):
+            if first == 19 and second == 23 then
+                result = 42
+            else
+                result = 0
+            end if
+        row(values): result = 2
+    end match
+end inspect
+
+public main: () -> (code: i32) =
+    state: choice = (
+        prefix: 0,
+        kind: pair(first: 19, second: 23),
+        tail: 0
+    )
+    code = inspect(state) + inspect(zeroed)
+end main

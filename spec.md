@@ -4696,7 +4696,7 @@ public seams; `positive/variant-part-measured`;
 `negative/variant-part-empty`; `negative/variant-case-duplicate`;
 `negative/variant-payload-struct-field-not-enabled`;
 `negative/variant-case-value-not-enabled`;
-`negative/variant-abi-not-enabled`; the generated construct, token, IR and
+`negative/variant-return-not-enabled`; the generated construct, token, IR and
 target-layout records; the backend seam against both target descriptions; and
 `runtime/variant-part-measurements-answer-for-the-target` on Linux x86-64.
 
@@ -5841,3 +5841,33 @@ argument slices rather than being flattened here.
 **Pinned by** the checker, lowering, verifier and backend public seams;
 `negative/struct-literal-argument-array-shape-mismatch`; the generated token and
 IR records; and `runtime/struct-arguments-cross-calls` on Linux x86-64.
+
+### D102 — Variant-bearing struct storage may cross an argument boundary
+
+**The tour said** that an unfolded variant is part of its enclosing struct's
+storage [0680] and matching inspects the selected case [0770]. D74--D85 carry
+that shape through local and module storage, while D94 initially refused it at
+a parameter declaration.
+
+**Chosen:** an ordinary struct parameter may contain unfolded variant fields,
+provided it contains no ordinary-child field. Direct matching storage or
+contextual `zeroed` may supply the argument. The complete variant field must be
+definitely assigned: a declaration-only local cannot cross the call until a
+case has been selected. Struct-literal argument construction with a variant
+label remains a separate slice.
+
+The aggregate parameter slot retains the variant tag type, source-order cases
+and compact payload-field runs. D94 transports one storage address and copies
+the complete target-derived padded struct extent before the body; tag matching
+and payload aliases then operate on the independent callee slot exactly as on
+any local aggregate.
+
+**Why opaque transport is sufficient:** case classification affects storage
+layout but not this internal convention's one-position carrier. Reclassifying
+or flattening payload leaves at the call would duplicate the selected target's
+layout in neutral IR. Keeping the existing shape and copying its extent avoids
+that second authority.
+
+**Pinned by** the checker, flow, lowering, verifier and backend public seams;
+`negative/variant-struct-argument-unassigned`; the generated token and IR
+records; and `runtime/variant-struct-arguments` on Linux x86-64.

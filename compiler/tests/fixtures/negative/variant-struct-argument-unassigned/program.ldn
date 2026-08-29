@@ -1,0 +1,14 @@
+choice: type = struct
+    kind: variant
+        leaf |
+        number: (value: u8)
+    end kind
+end choice
+
+consume: (value: choice) -> none =
+end consume
+
+bad: () -> none =
+    mut state: choice
+    consume(state)
+end bad

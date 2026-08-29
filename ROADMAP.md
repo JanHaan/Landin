@@ -1906,6 +1906,11 @@ The fifteenth increment extends that literal temporary to fixed-array fields.
 Their existing literal, repetition, zero, storage-copy and fill forms retain
 compact field-qualified IR and source-order evaluation.
 
+The sixteenth increment admits variant-bearing struct storage as a parameter.
+The shaped callee slot retains tag, case and payload runs, while definite
+assignment requires a complete selected variant before a local crosses the
+call. Variant literal arguments remain deferred.
+
 Further aggregate arguments and returns remain in this item; R4.40 later supplies
 complete C ABI classification rather than owning this internal convention.
 Aggregate values include the other nonzero nested-ordinary forms R2.20

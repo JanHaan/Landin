@@ -18682,53 +18682,6 @@ file negative/usize-is-not-u64/program.ldn tokens 25
   48 49 b
   50 53 end
   54 55 f
-file negative/variant-abi-not-enabled/program.ldn tokens 46
-  0 6 choice
-  6 7 :
-  8 12 type
-  13 14 =
-  15 21 struct
-  26 30 kind
-  30 31 :
-  32 39 variant
-  48 52 leaf
-  53 54 |
-  63 69 number
-  69 70 :
-  71 72 (
-  72 77 value
-  77 78 :
-  79 81 u8
-  81 82 )
-  87 90 end
-  91 95 kind
-  96 99 end
-  100 106 choice
-  108 111 use
-  111 112 :
-  113 114 (
-  114 119 state
-  119 120 :
-  121 127 choice
-  127 128 )
-  129 131 ->
-  132 136 none
-  137 138 =
-  139 142 end
-  143 146 use
-  148 152 make
-  152 153 :
-  154 155 (
-  155 156 )
-  157 159 ->
-  160 161 (
-  161 167 result
-  167 168 :
-  169 175 choice
-  175 176 )
-  177 178 =
-  179 182 end
-  183 187 make
 file negative/variant-case-does-not-belong/program.ldn tokens 70
   0 4 left
   4 5 :
@@ -20538,6 +20491,41 @@ file negative/variant-payload-struct-field-not-enabled/program.ldn tokens 29
   124 128 kind
   129 132 end
   133 138 outer
+file negative/variant-return-not-enabled/program.ldn tokens 34
+  0 6 choice
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 30 kind
+  30 31 :
+  32 39 variant
+  48 52 leaf
+  53 54 |
+  63 69 number
+  69 70 :
+  71 72 (
+  72 77 value
+  77 78 :
+  79 81 u8
+  81 82 )
+  87 90 end
+  91 95 kind
+  96 99 end
+  100 106 choice
+  108 112 make
+  112 113 :
+  114 115 (
+  115 116 )
+  117 119 ->
+  120 121 (
+  121 127 result
+  127 128 :
+  129 135 choice
+  135 136 )
+  137 138 =
+  139 142 end
+  143 147 make
 file negative/variant-runtime-array-payload-shape-disagrees/program.ldn tokens 105
   0 6 packet
   6 7 :
@@ -20700,6 +20688,57 @@ file negative/variant-runtime-array-payload-source-unassigned/program.ldn tokens
   191 192 )
   193 196 end
   197 200 bad
+file negative/variant-struct-argument-unassigned/program.ldn tokens 50
+  0 6 choice
+  6 7 :
+  8 12 type
+  13 14 =
+  15 21 struct
+  26 30 kind
+  30 31 :
+  32 39 variant
+  48 52 leaf
+  53 54 |
+  63 69 number
+  69 70 :
+  71 72 (
+  72 77 value
+  77 78 :
+  79 81 u8
+  81 82 )
+  87 90 end
+  91 95 kind
+  96 99 end
+  100 106 choice
+  108 115 consume
+  115 116 :
+  117 118 (
+  118 123 value
+  123 124 :
+  125 131 choice
+  131 132 )
+  133 135 ->
+  136 140 none
+  141 142 =
+  143 146 end
+  147 154 consume
+  156 159 bad
+  159 160 :
+  161 162 (
+  162 163 )
+  164 166 ->
+  167 171 none
+  172 173 =
+  178 181 mut
+  182 187 state
+  187 188 :
+  189 195 choice
+  200 207 consume
+  207 208 (
+  208 213 state
+  213 214 )
+  215 218 end
+  219 222 bad
 file negative/variant-whole-copy-source-unassigned/program.ldn tokens 48
   0 6 choice
   6 7 :
