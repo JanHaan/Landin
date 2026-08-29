@@ -1,7 +1,18 @@
 package body Landin.Checking is
 
+   package body Nominal_Identities is
+      function None return Id is (0);
+
+
+      function From_Position (Position : Positive) return Id
+        is (Id (Position));
+
+      function Position (Of_Id : Id) return Natural is (Natural (Of_Id));
+   end Nominal_Identities;
+
    use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
+   use type Landin.Syntax.Node_Kind;
    use type Landin.Targets.Byte_Count;
 
    ------------------------------------------------------------------
@@ -49,7 +60,7 @@ package body Landin.Checking is
 
             for Unused in 1 .. Held loop
                Into.Node_Types.Append (Landin.Types.Undecided);
-               Into.Node_Bodies.Append (Landin.Provenance.No_Declaration);
+               Into.Node_Nominals.Append (No_Nominal_Type);
                Into.Node_Atom_Sets.Append (No_Atom_Set);
                Into.Node_Signatures.Append (No_Signature);
                Into.Node_Result_Shapes.Append (No_Signature);
@@ -61,11 +72,52 @@ package body Landin.Checking is
 
       for Unused in 1 .. Landin.Resolution.Declaration_Count (Meanings) loop
          Into.Declarations.Append (Settlement'(others => <>));
-         Into.Layouts.Append (Aggregate_Layout'(others => <>));
+         Into.Declaration_Nominals.Append (No_Nominal_Type);
+         Into.Empty_Nominals.Append (No_Nominal_Type);
          Into.Shapes.Append (Array_Shape'(others => <>));
          Into.Declaration_Atom_Sets.Append (No_Atom_Set);
          Into.Declaration_Signatures.Append (No_Signature);
          Into.Declaration_Result_Shapes.Append (No_Signature);
+      end loop;
+
+      --  Allocate every enabled empty-actual nominal instance in source
+      --  declaration order before checking can follow a forward reference.
+      --  Thus identity is target-independent and independent of traversal.
+      for Id in Landin.Provenance.Declaration_Id'(1)
+                .. Landin.Provenance.Declaration_Id
+                     (Landin.Resolution.Declaration_Count (Meanings))
+      loop
+         declare
+            Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+              Landin.Syntax.Forest.Tree_Of
+                (Trees, Landin.Resolution.Source_Of (Meanings, Id));
+            Node : constant Landin.Syntax.Node_Id :=
+              Landin.Resolution.Node_Of (Meanings, Id);
+            Written : constant Landin.Syntax.Node_Id :=
+              (if Landin.Syntax.Kind (Of_Tree.all, Node)
+                    = Landin.Syntax.Type_Declaration
+               then Landin.Syntax.Declared_Type (Of_Tree.all, Node)
+               else Landin.Syntax.No_Node);
+         begin
+            if Landin.Syntax.Kind (Of_Tree.all, Node)
+                 = Landin.Syntax.Type_Declaration
+              and then Landin.Syntax.Type_Formal_Count (Of_Tree.all, Node) = 0
+              and then Written /= Landin.Syntax.No_Node
+              and then Landin.Syntax.Kind (Of_Tree.all, Written)
+                           = Landin.Syntax.Struct_Body
+            then
+               Into.Nominal_Templates.Append (Id);
+               Into.Layouts.Append (Aggregate_Layout'(others => <>));
+               declare
+                  Made : constant Nominal_Type_Id :=
+                    Nominal_Identities.From_Position
+                      (Into.Nominal_Templates.Last_Index);
+               begin
+                  Into.Empty_Nominals (Positive (Id)) := Made;
+                  Into.Declaration_Nominals (Positive (Id)) := Made;
+               end;
+            end if;
+         end;
       end loop;
 
       --  Interned once, so a Type_Name node costs eleven integer
@@ -114,57 +166,76 @@ package body Landin.Checking is
       Node     : Landin.Syntax.Node_Id) return Landin.Types.Type_Kind
      is (Of_Table.Node_Types (Slot (Of_Table, Of_Tree, Node)));
 
-   function Body_Of
+   function Nominal_Type_Count (Of_Table : Table) return Natural
+     is (Natural (Of_Table.Nominal_Templates.Length));
+
+   function Nth_Nominal_Type
+     (Of_Table : Table; Position : Positive) return Nominal_Type_Id
+   is
+      pragma Unreferenced (Of_Table);
+   begin
+      return Nominal_Identities.From_Position (Position);
+   end Nth_Nominal_Type;
+
+   function Holds (Of_Table : Table; Id : Nominal_Type_Id) return Boolean
+     is (Of_Table.Ready
+         and then Id /= No_Nominal_Type
+         and then Nominal_Identities.Position (Id)
+                    <= Nominal_Type_Count (Of_Table));
+
+   function Template_Of
+     (Of_Table : Table; Id : Nominal_Type_Id) return Declaration_Id
+     is (Of_Table.Nominal_Templates
+           (Positive (Nominal_Identities.Position (Id))));
+
+   function Empty_Nominal_Instance
+     (Of_Table : Table; Template : Declaration_Id) return Nominal_Type_Id
+     is (if Template = No_Declaration then No_Nominal_Type
+         else Of_Table.Empty_Nominals (Positive (Template)));
+
+   function Nominal_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id)
-     return Landin.Provenance.Declaration_Id
-     is (Of_Table.Node_Bodies (Slot (Of_Table, Of_Tree, Node)));
+      Node     : Landin.Syntax.Node_Id) return Nominal_Type_Id
+     is (Of_Table.Node_Nominals (Slot (Of_Table, Of_Tree, Node)));
 
-   function Body_Of
-     (Of_Table : Table; Id : Landin.Provenance.Declaration_Id)
-     return Landin.Provenance.Declaration_Id
-     is (if Id /= Landin.Provenance.No_Declaration
-           and then Natural (Id) <= Natural (Of_Table.Bodies.Length)
-         then Of_Table.Bodies (Natural (Id))
-         else Landin.Provenance.No_Declaration);
+   function Nominal_Of
+     (Of_Table : Table; Id : Declaration_Id) return Nominal_Type_Id
+     is (if Id = No_Declaration then No_Nominal_Type
+         else Of_Table.Declaration_Nominals (Positive (Id)));
 
-   procedure Note_Body
+   procedure Note_Nominal
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
-      Wrote   : Landin.Provenance.Declaration_Id)
+      Nominal : Nominal_Type_Id)
    is
       Where : constant Positive := Slot (Into, Of_Tree, Node);
    begin
-      if Into.Node_Bodies (Where) /= Landin.Provenance.No_Declaration
-        and then Into.Node_Bodies (Where) /= Wrote
+      if Into.Node_Nominals (Where) /= No_Nominal_Type
+        and then Into.Node_Nominals (Where) /= Nominal
       then
          raise Landin.Compiler_Defect with
-           "one node was assigned two aggregate type identities";
+           "one node was assigned two nominal type identities";
       end if;
 
-      Into.Node_Bodies (Where) := Wrote;
-   end Note_Body;
+      Into.Node_Nominals (Where) := Nominal;
+   end Note_Nominal;
 
-   procedure Note_Body
-     (Into  : in out Table;
-      Id    : Landin.Provenance.Declaration_Id;
-      Wrote : Landin.Provenance.Declaration_Id) is
+   procedure Note_Nominal
+     (Into   : in out Table;
+      Id     : Declaration_Id;
+      Nominal : Nominal_Type_Id) is
    begin
-      while Natural (Into.Bodies.Length) < Natural (Id) loop
-         Into.Bodies.Append (Landin.Provenance.No_Declaration);
-      end loop;
-
-      if Into.Bodies (Natural (Id)) /= Landin.Provenance.No_Declaration
-        and then Into.Bodies (Natural (Id)) /= Wrote
+      if Into.Declaration_Nominals (Positive (Id)) /= No_Nominal_Type
+        and then Into.Declaration_Nominals (Positive (Id)) /= Nominal
       then
          raise Landin.Compiler_Defect with
-           "one declaration was assigned two aggregate type identities";
+           "one declaration was assigned two nominal type identities";
       end if;
 
-      Into.Bodies (Natural (Id)) := Wrote;
-   end Note_Body;
+      Into.Declaration_Nominals (Positive (Id)) := Nominal;
+   end Note_Nominal;
 
    ------------------------------------------------------------------
    --  Atom sets
@@ -468,11 +539,11 @@ package body Landin.Checking is
               and then Holds (Of_Table, B.Atoms)
               and then Atom_Sets_Agree (Of_Table, A.Atoms, B.Atoms);
          when Landin.Types.Aggregate =>
-            return A.Aggregate_Body = B.Aggregate_Body;
+            return A.Nominal = B.Nominal;
          when Landin.Types.Fixed_Array =>
             return A.Length = B.Length
               and then A.Element = B.Element
-              and then A.Aggregate_Body = B.Aggregate_Body;
+              and then A.Nominal = B.Nominal;
          when Landin.Types.Function_Value =>
             return Holds (Of_Table, A.Signature)
               and then Holds (Of_Table, B.Signature)
@@ -600,23 +671,19 @@ package body Landin.Checking is
    --  How an aggregate is laid out
    ------------------------------------------------------------------
 
-   function Has_Layout (Of_Table : Table; Id : Declaration_Id)
+   function Has_Layout (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
-   is
-      From : constant Declaration_Id := Body_Of (Of_Table, Id);
-   begin
-      return From /= No_Declaration
-        and then Of_Table.Layouts (Natural (From)).Ready;
-   end Has_Layout;
+     is (Id /= No_Nominal_Type
+         and then Of_Table.Layouts (Nominal_Identities.Position (Id)).Ready);
 
-   function Layout_Field_Count (Of_Table : Table; Id : Declaration_Id)
+   function Layout_Field_Count (Of_Table : Table; Id : Nominal_Type_Id)
      return Natural
      is (Of_Table.Layouts
-           (Natural (Body_Of (Of_Table, Id))).Count);
+           (Nominal_Identities.Position (Id)).Count);
 
    procedure Lay_Out
      (Into  : in out Table;
-      Id    : Declaration_Id;
+      Id    : Nominal_Type_Id;
       Fields : Field_Shape_Array;
       Facts : Landin.Targets.Target_Facts;
       Fits  : out Boolean;
@@ -643,29 +710,29 @@ package body Landin.Checking is
             Size := Landin.Targets.Byte_Count (Landin.Targets.Bytes (Held));
             Alignment := Landin.Targets.Alignment_Of (Facts, Held);
          elsif Field.Kind = Fixed_Array_Field then
-            if Field.Aggregate_Body /= No_Declaration then
-               if not Contains (Into, Field.Aggregate_Body)
-                 or else not Has_Layout (Into, Field.Aggregate_Body)
+            if Field.Nominal /= No_Nominal_Type then
+               if not Holds (Into, Field.Nominal)
+                 or else not Has_Layout (Into, Field.Nominal)
                then
                   raise Landin.Compiler_Defect with
                     "an aggregate array element has no laid-out body";
                end if;
                Array_Extent
-                 (Into, Field.Length, Field.Aggregate_Body, Size, Alignment);
+                 (Into, Field.Length, Field.Nominal, Size, Alignment);
             else
                Array_Extent
                  (Field.Length, Field.Element, Facts, Size, Alignment);
             end if;
          elsif Field.Kind = Aggregate_Field then
-            if Field.Aggregate_Body = No_Declaration
-              or else not Contains (Into, Field.Aggregate_Body)
-              or else not Has_Layout (Into, Field.Aggregate_Body)
+            if Field.Nominal = No_Nominal_Type
+              or else not Holds (Into, Field.Nominal)
+              or else not Has_Layout (Into, Field.Nominal)
             then
                raise Landin.Compiler_Defect with
                  "an aggregate field has no laid-out body";
             end if;
-            Size := Layout_Size (Into, Field.Aggregate_Body);
-            Alignment := Layout_Alignment (Into, Field.Aggregate_Body);
+            Size := Layout_Size (Into, Field.Nominal);
+            Alignment := Layout_Alignment (Into, Field.Nominal);
          else
             if Field.Cases = 0
               or else Field.Payloads_First = 0
@@ -836,11 +903,11 @@ package body Landin.Checking is
       end;
 
       Built.Ready := True;
-      Into.Layouts (Natural (Id)) := Built;
+      Into.Layouts (Nominal_Identities.Position (Id)) := Built;
       Fits := True;
    end Lay_Out;
 
-   function Has_Variant_Part (Of_Table : Table; Id : Declaration_Id)
+   function Has_Variant_Part (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
    is
    begin
@@ -852,7 +919,7 @@ package body Landin.Checking is
       return False;
    end Has_Variant_Part;
 
-   function Has_Aggregate_Field (Of_Table : Table; Id : Declaration_Id)
+   function Has_Aggregate_Field (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
    is
    begin
@@ -865,18 +932,18 @@ package body Landin.Checking is
    end Has_Aggregate_Field;
 
    function Field_Shape_Of
-     (Of_Table : Table; Id : Declaration_Id; Field : Positive)
+     (Of_Table : Table; Id : Nominal_Type_Id; Field : Positive)
       return Field_Shape
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+        Of_Table.Layouts (Nominal_Identities.Position (Id));
    begin
       return Of_Table.Field_Shapes (Layout.Shape_First + Field - 1);
    end Field_Shape_Of;
 
    function Variant_Case_Field_Count
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive;
       Which    : Positive) return Natural
    is
@@ -889,7 +956,7 @@ package body Landin.Checking is
 
    function Nth_Variant_Case_Field
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive;
       Which    : Positive;
       Payload_Field : Positive) return Field_Shape
@@ -904,22 +971,22 @@ package body Landin.Checking is
 
    function Field_Offset
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Landin.Targets.Byte_Count
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+        Of_Table.Layouts (Nominal_Identities.Position (Id));
    begin
       return Of_Table.Field_Offsets (Layout.First + Field - 1);
    end Field_Offset;
 
    function Field_Type
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Landin.Types.Scalar_Name
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+        Of_Table.Layouts (Nominal_Identities.Position (Id));
    begin
       return Of_Table.Field_Shapes
         (Layout.Shape_First + Field - 1).Element;
@@ -927,11 +994,11 @@ package body Landin.Checking is
 
    function Field_Kind_Of
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Field_Kind
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+        Of_Table.Layouts (Nominal_Identities.Position (Id));
    begin
       return Of_Table.Field_Shapes
         (Layout.Shape_First + Field - 1).Kind;
@@ -939,11 +1006,11 @@ package body Landin.Checking is
 
    function Field_Array_Length
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Element_Count
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+        Of_Table.Layouts (Nominal_Identities.Position (Id));
    begin
       return Of_Table.Field_Shapes
         (Layout.Shape_First + Field - 1).Length;
@@ -951,33 +1018,33 @@ package body Landin.Checking is
 
    function Field_Array_Element
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Landin.Types.Scalar_Name
    is
       Layout : Aggregate_Layout renames
-        Of_Table.Layouts (Natural (Body_Of (Of_Table, Id)));
+        Of_Table.Layouts (Nominal_Identities.Position (Id));
    begin
       return Of_Table.Field_Shapes
         (Layout.Shape_First + Field - 1).Element;
    end Field_Array_Element;
 
-   function Layout_Extent (Of_Table : Table; Id : Declaration_Id)
+   function Layout_Extent (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Count
      is (Landin.Targets.Extent_Of
            (Of_Table.Layouts
-              (Natural (Body_Of (Of_Table, Id))).Placed));
+              (Nominal_Identities.Position (Id)).Placed));
 
-   function Layout_Alignment (Of_Table : Table; Id : Declaration_Id)
+   function Layout_Alignment (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Alignment
      is (Landin.Targets.Alignment_Of
            (Of_Table.Layouts
-              (Natural (Body_Of (Of_Table, Id))).Placed));
+              (Nominal_Identities.Position (Id)).Placed));
 
-   function Layout_Size (Of_Table : Table; Id : Declaration_Id)
+   function Layout_Size (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Count
      is (Landin.Targets.Size_Of
            (Of_Table.Layouts
-              (Natural (Body_Of (Of_Table, Id))).Placed));
+              (Nominal_Identities.Position (Id)).Placed));
 
    function Field_Index
      (Of_Table : Table;
@@ -1017,20 +1084,21 @@ package body Landin.Checking is
         Array_Shape'(Length => Length, Element => Element, others => <>);
    end Note_Array;
 
-   function Array_Element_Body
+   function Array_Element_Nominal
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id) return Declaration_Id
-     is (Of_Table.Node_Shapes (Slot (Of_Table, Of_Tree, Node)).Element_Body);
+      Node     : Landin.Syntax.Node_Id) return Nominal_Type_Id
+     is (Of_Table.Node_Shapes
+           (Slot (Of_Table, Of_Tree, Node)).Element_Nominal);
 
-   procedure Note_Array_Element_Body
+   procedure Note_Array_Element_Nominal
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
-      Wrote   : Declaration_Id) is
+      Nominal : Nominal_Type_Id) is
    begin
-      Into.Node_Shapes (Slot (Into, Of_Tree, Node)).Element_Body := Wrote;
-   end Note_Array_Element_Body;
+      Into.Node_Shapes (Slot (Into, Of_Tree, Node)).Element_Nominal := Nominal;
+   end Note_Array_Element_Nominal;
 
    function Array_Length
      (Of_Table : Table; Id : Declaration_Id) return Element_Count
@@ -1051,17 +1119,17 @@ package body Landin.Checking is
         Array_Shape'(Length => Length, Element => Element, others => <>);
    end Note_Array;
 
-   function Array_Element_Body
-     (Of_Table : Table; Id : Declaration_Id) return Declaration_Id
-     is (Of_Table.Shapes (Natural (Id)).Element_Body);
+   function Array_Element_Nominal
+     (Of_Table : Table; Id : Declaration_Id) return Nominal_Type_Id
+     is (Of_Table.Shapes (Natural (Id)).Element_Nominal);
 
-   procedure Note_Array_Element_Body
+   procedure Note_Array_Element_Nominal
      (Into  : in out Table;
-      Id    : Declaration_Id;
-      Wrote : Declaration_Id) is
+      Id      : Declaration_Id;
+      Nominal : Nominal_Type_Id) is
    begin
-      Into.Shapes (Natural (Id)).Element_Body := Wrote;
-   end Note_Array_Element_Body;
+      Into.Shapes (Natural (Id)).Element_Nominal := Nominal;
+   end Note_Array_Element_Nominal;
 
    procedure Array_Extent
      (Length    : Element_Count;
@@ -1084,7 +1152,7 @@ package body Landin.Checking is
    procedure Array_Extent
      (Of_Table  : Table;
       Length    : Element_Count;
-      Element   : Declaration_Id;
+      Element   : Nominal_Type_Id;
       Size      : out Landin.Targets.Byte_Count;
       Alignment : out Landin.Targets.Byte_Alignment)
    is

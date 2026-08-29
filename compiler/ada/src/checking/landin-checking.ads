@@ -78,6 +78,28 @@ package Landin.Checking is
    No_Declaration : constant Declaration_Id :=
      Landin.Provenance.No_Declaration;
 
+   --  A nominal type is a checker-owned instance identity, distinct from
+   --  the source declaration that supplies its template and owns storage.
+   --  Callers may compare identities but cannot construct one.  The enabled
+   --  nonparameterized struct is the canonical empty-actual instance of its
+   --  template declaration; later R2.40 increments extend the same table
+   --  with normalized actual tuples.
+   package Nominal_Identities is
+      type Id is private;
+
+      function None return Id;
+      function From_Position (Position : Positive) return Id;
+      function Position (Of_Id : Id) return Natural;
+   private
+      type Id is range 0 .. Integer'Last;
+   end Nominal_Identities;
+
+   subtype Nominal_Type_Id is Nominal_Identities.Id;
+   use type Nominal_Type_Id;
+
+   function No_Nominal_Type return Nominal_Type_Id
+     renames Nominal_Identities.None;
+
    --  Where a declaration's type has got to.  Untouched and Settled are
    --  the two states a caller wants; Underway exists because of the module
    --  scope and nothing else, and it is public because the stage that
@@ -154,46 +176,64 @@ package Landin.Checking is
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
 
-   --  Which declaration wrote the aggregate a node or a declaration has
-   --  the type of.  [0710]: two are one type when this answers the same
-   --  declaration for both, and never otherwise.
-   function Body_Of
+   function Nominal_Type_Count (Of_Table : Table) return Natural
+     with Pre => Is_Prepared (Of_Table);
+
+   function Nth_Nominal_Type
+     (Of_Table : Table; Position : Positive) return Nominal_Type_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Position <= Nominal_Type_Count (Of_Table);
+
+   function Holds (Of_Table : Table; Id : Nominal_Type_Id) return Boolean;
+
+   --  The source declaration that supplied an instance's template.  It is
+   --  provenance and storage ownership, not the nominal identity itself.
+   function Template_Of
+     (Of_Table : Table; Id : Nominal_Type_Id) return Declaration_Id
+     with Pre => Holds (Of_Table, Id);
+
+   --  The canonical empty-actual instance for a nonparameterized struct
+   --  template, or No_Nominal_Type for every other declaration.
+   function Empty_Nominal_Instance
+     (Of_Table : Table; Template : Declaration_Id) return Nominal_Type_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Natural (Template) <= Declaration_Limit (Of_Table);
+
+   --  Which nominal instance a node or declaration has the type of.
+   --  [0710]: two structs are one type exactly when these answers agree.
+   function Nominal_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id)
-     return Landin.Provenance.Declaration_Id
+      Node     : Landin.Syntax.Node_Id) return Nominal_Type_Id
      with Pre => Is_Prepared (Of_Table)
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
 
-   function Body_Of
-     (Of_Table : Table; Id : Landin.Provenance.Declaration_Id)
-     return Landin.Provenance.Declaration_Id
+   function Nominal_Of
+     (Of_Table : Table; Id : Declaration_Id) return Nominal_Type_Id
      with Pre => Is_Prepared (Of_Table)
                  and then Natural (Id) <= Declaration_Limit (Of_Table);
 
-   procedure Note_Body
+   procedure Note_Nominal
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
-      Wrote   : Landin.Provenance.Declaration_Id)
+      Nominal : Nominal_Type_Id)
      with Pre  => Is_Prepared (Into)
                   and then Covers (Into, Of_Tree)
                   and then Landin.Syntax.Contains (Of_Tree, Node)
-                  and then Wrote /= No_Declaration
-                  and then Natural (Wrote) <= Declaration_Limit (Into),
-          Post => Body_Of (Into, Of_Tree, Node) = Wrote;
+                  and then Holds (Into, Nominal),
+          Post => Nominal_Of (Into, Of_Tree, Node) = Nominal;
 
-   procedure Note_Body
-     (Into  : in out Table;
-      Id    : Landin.Provenance.Declaration_Id;
-      Wrote : Landin.Provenance.Declaration_Id)
+   procedure Note_Nominal
+     (Into   : in out Table;
+      Id     : Declaration_Id;
+      Nominal : Nominal_Type_Id)
      with Pre  => Is_Prepared (Into)
                   and then Id /= No_Declaration
-                  and then Wrote /= No_Declaration
                   and then Natural (Id) <= Declaration_Limit (Into)
-                  and then Natural (Wrote) <= Declaration_Limit (Into),
-          Post => Body_Of (Into, Id) = Wrote;
+                  and then Holds (Into, Nominal),
+          Post => Nominal_Of (Into, Id) = Nominal;
 
    ------------------------------------------------------------------
    --  How an aggregate is laid out
@@ -316,7 +356,7 @@ package Landin.Checking is
 
    type Signature_Part is record
       Kind    : Landin.Types.Type_Kind := Landin.Types.No_Value;
-      Aggregate_Body : Declaration_Id  := No_Declaration;
+      Nominal : Nominal_Type_Id := No_Nominal_Type;
       Length  : Element_Count          := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Signature : Signature_Id         := No_Signature;
@@ -471,7 +511,7 @@ package Landin.Checking is
    --  A call with two or more named returns has an anonymous structural
    --  aggregate shape.  This side table carries the source signature whose
    --  result run names and types are that shape; ordinary nominal aggregates
-   --  continue to use Body_Of.
+   --  continue to use Nominal_Of.
    function Result_Shape_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
@@ -532,9 +572,9 @@ package Landin.Checking is
       Payloads_First : Natural           := 0;
       --  The child's body for an Aggregate_Field, and since D121 the
       --  element's body for a Fixed_Array_Field whose elements are an
-      --  ordinary struct.  Both answer the same question -- which
-      --  declaration wrote the struct this field is made of.
-      Aggregate_Body : Declaration_Id    := No_Declaration;
+      --  ordinary struct.  Both answer the same question -- which nominal
+      --  instance this field is made of.
+      Nominal : Nominal_Type_Id   := No_Nominal_Type;
       --  A function-valued field is one `usize` carrier whose complete
       --  recursive type remains this target-neutral signature.  Zero means
       --  an ordinary scalar field.
@@ -557,62 +597,60 @@ package Landin.Checking is
    No_Field_Shapes : constant Field_Shape_Array (1 .. 0) := [];
    No_Case_Runs    : constant Case_Run_Array (1 .. 0) := [];
 
-   --  Every query accepts either the body declaration or any alias of it;
-   --  Body_Of is the canonical key, just as it is for nominal equality.
-   function Has_Layout (Of_Table : Table; Id : Declaration_Id)
+   --  Layout is target-dependent data keyed by target-independent nominal
+   --  identity.  Source declarations and aliases reach it through Nominal_Of.
+   function Has_Layout (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
-     with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id);
+     with Pre => Is_Prepared (Of_Table);
 
-   function Layout_Field_Count (Of_Table : Table; Id : Declaration_Id)
+   function Layout_Field_Count (Of_Table : Table; Id : Nominal_Type_Id)
      return Natural
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
    procedure Lay_Out
      (Into  : in out Table;
-      Id    : Declaration_Id;
+      Id    : Nominal_Type_Id;
       Fields : Field_Shape_Array;
       Facts : Landin.Targets.Target_Facts;
       Fits  : out Boolean;
       Cases : Case_Run_Array := No_Case_Runs;
       Payloads : Field_Shape_Array := No_Field_Shapes)
      with Pre  => Is_Prepared (Into)
-                  and then Contains (Into, Id)
-                  and then Body_Of (Into, Id) = Id
+                  and then Holds (Into, Id)
                   and then not Has_Layout (Into, Id),
           Post => Has_Layout (Into, Id) = Fits
                   and then (if Fits then Layout_Field_Count (Into, Id)
                                          = Fields'Length);
 
-   function Has_Variant_Part (Of_Table : Table; Id : Declaration_Id)
+   function Has_Variant_Part (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
-   function Has_Aggregate_Field (Of_Table : Table; Id : Declaration_Id)
+   function Has_Aggregate_Field (Of_Table : Table; Id : Nominal_Type_Id)
      return Boolean
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
    function Field_Shape_Of
-     (Of_Table : Table; Id : Declaration_Id; Field : Positive)
+     (Of_Table : Table; Id : Nominal_Type_Id; Field : Positive)
       return Field_Shape
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id);
 
    function Variant_Case_Field_Count
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive;
       Which    : Positive) return Natural
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id)
                  and then Field_Shape_Of (Of_Table, Id, Field).Kind
@@ -622,12 +660,12 @@ package Landin.Checking is
 
    function Nth_Variant_Case_Field
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive;
       Which    : Positive;
       Payload_Field : Positive) return Field_Shape
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id)
                  and then Field_Shape_Of (Of_Table, Id, Field).Kind
@@ -639,19 +677,19 @@ package Landin.Checking is
 
    function Field_Offset
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Landin.Targets.Byte_Count
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id);
 
    function Field_Kind_Of
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Field_Kind
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id);
 
@@ -660,10 +698,10 @@ package Landin.Checking is
    --  enabled runtime aggregate family.
    function Field_Type
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Landin.Types.Scalar_Name
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id)
                  and then Field_Kind_Of (Of_Table, Id, Field)
@@ -671,10 +709,10 @@ package Landin.Checking is
 
    function Field_Array_Length
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Element_Count
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id)
                  and then Field_Kind_Of (Of_Table, Id, Field)
@@ -682,31 +720,31 @@ package Landin.Checking is
 
    function Field_Array_Element
      (Of_Table : Table;
-      Id       : Declaration_Id;
+      Id       : Nominal_Type_Id;
       Field    : Positive) return Landin.Types.Scalar_Name
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id)
                  and then Field <= Layout_Field_Count (Of_Table, Id)
                  and then Field_Kind_Of (Of_Table, Id, Field)
                             = Fixed_Array_Field;
 
-   function Layout_Extent (Of_Table : Table; Id : Declaration_Id)
+   function Layout_Extent (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Count
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
-   function Layout_Alignment (Of_Table : Table; Id : Declaration_Id)
+   function Layout_Alignment (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Alignment
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
-   function Layout_Size (Of_Table : Table; Id : Declaration_Id)
+   function Layout_Size (Of_Table : Table; Id : Nominal_Type_Id)
      return Landin.Targets.Byte_Count
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Id)
+                 and then Holds (Of_Table, Id)
                  and then Has_Layout (Of_Table, Id);
 
    --  Which field of its target a selection [1820] names, by [0750]'s
@@ -757,39 +795,39 @@ package Landin.Checking is
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
 
-   --  D121: which declaration wrote the ordinary struct an array's
-   --  elements are, or No_Declaration when the element is one of [1790]'s
+   --  D121: which nominal ordinary struct instance an array's elements
+   --  have, or No_Nominal_Type when the element is one of [1790]'s
    --  scalars.  It sits beside the length and the scalar element for the
    --  reason the aggregate's body does: a Type_Kind says the category and
    --  never which one.
-   function Array_Element_Body
+   function Array_Element_Nominal
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
-      Node     : Landin.Syntax.Node_Id) return Declaration_Id
+      Node     : Landin.Syntax.Node_Id) return Nominal_Type_Id
      with Pre => Is_Prepared (Of_Table)
                  and then Covers (Of_Table, Of_Tree)
                  and then Landin.Syntax.Contains (Of_Tree, Node);
 
-   function Array_Element_Body
-     (Of_Table : Table; Id : Declaration_Id) return Declaration_Id
+   function Array_Element_Nominal
+     (Of_Table : Table; Id : Declaration_Id) return Nominal_Type_Id
      with Pre => Is_Prepared (Of_Table) and then Contains (Of_Table, Id);
 
-   procedure Note_Array_Element_Body
+   procedure Note_Array_Element_Nominal
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
-      Wrote   : Declaration_Id)
+      Nominal : Nominal_Type_Id)
      with Pre  => Is_Prepared (Into)
                   and then Covers (Into, Of_Tree)
                   and then Landin.Syntax.Contains (Of_Tree, Node),
-          Post => Array_Element_Body (Into, Of_Tree, Node) = Wrote;
+          Post => Array_Element_Nominal (Into, Of_Tree, Node) = Nominal;
 
-   procedure Note_Array_Element_Body
+   procedure Note_Array_Element_Nominal
      (Into  : in out Table;
-      Id    : Declaration_Id;
-      Wrote : Declaration_Id)
+      Id      : Declaration_Id;
+      Nominal : Nominal_Type_Id)
      with Pre  => Is_Prepared (Into) and then Contains (Into, Id),
-          Post => Array_Element_Body (Into, Id) = Wrote;
+          Post => Array_Element_Nominal (Into, Id) = Nominal;
 
    procedure Note_Array
      (Into    : in out Table;
@@ -839,11 +877,11 @@ package Landin.Checking is
    procedure Array_Extent
      (Of_Table  : Table;
       Length    : Element_Count;
-      Element   : Declaration_Id;
+      Element   : Nominal_Type_Id;
       Size      : out Landin.Targets.Byte_Count;
       Alignment : out Landin.Targets.Byte_Alignment)
      with Pre => Is_Prepared (Of_Table)
-                 and then Contains (Of_Table, Element)
+                 and then Holds (Of_Table, Element)
                  and then Has_Layout (Of_Table, Element);
 
    --  Says what a node synthesised.  Once: a second Note on one node is a
@@ -966,9 +1004,12 @@ private
    type Scalar_Identities is
      array (Landin.Types.Scalar_Name) of Landin.Source.Names.Name_Id;
 
-   package Body_Vectors is new Ada.Containers.Vectors
+   package Nominal_Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Nominal_Type_Id);
+
+   package Nominal_Template_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
-      Element_Type => Landin.Provenance.Declaration_Id,
+      Element_Type => Declaration_Id,
       "="          => Landin.Provenance."=");
 
    package Atom_Set_Id_Vectors is new Ada.Containers.Vectors
@@ -1006,9 +1047,9 @@ private
    type Array_Shape is record
       Length  : Element_Count            := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
-      --  D121: which declaration wrote the ordinary struct the elements
-      --  are, when they are not one of [1790]'s scalars.
-      Element_Body : Declaration_Id      := No_Declaration;
+      --  D121: which nominal ordinary struct instance the elements have,
+      --  when they are not one of [1790]'s scalars.
+      Element_Nominal : Nominal_Type_Id := No_Nominal_Type;
    end record;
 
    package Shape_Vectors is new Ada.Containers.Vectors
@@ -1051,12 +1092,9 @@ private
    type Table is tagged limited record
       Ready        : Boolean := False;
       Node_Types   : Type_Vectors.Vector;
-      --  Which declaration an Aggregate node's type came from.  Empty for
-      --  every other node, and the reason it is a side table rather than
-      --  part of Landin.Types: what a type *is* has no room for which one
-      --  it is, and [0710] makes two aggregates one type exactly when
-      --  they came from one declaration.
-      Node_Bodies  : Body_Vectors.Vector;
+      --  Which checker-owned nominal instance an Aggregate node has.  Empty
+      --  for every other node; source declarations remain separate metadata.
+      Node_Nominals : Nominal_Id_Vectors.Vector;
       Node_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Node_Signatures : Signature_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
@@ -1066,7 +1104,9 @@ private
       Shapes       : Shape_Vectors.Vector;
       Runs         : Run_Vectors.Vector;
       Declarations : Settlement_Vectors.Vector;
-      Bodies       : Body_Vectors.Vector;
+      Declaration_Nominals : Nominal_Id_Vectors.Vector;
+      Empty_Nominals : Nominal_Id_Vectors.Vector;
+      Nominal_Templates : Nominal_Template_Vectors.Vector;
       Declaration_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Atom_Sets    : Atom_Set_Vectors.Vector;
       Atoms        : Atom_Vectors.Vector;

@@ -28,6 +28,7 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Syntax.Node_Kind;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Field_Kind;
+   use type Landin.Checking.Nominal_Type_Id;
    use type Landin.Checking.Signature_Id;
    use type Landin.Types.Type_Kind;
 
@@ -153,6 +154,10 @@ package body Landin.Tests.Checking_Suite is
            Landin.Syntax.Declared_Type (Of_Tree.all, Alias_Node);
          Other_Body : constant Landin.Syntax.Node_Id :=
            Landin.Syntax.Declared_Type (Of_Tree.all, Other_Node);
+         Point_Type : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Empty_Nominal_Instance (Types.all, Point);
+         Other_Type : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Empty_Nominal_Instance (Types.all, Other);
       begin
          Landin.Testing.Check
            (Item,
@@ -162,38 +167,41 @@ package body Landin.Tests.Checking_Suite is
             and then Again /= Landin.Provenance.No_Declaration
             and then Other /= Landin.Provenance.No_Declaration,
             "all five declarations have identities");
-         Landin.Testing.Check
-           (Item, Landin.Checking.Body_Of (Types.all, Point) = Point,
-            "a struct body gives its declaration a fresh identity");
+         Landin.Testing.Check_Equal
+           (Item, Landin.Checking.Nominal_Type_Count (Types.all), 2,
+            "the two struct templates have two canonical instances");
          Landin.Testing.Check
            (Item,
-            Landin.Checking.Body_Of
-              (Types.all, Of_Tree.all, Point_Body) = Point,
+            Landin.Checking.Nominal_Of (Types.all, Point) = Point_Type
+            and then Landin.Checking.Template_Of (Types.all, Point_Type)
+              = Point,
+            "a struct declaration owns its empty-actual nominal instance");
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Nominal_Of
+              (Types.all, Of_Tree.all, Point_Body) = Point_Type,
             "the struct body node carries the identity it created");
          Landin.Testing.Check
-           (Item, Landin.Checking.Body_Of (Types.all, Ahead) = Point,
-            "a forward alias receives the later declaration's identity");
-         Landin.Testing.Check
-           (Item, Landin.Checking.Body_Of (Types.all, Alias) = Point,
-            "an alias keeps the aggregate identity it names");
-         Landin.Testing.Check
-           (Item, Landin.Checking.Body_Of (Types.all, Again) = Point,
-            "an alias chain keeps one aggregate identity");
-         Landin.Testing.Check
-           (Item, Landin.Checking.Body_Of (Types.all, Other) = Other,
-            "a second struct body gives its declaration another identity");
+           (Item,
+            Landin.Checking.Nominal_Of (Types.all, Ahead) = Point_Type
+            and then Landin.Checking.Nominal_Of (Types.all, Alias)
+              = Point_Type
+            and then Landin.Checking.Nominal_Of (Types.all, Again)
+              = Point_Type,
+            "forward aliases and alias chains preserve one identity");
          Landin.Testing.Check
            (Item,
-            Landin.Checking.Body_Of
-              (Types.all, Of_Tree.all, Other_Body) = Other,
-            "the second struct body node carries its own identity");
+            Landin.Checking.Nominal_Of (Types.all, Other) = Other_Type
+            and then Landin.Checking.Nominal_Of
+              (Types.all, Of_Tree.all, Other_Body) = Other_Type,
+            "repeated uses of the second struct share its identity");
          Landin.Testing.Check
-           (Item, Point /= Other,
-            "same-shaped named structs are not one declaration");
+           (Item, Point_Type /= Other_Type,
+            "same-shaped named structs remain nominally unequal");
          Landin.Testing.Check
            (Item,
-            Landin.Checking.Body_Of (Types.all, Of_Tree.all, Alias_Type)
-              = Point,
+            Landin.Checking.Nominal_Of (Types.all, Of_Tree.all, Alias_Type)
+              = Point_Type,
             "the type-reference node carries the identity into later stages");
       end;
    end Declarations_Give_Structs_Their_Identity;
@@ -277,18 +285,18 @@ package body Landin.Tests.Checking_Suite is
                return Landin.Provenance.No_Declaration;
             end Declaration_At;
 
-            Ahead   : constant Landin.Provenance.Declaration_Id :=
-              Declaration_At (1);
-            Span    : constant Landin.Provenance.Declaration_Id :=
-              Declaration_At (2);
-            Same    : constant Landin.Provenance.Declaration_Id :=
-              Declaration_At (3);
-            Machine : constant Landin.Provenance.Declaration_Id :=
-              Declaration_At (4);
-            Nested  : constant Landin.Provenance.Declaration_Id :=
-              Declaration_At (5);
-            Outer   : constant Landin.Provenance.Declaration_Id :=
-              Declaration_At (6);
+            Ahead : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Declaration_At (1));
+            Span : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Declaration_At (2));
+            Same : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Declaration_At (3));
+            Machine : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Declaration_At (4));
+            Nested : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Declaration_At (5));
+            Outer : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nominal_Of (Types.all, Declaration_At (6));
          begin
             Landin.Testing.Check
               (Item, Landin.Checking.Has_Layout (Types.all, Span),
@@ -321,7 +329,7 @@ package body Landin.Tests.Checking_Suite is
 
             declare
                type Alias_Array is array (Positive range <>) of
-                 Landin.Provenance.Declaration_Id;
+                 Landin.Checking.Nominal_Type_Id;
             begin
                for Alias of Alias_Array'[Ahead, Same] loop
                   Landin.Testing.Check
@@ -414,7 +422,7 @@ package body Landin.Tests.Checking_Suite is
                    (Types.all, Outer, 2)
                      = Landin.Checking.Aggregate_Field
                  and then Landin.Checking.Field_Shape_Of
-                   (Types.all, Outer, 2).Aggregate_Body = Nested,
+                   (Types.all, Outer, 2).Nominal = Nested,
                "the named child is one aggregate field with its body");
             Landin.Testing.Check_Equal
               (Item,
@@ -2611,9 +2619,9 @@ package body Landin.Tests.Checking_Suite is
                         Landin.Checking.Type_Of
                           (Types.all, Of_Tree.all, Value)
                             = Landin.Types.Aggregate
-                        and then Landin.Checking.Body_Of
+                        and then Landin.Checking.Nominal_Of
                           (Types.all, Of_Tree.all, Target)
-                            = Landin.Checking.Body_Of
+                            = Landin.Checking.Nominal_Of
                                 (Types.all, Of_Tree.all, Value),
                         "each whole copy keeps one nominal struct identity");
                   end if;
@@ -2695,9 +2703,9 @@ package body Landin.Tests.Checking_Suite is
                      Landin.Checking.Type_Of
                        (Types.all, Of_Tree.all, Value)
                          = Landin.Types.Aggregate
-                     and then Landin.Checking.Body_Of
+                     and then Landin.Checking.Nominal_Of
                        (Types.all, Of_Tree.all, Value)
-                         = Landin.Checking.Body_Of
+                         = Landin.Checking.Nominal_Of
                            (Types.all, Of_Tree.all, Place),
                      "zeroed carries its destination's nominal struct body");
                end;
@@ -2788,8 +2796,8 @@ package body Landin.Tests.Checking_Suite is
                         Landin.Checking.Type_Of
                           (Types.all, Of_Tree.all, Value)
                             = Landin.Types.Aggregate
-                        and then Landin.Checking.Body_Of (Types.all, Id)
-                          = Landin.Checking.Body_Of
+                        and then Landin.Checking.Nominal_Of (Types.all, Id)
+                          = Landin.Checking.Nominal_Of
                               (Types.all, Of_Tree.all, Value),
                         "the initializer and local share one struct body");
                   end if;
@@ -2869,8 +2877,8 @@ package body Landin.Tests.Checking_Suite is
                         Landin.Checking.Type_Of
                           (Types.all, Of_Tree.all, Value)
                             = Landin.Types.Aggregate
-                        and then Landin.Checking.Body_Of (Types.all, Id)
-                          = Landin.Checking.Body_Of
+                        and then Landin.Checking.Nominal_Of (Types.all, Id)
+                          = Landin.Checking.Nominal_Of
                               (Types.all, Of_Tree.all, Value),
                         "the module value and datum share one struct body");
                   end if;
@@ -2955,8 +2963,8 @@ package body Landin.Tests.Checking_Suite is
                         Landin.Checking.Type_Of
                           (Types.all, Of_Tree.all, Value)
                             = Landin.Types.Aggregate
-                        and then Landin.Checking.Body_Of (Types.all, Id)
-                          = Landin.Checking.Body_Of
+                        and then Landin.Checking.Nominal_Of (Types.all, Id)
+                          = Landin.Checking.Nominal_Of
                               (Types.all, Of_Tree.all, Value),
                         "each image source has the destination's body");
                   end if;
@@ -3050,8 +3058,8 @@ package body Landin.Tests.Checking_Suite is
                         Landin.Checking.Type_Of
                           (Types.all, Of_Tree.all, Value)
                             = Landin.Types.Aggregate
-                        and then Landin.Checking.Body_Of (Types.all, Id)
-                          = Landin.Checking.Body_Of
+                        and then Landin.Checking.Nominal_Of (Types.all, Id)
+                          = Landin.Checking.Nominal_Of
                               (Types.all, Of_Tree.all, Value),
                         "the inferred local carries its source struct body");
                   end if;
@@ -3437,9 +3445,9 @@ package body Landin.Tests.Checking_Suite is
                  (Item,
                   Landin.Checking.Type_Of (Types.all, Of_Tree.all, Node)
                     = Landin.Types.Aggregate
-                  and then Landin.Checking.Body_Of
+                  and then Landin.Checking.Nominal_Of
                     (Types.all, Of_Tree.all, Node)
-                      /= Landin.Resolution.No_Declaration,
+                      /= Landin.Checking.No_Nominal_Type,
                   "the literal carries its contextual nominal body");
                Landin.Testing.Check_Equal
                  (Item,
@@ -3627,9 +3635,9 @@ package body Landin.Tests.Checking_Suite is
                      Landin.Checking.Type_Of
                        (Types.all, Of_Tree.all, Node)
                          = Landin.Types.Aggregate
-                     and then Landin.Checking.Body_Of
+                     and then Landin.Checking.Nominal_Of
                        (Types.all, Of_Tree.all, Node)
-                         = Landin.Checking.Body_Of
+                         = Landin.Checking.Nominal_Of
                            (Types.all, Of_Tree.all, Nominal),
                      "the construction and nominal type carry one body");
                end;
@@ -3784,9 +3792,9 @@ package body Landin.Tests.Checking_Suite is
                      Aggregates := Aggregates + 1;
                      Landin.Testing.Check
                        (Item,
-                        Landin.Checking.Body_Of
+                        Landin.Checking.Nominal_Of
                           (Types.all, Of_Tree.all, Node)
-                            /= Landin.Provenance.No_Declaration,
+                            /= Landin.Checking.No_Nominal_Type,
                         "an aggregate control node keeps nominal identity");
                   when Landin.Types.Fixed_Array =>
                      Arrays := Arrays + 1;

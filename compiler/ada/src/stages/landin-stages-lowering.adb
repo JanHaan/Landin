@@ -26,6 +26,7 @@ package body Landin.Stages.Lowering is
    use type IR.Field_Shape_Kind;
    use type IR.Atom_Set_Id;
    use type IR.Item_Id;
+   use type IR.Nominal_Type_Id;
    use type IR.Slot_Id;
    use type IR.Signature_Id;
    use all type IR.Storage_Kind;
@@ -37,6 +38,7 @@ package body Landin.Stages.Lowering is
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Error_Set_Form;
    use type Landin.Checking.Field_Kind;
+   use type Landin.Checking.Nominal_Type_Id;
    use type Landin.Checking.Signature_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
@@ -245,6 +247,34 @@ package body Landin.Stages.Lowering is
          return Atom_Sets (Positive (Source));
       end Atom_Set_For;
 
+      subtype Source_Nominal is Positive range
+        1 .. Positive'Max
+               (1, Landin.Checking.Nominal_Type_Count (Types.all));
+      type Nominal_Map is array (Source_Nominal) of IR.Nominal_Type_Id;
+      Nominals : Nominal_Map := [others => IR.No_Nominal_Type];
+
+      function Nominal_For
+        (Source : Landin.Checking.Nominal_Type_Id)
+         return IR.Nominal_Type_Id;
+
+      function Nominal_For
+        (Source : Landin.Checking.Nominal_Type_Id)
+         return IR.Nominal_Type_Id
+      is
+         Position : Positive;
+      begin
+         if Source = Landin.Checking.No_Nominal_Type then
+            return IR.No_Nominal_Type;
+         end if;
+         Position := Positive
+           (Landin.Checking.Nominal_Identities.Position (Source));
+         if Nominals (Position) = IR.No_Nominal_Type then
+            raise Landin.Compiler_Defect with
+              "a checker nominal identity was not mapped before lowering";
+         end if;
+         return Nominals (Position);
+      end Nominal_For;
+
       subtype Source_Signature is Positive range
         1 .. Positive'Max
                (1, Landin.Checking.Signature_Count (Types.all));
@@ -329,7 +359,7 @@ package body Landin.Stages.Lowering is
             return IR.Signature_Part
            is (Kind    =>
                  (if Part.Kind = Ty.Atom_Value then Ty.U32 else Part.Kind),
-               Aggregate_Body => Part.Aggregate_Body,
+               Nominal => Nominal_For (Part.Nominal),
                Length  => IR.Element_Total (Part.Length),
                Element => Part.Element,
                Signature =>
@@ -508,7 +538,7 @@ package body Landin.Stages.Lowering is
       --  Exactly one destination identity is supplied; payload leaves remain
       --  scalar or fixed-array shapes, and all offsets stay target-owned.
       procedure Add_Stored_Field
-        (Wrote : Res.Declaration_Id;
+        (Wrote : Landin.Checking.Nominal_Type_Id;
          Field : Positive;
          Datum : IR.Item_Id := IR.No_Item;
          Slot  : IR.Slot_Id := IR.No_Slot);
@@ -909,12 +939,13 @@ package body Landin.Stages.Lowering is
         (Source : Landin.Checking.Field_Shape) return IR.Field_Shape;
 
       function Neutral_Field
-        (Wrote : Res.Declaration_Id; Field : Positive) return IR.Field_Shape;
+        (Nominal : Landin.Checking.Nominal_Type_Id;
+         Field   : Positive) return IR.Field_Shape;
 
       --  One whole declaration as a neutral shape: the run of its fields,
       --  appended before the shape that names it.
       function Neutral_Body
-        (Wrote : Res.Declaration_Id) return IR.Field_Shape;
+        (Nominal : Landin.Checking.Nominal_Type_Id) return IR.Field_Shape;
 
       --  One field of D128's anonymous result aggregate.  D131 gives a
       --  nominal aggregate the same one `usize` field plus its signature.
@@ -956,12 +987,12 @@ package body Landin.Stages.Lowering is
             when Landin.Checking.Fixed_Array_Field =>
                --  D121: an ordinary-struct element is one run of exactly
                --  one shape, appended before the array shape names it.
-               if Source.Aggregate_Body /= Res.No_Declaration then
+               if Source.Nominal /= Landin.Checking.No_Nominal_Type then
                   declare
                      First : constant Natural :=
                        IR.Add_Shape_Run
                          (Unit.all,
-                          [1 => Neutral_Body (Source.Aggregate_Body)]);
+                          [1 => Neutral_Body (Source.Nominal)]);
                   begin
                      return
                        (Kind           => IR.Array_Field_Shape,
@@ -969,6 +1000,7 @@ package body Landin.Stages.Lowering is
                         Length         => IR.Element_Total (Source.Length),
                         Cases          => 1,
                         Payloads_First => First,
+                        Nominal        => Nominal_For (Source.Nominal),
                         others         => <>);
                   end;
                end if;
@@ -979,7 +1011,7 @@ package body Landin.Stages.Lowering is
                   others  => <>);
 
             when Landin.Checking.Aggregate_Field =>
-               return Neutral_Body (Source.Aggregate_Body);
+               return Neutral_Body (Source.Nominal);
 
             when Landin.Checking.Variant_Field =>
                --  Lay_Out refuses a variant part inside a payload run, so
@@ -992,10 +1024,10 @@ package body Landin.Stages.Lowering is
       function Neutral_Element
         (Id : Res.Declaration_Id) return IR.Field_Shape
       is
-         Element : constant Res.Declaration_Id :=
-           Landin.Checking.Array_Element_Body (Types.all, Id);
+         Element : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Array_Element_Nominal (Types.all, Id);
       begin
-         if Element /= Res.No_Declaration then
+         if Element /= Landin.Checking.No_Nominal_Type then
             return Neutral_Body (Element);
          end if;
          return
@@ -1008,11 +1040,11 @@ package body Landin.Stages.Lowering is
       function Neutral_Element
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Field_Shape
       is
-         Element : constant Res.Declaration_Id :=
-           Landin.Checking.Array_Element_Body
+         Element : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Array_Element_Nominal
              (Types.all, Of_Tree, Node);
       begin
-         if Element /= Res.No_Declaration then
+         if Element /= Landin.Checking.No_Nominal_Type then
             return Neutral_Body (Element);
          end if;
          return
@@ -1030,7 +1062,7 @@ package body Landin.Stages.Lowering is
       begin
          if Held = Ty.Aggregate then
             return Neutral_Body
-              (Landin.Checking.Body_Of (Types.all, Of_Tree, Node));
+              (Landin.Checking.Nominal_Of (Types.all, Of_Tree, Node));
          elsif Held = Ty.Fixed_Array then
             declare
                Element : constant IR.Field_Shape :=
@@ -1048,6 +1080,7 @@ package body Landin.Stages.Lowering is
                        (Types.all, Of_Tree, Node)),
                   Cases          => (if First = 0 then 0 else 1),
                   Payloads_First => First,
+                  Nominal        => Element.Nominal,
                   others         => <>);
             end;
          end if;
@@ -1056,16 +1089,16 @@ package body Landin.Stages.Lowering is
       end Neutral_Value_Shape;
 
       function Neutral_Body
-        (Wrote : Res.Declaration_Id) return IR.Field_Shape
+        (Nominal : Landin.Checking.Nominal_Type_Id) return IR.Field_Shape
       is
          Count : constant Natural :=
-           Landin.Checking.Layout_Field_Count (Types.all, Wrote);
+           Landin.Checking.Layout_Field_Count (Types.all, Nominal);
          Parts : IR.Field_Shape_Array (1 .. Count) :=
            [others => (others => <>)];
          First : Natural;
       begin
          for Position in 1 .. Count loop
-            Parts (Position) := Neutral_Field (Wrote, Position);
+            Parts (Position) := Neutral_Field (Nominal, Position);
          end loop;
          First := IR.Add_Shape_Run (Unit.all, Parts);
          return
@@ -1074,6 +1107,7 @@ package body Landin.Stages.Lowering is
             Length         => 1,
             Cases          => Count,
             Payloads_First => First,
+            Nominal        => Nominal_For (Nominal),
             others         => <>);
       end Neutral_Body;
 
@@ -1103,14 +1137,14 @@ package body Landin.Stages.Lowering is
                   Atoms => Atom_Set_For (Part.Atoms),
                   others => <>);
             when Ty.Aggregate =>
-               return Neutral_Body (Part.Aggregate_Body);
+               return Neutral_Body (Part.Nominal);
             when Ty.Fixed_Array =>
-               if Part.Aggregate_Body /= Res.No_Declaration then
+               if Part.Nominal /= Landin.Checking.No_Nominal_Type then
                   declare
                      First : constant Natural :=
                        IR.Add_Shape_Run
                          (Unit.all,
-                          [1 => Neutral_Body (Part.Aggregate_Body)]);
+                          [1 => Neutral_Body (Part.Nominal)]);
                   begin
                      return
                        (Kind           => IR.Array_Field_Shape,
@@ -1118,6 +1152,7 @@ package body Landin.Stages.Lowering is
                         Length         => IR.Element_Total (Part.Length),
                         Cases          => 1,
                         Payloads_First => First,
+                        Nominal        => Nominal_For (Part.Nominal),
                         others         => <>);
                   end;
                end if;
@@ -1158,10 +1193,11 @@ package body Landin.Stages.Lowering is
       end Add_Result_Fields;
 
       function Neutral_Field
-        (Wrote : Res.Declaration_Id; Field : Positive) return IR.Field_Shape
+        (Nominal : Landin.Checking.Nominal_Type_Id;
+         Field   : Positive) return IR.Field_Shape
       is
          Source : constant Landin.Checking.Field_Shape :=
-           Landin.Checking.Field_Shape_Of (Types.all, Wrote, Field);
+           Landin.Checking.Field_Shape_Of (Types.all, Nominal, Field);
       begin
          if Source.Kind /= Landin.Checking.Variant_Field then
             return Neutral_Shape (Source);
@@ -1173,7 +1209,7 @@ package body Landin.Stages.Lowering is
             for Which in 1 .. Source.Cases loop
                Total := Total
                  + Landin.Checking.Variant_Case_Field_Count
-                     (Types.all, Wrote, Field, Which);
+                     (Types.all, Nominal, Field, Which);
             end loop;
 
             declare
@@ -1189,7 +1225,7 @@ package body Landin.Stages.Lowering is
                   declare
                      Count : constant Natural :=
                        Landin.Checking.Variant_Case_Field_Count
-                         (Types.all, Wrote, Field, Which);
+                         (Types.all, Nominal, Field, Which);
                   begin
                      Runs (Which) :=
                        (First => (if Count = 0 then 0 else Next),
@@ -1197,7 +1233,7 @@ package body Landin.Stages.Lowering is
                      for Position in 1 .. Count loop
                         Parts (Next) := Neutral_Shape
                           (Landin.Checking.Nth_Variant_Case_Field
-                             (Types.all, Wrote, Field, Which, Position));
+                             (Types.all, Nominal, Field, Which, Position));
                         Next := Next + 1;
                      end loop;
                   end;
@@ -1595,7 +1631,7 @@ package body Landin.Stages.Lowering is
       end Addressed_Storage;
 
       procedure Add_Stored_Field
-        (Wrote : Res.Declaration_Id;
+        (Wrote : Landin.Checking.Nominal_Type_Id;
          Field : Positive;
          Datum : IR.Item_Id := IR.No_Item;
          Slot  : IR.Slot_Id := IR.No_Slot)
@@ -1645,26 +1681,33 @@ package body Landin.Stages.Lowering is
          --  [0670]'s local: a cell holding a whole struct, carrying its
          --  fields' types the way an aggregate datum does.
          if Held = Ty.Aggregate then
-            Slots (Positive (Id)) :=
-              IR.Add_Aggregate_Slot
-                (Unit.all, Filling, Id, Site_Of (Of_Tree, Node));
+            declare
+               Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nominal_Of (Types.all, Id);
+            begin
+               Slots (Positive (Id)) :=
+                 IR.Add_Aggregate_Slot
+                   (Unit.all, Filling, Id, Site_Of (Of_Tree, Node),
+                    Nominal_For (Nominal));
 
-            if Landin.Checking.Result_Shape_Of (Types.all, Id)
-                 /= Landin.Checking.No_Signature
-            then
-               Add_Result_Fields
-                 (Landin.Checking.Result_Shape_Of (Types.all, Id),
-                  Slot => Slots (Positive (Id)));
-            else
-               for Field in
-                 1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
-               loop
-                  Add_Stored_Field
-                    (Id, Field, Slot => Slots (Positive (Id)));
-               end loop;
-            end if;
+               if Landin.Checking.Result_Shape_Of (Types.all, Id)
+                    /= Landin.Checking.No_Signature
+               then
+                  Add_Result_Fields
+                    (Landin.Checking.Result_Shape_Of (Types.all, Id),
+                     Slot => Slots (Positive (Id)));
+               else
+                  for Field in
+                    1 .. Landin.Checking.Layout_Field_Count
+                      (Types.all, Nominal)
+                  loop
+                     Add_Stored_Field
+                       (Nominal, Field, Slot => Slots (Positive (Id)));
+                  end loop;
+               end if;
 
-            return Slots (Positive (Id));
+               return Slots (Positive (Id));
+            end;
          end if;
 
          if Held not in Ty.Scalar_Name | Ty.Function_Value | Ty.Atom_Value
@@ -1736,18 +1779,20 @@ package body Landin.Stages.Lowering is
 
          if Held = Ty.Aggregate then
             declare
-               Wrote : constant Res.Declaration_Id :=
-                 Landin.Checking.Body_Of (Types.all, Of_Tree, Node);
+               Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                 Landin.Checking.Nominal_Of (Types.all, Of_Tree, Node);
                Shape : constant Landin.Checking.Signature_Id :=
                  Landin.Checking.Result_Shape_Of
                    (Types.all, Of_Tree, Node);
             begin
                Result := IR.Add_Aggregate_Slot
-                 (Unit.all, Filling, Res.No_Declaration, Site);
+                 (Unit.all, Filling, Res.No_Declaration, Site,
+                  Nominal_For (Wrote));
                if Shape /= Landin.Checking.No_Signature then
                   Add_Result_Fields (Shape, Slot => Result);
                else
-                  pragma Assert (Wrote /= Res.No_Declaration);
+                  pragma Assert
+                    (Wrote /= Landin.Checking.No_Nominal_Type);
                   for Field in
                     1 .. Landin.Checking.Layout_Field_Count (Types.all, Wrote)
                   loop
@@ -2073,13 +2118,14 @@ package body Landin.Stages.Lowering is
                         if Type_At (Of_Tree, Argument) = Ty.Aggregate then
                            Temporary := IR.Add_Aggregate_Slot
                              (Unit.all, Filling, Res.No_Declaration,
-                              Site_Of (Of_Tree, Argument));
+                              Site_Of (Of_Tree, Argument),
+                              Nominal_For (Parameter.Nominal));
                            for Field in
                              1 .. Landin.Checking.Layout_Field_Count
-                                    (Types.all, Parameter.Aggregate_Body)
+                                    (Types.all, Parameter.Nominal)
                            loop
                               Add_Stored_Field
-                                (Parameter.Aggregate_Body, Field,
+                                (Parameter.Nominal, Field,
                                  Slot => Temporary);
                            end loop;
                         else
@@ -2107,8 +2153,8 @@ package body Landin.Stages.Lowering is
                           Landin.Checking.Signature_Part :=
                             Landin.Checking.Nth_Signature_Parameter
                               (Types.all, Source_Signature, Which);
-                        Id : constant Res.Declaration_Id :=
-                          Parameter.Aggregate_Body;
+                        Id : constant Landin.Checking.Nominal_Type_Id :=
+                          Parameter.Nominal;
                         Count : constant Natural :=
                           Landin.Checking.Layout_Field_Count (Types.all, Id);
                         type Seen_Array is
@@ -2117,7 +2163,7 @@ package body Landin.Stages.Lowering is
                         Temporary : constant IR.Slot_Id :=
                           IR.Add_Aggregate_Slot
                             (Unit.all, Filling, Res.No_Declaration,
-                             Site_Of (Of_Tree, Argument));
+                             Site_Of (Of_Tree, Argument), Nominal_For (Id));
 
                         procedure Store_Child_Scalar
                           (Field       : Positive;
@@ -2363,10 +2409,11 @@ package body Landin.Stages.Lowering is
                                     Write_Variant_Field (Field, Value);
                                  when Landin.Checking.Aggregate_Field =>
                                     declare
-                                       Child : constant Res.Declaration_Id :=
+                                       Child : constant
+                                         Landin.Checking.Nominal_Type_Id :=
                                          Landin.Checking.Field_Shape_Of
                                            (Types.all, Id, Field)
-                                             .Aggregate_Body;
+                                             .Nominal;
                                        Destination : constant IR.Storage :=
                                          (Kind => IR.Frame_Slot,
                                           Slot => Temporary);
@@ -3106,8 +3153,8 @@ package body Landin.Stages.Lowering is
                begin
                   if Held = Ty.Aggregate then
                      declare
-                        Declared : constant Res.Declaration_Id :=
-                          Landin.Checking.Body_Of
+                        Declared : constant Landin.Checking.Nominal_Type_Id :=
+                          Landin.Checking.Nominal_Of
                             (Types.all, Of_Tree, Asked);
                         function Total_Cases return Natural;
                         function Total_Payload_Fields return Natural;
@@ -3157,7 +3204,7 @@ package body Landin.Stages.Lowering is
                                        (Types.all,
                                         Landin.Checking.Field_Shape_Of
                                           (Types.all, Declared, Field)
-                                            .Aggregate_Body);
+                                            .Nominal);
                               end if;
                            end loop;
                            return Total;
@@ -3215,8 +3262,9 @@ package body Landin.Stages.Lowering is
                                       Landin.Checking.Field_Shape :=
                                         Landin.Checking.Field_Shape_Of
                                           (Types.all, Declared, Field);
-                                    Child : constant Res.Declaration_Id :=
-                                      Shape.Aggregate_Body;
+                                    Child : constant
+                                      Landin.Checking.Nominal_Type_Id :=
+                                      Shape.Nominal;
                                     Count : constant Natural :=
                                       Landin.Checking.Layout_Field_Count
                                         (Types.all, Child);
@@ -3228,6 +3276,7 @@ package body Landin.Stages.Lowering is
                                        Length         => 1,
                                        Cases          => Count,
                                        Payloads_First => Next_Payload,
+                                       Nominal        => Nominal_For (Child),
                                        others         => <>);
 
                                     for Position in 1 .. Count loop
@@ -3916,8 +3965,8 @@ package body Landin.Stages.Lowering is
          --  from, and Base/Steps is the run down to the part.
          Holder : constant Syn.Node_Id :=
            Syn.Target_Of (Of_Tree, Subject);
-         Wrote : constant Res.Declaration_Id :=
-           Landin.Checking.Body_Of (Types.all, Of_Tree, Holder);
+         Wrote : constant Landin.Checking.Nominal_Type_Id :=
+           Landin.Checking.Nominal_Of (Types.all, Of_Tree, Holder);
          Field : constant Positive := Positive
            (Landin.Checking.Field_Index (Types.all, Of_Tree, Subject));
          Computed : constant Boolean :=
@@ -3984,7 +4033,8 @@ package body Landin.Stages.Lowering is
                  Addressed_Storage (Location, Holder_Shape, Site);
                Temporary : constant IR.Slot_Id :=
                  IR.Add_Aggregate_Slot
-                   (Unit.all, Filling, Res.No_Declaration, Site);
+                   (Unit.all, Filling, Res.No_Declaration, Site,
+                    Nominal_For (Wrote));
                Temp_Storage : constant IR.Storage :=
                  (Kind => IR.Frame_Slot, Slot => Temporary);
             begin
@@ -4330,7 +4380,7 @@ package body Landin.Stages.Lowering is
                --  recurses, so the depth of the copy is the depth of the
                --  type and not of this procedure.
                procedure Copy_Field
-                 (Wrote       : Res.Declaration_Id;
+                 (Wrote       : Landin.Checking.Nominal_Type_Id;
                   Source      : IR.Storage;
                   Destination : IR.Storage;
                   Field       : Positive;
@@ -4341,7 +4391,7 @@ package body Landin.Stages.Lowering is
                     IR.No_Path_Steps);
 
                procedure Copy_Aggregate_Value
-                 (Wrote       : Res.Declaration_Id;
+                 (Wrote       : Landin.Checking.Nominal_Type_Id;
                   Source_Node : Syn.Node_Id;
                   Destination : IR.Storage;
                   Destination_Base : Natural := 0;
@@ -4368,7 +4418,7 @@ package body Landin.Stages.Lowering is
                --  is what the case and payload shapes are looked up by.
                procedure Write_Variant_Value
                  (Value       : Syn.Node_Id;
-                  Wrote       : Res.Declaration_Id;
+                  Wrote       : Landin.Checking.Nominal_Type_Id;
                   Field       : Positive;
                   Destination : IR.Storage;
                   Base        : Positive;
@@ -4380,13 +4430,13 @@ package body Landin.Stages.Lowering is
                --  the type does.
                procedure Write_Struct_Literal
                  (Literal     : Syn.Node_Id;
-                  Wrote       : Res.Declaration_Id;
+                  Wrote       : Landin.Checking.Nominal_Type_Id;
                   Destination : IR.Storage;
                   Base        : Natural := 0;
                   Steps       : IR.Path_Step_Array := IR.No_Path_Steps);
 
                procedure Copy_Field
-                 (Wrote       : Res.Declaration_Id;
+                 (Wrote       : Landin.Checking.Nominal_Type_Id;
                   Source      : IR.Storage;
                   Destination : IR.Storage;
                   Field       : Positive;
@@ -4491,9 +4541,9 @@ package body Landin.Stages.Lowering is
                         --  D119: a child is copied by copying its own
                         --  fields, one place deeper on both sides.
                         declare
-                           Child : constant Res.Declaration_Id :=
+                           Child : constant Landin.Checking.Nominal_Type_Id :=
                              Landin.Checking.Field_Shape_Of
-                               (Types.all, Wrote, Field).Aggregate_Body;
+                               (Types.all, Wrote, Field).Nominal;
                         begin
                            for Part in
                              1 .. Landin.Checking.Layout_Field_Count
@@ -4530,7 +4580,7 @@ package body Landin.Stages.Lowering is
                end Copy_Field;
 
                procedure Copy_Aggregate_Value
-                 (Wrote       : Res.Declaration_Id;
+                 (Wrote       : Landin.Checking.Nominal_Type_Id;
                   Source_Node : Syn.Node_Id;
                   Destination : IR.Storage;
                   Destination_Base : Natural := 0;
@@ -4864,7 +4914,7 @@ package body Landin.Stages.Lowering is
 
                procedure Write_Variant_Value
                  (Value       : Syn.Node_Id;
-                  Wrote       : Res.Declaration_Id;
+                  Wrote       : Landin.Checking.Nominal_Type_Id;
                   Field       : Positive;
                   Destination : IR.Storage;
                   Base        : Positive;
@@ -4932,8 +4982,9 @@ package body Landin.Stages.Lowering is
                               --  other, and the case it sits in is one
                               --  step of the run that reaches it.
                               declare
-                                 Child : constant Res.Declaration_Id :=
-                                   Shape.Aggregate_Body;
+                                 Child : constant
+                                   Landin.Checking.Nominal_Type_Id :=
+                                   Shape.Nominal;
                                  Into_Steps :
                                    constant IR.Path_Step_Array :=
                                      Payload_Steps
@@ -4994,7 +5045,7 @@ package body Landin.Stages.Lowering is
 
                procedure Write_Struct_Literal
                  (Literal     : Syn.Node_Id;
-                  Wrote       : Res.Declaration_Id;
+                  Wrote       : Landin.Checking.Nominal_Type_Id;
                   Destination : IR.Storage;
                   Base        : Natural := 0;
                   Steps       : IR.Path_Step_Array := IR.No_Path_Steps)
@@ -5082,9 +5133,10 @@ package body Landin.Stages.Lowering is
 
                            when Landin.Checking.Aggregate_Field =>
                               declare
-                                 Child : constant Res.Declaration_Id :=
+                                 Child : constant
+                                   Landin.Checking.Nominal_Type_Id :=
                                    Landin.Checking.Field_Shape_Of
-                                     (Types.all, Wrote, Field).Aggregate_Body;
+                                     (Types.all, Wrote, Field).Nominal;
                                  Into_Field : constant Natural :=
                                    Descended_Base (Base, Steps, Field);
                                  Into_Steps :
@@ -5548,8 +5600,9 @@ package body Landin.Stages.Lowering is
                      then
                         if Held = Ty.Aggregate then
                            declare
-                              Wrote : constant Res.Declaration_Id :=
-                                Landin.Checking.Body_Of
+                              Wrote : constant
+                                Landin.Checking.Nominal_Type_Id :=
+                                Landin.Checking.Nominal_Of
                                   (Types.all, Of_Tree, Stmt);
                               Shape : constant
                                 Landin.Checking.Signature_Id :=
@@ -5557,7 +5610,10 @@ package body Landin.Stages.Lowering is
                                     (Types.all, Of_Tree, Stmt);
                            begin
                               Target := IR.Add_Aggregate_Slot
-                                (Unit.all, Filling, Res.No_Declaration, Site);
+                                (Unit.all, Filling, Res.No_Declaration, Site,
+                                 (if Shape = Landin.Checking.No_Signature
+                                  then Nominal_For (Wrote)
+                                  else IR.No_Nominal_Type));
                               if Shape /= Landin.Checking.No_Signature then
                                  Add_Result_Fields (Shape, Slot => Target);
                               else
@@ -5641,7 +5697,7 @@ package body Landin.Stages.Lowering is
                      then
                         Write_Struct_Literal
                           (Stmt,
-                           Landin.Checking.Body_Of
+                           Landin.Checking.Nominal_Of
                              (Types.all, Of_Tree, Stmt),
                            (Kind => IR.Frame_Slot, Slot => Target),
                            Base => Destination_Field,
@@ -5660,8 +5716,8 @@ package body Landin.Stages.Lowering is
                            Shape : constant Landin.Checking.Signature_Id :=
                              Landin.Checking.Result_Shape_Of
                                (Types.all, Of_Tree, Stmt);
-                           Wrote : constant Res.Declaration_Id :=
-                             Landin.Checking.Body_Of
+                           Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                             Landin.Checking.Nominal_Of
                                (Types.all, Of_Tree, Stmt);
                            Target_Storage : constant IR.Storage :=
                              (Kind => IR.Frame_Slot, Slot => Target);
@@ -5894,7 +5950,7 @@ package body Landin.Stages.Lowering is
                            then
                               Write_Struct_Literal
                                 (Value,
-                                 Landin.Checking.Body_Of (Types.all, Id),
+                                 Landin.Checking.Nominal_Of (Types.all, Id),
                                  (Kind => IR.Frame_Slot, Slot => Where));
                            elsif Syn.Kind (Of_Tree, Value)
                                 = Syn.Zeroed_Literal
@@ -5917,8 +5973,9 @@ package body Landin.Stages.Lowering is
                                    Landin.Checking.Signature_Id :=
                                      Landin.Checking.Result_Shape_Of
                                        (Types.all, Id);
-                                 Wrote : constant Res.Declaration_Id :=
-                                   Landin.Checking.Body_Of (Types.all, Id);
+                                 Wrote : constant
+                                   Landin.Checking.Nominal_Type_Id :=
+                                   Landin.Checking.Nominal_Of (Types.all, Id);
                                  Destination : constant IR.Storage :=
                                    (Kind => IR.Frame_Slot, Slot => Where);
                               begin
@@ -6045,8 +6102,8 @@ package body Landin.Stages.Lowering is
                            Named : constant Syn.Node_Id :=
                              (if Computed then Syn.No_Node
                               else Chain_Root (Of_Tree, Place));
-                           Wrote : constant Res.Declaration_Id :=
-                             Landin.Checking.Body_Of
+                           Wrote : constant Landin.Checking.Nominal_Type_Id :=
+                             Landin.Checking.Nominal_Of
                                (Types.all, Of_Tree, Holder);
                            Field : constant Positive := Positive
                              (Landin.Checking.Field_Index
@@ -6088,7 +6145,8 @@ package body Landin.Stages.Lowering is
                                        Temporary : constant IR.Slot_Id :=
                                          IR.Add_Aggregate_Slot
                                            (Unit.all, Filling,
-                                            Res.No_Declaration, Site);
+                                            Res.No_Declaration, Site,
+                                            Nominal_For (Wrote));
                                        Temp_Storage : constant IR.Storage :=
                                          (Kind => IR.Frame_Slot,
                                           Slot => Temporary);
@@ -6218,8 +6276,9 @@ package body Landin.Stages.Lowering is
                                  Reached : constant Stored_Place :=
                                    Lower_Stored_Place
                                      (Of_Tree, Place, Scope);
-                                 Wrote : constant Res.Declaration_Id :=
-                                   Landin.Checking.Body_Of
+                                 Wrote : constant
+                                   Landin.Checking.Nominal_Type_Id :=
+                                   Landin.Checking.Nominal_Of
                                      (Types.all, Of_Tree, Place);
                               begin
                                  if Current /= IR.No_Block then
@@ -6304,13 +6363,15 @@ package body Landin.Stages.Lowering is
                                    | Syn.Bare_Block
                            then
                               declare
-                                 Wrote : constant Res.Declaration_Id :=
-                                   Landin.Checking.Body_Of
+                                 Wrote : constant
+                                   Landin.Checking.Nominal_Type_Id :=
+                                   Landin.Checking.Nominal_Of
                                      (Types.all, Of_Tree, Place);
                                  Temporary : constant IR.Slot_Id :=
                                    IR.Add_Aggregate_Slot
                                      (Unit.all, Filling,
-                                      Res.No_Declaration, Site);
+                                      Res.No_Declaration, Site,
+                                      Nominal_For (Wrote));
                                  Source : constant IR.Storage :=
                                    (Kind => IR.Frame_Slot,
                                     Slot => Temporary);
@@ -6388,7 +6449,7 @@ package body Landin.Stages.Lowering is
                            then
                               Write_Struct_Literal
                                 (From,
-                                 Landin.Checking.Body_Of
+                                 Landin.Checking.Nominal_Of
                                    (Types.all, Of_Tree, Place),
                                  Destination,
                                  Base  => Parent_Field,
@@ -6404,7 +6465,7 @@ package body Landin.Stages.Lowering is
                                  Nested => Parent_Steps);
                            else
                               Copy_Aggregate_Value
-                                (Landin.Checking.Body_Of
+                                (Landin.Checking.Nominal_Of
                                    (Types.all, Of_Tree, Place),
                                  From, Destination,
                                  Destination_Base => Parent_Field,
@@ -6813,20 +6874,27 @@ package body Landin.Stages.Lowering is
                  Landin.Checking.Type_Of (Types.all, Id);
             begin
                if Held = Ty.Aggregate then
-                  Slots (Positive (Id)) :=
-                    IR.Add_Aggregate_Parameter
-                      (Unit.all, Filling, Id, Site_Of (Of_Tree, Param));
-                  for Field in
-                    1 .. Landin.Checking.Layout_Field_Count (Types.all, Id)
-                  loop
-                     Add_Stored_Field
-                       (Id, Field, Slot => Slots (Positive (Id)));
-                  end loop;
+                  declare
+                     Nominal : constant Landin.Checking.Nominal_Type_Id :=
+                       Landin.Checking.Nominal_Of (Types.all, Id);
+                  begin
+                     Slots (Positive (Id)) :=
+                       IR.Add_Aggregate_Parameter
+                         (Unit.all, Filling, Id, Site_Of (Of_Tree, Param),
+                          Nominal_For (Nominal));
+                     for Field in
+                       1 .. Landin.Checking.Layout_Field_Count
+                         (Types.all, Nominal)
+                     loop
+                        Add_Stored_Field
+                          (Nominal, Field, Slot => Slots (Positive (Id)));
+                     end loop;
+                  end;
                elsif Held = Ty.Fixed_Array then
                   Slots (Positive (Id)) :=
                     IR.Add_Array_Parameter
                       (Unit.all, Filling,
-                       Landin.Checking.Array_Element (Types.all, Id),
+                       Neutral_Element (Id),
                        IR.Element_Total
                          (Landin.Checking.Array_Length (Types.all, Id)),
                        Id, Site_Of (Of_Tree, Param));
@@ -7086,6 +7154,19 @@ package body Landin.Stages.Lowering is
 
       IR.Prepare (Unit.all, Meanings.all);
 
+      --  Map every checker identity in checker order before recursively
+      --  lowering any shape.  First-use order therefore cannot renumber IR.
+      for Position in 1 .. Landin.Checking.Nominal_Type_Count (Types.all) loop
+         declare
+            Source : constant Landin.Checking.Nominal_Type_Id :=
+              Landin.Checking.Nth_Nominal_Type (Types.all, Position);
+            Template : constant Res.Declaration_Id :=
+              Landin.Checking.Template_Of (Types.all, Source);
+         begin
+            Nominals (Position) := IR.Add_Nominal_Type (Unit.all, Template);
+         end;
+      end loop;
+
       --  Pass one: every item, over every tree, before any is filled.
       --  [1740] makes a module a set, so `f` may call `g` written below
       --  it, and Emit_Call needs `g`'s item to exist by then.
@@ -7129,7 +7210,14 @@ package body Landin.Stages.Lowering is
                                  then Ty.Usize
                                  elsif Held = Ty.Atom_Value
                                  then Ty.U32 else Held),
-                                Site_Of (Of_Tree.all, Node));
+                                Site_Of (Of_Tree.all, Node),
+                                Nominal =>
+                                  (if Held = Ty.Aggregate and then Count = 1
+                                   then Nominal_For
+                                     (Landin.Checking.Nominal_Of
+                                        (Types.all,
+                                         Declaration_At (Src, Gives)))
+                                   else IR.No_Nominal_Type));
                            if Held = Ty.Atom_Value then
                               IR.Set_Atom_Set
                                 (Unit.all, Made,
@@ -7157,7 +7245,13 @@ package body Landin.Stages.Lowering is
                                  then Ty.Usize
                                  elsif Held = Ty.Atom_Value
                                  then Ty.U32 else Held),
-                                Site_Of (Of_Tree.all, Node));
+                                Site_Of (Of_Tree.all, Node),
+                                Nominal =>
+                                  (if Held = Ty.Aggregate
+                                   then Nominal_For
+                                     (Landin.Checking.Nominal_Of
+                                        (Types.all, Id))
+                                   else IR.No_Nominal_Type));
 
                            if Held = Ty.Atom_Value then
                               IR.Set_Atom_Set
@@ -7194,13 +7288,20 @@ package body Landin.Stages.Lowering is
                            --  description and works out the same placement
                            --  the checker did.
                            if Held = Ty.Aggregate then
-                              for Field in
-                                1 .. Landin.Checking.Layout_Field_Count
-                                       (Types.all, Id)
-                              loop
-                                 Add_Stored_Field
-                                   (Id, Field, Datum => Made);
-                              end loop;
+                              declare
+                                 Nominal : constant
+                                   Landin.Checking.Nominal_Type_Id :=
+                                     Landin.Checking.Nominal_Of
+                                       (Types.all, Id);
+                              begin
+                                 for Field in
+                                   1 .. Landin.Checking.Layout_Field_Count
+                                     (Types.all, Nominal)
+                                 loop
+                                    Add_Stored_Field
+                                      (Nominal, Field, Datum => Made);
+                                 end loop;
+                              end;
                            end if;
                         end;
 
@@ -7246,7 +7347,13 @@ package body Landin.Stages.Lowering is
                            then Ty.Usize
                            elsif Held = Ty.Atom_Value
                            then Ty.U32 else Held),
-                          Site_Of (Of_Tree.all, Node));
+                          Site_Of (Of_Tree.all, Node),
+                          Nominal =>
+                            (if Held = Ty.Aggregate and then Count = 1
+                             then Nominal_For
+                               (Landin.Checking.Nominal_Of
+                                  (Types.all, Declaration_At (Src, Gives)))
+                             else IR.No_Nominal_Type));
                   begin
                      if Held = Ty.Atom_Value then
                         IR.Set_Atom_Set
@@ -7910,8 +8017,9 @@ package body Landin.Stages.Lowering is
                         end;
                      elsif Held = Ty.Aggregate then
                         declare
-                           Declared : constant Res.Declaration_Id :=
-                             Landin.Checking.Body_Of
+                           Declared : constant
+                             Landin.Checking.Nominal_Type_Id :=
+                             Landin.Checking.Nominal_Of
                                (Types.all, Of_Tree, Asked);
                         begin
                            Value :=
@@ -9941,9 +10049,9 @@ package body Landin.Stages.Lowering is
                        or else
                          (Landin.Checking.Type_Of (Types.all, Id)
                             = Ty.Aggregate
-                          and then Landin.Checking.Body_Of
+                          and then Landin.Checking.Nominal_Of
                             (Types.all, Source_Id)
-                            = Landin.Checking.Body_Of (Types.all, Id)))
+                            = Landin.Checking.Nominal_Of (Types.all, Id)))
                   then
                      Resolve_Image (Source_Id);
                      if Made (Source_Id) then
