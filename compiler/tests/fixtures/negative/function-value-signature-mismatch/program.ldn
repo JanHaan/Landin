@@ -1,0 +1,7 @@
+one: (value: i32) -> (result: i32) = value end one
+two: (left: i32, right: i32) -> (result: i32) = left + right end two
+
+bad: () -> none =
+    mut current := one
+    current = two
+end bad
