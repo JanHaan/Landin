@@ -19,7 +19,7 @@
 0030   tour        accepted emitted                   Doc comment. Attaches to the declaration that follows
 0040   tour        accepted emitted executed refused  Full form: name, type, value
 0050   tour        accepted emitted executed refused  Type inferred from the value
-0060   tour        accepted emitted executed          Mutable binding
+0060   tour        accepted emitted executed refused  Mutable binding
 0070   tour        -                                  Two questions about a reference
 0080   tour        accepted emitted executed refused  Declaration only
 0090   tour        accepted emitted                   Exported from the module
@@ -101,7 +101,7 @@
 0850   tour        -                                  Volatile is exempt from the borrow rule and from every
 0860   tour        -                                  What this does not catch
 0870   tour        accepted emitted executed refused  A function is a value of a function type
-0880   tour        accepted emitted executed          A single-expression body still takes an end
+0880   tour        accepted emitted executed refused  A single-expression body still takes an end
 0890   tour        accepted emitted                   Nothing returned
 0900   tour        accepted emitted executed refused refused-by-name Three parameter conventions
 0910   tour        -                                  sink takes a place
