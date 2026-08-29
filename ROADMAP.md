@@ -1826,9 +1826,11 @@ matrix make that evidence reproducible.
 Status: active
 Depends on: R2.20, R1.70, R1.80
 
-Implement full function values, named returns, control-flow expressions,
-traps, declared atom-set errors, `fail`, `try`, call-site `else`, `defer` and
-`undo`, together with Linux x86-64 internal calling/lowering rules. The first
+Implement full function values, named returns, non-loop control-flow
+expressions, traps, declared atom-set errors, `fail`, `try`, call-site `else`,
+`defer` and `undo`, together with Linux x86-64 internal calling/lowering rules.
+R4.10 owns loops and their `break`/`continue` transfers; their syntactic
+refusals name that item rather than this one. The first
 completed increment retains the six-register scalar prefix and places every
 later scalar argument in an aligned run of eight-byte stack slots, copied into
 ordinary callee slots and reclaimed by the caller. Its runtime case crosses
