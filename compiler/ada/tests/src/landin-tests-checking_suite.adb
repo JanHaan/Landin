@@ -641,6 +641,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
      (Item : in out Landin.Testing.Context);
 
+   procedure Invalid_Parameterized_Templates_Are_Checked_When_Unused
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Aliases_Normalize_To_Existing_Descriptors
      (Item : in out Landin.Testing.Context)
    is
@@ -786,6 +789,95 @@ package body Landin.Tests.Checking_Suite is
             "every formal was retained only for compile-time substitution");
       end;
    end Parameterized_Aliases_Normalize_To_Existing_Descriptors;
+
+   procedure Invalid_Parameterized_Templates_Are_Checked_When_Unused
+     (Item : in out Landin.Testing.Context)
+   is
+      procedure Check_Rejected (Text : String; What : String);
+
+      procedure Check_Rejected (Text : String; What : String) is
+         Work  : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Order : Landin.Stages.Pipeline;
+         Ran   : Natural;
+         Src   : Landin.Source.Source_Id;
+      begin
+         Src := Landin.Stages.Add_Source (Work, "unused.ldn", Text);
+         Landin.Stages.Append (Order, Frontend'Access);
+         Landin.Stages.Append (Order, Names'Access);
+         Landin.Stages.Append (Order, Checker'Access);
+         Ran := Landin.Stages.Run (Order, Work);
+         Landin.Testing.Check
+           (Item, Src /= Landin.Source.No_Source and then Ran = 3
+             and then Landin.Stages.Failed (Work),
+            What);
+      end Check_Rejected;
+
+      Work  : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran   : Natural;
+      Src   : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "unused-unknown.ldn",
+         "bad: type (t: type) = missing" & LF);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check
+        (Item, Ran = 3 and then Landin.Stages.Failed (Work),
+         "an unused template still rejects an unresolved free type");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Declaration : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Of_Tree.all, 1);
+         Template_Id : Landin.Provenance.Declaration_Id :=
+           Landin.Provenance.No_Declaration;
+      begin
+         for Id in Landin.Provenance.Declaration_Id'(1)
+                   .. Landin.Provenance.Declaration_Id
+                        (Landin.Resolution.Declaration_Count (Meanings.all))
+         loop
+            if Landin.Resolution.Node_Of (Meanings.all, Id) = Declaration then
+               Template_Id := Id;
+               exit;
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, Template_Id /= Landin.Provenance.No_Declaration
+             and then Landin.Checking.Type_Of (Types.all, Template_Id)
+                        = Landin.Types.Not_Typed
+             and then Landin.Checking.Type_Of
+               (Types.all, Of_Tree.all,
+                Landin.Syntax.Declared_Type (Of_Tree.all, Declaration))
+                  = Landin.Types.Undecided,
+            "validation writes no type metadata onto an invalid template");
+      end;
+
+      Check_Rejected
+        ("value: u8 = 1" & LF
+         & "bad: type (t: type) = value" & LF,
+         "an unused template rejects a free value name");
+      Check_Rejected
+        ("bad: type (fixed n: bool) = u8" & LF,
+         "an unused fixed formal rejects a decidable bool type");
+      Check_Rejected
+        ("bad: type (t: type) = () -> none" & LF,
+         "an unused template rejects a decidable function result");
+      Check_Rejected
+        ("a: type (t: type) = b(t)" & LF
+         & "b: type (t: type) = a(t)" & LF,
+         "unused templates reject an unconditional expansion cycle");
+   end Invalid_Parameterized_Templates_Are_Checked_When_Unused;
 
    --  R2.20: inference from a direct storage name carries D17's exact shape
    --  onto module and local declarations, independent of destination
@@ -3751,6 +3843,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "parameterized aliases normalize descriptors",
          Parameterized_Aliases_Normalize_To_Existing_Descriptors'Access);
+      Landin.Testing.Register
+        (Into, "checking", "invalid unused templates are checked",
+         Invalid_Parameterized_Templates_Are_Checked_When_Unused'Access);
       Landin.Testing.Register
         (Into, "checking", "inferred arrays carry their source shape",
          Inferred_Array_Bindings_Carry_Their_Source_Shape'Access);

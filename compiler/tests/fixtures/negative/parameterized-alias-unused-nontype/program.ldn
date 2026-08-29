@@ -1,0 +1,2 @@
+value: u8 = 1
+bad: type (t: type) = value
