@@ -509,7 +509,8 @@ package body Landin.Stages.Checking.Flow is
                        when Landin.Checking.Fixed_Array_Field =>
                          not Array_Is_Assigned (Id, Each, State),
                        when Landin.Checking.Aggregate_Field => False,
-                       when Landin.Checking.Variant_Field => False)
+                       when Landin.Checking.Variant_Field =>
+                         not State.Fields (Positive (Id), Each))
                then
                   Require_Assigned
                     (At_Source, At_Span, Id, State,

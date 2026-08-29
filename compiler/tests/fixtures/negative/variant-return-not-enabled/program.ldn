@@ -5,8 +5,5 @@ choice: type = struct
     end kind
 end choice
 
-use: (state: choice) -> none =
-end use
-
 make: () -> (result: choice) =
 end make

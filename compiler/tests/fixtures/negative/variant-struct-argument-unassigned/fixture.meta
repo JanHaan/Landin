@@ -1,0 +1,6 @@
+class: negative
+summary: passing a variant-bearing struct requires its variant field to be selected
+constructs: 0670, 0680, 0690, 1910, 1920
+program: program.ldn
+codes: L0302
+targets: linux-x86-64, macos-arm64

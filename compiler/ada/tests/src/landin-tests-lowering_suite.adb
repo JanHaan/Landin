@@ -4154,6 +4154,56 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Nested_Arguments_Carry_Both_Identities;
 
+   --  D102 keeps D74's complete variant shape on a by-value parameter slot;
+   --  the caller still transports one opaque storage address.
+   procedure Variant_Arguments_Keep_Their_Shape
+     (Item : in out Landin.Testing.Context);
+
+   procedure Variant_Arguments_Keep_Their_Shape
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "choice: type = struct" & LF
+         & "    prefix: u8" & LF
+         & "    kind: variant" & LF
+         & "        leaf |" & LF
+         & "        pair: (first: u8, second: u8)" & LF
+         & "    end kind" & LF
+         & "end choice" & LF
+         & "take: (value: choice) -> none =" & LF
+         & "end take" & LF
+         & "use: () -> none =" & LF
+         & "    take(zeroed)" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a variant-bearing struct parameter is accepted");
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Parameter : constant IR.Slot_Id := IR.Nth_Parameter (Unit, 1, 1);
+         Shape : constant IR.Field_Shape :=
+           IR.Nth_Slot_Field_Shape (Unit, 1, Parameter, 2);
+      begin
+         Landin.Testing.Check
+           (Item,
+            IR.Is_Aggregate (Unit, 1, Parameter)
+              and then Shape.Kind = IR.Variant_Field_Shape
+              and then Shape.Cases = 2,
+            "the parameter retains its variant cases and payload run");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the variant-bearing parameter carrier");
+      end;
+   end Variant_Arguments_Keep_Their_Shape;
+
    --  D75 gives D74's target-neutral carrier to both module and frame
    --  storage.  The zero image remains one whole-storage clear, not one
    --  instruction per tag, payload field, or padding byte.
@@ -5154,6 +5204,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "nested arguments carry both identities",
          Nested_Arguments_Carry_Both_Identities'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "variant arguments keep their shape",
+         Variant_Arguments_Keep_Their_Shape'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "variant storage carries cases and one clear",
