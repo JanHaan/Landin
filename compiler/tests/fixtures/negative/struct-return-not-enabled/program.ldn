@@ -1,8 +1,0 @@
-point: type = struct
-    x: i32
-end point
-
---  D94 carries ordinary structs into functions. Returning one still needs
---  the aggregate result convention owned by R2.30.
-g: () -> (there: point) =
-end g

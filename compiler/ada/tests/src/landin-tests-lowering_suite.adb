@@ -4245,6 +4245,66 @@ package body Landin.Tests.Lowering_Suite is
       end;
    end Variant_Arguments_Keep_Their_Shape;
 
+   --  D106 uses one unspellable Usize parameter for caller-owned aggregate
+   --  result storage.  The source result shape remains on its named slot.
+   procedure Aggregate_Returns_Use_A_Hidden_Destination
+     (Item : in out Landin.Testing.Context);
+
+   procedure Aggregate_Returns_Use_A_Hidden_Destination
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "pair: type = struct" & LF
+         & "    left: i32" & LF
+         & "    right: i32" & LF
+         & "end pair" & LF
+         & "make: () -> (result: pair) =" & LF
+         & "    result = (left: 19, right: 23)" & LF
+         & "end make" & LF
+         & "use: () -> none =" & LF
+         & "    mut answer: pair = make()" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work),
+         "a struct result and typed call initializer are accepted");
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Hidden : constant IR.Slot_Id := IR.Nth_Parameter (Unit, 1, 1);
+         Call : IR.Value_Id := IR.No_Value;
+      begin
+         for Position in 1 .. IR.Value_Count (Unit, 2) loop
+            if IR.Op_Of (Unit, 2, IR.Value_Id (Position)) = IR.Call then
+               Call := IR.Value_Id (Position);
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item,
+            IR.Result_Of (Unit, 1) = Landin.Types.Aggregate
+              and then IR.Parameter_Count (Unit, 1) = 1
+              and then IR.Type_Of (Unit, 1, Hidden) = Landin.Types.Usize
+              and then IR.Is_Aggregate
+                (Unit, 1, IR.Result_Slot (Unit, 1)),
+            "the routine retains its shape and hidden destination");
+         Landin.Testing.Check
+           (Item,
+            Call /= IR.No_Value
+              and then IR.Result_Of (Unit, 2, Call) = Landin.Types.No_Value
+              and then IR.Operand_Count (Unit, 2, Call) = 1,
+            "the call transports no aggregate as an IR value");
+         Landin.Testing.Check
+           (Item, IR.Verifier.Check (Unit).Kind = IR.Verifier.Nothing_Wrong,
+            "the verifier accepts the aggregate result convention");
+      end;
+   end Aggregate_Returns_Use_A_Hidden_Destination;
+
    --  D75 gives D74's target-neutral carrier to both module and frame
    --  storage.  The zero image remains one whole-storage clear, not one
    --  instruction per tag, payload field, or padding byte.
@@ -5249,6 +5309,10 @@ package body Landin.Tests.Lowering_Suite is
         (Into, "lowering",
          "variant arguments keep their shape",
          Variant_Arguments_Keep_Their_Shape'Access);
+      Landin.Testing.Register
+        (Into, "lowering",
+         "aggregate returns use a hidden destination",
+         Aggregate_Returns_Use_A_Hidden_Destination'Access);
       Landin.Testing.Register
         (Into, "lowering",
          "variant storage carries cases and one clear",

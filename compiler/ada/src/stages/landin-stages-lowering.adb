@@ -204,9 +204,10 @@ package body Landin.Stages.Lowering is
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id) return IR.Storage;
 
       function Lower_Call
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         Scope   : Res.Scope_Id) return IR.Value_Id;
+        (Of_Tree      : Syn.Tree;
+         Node         : Syn.Node_Id;
+         Scope        : Res.Scope_Id;
+         Destination  : IR.Slot_Id := IR.No_Slot) return IR.Value_Id;
 
       function Lower_Short_Circuit
         (Of_Tree : Syn.Tree;
@@ -269,7 +270,10 @@ package body Landin.Stages.Lowering is
       is
          Value : IR.Value_Id := IR.No_Value;
       begin
-         if Result /= IR.No_Slot then
+         if Result /= IR.No_Slot
+           and then not IR.Is_Aggregate (Unit.all, Filling, Result)
+           and then not IR.Is_Array (Unit.all, Filling, Result)
+         then
             Value := IR.Emit_Load (Unit.all, Filling, Result, Site);
          end if;
 
@@ -640,9 +644,10 @@ package body Landin.Stages.Lowering is
       ------------------------------------------------------------
 
       function Lower_Call
-        (Of_Tree : Syn.Tree;
-         Node    : Syn.Node_Id;
-         Scope   : Res.Scope_Id) return IR.Value_Id
+        (Of_Tree      : Syn.Tree;
+         Node         : Syn.Node_Id;
+         Scope        : Res.Scope_Id;
+         Destination  : IR.Slot_Id := IR.No_Slot) return IR.Value_Id
       is
          Site : constant Landin.Provenance.Origin :=
            Site_Of (Of_Tree, Node);
@@ -655,10 +660,13 @@ package body Landin.Stages.Lowering is
          Their_Node : constant Syn.Node_Id :=
            Res.Node_Of (Meanings.all, Means);
          Count : constant Natural := Syn.Argument_Count (Of_Tree, Node);
+         Returns_Aggregate : constant Boolean :=
+           Type_At (Of_Tree, Node) = Ty.Aggregate;
          Given : array (1 .. Positive'Max (1, Count)) of IR.Value_Id :=
            [others => IR.No_Value];
          Saved : array (1 .. Positive'Max (1, Count)) of IR.Slot_Id :=
            [others => IR.No_Slot];
+         Hidden : IR.Value_Id := IR.No_Value;
          Made : IR.Value_Id;
       begin
          --  [0410] fixes argument evaluation left to right.  Every argument
@@ -1387,9 +1395,23 @@ package body Landin.Stages.Lowering is
             end if;
          end loop;
 
+         if Returns_Aggregate then
+            pragma Assert (Destination /= IR.No_Slot);
+            Hidden := IR.Emit_Storage_Address
+              (Unit.all, Filling,
+               (Kind => IR.Frame_Slot, Slot => Destination), Site);
+         end if;
+
          Made :=
            IR.Emit_Call
-             (Unit.all, Filling, Target, Type_At (Of_Tree, Node), Site);
+             (Unit.all, Filling, Target,
+              (if Returns_Aggregate then Ty.No_Value
+               else Type_At (Of_Tree, Node)),
+              Site);
+
+         if Returns_Aggregate then
+            IR.Add_Argument (Unit.all, Filling, Made, Hidden);
+         end if;
 
          for Which in 1 .. Count loop
             IR.Add_Argument (Unit.all, Filling, Made, Given (Which));
@@ -3289,8 +3311,17 @@ package body Landin.Stages.Lowering is
                         elsif Landin.Checking.Type_Of (Types.all, Id)
                                 = Ty.Aggregate
                         then
-                           if Syn.Kind (Of_Tree, Value)
-                                = Syn.Struct_Literal
+                           if Syn.Kind (Of_Tree, Value) = Syn.Call then
+                              declare
+                                 Ignored : constant IR.Value_Id :=
+                                   Lower_Call
+                                     (Of_Tree, Value, Scope,
+                                      Destination => Where);
+                              begin
+                                 pragma Unreferenced (Ignored);
+                              end;
+                           elsif Syn.Kind (Of_Tree, Value)
+                                   = Syn.Struct_Literal
                            then
                               Write_Struct_Literal
                                 (Value,
@@ -3655,10 +3686,28 @@ package body Landin.Stages.Lowering is
            Res.Scope_At (Meanings.all, Of_Tree, Node);
          Runs : constant Syn.Node_Id := Syn.Body_Of (Of_Tree, Node);
          Gives : constant Syn.Node_Id := Syn.Return_Of (Of_Tree, Node);
+         Gives_Type : constant Ty.Type_Kind :=
+           (if Gives = Syn.No_Node then Ty.No_Value
+            else Landin.Checking.Type_Of
+              (Types.all, Declaration_At (Src, Gives)));
          Result : IR.Slot_Id := IR.No_Slot;
       begin
          Filling := IR.Item_For (Unit.all, Declaration_At (Src, Node));
          Slots := No_Slots;
+
+         --  D106's first internal parameter is an unspellable pointer to
+         --  caller-owned result storage.  Source parameters follow it through
+         --  the same register/stack run.
+         if Gives_Type = Ty.Aggregate then
+            declare
+               Ignored : constant IR.Slot_Id :=
+                 IR.Add_Parameter
+                   (Unit.all, Filling, Ty.Usize,
+                    Declaration_At (Src, Node), Site);
+            begin
+               pragma Unreferenced (Ignored);
+            end;
+         end if;
 
          --  [1920] names the parameters in order, so the run is that
          --  order and the ABI has somewhere to put an argument.

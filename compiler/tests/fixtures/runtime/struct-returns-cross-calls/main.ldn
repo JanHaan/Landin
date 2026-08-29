@@ -1,0 +1,15 @@
+pair: type = struct
+    left: i32
+    right: i32
+end pair
+
+make: (left: i32, right: i32) -> (result: pair) =
+    result = (left: left, right: right)
+end make
+
+public main: () -> (code: i32) =
+    mut answer: pair = make(19, 23)
+    mut other: pair = make(1, 2)
+    other.left = 40
+    code = answer.left + answer.right
+end main

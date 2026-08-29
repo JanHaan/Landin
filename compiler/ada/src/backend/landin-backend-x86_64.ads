@@ -40,9 +40,10 @@
 --  the internal convention's six argument registers from its operands in
 --  order, each at its own parameter's width.  Later scalar arguments occupy
 --  eight-byte stack slots in source order; the outgoing run is rounded to the
---  target's stack alignment and reclaimed after the call.  The result comes
---  from the accumulator into a frame cell; a callee returning none leaves
---  nothing to take.
+--  target's stack alignment and reclaimed after the call.  A scalar result
+--  comes from the accumulator into a frame cell; D106's aggregate result uses
+--  one leading opaque destination address and a complete callee-to-caller
+--  storage copy, while a callee returning none leaves nothing to take.
 --
 --  A module value is data and not code.  [1460] says nothing runs before the
 --  entry point, so a datum's block is folded here rather than executed, and
