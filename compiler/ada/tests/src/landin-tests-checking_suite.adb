@@ -1765,10 +1765,16 @@ package body Landin.Tests.Checking_Suite is
      (Item : in out Landin.Testing.Context)
    is
       procedure Check_Failure
-        (Text : String; Code : String; What : String);
+        (Text : String;
+         Code : String;
+         What : String;
+         No_Concrete_Instances : Boolean := False);
 
       procedure Check_Failure
-        (Text : String; Code : String; What : String)
+        (Text : String;
+         Code : String;
+         What : String;
+         No_Concrete_Instances : Boolean := False)
       is
          Work : Landin.Stages.Compilation :=
            Landin.Stages.Create (Landin.Targets.Linux_X86_64);
@@ -1789,7 +1795,11 @@ package body Landin.Tests.Checking_Suite is
               (Item, Src /= Landin.Source.No_Source and then Ran = 3
                 and then Landin.Diagnostics.Count (Reports) = 1
                 and then Landin.Diagnostics.Code
-                  (Landin.Diagnostics.Get (Reports, 1)) = Code,
+                  (Landin.Diagnostics.Get (Reports, 1)) = Code
+                and then
+                  (not No_Concrete_Instances
+                   or else Landin.Checking.Nominal_Type_Count
+                     (Landin.Stages.Types (Work).all) = 0),
                What);
          end;
       end Check_Failure;
@@ -1941,10 +1951,56 @@ package body Landin.Tests.Checking_Suite is
          & "end wrapper" & LF
          & "node: type (item: type) = struct" & LF
          & "    next: wrapper(node(item))" & LF
-         & "end node" & LF
-         & "bad: node(u8)" & LF,
+         & "end node" & LF,
          "L0313",
-         "promoting a currently building actual reports nominal recursion");
+         "symbolic promotion rejects unused indirect nominal recursion",
+         No_Concrete_Instances => True);
+      Check_Failure
+        ("node: type (item: type) = struct" & LF
+         & "    next: wrapper(node(item))" & LF
+         & "end node" & LF
+         & "wrapper: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end wrapper" & LF,
+         "L0313",
+         "symbolic recursion is declaration-order independent",
+         No_Concrete_Instances => True);
+      Check_Failure
+        ("wrapper: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end wrapper" & LF
+         & "node: type (item: type) = struct" & LF
+         & "    next: wrapper([0]node(item))" & LF
+         & "end node" & LF,
+         "L0313",
+         "a symbolic nominal-array obligation remains a value edge",
+         No_Concrete_Instances => True);
+      Check_Failure
+        ("wrapper: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end wrapper" & LF
+         & "left: type (item: type) = struct" & LF
+         & "    next: wrapper(right(item))" & LF
+         & "end left" & LF
+         & "right: type (item: type) = struct" & LF
+         & "    next: wrapper(left(item))" & LF
+         & "end right" & LF,
+         "L0313",
+         "symbolic obligations reject mutual used-formal recursion",
+         No_Concrete_Instances => True);
+      Check_Failure
+        ("one: type (item: type) = struct" & LF
+         & "    value: item" & LF
+         & "end one" & LF
+         & "two: type (item: type) = struct" & LF
+         & "    value: one(item)" & LF
+         & "end two" & LF
+         & "node: type (item: type) = struct" & LF
+         & "    next: two(node(item))" & LF
+         & "end node" & LF,
+         "L0313",
+         "symbolic obligations survive multiple used-formal wrappers",
+         No_Concrete_Instances => True);
       Check_Failure
         ("huge: type (fixed count: u64) = struct" & LF
          & "    bytes: [count]u64" & LF

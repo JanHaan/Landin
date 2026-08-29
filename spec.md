@@ -7551,9 +7551,18 @@ declaration is created, and the template and its formals create no IR item,
 slot or ABI position. Lowering maps only concrete nominal identities and their
 instantiated neutral shape trees.
 
-Every template is first walked symbolically. Free names, decidable fixed-formal
-and field-shape errors, duplicate fields and cases, and unconditional by-value
-recursion are therefore rejected even when no instance is requested. A truly
+Every template is first walked symbolically. An identity-only nonconcrete
+struct or nominal-array actual retains a transient obligation containing its
+source template and symbolic binding run rather than collapsing to an
+unqualified unknown. If another template substitutes that obligation at a
+by-value position, the checker follows it through any number of used-formal
+wrappers; reaching an active nominal obligation is L0313. The obligation is
+local to declaration validation: it interns no guessed actual, writes no AST
+metadata and disappears with the checking run. A plain unused formal, phantom
+actual or function-signature mention never promotes it. Free names, decidable
+fixed-formal and field-shape errors, duplicate fields and cases, and
+unconditional by-value recursion are therefore rejected even when no instance
+is requested. A truly
 actual-dependent failure is primary at each application and relates the field
 or expression in the template. An invalid layout state stores no application
 provenance: a repeated use of the same canonical key re-evaluates the bounded
@@ -7582,7 +7591,8 @@ or leak compile-time binders into runtime representation. All were declined.
 `positive/parameterized-struct-instances`,
 `positive/parameterized-struct-identity-only` and
 `positive/parameterized-struct-lazy-value-layout`; the
-`negative/parameterized-struct-*` and
-`negative/nominal-struct-recursive-layout` fixtures; the generated IR and
+`negative/parameterized-struct-*` (including the unused indirect, mutual and
+multi-wrapper recursion cases) and `negative/nominal-struct-recursive-layout`
+fixtures; the generated IR and
 diagnostic catalogue; and `runtime/parameterized-struct-values` and
 `runtime/parameterized-struct-lazy-value-layout` on Linux x86-64.

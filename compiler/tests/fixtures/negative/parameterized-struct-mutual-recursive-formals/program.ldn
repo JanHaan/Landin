@@ -1,0 +1,9 @@
+wrapper: type (item: type) = struct
+    value: item
+end wrapper
+left: type (item: type) = struct
+    next: wrapper(right(item))
+end left
+right: type (item: type) = struct
+    next: wrapper(left(item))
+end right
