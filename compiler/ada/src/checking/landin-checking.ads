@@ -38,7 +38,8 @@
 --  function type and D123 carries recursively nested descriptors through
 --  storage, parameters, results and anonymous routines.  D128 gives each
 --  descriptor an ordered result run and gives a two-or-more result value its
---  anonymous structural shape.  Type_Kind says that
+--  anonymous structural shape.  D131 puts the same descriptor beside a
+--  function-valued ordinary or payload field.  Type_Kind says that
 --  category and this table carries the complete signature descriptor beside
 --  each relevant node and declaration.  It never substitutes the declaration
 --  of one possible callee for that type evidence.  A call's type is its one
@@ -534,6 +535,10 @@ package Landin.Checking is
       --  ordinary struct.  Both answer the same question -- which
       --  declaration wrote the struct this field is made of.
       Aggregate_Body : Declaration_Id    := No_Declaration;
+      --  A function-valued field is one `usize` carrier whose complete
+      --  recursive type remains this target-neutral signature.  Zero means
+      --  an ordinary scalar field.
+      Signature : Signature_Id            := No_Signature;
    end record;
 
    type Field_Shape_Array is

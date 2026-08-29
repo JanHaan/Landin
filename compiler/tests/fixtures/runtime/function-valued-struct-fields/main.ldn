@@ -1,0 +1,101 @@
+problem: atom
+handler: type = (x: i32) -> (r: i32)
+fallible: type = (x: i32) -> (r: i32) ! problem
+
+box: type = struct
+    handler: handler
+    tail: i32
+end box
+
+outer: type = struct
+    head: i32
+    nested: box
+end outer
+
+choice: type = struct
+    which: variant
+        empty |
+        active: (handler: handler, bias: i32)
+    end which
+end choice
+
+fallible_box: type = struct
+    handler: fallible
+end fallible_box
+
+plus_one: (x: i32) -> (r: i32) = x + 1 end plus_one
+plus_two: (x: i32) -> (r: i32) = x + 2 end plus_two
+
+maybe: (x: i32) -> (r: i32) ! problem =
+    fail problem when x == 0
+    r = x
+end maybe
+
+stored: handler = plus_two
+mut global: box = (handler: plus_one, tail: 3)
+alias: box = global
+anonymous: box =
+    (handler: (x: i32) -> (r: i32) = x + 3 end, tail: 1)
+mut selected: choice = (which: active(handler: stored, bias: 4))
+fallible_state: fallible_box = (handler: maybe)
+
+nested_call: () -> (r: i32) =
+    mut local: outer
+    local = outer(head: 1, nested: box(handler: plus_one, tail: 2))
+    r = local.nested.handler(5)
+end nested_call
+
+array_call: () -> (r: i32) =
+    mut callbacks: [2]box
+    callbacks[0] = box(handler: plus_one, tail: 0)
+    callbacks[1] = box(handler: plus_two, tail: 0)
+    r = callbacks[0].handler(5) + callbacks[1].handler(5)
+end array_call
+
+computed_call: (at: usize) -> (r: i32) =
+    mut callbacks: [2]box
+    callbacks[0] = box(handler: plus_one, tail: 0)
+    callbacks[1] = box(handler: plus_two, tail: 0)
+    callbacks[at].handler = plus_one
+    r = callbacks[at].handler(5)
+end computed_call
+
+variant_call: () -> (r: i32) =
+    r = 0
+    match selected.which
+        empty: r = 0
+        active(handler, bias): r = handler(5) + bias
+    end match
+end variant_call
+
+make_box: (candidate: handler) -> (result: box) =
+    result = box(handler: candidate, tail: 5)
+end make_box
+
+apply_box: (value: box, x: i32) -> (r: i32) =
+    r = value.handler(x) + value.tail
+end apply_box
+
+public main: () -> (code: i32) =
+    mut local: box = (handler: plus_one, tail: 4)
+    first := local.handler(10)
+    local.handler = plus_two
+    global.handler = local.handler
+    copy := global
+    recovered := fallible_state.handler(0) else 42
+
+    code = 1
+    if first == 11
+       and copy.handler(10) == 12 and copy.tail == 3
+       and alias.handler(1) == 2
+       and anonymous.handler(1) == 4
+       and nested_call() == 6
+       and array_call() == 13
+       and computed_call(1) == 6
+       and variant_call() == 11
+       and apply_box(make_box(plus_two), 5) == 12
+       and recovered == 42
+    then
+        code = 42
+    end if
+end main

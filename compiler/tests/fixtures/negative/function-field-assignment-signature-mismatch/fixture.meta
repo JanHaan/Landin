@@ -1,0 +1,5 @@
+class: negative
+summary: replacing a mutable function-valued field requires its complete structural signature
+constructs: 0060, 0670, 0700, 1000, 1790, 1810, 1890, 1900
+program: program.ldn
+codes: L0301

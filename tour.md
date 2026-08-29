@@ -615,7 +615,9 @@ triple := [1.0, 2.0, 3.0]        -- [3]f32
 zeroed is the all-bits-zero image of a type. Two separate
 properties decide where it may appear. A type HAS a zero
 image when all-zero is a valid value for it; that is what
-lets a surrounding struct or array be zeroed. A type ACCEPTS
+lets a surrounding struct or array be zeroed. A function address has no zero
+image, so a struct or active variant payload containing one must supply it
+explicitly rather than using whole or trailing `zeroed`. A type ACCEPTS
 the word zeroed only when that image has one obvious
 reading. Numbers, bool, ranges containing zero and
 aggregates of those accept it. Named value sets do not:
@@ -1575,6 +1577,13 @@ end on_byte
 
 ```
 
+A function-valued field is called through its ordinary selection:
+`callback.call(callback.state, byte)`. It keeps the complete structural
+signature of the field type through construction, assignment, aggregate copy,
+variant payloads, nesting and arrays of such structs. The root binding decides
+whether the field may be replaced; a call evaluates that selected code address
+before its arguments.
+
 ### [1010] Anonymous functions
 
 Anonymous functions. No capture: their routine may use module declarations,
@@ -2391,6 +2400,11 @@ table: [4]u32 = [1, 2, 4, 8]
 mut call_count: u32 = 0
 
 ```
+
+A function value in a module struct image is likewise known: it is a static
+routine address, not a call or compile-time execution. Such a field may name a
+declared or no-capture anonymous function, and a module struct containing one
+needs an explicit image because no zero function address exists [0540].
 
 ### [1470] A package is a named collection of modules with a version
 

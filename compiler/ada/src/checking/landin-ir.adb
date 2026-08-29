@@ -1245,6 +1245,7 @@ package body Landin.IR is
    begin
       if Instruction_Held.Op
            in Function_Address | Load | Load_Datum | Load_Field
+              | Load_Element | Load_Variant_Field
       then
          return Instruction_Held.Signature;
       end if;
@@ -2073,7 +2074,8 @@ package body Landin.IR is
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0;
-      Below  : Path_Step_Array := No_Path_Steps) return Value_Id
+      Below  : Path_Step_Array := No_Path_Steps;
+      Signature : Signature_Id := No_Signature) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
       Under : constant Run := Stored_Path (Into, Below);
@@ -2082,6 +2084,7 @@ package body Landin.IR is
                      Result => Result,
                      Site   => Site,
                      Named  => Datum,
+                     Signature => Signature,
                      Element_Field => Field,
                      Nested      => Steps,
                      Below_Element => Under,
@@ -2141,7 +2144,8 @@ package body Landin.IR is
       Nested : Path_Step_Array := No_Path_Steps;
       Variant_Case : Natural := 0;
       Variant_Payload_Field : Natural := 0;
-      Below  : Path_Step_Array := No_Path_Steps) return Value_Id
+      Below  : Path_Step_Array := No_Path_Steps;
+      Signature : Signature_Id := No_Signature) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
       Under : constant Run := Stored_Path (Into, Below);
@@ -2150,6 +2154,7 @@ package body Landin.IR is
                      Result => Result,
                      Site   => Site,
                      Slot   => Slot,
+                     Signature => Signature,
                      Element_Field => Field,
                      Nested      => Steps,
                      Below_Element => Under,
@@ -2456,7 +2461,8 @@ package body Landin.IR is
       Payload_Field : Positive;
       Result        : Landin.Types.Scalar_Name;
       Site          : Landin.Provenance.Origin;
-      Nested        : Path_Step_Array := No_Path_Steps) return Value_Id
+      Nested        : Path_Step_Array := No_Path_Steps;
+      Signature     : Signature_Id := No_Signature) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
    begin
@@ -2466,6 +2472,7 @@ package body Landin.IR is
                       Result                => Result,
                       Site                  => Site,
                       Source                => Source,
+                      Signature             => Signature,
                       Element_Field         => Field,
                       Nested                => Steps,
                       Variant_Case          => Which,

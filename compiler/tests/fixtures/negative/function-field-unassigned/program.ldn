@@ -1,0 +1,11 @@
+handler: type = () -> (r: i32)
+box: type = struct
+    callback: handler
+    other: i32
+end box
+
+read_early: () -> (result: i32) =
+    mut local: box
+    local.other = 1
+    result = local.callback()
+end read_early

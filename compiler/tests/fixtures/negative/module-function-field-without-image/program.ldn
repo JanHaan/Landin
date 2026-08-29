@@ -1,0 +1,6 @@
+handler: type = () -> none
+box: type = struct
+    callback: handler
+end box
+
+mut state: box

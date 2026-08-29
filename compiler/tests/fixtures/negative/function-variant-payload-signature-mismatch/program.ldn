@@ -1,0 +1,10 @@
+handler: type = (x: i32) -> (r: i32)
+choice: type = struct
+    kind: variant
+        empty |
+        some: (callback: handler)
+    end kind
+end choice
+
+wrong: (x: bool) -> (r: i32) = 0 end wrong
+state: choice = (kind: some(callback: wrong))

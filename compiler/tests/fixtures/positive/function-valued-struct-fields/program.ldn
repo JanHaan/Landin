@@ -1,0 +1,39 @@
+handler: type = (x: i32) -> (r: i32)
+
+cell: type = struct
+    callback: handler
+end cell
+
+nested: type = struct
+    value: cell
+end nested
+
+choice: type = struct
+    kind: variant
+        empty |
+        some: (callback: handler)
+    end kind
+end choice
+
+identity: (x: i32) -> (r: i32) = x end identity
+other: (x: i32) -> (r: i32) = x + 1 end other
+
+static_cell: cell = (callback: identity)
+static_alias: cell = static_cell
+static_choice: choice = (kind: some(callback: other))
+
+use: (source: cell) -> (result: cell) =
+    mut local: nested
+    local = nested(value: cell(callback: source.callback))
+    local.value.callback = other
+
+    mut cells: [2]cell
+    cells[0] = cell(callback: identity)
+    cells[1] = cell(callback: local.value.callback)
+    _ = cells[0].callback(1)
+
+    match static_choice.kind
+        empty: result = cell(callback: source.callback)
+        some(callback): result = cell(callback: callback)
+    end match
+end use

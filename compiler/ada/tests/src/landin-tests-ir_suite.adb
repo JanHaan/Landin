@@ -1050,13 +1050,13 @@ package body Landin.Tests.IR_Suite is
             Landin.IR.Aggregate_Field_Image_Array'
               (1 => (others => <>),
                2 => (Form => Landin.IR.Finite,
-                     Offset => 0, Count => 2, Value => 0),
+                     Offset => 0, Count => 2, Value => 0, others => <>),
                3 => (Form => Landin.IR.Absent,
-                     Offset => 2, Count => 0, Value => 0),
+                     Offset => 2, Count => 0, Value => 0, others => <>),
                4 => (Form => Landin.IR.Repeated,
-                     Offset => 2, Count => 0, Value => 7),
+                     Offset => 2, Count => 0, Value => 7, others => <>),
                5 => (Form => Landin.IR.Hybrid,
-                     Offset => 2, Count => 2, Value => 23)),
+                     Offset => 2, Count => 2, Value => 23, others => <>)),
             Landin.Types.Folded_Array'(11, 13, 17, 19));
          Block := Landin.IR.Add_Block
            (Unit, Datum, Landin.Resolution.Program_Scope, Site);

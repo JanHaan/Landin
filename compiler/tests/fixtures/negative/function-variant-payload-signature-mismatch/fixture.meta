@@ -1,0 +1,5 @@
+class: negative
+summary: a function-valued variant payload field requires its declared structural signature
+constructs: 0680, 0700, 1000, 1790, 1890
+program: program.ldn
+codes: L0301
