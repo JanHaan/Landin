@@ -1649,17 +1649,37 @@ package body Landin.Stages.Checking is
                  Syn.Nth_Argument (Of_Tree, Node, Which);
             begin
                if Wants = Ty.Fixed_Array
-                 and then Syn.Kind (Of_Tree, Argument) = Syn.Array_Literal
+                 and then Syn.Kind (Of_Tree, Argument)
+                            in Syn.Array_Literal | Syn.Array_Repetition
+                               | Syn.Mixed_Array_Repetition
                then
-                  Check_Array_Literal
-                    (Of_Tree, Parameter, Argument,
-                     Landin.Checking.Array_Length
-                       (Types.all, Their_Tree.all,
-                        Syn.Declared_Type (Their_Tree.all, Parameter)),
-                     Landin.Checking.Array_Element
-                       (Types.all, Their_Tree.all,
-                        Syn.Declared_Type (Their_Tree.all, Parameter)),
-                     Static_Image => False);
+                  declare
+                     Expected : constant Landin.Checking.Element_Count :=
+                       Landin.Checking.Array_Length
+                         (Types.all, Their_Tree.all,
+                          Syn.Declared_Type (Their_Tree.all, Parameter));
+                     Element : constant Ty.Scalar_Name :=
+                       Landin.Checking.Array_Element
+                         (Types.all, Their_Tree.all,
+                          Syn.Declared_Type (Their_Tree.all, Parameter));
+                  begin
+                     case Syn.Kind (Of_Tree, Argument) is
+                        when Syn.Array_Literal =>
+                           Check_Array_Literal
+                             (Of_Tree, Parameter, Argument,
+                              Expected, Element, Static_Image => False);
+                        when Syn.Array_Repetition =>
+                           Check_Array_Repetition
+                             (Of_Tree, Parameter, Argument,
+                              Expected, Element, Static_Image => False);
+                        when Syn.Mixed_Array_Repetition =>
+                           Check_Mixed_Array_Repetition
+                             (Of_Tree, Parameter, Argument,
+                              Expected, Element, Static_Image => False);
+                        when others =>
+                           raise Landin.Compiler_Defect;
+                     end case;
+                  end;
                elsif Wants in Ty.Aggregate | Ty.Fixed_Array
                  and then Syn.Kind (Of_Tree, Argument) = Syn.Zeroed_Literal
                then

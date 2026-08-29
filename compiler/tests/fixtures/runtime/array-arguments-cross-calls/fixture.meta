@@ -2,5 +2,5 @@ class: runtime
 summary: fixed arrays cross register and stack argument positions by value
 constructs: 0080, 0410, 0520, 0930, 1920
 program: main.ldn
-status: 71
+status: 88
 targets: linux-x86-64

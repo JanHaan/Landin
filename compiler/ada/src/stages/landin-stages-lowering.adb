@@ -715,7 +715,9 @@ package body Landin.Stages.Lowering is
                            (Kind => IR.Frame_Slot, Slot => Temporary),
                            Site_Of (Of_Tree, Argument));
                      end;
-                  elsif Syn.Kind (Of_Tree, Argument) = Syn.Array_Literal
+                  elsif Syn.Kind (Of_Tree, Argument)
+                          in Syn.Array_Literal | Syn.Array_Repetition
+                             | Syn.Mixed_Array_Repetition
                   then
                      declare
                         Parameter : constant Syn.Node_Id :=
@@ -732,10 +734,14 @@ package body Landin.Stages.Lowering is
                                (Landin.Checking.Array_Length (Types.all, Id)),
                              Res.No_Declaration,
                              Site_Of (Of_Tree, Argument));
+                        Prefix : constant Natural :=
+                          (if Syn.Kind (Of_Tree, Argument)
+                                in Syn.Array_Literal
+                                   | Syn.Mixed_Array_Repetition
+                           then Syn.Element_Count (Of_Tree, Argument)
+                           else 0);
                      begin
-                        for Position in
-                          1 .. Syn.Element_Count (Of_Tree, Argument)
-                        loop
+                        for Position in 1 .. Prefix loop
                            declare
                               Element : constant Syn.Node_Id :=
                                 Syn.Nth_Element
@@ -753,6 +759,25 @@ package body Landin.Stages.Lowering is
                                  Site_Of (Of_Tree, Element));
                            end;
                         end loop;
+
+                        if Syn.Kind (Of_Tree, Argument)
+                             in Syn.Array_Repetition
+                                | Syn.Mixed_Array_Repetition
+                        then
+                           declare
+                              Repeated : constant Syn.Node_Id :=
+                                Syn.Repeated_Element (Of_Tree, Argument);
+                           begin
+                              IR.Emit_Array_Fill
+                                (Unit.all, Filling,
+                                 (Kind => IR.Frame_Slot,
+                                  Slot => Temporary),
+                                 IR.Part_Position (Prefix + 1),
+                                 Lower_Expression
+                                   (Of_Tree, Repeated, Scope),
+                                 Site_Of (Of_Tree, Repeated));
+                           end;
+                        end if;
 
                         Given (Which) := IR.Emit_Storage_Address
                           (Unit.all, Filling,
