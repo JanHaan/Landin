@@ -2623,6 +2623,57 @@ package body Landin.Tests.Verifier_Suite is
            Landin.Stages.Create (Landin.Targets.Linux_X86_64);
          Site : Landin.Provenance.Origin;
          Unit : IR.Unit;
+         Expected, Actual : IR.Atom_Set_Id;
+         Signature : IR.Signature_Id;
+         Routine : IR.Item_Id;
+         Result, Aggregate : IR.Slot_Id;
+         Block : IR.Block_Id;
+         Value : IR.Value_Id;
+      begin
+         Ready (Work, Site);
+         IR.Prepare (Unit, Landin.Stages.Meanings (Work).all);
+         Expected := IR.Add_Atom_Set (Unit, [1 => 5]);
+         Actual := IR.Add_Atom_Set (Unit, [1 => 6]);
+         Signature := IR.Add_Signature
+           (Unit, IR.No_Signature_Parts,
+            (Kind => Landin.Types.U32, others => <>));
+         Routine := IR.Add_Item
+           (Unit, IR.Routine, 1, Landin.Types.U32, Site);
+         IR.Set_Signature (Unit, Routine, Signature);
+         Result := IR.Add_Slot
+           (Unit, Routine, Landin.Types.U32, 2, Site);
+         Aggregate := IR.Add_Aggregate_Slot
+           (Unit, Routine, IR.No_Declaration, Site);
+         IR.Add_Slot_Field
+           (Unit, Routine, Aggregate,
+            (Kind    => IR.Scalar_Field_Shape,
+             Element => Landin.Types.U32,
+             Length  => 1,
+             Atoms   => Expected,
+             others  => <>));
+         IR.Set_Result_Slot (Unit, Routine, Result);
+         Block := IR.Add_Block
+           (Unit, Routine, Landin.Resolution.Program_Scope, Site);
+         IR.Enter (Unit, Routine, Block);
+         Value := IR.Emit_Atom (Unit, Routine, 6, Actual, Site);
+         IR.Emit_Store_Slot_Field
+           (Unit, Routine, Aggregate, 1, Value, Site);
+         Value := IR.Emit_Number
+           (Unit, Routine, Landin.Types.U32, 0, False, Site);
+         IR.Emit_Store (Unit, Routine, Result, Value, Site);
+         Value := IR.Emit_Load (Unit, Routine, Result, Site);
+         IR.Emit_Leave (Unit, Routine, Value, Site);
+         IR.Leave_Block (Unit, Routine);
+         Expect
+           (Item, V.Check (Unit), V.Atom_Metadata_Disagrees,
+            "an anonymous result field retains its structural atom set");
+      end;
+
+      declare
+         Work : Landin.Stages.Compilation :=
+           Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+         Site : Landin.Provenance.Origin;
+         Unit : IR.Unit;
          Errors : IR.Atom_Set_Id;
          Callee_Signature, Caller_Signature : IR.Signature_Id;
          Callee, Caller : IR.Item_Id;

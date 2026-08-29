@@ -1945,6 +1945,18 @@ package body Landin.IR is
       Signature : Signature_Id := No_Signature) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
+      Atoms : constant Atom_Set_Id :=
+        (if not Holds (Into, Datum)
+           or else Field_Count (Into, Datum) = 0
+           or else Field > Part_Position (Field_Count (Into, Datum))
+           or else Result_Of (Into, Datum) = Landin.Types.Fixed_Array
+           or else not Path_Is_Valid
+             (Into, Nth_Field_Shape (Into, Datum, Positive (Field)), Nested)
+         then No_Atom_Set
+         else Shape_At
+           (Into,
+            Nth_Field_Shape (Into, Datum, Positive (Field)),
+            Nested).Atoms);
    begin
       return Append
         (Into, Item,
@@ -1955,6 +1967,7 @@ package body Landin.IR is
                       Part        => Field,
                       Nested      => Steps,
                       Signature   => Signature,
+                      Atom_Set    => Atoms,
                       others      => <>));
    end Emit_Load_Field;
 
@@ -1969,6 +1982,20 @@ package body Landin.IR is
       Signature : Signature_Id := No_Signature) return Value_Id
    is
       Steps : constant Run := Stored_Path (Into, Nested);
+      Atoms : constant Atom_Set_Id :=
+        (if not Holds (Into, Item, Slot)
+           or else Slot_Field_Count (Into, Item, Slot) = 0
+           or else Field > Part_Position (Slot_Field_Count (Into, Item, Slot))
+           or else Is_Array (Into, Item, Slot)
+           or else not Path_Is_Valid
+             (Into,
+              Nth_Slot_Field_Shape
+                (Into, Item, Slot, Positive (Field)), Nested)
+         then No_Atom_Set
+         else Shape_At
+           (Into,
+            Nth_Slot_Field_Shape (Into, Item, Slot, Positive (Field)), Nested)
+              .Atoms);
    begin
       return Append
         (Into, Item,
@@ -1979,6 +2006,7 @@ package body Landin.IR is
                       Part        => Field,
                       Nested      => Steps,
                       Signature   => Signature,
+                      Atom_Set    => Atoms,
                       others      => <>));
    end Emit_Load_Slot_Field;
 

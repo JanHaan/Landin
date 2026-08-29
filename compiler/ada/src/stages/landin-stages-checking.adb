@@ -2778,6 +2778,9 @@ package body Landin.Stages.Checking is
             when Ty.Function_Value =>
                Landin.Checking.Note_Signature
                  (Types.all, Of_Tree, Node, Part.Signature);
+            when Ty.Atom_Value =>
+               Landin.Checking.Note_Atom_Set
+                 (Types.all, Of_Tree, Node, Part.Atoms);
             when others =>
                null;
          end case;
@@ -4144,6 +4147,15 @@ package body Landin.Stages.Checking is
                      Landin.Checking.Note_Atom_Set
                        (Types.all, Of_Tree, Node,
                         Landin.Checking.Atom_Set_Of
+                          (Types.all, Of_Tree, Operand));
+                  elsif Held = Ty.Aggregate
+                    and then Landin.Checking.Result_Shape_Of
+                      (Types.all, Of_Tree, Operand)
+                        /= Landin.Checking.No_Signature
+                  then
+                     Landin.Checking.Note_Result_Shape
+                       (Types.all, Of_Tree, Node,
+                        Landin.Checking.Result_Shape_Of
                           (Types.all, Of_Tree, Operand));
                   elsif Held = Ty.Aggregate then
                      Landin.Checking.Note_Body

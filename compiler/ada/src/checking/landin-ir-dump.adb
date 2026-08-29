@@ -94,6 +94,8 @@ package body Landin.IR.Dump is
                when Landin.Types.Function_Value =>
                   "function signature "
                   & Trimmed (Signature_Id'Image (Part.Signature)),
+               when Landin.Types.Atom_Value =>
+                  "atom-set " & Trimmed (Atom_Set_Id'Image (Part.Atoms)),
                when others => "invalid");
 
       --  D74/D75 use one target-neutral shape spelling for measurement,
@@ -106,7 +108,8 @@ package body Landin.IR.Dump is
       begin
          case Shape.Kind is
             when Scalar_Field_Shape =>
-               return Landin.Types.Spelling (Shape.Element);
+               return Landin.Types.Spelling (Shape.Element)
+                 & Atom_Set_Text (Shape.Atoms);
             when Array_Field_Shape =>
                --  D121: the element may be an ordinary struct, and then it
                --  is spelt by the same one spelling every shape is.
