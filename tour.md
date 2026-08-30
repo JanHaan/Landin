@@ -649,16 +649,24 @@ irqs:   set(irq) = zeroed       -- fine: a set is bools, see [0730]
 ### [0550] The first of those two properties is also a concept
 
 The first of those two properties is also a concept, so
-generic code can ask for it. It is supplied by the compiler
-rather than declared, which is the only kind of conformance
-that is: the compiler is the only thing that knows a type's
-bit patterns.
+generic code can ask for it. `zeroable` is the one closed compiler concept:
+it needs no source declaration, and its conformances are supplied by the
+compiler rather than declared, which is the only kind of conformance that is.
+The compiler is the only thing that knows a type's bit patterns. Its conceptual
+signature is:
 
 ```landin
-zeroable: type = concept (T: type)
+-- compiler-owned; a program does not repeat this declaration
+zeroable: type = concept (t: type)
 end zeroable
 
 ```
+
+A program cannot declare a `zeroable` conformance. The supplied family contains
+the enabled scalars, a fixed array exactly when its element is zeroable (also at
+length zero), and an aggregate exactly when its recursively active all-zero
+shape has a zero image. Atoms, functions, pointers and slices are not in it.
+This is a closed named family, not reflection over arbitrary representations.
 
 Which is what lets a shape that needs a value for storage it
 has not filled yet say so, instead of pretending — see
@@ -2167,6 +2175,18 @@ could quietly change the behaviour of generic code inside
 a library, which is a strange thing for a language whose
 whole point is that costs and effects are visible.
 
+The enabled R2.60 register collects every source file before constrained
+instantiation. It matches labels to all input types and direct entries, checks
+concrete supplying functions against the substituted entry signature, requires
+separate conformances for every composed parent, and diagnoses an ordinary
+collision even across files. A parameterized conformance quantifies one
+complete nominal type family: the target applies the leading binder once, in
+the same positions and kinds as the nominal declaration. One such family owns
+the target-template/concept space, so another family or a concrete exception is
+a collision rather than specialization. Lookup binds that family and records
+one concrete key; R2.70 later turns the retained generic supplying functions
+into physical evidence entries.
+
 ### [1290] A generic function takes the type as an ordinary parameter
 
 A generic function takes the type as an ordinary parameter,
@@ -2332,15 +2352,17 @@ end list
 
 ```
 
-The enabled declaration form takes unconstrained type parameters and fixed
-integer parameters. Applications are fully applied and positional. A type
-actual may be any enabled concrete identity; whether it is legal as a field,
-array element or payload is checked after substitution. Fixed actuals are
-integer literals, or fixed formals forwarded by another template, and must fit
-their declared integer type. Constraints remain later work. D138 applies the
-same substitution model to direct generic routine calls through exact argument
-deduction or a saturated named static list, and D139 selects module declaration
-lists with a closed fixed condition; neither mechanism executes user code.
+The enabled declaration form takes type parameters, each optionally carrying
+one direct concept constraint, and fixed integer parameters. Applications are
+fully applied and positional. A type actual may be any enabled concrete
+identity; whether it is legal as a field, array element or payload is checked
+after substitution. Fixed actuals are integer literals, or fixed formals
+forwarded by another template, and must fit their declared integer type. D142
+checks each constrained concrete application through the whole-program
+conformance register. D138 applies the same substitution model to direct
+generic routine calls through exact argument deduction or a saturated named
+static list, and D139 selects module declaration lists with a closed fixed
+condition; none of the three mechanisms executes user code.
 
 ```landin
 map: type (K: type is hashable, V: type) = struct ... end map
@@ -2348,8 +2370,8 @@ small: type (T: type is zeroable, fixed N: u32) = struct ... end small
 
 ```
 
-The two constrained examples above still describe the complete language rather
-than today's kernel. What is enabled already uses the same substitution model:
+The two constrained examples above use D142's enabled direct constraints. The
+rest uses the same substitution model:
 no user routine runs, each canonical nominal instance gets the target layout of
 its substituted fields when a value site requires one, and neither the template
 nor its formals acquire per-instance runtime state. Repeating an application

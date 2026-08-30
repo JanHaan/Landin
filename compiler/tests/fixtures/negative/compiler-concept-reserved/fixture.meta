@@ -1,0 +1,5 @@
+class: negative
+summary: users cannot impersonate the compiler-owned zeroable concept
+program: main.ldn
+codes: L0319
+constructs: 0550, 1230

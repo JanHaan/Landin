@@ -41,6 +41,8 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Checking.Actual_Type_Form;
    use type Landin.Checking.Array_Element_Form;
    use type Landin.Checking.Atom_Set_Id;
+   use type Landin.Checking.Concept_Id;
+   use type Landin.Checking.Conformance_Id;
    use type Landin.Checking.Element_Count;
    use type Landin.Checking.Error_Set_Form;
    use type Landin.Checking.Field_Kind;
@@ -6615,8 +6617,111 @@ package body Landin.Tests.Checking_Suite is
          "two atoms and one pointer keep a 32-bit tag-plus-payload layout");
    end Reference_Unions_Follow_Target_Layout;
 
+   procedure Conformance_Register_Uses_Normalized_Keys
+     (Item : in out Landin.Testing.Context);
+
+   procedure Conformance_Register_Uses_Normalized_Keys
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "conformance-table.ldn", Program);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Configurer'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 4, "the checker ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the table source is valid");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Point_Node : constant Landin.Syntax.Node_Id :=
+           Landin.Syntax.Nth_Declaration (Of_Tree.all, 2);
+         Point : Landin.Provenance.Declaration_Id :=
+           Landin.Provenance.No_Declaration;
+      begin
+         for Id in Landin.Provenance.Declaration_Id'(1)
+           .. Landin.Provenance.Declaration_Id
+             (Landin.Resolution.Declaration_Count (Meanings.all))
+         loop
+            if Landin.Resolution.Source_Of (Meanings.all, Id) = Src
+              and then Landin.Resolution.Node_Of (Meanings.all, Id)
+                = Point_Node
+            then
+               Point := Id;
+               exit;
+            end if;
+         end loop;
+
+         declare
+            Concept : constant Landin.Checking.Concept_Id :=
+              Landin.Checking.Intern_Concept (Types.all, Point);
+            Inputs : Landin.Checking.Actual_Tuple :=
+              Landin.Checking.Empty_Actuals;
+            Empty : constant Landin.Checking.Actual_Tuple :=
+              Landin.Checking.Empty_Actuals;
+            Target : constant Landin.Checking.Actual_Key :=
+              Landin.Checking.Scalar_Type_Actual (Landin.Types.I32);
+            Made : Landin.Checking.Conformance_Id;
+         begin
+            Landin.Checking.Append_Actual
+              (Inputs,
+               Landin.Checking.Scalar_Type_Actual (Landin.Types.U8));
+            Made := Landin.Checking.Add_Conformance
+              (Types.all, Concept, Target, Inputs, Empty, Src, Point_Node,
+               Landin.Checking.Declared_Conformance);
+
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Compiler_Zeroable_Concept (Types.all)
+                 /= Concept
+               and then Landin.Checking.Is_Compiler_Concept
+                 (Types.all,
+                  Landin.Checking.Compiler_Zeroable_Concept (Types.all))
+               and then not Landin.Checking.Is_Compiler_Concept
+                 (Types.all, Concept),
+               "the closed compiler concept is distinct from source concepts");
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Find_Conformance
+                 (Types.all, Concept, Target, Inputs) = Made
+               and then Landin.Checking.Conformance_Concept
+                 (Types.all, Made) = Concept
+               and then Landin.Checking.Conformance_Input_Count
+                 (Types.all, Made) = 1
+               and then Landin.Checking.Conformance_Source
+                 (Types.all, Made) = Src
+               and then Landin.Checking.Conformance_Node
+                 (Types.all, Made) = Point_Node,
+               "one normalized target, concept and input tuple finds one row");
+            Landin.Testing.Check
+              (Item,
+               Landin.Checking.Find_Conformance
+                 (Types.all, Concept,
+                  Landin.Checking.Scalar_Type_Actual (Landin.Types.U32),
+                  Inputs) = Landin.Checking.No_Conformance,
+               "a different normalized target has no conformance");
+         end;
+      end;
+   end Conformance_Register_Uses_Normalized_Keys;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "checking", "conformance register uses normalized keys",
+         Conformance_Register_Uses_Normalized_Keys'Access);
       Landin.Testing.Register
         (Into, "checking", "named runtime calls record formal positions",
          Named_Runtime_Calls_Record_One_Formal_Match'Access);

@@ -1,0 +1,5 @@
+class: negative
+summary: concept composition is a finite named graph
+program: main.ldn
+codes: L0301
+constructs: 1230, 1340

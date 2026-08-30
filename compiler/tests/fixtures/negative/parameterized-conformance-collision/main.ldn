@@ -1,0 +1,9 @@
+equatable: type = concept (t: type)
+end equatable
+
+box: type (t: type) = struct
+    value: t
+end box
+
+(t: type) box(t) is equatable ()
+(item: type) box(item) is equatable ()

@@ -26,7 +26,8 @@ package body Landin.Diagnostics.Checking is
    begin
       --  [1830] promises two facts and the checker writes neither: the
       --  construct's paragraph and the work that enables it both come out
-      --  of the tables above.
+      --  of the tables above.  Conformance failures use the ordinary note
+      --  argument; their exact note and related-source shape is catalogued.
       if Item = Unsupported_Use then
          Add_Note
            (Built, "the tour describes it at " & Construct (Refused));
@@ -39,6 +40,11 @@ package body Landin.Diagnostics.Checking is
       end if;
 
       if Because /= "" then
+         if not Landin.Provenance.Is_Known (Related) then
+            raise Compiler_Defect
+              with Text & " was given a related label and no origin";
+         end if;
+
          Add_Label
            (Built,
             Make_Label (Related.Source, Related.Where, Because));

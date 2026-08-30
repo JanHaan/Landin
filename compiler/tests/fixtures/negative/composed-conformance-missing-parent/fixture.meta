@@ -1,0 +1,5 @@
+class: negative
+summary: a composed conformance requires each explicit parent conformance
+program: main.ldn
+codes: L0318
+constructs: 1240, 1340

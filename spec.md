@@ -58,7 +58,8 @@ where the module is written, never inside a body.
 ```landin-grammar
 program     ::= declaration*
 declaration ::= "public"? (atom_declaration | binding | function
-                            | type_declaration)
+                            | type_declaration | concept_declaration
+                            | conformance_declaration)
                 | fixed_conditional
 fixed_conditional ::= "fixed" "if" expression "then" declaration*
                       ("elsif" expression "then" declaration*)*
@@ -253,9 +254,25 @@ nothing is refused [1860] both hold for it unchanged.
 type_declaration ::= identifier ":" "type"
                      ("=" (atom_union | type | struct_body)
                      | type_formals "=" (type | struct_body))
+concept_declaration ::= identifier ":" "type" "=" concept_body
+concept_body    ::= "concept" type_formals
+                    ("is" concept_reference
+                     ("," concept_reference)*)?
+                    concept_entry* "end" identifier?
+concept_entry   ::= identifier ":" signature
+conformance_declaration ::= type_formals? conformance_target "is"
+                            concept_reference "(" conformance_argument
+                            ("," conformance_argument)* ")"
+                          | type_formals? conformance_target "is"
+                            concept_reference "(" ")"
+conformance_target ::= array_type | pointer_type | slice_type
+                     | type_application | identifier
+conformance_argument ::= identifier ":" argument_rhs
+concept_reference ::= identifier
 type_formals    ::= "(" type_formal ("," type_formal)* ")"
-type_formal     ::= identifier ":" "type"
+type_formal     ::= identifier ":" "type" constraint?
                   | "fixed" identifier ":" type
+constraint      ::= "is" concept_reference
 atom_union      ::= identifier "|" identifier ("|" identifier)*
 struct_body      ::= "struct" member+ "end" identifier?
 member           ::= field | variant_part
@@ -509,8 +526,10 @@ an inner scope means nothing until the inner ones are named.
 | scope | what it holds |
 | --- | --- |
 | module | every file compiled together. There is one, until [1410]'s directories arrive. |
-| type declaration | D135's complete ordered formal list. The scope encloses the module and is visible in every fixed formal's declared type and in the alias or struct body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
-| signature | a declared routine's type/fixed formals, runtime parameters and named returns [1800]. Every binder is collected before any signature type is resolved, so its source order has no visibility meaning. Named returns are places the body assigns [0930]; all three binder kinds share one namespace, but type/fixed formals are compile-time-only and have no storage. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
+| type declaration | D135's complete ordered formal list. The scope encloses the module and is visible in every fixed formal's declared type, direct concept constraint and in the alias or struct body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
+| concept declaration | D142's complete ordered type-formal list. It encloses the module and is visible in every direct constraint, parent name and entry signature. Entry parameter and result labels describe signature positions and declare nothing in this scope. |
+| conformance declaration | D142's optional complete type/fixed binder. It encloses the module and is visible in every binder constraint, the target type and every labelled input or function RHS. The conformance itself declares no module name. |
+| signature | a declared routine's type/fixed formals, runtime parameters and named returns [1800]. Every binder is collected before any signature type or direct concept constraint is resolved, so its source order has no visibility meaning. Named returns are places the body assigns [0930]; all three binder kinds share one namespace, but type/fixed formals are compile-time-only and have no storage. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
 | body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; one for every bare `begin` block; and one for a call-site recovery [1810] [1030]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings and a recovery error name live only in their block. |
 
 [1800]'s direct final expression opens no additional scope inside its function
@@ -7484,8 +7503,9 @@ arguments are positional: a type application is `name(type_argument, ...)`,
 where an argument is a type or an integer for a fixed formal. A fixed formal
 may supply an array bound, so `[n]t` is an alias body. The grammar admits that
 formal list before either an alias type or a struct body. A parameterized atom
-union and constraints remain outside the enabled kernel. The same
-compile-time-only binders are admitted in declared-routine syntax and
+union remains outside the enabled kernel. D142 later adds one direct concept
+constraint to a type formal without changing this positional substitution. The
+same compile-time-only binders are admitted in declared-routine syntax and
 resolution; D138 enables exact direct-call deduction, and D139 separately
 enables target-selected module declaration lists.
 
@@ -7653,7 +7673,7 @@ or expression in the template. An invalid layout state stores no application
 provenance: a repeated use of the same canonical key re-evaluates the bounded
 body walk so it receives its own primary while retaining one identity and
 tuple. Fixed actuals remain integer literals or
-forwarded fixed formals. Parameterized atom unions and constraints remain
+forwarded fixed formals. Parameterized atom unions remain
 deferred; D138 and D139 separately define generic routine instances and fixed
 conditional module declarations.
 
@@ -7927,3 +7947,92 @@ and identity with no language value; an unspecified pattern contradicts
 
 **Pinned by** `runtime/r250-references`, the empty-slice IR verifier path, and
 the Linux x86-64 backend's target-derived empty-base emission.
+
+### D142 — Concepts and conformances are collected before constrained instantiation
+
+**The tour said** that a concept is a named requirement bundle [1230], a
+conformance registers a type [1240], a leading binder quantifies a
+parameterized type [1250], the key is `(type, concept, input types)` [1270],
+and every collision is an error [1280]. It did not settle the enabled grammar,
+the scopes, how an uninstantiated parameterized collision is found, or where a
+constraint lookup is performed without already having R2.70's evidence table.
+
+**Chosen:** `concept` and `is` are contextual words. A concept declaration
+carries one nonempty collected type-formal list, zero or more direct parent
+concept names, and an ordered run of named complete function signatures. A
+concept entry's error set is infallible or concrete, never inferred. A direct
+`is concept_name` may constrain a type formal in a type, routine, concept or
+conformance binder. The concept and conformance scopes collect their complete
+static binder before resolving any target, input or signature type.
+
+A conformance carries an optional leading type/fixed binder, one target type,
+one direct concept name, and a labelled run. Labels supply every concept input
+formal after the represented type and every direct concept entry exactly once.
+The whole-program key is the normalized represented type, concept identity and
+ordered normalized input-type tuple; function labels are payload, not key.
+Concrete supplied functions have exactly the substituted concept signature.
+Composed concepts require separate conformances to every named parent; having
+the child never synthesizes a parent.
+
+A parameterized conformance quantifies one complete nominal type family. Its
+target is that declaration fully applied to the binder in the same positional
+order and kind, with every binder used once. This closed family form covers the
+container conformances that forced [1250], avoids arithmetic inversion and
+specialization, and lets collection reject a second family for the same target
+template and concept even if no generic call requests an instance. A concrete
+exception under such a family is also a collision. Lookup substitutes the
+family binder, checks its own constraints, and interns the resulting concrete
+key. There is no search by return context, conversion, precedence, weak entry,
+or orphan rule.
+
+Collection retains parameterized supplying functions and the concrete binder
+tuple selected by lookup. R2.70 owns turning that retained selection into an
+evidence schema and validating the substituted generic entry at that ABI
+boundary; R2.60 emits no table and adds no generic dispatch operation.
+
+**Why the family restriction:** arbitrary overlapping type patterns require a
+general unification and specialization order the language has neither stated
+nor wanted. Silently checking only requested overlaps would contradict
+[1280]'s whole-program rule. One complete nominal family gives parameterized
+containers their required quantifier while keeping collision collection finite
+and independent of use.
+
+**Pinned by** `positive/concepts-and-conformances`,
+`positive/parameterized-conformance-lookup`,
+`negative/conformance-collision`,
+`negative/parameterized-conformance-collision`,
+`negative/constraint-not-satisfied`,
+`negative/conformance-entry-signature-mismatch`,
+`negative/composed-conformance-missing-parent`, and
+`negative/concept-composition-cycle`, plus parser, resolution and
+checker register cases.
+
+### D143 — `zeroable` is one closed compiler concept family
+
+**The tour said** that the compiler alone supplies `zeroable` conformances
+because only it knows bit patterns [0550], while [0540] separately distinguishes
+having a zero image from accepting the contextual word `zeroed`. It did not
+say whether `zeroable` needs a source declaration, whether users may add a
+missing entry, or how zero-length and nested enabled shapes enter the set.
+
+**Chosen:** `zeroable` is the sole compiler concept identity in R2.60 and needs
+no source declaration. A source declaration cannot impersonate that identity,
+and every source conformance naming it is L0319: users can neither synthesize a
+false entry nor override a true one. Lookup supplies a conformance for every
+enabled scalar; for a fixed array exactly when its element is zeroable, even at
+length zero; and for a nominal aggregate exactly when its recursively active
+all-zero field and first-variant-case payload shape has a zero image. Atoms,
+functions, pointers and slices are outside the family. The algorithm is the
+same checker predicate that admits an all-zero aggregate image, so contextual
+`zeroed` and the generic concept cannot drift.
+
+The set is closed and named. No source query enumerates it, no declaration is
+synthesized, and no reflection hook asks whether an arbitrary representation
+happens to be zero. A successful constrained lookup interns only the concrete
+semantic key for later evidence work.
+
+**Pinned by** `positive/compiler-zeroable-conformances`,
+`negative/nonzeroable-constraint`,
+`negative/nonzeroable-zero-length-constraint`,
+`negative/compiler-conformance-reserved`, the checker register case, and the
+existing aggregate zero-image fixtures.

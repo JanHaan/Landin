@@ -160,10 +160,13 @@ package Landin.Syntax.Precedence is
                     | Landin.Tokens.Kw_Return | Landin.Tokens.Kw_Fail
                     | Landin.Tokens.Kw_Try | Landin.Tokens.Kw_If);
 
-   --  `declaration ::= "public"? (binding | function) | fixed if` [1740].
+   --  A parameterized conformance may begin with `(`; every other module
+   --  declaration keeps [1740]'s existing first token.
    function Begins_Declaration (Of_Kind : Landin.Tokens.Token_Kind)
      return Boolean
      is (Of_Kind in Landin.Tokens.Kw_Public | Landin.Tokens.Kw_Mut
-                    | Landin.Tokens.Kw_Fixed | Landin.Tokens.Identifier);
+                    | Landin.Tokens.Kw_Fixed | Landin.Tokens.Identifier
+                    | Landin.Tokens.Left_Paren
+                    | Landin.Tokens.Left_Bracket | Landin.Tokens.Kw_Ptr);
 
 end Landin.Syntax.Precedence;

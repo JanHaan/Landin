@@ -1,0 +1,29 @@
+ordered: type = concept (t: type)
+    less: (left: t, right: t) -> (yes: bool)
+end ordered
+
+drawable: type = concept (t: type)
+end drawable
+
+widget: type = concept (t: type) is drawable
+end widget
+
+sortable: type = concept (t: type is ordered) is ordered
+end sortable
+
+less_i32: (left: i32, right: i32) -> (yes: bool) =
+    yes = left < right
+end less_i32
+
+i32 is ordered (less: less_i32)
+i32 is drawable ()
+i32 is widget ()
+i32 is sortable ()
+
+identity: (t: type is ordered, value: t) -> (result: t) =
+    result = value
+end identity
+
+public main: () -> (code: i32) =
+    code = identity(42)
+end main

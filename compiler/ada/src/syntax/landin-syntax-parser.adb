@@ -27,7 +27,7 @@ package body Landin.Syntax.Parser is
    --  `program ::= declaration*` [1740].
    Declaration_Anchor : constant Tok.Kind_Set :=
      [Tok.Kw_Public | Tok.Kw_Mut | Tok.Kw_Fixed | Tok.Identifier
-        | Tok.End_Of_Input => True,
+        | Tok.Left_Paren | Tok.End_Of_Input => True,
       others => False];
 
    --  `block ::= statement* | value_statement* expression` [1800].  The
@@ -199,6 +199,14 @@ package body Landin.Syntax.Parser is
             Undo_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "undo");
 
+            --  These remain ordinary identifiers except in the three
+            --  contextual productions below.
+            Concept_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "concept");
+
+            Is_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "is");
+
             --  [1480] takes this bare toolchain root.  D139 recognizes it
             --  only as the fixed-condition intrinsic, not as a declaration.
             Compiler_Id : constant Landin.Source.Names.Name_Id :=
@@ -302,6 +310,12 @@ package body Landin.Syntax.Parser is
             function Parse_Type_Declaration
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
+            function Parse_Concept_Body
+              (Named   : Landin.Source.Names.Name_Id;
+               At_Name : Landin.Source.Span) return Node_Id;
+            function Parse_Conformance
+              (Exported  : Boolean;
+               Public_At : Landin.Source.Span) return Node_Id;
             function Parse_Struct_Body
               (Named   : Landin.Source.Names.Name_Id;
                At_Name : Landin.Source.Span) return Node_Id;
@@ -380,6 +394,7 @@ package body Landin.Syntax.Parser is
             --  expression is the token after the whole chain and never
             --  the one after the name.
             function Starts_Signature return Boolean;
+            function Starts_Conformance return Boolean;
 
             --  A parenthesized expression, a struct literal and a function
             --  signature share `(`.  The arrow after the balanced list is
@@ -402,6 +417,49 @@ package body Landin.Syntax.Parser is
                end loop;
                return False;
             end Starts_Signature;
+
+            --  A module-level parenthesized prefix is a conformance binder
+            --  only when a direct contextual `is` follows its target type.
+            --  This lookahead neither parses nor interprets the type; it
+            --  merely balances type delimiters so `is` stays an ordinary name
+            --  in a nested signature or application.
+            function Starts_Conformance return Boolean is
+               Step        : Tok.Token_Index := 1;
+               Parentheses : Natural :=
+                 (if Peek = Tok.Left_Paren then 1 else 0);
+               Brackets    : Natural :=
+                 (if Peek = Tok.Left_Bracket then 1 else 0);
+            begin
+               loop
+                  exit when Ahead (Step) = Tok.End_Of_Input;
+                  exit when Parentheses = 0 and then Brackets = 0
+                    and then Ahead (Step) in Tok.Equal | Tok.Colon;
+
+                  if Parentheses = 0 and then Brackets = 0
+                    and then Ahead (Step) = Tok.Identifier
+                    and then Named_Ahead (Step) = Is_Id
+                  then
+                     return True;
+                  end if;
+
+                  case Ahead (Step) is
+                     when Tok.Left_Paren => Parentheses := Parentheses + 1;
+                     when Tok.Right_Paren =>
+                        if Parentheses = 0 then
+                           return False;
+                        end if;
+                        Parentheses := Parentheses - 1;
+                     when Tok.Left_Bracket => Brackets := Brackets + 1;
+                     when Tok.Right_Bracket =>
+                        if Brackets > 0 then
+                           Brackets := Brackets - 1;
+                        end if;
+                     when others => null;
+                  end case;
+                  Step := Step + 1;
+               end loop;
+               return False;
+            end Starts_Conformance;
 
             --  Whether a labelled argument's RHS begins one of the type-only
             --  shapes that ordinary expression parsing cannot consume.  This
@@ -908,6 +966,7 @@ package body Landin.Syntax.Parser is
                         Mark_Reported;
                         Advance;
                      elsif Pre.Begins_Declaration (Peek)
+                       or else Peek = Tok.Left_Paren
                        or else Peek = Tok.Kw_Fixed
                        or else Peek not in Tok.Kernel_Kind
                        or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
@@ -976,6 +1035,12 @@ package body Landin.Syntax.Parser is
                                    & " with an export modifier");
                   end if;
                   return Parse_Fixed_Conditional;
+               end if;
+
+               if Peek in Tok.Left_Paren | Tok.Left_Bracket | Tok.Kw_Ptr
+                 or else (Peek = Tok.Identifier and then Starts_Conformance)
+               then
+                  return Parse_Conformance (Exported, Public_At);
                end if;
 
                if Peek = Tok.Identifier then
@@ -1883,6 +1948,7 @@ package body Landin.Syntax.Parser is
                      Named : Landin.Source.Names.Name_Id;
                      At_Name : Landin.Source.Span;
                      Of_Type : Node_Id := No_Node;
+                     Constraint : Node_Id := No_Node;
                   begin
                      if Fixed then
                         Advance;
@@ -1901,6 +1967,29 @@ package body Landin.Syntax.Parser is
                            Of_Type := Parse_Type (False, At_Name);
                         elsif Peek = Tok.Kw_Type then
                            Advance;
+                           if Peek = Tok.Identifier
+                             and then Named_Here = Is_Id
+                           then
+                              Advance;
+                              if Peek = Tok.Identifier then
+                                 Constraint := Add
+                                   (Concept_Reference, Here,
+                                    Named => Named_Here);
+                                 Advance;
+                              else
+                                 Complain
+                                   (Item    => Syn.Name_Expected,
+                                    Where   => (if Peek = Tok.End_Of_Input
+                                                then After_Previous
+                                                else Here),
+                                    Message => "a type constraint names a"
+                                               & " concept after `is`",
+                                    Note    => "[1290]: a type formal may"
+                                               & " name one direct concept");
+                                 Constraint := Add
+                                   (Error_Type, After_Previous);
+                              end if;
+                           end if;
                         else
                            Complain
                              (Item    => Syn.Type_Expected,
@@ -1924,7 +2013,8 @@ package body Landin.Syntax.Parser is
                              (if Fixed then Fixed_Formal else Type_Formal),
                            At_Token => (if Fixed then Starts else At_Name),
                            Extent   => Join (Starts, After_Previous),
-                           Children => (if Fixed then [Of_Type] else No_Slots),
+                           Children =>
+                             (if Fixed then [Of_Type] else [Constraint]),
                            Named    => Named));
                   end;
 
@@ -1986,11 +2076,31 @@ package body Landin.Syntax.Parser is
                      Related => At_Name,
                      Because => "declared here")
                then
+                  --  `concept` is contextual, so an ordinary declaration
+                  --  named concept remains legal; only this exact position
+                  --  opens [1230]'s body and its post-keyword formal list.
+                  if Formals.Is_Empty
+                    and then Peek = Tok.Identifier
+                    and then Named_Here = Concept_Id
+                  then
+                     declare
+                        Concept_Node : constant Node_Id :=
+                          Parse_Concept_Body (Named, At_Name);
+                     begin
+                        return Add
+                          (Of_Kind  => Concept_Declaration,
+                           At_Token => At_Name,
+                           Extent   => Join (Start, After_Previous),
+                           Children => [Concept_Node],
+                           Named    => Named,
+                           Exported => Exported);
+                     end;
+
                   --  [1795] permits a name, or [0670]'s block form, after
                   --  either a bare declaration or D135's formal list.  The
                   --  latter carries syntax and resolution only in this slice;
                   --  checking decides its later nominal meaning.
-                  if Peek = Tok.Kw_Struct then
+                  elsif Peek = Tok.Kw_Struct then
                      Aliased_Type := Parse_Struct_Body (Named, At_Name);
                   else
                      Aliased_Type := Parse_Type (False, At_Name);
@@ -2075,6 +2185,314 @@ package body Landin.Syntax.Parser is
                   Named    => Named,
                   Exported => Exported);
             end Parse_Type_Declaration;
+
+            --  [1230]'s contextual concept body.  Its requirement entries
+            --  deliberately reuse the ordinary signature parts but never a
+            --  routine declaration: they have no body and create no value.
+            function Parse_Concept_Body
+              (Named   : Landin.Source.Names.Name_Id;
+               At_Name : Landin.Source.Span) return Node_Id
+            is
+               At_Concept : constant Landin.Source.Span := Here;
+               Items      : Slot_Vectors.Vector;
+               Closed     : Boolean := True;
+
+               function Parse_Entry return Node_Id;
+
+               function Parse_Entry return Node_Id is
+                  Entry_Name : Landin.Source.Names.Name_Id;
+                  At_Entry   : constant Landin.Source.Span :=
+                    Parse_Declared_Name (Entry_Name);
+                  Params     : Slot_Vectors.Vector;
+                  Returns    : Node_Id := No_Node;
+                  Returns_At : Landin.Source.Span :=
+                    Landin.Source.Empty_Span;
+                  Errors     : Node_Id := No_Node;
+               begin
+                  if Expect
+                    (Wanted  => Tok.Colon,
+                     Message => "a concept entry names its signature after"
+                                & " `:`",
+                     Note    => "[1230]: a concept body contains named"
+                                & " signature-only entries",
+                     Related => At_Entry,
+                     Because => "the entry named here")
+                    and then Expect
+                      (Wanted  => Tok.Left_Paren,
+                       Message => "a concept entry signature opens with `(`",
+                       Note    => "[1230]: a requirement is a named"
+                                  & " signature without `=` or a body",
+                       Related => At_Entry,
+                       Because => "the entry named here")
+                  then
+                     if Peek /= Tok.Right_Paren then
+                        loop
+                           declare
+                              Before : constant Tok.Token_Index := Index;
+                           begin
+                              Params.Append (Parse_Parameter);
+                              exit when Index = Before;
+                           end;
+                           exit when Peek /= Tok.Comma;
+                           Advance;
+                        end loop;
+                     end if;
+
+                     if not Expect
+                       (Wanted  => Tok.Right_Paren,
+                        Message => "a concept entry's parameters close with"
+                                   & " `)`",
+                        Note    => "[1230]: the signature has an ordinary"
+                                   & " parameter list",
+                        Related => At_Entry,
+                        Because => "the entry named here")
+                     then
+                        Resync (List_Anchor);
+                        if Peek = Tok.Right_Paren then
+                           Advance;
+                        end if;
+                     end if;
+                  end if;
+
+                  if Expect
+                    (Wanted  => Tok.Minus_Greater,
+                     Message => "a concept entry says what it returns after"
+                                & " `->`",
+                     Note    => "[1230]: a requirement retains a complete"
+                                & " routine signature",
+                     Related => At_Entry,
+                     Because => "the entry named here")
+                  then
+                     Returns := Parse_Returns (At_Entry, Returns_At);
+                  end if;
+                  Errors := Parse_Errors (At_Entry);
+
+                  declare
+                     Head : constant Slot_List (1 .. 2) := [Returns, Errors];
+                  begin
+                     return Add
+                       (Of_Kind  => Concept_Entry,
+                        At_Token => At_Entry,
+                        Extent   => Join (At_Entry, After_Previous),
+                        Children => Head & To_List (Params),
+                        Named    => Entry_Name);
+                  end;
+               end Parse_Entry;
+            begin
+               pragma Unreferenced (At_Name);
+               --  Parse_Type_Declaration identified this contextual word.
+               Advance;
+
+               if Peek = Tok.Left_Paren then
+                  Parse_Type_Formals (At_Concept, Items, Closed);
+               else
+                  Closed := Expect
+                    (Wanted  => Tok.Left_Paren,
+                     Message => "a concept names its type formals in `(`"
+                                & " `)`",
+                     Note    => "[1230]: concept (T: type, ...) is its"
+                                & " requirement signature",
+                     Related => At_Concept,
+                     Because => "this concept");
+               end if;
+
+               if Closed and then Peek = Tok.Identifier
+                 and then Named_Here = Is_Id
+               then
+                  Advance;
+                  loop
+                     if Peek = Tok.Identifier then
+                        Items.Append
+                          (Add (Concept_Reference, Here, Named => Named_Here));
+                        Advance;
+                     else
+                        Complain
+                          (Item    => Syn.Name_Expected,
+                           Where   => (if Peek = Tok.End_Of_Input
+                                       then After_Previous else Here),
+                           Message => "a concept parent belongs after `is`",
+                           Note    => "[1340]: parent concepts are direct"
+                                      & " names");
+                        exit;
+                     end if;
+                     exit when Peek /= Tok.Comma;
+                     Advance;
+                  end loop;
+               end if;
+
+               --  An entry has `name: (`; that lookahead leaves an ordinary
+               --  following declaration in hand when a missing `end` ends
+               --  this body, instead of absorbing it as a broken entry.
+               while Peek = Tok.Identifier and then Ahead (1) = Tok.Colon
+                 and then Ahead (2) = Tok.Left_Paren
+               loop
+                  Items.Append (Parse_Entry);
+               end loop;
+
+               if Peek = Tok.Kw_End then
+                  Advance;
+                  if Peek = Tok.Identifier then
+                     if Named_Here /= Named then
+                        Complain
+                          (Item    => Syn.End_Name_Mismatch,
+                           Where   => Here,
+                           Message => "this name does not close the concept",
+                           Note    => "[1230]: `end` may repeat the concept"
+                                      & " name",
+                           Related => At_Concept,
+                           Because => "opened here");
+                     end if;
+                     Advance;
+                  end if;
+               else
+                  Complain
+                    (Item    => Syn.Unclosed_Construct,
+                     Where   => After_Previous,
+                     Message => "this concept is never closed",
+                     Note    => "[1230]: a concept closes with `end` and an"
+                                & " optional matching name",
+                     Related => At_Concept,
+                     Because => "opened here",
+                     Gate    => False);
+               end if;
+
+               return Add
+                 (Of_Kind  => Concept_Body,
+                  At_Token => At_Concept,
+                  Extent   => Join (At_Concept, After_Previous),
+                  Children => To_List (Items));
+            end Parse_Concept_Body;
+
+            --  [1240]'s optional generic binder, target type, direct
+            --  contextual concept name and labelled source RHS run.
+            function Parse_Conformance
+              (Exported  : Boolean;
+               Public_At : Landin.Source.Span) return Node_Id
+            is
+               Start    : constant Landin.Source.Span :=
+                 (if Exported then Public_At else Here);
+               Binders  : Slot_Vectors.Vector;
+               Closed   : Boolean := True;
+               Target   : Node_Id := No_Node;
+               Concept  : Node_Id := No_Node;
+               Entries  : Slot_Vectors.Vector;
+            begin
+               if Peek = Tok.Left_Paren and then not Starts_Signature then
+                  Parse_Type_Formals (Start, Binders, Closed);
+               end if;
+
+               if Closed then
+                  Target := Parse_Type (False, Start);
+               else
+                  Target := Add (Error_Type, After_Previous);
+               end if;
+
+               if Peek = Tok.Identifier and then Named_Here = Is_Id then
+                  Advance;
+                  if Peek = Tok.Identifier then
+                     Concept := Add
+                       (Concept_Reference, Here, Named => Named_Here);
+                     Advance;
+                  else
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => (if Peek = Tok.End_Of_Input
+                                    then After_Previous else Here),
+                        Message => "a conformance names its concept after"
+                                   & " `is`",
+                        Note    => "[1240]: a conformance has one direct"
+                                   & " concept name");
+                     Concept := Add (Concept_Reference, After_Previous);
+                  end if;
+               else
+                  Complain
+                    (Item    => Syn.Token_Expected,
+                     Where   => After_Previous,
+                     Message => "a conformance puts `is` after its target"
+                                & " type",
+                     Note    => "[1240]: target_type is concept_name"
+                                & " (label: RHS, ...)",
+                     Related => Start,
+                     Because => "this conformance");
+                  Concept := Add (Concept_Reference, After_Previous);
+               end if;
+
+               if Expect
+                 (Wanted  => Tok.Left_Paren,
+                  Message => "a conformance opens its entries with `(`",
+                  Note    => "[1240]: a conformance supplies labelled"
+                             & " source RHS entries",
+                  Related => Start,
+                  Because => "this conformance")
+               then
+                  while Peek /= Tok.Right_Paren
+                    and then Peek /= Tok.End_Of_Input
+                  loop
+                     if Peek /= Tok.Identifier then
+                        Complain
+                          (Item    => Syn.Name_Expected,
+                           Where   => Here,
+                           Message => "a conformance entry begins with a"
+                                      & " label",
+                           Note    => "[1240]: entries are `label: RHS`");
+                        Resync (List_Anchor);
+                        exit;
+                     end if;
+
+                     declare
+                        Label : constant Landin.Source.Names.Name_Id :=
+                          Named_Here;
+                        At_Label : constant Landin.Source.Span := Here;
+                        RHS : Node_Id;
+                     begin
+                        Advance;
+                        if Expect
+                          (Wanted  => Tok.Colon,
+                           Message => "a conformance label has a RHS after"
+                                      & " `:`",
+                           Note    => "[1240]: entries are `label: RHS`",
+                           Related => At_Label,
+                           Because => "the label named here")
+                        then
+                           RHS := Parse_Argument_RHS;
+                        else
+                           RHS := Add (Error_Expression, After_Previous);
+                        end if;
+                        Entries.Append
+                          (Add
+                             (Of_Kind  => Conformance_Entry,
+                              At_Token => At_Label,
+                              Extent   => Join (At_Label, After_Previous),
+                              Children => [RHS],
+                              Named    => Label));
+                     end;
+
+                     exit when Peek /= Tok.Comma;
+                     Advance;
+                  end loop;
+
+                  if not Expect
+                    (Wanted  => Tok.Right_Paren,
+                     Message => "a conformance's entries close with `)`",
+                     Note    => "[1240]: `(` opens the labelled entry run",
+                     Related => Start,
+                     Because => "this conformance")
+                  then
+                     Resync_Declaration;
+                  end if;
+               end if;
+
+               declare
+                  Head : constant Slot_List (1 .. 2) := [Target, Concept];
+               begin
+                  return Add
+                    (Of_Kind  => Conformance_Declaration,
+                     At_Token => Start,
+                     Extent   => Join (Start, After_Previous),
+                     Children => Head & To_List (Binders) & To_List (Entries),
+                     Exported => Exported);
+               end;
+            end Parse_Conformance;
 
             --  `"struct" field+ "end" identifier?` [1795], where a
             --  field is `identifier ":" type` [0750].  The closing name
@@ -2612,6 +3030,7 @@ package body Landin.Syntax.Parser is
                Named       : Landin.Source.Names.Name_Id;
                At_Name     : Landin.Source.Span;
                Type_Node   : Node_Id := No_Node;
+               Constraint  : Node_Id := No_Node;
             begin
                if Fixed then
                   if not Allow_Static then
@@ -2658,10 +3077,30 @@ package body Landin.Syntax.Parser is
                     and then Peek = Tok.Kw_Type
                   then
                      Advance;
+                     if Peek = Tok.Identifier and then Named_Here = Is_Id then
+                        Advance;
+                        if Peek = Tok.Identifier then
+                           Constraint := Add
+                             (Concept_Reference, Here,
+                              Named => Named_Here);
+                           Advance;
+                        else
+                           Complain
+                             (Item    => Syn.Name_Expected,
+                              Where   => (if Peek = Tok.End_Of_Input
+                                          then After_Previous else Here),
+                              Message => "a type constraint names a"
+                                         & " concept after `is`",
+                              Note    => "[1290]: a type formal may name"
+                                         & " one direct concept");
+                           Constraint := Add (Error_Type, After_Previous);
+                        end if;
+                     end if;
                      return Add
                        (Of_Kind  => Type_Formal,
                         At_Token => At_Name,
                         Extent   => Join (Start, After_Previous),
+                        Children => [Constraint],
                         Named    => Named);
                   end if;
                   Type_Node := Parse_Type (True, At_Name);

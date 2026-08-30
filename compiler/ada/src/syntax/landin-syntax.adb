@@ -13,6 +13,12 @@ package body Landin.Syntax is
             --  The first slot is the type it names [1795]; D135's
             --  type/fixed formals trail it.
             when Type_Declaration         => 1,
+            when Concept_Declaration      => 1,
+            --  The concept's ordered formal, parent and entry source run.
+            when Concept_Body             => 0,
+            --  Target type and direct concept reference; binders and
+            --  labelled RHS entries are the trailing source run.
+            when Conformance_Declaration  => 2,
             when Binding                  => 2,
             when Destructuring_Binding    => 1,
             when Error_Statement          => 0,
@@ -46,8 +52,8 @@ package body Landin.Syntax is
             when Unary_Kind               => 1,
             when Binary_Kind              => 2,
             when Field_Value | Call_Argument => 1,
-            when Error_Type | Type_Name
-               | Type_Reference           => 0,
+            when Error_Type | Type_Name | Type_Reference
+               | Concept_Reference        => 0,
             --  The applied alias, then its positional argument run.
             when Type_Application         => 1,
             when Atom_Union_Type          => 0,
@@ -67,7 +73,11 @@ package body Landin.Syntax is
                | Destructured_Name | Result_Wildcard => 0,
             when Fixed_Formal | Parameter | Named_Return
                | Destructured_Field => 1,
-            when Type_Formal | Return_Source => 0,
+            --  Return list, error set, then the parameter run.
+            when Concept_Entry => 2,
+            when Conformance_Entry => 1,
+            when Type_Formal => 1,
+            when Return_Source => 0,
             when If_Arm | Match_Arm       => 2,
             --  A D139 arm's condition is slot one (No_Node for `else`);
             --  its declaration list is the trailing run.
@@ -165,6 +175,133 @@ package body Landin.Syntax is
 
    function Declared_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
+
+   function Constraint_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Concept_Body_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Concept_Formal_Count (Of_Tree : Tree; Id : Node_Id)
+     return Natural
+   is
+      Count : Natural := 0;
+      Concept_Node : constant Node_Id := Concept_Body_Of (Of_Tree, Id);
+   begin
+      for Position in 1 .. Slot_Count (Of_Tree, Concept_Node) loop
+         if Kind (Of_Tree, Slot (Of_Tree, Concept_Node, Position))
+              in Type_Formal | Fixed_Formal
+         then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Concept_Formal_Count;
+
+   function Nth_Concept_Formal
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+   is
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Slot_Count
+        (Of_Tree, Concept_Body_Of (Of_Tree, Id))
+      loop
+         declare
+            Candidate : constant Node_Id := Slot
+              (Of_Tree, Concept_Body_Of (Of_Tree, Id), Position);
+         begin
+            if Kind (Of_Tree, Candidate) in Type_Formal | Fixed_Formal then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Candidate;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Constraint_Error;
+   end Nth_Concept_Formal;
+
+   function Concept_Parent_Count (Of_Tree : Tree; Id : Node_Id)
+     return Natural
+   is
+      Count : Natural := 0;
+   begin
+      for Position in 1 .. Slot_Count
+        (Of_Tree, Concept_Body_Of (Of_Tree, Id))
+      loop
+         if Kind
+           (Of_Tree, Slot (Of_Tree, Concept_Body_Of (Of_Tree, Id), Position))
+              = Concept_Reference
+         then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Concept_Parent_Count;
+
+   function Nth_Concept_Parent
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+   is
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Slot_Count
+        (Of_Tree, Concept_Body_Of (Of_Tree, Id))
+      loop
+         declare
+            Candidate : constant Node_Id := Slot
+              (Of_Tree, Concept_Body_Of (Of_Tree, Id), Position);
+         begin
+            if Kind (Of_Tree, Candidate) = Concept_Reference then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Candidate;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Constraint_Error;
+   end Nth_Concept_Parent;
+
+   function Concept_Entry_Count (Of_Tree : Tree; Id : Node_Id)
+     return Natural
+   is
+      Count : Natural := 0;
+   begin
+      for Position in 1 .. Slot_Count
+        (Of_Tree, Concept_Body_Of (Of_Tree, Id))
+      loop
+         if Kind
+           (Of_Tree, Slot (Of_Tree, Concept_Body_Of (Of_Tree, Id), Position))
+              = Concept_Entry
+         then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Concept_Entry_Count;
+
+   function Nth_Concept_Entry
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+   is
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Slot_Count
+        (Of_Tree, Concept_Body_Of (Of_Tree, Id))
+      loop
+         declare
+            Candidate : constant Node_Id := Slot
+              (Of_Tree, Concept_Body_Of (Of_Tree, Id), Position);
+         begin
+            if Kind (Of_Tree, Candidate) = Concept_Entry then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Candidate;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Constraint_Error;
+   end Nth_Concept_Entry;
 
    function Type_Formal_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      is (Run_Length (Of_Tree, Id));
@@ -316,6 +453,85 @@ package body Landin.Syntax is
       end loop;
       raise Constraint_Error;
    end Nth_Generic_Formal;
+
+   function Conforming_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
+
+   function Conforming_Concept (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 2));
+
+   function Conformance_Binder_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+   is
+      Count : Natural := 0;
+   begin
+      for Position in 1 .. Run_Length (Of_Tree, Id) loop
+         if Kind (Of_Tree, Nth_Item (Of_Tree, Id, Position))
+              in Type_Formal | Fixed_Formal
+         then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Conformance_Binder_Count;
+
+   function Nth_Conformance_Binder
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+   is
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Run_Length (Of_Tree, Id) loop
+         declare
+            Candidate : constant Node_Id := Nth_Item (Of_Tree, Id, Position);
+         begin
+            if Kind (Of_Tree, Candidate) in Type_Formal | Fixed_Formal then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Candidate;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Constraint_Error;
+   end Nth_Conformance_Binder;
+
+   function Conformance_Entry_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+   is
+      Count : Natural := 0;
+   begin
+      for Position in 1 .. Run_Length (Of_Tree, Id) loop
+         if Kind (Of_Tree, Nth_Item (Of_Tree, Id, Position))
+              = Conformance_Entry
+         then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Conformance_Entry_Count;
+
+   function Nth_Conformance_Entry
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+   is
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Run_Length (Of_Tree, Id) loop
+         declare
+            Candidate : constant Node_Id := Nth_Item (Of_Tree, Id, Position);
+         begin
+            if Kind (Of_Tree, Candidate) = Conformance_Entry then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Candidate;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Constraint_Error;
+   end Nth_Conformance_Entry;
+
+   function Conformance_RHS (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     is (Slot (Of_Tree, Id, 1));
 
    function Else_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));

@@ -1,0 +1,9 @@
+callback_box: type = struct
+    callback: () -> none
+end callback_box
+
+cell: type (t: type is zeroable) = struct
+    value: t
+end cell
+
+bad: type = cell([0]callback_box)

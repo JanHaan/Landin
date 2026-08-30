@@ -1,0 +1,5 @@
+class: negative
+summary: users cannot synthesize a compiler-supplied zeroable entry
+program: main.ldn
+codes: L0319
+constructs: 0550, 1240, 1280

@@ -145,9 +145,11 @@ and internal aggregate ABI are complete. R2.40's fixed parameters,
 compile-time substitution, generic routine instances, fixed conditional
 selection and per-instance inferred errors are complete. R2.50's pointers,
 slices, conventions, local origins and borrows, `escaping`, `from`, consume
-checking and target reference carriers are complete.
+checking and target reference carriers are complete. R2.60's concepts,
+constraints, whole-program conformance register and closed compiler `zeroable`
+family are complete.
 
-**Current roadmap work: R2.60 — Implement concepts and conformance collection.**
+**Current roadmap work: R2.70 — Implement the generic evidence schema.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.

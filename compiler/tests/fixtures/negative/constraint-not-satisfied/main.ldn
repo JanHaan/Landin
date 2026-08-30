@@ -1,0 +1,10 @@
+ordered: type = concept (t: type)
+end ordered
+
+identity: (t: type is ordered, value: t) -> (result: t) =
+    result = value
+end identity
+
+public main: () -> (code: i32) =
+    code = identity(42)
+end main

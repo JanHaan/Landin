@@ -7,7 +7,7 @@
 --  against that code's row before it leaves, and the stage that found the
 --  fault therefore contains no code at all.
 --
---  Seventeen rules, each with its own paragraph in the specification, because
+--  Twenty rules, each with its own paragraph in the specification, because
 --  none of them could be read out of the older ones.  [1880] says where a
 --  literal's type comes from and that a value the type does not hold is
 --  refused; [1890] says what each operator takes and gives; [1900] says
@@ -49,7 +49,9 @@
 --
 --  Related is a Landin.Provenance.Origin and not a span, for the reason
 --  Landin.Diagnostics.Resolution found first: the declaration a mismatch
---  points at can be in another file.
+--  points at can be in another file.  R2.60 adds whole-program conformance
+--  collisions, unsatisfied concept constraints, and compiler-reserved
+--  conformances; their related-source cardinalities are part of the rows.
 
 with Landin.Diagnostics.Catalogue;
 with Landin.Provenance;
@@ -78,7 +80,10 @@ package Landin.Diagnostics.Checking is
       Recursive_Nominal_Value,
       Reference_Escapes,
       Borrowed_Place,
-      Return_Sources_Disagree);
+      Return_Sources_Disagree,
+      Conformance_Collision,
+      Unsatisfied_Constraint,
+      Compiler_Conformance_Reserved);
 
    function Code_For (Item : Failure)
      return Landin.Diagnostics.Catalogue.Code_Name
@@ -116,7 +121,13 @@ package Landin.Diagnostics.Checking is
             when Borrowed_Place =>
                Catalogue.Borrowed_Place,
             when Return_Sources_Disagree =>
-               Catalogue.Return_Sources_Disagree);
+               Catalogue.Return_Sources_Disagree,
+            when Conformance_Collision =>
+               Catalogue.Conformance_Collision,
+            when Unsatisfied_Constraint =>
+               Catalogue.Unsatisfied_Constraint,
+            when Compiler_Conformance_Reserved =>
+               Catalogue.Compiler_Conformance_Reserved);
 
    --  The constructs the tour describes, the kernel omits, and only the
    --  checker can recognise, because recognising one means knowing what a

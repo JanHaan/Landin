@@ -1,0 +1,7 @@
+drawable: type = concept (t: type)
+end drawable
+
+widget: type = concept (t: type) is drawable
+end widget
+
+i32 is widget ()
