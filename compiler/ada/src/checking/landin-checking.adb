@@ -23,6 +23,53 @@ package body Landin.Checking is
       end Position;
    end Nominal_Identities;
 
+   package body Routine_Identities is
+      function None return Id is (0);
+
+      function From_Position (Position : Positive) return Id
+        is (Id (Position));
+
+      function Nth (Of_Table : Table; Position : Positive) return Id
+        is (if Position <= Natural (Of_Table.Routine_Instances.Length)
+            then From_Position (Position) else None);
+
+      function Holds (Of_Table : Table; Of_Id : Id) return Boolean
+        is (Of_Table.Ready
+            and then Of_Id /= None
+            and then Natural (Of_Id)
+                       <= Natural (Of_Table.Routine_Instances.Length));
+
+      function Position (Of_Table : Table; Of_Id : Id) return Positive is
+         pragma Unreferenced (Of_Table);
+      begin
+         return Positive (Of_Id);
+      end Position;
+   end Routine_Identities;
+
+   function Holds (Of_Table : Table; Id : Routine_Instance_Id)
+     return Boolean
+     is (Routine_Identities.Holds (Of_Table, Id));
+
+   function Current_Routine_View (Of_Table : Table)
+     return Routine_Instance_Id
+     is (Of_Table.Current_Routine);
+
+   procedure Activate_Routine_View
+     (Into     : in out Table;
+      Instance : Routine_Instance_Id;
+      Previous : out Routine_Instance_Id) is
+   begin
+      Previous := Into.Current_Routine;
+      Into.Current_Routine := Instance;
+   end Activate_Routine_View;
+
+   procedure Restore_Routine_View
+     (Into     : in out Table;
+      Previous : Routine_Instance_Id) is
+   begin
+      Into.Current_Routine := Previous;
+   end Restore_Routine_View;
+
    use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Syntax.Node_Kind;
@@ -334,6 +381,124 @@ package body Landin.Checking is
       return Of_Table.Nominal_Actuals (Members.First + Position);
    end Nth_Instance_Actual;
 
+   function Intern_Routine_Instance
+     (Into     : in out Table;
+      Template : Declaration_Id;
+      Actuals  : Actual_Tuple) return Routine_Instance_Id
+   is
+   begin
+      if not Holds (Into, Actuals) then
+         raise Landin.Compiler_Defect with
+           "routine actuals belong to another checking table";
+      end if;
+
+      for Position in 1 .. Natural (Into.Routine_Instances.Length) loop
+         declare
+            Held : constant Routine_Instance_Record :=
+              Into.Routine_Instances (Position);
+            Same : Boolean := Held.Template = Template
+              and then Held.Actuals.Count = Natural (Actuals.Members.Length);
+         begin
+            if Same then
+               for Index in 1 .. Held.Actuals.Count loop
+                  if not Actuals_Agree
+                    (Into,
+                     Into.Routine_Actuals (Held.Actuals.First + Index),
+                     Actuals.Members (Index))
+                  then
+                     Same := False;
+                     exit;
+                  end if;
+               end loop;
+            end if;
+            if Same then
+               return Routine_Identities.Nth (Into, Position);
+            end if;
+         end;
+      end loop;
+
+      declare
+         Made : Routine_Instance_Record :=
+           (Template => Template,
+            Actuals  => (First => Natural (Into.Routine_Actuals.Length),
+                         Count => 0),
+            others   => <>);
+      begin
+         for Actual of Actuals.Members loop
+            Into.Routine_Actuals.Append (Actual);
+            Made.Actuals.Count := Made.Actuals.Count + 1;
+         end loop;
+         Into.Routine_Instances.Append (Made);
+      end;
+      return Routine_Identities.Nth
+        (Into, Into.Routine_Instances.Last_Index);
+   end Intern_Routine_Instance;
+
+   function Routine_Instance_Count (Of_Table : Table) return Natural
+     is (Natural (Of_Table.Routine_Instances.Length));
+
+   function Routine_Template_Of
+     (Of_Table : Table; Id : Routine_Instance_Id) return Declaration_Id
+     is (Of_Table.Routine_Instances
+           (Routine_Identities.Position (Of_Table, Id)).Template);
+
+   function Routine_Actual_Count
+     (Of_Table : Table; Id : Routine_Instance_Id) return Natural
+     is (Of_Table.Routine_Instances
+           (Routine_Identities.Position (Of_Table, Id)).Actuals.Count);
+
+   function Nth_Routine_Actual
+     (Of_Table : Table;
+      Id       : Routine_Instance_Id;
+      Position : Positive) return Actual_Key
+   is
+      Members : constant Run := Of_Table.Routine_Instances
+        (Routine_Identities.Position (Of_Table, Id)).Actuals;
+   begin
+      return Of_Table.Routine_Actuals (Members.First + Position);
+   end Nth_Routine_Actual;
+
+   function Routine_State_Of
+     (Of_Table : Table; Id : Routine_Instance_Id)
+      return Routine_Instance_State
+     is (Of_Table.Routine_Instances
+           (Routine_Identities.Position (Of_Table, Id)).State);
+
+   procedure Begin_Routine_Instance
+     (Into : in out Table; Id : Routine_Instance_Id) is
+   begin
+      Into.Routine_Instances
+        (Routine_Identities.Position (Into, Id)).State := Routine_Building;
+   end Begin_Routine_Instance;
+
+   procedure Publish_Routine_Signature
+     (Into      : in out Table;
+      Id        : Routine_Instance_Id;
+      Signature : Signature_Id) is
+   begin
+      Into.Routine_Instances
+        (Routine_Identities.Position (Into, Id)).Signature := Signature;
+   end Publish_Routine_Signature;
+
+   function Routine_Signature_Of
+     (Of_Table : Table; Id : Routine_Instance_Id) return Signature_Id
+     is (Of_Table.Routine_Instances
+           (Routine_Identities.Position (Of_Table, Id)).Signature);
+
+   procedure Finish_Routine_Instance
+     (Into : in out Table; Id : Routine_Instance_Id) is
+   begin
+      Into.Routine_Instances
+        (Routine_Identities.Position (Into, Id)).State := Routine_Ready;
+   end Finish_Routine_Instance;
+
+   procedure Invalidate_Routine_Instance
+     (Into : in out Table; Id : Routine_Instance_Id) is
+   begin
+      Into.Routine_Instances
+        (Routine_Identities.Position (Into, Id)).State := Routine_Invalid;
+   end Invalidate_Routine_Instance;
+
    ------------------------------------------------------------------
    --  Building
    ------------------------------------------------------------------
@@ -383,6 +548,7 @@ package body Landin.Checking is
                Into.Node_Atom_Sets.Append (No_Atom_Set);
                Into.Node_Signatures.Append (No_Signature);
                Into.Node_Result_Shapes.Append (No_Signature);
+               Into.Node_Routine_Targets.Append (No_Routine_Instance);
                Into.Node_Fields.Append (0);
                Into.Node_Shapes.Append (Array_Shape'(others => <>));
             end loop;
@@ -476,11 +642,103 @@ package body Landin.Checking is
            (Positive (Landin.Syntax.Source_Of (Of_Tree))).First
          + Positive (Node));
 
+   function Node_Overlay_Position
+     (Of_Table : Table; Where : Positive) return Natural;
+
+   function Ensure_Node_Overlay
+     (Into : in out Table; Where : Positive) return Positive;
+
+   function Declaration_Overlay_Position
+     (Of_Table : Table; Id : Declaration_Id) return Natural;
+
+   function Ensure_Declaration_Overlay
+     (Into : in out Table; Id : Declaration_Id) return Positive;
+
+   function Node_Overlay_Position
+     (Of_Table : Table; Where : Positive) return Natural is
+   begin
+      if Of_Table.Current_Routine = No_Routine_Instance then
+         return 0;
+      end if;
+      for Position in reverse 1 .. Natural (Of_Table.Node_Overlays.Length) loop
+         if Of_Table.Node_Overlays (Position).Instance
+              = Of_Table.Current_Routine
+           and then Of_Table.Node_Overlays (Position).Where = Where
+         then
+            return Position;
+         end if;
+      end loop;
+      return 0;
+   end Node_Overlay_Position;
+
+   function Ensure_Node_Overlay
+     (Into : in out Table; Where : Positive) return Positive
+   is
+      Found : constant Natural := Node_Overlay_Position (Into, Where);
+   begin
+      if Found /= 0 then
+         return Positive (Found);
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         raise Landin.Compiler_Defect with
+           "a global fact was sent to the routine overlay";
+      end if;
+      Into.Node_Overlays.Append
+        (Node_Overlay'(Instance => Into.Current_Routine,
+                       Where => Where, others => <>));
+      return Into.Node_Overlays.Last_Index;
+   end Ensure_Node_Overlay;
+
+   function Declaration_Overlay_Position
+     (Of_Table : Table; Id : Declaration_Id) return Natural is
+   begin
+      if Of_Table.Current_Routine = No_Routine_Instance then
+         return 0;
+      end if;
+      for Position in reverse
+        1 .. Natural (Of_Table.Declaration_Overlays.Length)
+      loop
+         if Of_Table.Declaration_Overlays (Position).Instance
+              = Of_Table.Current_Routine
+           and then Of_Table.Declaration_Overlays (Position).Declared = Id
+         then
+            return Position;
+         end if;
+      end loop;
+      return 0;
+   end Declaration_Overlay_Position;
+
+   function Ensure_Declaration_Overlay
+     (Into : in out Table; Id : Declaration_Id) return Positive
+   is
+      Found : constant Natural := Declaration_Overlay_Position (Into, Id);
+   begin
+      if Found /= 0 then
+         return Positive (Found);
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         raise Landin.Compiler_Defect with
+           "a global declaration fact was sent to the routine overlay";
+      end if;
+      Into.Declaration_Overlays.Append
+        (Declaration_Overlay'(Instance => Into.Current_Routine,
+                              Declared => Id, others => <>));
+      return Into.Declaration_Overlays.Last_Index;
+   end Ensure_Declaration_Overlay;
+
    function Type_Of
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Landin.Types.Type_Kind
-     is (Of_Table.Node_Types (Slot (Of_Table, Of_Tree, Node)));
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Type then
+         return Of_Table.Node_Overlays (Overlay).Answer;
+      end if;
+      return Of_Table.Node_Types (Where);
+   end Type_Of;
 
    function Nominal_Type_Count (Of_Table : Table) return Natural
      is (Natural (Of_Table.Nominal_Templates.Length));
@@ -532,12 +790,33 @@ package body Landin.Checking is
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Nominal_Type_Id
-     is (Of_Table.Node_Nominals (Slot (Of_Table, Of_Tree, Node)));
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Nominal
+      then
+         return Of_Table.Node_Overlays (Overlay).Nominal;
+      end if;
+      return Of_Table.Node_Nominals (Where);
+   end Nominal_Of;
 
    function Nominal_Of
      (Of_Table : Table; Id : Declaration_Id) return Nominal_Type_Id
-     is (if Id = No_Declaration then No_Nominal_Type
-         else Of_Table.Declaration_Nominals (Positive (Id)));
+   is
+      Overlay : constant Natural :=
+        (if Id = No_Declaration then 0
+         else Declaration_Overlay_Position (Of_Table, Id));
+   begin
+      if Id = No_Declaration then
+         return No_Nominal_Type;
+      elsif Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Nominal
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Nominal;
+      end if;
+      return Of_Table.Declaration_Nominals (Positive (Id));
+   end Nominal_Of;
 
    procedure Note_Nominal
      (Into    : in out Table;
@@ -547,14 +826,23 @@ package body Landin.Checking is
    is
       Where : constant Positive := Slot (Into, Of_Tree, Node);
    begin
-      if Into.Node_Nominals (Where) /= No_Nominal_Type
-        and then Into.Node_Nominals (Where) /= Nominal
+      if Nominal_Of (Into, Of_Tree, Node) /= No_Nominal_Type
+        and then Nominal_Of (Into, Of_Tree, Node) /= Nominal
       then
          raise Landin.Compiler_Defect with
            "one node was assigned two nominal type identities";
       end if;
 
-      Into.Node_Nominals (Where) := Nominal;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Nominals (Where) := Nominal;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Nominal := True;
+            Into.Node_Overlays (Overlay).Nominal := Nominal;
+         end;
+      end if;
    end Note_Nominal;
 
    procedure Note_Nominal
@@ -562,14 +850,24 @@ package body Landin.Checking is
       Id     : Declaration_Id;
       Nominal : Nominal_Type_Id) is
    begin
-      if Into.Declaration_Nominals (Positive (Id)) /= No_Nominal_Type
-        and then Into.Declaration_Nominals (Positive (Id)) /= Nominal
+      if Nominal_Of (Into, Id) /= No_Nominal_Type
+        and then Nominal_Of (Into, Id) /= Nominal
       then
          raise Landin.Compiler_Defect with
            "one declaration was assigned two nominal type identities";
       end if;
 
-      Into.Declaration_Nominals (Positive (Id)) := Nominal;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Declaration_Nominals (Positive (Id)) := Nominal;
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Nominal := True;
+            Into.Declaration_Overlays (Overlay).Nominal := Nominal;
+         end;
+      end if;
    end Note_Nominal;
 
    ------------------------------------------------------------------
@@ -643,12 +941,32 @@ package body Landin.Checking is
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Atom_Set_Id
-     is (Of_Table.Node_Atom_Sets (Slot (Of_Table, Of_Tree, Node)));
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Atoms then
+         return Of_Table.Node_Overlays (Overlay).Atoms;
+      end if;
+      return Of_Table.Node_Atom_Sets (Where);
+   end Atom_Set_Of;
 
    function Atom_Set_Of
      (Of_Table : Table; Id : Declaration_Id) return Atom_Set_Id
-     is (if Id = No_Declaration then No_Atom_Set
-         else Of_Table.Declaration_Atom_Sets (Positive (Id)));
+   is
+      Overlay : constant Natural :=
+        (if Id = No_Declaration then 0
+         else Declaration_Overlay_Position (Of_Table, Id));
+   begin
+      if Id = No_Declaration then
+         return No_Atom_Set;
+      elsif Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Atoms
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Atoms;
+      end if;
+      return Of_Table.Declaration_Atom_Sets (Positive (Id));
+   end Atom_Set_Of;
 
    procedure Note_Atom_Set
      (Into    : in out Table;
@@ -658,14 +976,23 @@ package body Landin.Checking is
    is
       Where : constant Positive := Slot (Into, Of_Tree, Node);
    begin
-      if Into.Node_Atom_Sets (Where) /= No_Atom_Set
+      if Atom_Set_Of (Into, Of_Tree, Node) /= No_Atom_Set
         and then not Atom_Sets_Agree
-          (Into, Into.Node_Atom_Sets (Where), Set_Id)
+          (Into, Atom_Set_Of (Into, Of_Tree, Node), Set_Id)
       then
          raise Landin.Compiler_Defect with
            "one node was assigned two atom sets";
       end if;
-      Into.Node_Atom_Sets (Where) := Set_Id;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Atom_Sets (Where) := Set_Id;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Atoms := True;
+            Into.Node_Overlays (Overlay).Atoms := Set_Id;
+         end;
+      end if;
    end Note_Atom_Set;
 
    procedure Note_Atom_Set
@@ -673,14 +1000,24 @@ package body Landin.Checking is
       Id     : Declaration_Id;
       Set_Id : Atom_Set_Id) is
    begin
-      if Into.Declaration_Atom_Sets (Positive (Id)) /= No_Atom_Set
+      if Atom_Set_Of (Into, Id) /= No_Atom_Set
         and then not Atom_Sets_Agree
-          (Into, Into.Declaration_Atom_Sets (Positive (Id)), Set_Id)
+          (Into, Atom_Set_Of (Into, Id), Set_Id)
       then
          raise Landin.Compiler_Defect with
            "one declaration was assigned two atom sets";
       end if;
-      Into.Declaration_Atom_Sets (Positive (Id)) := Set_Id;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Declaration_Atom_Sets (Positive (Id)) := Set_Id;
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Atoms := True;
+            Into.Declaration_Overlays (Overlay).Atoms := Set_Id;
+         end;
+      end if;
    end Note_Atom_Set;
 
    ------------------------------------------------------------------
@@ -749,12 +1086,34 @@ package body Landin.Checking is
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Signature_Id
-     is (Of_Table.Node_Signatures (Slot (Of_Table, Of_Tree, Node)));
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Has_Signature
+      then
+         return Of_Table.Node_Overlays (Overlay).Signature;
+      end if;
+      return Of_Table.Node_Signatures (Where);
+   end Signature_Of;
 
    function Signature_Of
      (Of_Table : Table; Id : Declaration_Id) return Signature_Id
-     is (if Id = No_Declaration then No_Signature
-         else Of_Table.Declaration_Signatures (Positive (Id)));
+   is
+      Overlay : constant Natural :=
+        (if Id = No_Declaration then 0
+         else Declaration_Overlay_Position (Of_Table, Id));
+   begin
+      if Id = No_Declaration then
+         return No_Signature;
+      elsif Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Signature
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Signature;
+      end if;
+      return Of_Table.Declaration_Signatures (Positive (Id));
+   end Signature_Of;
 
    procedure Note_Signature
      (Into      : in out Table;
@@ -764,13 +1123,22 @@ package body Landin.Checking is
    is
       Where : constant Positive := Slot (Into, Of_Tree, Node);
    begin
-      if Into.Node_Signatures (Where) /= No_Signature
-        and then Into.Node_Signatures (Where) /= Signature
+      if Signature_Of (Into, Of_Tree, Node) /= No_Signature
+        and then Signature_Of (Into, Of_Tree, Node) /= Signature
       then
          raise Landin.Compiler_Defect with
            "one node was assigned two function signatures";
       end if;
-      Into.Node_Signatures (Where) := Signature;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Signatures (Where) := Signature;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Signature := True;
+            Into.Node_Overlays (Overlay).Signature := Signature;
+         end;
+      end if;
    end Note_Signature;
 
    procedure Note_Signature
@@ -778,13 +1146,23 @@ package body Landin.Checking is
       Id        : Declaration_Id;
       Signature : Signature_Id) is
    begin
-      if Into.Declaration_Signatures (Positive (Id)) /= No_Signature
-        and then Into.Declaration_Signatures (Positive (Id)) /= Signature
+      if Signature_Of (Into, Id) /= No_Signature
+        and then Signature_Of (Into, Id) /= Signature
       then
          raise Landin.Compiler_Defect with
            "one declaration was assigned two function signatures";
       end if;
-      Into.Declaration_Signatures (Positive (Id)) := Signature;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Declaration_Signatures (Positive (Id)) := Signature;
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Signature := True;
+            Into.Declaration_Overlays (Overlay).Signature := Signature;
+         end;
+      end if;
    end Note_Signature;
 
    function Signature_Parameter_Count
@@ -940,12 +1318,34 @@ package body Landin.Checking is
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Signature_Id
-     is (Of_Table.Node_Result_Shapes (Slot (Of_Table, Of_Tree, Node)));
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Has_Result_Shape
+      then
+         return Of_Table.Node_Overlays (Overlay).Result_Shape;
+      end if;
+      return Of_Table.Node_Result_Shapes (Where);
+   end Result_Shape_Of;
 
    function Result_Shape_Of
      (Of_Table : Table; Id : Declaration_Id) return Signature_Id
-     is (if Id = No_Declaration then No_Signature
-         else Of_Table.Declaration_Result_Shapes (Positive (Id)));
+   is
+      Overlay : constant Natural :=
+        (if Id = No_Declaration then 0
+         else Declaration_Overlay_Position (Of_Table, Id));
+   begin
+      if Id = No_Declaration then
+         return No_Signature;
+      elsif Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Result_Shape
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Result_Shape;
+      end if;
+      return Of_Table.Declaration_Result_Shapes (Positive (Id));
+   end Result_Shape_Of;
 
    procedure Note_Result_Shape
      (Into      : in out Table;
@@ -955,13 +1355,22 @@ package body Landin.Checking is
    is
       Where : constant Positive := Slot (Into, Of_Tree, Node);
    begin
-      if Into.Node_Result_Shapes (Where) /= No_Signature
-        and then Into.Node_Result_Shapes (Where) /= Signature
+      if Result_Shape_Of (Into, Of_Tree, Node) /= No_Signature
+        and then Result_Shape_Of (Into, Of_Tree, Node) /= Signature
       then
          raise Landin.Compiler_Defect with
            "one node was assigned two anonymous result shapes";
       end if;
-      Into.Node_Result_Shapes (Where) := Signature;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Result_Shapes (Where) := Signature;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Result_Shape := True;
+            Into.Node_Overlays (Overlay).Result_Shape := Signature;
+         end;
+      end if;
    end Note_Result_Shape;
 
    procedure Note_Result_Shape
@@ -969,14 +1378,66 @@ package body Landin.Checking is
       Id        : Declaration_Id;
       Signature : Signature_Id) is
    begin
-      if Into.Declaration_Result_Shapes (Positive (Id)) /= No_Signature
-        and then Into.Declaration_Result_Shapes (Positive (Id)) /= Signature
+      if Result_Shape_Of (Into, Id) /= No_Signature
+        and then Result_Shape_Of (Into, Id) /= Signature
       then
          raise Landin.Compiler_Defect with
            "one declaration was assigned two anonymous result shapes";
       end if;
-      Into.Declaration_Result_Shapes (Positive (Id)) := Signature;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Declaration_Result_Shapes (Positive (Id)) := Signature;
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Result_Shape := True;
+            Into.Declaration_Overlays (Overlay).Result_Shape := Signature;
+         end;
+      end if;
    end Note_Result_Shape;
+
+   function Routine_Target_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Call     : Landin.Syntax.Node_Id) return Routine_Instance_Id
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Call);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Has_Routine_Target
+      then
+         return Of_Table.Node_Overlays (Overlay).Routine_Target;
+      end if;
+      return Of_Table.Node_Routine_Targets (Where);
+   end Routine_Target_Of;
+
+   procedure Note_Routine_Target
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Call    : Landin.Syntax.Node_Id;
+      Target  : Routine_Instance_Id)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Call);
+      Existing : constant Routine_Instance_Id :=
+        Routine_Target_Of (Into, Of_Tree, Call);
+   begin
+      if Existing /= No_Routine_Instance and then Existing /= Target then
+         raise Landin.Compiler_Defect with
+           "one call selected two routine instances in one fact view";
+      end if;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Routine_Targets (Where) := Target;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Routine_Target := True;
+            Into.Node_Overlays (Overlay).Routine_Target := Target;
+         end;
+      end if;
+   end Note_Routine_Target;
 
    function Result_Shapes_Agree
      (Of_Table : Table; Left, Right : Signature_Id) return Boolean
@@ -1403,28 +1864,63 @@ package body Landin.Checking is
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Natural
-     is (Of_Table.Node_Fields (Slot (Of_Table, Of_Tree, Node)));
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Field then
+         return Of_Table.Node_Overlays (Overlay).Field;
+      end if;
+      return Of_Table.Node_Fields (Where);
+   end Field_Index;
 
    procedure Note_Field
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
-      Which   : Positive) is
+      Which   : Positive)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
    begin
-      Into.Node_Fields (Slot (Into, Of_Tree, Node)) := Which;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Fields (Where) := Which;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Field := True;
+            Into.Node_Overlays (Overlay).Field := Which;
+         end;
+      end if;
    end Note_Field;
 
    function Array_Length
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Element_Count
-     is (Of_Table.Node_Shapes (Slot (Of_Table, Of_Tree, Node)).Length);
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Array then
+         return Of_Table.Node_Overlays (Overlay).Shape.Length;
+      end if;
+      return Of_Table.Node_Shapes (Where).Length;
+   end Array_Length;
 
    function Array_Element
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Landin.Types.Scalar_Name
-     is (Of_Table.Node_Shapes (Slot (Of_Table, Of_Tree, Node)).Element);
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0 and then Of_Table.Node_Overlays (Overlay).Has_Array then
+         return Of_Table.Node_Overlays (Overlay).Shape.Element;
+      end if;
+      return Of_Table.Node_Shapes (Where).Element;
+   end Array_Element;
 
    procedure Note_Array
      (Into    : in out Table;
@@ -1433,16 +1929,41 @@ package body Landin.Checking is
       Length  : Element_Count;
       Element : Landin.Types.Scalar_Name) is
    begin
-      Into.Node_Shapes (Slot (Into, Of_Tree, Node)) :=
-        Array_Shape'(Length => Length, Element => Element, others => <>);
+      declare
+         Where : constant Positive := Slot (Into, Of_Tree, Node);
+      begin
+         if Into.Current_Routine = No_Routine_Instance then
+            Into.Node_Shapes (Where) :=
+              Array_Shape'(Length => Length, Element => Element, others => <>);
+         else
+            declare
+               Overlay : constant Positive :=
+                 Ensure_Node_Overlay (Into, Where);
+            begin
+               Into.Node_Overlays (Overlay).Has_Array := True;
+               Into.Node_Overlays (Overlay).Shape :=
+                 Array_Shape'(Length => Length, Element => Element,
+                              others => <>);
+            end;
+         end if;
+      end;
    end Note_Array;
 
    function Array_Element_Nominal
      (Of_Table : Table;
       Of_Tree  : Landin.Syntax.Tree;
       Node     : Landin.Syntax.Node_Id) return Nominal_Type_Id
-     is (Of_Table.Node_Shapes
-           (Slot (Of_Table, Of_Tree, Node)).Element_Nominal);
+   is
+      Where : constant Positive := Slot (Of_Table, Of_Tree, Node);
+      Overlay : constant Natural := Node_Overlay_Position (Of_Table, Where);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Node_Overlays (Overlay).Has_Array_Nominal
+      then
+         return Of_Table.Node_Overlays (Overlay).Array_Nominal;
+      end if;
+      return Of_Table.Node_Shapes (Where).Element_Nominal;
+   end Array_Element_Nominal;
 
    procedure Note_Array_Element_Nominal
      (Into    : in out Table;
@@ -1450,17 +1971,51 @@ package body Landin.Checking is
       Node    : Landin.Syntax.Node_Id;
       Nominal : Nominal_Type_Id) is
    begin
-      Into.Node_Shapes (Slot (Into, Of_Tree, Node)).Element_Nominal := Nominal;
+      declare
+         Where : constant Positive := Slot (Into, Of_Tree, Node);
+      begin
+         if Into.Current_Routine = No_Routine_Instance then
+            Into.Node_Shapes (Where).Element_Nominal := Nominal;
+         else
+            declare
+               Overlay : constant Positive :=
+                 Ensure_Node_Overlay (Into, Where);
+            begin
+               Into.Node_Overlays (Overlay).Has_Array_Nominal := True;
+               Into.Node_Overlays (Overlay).Array_Nominal := Nominal;
+            end;
+         end if;
+      end;
    end Note_Array_Element_Nominal;
 
    function Array_Length
      (Of_Table : Table; Id : Declaration_Id) return Element_Count
-     is (Of_Table.Shapes (Natural (Id)).Length);
+   is
+      Overlay : constant Natural :=
+        Declaration_Overlay_Position (Of_Table, Id);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Array
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Shape.Length;
+      end if;
+      return Of_Table.Shapes (Natural (Id)).Length;
+   end Array_Length;
 
    function Array_Element
      (Of_Table : Table; Id : Declaration_Id)
      return Landin.Types.Scalar_Name
-     is (Of_Table.Shapes (Natural (Id)).Element);
+   is
+      Overlay : constant Natural :=
+        Declaration_Overlay_Position (Of_Table, Id);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Array
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Shape.Element;
+      end if;
+      return Of_Table.Shapes (Natural (Id)).Element;
+   end Array_Element;
 
    procedure Note_Array
      (Into    : in out Table;
@@ -1468,20 +2023,52 @@ package body Landin.Checking is
       Length  : Element_Count;
       Element : Landin.Types.Scalar_Name) is
    begin
-      Into.Shapes (Natural (Id)) :=
-        Array_Shape'(Length => Length, Element => Element, others => <>);
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Shapes (Natural (Id)) :=
+           Array_Shape'(Length => Length, Element => Element, others => <>);
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Array := True;
+            Into.Declaration_Overlays (Overlay).Shape :=
+              Array_Shape'(Length => Length, Element => Element,
+                           others => <>);
+         end;
+      end if;
    end Note_Array;
 
    function Array_Element_Nominal
      (Of_Table : Table; Id : Declaration_Id) return Nominal_Type_Id
-     is (Of_Table.Shapes (Natural (Id)).Element_Nominal);
+   is
+      Overlay : constant Natural :=
+        Declaration_Overlay_Position (Of_Table, Id);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Array_Nominal
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Array_Nominal;
+      end if;
+      return Of_Table.Shapes (Natural (Id)).Element_Nominal;
+   end Array_Element_Nominal;
 
    procedure Note_Array_Element_Nominal
      (Into  : in out Table;
       Id      : Declaration_Id;
       Nominal : Nominal_Type_Id) is
    begin
-      Into.Shapes (Natural (Id)).Element_Nominal := Nominal;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Shapes (Natural (Id)).Element_Nominal := Nominal;
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Array_Nominal := True;
+            Into.Declaration_Overlays (Overlay).Array_Nominal := Nominal;
+         end;
+      end if;
    end Note_Array_Element_Nominal;
 
    procedure Array_Extent
@@ -1518,13 +2105,39 @@ package body Landin.Checking is
       Size := Landin.Targets.Byte_Count (Length) * Held;
    end Array_Extent;
 
+   procedure Set_Node_Type
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Item    : Landin.Types.Type_Kind);
+
+   procedure Set_Node_Type
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Item    : Landin.Types.Type_Kind)
+   is
+      Where : constant Positive := Slot (Into, Of_Tree, Node);
+   begin
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Node_Types (Where) := Item;
+      else
+         declare
+            Overlay : constant Positive := Ensure_Node_Overlay (Into, Where);
+         begin
+            Into.Node_Overlays (Overlay).Has_Type := True;
+            Into.Node_Overlays (Overlay).Answer := Item;
+         end;
+      end if;
+   end Set_Node_Type;
+
    procedure Note
      (Into    : in out Table;
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id;
       Item    : Landin.Types.Type_Kind) is
    begin
-      Into.Node_Types (Slot (Into, Of_Tree, Node)) := Item;
+      Set_Node_Type (Into, Of_Tree, Node, Item);
    end Note;
 
    procedure Commit
@@ -1533,7 +2146,7 @@ package body Landin.Checking is
       Node    : Landin.Syntax.Node_Id;
       To      : Landin.Types.Scalar_Name) is
    begin
-      Into.Node_Types (Slot (Into, Of_Tree, Node)) := To;
+      Set_Node_Type (Into, Of_Tree, Node, To);
    end Commit;
 
    procedure Refuse
@@ -1541,8 +2154,7 @@ package body Landin.Checking is
       Of_Tree : Landin.Syntax.Tree;
       Node    : Landin.Syntax.Node_Id) is
    begin
-      Into.Node_Types (Slot (Into, Of_Tree, Node)) :=
-        Landin.Types.Ill_Typed;
+      Set_Node_Type (Into, Of_Tree, Node, Landin.Types.Ill_Typed);
    end Refuse;
 
    ------------------------------------------------------------------
@@ -1551,16 +2163,47 @@ package body Landin.Checking is
 
    function State_Of (Of_Table : Table; Id : Declaration_Id)
      return Progress
-     is (Of_Table.Declarations (Positive (Id)).State);
+   is
+      Overlay : constant Natural :=
+        Declaration_Overlay_Position (Of_Table, Id);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Settlement
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Settlement_Fact.State;
+      end if;
+      return Of_Table.Declarations (Positive (Id)).State;
+   end State_Of;
 
    function Type_Of (Of_Table : Table; Id : Declaration_Id)
      return Landin.Types.Type_Kind
-     is (Of_Table.Declarations (Positive (Id)).Answer);
+   is
+      Overlay : constant Natural :=
+        Declaration_Overlay_Position (Of_Table, Id);
+   begin
+      if Overlay /= 0
+        and then Of_Table.Declaration_Overlays (Overlay).Has_Settlement
+      then
+         return Of_Table.Declaration_Overlays (Overlay).Settlement_Fact.Answer;
+      end if;
+      return Of_Table.Declarations (Positive (Id)).Answer;
+   end Type_Of;
 
    procedure Begin_Inference
      (Into : in out Table; Id : Declaration_Id) is
    begin
-      Into.Declarations (Positive (Id)).State := Underway;
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Declarations (Positive (Id)).State := Underway;
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Settlement := True;
+            Into.Declaration_Overlays (Overlay).Settlement_Fact :=
+              (State => Underway, Answer => Landin.Types.Undecided);
+         end;
+      end if;
    end Begin_Inference;
 
    procedure Settle
@@ -1568,8 +2211,19 @@ package body Landin.Checking is
       Id   : Declaration_Id;
       Item : Landin.Types.Type_Kind) is
    begin
-      Into.Declarations (Positive (Id)) :=
-        Settlement'(State => Settled, Answer => Item);
+      if Into.Current_Routine = No_Routine_Instance then
+         Into.Declarations (Positive (Id)) :=
+           Settlement'(State => Settled, Answer => Item);
+      else
+         declare
+            Overlay : constant Positive :=
+              Ensure_Declaration_Overlay (Into, Id);
+         begin
+            Into.Declaration_Overlays (Overlay).Has_Settlement := True;
+            Into.Declaration_Overlays (Overlay).Settlement_Fact :=
+              (State => Settled, Answer => Item);
+         end;
+      end if;
    end Settle;
 
 end Landin.Checking;

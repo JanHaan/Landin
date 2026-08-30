@@ -24,6 +24,7 @@ with Landin.Types;
 
 package body Landin.Tests.Checking_Suite is
 
+   use type Landin.IR.Item_Id;
    use type Landin.IR.Nominal_Type_Id;
    use type Landin.Provenance.Declaration_Id;
    use type Landin.Source.Span;
@@ -39,6 +40,8 @@ package body Landin.Tests.Checking_Suite is
    use type Landin.Checking.Field_Kind;
    use type Landin.Checking.Instance_State;
    use type Landin.Checking.Nominal_Type_Id;
+   use type Landin.Checking.Progress;
+   use type Landin.Checking.Routine_Instance_Id;
    use type Landin.Checking.Signature_Id;
    use type Landin.Types.Magnitude;
    use type Landin.Types.Type_Kind;
@@ -87,6 +90,9 @@ package body Landin.Tests.Checking_Suite is
      (Item : in out Landin.Testing.Context);
 
    procedure Nominal_Instances_Intern_Normalized_Actuals
+     (Item : in out Landin.Testing.Context);
+
+   procedure Routine_Instance_Views_Keep_Source_Facts_Separate
      (Item : in out Landin.Testing.Context);
 
    procedure Declared_Structs_Follow_Target_Layout
@@ -896,6 +902,231 @@ package body Landin.Tests.Checking_Suite is
             "target-dependent layout cannot enter a nominal actual key");
       end;
    end Nominal_Instances_Intern_Normalized_Actuals;
+
+   procedure Routine_Instance_Views_Keep_Source_Facts_Separate
+     (Item : in out Landin.Testing.Context)
+   is
+      Source_Text : constant String :=
+        "identity: (t: type, value: t) -> (result: t) =" & LF
+        & "    local: t = value" & LF
+        & "    result = identity(local)" & LF
+        & "end identity" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Src : Landin.Source.Source_Id;
+      Ran : Natural;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "routine-views.ldn", Source_Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+      Landin.Testing.Check_Equal (Item, Ran, 2, "syntax and resolution ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the generic source resolves");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Meanings : constant not null access Landin.Resolution.Table :=
+           Landin.Stages.Meanings (Work);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Unit : constant not null access Landin.IR.Unit :=
+           Landin.Stages.Code (Work);
+         Template, Parameter, Returned, Local :
+           Landin.Provenance.Declaration_Id :=
+             Landin.Provenance.No_Declaration;
+         Call : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
+         Previous : Landin.Checking.Routine_Instance_Id;
+      begin
+         Landin.Checking.Prepare
+           (Types.all, Landin.Stages.Trees (Work).all, Meanings.all,
+            Landin.Stages.Identities (Work).all);
+         Landin.IR.Prepare (Unit.all, Meanings.all);
+         for Id in Landin.Provenance.Declaration_Id'(1)
+                   .. Landin.Provenance.Declaration_Id
+                        (Landin.Resolution.Declaration_Count (Meanings.all))
+         loop
+            case Landin.Resolution.Sort_Of (Meanings.all, Id) is
+               when Landin.Resolution.Module_Function => Template := Id;
+               when Landin.Resolution.Parameter => Parameter := Id;
+               when Landin.Resolution.Named_Return => Returned := Id;
+               when Landin.Resolution.Local_Binding => Local := Id;
+               when others => null;
+            end case;
+         end loop;
+         for Node in Landin.Syntax.Node_Id'(1)
+                   .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node) = Landin.Syntax.Call then
+               Call := Node;
+            end if;
+         end loop;
+
+         declare
+            U8_Actuals : Landin.Checking.Actual_Tuple :=
+              Landin.Checking.Empty_Actuals;
+            I32_Actuals : Landin.Checking.Actual_Tuple :=
+              Landin.Checking.Empty_Actuals;
+         begin
+            Landin.Checking.Append_Actual
+              (U8_Actuals,
+               Landin.Checking.Scalar_Type_Actual (Landin.Types.U8));
+            Landin.Checking.Append_Actual
+              (I32_Actuals,
+               Landin.Checking.Scalar_Type_Actual (Landin.Types.I32));
+            declare
+               Small : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Intern_Routine_Instance
+                   (Types.all, Template, U8_Actuals);
+               Small_Again : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Intern_Routine_Instance
+                   (Types.all, Template, U8_Actuals);
+               Wide : constant Landin.Checking.Routine_Instance_Id :=
+                 Landin.Checking.Intern_Routine_Instance
+                   (Types.all, Template, I32_Actuals);
+               Site : constant Landin.Provenance.Origin :=
+                 Landin.Syntax.Origin
+                   (Of_Tree.all,
+                    Landin.Resolution.Node_Of (Meanings.all, Template));
+               Small_Signature : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Add_Signature
+                   (Types.all,
+                    Landin.Checking.Signature_Part_Array'
+                      [1 => (Kind => Landin.Types.U8, Site => Site,
+                             others => <>)],
+                    Landin.Checking.Signature_Part'
+                      (Kind => Landin.Types.U8, Site => Site, others => <>),
+                    Site);
+               Wide_Signature : constant Landin.Checking.Signature_Id :=
+                 Landin.Checking.Add_Signature
+                   (Types.all,
+                    Landin.Checking.Signature_Part_Array'
+                      [1 => (Kind => Landin.Types.I32, Site => Site,
+                             others => <>)],
+                    Landin.Checking.Signature_Part'
+                      (Kind => Landin.Types.I32, Site => Site, others => <>),
+                    Site);
+            begin
+               Landin.Testing.Check
+                 (Item, Small = Small_Again and then Small /= Wide,
+                  "equal routine keys reuse and unequal keys stay distinct");
+
+               Landin.Checking.Begin_Routine_Instance (Types.all, Small);
+               Landin.Checking.Publish_Routine_Signature
+                 (Types.all, Small, Small_Signature);
+               Landin.Checking.Activate_Routine_View
+                 (Types.all, Small, Previous);
+               Landin.Checking.Settle
+                 (Types.all, Parameter, Landin.Types.U8);
+               Landin.Checking.Settle
+                 (Types.all, Returned, Landin.Types.U8);
+               Landin.Checking.Settle (Types.all, Local, Landin.Types.U8);
+               Landin.Checking.Note
+                 (Types.all, Of_Tree.all, Call, Landin.Types.U8);
+               Landin.Checking.Note_Routine_Target
+                 (Types.all, Of_Tree.all, Call, Small);
+               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+               Landin.Checking.Finish_Routine_Instance (Types.all, Small);
+
+               Landin.Checking.Begin_Routine_Instance (Types.all, Wide);
+               Landin.Checking.Publish_Routine_Signature
+                 (Types.all, Wide, Wide_Signature);
+               Landin.Checking.Activate_Routine_View
+                 (Types.all, Wide, Previous);
+               Landin.Checking.Settle
+                 (Types.all, Parameter, Landin.Types.I32);
+               Landin.Checking.Settle
+                 (Types.all, Returned, Landin.Types.I32);
+               Landin.Checking.Settle (Types.all, Local, Landin.Types.I32);
+               Landin.Checking.Note
+                 (Types.all, Of_Tree.all, Call, Landin.Types.I32);
+               Landin.Checking.Note_Routine_Target
+                 (Types.all, Of_Tree.all, Call, Wide);
+               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+               Landin.Checking.Finish_Routine_Instance (Types.all, Wide);
+
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.State_Of (Types.all, Local)
+                    = Landin.Checking.Untouched
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree.all, Call)
+                        = Landin.Types.Undecided
+                    and then Landin.Checking.Routine_Target_Of
+                      (Types.all, Of_Tree.all, Call)
+                        = Landin.Checking.No_Routine_Instance,
+                  "the global fact layer remains untouched");
+
+               Landin.Checking.Activate_Routine_View
+                 (Types.all, Small, Previous);
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Local)
+                    = Landin.Types.U8
+                    and then Landin.Checking.Type_Of (Types.all, Returned)
+                      = Landin.Types.U8
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree.all, Call) = Landin.Types.U8
+                    and then Landin.Checking.Routine_Target_Of
+                      (Types.all, Of_Tree.all, Call) = Small,
+                  "the u8 view retains local, return, and call facts");
+               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+
+               Landin.Checking.Activate_Routine_View
+                 (Types.all, Wide, Previous);
+               Landin.Testing.Check
+                 (Item,
+                  Landin.Checking.Type_Of (Types.all, Local)
+                    = Landin.Types.I32
+                    and then Landin.Checking.Type_Of (Types.all, Returned)
+                      = Landin.Types.I32
+                    and then Landin.Checking.Type_Of
+                      (Types.all, Of_Tree.all, Call) = Landin.Types.I32
+                    and then Landin.Checking.Routine_Target_Of
+                      (Types.all, Of_Tree.all, Call) = Wide,
+                  "the i32 view retains distinct facts on the same source");
+               Landin.Checking.Restore_Routine_View (Types.all, Previous);
+
+               declare
+                  Small_Item : constant Landin.IR.Item_Id :=
+                    Landin.IR.Add_Routine_Instance_Item
+                      (Unit.all,
+                       Landin.Checking.Routine_Identities.Position
+                         (Types.all, Small),
+                       Template, Landin.Types.U8, Site);
+                  Wide_Item : constant Landin.IR.Item_Id :=
+                    Landin.IR.Add_Routine_Instance_Item
+                      (Unit.all,
+                       Landin.Checking.Routine_Identities.Position
+                         (Types.all, Wide),
+                       Template, Landin.Types.I32, Site);
+               begin
+                  Landin.Testing.Check
+                    (Item,
+                     Small_Item /= Wide_Item
+                       and then Landin.IR.Item_For_Instance
+                         (Unit.all,
+                          Landin.Checking.Routine_Identities.Position
+                            (Types.all, Small_Again)) = Small_Item
+                       and then Landin.IR.Item_For_Instance
+                         (Unit.all,
+                          Landin.Checking.Routine_Identities.Position
+                            (Types.all, Wide)) = Wide_Item
+                       and then Landin.IR.Declares (Unit.all, Small_Item)
+                         = Landin.IR.No_Declaration
+                       and then Landin.IR.Generic_Template_Of
+                         (Unit.all, Small_Item) = Template
+                       and then Landin.IR.Generic_Template_Of
+                         (Unit.all, Wide_Item) = Template,
+                     "routine keys map to reused or distinct local IR items");
+               end;
+            end;
+         end;
+      end;
+   end Routine_Instance_Views_Keep_Source_Facts_Separate;
 
    procedure Declared_Structs_Follow_Target_Layout
      (Item : in out Landin.Testing.Context)
@@ -5673,6 +5904,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "nominal instances intern normalized actuals",
          Nominal_Instances_Intern_Normalized_Actuals'Access);
+      Landin.Testing.Register
+        (Into, "checking", "routine instance views keep source facts",
+         Routine_Instance_Views_Keep_Source_Facts_Separate'Access);
       Landin.Testing.Register
         (Into, "checking", "ordinary signatures use nominal identity only",
          Ordinary_Function_Signatures_Use_Identity_Only'Access);

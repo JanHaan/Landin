@@ -666,6 +666,40 @@ package Landin.IR is
                   and then Kind_Of (Into, Add_Item'Result) = Kind
                   and then Result_Of (Into, Add_Item'Result) = Result;
 
+   --  Generic routine items are keyed by the checker interning position,
+   --  not by the source declaration.  Declares therefore remains
+   --  No_Declaration (giving the backend a deterministic local symbol), while
+   --  Generic_Template_Of retains source provenance.
+   function Item_For_Instance
+     (Of_Unit : Unit; Instance_Position : Positive) return Item_Id
+     with Pre => Is_Prepared (Of_Unit);
+
+   function Add_Routine_Instance_Item
+     (Into             : in out Unit;
+      Instance_Position : Positive;
+      Template          : Declaration_Id;
+      Result            : Landin.Types.Type_Kind;
+      Site              : Landin.Provenance.Origin;
+      Nominal           : Nominal_Type_Id := No_Nominal_Type) return Item_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Template /= No_Declaration
+                  and then Natural (Template) <= Declaration_Limit (Into)
+                  and then Item_For_Instance
+                    (Into, Instance_Position) = No_Item
+                  and then Result
+                    in Landin.Types.No_Value | Landin.Types.Scalar_Name
+                       | Landin.Types.Aggregate | Landin.Types.Fixed_Array
+                  and then (Nominal = No_Nominal_Type
+                            or else Holds (Into, Nominal))
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Holds (Into, Add_Routine_Instance_Item'Result)
+                  and then Item_For_Instance (Into, Instance_Position)
+                    = Add_Routine_Instance_Item'Result;
+
+   function Generic_Template_Of (Of_Unit : Unit; Id : Item_Id)
+     return Declaration_Id
+     with Pre => Holds (Of_Unit, Id);
+
    function Kind_Of (Of_Unit : Unit; Id : Item_Id) return Item_Kind
      with Pre => Holds (Of_Unit, Id);
 
@@ -2901,6 +2935,7 @@ private
    type Item_Record is record
       Kind        : Item_Kind                 := Datum;
       Declaration : Declaration_Id            := No_Declaration;
+      Generic_Template : Declaration_Id       := No_Declaration;
       Result      : Landin.Types.Type_Kind    := Landin.Types.Not_Typed;
       Nominal     : Nominal_Type_Id           := No_Nominal_Type;
       Signature   : Signature_Id              := No_Signature;
@@ -2975,6 +3010,15 @@ private
    package Item_Ref_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Item_Id);
 
+   type Routine_Instance_Item is record
+      Position : Positive := 1;
+      Template : Declaration_Id := No_Declaration;
+      Item     : Item_Id := No_Item;
+   end record;
+
+   package Routine_Instance_Item_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Routine_Instance_Item);
+
    package Nominal_Template_Vectors is new Ada.Containers.Vectors
      (Index_Type   => Positive,
       Element_Type => Declaration_Id,
@@ -3024,6 +3068,7 @@ private
       --  instruction is a fixed-size record and a path is not.
       Paths       : Path_Step_Vectors.Vector;
       Standing    : Item_Ref_Vectors.Vector;
+      Routine_Instance_Items : Routine_Instance_Item_Vectors.Vector;
       --  D24: one folded scalar per array-datum position, laid end to end
       --  across items so a datum with no image contributes no bytes here.
       Images      : Image_Vectors.Vector;
