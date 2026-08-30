@@ -100,6 +100,11 @@ ROADMAP_PHASE = re.compile(r"^## (R[0-7]) — \S.*$")
 ROADMAP_WORK = re.compile(r"^### (R[0-7]\.([1-9]\d*)) — (\S.*)$")
 ROADMAP_GATE = re.compile(r"^### (R[0-7]) gate$")
 ROADMAP_STATUS = re.compile(r"^Status: (planned|active|blocked|complete)$")
+CURRENT_ROADMAP_WORK = re.compile(
+    r"^\*\*Current roadmap work: (R[0-7]\.\d+ — \S.*?)\.\*\*$")
+ROADMAP_PROSE_STATUS = re.compile(
+    r"(?=(\b(R[0-7]\.\d+)'s\b.{0,240}?\b(?:is|are) "
+    r"(active|complete)\b))")
 ROADMAP_DEPENDS = re.compile(
     r"^Depends on: (none|R[0-7]\.[1-9]\d*(?:, R[0-7]\.[1-9]\d*)*)$")
 ROADMAP_REFERENCE = re.compile(r"R[0-7]\.[1-9]\d*")
@@ -783,6 +788,7 @@ def read_grammar(path):
     offset, section = grammar_section(text)
     if section is None:
         return {}, {}, []
+    assert offset is not None
 
     rules, order, raw = grammar_rules(section)
     out = [(n + offset, why) for n, why in raw]
@@ -880,8 +886,11 @@ def check_roadmap(path):
             out.append((n, "malformed roadmap work heading"))
 
     expected_phases = ["R%d" % n for n in range(8)]
-    actual_phases = [ROADMAP_PHASE.match(line).group(1) for line in lines
-                     if ROADMAP_PHASE.match(line)]
+    actual_phases = []
+    for line in lines:
+        phase = ROADMAP_PHASE.match(line)
+        if phase:
+            actual_phases.append(phase.group(1))
     for phase in expected_phases:
         if not phases[phase]:
             out.append((1, "%s phase is missing" % phase))
@@ -1041,6 +1050,96 @@ def check_roadmap(path):
     for legacy_id in extra:
         out.append((legacy[legacy_id][0], "unexpected legacy migration row %s"
                     % legacy_id))
+
+    return sorted(set(out))
+
+
+def check_project_status(full_run):
+    """The published/current-work prose must agree with ROADMAP.md.
+
+    The site renderer reads its hero status from README.md and its progress
+    track from ROADMAP.md, while handoff.md is the first human orientation.
+    R2.40 was marked complete in the roadmap and README but remained active in
+    the handoff, and the roadmap then had no active item for the page to show.
+    Keep all three answers mechanically one answer.
+    """
+    if not full_run:
+        return []
+
+    roadmap = os.path.join(ROOT, ROADMAP)
+    documents = [os.path.join(ROOT, "README.md"),
+                 os.path.join(ROOT, "handoff.md")]
+    missing = absent([roadmap] + documents)
+    if missing:
+        return missing
+
+    lines = io.open(roadmap, encoding="utf-8").read().splitlines()
+    items = {}
+    current = None
+    for n, line in enumerate(lines, 1):
+        heading = ROADMAP_WORK.match(line)
+        if heading:
+            current = heading.group(1)
+            items[current] = {
+                "title": heading.group(3), "line": n, "status": None,
+                "status_line": n,
+            }
+        elif line.startswith("### "):
+            current = None
+        elif current and line.startswith("Status:"):
+            status = ROADMAP_STATUS.match(line)
+            if status:
+                items[current]["status"] = status.group(1)
+                items[current]["status_line"] = n
+
+    active = [(work_id, item) for work_id, item in items.items()
+              if item["status"] == "active"]
+    out = []
+    if len(active) != 1:
+        out.append((ROADMAP, 1,
+                    "roadmap has %d active work items; the page needs exactly one"
+                    % len(active)))
+        expected = None
+    else:
+        work_id, item = active[0]
+        expected = "%s — %s" % (work_id, item["title"])
+
+    for path in documents:
+        relative = os.path.relpath(path, ROOT)
+        text = io.open(path, encoding="utf-8").read()
+        markers = []
+        for n, line in enumerate(text.splitlines(), 1):
+            match = CURRENT_ROADMAP_WORK.match(line)
+            if match:
+                markers.append((n, match.group(1)))
+        if len(markers) != 1:
+            out.append((relative, 1,
+                        "expected one current-roadmap-work line, found %d"
+                        % len(markers)))
+        elif expected is not None and markers[0][1] != expected:
+            out.append((relative, markers[0][0],
+                        "current roadmap work is %r, expected %r"
+                        % (markers[0][1], expected)))
+
+        #  Possessive status prose is allowed, but it cannot contradict the
+        #  durable status. Work paragraph-by-paragraph so an unrelated later
+        #  sentence cannot accidentally satisfy a claim.
+        offset = 0
+        for paragraph in re.split(r"\n\s*\n", text):
+            flat = " ".join(paragraph.split())
+            line = text.count("\n", 0, offset) + 1
+            for match in ROADMAP_PROSE_STATUS.finditer(flat):
+                work_id = match.group(2)
+                claimed = match.group(3)
+                actual = items.get(work_id, {}).get("status")
+                if actual is not None and actual != claimed:
+                    out.append((relative, line,
+                                "%s is called %s here but is %s in ROADMAP.md"
+                                % (work_id, claimed, actual)))
+            offset += len(paragraph)
+            following = re.match(r"\n\s*\n", text[offset:])
+            if following:
+                offset += len(following.group(0))
 
     return sorted(set(out))
 
@@ -3331,6 +3430,7 @@ def main(argv):
     extra = check_citations(citation_paths)
     stale_paths = LIVE_DOCS if full_run else paths
     extra += check_stale_backlog(stale_paths, full_run)
+    extra += check_project_status(full_run)
     extra += check_pinned_toolchain(full_run)
     extra += check_developer_loops(full_run)
     extra += check_grammar_corpus(full_run)

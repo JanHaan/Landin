@@ -187,8 +187,12 @@ as a second authority.
 kernel, R2.20's aggregate/value-layout work and R2.30's functions, control,
 declared errors, function fields, recursive module images, computed aggregate
 elements and lexical `defer`/failure-only `undo` cleanup are complete. R2.40's
-fixed parameters and compile-time substitution are active. `refine`
-runs the frontend, lowers and
+fixed parameters, compile-time substitution, generic routine instances and
+fixed conditional declarations are complete.
+
+**Current roadmap work: R2.50 — Implement references and local lifetime checks.**
+
+`refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and
 link a hosted executable whose runtime behaviour the native x86-64 gate
 checks. macOS arm64 and Cortex-M backends and the standard library remain
