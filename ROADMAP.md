@@ -2318,15 +2318,22 @@ images, construction, copies, calls, control joins, arrays, nested children and
 variants then use the ordinary nominal shape path. Templates and formals make
 no IR item, slot or ABI position.
 
-The next semantic increments extend the substitution layer to generic routine
-instances and exact deduction from ordinary argument types, then fixed
-conditional declaration lists. Deduction does not use return context,
-constraint lookup or arithmetic inversion. Parameterised nominal types and
-generic routines receive identities derived from a template and normalised
-actual tuple rather than reusing one source declaration identity for unequal
-instances. No correctness step executes a user routine. R2.70 remains the
-owner of shared generic evidence and R4.50 the owner of choosing
-specialisation as an optimisation.
+D138's first executable routine increment now extends substitution to direct
+scalar generic calls. The checker interns `(template, normalized actual tuple)`
+routine identities, checks and lowers each through a fact overlay on the shared
+source, publishes a signature before same-key recursion, rejects active
+same-template unequal-tuple expansion, and maps each ready key to one local IR
+routine item. Deduction synthesizes runtime arguments without parameter context,
+binds direct type-formal occurrences exactly, requires repeats and all formals
+to agree, and then performs ordinary call checking; a context-free literal
+therefore deduces `i32`. An exact `[n]t` runtime parameter additionally binds
+`n` from the argument's normalized array length and `t` from its element
+descriptor, without arithmetic inversion. Static formals remain outside
+signatures, slots and the ABI. Explicit static call syntax, computed fixed
+patterns, and fixed conditional declaration lists remain the next increments.
+Deduction does not use return context or constraint lookup. No correctness
+step executes a user routine. R2.70 remains the owner of shared generic
+evidence and R4.50 the owner of choosing specialisation as an optimisation.
 
 Exit evidence: generic shape, nominal identity/layout, parser, resolution,
 checking, lowering and verifier seams pass. Positive, negative and runtime
@@ -2339,8 +2346,13 @@ provenance, alias-cycle classification, ordinary self/alias/mutual
 signature-only cycles in both declaration orders, multiple named generic
 nominal and nominal-array results, and nominal recursion including unused
 order-permuted, mutual and multi-wrapper symbolic formal paths plus direct
-field, payload and zero-length array edges. Direct and expression-folded zero
-lengths and a syntactically valid rejected call in an
+field, payload and zero-length array edges. Routine evidence covers overlay
+separation on one source node, equal-key reuse, unequal scalar items, deduced
+`u8`/`i32`, context-free literal `i32`, exact `[n]t` fixed/element deduction,
+same-key recursion, repeated-formal conflict, undeduced formals, non-finite
+unequal-key recursion, unconditional
+unused-template defects, and absence of static ABI positions. Direct and
+expression-folded zero lengths and a syntactically valid rejected call in an
 array bound remain covered; no user code executes during compilation.
 
 ### R2.50 — Implement references and local lifetime checks

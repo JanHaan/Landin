@@ -1002,6 +1002,9 @@ package body Landin.Tests.Lowering_Suite is
    procedure Parameterized_Aliases_Lower_As_Ordinary_Arrays
      (Item : in out Landin.Testing.Context);
 
+   procedure Generic_Routine_Instances_Lower_Once_Per_Key
+     (Item : in out Landin.Testing.Context);
+
    procedure Parameterized_Aliases_Lower_As_Ordinary_Arrays
      (Item : in out Landin.Testing.Context)
    is
@@ -1046,6 +1049,91 @@ package body Landin.Tests.Lowering_Suite is
          Check_Terminators (Item, Unit, "parameterized alias erasure");
       end;
    end Parameterized_Aliases_Lower_As_Ordinary_Arrays;
+
+   procedure Generic_Routine_Instances_Lower_Once_Per_Key
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "identity: (t: type, value: t) -> (result: t) = value end identity"
+         & LF
+         & "array_identity: (fixed n: u32, t: type, value: [n]t)"
+         & " -> (result: [n]t) =" & LF
+         & "    result = value" & LF
+         & "end array_identity" & LF
+         & "use: (small: u8, wide: i32) -> (result: i32) =" & LF
+         & "    small_copy: u8 = identity(small)" & LF
+         & "    wide_copy: i32 = identity(wide)" & LF
+         & "    wide_again: i32 = identity(wide_copy)" & LF
+         & "    source: [2]i32 = [1, 2]" & LF
+         & "    array_copy: [2]i32 = array_identity(source)" & LF
+         & "    result = wide_again" & LF
+         & "end use" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 4, "four stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "generic calls are accepted");
+
+      declare
+         Unit : IR.Unit renames Landin.Stages.Code (Work).all;
+         Use_Item : constant IR.Item_Id := 1;
+         Small_Item : constant IR.Item_Id := 2;
+         Wide_Item : constant IR.Item_Id := 3;
+         Array_Item : constant IR.Item_Id := 4;
+         Calls : Natural := 0;
+         Small_Calls : Natural := 0;
+         Wide_Calls : Natural := 0;
+         Array_Calls : Natural := 0;
+      begin
+         for Value in 1 .. IR.Value_Count (Unit, Use_Item) loop
+            if IR.Op_Of (Unit, Use_Item, IR.Value_Id (Value)) = IR.Call then
+               Calls := Calls + 1;
+               if IR.Callee_Of (Unit, Use_Item, IR.Value_Id (Value))
+                 = Small_Item
+               then
+                  Small_Calls := Small_Calls + 1;
+               elsif IR.Callee_Of (Unit, Use_Item, IR.Value_Id (Value))
+                 = Wide_Item
+               then
+                  Wide_Calls := Wide_Calls + 1;
+               elsif IR.Callee_Of (Unit, Use_Item, IR.Value_Id (Value))
+                 = Array_Item
+               then
+                  Array_Calls := Array_Calls + 1;
+               end if;
+            end if;
+         end loop;
+
+         Landin.Testing.Check
+           (Item,
+            IR.Item_Count (Unit) = 4
+              and then IR.Declares (Unit, Small_Item) = IR.No_Declaration
+              and then IR.Declares (Unit, Wide_Item) = IR.No_Declaration
+              and then IR.Generic_Template_Of (Unit, Small_Item)
+                = IR.Generic_Template_Of (Unit, Wide_Item),
+            "one template emits two local routine items for two keys");
+         Landin.Testing.Check
+           (Item,
+            Calls = 4 and then Small_Calls = 1 and then Wide_Calls = 2
+              and then Array_Calls = 1,
+            "equal i32 keys reuse one target while other keys stay distinct");
+         Landin.Testing.Check
+           (Item,
+            IR.Parameter_Count (Unit, Small_Item) = 1
+              and then IR.Parameter_Count (Unit, Wide_Item) = 1
+              and then IR.Slot_Count (Unit, Small_Item) = 2
+              and then IR.Slot_Count (Unit, Wide_Item) = 2
+              and then IR.Parameter_Count (Unit, Array_Item) = 2
+              and then IR.Slot_Count (Unit, Array_Item) = 3,
+            "static formals occupy no ABI or frame position");
+         Check_Terminators (Item, Unit, "generic routine instances");
+      end;
+   end Generic_Routine_Instances_Lower_Once_Per_Key;
 
    ------------------------------------------------------------------
 
@@ -5924,6 +6012,9 @@ package body Landin.Tests.Lowering_Suite is
       Landin.Testing.Register
         (Into, "lowering", "parameterized aliases lower as arrays",
          Parameterized_Aliases_Lower_As_Ordinary_Arrays'Access);
+      Landin.Testing.Register
+        (Into, "lowering", "generic routines lower once per key",
+         Generic_Routine_Instances_Lower_Once_Per_Key'Access);
       Landin.Testing.Register
         (Into, "lowering", "parameterized structs lower as nominals",
          Parameterized_Structs_Lower_As_Concrete_Nominals'Access);

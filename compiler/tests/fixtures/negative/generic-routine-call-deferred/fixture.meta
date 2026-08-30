@@ -1,6 +1,0 @@
-class: negative
-summary: generic routine syntax has no standalone callable value before deduction instances
-constructs: 1290, 1350
-program: program.ldn
-targets: linux-x86-64, macos-arm64
-codes: L0304, L0304, L0301

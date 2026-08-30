@@ -1,0 +1,6 @@
+class: runtime
+summary: an exact runtime array shape deduces fixed n and direct element type t without arithmetic inversion
+constructs: 0520, 1290, 1800, 1920, 1970
+program: main.ldn
+status: 42
+targets: linux-x86-64

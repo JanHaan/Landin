@@ -39,6 +39,8 @@ package body Landin.Stages.Lowering is
    use type Landin.Checking.Error_Set_Form;
    use type Landin.Checking.Field_Kind;
    use type Landin.Checking.Nominal_Type_Id;
+   use type Landin.Checking.Routine_Instance_Id;
+   use type Landin.Checking.Routine_Instance_State;
    use type Landin.Checking.Signature_Id;
    use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
@@ -2007,8 +2009,14 @@ package body Landin.Stages.Lowering is
            Named
            and then Res.Sort_Of (Meanings.all, Means)
              = Res.Module_Function;
+         Generic_Target : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Routine_Target_Of
+             (Types.all, Of_Tree, Node);
          Source_Signature : constant Landin.Checking.Signature_Id :=
-           (if Named
+           (if Generic_Target /= Landin.Checking.No_Routine_Instance
+            then Landin.Checking.Routine_Signature_Of
+              (Types.all, Generic_Target)
+            elsif Named
             then Landin.Checking.Signature_Of (Types.all, Means)
             else Landin.Checking.Signature_Of
               (Types.all, Of_Tree, Callee));
@@ -2017,6 +2025,11 @@ package body Landin.Stages.Lowering is
          Indirect : constant Boolean := not Direct;
          Target : constant IR.Item_Id :=
            (if Indirect then IR.No_Item
+            elsif Generic_Target /= Landin.Checking.No_Routine_Instance
+            then IR.Item_For_Instance
+              (Unit.all,
+               Landin.Checking.Routine_Identities.Position
+                 (Types.all, Generic_Target))
             else IR.Item_For (Unit.all, Means));
          Count : constant Natural := Syn.Argument_Count (Of_Tree, Node);
          Returns_Stored : constant Boolean :=
@@ -6842,7 +6855,14 @@ package body Landin.Stages.Lowering is
             then Declaration_At (Src, Node) else Res.No_Declaration);
       begin
          Filling :=
-           (if Owner = Res.No_Declaration
+           (if Landin.Checking.Current_Routine_View (Types.all)
+                  /= Landin.Checking.No_Routine_Instance
+            then IR.Item_For_Instance
+              (Unit.all,
+               Landin.Checking.Routine_Identities.Position
+                 (Types.all,
+                  Landin.Checking.Current_Routine_View (Types.all)))
+            elsif Owner = Res.No_Declaration
             then Anonymous_Item (Of_Tree, Node)
             else IR.Item_For (Unit.all, Owner));
          Slots := No_Slots;
@@ -7322,6 +7342,62 @@ package body Landin.Stages.Lowering is
          end;
       end loop;
 
+      --  Ready generic routine instances follow declaration-backed items in
+      --  checker interning order.  Their source template remains provenance;
+      --  the item itself is local and keyed by the opaque instance position.
+      for Position in 1 .. Landin.Checking.Routine_Instance_Count (Types.all)
+      loop
+         declare
+            Source : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Routine_Identities.Nth (Types.all, Position);
+         begin
+            if Landin.Checking.Routine_State_Of (Types.all, Source)
+              = Landin.Checking.Routine_Ready
+            then
+               declare
+                  Template : constant Res.Declaration_Id :=
+                    Landin.Checking.Routine_Template_Of (Types.all, Source);
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Template));
+                  Node : constant Syn.Node_Id :=
+                    Res.Node_Of (Meanings.all, Template);
+                  Source_Signature : constant Landin.Checking.Signature_Id :=
+                    Landin.Checking.Routine_Signature_Of
+                      (Types.all, Source);
+                  Result_Count : constant Natural :=
+                    Landin.Checking.Signature_Result_Count
+                      (Types.all, Source_Signature);
+                  Part : constant Landin.Checking.Signature_Part :=
+                    (if Result_Count = 1
+                     then Landin.Checking.Nth_Signature_Result
+                       (Types.all, Source_Signature, 1)
+                     else (Kind => Ty.No_Value, others => <>));
+                  Held : constant Ty.Type_Kind :=
+                    (if Result_Count = 0 then Ty.No_Value
+                     elsif Result_Count > 1 then Ty.Aggregate
+                     else Part.Kind);
+                  Made : constant IR.Item_Id :=
+                    IR.Add_Routine_Instance_Item
+                      (Unit.all, Position, Template,
+                       (if Held = Ty.Function_Value then Ty.Usize
+                        elsif Held = Ty.Atom_Value then Ty.U32 else Held),
+                       Site_Of (Of_Tree.all, Node),
+                       Nominal =>
+                         (if Held = Ty.Aggregate and then Result_Count = 1
+                          then Nominal_For (Part.Nominal)
+                          else IR.No_Nominal_Type));
+               begin
+                  if Held = Ty.Atom_Value then
+                     IR.Set_Atom_Set
+                       (Unit.all, Made, Atom_Set_For (Part.Atoms));
+                  end if;
+                  IR.Set_Signature
+                    (Unit.all, Made, Signature_For (Source_Signature));
+               end;
+            end if;
+         end;
+      end loop;
+
       --  Anonymous routines follow every declaration item, in source order
       --  and then syntax post-order.  That order is independent of traversal
       --  recursion and gives each no-capture function one deterministic item
@@ -7413,6 +7489,38 @@ package body Landin.Stages.Lowering is
                   end case;
                end;
             end loop;
+         end;
+      end loop;
+
+      for Position in 1 .. Landin.Checking.Routine_Instance_Count (Types.all)
+      loop
+         declare
+            Source : constant Landin.Checking.Routine_Instance_Id :=
+              Landin.Checking.Routine_Identities.Nth (Types.all, Position);
+         begin
+            if Landin.Checking.Routine_State_Of (Types.all, Source)
+              = Landin.Checking.Routine_Ready
+            then
+               declare
+                  Template : constant Res.Declaration_Id :=
+                    Landin.Checking.Routine_Template_Of (Types.all, Source);
+                  Of_Tree : constant not null access constant Syn.Tree :=
+                    Tree_For (Res.Source_Of (Meanings.all, Template));
+                  Previous : Landin.Checking.Routine_Instance_Id;
+               begin
+                  Landin.Checking.Activate_Routine_View
+                    (Types.all, Source, Previous);
+                  Lower_Routine
+                    (Of_Tree.all, Res.Node_Of (Meanings.all, Template));
+                  Landin.Checking.Restore_Routine_View
+                    (Types.all, Previous);
+               exception
+                  when others =>
+                     Landin.Checking.Restore_Routine_View
+                       (Types.all, Previous);
+                     raise;
+               end;
+            end if;
          end;
       end loop;
 
