@@ -2436,8 +2436,9 @@ check in another, explicit
 computed checks, same-key recursion, repeated nested type/fixed-formal
 conflicts, no-inversion undeduced formals, wrong nominal templates, non-finite
 unequal-key recursion, declared and inferred per-instance error propagation,
-call-site recovery, ordinary/generic and generic/generic fixed-point seams,
-direct and mutual same-key recursion, unequal function-signature keys with
+call-site recovery, `try` through deduced and reordered explicit instance
+targets, ordinary/generic and generic/generic fixed-point seams, direct and
+mutual same-key recursion, unequal function-signature keys with
 distinct inferred sets, finalized infallible instances, failure cleanup,
 template-not-function-value refusal, unconditional unused-template defects,
 and absence of static ABI positions or generic error IR. Direct and

@@ -500,6 +500,9 @@ package body Landin.Stages.Checking is
         (Of_Tree : Syn.Tree;
          Node    : Syn.Node_Id;
          Signature : Landin.Checking.Signature_Id) return Ty.Type_Kind;
+      function Effective_Call_Signature
+        (Of_Tree : Syn.Tree; Call : Syn.Node_Id)
+         return Landin.Checking.Signature_Id;
       function Instantiate_Generic_Call
         (Caller_Tree : Syn.Tree;
          Call        : Syn.Node_Id;
@@ -7377,6 +7380,32 @@ package body Landin.Stages.Checking is
          return Result.Kind;
       end Check_Call;
 
+      --  One source call can select a different generic target in each
+      --  routine-instance overlay.  Error inference, `try`, recovery and the
+      --  ordinary call checker must all ask this one question rather than
+      --  reading the declaration-backed signature of a bare template (which
+      --  deliberately has none).
+      function Effective_Call_Signature
+        (Of_Tree : Syn.Tree; Call : Syn.Node_Id)
+         return Landin.Checking.Signature_Id
+      is
+         Target : constant Landin.Checking.Routine_Instance_Id :=
+           Landin.Checking.Routine_Target_Of (Types.all, Of_Tree, Call);
+         Callee : constant Syn.Node_Id := Syn.Callee_Of (Of_Tree, Call);
+      begin
+         if Target /= Landin.Checking.No_Routine_Instance then
+            return Landin.Checking.Routine_Signature_Of
+              (Types.all, Target);
+         elsif Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound
+         then
+            return Landin.Checking.Signature_Of
+              (Types.all, Res.Bound_To (Meanings.all, Of_Tree, Callee));
+         else
+            return Landin.Checking.Signature_Of
+              (Types.all, Of_Tree, Callee);
+         end if;
+      end Effective_Call_Signature;
+
       --  [1950]'s third row.  An index the compiler knows is refused when
       --  it is outside the length, and one it does not know is left to the
       --  trap the backend emits -- which is what the divisor and the shift
@@ -8963,18 +8992,8 @@ package body Landin.Stages.Checking is
 
                   Held := Synthesise (Of_Tree, Operand);
                   declare
-                     Callee : constant Syn.Node_Id :=
-                       Syn.Callee_Of (Of_Tree, Operand);
-                     Means : constant Res.Declaration_Id :=
-                       (if Res.Verdict_Of (Meanings.all, Of_Tree, Callee)
-                              = Res.Bound
-                        then Res.Bound_To (Meanings.all, Of_Tree, Callee)
-                        else Res.No_Declaration);
                      Signature : constant Landin.Checking.Signature_Id :=
-                       (if Means /= Res.No_Declaration
-                        then Landin.Checking.Signature_Of (Types.all, Means)
-                        else Landin.Checking.Signature_Of
-                          (Types.all, Of_Tree, Callee));
+                       Effective_Call_Signature (Of_Tree, Operand);
                   begin
                      if Signature /= Landin.Checking.No_Signature
                        and then Landin.Checking.Signature_Errors
@@ -9054,13 +9073,15 @@ package body Landin.Stages.Checking is
                     (if Is_Generic then Ty.Function_Value
                      elsif Named then Settled_Type (Means)
                      else Synthesise (Of_Tree, Callee));
-                  Signature : constant Landin.Checking.Signature_Id :=
+                  Selected : constant Landin.Checking.Signature_Id :=
                     (if Is_Generic
                      then Instantiate_Generic_Call (Of_Tree, Node, Means)
-                     elsif Named
-                     then Landin.Checking.Signature_Of (Types.all, Means)
-                     else Landin.Checking.Signature_Of
-                       (Types.all, Of_Tree, Callee));
+                     else Landin.Checking.No_Signature);
+                  Signature : constant Landin.Checking.Signature_Id :=
+                    (if Is_Generic
+                       and then Selected = Landin.Checking.No_Signature
+                     then Landin.Checking.No_Signature
+                     else Effective_Call_Signature (Of_Tree, Node));
                begin
                   if Syn.Kind (Of_Tree, Node) = Syn.Labeled_Application
                     and then Res.Class_Of (Meanings.all, Of_Tree, Node)
@@ -16135,9 +16156,6 @@ package body Landin.Stages.Checking is
          Issue_Count : Natural := 0;
          Deferred_Recovery_Count : Natural := 0;
 
-         function Signature_For_Call
-           (Of_Tree : Syn.Tree; Call : Syn.Node_Id)
-            return Landin.Checking.Signature_Id;
          procedure Include_Set
            (Into : in out Effect_Matrix;
             Row : Positive;
@@ -16151,32 +16169,6 @@ package body Landin.Stages.Checking is
            (Of_Tree : Syn.Tree;
             Node : Syn.Node_Id;
             Caller : Positive);
-
-         function Signature_For_Call
-           (Of_Tree : Syn.Tree; Call : Syn.Node_Id)
-            return Landin.Checking.Signature_Id
-         is
-            Callee : constant Syn.Node_Id :=
-              Syn.Callee_Of (Of_Tree, Call);
-         begin
-            declare
-               Target : constant Landin.Checking.Routine_Instance_Id :=
-                 Landin.Checking.Routine_Target_Of
-                   (Types.all, Of_Tree, Call);
-            begin
-               if Target /= Landin.Checking.No_Routine_Instance then
-                  return Landin.Checking.Routine_Signature_Of
-                    (Types.all, Target);
-               end if;
-            end;
-            if Res.Verdict_Of (Meanings.all, Of_Tree, Callee) = Res.Bound
-            then
-               return Landin.Checking.Signature_Of
-                 (Types.all, Res.Bound_To (Meanings.all, Of_Tree, Callee));
-            end if;
-            return Landin.Checking.Signature_Of
-              (Types.all, Of_Tree, Callee);
-         end Signature_For_Call;
 
          procedure Include_Set
            (Into : in out Effect_Matrix;
@@ -16237,7 +16229,7 @@ package body Landin.Stages.Checking is
                when Syn.Call | Syn.Labeled_Application =>
                   declare
                      Signature : constant Landin.Checking.Signature_Id :=
-                       Signature_For_Call (Of_Tree, Node);
+                       Effective_Call_Signature (Of_Tree, Node);
                   begin
                      if Signature /= Landin.Checking.No_Signature
                        and then Landin.Checking.Signature_Result_Count
@@ -16344,7 +16336,7 @@ package body Landin.Stages.Checking is
                         declare
                            Signature : constant
                              Landin.Checking.Signature_Id :=
-                               Signature_For_Call (Of_Tree, Call);
+                               Effective_Call_Signature (Of_Tree, Call);
                         begin
                            if Signature /= Landin.Checking.No_Signature then
                               Edges (Caller, Positive (Signature)) := True;
@@ -16403,7 +16395,7 @@ package body Landin.Stages.Checking is
 
                   declare
                      Signature : constant Landin.Checking.Signature_Id :=
-                       Signature_For_Call (Of_Tree, Node);
+                       Effective_Call_Signature (Of_Tree, Node);
                      Recovery : constant Syn.Node_Id :=
                        Syn.Recovery_Of (Of_Tree, Node);
                   begin
