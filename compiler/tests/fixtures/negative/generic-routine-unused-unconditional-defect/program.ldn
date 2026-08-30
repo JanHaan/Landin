@@ -1,0 +1,6 @@
+bad: (t: type, value: t) -> (result: t) =
+    _ = 1 / 0
+    result = value
+end bad
+
+public main: () -> (code: i32) = 0 end main

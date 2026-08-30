@@ -267,8 +267,11 @@ and generic parameters [1290] have their parser and resolution foundation on
 a declared routine. Its complete signature scope collects type/fixed formals,
 runtime parameters and named returns before resolving any type; runtime
 formals alone make the runtime signature. A generic template has no standalone
-function value or IR item. Direct-call deduction and concrete routine instances
-remain the next R2.40 increment. An enabled nongeneric signature takes values
+function value or IR item. D138's first executable increment deduces a direct
+type formal or exact `[n]t` shape from context-free runtime argument types,
+interns the concrete routine instance, and emits that instance rather than the
+template.
+An enabled nongeneric signature takes values
 including function values, hands one or more named values (or none) back, and
 optionally declares [0940]'s payload-free atom error set. A function type
 reuses the nongeneric `signature` production but has no body. Its labels are
@@ -7577,8 +7580,8 @@ or expression in the template. An invalid layout state stores no application
 provenance: a repeated use of the same canonical key re-evaluates the bounded
 body walk so it receives its own primary while retaining one identity and
 tuple. Fixed actuals remain integer literals or
-forwarded fixed formals. Parameterized atom unions, generic routine deduction,
-constraints and fixed conditional declarations remain deferred.
+forwarded fixed formals. Parameterized atom unions, constraints and fixed conditional declarations
+remain deferred.
 
 An alias expansion that reaches no type remains L0307. A nominal field,
 nominal array element or variant payload that would require a finite instance
@@ -7622,3 +7625,63 @@ multi-wrapper recursion cases) and `negative/nominal-struct-recursive-layout`
 fixtures; the generated IR and
 diagnostic catalogue; and `runtime/parameterized-struct-values` and
 `runtime/parameterized-struct-lazy-value-layout` on Linux x86-64.
+
+### D138 — Direct generic calls deduce one checker-owned routine instance
+
+**The tour said** that type and fixed parameters are compile-time-only [1290],
+that a call supplies runtime arguments [1920], and that specialization is an
+implementation choice rather than generic meaning [1350]. It did not say
+where facts about two concrete uses of one routine body live or which context
+may participate in deduction.
+
+**Chosen:** a generic routine template has no standalone function value or IR
+item. A direct call first synthesizes each runtime argument without an expected
+parameter type. A context-free integer literal therefore takes [0200]'s `i32`.
+A type formal occurring directly as a runtime parameter type binds that
+argument's complete normalized descriptor; repeated direct occurrences must
+agree exactly, and every type formal must be bound. Deduction uses no return
+context, conversion, constraint search, arithmetic inversion or user-code
+execution. One exact runtime array pattern `[n]t` may additionally bind `n`
+from the argument's normalized length and `t` from its normalized element
+descriptor; this is shape matching, not arithmetic inversion. Other fixed
+formals remain undeduced until explicit static call syntax is enabled. After
+deduction, substitution builds the concrete runtime signature and ordinary
+call checking applies that signature.
+
+The checker interns an opaque routine identity from the source template and
+complete normalized actual tuple. Equal keys reuse one identity; unequal keys
+remain distinct. The instance publishes its substituted signature before its
+body is checked, so recursion at the same key is legal. Re-entering the same
+active template with a different tuple is refused as non-finite expansion.
+Each instance owns a layered fact view keyed by that identity and the original
+source declaration or node. An unwritten fact falls back to module and
+nongeneric facts, while writes remain in that one view; no instance answer is
+put on syntax and no AST is cloned or synthesized. Template defects independent
+of actuals, including an impossible literal operand, are checked without a
+guessed instance; dependent operations wait for a concrete view.
+
+Lowering selects that same view and creates one deterministic local routine
+item per ready identity in checker interning order. A generic call records its
+target identity in its caller's view, so nested and recursive calls remain
+stable. The template, type formals and fixed formals create no item, slot,
+runtime signature part or ABI position. This first executable increment pins
+scalar and exact fixed-array routine parameters, results, locals and calls; the
+identity key and fact view already carry the normalized descriptor forms shared with D137. Exact
+`[n]t` shape deduction is enabled; explicit static call syntax and deduction
+through computed fixed expressions remain later R2.40 increments.
+
+**Why an instance view:** writing `t = u8` on the template declaration or its
+nodes makes a later `t = i32` call overwrite the first. Resetting shared tables
+around a recursive walk makes nested instances depend on traversal order.
+Cloning syntax invents declarations and provenance for a compile-time
+substitution. A checker-owned identity plus overlay avoids all three.
+
+**Pinned by** the checking public-seam case `routine instance views keep source
+facts`, the lowering case `generic routines lower once per key`,
+`negative/generic-routine-repeated-deduction-conflict`,
+`negative/generic-routine-undeduced-formal`,
+`negative/generic-routine-infinite-expansion`,
+`negative/generic-routine-unused-unconditional-defect`, and
+`runtime/generic-identity-deduction`,
+`runtime/generic-fixed-array-deduction`, and
+`runtime/generic-same-key-recursion` on Linux x86-64.

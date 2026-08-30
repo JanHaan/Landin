@@ -1175,6 +1175,16 @@ item 6 ROUTINE use result struct signature 4 params 2 slots 7 blocks 5 values 27
     24 LOAD_VARIANT_FIELD usize from datum 5 static_choice field 1 case 2 payload field 1
     25 STORE_FIELD slot 3 field 1 <- 24
     26 JUMP target 4
+file positive/generic-routine-formals/program.ldn
+unit signatures 1 items 1
+signature 1 () -> u8
+item 1 ROUTINE main result u8 signature 1 params 0 slots 1 blocks 1 values 4
+  slot 1 code u8 return
+  block 1 scope 4 SIGNATURE length 4
+    1 NUMBER u8 0
+    2 STORE slot 1 <- 1
+    3 LOAD u8 slot 1
+    4 LEAVE <- 3
 file positive/identifier-underscore/program.ldn
 unit signatures 0 items 2
 item 1 DATUM _hidden result u32 params 0 slots 0 blocks 1 values 2

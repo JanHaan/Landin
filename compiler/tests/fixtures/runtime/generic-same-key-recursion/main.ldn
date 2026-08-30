@@ -1,0 +1,9 @@
+countdown: (t: type, value: t, count: i32) -> (result: t) =
+    if count == 0 then
+        result = value
+    else
+        result = countdown(value, count - 1)
+    end if
+end countdown
+
+public main: () -> (code: i32) = countdown(42, 5) end main
