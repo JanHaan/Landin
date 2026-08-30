@@ -5772,8 +5772,12 @@ package body Landin.Stages.Checking is
                    (Types.all, Signature, Which);
                Wants : constant Ty.Type_Kind :=
                  Parameter.Kind;
-               Argument : constant Syn.Node_Id :=
+               Raw_Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Which);
+               Argument : constant Syn.Node_Id :=
+                 (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
+                  then Syn.Expression_Projection (Of_Tree, Raw_Argument)
+                  else Raw_Argument);
             begin
                if Wants in Ty.Aggregate | Ty.Fixed_Array | Ty.Function_Value
                               | Ty.Atom_Value
@@ -7729,7 +7733,7 @@ package body Landin.Stages.Checking is
                   return Kept (Held);
                end;
 
-            when Syn.Call =>
+            when Syn.Call | Syn.Labeled_Application =>
                declare
                   Callee : constant Syn.Node_Id :=
                     Syn.Callee_Of (Of_Tree, Node);
