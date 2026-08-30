@@ -1558,7 +1558,7 @@ end read_config
 ### [0970] Early exit
 
 Early exit: return and fail, each with an optional
-'when <condition>'.
+`when condition`.
 
 ### [0980] Calls: positional first, then named
 
