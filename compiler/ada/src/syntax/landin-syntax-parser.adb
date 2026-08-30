@@ -205,6 +205,11 @@ package body Landin.Syntax.Parser is
             Undo_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "undo");
 
+            --  [1480] takes this bare toolchain root.  D138 recognizes it
+            --  only as the fixed-condition intrinsic, not as a declaration.
+            Compiler_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "compiler");
+
             Scalar_Id : constant array (Scalar_Name)
               of Landin.Source.Names.Name_Id :=
                 [for S in Scalar_Name =>
@@ -1167,6 +1172,16 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Identifier then
                   Named := Named_Here;
                   Advance;
+                  if Named = Compiler_Id then
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => At_Name,
+                        Message => "`compiler` is reserved for the"
+                                   & " toolchain intrinsic root",
+                        Note    => "[1480]: bare toolchain module names are"
+                                   & " not available to declarations");
+                     Named := Landin.Source.Names.No_Name;
+                  end if;
                   return At_Name;
                end if;
 
