@@ -5263,6 +5263,8 @@ package body Landin.Stages.Checking is
                        and then Syn.Generic_Formal_Count
                          (Tree_For (Res.Source_Of (Meanings.all, Means)).all,
                           Res.Node_Of (Meanings.all, Means)) /= 0
+                       and then Landin.Checking.Type_Of
+                         (Types.all, Of_Tree, Node) = Ty.Undecided
                      then
                         declare
                            Signature : constant

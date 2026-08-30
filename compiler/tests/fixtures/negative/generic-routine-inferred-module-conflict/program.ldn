@@ -1,0 +1,5 @@
+same: (t: type, left: t, right: t) -> (result: t) = left end same
+
+small: u8 = 7
+wide: i32 = 9
+result := same(small, wide)

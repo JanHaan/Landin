@@ -100,6 +100,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Failed_Generic_Deduction_Has_No_Target
      (Item : in out Landin.Testing.Context);
 
+   procedure Discovery_Skips_Refused_Generic_Calls
+     (Item : in out Landin.Testing.Context);
+
    procedure Generic_Instances_Carry_Declared_Errors
      (Item : in out Landin.Testing.Context);
 
@@ -1193,6 +1196,68 @@ package body Landin.Tests.Checking_Suite is
             "a refused deduction has neither a target nor an instance");
       end;
    end Failed_Generic_Deduction_Has_No_Target;
+
+   procedure Discovery_Skips_Refused_Generic_Calls
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "identity: (t: type, value: t) -> (result: t) = value"
+        & " end identity" & LF
+        & "one: (t: type, value: t) -> (result: t) = value end one" & LF
+        & "result := one(identity(42), 0)" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source
+        (Work, "inferred-module-conflict.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Count (Landin.Stages.Report (Work)), 1,
+         "discovery does not repeat the inference diagnostic");
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Outer, Nested : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+           .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node) = Landin.Syntax.Call then
+               if Landin.Syntax.Argument_Count (Of_Tree.all, Node) = 2 then
+                  Outer := Node;
+               else
+                  Nested := Node;
+               end if;
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item,
+            Outer /= Landin.Syntax.No_Node
+              and then Nested /= Landin.Syntax.No_Node
+              and then Landin.Checking.Type_Of
+                (Types.all, Of_Tree.all, Outer) = Landin.Types.Ill_Typed
+              and then Landin.Checking.Routine_Target_Of
+                (Types.all, Of_Tree.all, Outer)
+                  = Landin.Checking.No_Routine_Instance
+              and then Landin.Checking.Routine_Target_Of
+                (Types.all, Of_Tree.all, Nested)
+                  /= Landin.Checking.No_Routine_Instance
+              and then Landin.Checking.Routine_Instance_Count (Types.all) = 1,
+            "the refused outer call stays targetless while discovery reaches"
+            & " its nested call");
+      end;
+   end Discovery_Skips_Refused_Generic_Calls;
 
    procedure Generic_Instances_Carry_Declared_Errors
      (Item : in out Landin.Testing.Context)
@@ -6029,6 +6094,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "failed generic deduction has no target",
          Failed_Generic_Deduction_Has_No_Target'Access);
+      Landin.Testing.Register
+        (Into, "checking", "discovery skips refused generic calls",
+         Discovery_Skips_Refused_Generic_Calls'Access);
       Landin.Testing.Register
         (Into, "checking", "generic instances carry declared errors",
          Generic_Instances_Carry_Declared_Errors'Access);
