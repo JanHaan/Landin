@@ -315,7 +315,8 @@ package body Landin.Syntax.Parser is
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
             function Parse_Anonymous_Function return Node_Id;
-            function Parse_Parameter return Node_Id;
+            function Parse_Parameter
+              (Allow_Static : Boolean := False) return Node_Id;
             function Parse_Returns
               (Declared_At : Landin.Source.Span;
                Returns_At  : out Landin.Source.Span) return Node_Id;
@@ -2305,22 +2306,26 @@ package body Landin.Syntax.Parser is
             ------------------------------------------------------------
 
             --  parameter ::= identifier ":" type                  [1800]
-            function Parse_Parameter return Node_Id is
+            --  D138 adds type and fixed formals only to a declared routine.
+            --  They retain their distinct syntax nodes, so the runtime
+            --  parameter view cannot accidentally give them an ABI position.
+            function Parse_Parameter
+              (Allow_Static : Boolean := False) return Node_Id
+            is
                Start     : constant Landin.Source.Span := Here;
+               Fixed     : constant Boolean := Peek = Tok.Kw_Fixed;
                Named     : Landin.Source.Names.Name_Id;
                At_Name   : Landin.Source.Span;
-               Type_Node : Node_Id;
+               Type_Node : Node_Id := No_Node;
             begin
-               --  D135 reserves `fixed` for type declarations, but generic
-               --  function parameters remain refused.  Consume its prefix
-               --  here so the one refusal owns the complete parameter rather
-               --  than turning the reserved word into a name-error cascade.
-               if Peek = Tok.Kw_Fixed then
-                  Refuse
-                    (Item    => Syn.Type_Parameter,
-                     Where   => Here,
-                     Message => "fixed parameters are not enabled on"
-                                & " functions yet");
+               if Fixed then
+                  if not Allow_Static then
+                     Refuse
+                       (Item    => Syn.Type_Parameter,
+                        Where   => Here,
+                        Message => "fixed parameters are only enabled on"
+                                   & " declared routines");
+                  end if;
                   Advance;
                end if;
 
@@ -2354,9 +2359,28 @@ package body Landin.Syntax.Parser is
                      Related => At_Name,
                      Because => "declared here")
                then
+                  if Allow_Static and then not Fixed
+                    and then Peek = Tok.Kw_Type
+                  then
+                     Advance;
+                     return Add
+                       (Of_Kind  => Type_Formal,
+                        At_Token => At_Name,
+                        Extent   => Join (Start, After_Previous),
+                        Named    => Named);
+                  end if;
                   Type_Node := Parse_Type (True, At_Name);
                else
                   Type_Node := Add (Error_Type, After_Previous);
+               end if;
+
+               if Fixed then
+                  return Add
+                    (Of_Kind  => Fixed_Formal,
+                     At_Token => Start,
+                     Extent   => Join (Start, After_Previous),
+                     Children => [Type_Node],
+                     Named    => Named);
                end if;
 
                return Add
@@ -2713,7 +2737,8 @@ package body Landin.Syntax.Parser is
                         declare
                            Before : constant Tok.Token_Index := Index;
                         begin
-                           Params.Append (Parse_Parameter);
+                           Params.Append
+                             (Parse_Parameter (Allow_Static => True));
                            exit when Index = Before;
                         end;
 

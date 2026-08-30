@@ -217,12 +217,71 @@ package body Landin.Syntax is
    function Recovery_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Element (Of_Tree, Id).Recovery);
 
-   function Parameter_Count (Of_Tree : Tree; Id : Node_Id) return Natural
-     is (Run_Length (Of_Tree, Id));
+   function Parameter_Count (Of_Tree : Tree; Id : Node_Id) return Natural is
+      Count : Natural := 0;
+   begin
+      for Position in 1 .. Run_Length (Of_Tree, Id) loop
+         if Kind (Of_Tree, Nth_Item (Of_Tree, Id, Position)) = Parameter then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Parameter_Count;
 
    function Nth_Parameter
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
-     is (Nth_Item (Of_Tree, Id, Index));
+   is
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Run_Length (Of_Tree, Id) loop
+         declare
+            Candidate : constant Node_Id := Nth_Item (Of_Tree, Id, Position);
+         begin
+            if Kind (Of_Tree, Candidate) = Parameter then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Candidate;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Constraint_Error;
+   end Nth_Parameter;
+
+   function Generic_Formal_Count (Of_Tree : Tree; Id : Node_Id)
+     return Natural
+   is
+      Count : Natural := 0;
+   begin
+      for Position in 1 .. Run_Length (Of_Tree, Id) loop
+         if Kind (Of_Tree, Nth_Item (Of_Tree, Id, Position))
+              in Type_Formal | Fixed_Formal
+         then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Generic_Formal_Count;
+
+   function Nth_Generic_Formal
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+   is
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Run_Length (Of_Tree, Id) loop
+         declare
+            Candidate : constant Node_Id := Nth_Item (Of_Tree, Id, Position);
+         begin
+            if Kind (Of_Tree, Candidate) in Type_Formal | Fixed_Formal then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Candidate;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Constraint_Error;
+   end Nth_Generic_Formal;
 
    function Else_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id
      is (Slot (Of_Tree, Id, 1));
