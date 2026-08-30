@@ -369,7 +369,7 @@ defer       ::= "defer" call
 undo        ::= "undo" call
 return      ::= "return" ("when" expression)?
 fail        ::= "fail" expression ("when" expression)?
-try         ::= "try" call
+try         ::= "try" (call | labeled_application)
 if          ::= "if" expression "then" block
                 ("elsif" expression "then" block)*
                 ("else" block)?
@@ -7697,7 +7697,9 @@ concrete routine identity instead publishes an initially inferred signature,
 then contributes its directly failed atoms and its instance-view call targets
 to the whole-program least fixed point. Calls from or to ordinary routines and
 same- or different-key generic instances use one graph; direct and mutual
-same-key recursion therefore close without syntax recursion. Equal keys share
+same-key recursion therefore close without syntax recursion. `try`, recovery
+and inference all resolve a call through the active view's recorded instance
+target rather than the deliberately absent template signature. Equal keys share
 one inferred set, while unequal keys retain separate signatures and may settle
 to different sets. An empty result becomes infallible; a nonempty result becomes
 a concrete atom set before body checking resumes and before lowering. Call
@@ -7744,6 +7746,7 @@ facts`, the lowering case `generic routines lower once per key`,
 `negative/generic-routine-infinite-expansion`,
 `negative/generic-inferred-error-unhandled`,
 `negative/generic-inferred-template-not-function-value`,
+`negative/generic-try-infallible-instance`,
 `negative/generic-routine-unused-unconditional-defect`,
 `negative/generic-computed-pattern-undeduced`,
 `negative/generic-explicit-computed-pattern-mismatch`,
@@ -7757,7 +7760,8 @@ facts`, the lowering case `generic routines lower once per key`,
 `runtime/generic-structural-deduction`,
 `runtime/generic-zero-nominal-array-signatures`,
 `runtime/generic-declared-errors`,
-`runtime/generic-routine-inferred-errors`, and
+`runtime/generic-routine-inferred-errors`,
+`runtime/generic-try-effective-signature`, and
 `runtime/generic-same-key-recursion` on Linux x86-64. The malformed-error
 verifier case uses a generic-instance item to pin that only the finalized
 concrete signature and ordinary failure opcode reach neutral IR.
