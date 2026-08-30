@@ -3,6 +3,7 @@ with Ada.Strings.Fixed;
 with Ada.Strings.Unbounded;
 
 with Landin.Checking;
+with Landin.Configuration;
 with Landin.Diagnostics.Checking;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -14510,6 +14511,79 @@ package body Landin.Stages.Checking is
                      when others =>
                         null;
                   end case;
+               end;
+            end loop;
+         end;
+      end loop;
+
+      --  D138 declarations are checked through the same module paths, but
+      --  only after configuration has selected their arm.  The AST stays
+      --  intact; this is the active view rather than a syntax rewrite.
+      for Index in 1 .. Source_Count (Context) loop
+         declare
+            Of_Tree : constant not null access constant Syn.Tree :=
+              Tree_For (Nth_Source (Context, Index));
+         begin
+            for Position in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+               declare
+                  Conditional : constant Syn.Node_Id :=
+                    Syn.Nth_Declaration (Of_Tree.all, Position);
+               begin
+                  if Syn.Kind (Of_Tree.all, Conditional)
+                    = Syn.Fixed_Conditional
+                  then
+                     for Arm in 1 .. Syn.Fixed_Arm_Count
+                       (Of_Tree.all, Conditional)
+                     loop
+                        declare
+                           This : constant Syn.Node_Id := Syn.Nth_Fixed_Arm
+                             (Of_Tree.all, Conditional, Arm);
+                        begin
+                           for Which in 1 .. Syn.Fixed_Declaration_Count
+                             (Of_Tree.all, This)
+                           loop
+                              declare
+                                 Node : constant Syn.Node_Id :=
+                                   Syn.Nth_Fixed_Declaration
+                                     (Of_Tree.all, This, Which);
+                              begin
+                                 if Landin.Configuration.Is_Active
+                                   (Configurations (Context).all,
+                                    Syn.Source_Of (Of_Tree.all), Node)
+                                 then
+                                    case Syn.Kind (Of_Tree.all, Node) is
+                                       when Syn.Type_Declaration =>
+                                          declare
+                                             Ignored : constant Ty.Type_Kind :=
+                                               Settled_Type (Declaration_At
+                                                 (Syn.Source_Of (Of_Tree.all),
+                                                  Node));
+                                          begin
+                                             pragma Unreferenced (Ignored);
+                                          end;
+                                       when Syn.Binding =>
+                                          Check_Module_Value
+                                            (Of_Tree.all, Node);
+                                          Check_Statement
+                                            (Of_Tree.all, Node, Ty.Not_Typed);
+                                          Check_Module_Fold
+                                            (Of_Tree.all, Node);
+                                          Check_Operands
+                                            (Of_Tree.all,
+                                             Syn.Value_Of (Of_Tree.all, Node),
+                                             Whole_Fold => True);
+                                       when Syn.Function_Declaration =>
+                                          Check_Routine_Body
+                                            (Of_Tree.all, Node);
+                                       when others =>
+                                          null;
+                                    end case;
+                                 end if;
+                              end;
+                           end loop;
+                        end;
+                     end loop;
+                  end if;
                end;
             end loop;
          end;
