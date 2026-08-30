@@ -1,8 +1,8 @@
-sink: (value: i32) -> none =
+consume: (value: i32) -> none =
     _ = value
-end sink
+end consume
 
 f: () -> none =
-    defer sink(local)
+    defer consume(local)
     local: i32 = 42
 end f

@@ -1,0 +1,5 @@
+class: negative
+summary: a returned reference derived from a parameter must name that source
+program: program.ldn
+codes: L0316
+constructs: 0430, 0790, 1800, 1810

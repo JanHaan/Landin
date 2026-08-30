@@ -1,0 +1,5 @@
+class: negative
+summary: a read-only slice cannot be used to write an element
+program: program.ldn
+codes: L0303
+constructs: 0440, 0570, 1810, 1820

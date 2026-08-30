@@ -169,11 +169,14 @@ package body Landin.IR is
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
       Results    : Signature_Part_Array;
-      Errors     : Atom_Set_Id := No_Atom_Set) return Signature_Id
+      Errors     : Atom_Set_Id := No_Atom_Set;
+      Sources    : Return_Source_Array := No_Return_Sources)
+      return Signature_Id
    is
       Made : Signature_Record :=
         (Parameters => (First => 0, Count => 0),
          Results    => (First => 0, Count => 0),
+         Sources    => (First => 0, Count => 0),
          Errors     => Errors);
 
       procedure Append (Parts : Signature_Part_Array; To_Run : in out Run);
@@ -191,6 +194,13 @@ package body Landin.IR is
    begin
       Append (Parameters, Made.Parameters);
       Append (Results, Made.Results);
+      if Sources'Length > 0 then
+         Made.Sources.First := Natural (Into.Return_Sources.Length);
+         for Source of Sources loop
+            Into.Return_Sources.Append (Source);
+            Made.Sources.Count := Made.Sources.Count + 1;
+         end loop;
+      end if;
       Into.Signatures.Append (Made);
       return Signature_Id (Into.Signatures.Last_Index);
    end Add_Signature_With_Results;
@@ -199,15 +209,18 @@ package body Landin.IR is
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
       Result     : Signature_Part;
-      Errors     : Atom_Set_Id := No_Atom_Set) return Signature_Id
+      Errors     : Atom_Set_Id := No_Atom_Set;
+      Sources    : Return_Source_Array := No_Return_Sources)
+      return Signature_Id
    is
    begin
       if Result.Kind = Landin.Types.No_Value then
          return Add_Signature_With_Results
-           (Into, Parameters, No_Signature_Parts, Errors);
+           (Into, Parameters, No_Signature_Parts, Errors, Sources);
       end if;
       return Add_Signature_With_Results
-        (Into, Parameters, Signature_Part_Array'[1 => Result], Errors);
+        (Into, Parameters, Signature_Part_Array'[1 => Result], Errors,
+         Sources);
    end Add_Signature;
 
    function Signature_Parameter_Count
@@ -238,6 +251,50 @@ package body Landin.IR is
       return Of_Unit.Signature_Parts (Results.First + Index);
    end Nth_Signature_Result;
 
+   function Signature_Return_Source_Count
+     (Of_Unit : Unit; Signature : Signature_Id; Result : Positive)
+      return Natural
+   is
+      Sources : constant Run :=
+        Of_Unit.Signatures (Positive (Signature)).Sources;
+      Count : Natural := 0;
+   begin
+      for Position in 1 .. Sources.Count loop
+         if Of_Unit.Return_Sources (Sources.First + Position).Result = Result
+         then
+            Count := Count + 1;
+         end if;
+      end loop;
+      return Count;
+   end Signature_Return_Source_Count;
+
+   function Nth_Signature_Return_Source
+     (Of_Unit : Unit;
+      Signature : Signature_Id;
+      Result    : Positive;
+      Index     : Positive) return Positive
+   is
+      Sources : constant Run :=
+        Of_Unit.Signatures (Positive (Signature)).Sources;
+      Seen : Natural := 0;
+   begin
+      for Position in 1 .. Sources.Count loop
+         declare
+            Source : constant Return_Source_Association :=
+              Of_Unit.Return_Sources (Sources.First + Position);
+         begin
+            if Source.Result = Result then
+               Seen := Seen + 1;
+               if Seen = Index then
+                  return Source.Parameter;
+               end if;
+            end if;
+         end;
+      end loop;
+      raise Landin.Compiler_Defect with
+        "an IR return source escaped its checked bound";
+   end Nth_Signature_Return_Source;
+
    function Signature_Result
      (Of_Unit : Unit; Signature : Signature_Id) return Signature_Part
    is
@@ -264,6 +321,8 @@ package body Landin.IR is
    is
       function Parts_Agree (A, B : Signature_Part) return Boolean
         is (A.Kind = B.Kind
+            and then A.Convention = B.Convention
+            and then A.Escaping = B.Escaping
             and then
               (case A.Kind is
                   when Landin.Types.No_Value => True,
@@ -314,9 +373,22 @@ package body Landin.IR is
          if not Parts_Agree
            (Nth_Signature_Result (Of_Unit, Left, Index),
             Nth_Signature_Result (Of_Unit, Right, Index))
+           or else Signature_Return_Source_Count (Of_Unit, Left, Index)
+             /= Signature_Return_Source_Count (Of_Unit, Right, Index)
          then
             return False;
          end if;
+         for Source in
+           1 .. Signature_Return_Source_Count (Of_Unit, Left, Index)
+         loop
+            if Nth_Signature_Return_Source
+                 (Of_Unit, Left, Index, Source)
+              /= Nth_Signature_Return_Source
+                   (Of_Unit, Right, Index, Source)
+            then
+               return False;
+            end if;
+         end loop;
       end loop;
       return True;
    end Signatures_Agree;
@@ -661,7 +733,8 @@ package body Landin.IR is
      (Into   : in out Unit;
       Item   : Item_Id;
       Shape  : Field_Shape;
-      Site   : Landin.Provenance.Origin) return Slot_Id
+      Site   : Landin.Provenance.Origin;
+      Declares : Declaration_Id := No_Declaration) return Slot_Id
    is
       Held : Item_Record := Element (Into, Item);
    begin
@@ -670,6 +743,7 @@ package body Landin.IR is
         (Slot_Record'(Of_Type   => Landin.Types.Usize,
                       Element   => Shape,
                       Addressed => True,
+                      Declaration => Declares,
                       Site      => Site,
                       others    => <>));
       Held.Slots.Count := Held.Slots.Count + 1;
@@ -932,6 +1006,43 @@ package body Landin.IR is
       Held.Has_Image := True;
       Into.Items (Positive (Item)) := Held;
    end Set_Array_Image;
+
+   procedure Set_Slice_Image
+     (Into      : in out Unit;
+      Item      : Item_Id;
+      Of_Element : Field_Shape;
+      Length      : Element_Total;
+      Source      : Item_Id := No_Item;
+      First       : Element_Total := 0)
+   is
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Held.Has_Image := True;
+      Held.Slice_Image := True;
+      Held.Slice_Source := Source;
+      Held.Slice_First := First;
+      Held.Slice_Length := Length;
+      Held.Slice_Element := Of_Element;
+      Into.Items (Positive (Item)) := Held;
+   end Set_Slice_Image;
+
+   function Has_Slice_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
+     is (Element (Of_Unit, Item).Slice_Image);
+
+   function Slice_Image_Source (Of_Unit : Unit; Item : Item_Id) return Item_Id
+     is (Element (Of_Unit, Item).Slice_Source);
+
+   function Slice_Image_First
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     is (Element (Of_Unit, Item).Slice_First);
+
+   function Slice_Image_Length
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     is (Element (Of_Unit, Item).Slice_Length);
+
+   function Slice_Image_Element
+     (Of_Unit : Unit; Item : Item_Id) return Field_Shape
+     is (Element (Of_Unit, Item).Slice_Element);
 
    procedure Set_Repeated_Array_Image
      (Into  : in out Unit;
@@ -1218,6 +1329,24 @@ package body Landin.IR is
       Into.Items (Positive (Item)) := Held;
       return Made;
    end Add_Parameter;
+
+   function Add_Address_Parameter
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Shape    : Field_Shape;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+   is
+      Made : constant Slot_Id :=
+        Add_Address_Slot (Into, Item, Shape, Site, Declares);
+      Held : Item_Record := Element (Into, Item);
+   begin
+      Open_Run (Held.Parameters, Natural (Into.Parameters.Length));
+      Into.Parameters.Append (Made);
+      Held.Parameters.Count := Held.Parameters.Count + 1;
+      Into.Items (Positive (Item)) := Held;
+      return Made;
+   end Add_Address_Parameter;
 
    function Add_Aggregate_Parameter
      (Into     : in out Unit;
@@ -1899,6 +2028,15 @@ package body Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
      is (Held (Of_Unit, Item, Value).Truth);
 
+   function Slice_Is_Inclusive
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     is (Held (Of_Unit, Item, Value).Truth);
+
+   function Slice_Element_Shape
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Field_Shape
+     is (Held (Of_Unit, Item, Value).Element_Shape);
+
    ------------------------------------------------------------------
    --  Emitting
    --
@@ -1961,6 +2099,27 @@ package body Landin.IR is
       end if;
       return Append (Into, Item, Made);
    end Emit_Storage_Address;
+
+   function Emit_Place_Address
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Place : Storage;
+      Site  : Landin.Provenance.Origin;
+      Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+   is
+      Steps : constant Run := Stored_Path (Into, Nested);
+   begin
+      return Append
+        (Into, Item,
+         Instruction'(Op => Place_Address,
+                      Result => Landin.Types.Usize,
+                      Site => Site,
+                      Destination => Place,
+                      Element_Field => Field,
+                      Nested => Steps,
+                      others => <>));
+   end Emit_Place_Address;
 
    function Storage_Address_Has_Index
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
@@ -2126,6 +2285,117 @@ package body Landin.IR is
       Where := Append (Into, Item, Made);
       pragma Assert (Where /= No_Value);
    end Emit_Store;
+
+   function Emit_Pointer_Address
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Value : Value_Id;
+      Site  : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op => Pointer_Address,
+                     Result => Landin.Types.Usize,
+                     Site => Site, others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Value);
+      return Append (Into, Item, Made);
+   end Emit_Pointer_Address;
+
+   function Emit_Conversion
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Value : Value_Id;
+      Result : Landin.Types.Integer_Name;
+      Site  : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op => Conversion, Result => Result, Site => Site,
+                     others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Value);
+      return Append (Into, Item, Made);
+   end Emit_Conversion;
+
+   function Emit_Slice_Address
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Base    : Value_Id;
+      Length  : Value_Id;
+      Lower   : Value_Id;
+      Upper   : Value_Id;
+      Element : Field_Shape;
+      Inclusive : Boolean;
+      Site    : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op => Slice_Address,
+                     Result => Landin.Types.Usize,
+                     Site => Site,
+                     Element_Shape => Element,
+                     Truth => Inclusive,
+                     others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 4;
+      Into.Operands.Append (Base);
+      Into.Operands.Append (Length);
+      Into.Operands.Append (Lower);
+      Into.Operands.Append (Upper);
+      return Append (Into, Item, Made);
+   end Emit_Slice_Address;
+
+   function Emit_Empty_Slice_Base
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Element : Field_Shape;
+      Site    : Landin.Provenance.Origin) return Value_Id
+     is (Append
+           (Into, Item,
+            Instruction'(Op => Empty_Slice_Base,
+                         Result => Landin.Types.Usize,
+                         Site => Site,
+                         Element_Shape => Element,
+                         others => <>)));
+
+   function Emit_Load_Indirect
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Address : Value_Id;
+      Result  : Landin.Types.Scalar_Name;
+      Site    : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op => Load_Indirect, Result => Result, Site => Site,
+                     others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Address);
+      return Append (Into, Item, Made);
+   end Emit_Load_Indirect;
+
+   procedure Emit_Store_Indirect
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Address : Value_Id;
+      Value   : Value_Id;
+      Site    : Landin.Provenance.Origin)
+   is
+      Made : Instruction :=
+        Instruction'(Op => Store_Indirect, Site => Site, others => <>);
+      Where : Value_Id;
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 2;
+      Into.Operands.Append (Address);
+      Into.Operands.Append (Value);
+      Where := Append (Into, Item, Made);
+      pragma Assert (Where /= No_Value);
+   end Emit_Store_Indirect;
 
    function Emit_Load_Datum
      (Into  : in out Unit;

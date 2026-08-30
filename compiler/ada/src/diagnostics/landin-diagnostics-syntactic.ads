@@ -95,7 +95,6 @@ package Landin.Diagnostics.Syntactic is
      (Declared_Type,
       Float_Type,
       Text_Type,
-      Parameter_Convention,
       Loop_Statement,
       While_Statement,
       For_Statement,
@@ -108,7 +107,6 @@ package Landin.Diagnostics.Syntactic is
       Parameterized_Atom_Union,
       --  Bracketed constructs whose spelling the parser alone can tell
       --  from [1790]'s array type and [0520]'s array literal.
-      Slice_Type,
       Array_Repetition,
       Indexing,
       --  D64 parses [0710]'s nonempty labelled form and D72 its call-shaped
@@ -125,7 +123,6 @@ package Landin.Diagnostics.Syntactic is
             when Declared_Type        => "[0120]",
             when Float_Type           => "[0170]",
             when Text_Type            => "[0600]",
-            when Parameter_Convention => "[0900]",
             when Loop_Statement       => "[1130]",
             when While_Statement      => "[1140]",
             when For_Statement        => "[1150]",
@@ -136,7 +133,6 @@ package Landin.Diagnostics.Syntactic is
             when Break_Statement      => "[1190]",
             when Type_Parameter       => "[1290]",
             when Parameterized_Atom_Union => "[1350]",
-            when Slice_Type           => "[0570]",
             when Array_Repetition     => "[0560]",
             when Indexing             => "[0570]",
             when Struct_All_Of         => "[0720]")
@@ -182,15 +178,12 @@ private
             --  aggregate slice.
             when Struct_Type
                | Distinct_Type
-               | Slice_Type
                | Array_Repetition
                | Indexing
                | Struct_All_Of         => "R2.20",
             --  R2.40 implements type and fixed parameters.
             when Type_Parameter
                | Parameterized_Atom_Union => "R2.40",
-            --  R2.50 sources [0900] for the parameter conventions.
-            when Parameter_Convention => "R2.50",
             --  R4.10 closes the hosted construct matrix.
             when Wide_Integer_Type
                | Float_Type

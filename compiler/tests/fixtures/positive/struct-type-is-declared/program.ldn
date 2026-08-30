@@ -12,7 +12,7 @@ end point
 offset: type = i32
 
 span: type = struct
-    from: offset
+    start: offset
     to:   offset
     tag:  u8
 end span

@@ -151,17 +151,22 @@ package Landin.Syntax is
       Anonymous_Function,
       Error_Expression,
       Name_Reference,
-      --  [0420]'s member selection, of which the kernel enables one
-      --  member: a field of a struct [0670].  It carries what it selects
-      --  from and the name it selects, and the name is not a
-      --  Name_Reference because no scope [1090] answers for it -- which
-      --  field it is depends on the type of what stands to its left.
+      --  [0420]'s ordinary member selection.  It carries what it selects
+      --  from and the selected name; the parser does not distinguish a
+      --  struct field from [0430]'s `val` pointee.  The name is not a
+      --  Name_Reference because no lexical scope [1090] answers for it --
+      --  its meaning depends on the type of what stands to its left.
       Member_Selection,
       --  [0570]'s index, which takes what a selection named and one
       --  expression inside the brackets.  Two slots: what is indexed and
       --  the index, which D18 gives `usize` context -- [1950] says what
       --  happens when the compiler knows it and when it does not.
       Element_Index,
+      --  [0570]'s two range-selection forms.  Both retain the selected
+      --  storage, lower bound and upper bound; the kind says whether the
+      --  upper endpoint is included.
+      Inclusive_Slice,
+      Half_Open_Slice,
       --  [0520]'s value form.  Its elements are its trailing run, in the
       --  order [0410] says they are evaluated.
       Array_Literal,
@@ -183,6 +188,9 @@ package Landin.Syntax is
       False_Literal,
       --  [0540]'s contextual all-bits-zero image.
       Zeroed_Literal,
+      --  [0580]'s contextual empty slice.  Its aligned non-null base is
+      --  derived from the destination element type by lowering/backend.
+      Empty_Slice_Literal,
       --  [0370]'s measurements.  They take a type where every other
       --  expression takes an expression, which is why they are their own
       --  node kind and not a call: the kernel has no way to pass a type
@@ -192,6 +200,12 @@ package Landin.Syntax is
       --  [0370]'s array-length query.  Its one operand is deliberately only
       --  a direct name in the first R2.20 slice.
       Len_Of,
+      --  [0380]/[0430]'s address expression.  Its child is the ordinary
+      --  place syntax whose address is taken; lifetime and addressability
+      --  are later R2.50 checking facts, not parser classifications.
+      Address_Of,
+      --  [0460]/[0470]'s context-typed integer-to-pointer conversion.
+      Pointer_Conversion,
       Negation,
       Complement,
       Logical_Not,
@@ -247,6 +261,10 @@ package Landin.Syntax is
       --  fixed bound expression and the element type.  The syntax retains
       --  the expression; no instantiated answer is written back here.
       Array_Type,
+      --  [0430]'s pointer and [0570]'s slice each retain one referenced
+      --  type and the shallow permission written by their optional `mut`.
+      Pointer_Type,
+      Slice_Type,
       --  D117's written infallible function type.  Its first slot is the
       --  named Return_List, or No_Node for `none`; its trailing run is the
       --  parameter descriptions in source order.  It has no body and its
@@ -271,6 +289,10 @@ package Landin.Syntax is
       Fixed_Formal,
       Parameter,
       Named_Return,
+      --  One source named by [0790]'s `from` clause.  It is a signature
+      --  label rather than a lexical Name_Reference; resolution associates
+      --  it with a runtime parameter position in a separate fact table.
+      Return_Source,
       If_Arm,
       Fixed_Arm,
       Match_Arm,
@@ -307,7 +329,8 @@ package Landin.Syntax is
 
    subtype Binary_Kind is Node_Kind range Multiply .. Logical_Or;
 
-   subtype Literal_Kind is Node_Kind range Integer_Literal .. Zeroed_Literal;
+   subtype Literal_Kind is
+     Node_Kind range Integer_Literal .. Empty_Slice_Literal;
 
    --  A hole: the parser needed a construct of that band here and could not
    --  read one.  Not a band of its own, because one per band is the point.
@@ -327,7 +350,8 @@ package Landin.Syntax is
                     | Fixed_Formal | Field | Variant_Part | Variant_Case
                     | Destructured_Field
                     | Destructured_Name | Recovery_Clause | Match_Binding
-                    | Member_Selection | Field_Value | Call_Argument);
+                    | Return_Source | Member_Selection | Field_Value
+                    | Call_Argument);
 
    ------------------------------------------------------------------
    --  Trees
@@ -439,6 +463,27 @@ package Landin.Syntax is
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) in Binding | Match_Binding;
+
+   --  [0900]'s convention.  Explicit `in` is retained apart from the
+   --  omitted default so this syntax table does not erase source spelling.
+   type Parameter_Convention is
+     (Implicit_In, Explicit_In, Inout_Convention, Sink_Convention);
+
+   function Convention_Of (Of_Tree : Tree; Id : Node_Id)
+     return Parameter_Convention
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Parameter;
+
+   function Is_Escaping (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Parameter;
+
+   --  Shallow write permission belongs to a reference type [0430] [0570],
+   --  independently of the mutability of a binding that holds it.
+   function Is_Referent_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id)
+                            in Pointer_Type | Slice_Type;
 
    --  No Error node anywhere in this subtree, so R1.60 may check it and
    --  R1.70 may lower it.  A hole poisons every node above it, which is how
@@ -562,13 +607,26 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                           in Assignment | Increment | Decrement
-                             | Member_Selection | Element_Index;
+                             | Member_Selection | Element_Index
+                             | Inclusive_Slice | Half_Open_Slice;
 
    --  The expression between the brackets [0570].
    function Index_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) = Element_Index,
           Post => Contains (Of_Tree, Index_Of'Result);
+
+   function Slice_Lower (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id)
+                    in Inclusive_Slice | Half_Open_Slice,
+          Post => Contains (Of_Tree, Slice_Lower'Result);
+
+   function Slice_Upper (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id)
+                    in Inclusive_Slice | Half_Open_Slice,
+          Post => Contains (Of_Tree, Slice_Upper'Result);
 
    --  The condition of a branch [1810], or an exit's `when` guard.
    --  No_Node for a bare `return`.
@@ -646,6 +704,22 @@ package Landin.Syntax is
                   and then Index <= Return_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Return'Result)
                   and then Kind (Of_Tree, Nth_Return'Result) = Named_Return;
+
+   --  [0790]'s ordered `from` names on one named return.  The declared type
+   --  is its fixed slot and this is the trailing run.
+   function Return_Source_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Named_Return;
+
+   function Nth_Return_Source
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Named_Return
+                  and then Index <= Return_Source_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Return_Source'Result)
+                  and then Kind (Of_Tree, Nth_Return_Source'Result)
+                             = Return_Source;
 
    --  The optional declared error set after `!`; No_Node is infallible.
    function Error_Set_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
@@ -1002,6 +1076,12 @@ package Landin.Syntax is
                   and then Kind (Of_Tree, Id) = Array_Type,
           Post => Contains (Of_Tree, Element_Of'Result);
 
+   function Referenced_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id)
+                             in Pointer_Type | Slice_Type,
+          Post => Contains (Of_Tree, Referenced_Type'Result);
+
    function Measured_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id) in Size_Of | Align_Of,
@@ -1038,6 +1118,8 @@ private
       Sound      : Boolean := True;
       Exported   : Boolean := False;
       Mutable    : Boolean := False;
+      Escaping   : Boolean := False;
+      Convention : Parameter_Convention := Implicit_In;
       Fill       : Boolean := False;
       Recovery   : Node_Id := No_Node;
    end record;

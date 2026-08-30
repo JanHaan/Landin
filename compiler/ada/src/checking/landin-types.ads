@@ -70,6 +70,12 @@ package Landin.Types is
       I8, I16, I32, I64,
       Usize, Isize,
       Bool,
+      --  [0430]/[0570]: runtime reference carriers.  Permission and the
+      --  complete referent/element descriptor live beside this broad
+      --  category in Landin.Checking, just as a function value's complete
+      --  signature does.
+      Pointer_Value,
+      Slice_Value,
       --  [0630]/[0640]: identity without payload.  The complete singleton
       --  or union set lives beside this broad category in Landin.Checking,
       --  as an aggregate's nominal body and an array's shape do.

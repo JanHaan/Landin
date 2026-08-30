@@ -729,11 +729,11 @@ edit:  []mut f32 = grid[0..<2]      -- writable, since grid is mut
 
 ### [0580] An empty slice still has a base
 
-An empty slice still has a base. It is a canonical aligned
-address that is not null and may not be dereferenced, so
-base_of on an empty slice yields that and nothing pretends
-otherwise. Indexing checks the length before it computes an
-address, so an empty slice cannot produce one.
+An empty slice still has a base. It is the lowest positive address aligned for
+the element type — the numerical element alignment — and may not be
+dereferenced, so `base_of` on an empty slice yields that canonical non-null
+address and nothing pretends otherwise (D141). Indexing checks the length before
+it computes an address, so an empty slice cannot produce one.
 
 ### [0590] Fixed arrays are the vector type
 

@@ -298,6 +298,15 @@ package Landin.Checking is
    --  the particular target's byte-extent limit before one is recorded.
    type Element_Count is range 0 .. 2 ** 64 - 1;
 
+   --  [0480]'s target-parametric atom/pointer union representation.  The
+   --  one-atom case reserves zero and is exactly one pointer carrier; two
+   --  or more atoms use R2.20's ordinary tag-plus-payload placement.
+   procedure Reference_Union_Extent
+     (Atom_Count : Positive;
+      Facts      : Landin.Targets.Target_Facts;
+      Size       : out Landin.Targets.Byte_Count;
+      Alignment  : out Landin.Targets.Byte_Alignment);
+
    ------------------------------------------------------------------
    --  Atom sets
    ------------------------------------------------------------------
@@ -390,6 +399,96 @@ package Landin.Checking is
           Post => Atom_Set_Of (Into, Id) = Set_Id;
 
    ------------------------------------------------------------------
+   --  Reference and function descriptors
+   ------------------------------------------------------------------
+
+   --  Both descriptors are recursive: a pointer may refer to a function,
+   --  and a function may accept a pointer.  Dense compilation-owned IDs let
+   --  each side name the other without putting target width, storage or an
+   --  Ada access value into the language type.
+   type Signature_Id is range 0 .. Integer'Last;
+   No_Signature : constant Signature_Id := 0;
+
+   type Reference_Id is range 0 .. Integer'Last;
+   No_Reference : constant Reference_Id := 0;
+
+   type Reference_Descriptor is record
+      Kind      : Landin.Types.Type_Kind := Landin.Types.Pointer_Value;
+      Mutable   : Boolean := False;
+      Referent  : Landin.Types.Type_Kind := Landin.Types.Ill_Typed;
+      Nominal   : Nominal_Type_Id := No_Nominal_Type;
+      Length    : Element_Count := 0;
+      Element   : Landin.Types.Scalar_Name := Landin.Types.Bool;
+      Element_Nominal : Nominal_Type_Id := No_Nominal_Type;
+      Reference : Reference_Id := No_Reference;
+      Signature : Signature_Id := No_Signature;
+      Atoms     : Atom_Set_Id := No_Atom_Set;
+   end record;
+
+   function Reference_Count (Of_Table : Table) return Natural
+     with Pre => Is_Prepared (Of_Table);
+
+   function Holds (Of_Table : Table; Id : Reference_Id) return Boolean
+     is (Is_Prepared (Of_Table)
+         and then Id /= No_Reference
+         and then Natural (Id) <= Reference_Count (Of_Table));
+
+   function Add_Reference
+     (Into : in out Table; Item : Reference_Descriptor) return Reference_Id
+     with Pre  => Is_Prepared (Into),
+          Post => Reference_Count (Into) = Reference_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Reference'Result);
+
+   function Descriptor_Of
+     (Of_Table : Table; Id : Reference_Id) return Reference_Descriptor
+     with Pre => Holds (Of_Table, Id);
+
+   function References_Agree
+     (Of_Table : Table; Left, Right : Reference_Id) return Boolean
+     with Pre => Holds (Of_Table, Left) and then Holds (Of_Table, Right);
+
+   --  [0440]'s sole relaxation: a mutable reference satisfies the otherwise
+   --  identical read-only reference.  It is directional and does not change
+   --  the value's bits.
+   function Reference_Satisfies
+     (Of_Table : Table; Actual, Expected : Reference_Id) return Boolean
+     with Pre => Holds (Of_Table, Actual) and then Holds (Of_Table, Expected);
+
+   function Reference_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Reference_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Reference_Of
+     (Of_Table : Table; Id : Declaration_Id) return Reference_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Natural (Id) <= Declaration_Limit (Of_Table);
+
+   procedure Note_Reference
+     (Into    : in out Table;
+      Of_Tree : Landin.Syntax.Tree;
+      Node    : Landin.Syntax.Node_Id;
+      Reference : Reference_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Reference),
+          Post => Reference_Of (Into, Of_Tree, Node) = Reference;
+
+   procedure Note_Reference
+     (Into     : in out Table;
+      Id       : Declaration_Id;
+      Reference : Reference_Id)
+     with Pre  => Is_Prepared (Into)
+                  and then Id /= No_Declaration
+                  and then Natural (Id) <= Declaration_Limit (Into)
+                  and then Holds (Into, Reference),
+          Post => Reference_Of (Into, Id) = Reference;
+
+   ------------------------------------------------------------------
    --  Function signatures
    ------------------------------------------------------------------
 
@@ -399,9 +498,6 @@ package Landin.Checking is
    --  type identity: a scalar name, [0710]'s nominal aggregate body, D17's
    --  array shape, or another structural signature for a function-valued
    --  position.  No width, offset, register or target byte appears here.
-   type Signature_Id is range 0 .. Integer'Last;
-   No_Signature : constant Signature_Id := 0;
-
    --  `! ...` exists only while whole-module inference is being solved.
    --  Target-neutral IR receives Infallible or Concrete descriptors only.
    type Error_Set_Form is (Infallible, Concrete, Inferred);
@@ -412,6 +508,10 @@ package Landin.Checking is
       Length  : Element_Count          := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Signature : Signature_Id         := No_Signature;
+      Reference : Reference_Id         := No_Reference;
+      Convention : Landin.Syntax.Parameter_Convention :=
+        Landin.Syntax.Implicit_In;
+      Escaping   : Boolean := False;
       --  A result label is source-level shape for [0990].  Parameter labels
       --  may be retained too, but signature agreement deliberately ignores
       --  every label [1000].
@@ -426,12 +526,30 @@ package Landin.Checking is
 
    No_Signature_Parts : constant Signature_Part_Array (1 .. 0) := [];
 
+   type Return_Source_Association is record
+      Result    : Positive := 1;
+      Parameter : Positive := 1;
+   end record;
+
+   type Return_Source_Array is
+     array (Positive range <>) of Return_Source_Association;
+
+   No_Return_Sources : constant Return_Source_Array (1 .. 0) := [];
+
    --  A signature part carries exactly the descriptor selected by Kind.
    --  In particular, Fixed_Array.Nominal is its element nominal identity;
    --  Aggregate.Nominal is the aggregate itself.  Reject stray or missing
    --  descriptor IDs at this public seam rather than letting a later
    --  structural walk dereference a malformed part.
    function Holds (Of_Table : Table; Part : Signature_Part) return Boolean;
+
+   function Contains_References
+     (Of_Table : Table; Part : Signature_Part) return Boolean
+     with Pre => Holds (Of_Table, Part);
+
+   function Contains_References
+     (Of_Table : Table; Nominal : Nominal_Type_Id) return Boolean
+     with Pre => Holds (Of_Table, Nominal);
 
    function Holds
      (Of_Table : Table; Parts : Signature_Part_Array) return Boolean;
@@ -450,11 +568,16 @@ package Landin.Checking is
       Results    : Signature_Part_Array;
       Site       : Landin.Provenance.Origin;
       Errors     : Atom_Set_Id := No_Atom_Set;
-      Error_Form : Error_Set_Form := Infallible) return Signature_Id
+      Error_Form : Error_Set_Form := Infallible;
+      Sources    : Return_Source_Array := No_Return_Sources)
+      return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
                   and then Holds (Into, Parameters)
                   and then Holds (Into, Results)
+                  and then (for all Source of Sources =>
+                    Source.Result <= Results'Length
+                    and then Source.Parameter <= Parameters'Length)
                   and then
                     (if Error_Form = Concrete then Holds (Into, Errors)
                      else Errors = No_Atom_Set),
@@ -469,13 +592,21 @@ package Landin.Checking is
       Result     : Signature_Part;
       Site       : Landin.Provenance.Origin;
       Errors     : Atom_Set_Id := No_Atom_Set;
-      Error_Form : Error_Set_Form := Infallible) return Signature_Id
+      Error_Form : Error_Set_Form := Infallible;
+      Sources    : Return_Source_Array := No_Return_Sources)
+      return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then Landin.Provenance.Is_Known (Site)
                   and then Holds (Into, Parameters)
                   and then
                     (Result.Kind = Landin.Types.No_Value
                      or else Holds (Into, Result))
+                  and then
+                    (Result.Kind /= Landin.Types.No_Value
+                     or else Sources'Length = 0)
+                  and then (for all Source of Sources =>
+                    Source.Result = 1
+                    and then Source.Parameter <= Parameters'Length)
                   and then
                     (if Error_Form = Concrete then Holds (Into, Errors)
                      else Errors = No_Atom_Set),
@@ -540,6 +671,24 @@ package Landin.Checking is
 
    --  The former zero-or-one query.  It returns No_Value for an empty run
    --  and is only valid as a language result when the count is at most one.
+   function Signature_Return_Source_Count
+     (Of_Table : Table; Signature : Signature_Id; Result : Positive)
+      return Natural
+     with Pre => Holds (Of_Table, Signature)
+                 and then Result <= Signature_Result_Count
+                                      (Of_Table, Signature);
+
+   function Nth_Signature_Return_Source
+     (Of_Table : Table;
+      Signature : Signature_Id;
+      Result    : Positive;
+      Index     : Positive) return Positive
+     with Pre => Holds (Of_Table, Signature)
+                 and then Result <= Signature_Result_Count
+                                      (Of_Table, Signature)
+                 and then Index <= Signature_Return_Source_Count
+                   (Of_Table, Signature, Result);
+
    function Signature_Result
      (Of_Table : Table; Signature : Signature_Id) return Signature_Part
      with Pre => Holds (Of_Table, Signature)
@@ -599,7 +748,8 @@ package Landin.Checking is
       Atom_Set_Actual_Type,
       Fixed_Array_Actual_Type,
       Nominal_Actual_Type,
-      Function_Actual_Type);
+      Function_Actual_Type,
+      Reference_Actual_Type);
    type Array_Element_Form is
      (Scalar_Array_Element, Nominal_Array_Element);
 
@@ -634,6 +784,10 @@ package Landin.Checking is
      with Pre => Holds (Of_Table, Signature)
                  and then Signature_Error_Form (Of_Table, Signature)
                             /= Inferred;
+
+   function Reference_Type_Actual
+     (Of_Table : Table; Reference : Reference_Id) return Actual_Key
+     with Pre => Holds (Of_Table, Reference);
 
    function Fixed_Actual (Value : Landin.Types.Magnitude) return Actual_Key;
 
@@ -698,6 +852,12 @@ package Landin.Checking is
      with Pre => Holds (Of_Table, Key)
                  and then Actual_Kind_Of (Key) = Type_Actual_Kind
                  and then Type_Form_Of (Key) = Function_Actual_Type;
+
+   function Reference_Of
+     (Of_Table : Table; Key : Actual_Key) return Reference_Id
+     with Pre => Holds (Of_Table, Key)
+                 and then Actual_Kind_Of (Key) = Type_Actual_Kind
+                 and then Type_Form_Of (Key) = Reference_Actual_Type;
 
    function Fixed_Magnitude_Of
      (Key : Actual_Key) return Landin.Types.Magnitude
@@ -911,7 +1071,8 @@ package Landin.Checking is
    --  measurement-only named ordinary child.  The child keeps its nominal
    --  body; no target offset or byte extent is stored here.
    type Field_Kind is
-     (Scalar_Field, Fixed_Array_Field, Aggregate_Field, Variant_Field);
+     (Scalar_Field, Reference_Field, Fixed_Array_Field, Aggregate_Field,
+      Variant_Field);
 
    type Field_Shape is record
       Kind    : Field_Kind               := Scalar_Field;
@@ -924,10 +1085,10 @@ package Landin.Checking is
       --  ordinary struct.  Both answer the same question -- which nominal
       --  instance this field is made of.
       Nominal : Nominal_Type_Id   := No_Nominal_Type;
-      --  A function-valued field is one `usize` carrier whose complete
-      --  recursive type remains this target-neutral signature.  Zero means
-      --  an ordinary scalar field.
+      --  Function and reference fields retain complete target-neutral type
+      --  evidence beside their one-word or two-word runtime carriers.
       Signature : Signature_Id            := No_Signature;
+      Reference : Reference_Id            := No_Reference;
    end record;
 
    type Field_Shape_Array is
@@ -1382,6 +1543,7 @@ private
       Length    : Element_Count := 0;
       Nominal   : Nominal_Type_Id := No_Nominal_Type;
       Signature : Signature_Id := No_Signature;
+      Reference : Reference_Id := No_Reference;
       Value     : Landin.Types.Magnitude := 0;
    end record;
 
@@ -1420,6 +1582,12 @@ private
    package Signature_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Signature_Id);
 
+   package Reference_Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Reference_Id);
+
+   package Reference_Descriptor_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Reference_Descriptor);
+
    package Signature_Part_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Signature_Part);
 
@@ -1453,9 +1621,13 @@ private
      (Index_Type   => Positive,
       Element_Type => Case_Run);
 
+   package Return_Source_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Return_Source_Association);
+
    type Signature_Record is record
       Parameters : Run;
       Results    : Run;
+      Sources    : Run;
       Site       : Landin.Provenance.Origin := Landin.Provenance.No_Origin;
       Errors     : Atom_Set_Id := No_Atom_Set;
       Error_Form : Error_Set_Form := Infallible;
@@ -1490,6 +1662,8 @@ private
       Atoms    : Atom_Set_Id := No_Atom_Set;
       Has_Signature : Boolean := False;
       Signature : Signature_Id := No_Signature;
+      Has_Reference : Boolean := False;
+      Reference : Reference_Id := No_Reference;
       Has_Result_Shape : Boolean := False;
       Result_Shape : Signature_Id := No_Signature;
       Has_Field : Boolean := False;
@@ -1516,6 +1690,8 @@ private
       Atoms    : Atom_Set_Id := No_Atom_Set;
       Has_Signature : Boolean := False;
       Signature : Signature_Id := No_Signature;
+      Has_Reference : Boolean := False;
+      Reference : Reference_Id := No_Reference;
       Has_Result_Shape : Boolean := False;
       Result_Shape : Signature_Id := No_Signature;
       Has_Array : Boolean := False;
@@ -1535,6 +1711,7 @@ private
       Node_Nominals : Nominal_Id_Vectors.Vector;
       Node_Atom_Sets : Atom_Set_Id_Vectors.Vector;
       Node_Signatures : Signature_Id_Vectors.Vector;
+      Node_References : Reference_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
       Node_Routine_Targets : Routine_Id_Vectors.Vector;
       --  Which field a selection node names, in the same run.
@@ -1557,9 +1734,12 @@ private
       Atom_Sets    : Atom_Set_Vectors.Vector;
       Atoms        : Atom_Vectors.Vector;
       Declaration_Signatures : Signature_Id_Vectors.Vector;
+      Declaration_References : Reference_Id_Vectors.Vector;
       Declaration_Result_Shapes : Signature_Id_Vectors.Vector;
+      References   : Reference_Descriptor_Vectors.Vector;
       Signatures   : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
+      Return_Sources : Return_Source_Vectors.Vector;
       Layouts      : Layout_Vectors.Vector;
       Field_Offsets : Offset_Vectors.Vector;
       Field_Shapes : Field_Shape_Vectors.Vector;

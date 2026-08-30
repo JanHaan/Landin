@@ -1,0 +1,5 @@
+bad: () -> none =
+    mut values: [2]u32 = [1, 2]
+    view: []u32 = values[0..<2]
+    view[0] = 3
+end bad

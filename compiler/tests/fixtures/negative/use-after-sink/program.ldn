@@ -1,0 +1,10 @@
+consume: (sink pointer: ptr u32) -> none =
+    _ = pointer
+end consume
+
+bad: () -> none =
+    value: u32 = 1
+    pointer: ptr u32 = addr value
+    consume(pointer)
+    _ = pointer
+end bad

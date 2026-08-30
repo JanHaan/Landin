@@ -1,6 +1,0 @@
-class: negative
-summary: [0570] describes a slice and the kernel omits it, so it is refused by name and not as an array missing its length
-constructs: 0570, 1830
-program: program.ldn
-codes: L0010
-targets: linux-x86-64, macos-arm64

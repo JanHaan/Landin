@@ -187,6 +187,27 @@ package Landin.IR is
       --  address.  The callee copies from it before running, so this is an
       --  ABI carrier and never a source-language pointer or alias.
       Storage_Address,
+      --  A source `addr` or `inout` carrier may address scalar or aggregate
+      --  storage.  It remains distinct from Storage_Address, whose verified
+      --  internal ABI/computed-element use requires a stored shape.
+      Place_Address,
+      --  [0570]/[0580]: validate a lower/upper range against a source
+      --  length and form the selected element address, or form the canonical
+      --  aligned non-null base of an empty slice.  Element width remains a
+      --  target question carried by the scalar element identity.
+      Slice_Address,
+      Empty_Slice_Base,
+      --  [0470]'s explicit integer/pointer carrier conversion.  The source
+      --  and result integer kinds retain both widths; a backend emits the
+      --  required runtime fit check before preserving the address bits.
+      Conversion,
+      Pointer_Address,
+      --  [0430]'s source pointer access.  The address is an ordinary usize
+      --  value; the referred scalar type is retained on the load result and
+      --  the store's value.  Aggregate reference copies use the existing
+      --  target-neutral storage operations through an address slot.
+      Load_Indirect,
+      Store_Indirect,
       --  A module value [1940] read and written.  Written, because
       --  [1900] lets a mutable binding be a place and [1740] lets a
       --  module binding carry `mut`.
@@ -300,9 +321,9 @@ package Landin.IR is
    --  defines a value exactly when its callee has a result [1920], so the
    --  instruction's own Result answers that and an opcode cannot.
    function Defines_Nothing (Of_Code : Opcode) return Boolean
-     is (Of_Code in Store | Store_Datum | Store_Field | Store_Element
-                    | Copy_Array | Copy_Variant | Clear_Array | Fill_Array
-                    | Select_Variant | Store_Variant_Field
+     is (Of_Code in Store | Store_Indirect | Store_Datum | Store_Field
+                    | Store_Element | Copy_Array | Copy_Variant | Clear_Array
+                    | Fill_Array | Select_Variant | Store_Variant_Field
                     | Terminator_Kind);
 
    ------------------------------------------------------------------
@@ -426,12 +447,16 @@ package Landin.IR is
    --  position refers to another structural descriptor.
    --  A backend may derive a carrier convention from these facts; no register,
    --  byte width or target offset is represented here.
+   type Parameter_Convention is (In_Value, Inout_Place, Sink_Value);
+
    type Signature_Part is record
       Kind    : Landin.Types.Type_Kind := Landin.Types.No_Value;
       Nominal : Nominal_Type_Id := No_Nominal_Type;
       Length  : Element_Total          := 0;
       Element : Landin.Types.Scalar_Name := Landin.Types.Bool;
       Signature : Signature_Id         := No_Signature;
+      Convention : Parameter_Convention := In_Value;
+      Escaping   : Boolean := False;
       --  Nonzero only when Kind is the u32 carrier for [0630]/[0640].
       Atoms   : Atom_Set_Id             := No_Atom_Set;
    end record;
@@ -440,6 +465,16 @@ package Landin.IR is
      array (Positive range <>) of Signature_Part;
 
    No_Signature_Parts : constant Signature_Part_Array (1 .. 0) := [];
+
+   type Return_Source_Association is record
+      Result    : Positive := 1;
+      Parameter : Positive := 1;
+   end record;
+
+   type Return_Source_Array is
+     array (Positive range <>) of Return_Source_Association;
+
+   No_Return_Sources : constant Return_Source_Array (1 .. 0) := [];
 
    --  A storage operation reaches a module datum, an ordinary frame slot,
    --  or an internal address kept in a frame slot.  The last form is not a
@@ -555,7 +590,9 @@ package Landin.IR is
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
       Results    : Signature_Part_Array;
-      Errors     : Atom_Set_Id := No_Atom_Set) return Signature_Id
+      Errors     : Atom_Set_Id := No_Atom_Set;
+      Sources    : Return_Source_Array := No_Return_Sources)
+      return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then (Errors = No_Atom_Set
                             or else Holds (Into, Errors)),
@@ -566,7 +603,9 @@ package Landin.IR is
      (Into       : in out Unit;
       Parameters : Signature_Part_Array;
       Result     : Signature_Part;
-      Errors     : Atom_Set_Id := No_Atom_Set) return Signature_Id
+      Errors     : Atom_Set_Id := No_Atom_Set;
+      Sources    : Return_Source_Array := No_Return_Sources)
+      return Signature_Id
      with Pre  => Is_Prepared (Into)
                   and then (Errors = No_Atom_Set
                             or else Holds (Into, Errors)),
@@ -594,6 +633,22 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Signature)
                  and then Index <= Signature_Result_Count
                                      (Of_Unit, Signature);
+
+   function Signature_Return_Source_Count
+     (Of_Unit : Unit; Signature : Signature_Id; Result : Positive)
+      return Natural
+     with Pre => Holds (Of_Unit, Signature)
+                 and then Result <= Signature_Result_Count
+                                      (Of_Unit, Signature);
+
+   function Nth_Signature_Return_Source
+     (Of_Unit : Unit;
+      Signature : Signature_Id;
+      Result    : Positive;
+      Index     : Positive) return Positive
+     with Pre => Holds (Of_Unit, Signature)
+                 and then Index <= Signature_Return_Source_Count
+                   (Of_Unit, Signature, Result);
 
    function Signature_Result
      (Of_Unit : Unit; Signature : Signature_Id) return Signature_Part
@@ -965,6 +1020,9 @@ package Landin.IR is
       --  placeholder stays zero; the verifier proves this target's recursive
       --  signature against the field shape before a backend emits a symbol.
       Target : Item_Id              := No_Item;
+      Slice  : Boolean              := False;
+      Slice_First : Element_Total   := 0;
+      Slice_Element : Field_Shape;
    end record;
 
    type Aggregate_Field_Image_Array is
@@ -1226,6 +1284,42 @@ package Landin.IR is
                   and then Image_Length (Into, Item)
                            = Element_Total (Elements'Length);
 
+   procedure Set_Slice_Image
+     (Into      : in out Unit;
+      Item      : Item_Id;
+      Of_Element : Field_Shape;
+      Length     : Element_Total;
+      Source    : Item_Id := No_Item;
+      First     : Element_Total := 0)
+     with Pre  => Holds (Into, Item)
+                  and then Result_Of (Into, Item)
+                    = Landin.Types.Fixed_Array
+                  and then Array_Length (Into, Item) = 2
+                  and then Array_Element (Into, Item) = Landin.Types.Usize
+                  and then (Source = No_Item or else Holds (Into, Source));
+
+   function Has_Slice_Image (Of_Unit : Unit; Item : Item_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item);
+
+   function Slice_Image_Source (Of_Unit : Unit; Item : Item_Id) return Item_Id
+     with Pre => Holds (Of_Unit, Item)
+                 and then Has_Slice_Image (Of_Unit, Item);
+
+   function Slice_Image_First
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     with Pre => Holds (Of_Unit, Item)
+                 and then Has_Slice_Image (Of_Unit, Item);
+
+   function Slice_Image_Length
+     (Of_Unit : Unit; Item : Item_Id) return Element_Total
+     with Pre => Holds (Of_Unit, Item)
+                 and then Has_Slice_Image (Of_Unit, Item);
+
+   function Slice_Image_Element
+     (Of_Unit : Unit; Item : Item_Id) return Field_Shape
+     with Pre => Holds (Of_Unit, Item)
+                 and then Has_Slice_Image (Of_Unit, Item);
+
    --  D34's repetition image is one folded scalar plus the array shape,
    --  never a run proportional to a target-sized extent.  A zero pattern is
    --  represented by no image instead and remains loader-zeroed storage.
@@ -1401,7 +1495,8 @@ package Landin.IR is
      (Into   : in out Unit;
       Item   : Item_Id;
       Shape  : Field_Shape;
-      Site   : Landin.Provenance.Origin) return Slot_Id
+      Site   : Landin.Provenance.Origin;
+      Declares : Declaration_Id := No_Declaration) return Slot_Id
      with Pre  => Holds (Into, Item)
                   and then Landin.Provenance.Is_Known (Site),
           Post => Slot_Count (Into, Item) = Slot_Count (Into, Item)'Old + 1
@@ -1602,6 +1697,19 @@ package Landin.IR is
 
    --  D94's by-value aggregate parameter.  Its frame slot receives a copy
    --  from the transported address before the first IR block executes.
+   function Add_Address_Parameter
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Shape    : Field_Shape;
+      Declares : Declaration_Id;
+      Site     : Landin.Provenance.Origin) return Slot_Id
+     with Pre  => Holds (Into, Item)
+                  and then Declares /= No_Declaration
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Holds (Into, Item, Add_Address_Parameter'Result)
+                  and then Is_Address
+                    (Into, Item, Add_Address_Parameter'Result);
+
    function Add_Aggregate_Parameter
      (Into     : in out Unit;
       Item     : Item_Id;
@@ -1961,7 +2069,8 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Storage
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Storage_Address | Copy_Array | Copy_Variant
+                          in Storage_Address | Place_Address
+                             | Copy_Array | Copy_Variant
                              | Clear_Array | Fill_Array
                              | Select_Variant | Store_Variant_Field;
 
@@ -2014,7 +2123,8 @@ package Landin.IR is
       return Path_Step_Array
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Storage_Address | Load_Field | Store_Field
+                          in Storage_Address | Place_Address
+                             | Load_Field | Store_Field
                              | Load_Element | Store_Element
                              | Copy_Array | Clear_Array | Fill_Array
                              | Copy_Variant | Select_Variant
@@ -2038,7 +2148,8 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Storage_Address | Load_Field | Store_Field
+                          in Storage_Address | Place_Address
+                             | Load_Field | Store_Field
                              | Load_Element | Store_Element
                              | Copy_Array | Clear_Array | Fill_Array
                              | Copy_Variant | Select_Variant
@@ -2072,7 +2183,8 @@ package Landin.IR is
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value)
-                          in Storage_Address | Load_Element | Store_Element
+                          in Storage_Address | Place_Address
+                             | Load_Element | Store_Element
                              | Copy_Array | Copy_Variant
                              | Clear_Array | Fill_Array
                              | Load_Variant_Tag
@@ -2293,6 +2405,18 @@ package Landin.IR is
      with Pre => Holds (Of_Unit, Item, Value)
                  and then Op_Of (Of_Unit, Item, Value) = Truth;
 
+   function Slice_Is_Inclusive
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Boolean
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value) = Slice_Address;
+
+   function Slice_Element_Shape
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
+      return Field_Shape
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                   in Slice_Address | Empty_Slice_Base;
+
    ------------------------------------------------------------------
    --  Emitting
    --
@@ -2361,6 +2485,95 @@ package Landin.IR is
       Site  : Landin.Provenance.Origin)
      with Pre => Is_Emitting (Into, Item)
                  and then Holds (Into, Item, Slot)
+                 and then Holds (Into, Item, Value)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   function Emit_Pointer_Address
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Value : Value_Id;
+      Site  : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Value)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Pointer_Address'Result,
+                     Pointer_Address);
+
+   function Emit_Place_Address
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Place : Storage;
+      Site  : Landin.Provenance.Origin;
+      Field : Natural := 0;
+      Nested : Path_Step_Array := No_Path_Steps) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Place_Address'Result, Place_Address);
+
+   function Emit_Conversion
+     (Into  : in out Unit;
+      Item  : Item_Id;
+      Value : Value_Id;
+      Result : Landin.Types.Integer_Name;
+      Site  : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Value)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Conversion'Result, Conversion);
+
+   function Emit_Slice_Address
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Base    : Value_Id;
+      Length  : Value_Id;
+      Lower   : Value_Id;
+      Upper   : Value_Id;
+      Element : Field_Shape;
+      Inclusive : Boolean;
+      Site    : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Base)
+                  and then Holds (Into, Item, Length)
+                  and then Holds (Into, Item, Lower)
+                  and then Holds (Into, Item, Upper)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Slice_Address'Result, Slice_Address);
+
+   function Emit_Empty_Slice_Base
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Element : Field_Shape;
+      Site    : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Empty_Slice_Base'Result,
+                     Empty_Slice_Base);
+
+   function Emit_Load_Indirect
+     (Into   : in out Unit;
+      Item   : Item_Id;
+      Address : Value_Id;
+      Result : Landin.Types.Scalar_Name;
+      Site   : Landin.Provenance.Origin) return Value_Id
+     with Pre  => Is_Emitting (Into, Item)
+                  and then Holds (Into, Item, Address)
+                  and then Landin.Provenance.Is_Known (Site),
+          Post => Emitted
+                    (Into, Item, Emit_Load_Indirect'Result, Load_Indirect);
+
+   procedure Emit_Store_Indirect
+     (Into    : in out Unit;
+      Item    : Item_Id;
+      Address : Value_Id;
+      Value   : Value_Id;
+      Site    : Landin.Provenance.Origin)
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Address)
                  and then Holds (Into, Item, Value)
                  and then Landin.Provenance.Is_Known (Site);
 
@@ -2887,6 +3100,7 @@ private
       Part        : Part_Position              := 1;
       Nested      : Run;
       Element_Field : Natural                  := 0;
+      Element_Shape : Field_Shape;
       Variant_Case  : Natural                  := 0;
       Variant_Payload_Field : Natural           := 0;
       Measured    : Landin.Types.Scalar_Name  := Landin.Types.Bool;
@@ -2962,6 +3176,11 @@ private
       Aggregate_Images : Run;
       Has_Image   : Boolean                   := False;
       Repeated_Image : Boolean                := False;
+      Slice_Image : Boolean                   := False;
+      Slice_Source : Item_Id                  := No_Item;
+      Slice_First : Element_Total             := 0;
+      Slice_Length : Element_Total            := 0;
+      Slice_Element : Field_Shape;
       Open        : Block_Id                  := No_Block;
    end record;
 
@@ -2998,9 +3217,13 @@ private
    package Signature_Part_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Signature_Part);
 
+   package Return_Source_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Return_Source_Association);
+
    type Signature_Record is record
       Parameters : Run;
       Results    : Run;
+      Sources    : Run;
       Errors     : Atom_Set_Id := No_Atom_Set;
    end record;
 
@@ -3058,6 +3281,7 @@ private
       Atoms      : Atom_Vectors.Vector;
       Signatures : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
+      Return_Sources : Return_Source_Vectors.Vector;
       Fields     : Field_Shape_Vectors.Vector;
       Slot_Fields : Field_Shape_Vectors.Vector;
       Measurement_Fields : Field_Shape_Vectors.Vector;

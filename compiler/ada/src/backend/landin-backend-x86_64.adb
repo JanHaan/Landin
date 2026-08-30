@@ -12,6 +12,7 @@ package body Landin.Backend.X86_64 is
    use type Landin.IR.Atom_Set_Id;
    use type Landin.IR.Declaration_Id;
    use type Landin.IR.Item_Kind;
+   use type Landin.IR.Item_Id;
    use type Landin.IR.Opcode;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
@@ -1038,6 +1039,21 @@ package body Landin.Backend.X86_64 is
                                   (Of_Unit, Item, Value))))
                      & ", " & Value_Cell (Value));
 
+               when Landin.IR.Place_Address =>
+                  declare
+                     Place : constant Landin.IR.Storage :=
+                       Landin.IR.Destination_Of (Of_Unit, Item, Value);
+                     Field : constant Natural :=
+                       Landin.IR.Element_Field_Of (Of_Unit, Item, Value);
+                     Nested : constant Landin.IR.Path_Step_Array :=
+                       Landin.IR.Path_Of (Of_Unit, Item, Value);
+                  begin
+                     Storage_Address
+                       (Place, Field, "%rax", Nested => Nested);
+                     Carry
+                       (Landin.Targets.Byte_8, "%rax", Value_Cell (Value));
+                  end;
+
                when Landin.IR.Storage_Address =>
                   declare
                      Place : constant Landin.IR.Storage :=
@@ -1102,6 +1118,142 @@ package body Landin.Backend.X86_64 is
                               Value_Cell (Value));
                         end;
                      end if;
+                  end;
+
+               when Landin.IR.Pointer_Address =>
+                  Carry
+                    (Landin.Targets.Byte_8,
+                     Value_Cell (Operand (1)), Value_Cell (Value));
+
+               when Landin.IR.Conversion =>
+                  declare
+                     Source : constant Landin.IR.Value_Id := Operand (1);
+                     From : constant Landin.Types.Integer_Name :=
+                       Landin.IR.Result_Of (Of_Unit, Item, Source);
+                     Into_Type : constant Landin.Types.Integer_Name :=
+                       Landin.IR.Result_Of (Of_Unit, Item, Value);
+                     From_Size : constant Held_Size := Size_Of (From, Facts);
+                     Into_Size : constant Held_Size :=
+                       Size_Of (Into_Type, Facts);
+                     Safe_Sign : constant String :=
+                       Value_Label (Value) & "_sign";
+                     Safe_Range : constant String :=
+                       Value_Label (Value) & "_range";
+                  begin
+                     Emit ("movq $0, %rax");
+                     Emit ("mov" & Suffix (From_Size) & " "
+                           & Value_Cell (Source) & ", "
+                           & Accumulator (From_Size));
+                     if Landin.Types.Is_Signed (From) then
+                        Emit ("test" & Suffix (From_Size) & " "
+                              & Accumulator (From_Size) & ", "
+                              & Accumulator (From_Size));
+                        Emit ("jns " & Safe_Sign);
+                        Emit ("ud2");
+                        Put (Safe_Sign & ":");
+                     end if;
+                     if Landin.Types.Width (Into_Type, Facts) < 64 then
+                        declare
+                           Maximum : constant Landin.Types.Magnitude :=
+                             2 ** Natural
+                               (Landin.Types.Width (Into_Type, Facts)) - 1;
+                        begin
+                           Emit
+                             ("movabsq $"
+                              & Trimmed
+                                  (Landin.Types.Magnitude'Image (Maximum))
+                              & ", %rcx");
+                           Emit ("cmpq %rcx, %rax");
+                           Emit ("jbe " & Safe_Range);
+                           Emit ("ud2");
+                           Put (Safe_Range & ":");
+                        end;
+                     end if;
+                     Emit ("mov" & Suffix (Into_Size) & " "
+                           & Accumulator (Into_Size) & ", "
+                           & Value_Cell (Value));
+                  end;
+
+               when Landin.IR.Slice_Address =>
+                  declare
+                     Safe_Upper : constant String :=
+                       Value_Label (Value) & "_upper";
+                     Safe_Lower : constant String :=
+                       Value_Label (Value) & "_lower";
+                     Element : constant Landin.IR.Field_Shape :=
+                       Landin.IR.Slice_Element_Shape
+                         (Of_Unit, Item, Value);
+                     Stride : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Field_Extent
+                       (Of_Unit, Element, Facts, Stride, Alignment);
+                     pragma Unreferenced (Alignment);
+                     Emit ("movq " & Value_Cell (Operand (4)) & ", %rax");
+                     Emit ("cmpq " & Value_Cell (Operand (2)) & ", %rax");
+                     Emit
+                       ((if Landin.IR.Slice_Is_Inclusive
+                              (Of_Unit, Item, Value)
+                         then "jb " else "jbe ") & Safe_Upper);
+                     Emit ("ud2");
+                     Put (Safe_Upper & ":");
+                     Emit ("movq " & Value_Cell (Operand (3)) & ", %rcx");
+                     Emit ("cmpq " & Value_Cell (Operand (4)) & ", %rcx");
+                     Emit ("jbe " & Safe_Lower);
+                     Emit ("ud2");
+                     Put (Safe_Lower & ":");
+                     if Stride > 1 then
+                        Emit
+                          ("imulq $"
+                           & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Stride))
+                           & ", %rcx, %rcx");
+                     end if;
+                     Emit ("movq " & Value_Cell (Operand (1)) & ", %rax");
+                     Emit ("addq %rcx, %rax");
+                     Carry
+                       (Landin.Targets.Byte_8, "%rax", Value_Cell (Value));
+                  end;
+
+               when Landin.IR.Empty_Slice_Base =>
+                  declare
+                     Element : constant Landin.IR.Field_Shape :=
+                       Landin.IR.Slice_Element_Shape
+                         (Of_Unit, Item, Value);
+                     Size : Landin.Targets.Byte_Count;
+                     Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Field_Extent
+                       (Of_Unit, Element, Facts, Size, Alignment);
+                     pragma Unreferenced (Size);
+                     Emit
+                       ("movq $"
+                        & Trimmed
+                            (Landin.Targets.Byte_Alignment'Image (Alignment))
+                        & ", " & Value_Cell (Value));
+                  end;
+
+               when Landin.IR.Load_Indirect =>
+                  declare
+                     Held : constant Held_Size := Size_Of_Value (Value);
+                  begin
+                     Emit ("movq " & Value_Cell (Operand (1)) & ", %rcx");
+                     Emit ("mov" & Suffix (Held) & " (%rcx), "
+                           & Accumulator (Held));
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", " & Value_Cell (Value));
+                  end;
+
+               when Landin.IR.Store_Indirect =>
+                  declare
+                     Held : constant Held_Size := Size_Of_Value (Operand (2));
+                  begin
+                     Emit ("movq " & Value_Cell (Operand (1)) & ", %rcx");
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Value_Cell (Operand (2)) & ", "
+                           & Accumulator (Held));
+                     Emit ("mov" & Suffix (Held) & " "
+                           & Accumulator (Held) & ", (%rcx)");
                   end;
 
                when Landin.IR.Load =>
@@ -1708,37 +1860,69 @@ package body Landin.Backend.X86_64 is
                           Landin.IR.Field_Of (Of_Unit, Item, Value);
                         Nested : constant Landin.IR.Path_Step_Array :=
                           Landin.IR.Path_Of (Of_Unit, Item, Value);
-                        Kind : constant Landin.Types.Scalar_Name :=
-                          (if Nested'Length = 0
-                           then Landin.IR.Nth_Slot_Part
-                                  (Of_Unit, Item, Slot, Which)
-                           else Landin.IR.Shape_At
-                                  (Of_Unit,
-                                   Part_Shape_Of
-                                     ((Kind => Landin.IR.Frame_Slot,
-                                       Slot => Slot), Which),
-                                   Nested).Element);
-                        Held : constant Held_Size := Size_Of (Kind, Facts);
-                        Top : constant Landin.Targets.Byte_Count :=
-                          Field_Offset
-                            (Of_Unit, Item, Layout, Slot, Which, Facts);
-                        --  A cell grows downward and [0750] lays a struct
-                        --  out upward, so the whole path moves the leaf
-                        --  back toward the frame pointer.
-                        At_Offset : constant Landin.Targets.Byte_Count :=
-                          (if Nested'Length = 0 then Top
-                           else Top - Path_Offset
-                             (Part_Shape_Of
-                                ((Kind => Landin.IR.Frame_Slot,
-                                  Slot => Slot), Which),
-                              Nested));
-                        Place : constant String := Cell (At_Offset);
                      begin
-                        if Op = Landin.IR.Load_Field then
-                           Carry (Held, Place, Value_Cell (Value));
-                        else
-                           Carry (Held, Value_Cell (Operand (1)), Place);
+                        if Landin.IR.Is_Address (Of_Unit, Item, Slot) then
+                           declare
+                              Place : constant Landin.IR.Storage :=
+                                (Kind => Landin.IR.Runtime_Address,
+                                 Address => Slot);
+                              Shape : constant Landin.IR.Field_Shape :=
+                                (if Nested'Length = 0
+                                 then Part_Shape_Of (Place, Which)
+                                 else Landin.IR.Shape_At
+                                   (Of_Unit,
+                                    Part_Shape_Of (Place, Which), Nested));
+                              Held : constant Held_Size :=
+                                Size_Of (Shape.Element, Facts);
+                           begin
+                              Storage_Address
+                                (Place, Natural (Which), "%rcx",
+                                 Nested => Nested);
+                              if Op = Landin.IR.Load_Field then
+                                 Carry
+                                   (Held, "(%rcx)", Value_Cell (Value));
+                              else
+                                 Carry
+                                   (Held, Value_Cell (Operand (1)),
+                                    "(%rcx)");
+                              end if;
+                              return;
+                           end;
                         end if;
+
+                        declare
+                           Kind : constant Landin.Types.Scalar_Name :=
+                             (if Nested'Length = 0
+                              then Landin.IR.Nth_Slot_Part
+                                (Of_Unit, Item, Slot, Which)
+                              else Landin.IR.Shape_At
+                                (Of_Unit,
+                                 Part_Shape_Of
+                                   ((Kind => Landin.IR.Frame_Slot,
+                                     Slot => Slot), Which),
+                                 Nested).Element);
+                           Held : constant Held_Size := Size_Of (Kind, Facts);
+                           Top : constant Landin.Targets.Byte_Count :=
+                             Field_Offset
+                               (Of_Unit, Item, Layout, Slot, Which, Facts);
+                           --  A cell grows downward and [0750] lays a struct
+                           --  out upward, so the whole path moves the leaf
+                           --  back toward the frame pointer.
+                           At_Offset : constant Landin.Targets.Byte_Count :=
+                             (if Nested'Length = 0 then Top
+                              else Top - Path_Offset
+                                (Part_Shape_Of
+                                   ((Kind => Landin.IR.Frame_Slot,
+                                     Slot => Slot), Which),
+                                 Nested));
+                           Place : constant String := Cell (At_Offset);
+                        begin
+                           if Op = Landin.IR.Load_Field then
+                              Carry (Held, Place, Value_Cell (Value));
+                           else
+                              Carry (Held, Value_Cell (Operand (1)), Place);
+                           end if;
+                        end;
                      end;
 
                      return;
@@ -2518,6 +2702,10 @@ package body Landin.Backend.X86_64 is
                                  (Landin.IR.Slot_Of (Of_Unit, Item, Value)))
                           := Of_Value (Operand_Of (Value, 1));
 
+                     when Landin.IR.Conversion =>
+                        Held (Natural (Value)) :=
+                          Of_Value (Operand_Of (Value, 1));
+
                      when Landin.IR.Negation =>
                         Held (Natural (Value)) :=
                           -Of_Value (Operand_Of (Value, 1));
@@ -2661,7 +2849,11 @@ package body Landin.Backend.X86_64 is
 
                      when Landin.IR.Failure_Test
                         | Landin.IR.Function_Address | Landin.IR.Call
+                        | Landin.IR.Load_Indirect | Landin.IR.Store_Indirect
                         | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
+                        | Landin.IR.Place_Address | Landin.IR.Slice_Address
+                        | Landin.IR.Empty_Slice_Base
+                        | Landin.IR.Pointer_Address
                         | Landin.IR.Store_Datum
                         | Landin.IR.Load_Field | Landin.IR.Store_Field
                         | Landin.IR.Load_Element | Landin.IR.Store_Element
@@ -2698,6 +2890,8 @@ package body Landin.Backend.X86_64 is
                when Landin.Targets.Byte_8 => ".quad");
 
       procedure Emit_Datum (Item : Landin.IR.Item_Id);
+
+      procedure Emit_Slice_Image_Datum (Item : Landin.IR.Item_Id);
 
       procedure Emit_Aggregate_Datum (Item : Landin.IR.Item_Id);
 
@@ -2829,7 +3023,35 @@ package body Landin.Backend.X86_64 is
               (Of_Unit, Shape, Facts, Field_Size, Field_Alignment);
             pragma Unreferenced (Field_Alignment);
 
-            if Landin.IR.Array_Element_Is_Aggregate (Of_Unit, Shape) then
+            if Image.Slice then
+               declare
+                  Element_Size : Landin.Targets.Byte_Count;
+                  Element_Alignment : Landin.Targets.Byte_Alignment;
+               begin
+                  Landin.Backend.Field_Extent
+                    (Of_Unit, Image.Slice_Element, Facts,
+                     Element_Size, Element_Alignment);
+                  declare
+                     Offset : constant Landin.Targets.Byte_Count :=
+                       Landin.Targets.Byte_Count (Image.Slice_First)
+                       * Element_Size;
+                     Base : constant String :=
+                       (if Image.Target = Landin.IR.No_Item
+                        then Trimmed
+                          (Landin.Targets.Byte_Alignment'Image
+                             (Element_Alignment))
+                        else Symbol (Image.Target)
+                          & (if Offset = 0 then ""
+                             else " + " & Trimmed
+                               (Landin.Targets.Byte_Count'Image (Offset))));
+                  begin
+                     Emit (".quad " & Base);
+                     Emit
+                       (".quad "
+                        & Trimmed (Landin.Types.Folded'Image (Image.Value)));
+                  end;
+               end;
+            elsif Landin.IR.Array_Element_Is_Aggregate (Of_Unit, Shape) then
                Emit_Zero (Field_Size);
             elsif Image.Form = Landin.IR.Finite then
                for Position in 1 .. Image.Count loop
@@ -3273,6 +3495,35 @@ package body Landin.Backend.X86_64 is
                           (Landin.Types.Folded'Image
                              (Landin.IR.Nth_Field_Image
                                 (Of_Unit, Item, Field)))));
+               elsif Image.Slice then
+                  declare
+                     Element_Size : Landin.Targets.Byte_Count;
+                     Element_Alignment : Landin.Targets.Byte_Alignment;
+                  begin
+                     Landin.Backend.Field_Extent
+                       (Of_Unit, Image.Slice_Element, Facts,
+                        Element_Size, Element_Alignment);
+                     declare
+                        Offset : constant Landin.Targets.Byte_Count :=
+                          Landin.Targets.Byte_Count (Image.Slice_First)
+                          * Element_Size;
+                        Base : constant String :=
+                          (if Image.Target = Landin.IR.No_Item
+                           then Trimmed
+                             (Landin.Targets.Byte_Alignment'Image
+                                (Element_Alignment))
+                           else Symbol (Image.Target)
+                             & (if Offset = 0 then ""
+                                else " + " & Trimmed
+                                  (Landin.Targets.Byte_Count'Image (Offset))));
+                     begin
+                        Emit (".quad " & Base);
+                        Emit
+                          (".quad "
+                           & Trimmed
+                               (Landin.Types.Folded'Image (Image.Value)));
+                     end;
+                  end;
                elsif Image.Form = Landin.IR.Finite then
                   for Position in 1 .. Image.Count loop
                      Emit
@@ -3494,6 +3745,46 @@ package body Landin.Backend.X86_64 is
          Put (Character'Val (9) & ".size " & Symbol (Item) & ", " & Bytes);
       end Emit_Array_Image_Datum;
 
+      procedure Emit_Slice_Image_Datum (Item : Landin.IR.Item_Id) is
+         Source : constant Landin.IR.Item_Id :=
+           Landin.IR.Slice_Image_Source (Of_Unit, Item);
+         Element : constant Landin.IR.Field_Shape :=
+           Landin.IR.Slice_Image_Element (Of_Unit, Item);
+         Element_Size : Landin.Targets.Byte_Count;
+         Alignment : Landin.Targets.Byte_Alignment;
+      begin
+         Landin.Backend.Field_Extent
+           (Of_Unit, Element, Facts, Element_Size, Alignment);
+         if Is_Public_Item (Item) then
+            Put (Character'Val (9) & ".globl " & Symbol (Item));
+         end if;
+         Put (Character'Val (9) & ".type " & Symbol (Item) & ", @object");
+         Put (Character'Val (9) & ".align 8");
+         Put (Symbol (Item) & ":");
+         declare
+            Offset : constant Landin.Targets.Byte_Count :=
+              Landin.Targets.Byte_Count
+                (Landin.IR.Slice_Image_First (Of_Unit, Item))
+              * Element_Size;
+            Base : constant String :=
+              (if Source = Landin.IR.No_Item
+               then Trimmed
+                 (Landin.Targets.Byte_Alignment'Image (Alignment))
+               else Symbol (Source)
+                 & (if Offset = 0 then ""
+                    else " + " & Trimmed
+                      (Landin.Targets.Byte_Count'Image (Offset))));
+         begin
+            Emit (".quad " & Base);
+         end;
+         Emit
+           (".quad "
+            & Trimmed
+                (Landin.IR.Element_Total'Image
+                   (Landin.IR.Slice_Image_Length (Of_Unit, Item))));
+         Put (Character'Val (9) & ".size " & Symbol (Item) & ", 16");
+      end Emit_Slice_Image_Datum;
+
       procedure Emit_Datum (Item : Landin.IR.Item_Id) is
          Kind : constant Landin.Types.Scalar_Name :=
            Landin.IR.Result_Of (Of_Unit, Item);
@@ -3562,6 +3853,8 @@ package body Landin.Backend.X86_64 is
                      = Landin.Types.Aggregate
                   then
                      Emit_Aggregate_Image_Datum (Item);
+                  elsif Landin.IR.Has_Slice_Image (Of_Unit, Item) then
+                     Emit_Slice_Image_Datum (Item);
                   elsif Landin.IR.Result_Of (Of_Unit, Item)
                         = Landin.Types.Fixed_Array
                   then

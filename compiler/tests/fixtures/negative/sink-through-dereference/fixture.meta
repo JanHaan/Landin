@@ -1,0 +1,5 @@
+class: negative
+summary: sink cannot name a place through a pointer dereference
+program: program.ldn
+codes: L0301
+constructs: 0430, 0900, 0910, 1800, 1810

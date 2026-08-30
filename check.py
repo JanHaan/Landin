@@ -278,7 +278,7 @@ def check_code(lines, offset):
         for m in re.finditer(
                 r"(?:^|[(,]|\bmut\s+|\bpublic\s+)\s*([a-z_][a-z0-9_]*)\s*(?::=|:)", line):
             word = m.group(1)
-            if word in KEYWORDS and word != "ptr":
+            if word in KEYWORDS:
                 out.append((n, "%r is a keyword and cannot be a name" % word))
 
     #  2. 'when' rides only on an exit statement
@@ -1295,14 +1295,14 @@ def check_pinned_toolchain(full_run):
                  if os.path.exists(pins) else "")
 
     wanted = {
-        "GNAT_VERSION": r"ARG GNAT_VERSION=(\S+)",
-        "GPRBUILD_VERSION": r"ARG GPRBUILD_VERSION=(\S+)",
-        "GNAT_SHA256": r"ARG GNAT_SHA256=(\S+)",
-        "GPRBUILD_SHA256": r"ARG GPRBUILD_SHA256=(\S+)",
+        "GNAT_VERSION": re.compile(r"ARG GNAT_VERSION=(\S+)"),
+        "GPRBUILD_VERSION": re.compile(r"ARG GPRBUILD_VERSION=(\S+)"),
+        "GNAT_SHA256": re.compile(r"ARG GNAT_SHA256=(\S+)"),
+        "GPRBUILD_SHA256": re.compile(r"ARG GPRBUILD_SHA256=(\S+)"),
     }
 
     for name, pattern in wanted.items():
-        found = re.search(pattern, recipe_text)
+        found = pattern.search(recipe_text)
         if not found:
             out.append((recipe, 1, "%s is not pinned in the recipe" % name))
             continue
@@ -1330,7 +1330,7 @@ def check_pinned_toolchain(full_run):
             out.append((path, 1, "%s does not read environments/pins.sh"
                                  % relative))
         for name, pattern in wanted.items():
-            found = re.search(pattern, recipe_text)
+            found = pattern.search(recipe_text)
             if found and found.group(1) in text:
                 out.append((path, 1,
                             "%s names %s literally instead of reading it "
@@ -1348,7 +1348,7 @@ def check_pinned_toolchain(full_run):
         relative = os.path.join(".builds", name_yml)
         text = io.open(path, encoding="utf-8").read()
         for name, pattern in wanted.items():
-            found = re.search(pattern, recipe_text)
+            found = pattern.search(recipe_text)
             if found and found.group(1) in text:
                 out.append((path, 1,
                             "%s names %s literally instead of reading it "
@@ -1675,8 +1675,8 @@ def check_grammar_corpus(full_run):
 def check_token_vocabulary(full_run):
     """The scanner's vocabulary is the grammar's, and says where it is not.
 
-    Landin.Tokens names two things the grammar does not: the seventeen
-    reserved words, which must be exactly the grammar's own, and a band of
+    Landin.Tokens names two things the grammar does not: the reserved words,
+    which must be exactly the grammar's own, and a band of
     deferred lexemes the kernel refuses by [1830], each of which must name
     a construct spec.md actually defines.  Without this the scanner would
     be a second lexical authority, which is one more than this repository
@@ -2037,8 +2037,8 @@ def check_precedence_table(full_run):
 def check_refused_constructs(full_run):
     """The parser's refusal tables are the tour's, and the corpus is pinned.
 
-    [1760] reserves seventeen words, so `loop`, `match` and the rest lex as
-    ordinary identifiers and only the parser can meet them.  That makes the
+    [1760] leaves `loop`, `match` and the rest as ordinary identifiers, so
+    only the parser can meet them.  That makes the
     parser a second authority on what the tour describes, which is one more
     than this repository is willing to have: every spelling it refuses has
     to be a word the tour writes and not one the grammar already spells,
