@@ -7416,9 +7416,10 @@ arguments are positional: a type application is `name(type_argument, ...)`,
 where an argument is a type or an integer for a fixed formal. A fixed formal
 may supply an array bound, so `[n]t` is an alias body. The grammar admits that
 formal list before either an alias type or a struct body. A parameterized atom
-union, constraint and fixed conditional declaration remain outside the enabled
-kernel. The same compile-time-only binders are admitted in declared-routine
-syntax and resolution; direct-call deduction remains a later R2.40 increment.
+union and constraints remain outside the enabled kernel. The same
+compile-time-only binders are admitted in declared-routine syntax and
+resolution; D138 enables exact direct-call deduction, and D139 separately
+enables target-selected module declaration lists.
 
 One type-declaration scope contains all of the formals. The resolver collects
 the complete formal list into that scope before it resolves any fixed formal's
@@ -7584,8 +7585,9 @@ or expression in the template. An invalid layout state stores no application
 provenance: a repeated use of the same canonical key re-evaluates the bounded
 body walk so it receives its own primary while retaining one identity and
 tuple. Fixed actuals remain integer literals or
-forwarded fixed formals. Parameterized atom unions, constraints and fixed conditional declarations
-remain deferred.
+forwarded fixed formals. Parameterized atom unions and constraints remain
+deferred; D138 and D139 separately define generic routine instances and fixed
+conditional module declarations.
 
 An alias expansion that reaches no type remains L0307. A nominal field,
 nominal array element or variant payload that would require a finite instance

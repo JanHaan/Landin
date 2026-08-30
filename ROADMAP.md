@@ -2361,13 +2361,14 @@ error, `negative/fixed-conditional-inactive-parser-error` retains parser
 reporting, and the lowering seam records that an inactive template creates no
 item while a selected generic instance does.
 
-The next semantic increments extend the substitution layer to generic routine
-instances and exact deduction from ordinary argument types. Deduction does not
-use return context, constraint lookup or arithmetic inversion. Parameterised
-nominal types and generic routines receive identities derived from a template
-and normalised actual tuple rather than reusing one source declaration identity
-for unequal instances. No correctness step executes a user routine. R2.70
-remains the owner of shared generic evidence and R4.50 the owner of choosing
+The remaining generic-routine increments settle explicit static-call syntax
+and may extend exact deduction through additional nested type patterns and
+computed fixed patterns. D138's implemented deduction does not use return
+context, constraint lookup or arithmetic inversion. Parameterised nominal types
+and generic routines already receive identities derived from a template and
+normalised actual tuple rather than reusing one source declaration identity for
+unequal instances. No correctness step executes a user routine. R2.70 remains
+the owner of shared generic evidence and R4.50 the owner of choosing
 specialisation as an optimisation.
 
 Exit evidence: generic shape, nominal identity/layout, parser, resolution,

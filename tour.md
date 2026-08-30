@@ -2169,6 +2169,13 @@ deduced from whatever argument pins it down.
 Concept entries are reached through the type parameter, so
 two constrained parameters never collide: A.less, B.less.
 
+The enabled R2.40 kernel admits the same collected signature scope with
+unconstrained type formals and fixed integer formals. A direct call deduces a
+type formal from an ordinary argument's exact normalized type, and an exact
+`[N]T` parameter also deduces its direct length and element formals. The
+compile-time formals create no runtime parameters or ABI positions. Constraints
+and evidence remain later work.
+
 ```landin
 sort: (T: type is ordered, data: []mut T) -> none =
     for k in 1..<lenof data do
@@ -2187,7 +2194,10 @@ end sort
 ### [1300] At the call site the type is inferred from the arguments
 
 At the call site the type is inferred from the arguments.
-Naming it explicitly stays possible.
+Naming it explicitly stays possible in the complete design. The enabled R2.40
+kernel currently implements only the inferred direct-call form; its explicit
+static-call spelling remains to be settled against the named form shown below
+and the kernel's positional call grammar.
 
 ```landin
 sort_demo: (values: []i32) -> none =
@@ -2300,8 +2310,10 @@ integer parameters. Applications are fully applied and positional. A type
 actual may be any enabled concrete identity; whether it is legal as a field,
 array element or payload is checked after substitution. Fixed actuals are
 integer literals, or fixed formals forwarded by another template, and must fit
-their declared integer type. Constraints, deduction, generic routines and
-fixed conditional declarations remain later work.
+their declared integer type. Constraints remain later work. D138 applies the
+same substitution model to direct generic routine calls through exact argument
+deduction, and D139 selects module declaration lists with a closed fixed
+condition; neither mechanism executes user code.
 
 ```landin
 map: type (K: type is hashable, V: type) = struct ... end map
