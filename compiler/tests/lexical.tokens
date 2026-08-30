@@ -1662,6 +1662,40 @@ file positive/fixed-array-bound-zero/program.ldn tokens 26
   69 75 second
   75 76 :
   77 83 folded
+file positive/fixed-conditional-selects-declarations/main.ldn tokens 33
+  0 5 fixed
+  6 8 if
+  9 17 compiler
+  17 18 .
+  18 22 arch
+  23 25 ==
+  26 31 arm64
+  32 36 then
+  41 48 ignored
+  48 49 :
+  50 53 i32
+  54 55 =
+  56 62 absent
+  63 68 elsif
+  69 77 compiler
+  77 78 .
+  78 82 arch
+  83 85 ==
+  86 92 x86_64
+  93 97 then
+  102 110 selected
+  110 111 :
+  112 115 i32
+  116 117 =
+  118 120 42
+  121 125 else
+  130 142 ignored_else
+  142 143 :
+  144 147 i32
+  148 149 =
+  150 157 missing
+  158 161 end
+  162 164 if
 file positive/function-end-unnamed/program.ldn tokens 13
   0 3 one
   3 4 :
