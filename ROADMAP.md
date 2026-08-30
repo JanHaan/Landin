@@ -2331,8 +2331,11 @@ ordinary call checking; a context-free literal therefore deduces `i32`. An exact
 `n` from the argument's normalized array length and `t` from its element
 descriptor, without arithmetic inversion. Static formals remain outside
 signatures, slots and the ABI. Other nested type patterns, function descriptors
-whose error sets are still inferred, explicit static call syntax, and computed
-fixed patterns remain the next increments. Fixed conditional declaration lists
+whose error sets are still inferred, and computed fixed patterns remain the
+next increments. Explicit static call syntax is now one named call list: when
+one static formal is written, every static formal is named and the tuple is
+ordered by declaration; runtime arguments remain [0980]'s positional prefix
+and named suffix. Fixed conditional declaration lists
 are D139's completed increment.
 Deduction does not use return context or constraint lookup. Concrete declared
 atom error sets are substituted onto each instance signature and use the
@@ -2381,9 +2384,9 @@ including reordered side effects and differing declaration/type labels; the
 `negative/function-type-parameter-name-duplicate` fixtures pin the refusal
 surface. D72 construction projections remain unchanged.
 
-The remaining generic-routine increments settle explicit static-call syntax
-and may extend exact deduction through additional nested type patterns and
-computed fixed patterns. D138's implemented deduction does not use return
+The remaining generic-routine increments may extend exact deduction through
+additional nested type patterns and computed fixed patterns; R2.40 remains
+active until its complete evidence set is closed. D138's implemented deduction does not use return
 context, constraint lookup or arithmetic inversion. Parameterised nominal types
 and generic routines already receive identities derived from a template and
 normalised actual tuple rather than reusing one source declaration identity for

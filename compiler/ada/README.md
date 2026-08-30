@@ -253,7 +253,10 @@ expansion cycles and impossible by-value nominal recursion in an unused
 template. Concrete instances use the
 same contextual aggregate storage, images, calls and control paths as ordinary
 structs. D138 direct generic calls instead intern one checker routine identity per
-complete normalized tuple. Direct type-formal positions deduce every enabled
+complete normalized tuple. A direct generic call either deduces every static
+formal from positional runtime arguments or names every static formal in the
+same named call list; static entries have no evaluation, IR value or ABI
+position. Direct type-formal positions deduce every enabled
 normalized descriptor: scalar, structural atom set, exact fixed array, nominal
 aggregate identity, or structural function signature whose error set is already
 concrete. An exact `[n]t` array

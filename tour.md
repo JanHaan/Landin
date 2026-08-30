@@ -1566,7 +1566,10 @@ Calls: positional first, then named. No default values. The positional prefix
 fills parameters in order; the named suffix may reorder the rest. Every runtime
 parameter is filled exactly once, and an unknown or repeated label is an error.
 Arguments still run in written order before their checked values are passed in
-formal order. A call through a stored or selected function uses the parameter
+formal order. A generic direct call may put its compile-time actuals in this
+same named list: `copy(t: u8, n: 4, source: bytes)`. Once it names one static
+formal, it names every static formal; those entries neither evaluate nor fill a
+runtime position. A call through a stored or selected function uses the parameter
 labels of that value's static function type; changing those labels does not
 change function-type identity [1000].
 
@@ -2176,7 +2179,9 @@ Concept entries are reached through the type parameter, so
 two constrained parameters never collide: A.less, B.less.
 
 The enabled R2.40 kernel admits the same collected signature scope with
-unconstrained type formals and fixed integer formals. A direct call deduces a
+unconstrained type formals and fixed integer formals. A direct call either
+leaves every static formal for deduction, or names every one explicitly in its
+single call list; partial explicit/deduced tuples are refused. A direct call deduces a
 type formal from an ordinary argument's exact normalized type, and an exact
 `[N]T` parameter also deduces its direct length and element formals. The
 compile-time formals create no runtime parameters or ABI positions. Constraints
@@ -2199,11 +2204,11 @@ end sort
 
 ### [1300] At the call site the type is inferred from the arguments
 
-At the call site the type is inferred from the arguments.
-Naming it explicitly stays possible in the complete design. The enabled R2.40
-kernel currently implements only the inferred direct-call form; its explicit
-static-call spelling remains to be settled against the named form shown below
-and the kernel's positional call grammar.
+At the call site the type is normally inferred from the arguments. It may also
+be named explicitly in the same uniformly named list as runtime arguments; an
+explicit static list is saturated, while the runtime positional prefix and
+named suffix keep [0980]'s matching rule. Positional-only calls remain the
+all-deduction form.
 
 ```landin
 sort_demo: (values: []i32) -> none =
@@ -2318,8 +2323,8 @@ array element or payload is checked after substitution. Fixed actuals are
 integer literals, or fixed formals forwarded by another template, and must fit
 their declared integer type. Constraints remain later work. D138 applies the
 same substitution model to direct generic routine calls through exact argument
-deduction, and D139 selects module declaration lists with a closed fixed
-condition; neither mechanism executes user code.
+deduction or a saturated named static list, and D139 selects module declaration
+lists with a closed fixed condition; neither mechanism executes user code.
 
 ```landin
 map: type (K: type is hashable, V: type) = struct ... end map
