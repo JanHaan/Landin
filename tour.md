@@ -2181,11 +2181,20 @@ two constrained parameters never collide: A.less, B.less.
 The enabled R2.40 kernel admits the same collected signature scope with
 unconstrained type formals and fixed integer formals. A direct call either
 leaves every static formal for deduction, or names every one explicitly in its
-single call list; partial explicit/deduced tuples are refused. A direct call deduces a
-type formal from an ordinary argument's exact normalized type, and an exact
-`[N]T` parameter also deduces its direct length and element formals. The
-compile-time formals create no runtime parameters or ABI positions. Constraints
-and evidence remain later work.
+single call list; partial explicit/deduced tuples are refused. A direct call
+recursively matches each written runtime parameter type against the argument's
+independently synthesized normalized type. Direct type formals bind complete
+descriptors. Fixed arrays match exact bounds and elements; a direct fixed bound
+binds its length, while a computed bound such as `N * 2` is never inverted and
+is checked only after another occurrence has bound `N`. Parameterized nominal
+patterns require the same source template and match their complete stored tuple,
+including phantom actuals. Parameterized aliases expand symbolically, and
+function patterns match parameter and result runs plus their error form while
+ignoring labels. Repeats must agree exactly. A saturated explicit static tuple
+bypasses deduction and validates the same patterns. No return context,
+conversion, constraint search or user code participates. The compile-time
+formals create no runtime parameters or ABI positions. Constraints and evidence
+remain later work.
 
 ```landin
 sort: (T: type is ordered, data: []mut T) -> none =

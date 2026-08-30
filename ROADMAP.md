@@ -2318,25 +2318,33 @@ images, construction, copies, calls, control joins, arrays, nested children and
 variants then use the ordinary nominal shape path. Templates and formals make
 no IR item, slot or ABI position.
 
-D138's first executable routine increment now extends substitution to direct
-generic calls across every enabled normalized descriptor. The checker interns `(template, normalized actual tuple)`
-routine identities, checks and lowers each through a fact overlay on the shared
-source, publishes a signature before same-key recursion, rejects active
+D138 now extends substitution to direct generic calls across every enabled
+normalized descriptor. The checker interns `(template, normalized actual
+tuple)` routine identities, checks and lowers each through a fact overlay on the
+shared source, publishes a signature before same-key recursion, rejects active
 same-template unequal-tuple expansion, and maps each ready key to one local IR
-routine item. Deduction synthesizes runtime arguments without parameter context,
-binds direct type-formal occurrences exactly as scalar, structural atom-set,
-exact fixed-array, nominal aggregate or already-concrete structural
-function-signature descriptors, requires repeats and all formals to agree, and then performs
-ordinary call checking; a context-free literal therefore deduces `i32`. An exact `[n]t` runtime parameter additionally binds
-`n` from the argument's normalized array length and `t` from its element
-descriptor, without arithmetic inversion. Static formals remain outside
-signatures, slots and the ABI. Other nested type patterns, function descriptors
-whose error sets are still inferred, and computed fixed patterns remain the
-next increments. Explicit static call syntax is now one named call list: when
-one static formal is written, every static formal is named and the tuple is
-ordered by declaration; runtime arguments remain [0980]'s positional prefix
-and named suffix. Fixed conditional declaration lists
-are D139's completed increment.
+routine item. Deduction synthesizes runtime arguments without parameter context;
+a context-free literal therefore deduces `i32`. It recursively unifies each
+written parameter pattern with that independent descriptor. Direct type formals
+bind complete scalar, structural atom-set, fixed-array, nominal or concrete
+function descriptors. Fixed arrays recurse through exact element and bound
+patterns. A direct fixed bound binds the length; a computed D136 bound is never
+inverted, waits for formals bound elsewhere, then folds and compares exactly.
+Only-computed occurrences remain undeduced.
+
+Parameterized nominal patterns require the same source template and recursively
+match their stored normalized tuple, including phantom actuals. Parameterized
+aliases expand symbolically without a guessed actual. Function patterns recurse
+through parameter and result runs and their infallible, concrete or inferred
+error form while ignoring labels. Repeats agree exactly. A saturated explicit
+static tuple bypasses binding and validates all patterns by the same exact walk.
+Fixed values and declared integer ranges are checked after the complete tuple.
+No return context, conversion, constraint lookup, arithmetic inversion or user
+code participates. Static formals remain outside signatures, slots and the ABI.
+Explicit static call syntax is one named call list: when one static formal is
+written, every static formal is named and the tuple is ordered by declaration;
+runtime arguments remain [0980]'s positional prefix and named suffix. Fixed
+conditional declaration lists are D139's completed increment.
 Deduction does not use return context or constraint lookup. Concrete declared
 atom error sets are substituted onto each instance signature and use the
 ordinary call, recovery, `try`, `fail`, `defer`, and `undo` machinery;
@@ -2384,10 +2392,13 @@ including reordered side effects and differing declaration/type labels; the
 `negative/function-type-parameter-name-duplicate` fixtures pin the refusal
 surface. D72 construction projections remain unchanged.
 
-The remaining generic-routine increments may extend exact deduction through
-additional nested type patterns and computed fixed patterns; R2.40 remains
-active until its complete evidence set is closed. D138's implemented deduction does not use return
-context, constraint lookup or arithmetic inversion. Parameterised nominal types
+The structural generic-routine deduction surface is now closed: its known
+remaining semantic gap is per-instance `! ...` inference, whose descriptors
+cannot become routine actual keys until that inference is solved in the
+instance view. R2.40 remains active rather than claiming completion before that
+last increment and its complete evidence set are closed. D138's implemented
+deduction does not use return context, constraint lookup or arithmetic
+inversion. Parameterised nominal types
 and generic routines already receive identities derived from a template and
 normalised actual tuple rather than reusing one source declaration identity for
 unequal instances. No correctness step executes a user routine. R2.70 remains
@@ -2409,10 +2420,14 @@ field, payload and zero-length array edges. Routine evidence covers overlay
 separation on one source node, equal-key reuse, unequal scalar items, deduced
 `u8`/`i32`, context-free literal `i32`, unequal atom-set/function-signature/
 nominal descriptors with aggregate transport and layout, exact `[n]t`
-fixed/element deduction, same-key recursion, repeated type/fixed-formal conflicts, undeduced formals,
-non-finite unequal-key recursion, declared error propagation/recovery/failure
-cleanup, safe refusal of inferred generic errors, unconditional unused-template
-defects, and absence of static ABI positions. Direct and
+fixed/element deduction, nested nominal tuples, phantom actuals, parameterized
+alias expansion, recursive function-signature matching, a fixed formal bound in
+one relation followed by an exact computed-bound check in another, explicit
+computed checks, same-key recursion, repeated nested type/fixed-formal
+conflicts, no-inversion undeduced formals, wrong nominal templates, non-finite
+unequal-key recursion, declared error propagation/recovery/failure cleanup,
+safe refusal of inferred generic errors, unconditional unused-template defects,
+and absence of static ABI positions. Direct and
 expression-folded zero lengths and a syntactically valid rejected call in an
 array bound remain covered; no user code executes during compilation.
 
