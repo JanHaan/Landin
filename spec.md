@@ -7410,9 +7410,8 @@ where an argument is a type or an integer for a fixed formal. A fixed formal
 may supply an array bound, so `[n]t` is an alias body. The grammar admits that
 formal list before either an alias type or a struct body. A parameterized atom
 union, constraint and fixed conditional declaration remain outside the enabled
-kernel. D138 separately extends the same compile-time-only binders to
-routine syntax and resolution; direct-call deduction remains its next
-increment.
+kernel. The same compile-time-only binders are admitted in declared-routine
+syntax and resolution; direct-call deduction remains a later R2.40 increment.
 
 One type-declaration scope contains all of the formals. The resolver collects
 the complete formal list into that scope before it resolves any fixed formal's

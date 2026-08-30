@@ -1,0 +1,3 @@
+id: (t: type, value: t) -> (result: t) = value end id
+
+main: () -> (code: u8) = id(7) end main
