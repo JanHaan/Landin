@@ -263,11 +263,16 @@ A function is a value with a body, and its returns are named.
 expression still takes an end, and the expression fills the named
 return [0880]; every named return must be assigned before the
 function returns [0930]. The parameter conventions [0900], `escaping` [0780]
-and generic parameters [1290] remain deferred. An enabled signature takes
-values including function values, hands one or more named values (or none)
-back, and optionally declares [0940]'s payload-free atom error set. A function
-type reuses this `signature` production but has no body. Its labels are type
-description only and do not declare parameters or named returns.
+and generic parameters [1290] are enabled only on a declared routine. Its
+complete signature scope collects type/fixed formals, runtime parameters and
+named returns before resolving any type; runtime formals alone make the
+runtime signature. Calls retain ordinary `f(runtime_arguments)` spelling and
+deduce every static formal from independently synthesized argument types.
+An enabled signature takes values including function values, hands one or more
+named values (or none) back, and optionally declares [0940]'s payload-free
+atom error set. A function type reuses the nongeneric `signature` production
+but has no body. Its labels are type description only and do not declare
+parameters or named returns.
 
 An anonymous function [1010] writes that same signature and body without a
 module name. It captures no enclosing local, parameter or named return: its
@@ -286,12 +291,15 @@ also keeps `return 1` the refused payload spelling [1810]. A guarded return may
 prefix a final expression because its untaken edge continues.
 
 ```landin-grammar
-function           ::= identifier ":" signature "=" body "end" identifier?
+function           ::= identifier ":" declared_signature "=" body "end" identifier?
 anonymous_function ::= signature "=" body "end"
 signature          ::= "(" parameters? ")" "->" returns errors?
+declared_signature ::= "(" routine_formals? ")" "->" returns errors?
+routine_formals    ::= routine_formal ("," routine_formal)*
+routine_formal     ::= parameter | type_formal
 errors             ::= "!" (identifier ("|" identifier)* | "...")
-parameters  ::= parameter ("," parameter)*
-parameter   ::= identifier ":" type
+parameters         ::= parameter ("," parameter)*
+parameter          ::= identifier ":" type
 returns     ::= "(" named_return ("," named_return)* ")" | "none"
 named_return ::= identifier ":" type
 body        ::= block
@@ -466,7 +474,7 @@ an inner scope means nothing until the inner ones are named.
 | --- | --- |
 | module | every file compiled together. There is one, until [1410]'s directories arrive. |
 | type declaration | D135's complete ordered formal list. The scope encloses the module and is visible in every fixed formal's declared type and in the alias or struct body, regardless of formal order. It closes with that declaration: its names do not enter the module or another type declaration. A type declaration without formals opens no scope. |
-| signature | a declared or anonymous function's parameters and named returns [1800]. Every named return is a place the body assigns [0930], so each is declared here and not in the body; parameters and returns share one namespace. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
+| signature | a declared routine's type/fixed formals, runtime parameters and named returns [1800]. Every binder is collected before any signature type is resolved, so its source order has no visibility meaning. Named returns are places the body assigns [0930]; all three binder kinds share one namespace, but type/fixed formals are compile-time-only and have no storage. A declared function's signature encloses the module; a no-capture anonymous signature also encloses the module rather than the expression's local scope. A written function type opens no scope and its labels declare nothing. |
 | body | what a function runs; one for each arm of an `if` and its `else`; one for each `match` arm; one for every bare `begin` block; and one for a call-site recovery [1810] [1030]. A statement run plus its optional final expression is a block and a block is what scopes [1090], so a name declared in one is not visible in a sibling or after the block closes. Match payload bindings and a recovery error name live only in their block. |
 
 [1800]'s direct final expression opens no additional scope inside its function
@@ -7401,8 +7409,9 @@ arguments are positional: a type application is `name(type_argument, ...)`,
 where an argument is a type or an integer for a fixed formal. A fixed formal
 may supply an array bound, so `[n]t` is an alias body. The grammar admits that
 formal list before either an alias type or a struct body. A parameterized atom
-union, generic function or constraint, deduction and fixed conditional
-declaration remain outside the enabled kernel.
+union, constraint and fixed conditional declaration remain outside the enabled
+kernel. D138 separately extends the same compile-time-only binders to declared
+routines and deduces their complete actual tuple from ordinary call arguments.
 
 One type-declaration scope contains all of the formals. The resolver collects
 the complete formal list into that scope before it resolves any fixed formal's
@@ -7568,8 +7577,9 @@ or expression in the template. An invalid layout state stores no application
 provenance: a repeated use of the same canonical key re-evaluates the bounded
 body walk so it receives its own primary while retaining one identity and
 tuple. Fixed actuals remain integer literals or
-forwarded fixed formals. Parameterized atom unions, generic routines and
-constraints, deduction and fixed conditional declarations remain deferred.
+forwarded fixed formals. Parameterized atom unions, constraints and fixed
+conditional declarations remain deferred; D138 owns generic routines and
+exact deduction.
 
 An alias expansion that reaches no type remains L0307. A nominal field,
 nominal array element or variant payload that would require a finite instance

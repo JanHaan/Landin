@@ -142,7 +142,7 @@
 1260   tour        -                                  A concept entry's error set has to be concrete
 1270   tour        -                                  The register is keyed by (type
 1280   tour        -                                  Conformances may be declared anywhere
-1290   tour        refused refused-by-name            A generic function takes the type as an ordinary parameter
+1290   tour        accepted emitted refused refused-by-name A generic function takes the type as an ordinary parameter
 1300   tour        -                                  At the call site the type is inferred from the arguments
 1310   tour        -                                  Generic code can always be compiled once and handed a table
 1320   tour        -                                  Traversal is a concept
