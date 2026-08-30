@@ -4958,8 +4958,86 @@ package body Landin.Tests.Backend_Suite is
       end;
    end Declared_Errors_Use_The_Dedicated_Register;
 
+   procedure Generic_Evidence_Is_Ordered_Indirect_And_Shared
+     (Item : in out Landin.Testing.Context);
+
+   procedure Generic_Evidence_Is_Ordered_Indirect_And_Shared
+     (Item : in out Landin.Testing.Context)
+   is
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Ran : Natural;
+   begin
+      Lower
+        (Work,
+         "ordered: type = concept (t: type)" & LF
+         & "    less: (left: t, right: t) -> (yes: bool)" & LF
+         & "end ordered" & LF
+         & "less_i32: (left: i32, right: i32) -> (yes: bool) =" & LF
+         & "    yes = left < right" & LF
+         & "end less_i32" & LF
+         & "less_u32: (left: u32, right: u32) -> (yes: bool) =" & LF
+         & "    yes = left < right" & LF
+         & "end less_u32" & LF
+         & "i32 is ordered (less: less_i32)" & LF
+         & "u32 is ordered (less: less_u32)" & LF
+         & "is_less: (t: type is ordered, left: t, right: t)" & LF
+         & "  -> (yes: bool) =" & LF
+         & "    yes = t.less(left, right)" & LF
+         & "end is_less" & LF
+         & "public main: () -> (code: i32) =" & LF
+         & "    a: i32 = 1" & LF
+         & "    b: i32 = 2" & LF
+         & "    c: u32 = 3" & LF
+         & "    d: u32 = 4" & LF
+         & "    if is_less(a, b) and is_less(c, d) then" & LF
+         & "        code = 42" & LF
+         & "    else" & LF
+         & "        code = 0" & LF
+         & "    end if" & LF
+         & "end main" & LF,
+         Ran);
+
+      Landin.Testing.Check_Equal (Item, Ran, 5, "five stages ran");
+      Landin.Testing.Check
+        (Item, not Landin.Stages.Failed (Work), "the program is accepted");
+      declare
+         Text : constant String := Emitted (Work);
+      begin
+         Landin.Testing.Check_Equal
+           (Item,
+            Occurrences
+              (Text, ":" & LF & HT & ".quad 4" & LF
+                 & HT & ".quad 4" & LF & HT & ".quad less_"),
+            2, "two concrete conformances emit two tables");
+         Landin.Testing.Check
+           (Item,
+            Contains
+              (Text, HT & ".quad 4" & LF & HT & ".quad 4" & LF
+                 & HT & ".quad less_i32" & LF)
+              and then Contains
+                (Text, HT & ".quad 4" & LF & HT & ".quad 4" & LF
+                   & HT & ".quad less_u32" & LF),
+            "size and alignment precede source-order function entries");
+         Landin.Testing.Check
+           (Item,
+            Contains (Text, "movq 16(%rax), %rax")
+              and then Occurrences (Text, "call *") = 1,
+            "the first semantic function offset feeds one indirect call");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, ".type .Llandin_anonymous_"), 1,
+            "representation-compatible instances emit one machine body");
+         Landin.Testing.Check_Equal
+           (Item, Occurrences (Text, ".set .Llandin_anonymous_"), 1,
+            "the second concrete symbol aliases the shared body");
+      end;
+   end Generic_Evidence_Is_Ordered_Indirect_And_Shared;
+
    procedure Register (Into : in out Landin.Testing.Registry) is
    begin
+      Landin.Testing.Register
+        (Into, "backend", "generic evidence is ordered indirect and shared",
+         Generic_Evidence_Is_Ordered_Indirect_And_Shared'Access);
       Landin.Testing.Register
         (Into, "backend", "a constant return emits its whole frame",
          A_Constant_Return_Emits_Its_Whole_Frame'Access);

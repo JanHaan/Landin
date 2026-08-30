@@ -631,6 +631,27 @@ package body Landin.IR.Dump is
                            (Signature_Of (Of_Unit, Item, Value)));
                end;
 
+            when Evidence_Address =>
+               return Lead & " evidence "
+                 & Trimmed
+                     (Evidence_Id'Image
+                        (Evidence_Of (Of_Unit, Item, Value)));
+
+            when Evidence_Function =>
+               return Lead & " evidence "
+                 & Trimmed
+                     (Evidence_Id'Image
+                        (Evidence_Of (Of_Unit, Item, Value)))
+                 & " entry "
+                 & Trimmed
+                     (Natural'Image
+                        (Evidence_Entry_Of (Of_Unit, Item, Value)))
+                 & " signature "
+                 & Trimmed
+                     (Signature_Id'Image
+                        (Signature_Of (Of_Unit, Item, Value)))
+                 & Operands (Item, Value);
+
             when Call =>
                declare
                   C : constant Item_Id := Callee_Of (Of_Unit, Item, Value);

@@ -288,6 +288,11 @@ package Landin.IR is
       --  [0870]: a routine's target-neutral code identity and D117
       --  signature descriptor, lowered to one target code address.
       Function_Address,
+      --  R2.70's static table address and one source-order concept-function
+      --  word loaded from a hidden evidence parameter.  The semantic entry
+      --  index is retained; only a backend turns it into a target offset.
+      Evidence_Address,
+      Evidence_Function,
       --  [1920]: every parameter named once and in order, and the type
       --  of the named return, or no value at all.  Both forms carry a
       --  descriptor; only the direct form also names a routine item.
@@ -344,6 +349,7 @@ package Landin.IR is
    type Value_Id is range 0 .. Integer'Last;
    type Signature_Id is range 0 .. Integer'Last;
    type Atom_Set_Id is range 0 .. Integer'Last;
+   type Evidence_Id is range 0 .. Integer'Last;
 
    type Unit is tagged limited private;
 
@@ -435,6 +441,7 @@ package Landin.IR is
    No_Value : constant Value_Id := 0;
    No_Signature : constant Signature_Id := 0;
    No_Atom_Set : constant Atom_Set_Id := 0;
+   No_Evidence : constant Evidence_Id := 0;
 
    type Atom_Array is array (Positive range <>) of Declaration_Id;
    No_Atoms : constant Atom_Array (1 .. 0) := [];
@@ -662,6 +669,52 @@ package Landin.IR is
    function Signatures_Agree
      (Of_Unit : Unit; Left, Right : Signature_Id) return Boolean
      with Pre => Holds (Of_Unit, Left) and then Holds (Of_Unit, Right);
+
+   ------------------------------------------------------------------
+   --  Generic evidence
+   ------------------------------------------------------------------
+
+   function Evidence_Count (Of_Unit : Unit) return Natural;
+
+   function Holds (Of_Unit : Unit; Id : Evidence_Id) return Boolean
+     is (Id /= No_Evidence
+         and then Natural (Id) <= Evidence_Count (Of_Unit));
+
+   function Add_Evidence
+     (Into : in out Unit; Represented : Field_Shape) return Evidence_Id
+     with Pre  => Is_Prepared (Into),
+          Post => Evidence_Count (Into) = Evidence_Count (Into)'Old + 1
+                  and then Holds (Into, Add_Evidence'Result);
+
+   function Evidence_Represented
+     (Of_Unit : Unit; Id : Evidence_Id) return Field_Shape
+     with Pre => Holds (Of_Unit, Id);
+
+   function Evidence_Entry_Count
+     (Of_Unit : Unit; Id : Evidence_Id) return Natural
+     with Pre => Holds (Of_Unit, Id);
+
+   procedure Add_Evidence_Entry
+     (Into      : in out Unit;
+      Evidence  : Evidence_Id;
+      Target    : Item_Id;
+      Signature : Signature_Id)
+     with Pre  => Holds (Into, Evidence)
+                  and then Holds (Into, Target)
+                  and then Holds (Into, Signature),
+          Post => Evidence_Entry_Count (Into, Evidence)
+                    = Evidence_Entry_Count (Into, Evidence)'Old + 1;
+
+   function Evidence_Entry_Target
+     (Of_Unit : Unit; Id : Evidence_Id; Which : Positive) return Item_Id
+     with Pre => Holds (Of_Unit, Id)
+                 and then Which <= Evidence_Entry_Count (Of_Unit, Id);
+
+   function Evidence_Entry_Signature
+     (Of_Unit : Unit; Id : Evidence_Id; Which : Positive)
+      return Signature_Id
+     with Pre => Holds (Of_Unit, Id)
+                 and then Which <= Evidence_Entry_Count (Of_Unit, Id);
 
    ------------------------------------------------------------------
    --  Items
@@ -2256,6 +2309,18 @@ package Landin.IR is
                  and then Op_Of (Of_Unit, Item, Value)
                    in Function_Address | Call;
 
+   function Evidence_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Evidence_Id
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                   in Evidence_Address | Evidence_Function;
+
+   function Evidence_Entry_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     with Pre => Holds (Of_Unit, Item, Value)
+                 and then Op_Of (Of_Unit, Item, Value)
+                   = Evidence_Function;
+
    function Target_Of
      (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Block_Id
      with Pre => Holds (Of_Unit, Item, Value)
@@ -2950,6 +3015,28 @@ package Landin.IR is
                   and then Kind_Of (Into, Target) = Routine
                   and then Signature_Of (Into, Target) /= No_Signature;
 
+   function Emit_Evidence_Address
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Evidence : Evidence_Id;
+      Site     : Landin.Provenance.Origin) return Value_Id
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Evidence)
+                 and then Landin.Provenance.Is_Known (Site);
+
+   function Emit_Evidence_Function
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Table    : Value_Id;
+      Evidence : Evidence_Id;
+      Which    : Positive;
+      Site     : Landin.Provenance.Origin) return Value_Id
+     with Pre => Is_Emitting (Into, Item)
+                 and then Holds (Into, Item, Table)
+                 and then Holds (Into, Evidence)
+                 and then Which <= Evidence_Entry_Count (Into, Evidence)
+                 and then Landin.Provenance.Is_Known (Site);
+
    function Emit_Call
      (Into   : in out Unit;
       Item   : Item_Id;
@@ -3087,6 +3174,8 @@ private
       Named       : Item_Id                   := No_Item;
       Signature   : Signature_Id              := No_Signature;
       Atom_Set    : Atom_Set_Id               := No_Atom_Set;
+      Evidence    : Evidence_Id               := No_Evidence;
+      Evidence_Entry : Natural                := 0;
       Atom_Identity : Declaration_Id           := No_Declaration;
       Source      : Storage                   := (others => <>);
       Source_Field : Natural                  := 0;
@@ -3233,6 +3322,22 @@ private
    package Item_Ref_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Item_Id);
 
+   type Evidence_Entry_Record is record
+      Target    : Item_Id := No_Item;
+      Signature : Signature_Id := No_Signature;
+   end record;
+
+   package Evidence_Entry_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Evidence_Entry_Record);
+
+   type Evidence_Record is record
+      Represented : Field_Shape;
+      Entries     : Run;
+   end record;
+
+   package Evidence_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Evidence_Record);
+
    type Routine_Instance_Item is record
       Position : Positive := 1;
       Template : Declaration_Id := No_Declaration;
@@ -3282,6 +3387,8 @@ private
       Signatures : Signature_Vectors.Vector;
       Signature_Parts : Signature_Part_Vectors.Vector;
       Return_Sources : Return_Source_Vectors.Vector;
+      Evidence   : Evidence_Vectors.Vector;
+      Evidence_Entries : Evidence_Entry_Vectors.Vector;
       Fields     : Field_Shape_Vectors.Vector;
       Slot_Fields : Field_Shape_Vectors.Vector;
       Measurement_Fields : Field_Shape_Vectors.Vector;

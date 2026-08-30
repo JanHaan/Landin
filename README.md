@@ -147,9 +147,11 @@ selection and per-instance inferred errors are complete. R2.50's pointers,
 slices, conventions, local origins and borrows, `escaping`, `from`, consume
 checking and target reference carriers are complete. R2.60's concepts,
 constraints, whole-program conformance register and closed compiler `zeroable`
-family are complete.
+family are complete. R2.70's target-neutral evidence order, target-derived
+Linux/synthetic-32 table layout, hidden evidence arguments, indirect concept
+calls and representation-compatible shared machine bodies are complete.
 
-**Current roadmap work: R2.70 — Implement the generic evidence schema.**
+**Current roadmap work: R2.80 — Implement `any C`.**
 
 Language and architecture questions are resolved when the first vertical
 slice needs them.

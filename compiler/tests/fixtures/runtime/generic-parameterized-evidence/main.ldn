@@ -1,0 +1,41 @@
+equatable: type = concept (t: type)
+    equal: (left: t, right: t) -> (yes: bool)
+end equatable
+
+box: type (t: type) = struct
+    value: t
+end box
+
+equal_box: (t: type, left: box(t), right: box(t)) -> (yes: bool) =
+    yes = true
+end equal_box
+
+(t: type) box(t) is equatable (equal: equal_box)
+
+sized: type = concept (t: type)
+end sized
+
+bounded: type (fixed n: u32) = struct
+    bytes: [n]u8
+end bounded
+
+(fixed n: u32) bounded(n) is sized ()
+
+holder: type (t: type is sized) = struct
+    value: t
+end holder
+
+checked: type = holder(bounded(2))
+
+accept: (t: type is equatable, value: t) -> (code: i32) =
+    if t.equal(value, value) then
+        code = 42
+    else
+        code = 0
+    end if
+end accept
+
+public main: () -> (code: i32) =
+    item: box(i32) = (value: 1)
+    code = accept(item)
+end main

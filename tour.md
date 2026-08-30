@@ -2274,6 +2274,21 @@ because sizeof T and alignof T are constants only where
 the call was specialised, and a generic container that
 cannot ask how big its element is cannot allocate.
 
+The enabled R2.70 bootstrap gives every constrained routine instance hidden
+table pointers for the direct constraint and its separate transitive
+constraint/parent closure, in generic-formal and concept declaration order. A table begins with
+the represented type's target `usize` size and alignment, then carries direct
+concept functions in concept declaration order. `T.entry(...)` loads that
+function word and uses the ordinary indirect-call and error conventions; the
+static type formal still occupies no source ABI position. Linux x86-64 emits
+pointer-width table cells, while the same semantic positions are laid out from
+the synthetic 32-bit target facts. The baseline backend folds two instance
+symbols onto one machine body only after a deliberately narrow IR comparison
+proves every retained operation has the same physical meaning; differing
+representations or signed operations remain separate concrete bodies rather
+than making sharing a correctness assumption. Direct-call specialization and
+the general optimization policy above remain R4.50 work.
+
 ### [1320] Traversal is a concept
 
 Traversal is a concept. This is what 'for x in s' uses.

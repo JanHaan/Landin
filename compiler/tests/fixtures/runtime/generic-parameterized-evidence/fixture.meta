@@ -1,0 +1,5 @@
+class: runtime
+summary: selected family bindings instantiate a generic evidence provider
+program: main.ldn
+status: 42
+constructs: 1230, 1240, 1250, 1290, 1310

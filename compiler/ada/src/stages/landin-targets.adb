@@ -1,3 +1,5 @@
+with Landin.Evidence;
+
 package body Landin.Targets is
 
    function Padded (Text : String) return String;
@@ -84,6 +86,58 @@ package body Landin.Targets is
 
    function Maximum_Object_Size (Facts : Target_Facts) return Byte_Count
      is (2 ** Natural (Facts.Pointer) - 1);
+
+   function Evidence_Cell_Size (Facts : Target_Facts) return Byte_Count
+     is (Byte_Count (Bytes (Pointer_Size (Facts))));
+
+   function Evidence_Size_Offset (Facts : Target_Facts) return Byte_Count
+     is (Evidence_Cell_Size (Facts)
+         * Byte_Count (Landin.Evidence.Size_Position));
+
+   function Evidence_Alignment_Offset
+     (Facts : Target_Facts) return Byte_Count
+     is (Evidence_Cell_Size (Facts)
+         * Byte_Count (Landin.Evidence.Alignment_Position));
+
+   function Evidence_Function_Offset
+     (Facts : Target_Facts;
+      Declaration_Order : Positive) return Byte_Count
+   is
+      Cell : constant Byte_Count := Evidence_Cell_Size (Facts);
+      Position : constant Byte_Count :=
+        Byte_Count (Landin.Evidence.Function_Position (Declaration_Order));
+   begin
+      if Position > Byte_Count'Last / Cell then
+         raise Compiler_Defect with "evidence-table offset overflow";
+      end if;
+      return Position * Cell;
+   end Evidence_Function_Offset;
+
+   function Evidence_Table_Size
+     (Facts : Target_Facts;
+      Function_Count : Natural) return Byte_Count
+   is
+      Cell    : constant Byte_Count := Evidence_Cell_Size (Facts);
+      Count   : constant Byte_Count := Byte_Count (Function_Count);
+      Entries : Byte_Count;
+   begin
+      if Count > Byte_Count'Last - 2 then
+         raise Compiler_Defect with "evidence-table size overflow";
+      end if;
+      Entries := Byte_Count (Landin.Evidence.Entry_Count (Function_Count));
+      if Entries > Byte_Count'Last / Cell
+        or else Entries > Maximum_Object_Size (Facts) / Cell
+      then
+         raise Compiler_Defect with "evidence-table size overflow";
+      end if;
+      --  A pointer-width cell is aligned to pointer alignment on every
+      --  described target, so the contiguous extent is already aligned.
+      return Entries * Cell;
+   end Evidence_Table_Size;
+
+   function Evidence_Table_Alignment
+     (Facts : Target_Facts) return Byte_Alignment
+     is (Pointer_Alignment (Facts));
 
    function Is_Power_Of_Two (Value : Byte_Alignment) return Boolean is
       Remaining : Natural := Natural (Value);

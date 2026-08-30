@@ -8036,3 +8036,76 @@ semantic key for later evidence work.
 `negative/nonzeroable-zero-length-constraint`,
 `negative/compiler-conformance-reserved`, the checker register case, and the
 existing aggregate zero-image fixtures.
+
+### D144 — Evidence order is semantic and physical layout is target-derived
+
+**The tour said** that generic code receives a table of concept functions and
+that the evidence also carries the represented type's size and alignment
+[1310]. It did not state table identity, member order, hidden-argument order,
+composition, the physical cell layout, or how the first backend may share code
+without making an x86 representation the semantic schema.
+
+**Chosen:** one evidence identity realizes one concrete D142 conformance key:
+the normalized represented type, direct concept identity and ordered input-type
+tuple. Parameterized families materialize only concrete keys selected by
+lookup; an ordinary collected key may be emitted without waiting for a call.
+The target-neutral logical run is the represented type's size, its alignment,
+then every direct concept function in concept declaration order. Conformance
+labels select providers and never reorder that run. Parent concepts retain the
+separate conformances D142 requires rather than flattening their entries into a
+child table. The compiler `zeroable` conformance consequently has only the two
+layout members and synthesizes no source provider.
+
+Size is the complete padded target-byte size of one represented value and
+alignment is that value's target-byte alignment. Both are runtime `usize`
+values. A direct function member retains its substituted concrete signature and
+names the ordinary provider routine or selected generic provider instance; its
+concrete error set uses D109's existing orthogonal call outcome. The semantic
+schema contains no byte offset, register, relocation spelling or host-sized
+integer.
+
+Every physical member is one target pointer-width cell, and the table is
+aligned to the target pointer alignment. Therefore Linux x86-64 places size,
+alignment and the first function at offsets 0, 8 and 16, while synthetic-32
+places them at 0, 4 and 8. A table with `N` direct functions occupies
+`(N + 2) * pointer_bytes`. `Landin.Evidence` owns semantic positions;
+`Landin.Targets` alone derives these offsets, extent and alignment.
+
+A concrete generic call passes the direct table and then each distinct table in
+its represented-formal constraint/parent closure, depth-first in concept
+declaration order, for every constrained type formal in generic-formal order.
+This preserves D142's separate parent conformances while making inherited
+entries reachable without flattening a child table. The existing caller-owned
+aggregate result address remains first, evidence pointers follow, and written
+runtime parameters remain after them in source signature order.
+Static type and fixed formals still create no runtime position. Inside the
+active routine view, `T.entry(...)` loads the declaration-order function word
+from that hidden table and makes the ordinary verified indirect call. Size and
+alignment remain table members even where the current concrete view can answer
+the same measurement directly, so later shared and `any` consumers use this
+one ABI.
+
+The Linux baseline may alias two concrete generic symbols to one emitted body
+only when a bounded IR comparison proves their signatures, slots, operand graph
+and allowed operations have one physical meaning on that target. Evidence
+identity may differ because it arrives through the hidden parameter; signed
+arithmetic, aggregates, static table addresses and every unproved operation
+prevent folding. A failed sharing proof emits separate concrete bodies and
+cannot affect source correctness. This is baseline code folding, not R4.50's
+direct-call specialization policy.
+
+**The alternatives:** putting function words first was viable, but makes the
+two representation facts every evidence consumer needs a variable-position
+suffix; the fixed prefix was chosen. Reordering by conformance labels would
+make source-equivalent labelled payloads ABI-different. Flattening parents
+would make a child ABI change when a separately registered parent changed.
+Encoding `.quad` or eight-byte offsets in IR would turn the first backend into
+the language definition. Calling providers directly from constrained generic
+bodies would leave a table that no executed path proved. All were declined.
+
+**Pinned by** `runtime/generic-evidence-indirect`,
+`runtime/generic-composed-evidence`, `runtime/generic-parameterized-evidence`,
+`negative/parameterized-conformance-entry-signature-mismatch`; the target case
+`evidence ordering and layout`; the backend case `generic evidence is ordered indirect
+and shared`; IR verifier evidence identity, entry and signature checks; and the
+recorded target and lowering artefacts.

@@ -194,7 +194,11 @@ and target reference carriers are complete. R2.60's concepts, constraints,
 whole-program conformance register and closed compiler `zeroable` family are
 complete.
 
-**Current roadmap work: R2.70 — Implement the generic evidence schema.**
+R2.70's target-neutral evidence order, target-derived Linux/synthetic-32 table
+layout, hidden evidence arguments, indirect concept calls and
+representation-compatible shared machine bodies are complete.
+
+**Current roadmap work: R2.80 — Implement `any C`.**
 
 `refine` runs the frontend, lowers and
 verifies target-neutral IR, emits Linux x86-64 assembly, and can assemble and
