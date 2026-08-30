@@ -1,5 +1,5 @@
 class: negative
-summary: D138 reports mathematical overflow, impossible fixed operands and a syntactically valid user call without executing it
+summary: D138 reports arithmetic boundaries and validates forbidden calls in ordinary, short-circuited and later elsif conditions without executing them
 program: program.ldn
-codes: L0300, L0306, L0306, L0305
+codes: L0300, L0306, L0306, L0305, L0305
 constructs: 0290, 0300, 1500, 1540, 1820, 1950

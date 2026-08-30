@@ -1,0 +1,5 @@
+fixed if compiler.arch == arm64 then
+    unavailable: i32 = 42
+else
+    selected: i32 = unavailable
+end if

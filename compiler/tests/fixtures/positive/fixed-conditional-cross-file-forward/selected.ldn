@@ -1,0 +1,5 @@
+fixed if compiler.arch == x86_64 then
+    selected: i32 = 42
+else
+    wrong: missing = unknown
+end if

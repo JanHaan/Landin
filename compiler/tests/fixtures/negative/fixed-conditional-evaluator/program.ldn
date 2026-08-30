@@ -11,3 +11,7 @@ end if
 
 fixed if f() == 0 then
 end if
+
+fixed if true then
+elsif false and f() == 0 then
+end if

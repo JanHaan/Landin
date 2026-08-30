@@ -14315,6 +14315,34 @@ package body Landin.Stages.Checking is
          Check_Operands (Of_Tree, Runs, Whole_Fold => False);
       end Check_Routine_Body;
 
+      --  D138 presents its active declarations through the same traversal
+      --  as ordinary module declarations.  This action deliberately knows
+      --  nothing about arms, so it cannot descend into an inactive one.
+      procedure Check_Declaration (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      procedure Check_Declaration (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+      begin
+         case Syn.Kind (Of_Tree, Node) is
+            when Syn.Type_Declaration =>
+               declare
+                  Ignored : constant Ty.Type_Kind := Settled_Type
+                    (Declaration_At (Syn.Source_Of (Of_Tree), Node));
+               begin
+                  pragma Unreferenced (Ignored);
+               end;
+            when Syn.Binding =>
+               Check_Module_Value (Of_Tree, Node);
+               Check_Statement (Of_Tree, Node, Ty.Not_Typed);
+               Check_Module_Fold (Of_Tree, Node);
+               Check_Operands (Of_Tree, Syn.Value_Of (Of_Tree, Node),
+                               Whole_Fold => True);
+            when Syn.Function_Declaration =>
+               Check_Routine_Body (Of_Tree, Node);
+            when others =>
+               null;
+         end case;
+      end Check_Declaration;
+
       ------------------------------------------------------------
 
    begin
@@ -14426,7 +14454,11 @@ package body Landin.Stages.Checking is
               Tree_For (Nth_Source (Context, Index));
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all) loop
-               if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function then
+               if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function
+                 and then Landin.Configuration.Is_Active
+                   (Configurations (Context).all,
+                    Syn.Source_Of (Of_Tree.all), Node)
+               then
                   declare
                      Held : constant Ty.Type_Kind :=
                        Synthesise (Of_Tree.all, Node);
@@ -14450,6 +14482,9 @@ package body Landin.Stages.Checking is
          begin
             for Node in Syn.Node_Id'(1) .. Syn.Last_Node (Of_Tree.all) loop
                if Syn.Kind (Of_Tree.all, Node) = Syn.Anonymous_Function
+                 and then Landin.Configuration.Is_Active
+                   (Configurations (Context).all,
+                    Syn.Source_Of (Of_Tree.all), Node)
                  and then Landin.Checking.Signature_Of
                    (Types.all, Of_Tree.all, Node)
                      /= Landin.Checking.No_Signature
@@ -14467,125 +14502,18 @@ package body Landin.Stages.Checking is
       Validate_Function_Images;
       Validate_Module_Images;
 
-      --  Pass three: the bodies, one tree at a time in source order.
+      --  Pass three: every active declaration, in source order.  The
+      --  configuration traversal splices nested selected declarations into
+      --  this same pass and never offers an inactive declaration to it.
       for Index in 1 .. Source_Count (Context) loop
          declare
             Of_Tree : constant not null access constant Syn.Tree :=
               Tree_For (Nth_Source (Context, Index));
+            procedure Walk is new
+              Landin.Configuration.For_Each_Active_Declaration
+                (Check_Declaration);
          begin
-            for Position in
-              1 .. Syn.Declaration_Count (Of_Tree.all)
-            loop
-               declare
-                  Node : constant Syn.Node_Id :=
-                    Syn.Nth_Declaration (Of_Tree.all, Position);
-               begin
-                  case Syn.Kind (Of_Tree.all, Node) is
-                     --  [1795] declares no value, so there is nothing
-                     --  here to fold, to assign or to read.  Asking what
-                     --  it names settles its type and reports a name that
-                     --  is not a type, which is the whole of its check.
-                     when Syn.Type_Declaration =>
-                        declare
-                           Ignored : constant Ty.Type_Kind :=
-                             Settled_Type (Declaration_At
-                                             (Syn.Source_Of (Of_Tree.all),
-                                              Node));
-                        begin
-                           pragma Assert (Ignored = Ignored);
-                        end;
-
-                     when Syn.Binding =>
-                        Check_Module_Value (Of_Tree.all, Node);
-                        Check_Statement
-                          (Of_Tree.all, Node, Ty.Not_Typed);
-                        Check_Module_Fold (Of_Tree.all, Node);
-                        Check_Operands
-                          (Of_Tree.all,
-                           Syn.Value_Of (Of_Tree.all, Node),
-                           Whole_Fold => True);
-
-                     when Syn.Function_Declaration =>
-                        Check_Routine_Body (Of_Tree.all, Node);
-
-                     when others =>
-                        null;
-                  end case;
-               end;
-            end loop;
-         end;
-      end loop;
-
-      --  D138 declarations are checked through the same module paths, but
-      --  only after configuration has selected their arm.  The AST stays
-      --  intact; this is the active view rather than a syntax rewrite.
-      for Index in 1 .. Source_Count (Context) loop
-         declare
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Tree_For (Nth_Source (Context, Index));
-         begin
-            for Position in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
-               declare
-                  Conditional : constant Syn.Node_Id :=
-                    Syn.Nth_Declaration (Of_Tree.all, Position);
-               begin
-                  if Syn.Kind (Of_Tree.all, Conditional)
-                    = Syn.Fixed_Conditional
-                  then
-                     for Arm in 1 .. Syn.Fixed_Arm_Count
-                       (Of_Tree.all, Conditional)
-                     loop
-                        declare
-                           This : constant Syn.Node_Id := Syn.Nth_Fixed_Arm
-                             (Of_Tree.all, Conditional, Arm);
-                        begin
-                           for Which in 1 .. Syn.Fixed_Declaration_Count
-                             (Of_Tree.all, This)
-                           loop
-                              declare
-                                 Node : constant Syn.Node_Id :=
-                                   Syn.Nth_Fixed_Declaration
-                                     (Of_Tree.all, This, Which);
-                              begin
-                                 if Landin.Configuration.Is_Active
-                                   (Configurations (Context).all,
-                                    Syn.Source_Of (Of_Tree.all), Node)
-                                 then
-                                    case Syn.Kind (Of_Tree.all, Node) is
-                                       when Syn.Type_Declaration =>
-                                          declare
-                                             Ignored : constant Ty.Type_Kind :=
-                                               Settled_Type (Declaration_At
-                                                 (Syn.Source_Of (Of_Tree.all),
-                                                  Node));
-                                          begin
-                                             pragma Unreferenced (Ignored);
-                                          end;
-                                       when Syn.Binding =>
-                                          Check_Module_Value
-                                            (Of_Tree.all, Node);
-                                          Check_Statement
-                                            (Of_Tree.all, Node, Ty.Not_Typed);
-                                          Check_Module_Fold
-                                            (Of_Tree.all, Node);
-                                          Check_Operands
-                                            (Of_Tree.all,
-                                             Syn.Value_Of (Of_Tree.all, Node),
-                                             Whole_Fold => True);
-                                       when Syn.Function_Declaration =>
-                                          Check_Routine_Body
-                                            (Of_Tree.all, Node);
-                                       when others =>
-                                          null;
-                                    end case;
-                                 end if;
-                              end;
-                           end loop;
-                        end;
-                     end loop;
-                  end if;
-               end;
-            end loop;
+            Walk (Configurations (Context).all, Of_Tree.all);
          end;
       end loop;
 
