@@ -1,0 +1,5 @@
+class: negative
+summary: a selected generic provider must have the substituted concept entry signature
+program: main.ldn
+codes: L0301
+constructs: 1230, 1240, 1250, 1260, 1290, 1310

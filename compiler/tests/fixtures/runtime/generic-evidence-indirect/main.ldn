@@ -1,0 +1,35 @@
+bad: atom
+problem: type = bad
+
+ordered: type = concept (t: type)
+    less: (left: t, right: t) -> (yes: bool) ! problem
+end ordered
+
+less_i32: (left: i32, right: i32) -> (yes: bool) ! problem =
+    fail bad when left >= right
+    yes = true
+end less_i32
+
+less_u32: (left: u32, right: u32) -> (yes: bool) ! problem =
+    fail bad when left >= right
+    yes = true
+end less_u32
+
+i32 is ordered (less: less_i32)
+u32 is ordered (less: less_u32)
+
+is_less: (t: type is ordered, left: t, right: t) -> (yes: bool) =
+    yes = t.less(left, right) else false
+end is_less
+
+public main: () -> (code: i32) =
+    a: i32 = 1
+    b: i32 = 2
+    c: u32 = 3
+    d: u32 = 4
+    if is_less(a, b) and is_less(c, d) and not is_less(d, c) then
+        code = 42
+    else
+        code = 0
+    end if
+end main

@@ -9,13 +9,18 @@ package body Landin.Backend.X86_64 is
 
    use type Landin.Targets.Bit_Width;
    use type Landin.Targets.Byte_Count;
+   use type Landin.Targets.Scalar_Size;
    use type Landin.IR.Atom_Set_Id;
+   use type Landin.IR.Block_Id;
    use type Landin.IR.Declaration_Id;
    use type Landin.IR.Item_Kind;
    use type Landin.IR.Item_Id;
+   use type Landin.IR.Nominal_Type_Id;
    use type Landin.IR.Opcode;
+   use type Landin.IR.Parameter_Convention;
    use type Landin.IR.Signature_Id;
    use type Landin.IR.Slot_Id;
+   use type Landin.IR.Value_Id;
    use type Landin.IR.Element_Total;
    use type Landin.IR.Field_Image_Form;
    use type Landin.IR.Field_Shape_Kind;
@@ -257,6 +262,7 @@ package body Landin.Backend.X86_64 is
       --  routine instead receives one assembler-local name derived only from
       --  its deterministic Unit item identity.
       function Symbol (Item : Landin.IR.Item_Id) return String;
+      function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String;
       function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean;
 
       function Symbol (Item : Landin.IR.Item_Id) return String is
@@ -270,6 +276,10 @@ package body Landin.Backend.X86_64 is
          return Landin.Source.Names.Spelling
                   (Names, Landin.Resolution.Name_Of (Meanings, Declared));
       end Symbol;
+
+      function Evidence_Symbol (Id : Landin.IR.Evidence_Id) return String
+        is (".Llandin_evidence_"
+            & Trimmed (Landin.IR.Evidence_Id'Image (Id)));
 
       function Is_Public_Item (Item : Landin.IR.Item_Id) return Boolean
       is
@@ -287,6 +297,259 @@ package body Landin.Backend.X86_64 is
         return String
         is (".L" & Trimmed (Landin.IR.Item_Id'Image (Item))
             & "_" & Trimmed (Landin.IR.Block_Id'Image (Block)));
+
+      --  R2.70's baseline sharing is representation-class sharing: two
+      --  concrete views may use one machine body only when every retained
+      --  operation has the same physical meaning.  Evidence identity may
+      --  differ, because the hidden table parameter supplies that choice;
+      --  signed arithmetic and every operation carrying another concrete
+      --  identity remain separate rather than being guessed equivalent.
+      Shared_With : array
+        (1 .. Positive'Max (1, Landin.IR.Item_Count (Of_Unit))) of
+          Landin.IR.Item_Id := [others => Landin.IR.No_Item];
+
+      function Carriers_Agree
+        (Left, Right : Landin.Types.Type_Kind) return Boolean;
+      function Signatures_Have_One_ABI
+        (Left, Right : Landin.IR.Signature_Id;
+         Limit       : Natural) return Boolean;
+      function Routines_Can_Share
+        (Left, Right : Landin.IR.Item_Id) return Boolean;
+
+      function Carriers_Agree
+        (Left, Right : Landin.Types.Type_Kind) return Boolean
+      is
+      begin
+         if Left = Right then
+            return True;
+         elsif Left in Landin.Types.Scalar_Name
+           and then Right in Landin.Types.Scalar_Name
+         then
+            return Landin.Types.Storage_Size
+              (Landin.Types.Scalar_Name (Left), Facts)
+              = Landin.Types.Storage_Size
+                  (Landin.Types.Scalar_Name (Right), Facts);
+         end if;
+         return False;
+      end Carriers_Agree;
+
+      function Signatures_Have_One_ABI
+        (Left, Right : Landin.IR.Signature_Id;
+         Limit       : Natural) return Boolean
+      is
+         function Parts_Agree
+           (A, B : Landin.IR.Signature_Part) return Boolean;
+
+         function Parts_Agree
+           (A, B : Landin.IR.Signature_Part) return Boolean
+         is
+         begin
+            if A.Convention /= B.Convention
+              or else A.Escaping /= B.Escaping
+              or else not Carriers_Agree (A.Kind, B.Kind)
+            then
+               return False;
+            elsif A.Kind = Landin.Types.Function_Value then
+               return Limit > 0
+                 and then Signatures_Have_One_ABI
+                   (A.Signature, B.Signature, Limit - 1);
+            elsif A.Kind in Landin.Types.Aggregate
+                                | Landin.Types.Fixed_Array
+            then
+               return A.Kind = B.Kind
+                 and then A.Length = B.Length
+                 and then A.Element = B.Element
+                 and then A.Nominal = B.Nominal;
+            end if;
+            return True;
+         end Parts_Agree;
+      begin
+         if Left = Right then
+            return True;
+         elsif Limit = 0
+           or else Landin.IR.Signature_Parameter_Count (Of_Unit, Left)
+             /= Landin.IR.Signature_Parameter_Count (Of_Unit, Right)
+           or else Landin.IR.Signature_Result_Count (Of_Unit, Left)
+             /= Landin.IR.Signature_Result_Count (Of_Unit, Right)
+           or else
+             ((Landin.IR.Signature_Errors (Of_Unit, Left)
+                 = Landin.IR.No_Atom_Set)
+              /= (Landin.IR.Signature_Errors (Of_Unit, Right)
+                    = Landin.IR.No_Atom_Set))
+         then
+            return False;
+         end if;
+         if Landin.IR.Signature_Errors (Of_Unit, Left)
+              /= Landin.IR.No_Atom_Set
+           and then not Landin.IR.Atom_Sets_Agree
+             (Of_Unit,
+              Landin.IR.Signature_Errors (Of_Unit, Left),
+              Landin.IR.Signature_Errors (Of_Unit, Right))
+         then
+            return False;
+         end if;
+         for Index in 1 .. Landin.IR.Signature_Parameter_Count
+           (Of_Unit, Left)
+         loop
+            if not Parts_Agree
+              (Landin.IR.Nth_Signature_Parameter (Of_Unit, Left, Index),
+               Landin.IR.Nth_Signature_Parameter (Of_Unit, Right, Index))
+            then
+               return False;
+            end if;
+         end loop;
+         for Index in 1 .. Landin.IR.Signature_Result_Count
+           (Of_Unit, Left)
+         loop
+            if not Parts_Agree
+              (Landin.IR.Nth_Signature_Result (Of_Unit, Left, Index),
+               Landin.IR.Nth_Signature_Result (Of_Unit, Right, Index))
+            then
+               return False;
+            end if;
+         end loop;
+         return True;
+      end Signatures_Have_One_ABI;
+
+      function Routines_Can_Share
+        (Left, Right : Landin.IR.Item_Id) return Boolean
+      is
+      begin
+         if Landin.IR.Generic_Template_Of (Of_Unit, Left)
+              = Landin.IR.No_Declaration
+           or else Landin.IR.Generic_Template_Of (Of_Unit, Left)
+             /= Landin.IR.Generic_Template_Of (Of_Unit, Right)
+           or else Landin.IR.Slot_Count (Of_Unit, Left)
+             /= Landin.IR.Slot_Count (Of_Unit, Right)
+           or else Landin.IR.Block_Count (Of_Unit, Left)
+             /= Landin.IR.Block_Count (Of_Unit, Right)
+           or else not Signatures_Have_One_ABI
+             (Landin.IR.Signature_Of (Of_Unit, Left),
+              Landin.IR.Signature_Of (Of_Unit, Right),
+              Landin.IR.Signature_Count (Of_Unit) + 1)
+         then
+            return False;
+         end if;
+         for Slot in 1 .. Landin.IR.Slot_Count (Of_Unit, Left) loop
+            if Landin.IR.Is_Aggregate
+                 (Of_Unit, Left, Landin.IR.Slot_Id (Slot))
+              or else Landin.IR.Is_Array
+                (Of_Unit, Left, Landin.IR.Slot_Id (Slot))
+              or else Landin.IR.Is_Address
+                (Of_Unit, Left, Landin.IR.Slot_Id (Slot))
+              or else Landin.IR.Is_Aggregate
+                (Of_Unit, Right, Landin.IR.Slot_Id (Slot))
+              or else Landin.IR.Is_Array
+                (Of_Unit, Right, Landin.IR.Slot_Id (Slot))
+              or else Landin.IR.Is_Address
+                (Of_Unit, Right, Landin.IR.Slot_Id (Slot))
+              or else not Carriers_Agree
+                (Landin.IR.Type_Of
+                   (Of_Unit, Left, Landin.IR.Slot_Id (Slot)),
+                 Landin.IR.Type_Of
+                   (Of_Unit, Right, Landin.IR.Slot_Id (Slot)))
+            then
+               return False;
+            end if;
+         end loop;
+         for Block in 1 .. Landin.IR.Block_Count (Of_Unit, Left) loop
+            if Landin.IR.Length
+                 (Of_Unit, Left, Landin.IR.Block_Id (Block))
+              /= Landin.IR.Length
+                (Of_Unit, Right, Landin.IR.Block_Id (Block))
+            then
+               return False;
+            end if;
+            for Position in 1 .. Landin.IR.Length
+              (Of_Unit, Left, Landin.IR.Block_Id (Block))
+            loop
+               declare
+                  A : constant Landin.IR.Value_Id := Landin.IR.Nth_Value
+                    (Of_Unit, Left, Landin.IR.Block_Id (Block), Position);
+                  B : constant Landin.IR.Value_Id := Landin.IR.Nth_Value
+                    (Of_Unit, Right, Landin.IR.Block_Id (Block), Position);
+                  Op : constant Landin.IR.Opcode :=
+                    Landin.IR.Op_Of (Of_Unit, Left, A);
+               begin
+                  if Op not in Landin.IR.Number | Landin.IR.Truth
+                               | Landin.IR.Load | Landin.IR.Store
+                               | Landin.IR.Evidence_Function
+                               | Landin.IR.Indirect_Call
+                               | Landin.IR.Failure_Test | Landin.IR.Jump
+                               | Landin.IR.Branch | Landin.IR.Leave
+                    or else Op /= Landin.IR.Op_Of (Of_Unit, Right, B)
+                    or else not Carriers_Agree
+                      (Landin.IR.Result_Of (Of_Unit, Left, A),
+                       Landin.IR.Result_Of (Of_Unit, Right, B))
+                    or else Landin.IR.Operand_Count (Of_Unit, Left, A)
+                      /= Landin.IR.Operand_Count (Of_Unit, Right, B)
+                  then
+                     return False;
+                  end if;
+                  for Operand in 1 .. Landin.IR.Operand_Count
+                    (Of_Unit, Left, A)
+                  loop
+                     if Landin.IR.Nth_Operand
+                       (Of_Unit, Left, A, Operand)
+                       /= Landin.IR.Nth_Operand
+                         (Of_Unit, Right, B, Operand)
+                     then
+                        return False;
+                     end if;
+                  end loop;
+                  if Op = Landin.IR.Number
+                    and then
+                      (Landin.IR.Number_Of (Of_Unit, Left, A)
+                         /= Landin.IR.Number_Of (Of_Unit, Right, B)
+                       or else Landin.IR.Is_Negated (Of_Unit, Left, A)
+                         /= Landin.IR.Is_Negated (Of_Unit, Right, B))
+                  then
+                     return False;
+                  elsif Op = Landin.IR.Truth
+                    and then Landin.IR.Truth_Of (Of_Unit, Left, A)
+                      /= Landin.IR.Truth_Of (Of_Unit, Right, B)
+                  then
+                     return False;
+                  elsif Op in Landin.IR.Load | Landin.IR.Store
+                    and then Landin.IR.Slot_Of (Of_Unit, Left, A)
+                      /= Landin.IR.Slot_Of (Of_Unit, Right, B)
+                  then
+                     return False;
+                  elsif Op = Landin.IR.Evidence_Function
+                    and then Landin.IR.Evidence_Entry_Of
+                      (Of_Unit, Left, A)
+                      /= Landin.IR.Evidence_Entry_Of (Of_Unit, Right, B)
+                  then
+                     return False;
+                  elsif Op = Landin.IR.Indirect_Call
+                    and then
+                      (not Signatures_Have_One_ABI
+                         (Landin.IR.Call_Signature (Of_Unit, Left, A),
+                          Landin.IR.Call_Signature (Of_Unit, Right, B),
+                          Landin.IR.Signature_Count (Of_Unit) + 1)
+                       or else Landin.IR.Failure_Slot_Of (Of_Unit, Left, A)
+                         /= Landin.IR.Failure_Slot_Of (Of_Unit, Right, B))
+                  then
+                     return False;
+                  elsif Op = Landin.IR.Jump
+                    and then Landin.IR.Target_Of (Of_Unit, Left, A)
+                      /= Landin.IR.Target_Of (Of_Unit, Right, B)
+                  then
+                     return False;
+                  elsif Op = Landin.IR.Branch
+                    and then
+                      (Landin.IR.Target_Of (Of_Unit, Left, A)
+                         /= Landin.IR.Target_Of (Of_Unit, Right, B)
+                       or else Landin.IR.Alternative_Of (Of_Unit, Left, A)
+                         /= Landin.IR.Alternative_Of (Of_Unit, Right, B))
+                  then
+                     return False;
+                  end if;
+               end;
+            end loop;
+         end loop;
+         return True;
+      end Routines_Can_Share;
 
       function Cell (Offset : Landin.Targets.Byte_Count) return String
         is ("-" & Trimmed (Landin.Targets.Byte_Count'Image (Offset))
@@ -2224,6 +2487,31 @@ package body Landin.Backend.X86_64 is
                      & "(%rip), %rax");
                   Emit ("movq %rax, " & Value_Cell (Value));
 
+               when Landin.IR.Evidence_Address =>
+                  Emit
+                    ("leaq "
+                     & Evidence_Symbol
+                         (Landin.IR.Evidence_Of (Of_Unit, Item, Value))
+                     & "(%rip), %rax");
+                  Emit ("movq %rax, " & Value_Cell (Value));
+
+               when Landin.IR.Evidence_Function =>
+                  declare
+                     Which : constant Natural :=
+                       Landin.IR.Evidence_Entry_Of (Of_Unit, Item, Value);
+                     Offset : constant Landin.Targets.Byte_Count :=
+                       Landin.Targets.Evidence_Function_Offset
+                         (Facts, Positive (Which));
+                  begin
+                     Emit ("movq " & Value_Cell (Operand (1)) & ", %rax");
+                     Emit
+                       ("movq "
+                        & Trimmed
+                            (Landin.Targets.Byte_Count'Image (Offset))
+                        & "(%rax), %rax");
+                     Emit ("movq %rax, " & Value_Cell (Value));
+                  end;
+
                when Landin.IR.Call | Landin.IR.Indirect_Call =>
                   --  [1920] names every parameter once and in order, so the
                   --  operands are already the argument list.  The first six
@@ -2848,7 +3136,9 @@ package body Landin.Backend.X86_64 is
                         Answer := Of_Value (Operand_Of (Value, 1));
 
                      when Landin.IR.Failure_Test
-                        | Landin.IR.Function_Address | Landin.IR.Call
+                        | Landin.IR.Function_Address
+                        | Landin.IR.Evidence_Address
+                        | Landin.IR.Evidence_Function | Landin.IR.Call
                         | Landin.IR.Load_Indirect | Landin.IR.Store_Indirect
                         | Landin.IR.Indirect_Call | Landin.IR.Storage_Address
                         | Landin.IR.Place_Address | Landin.IR.Slice_Address
@@ -3820,12 +4110,35 @@ package body Landin.Backend.X86_64 is
    begin
       Put (Character'Val (9) & ".text");
 
+      for Right in 2 .. Landin.IR.Item_Count (Of_Unit) loop
+         if Landin.IR.Kind_Of
+           (Of_Unit, Landin.IR.Item_Id (Right)) = Landin.IR.Routine
+         then
+            for Left in 1 .. Right - 1 loop
+               if Landin.IR.Kind_Of
+                 (Of_Unit, Landin.IR.Item_Id (Left)) = Landin.IR.Routine
+                 and then Routines_Can_Share
+                   (Landin.IR.Item_Id (Left), Landin.IR.Item_Id (Right))
+               then
+                  Shared_With (Right) := Landin.IR.Item_Id (Left);
+                  exit;
+               end if;
+            end loop;
+         end if;
+      end loop;
+
       for Index in 1 .. Landin.IR.Item_Count (Of_Unit) loop
          declare
             Item : constant Landin.IR.Item_Id := Landin.IR.Item_Id (Index);
          begin
             if Landin.IR.Kind_Of (Of_Unit, Item) = Landin.IR.Routine then
-               Emit_Routine (Item);
+               if Shared_With (Index) = Landin.IR.No_Item then
+                  Emit_Routine (Item);
+               else
+                  Emit
+                    (".set " & Symbol (Item) & ", "
+                     & Symbol (Shared_With (Index)));
+               end if;
             elsif Is_All_Zero (Item) then
                Any_Reserved := True;
             else
@@ -3833,6 +4146,44 @@ package body Landin.Backend.X86_64 is
             end if;
          end;
       end loop;
+
+      if Landin.IR.Evidence_Count (Of_Unit) > 0 then
+         Put (Character'Val (9) & ".section .data.rel.ro.local,""aw""");
+         for Position in 1 .. Landin.IR.Evidence_Count (Of_Unit) loop
+            declare
+               Evidence : constant Landin.IR.Evidence_Id :=
+                 Landin.IR.Evidence_Id (Position);
+               Size : Landin.Targets.Byte_Count;
+               Alignment : Landin.Targets.Byte_Alignment;
+            begin
+               Landin.Backend.Field_Extent
+                 (Of_Unit, Landin.IR.Evidence_Represented
+                    (Of_Unit, Evidence), Facts, Size, Alignment);
+               Emit
+                 (".balign "
+                  & Trimmed
+                      (Landin.Targets.Byte_Alignment'Image
+                         (Landin.Targets.Pointer_Alignment (Facts))));
+               Put (Evidence_Symbol (Evidence) & ":");
+               Emit
+                 (".quad "
+                  & Trimmed (Landin.Targets.Byte_Count'Image (Size)));
+               Emit
+                 (".quad "
+                  & Trimmed
+                      (Landin.Targets.Byte_Alignment'Image (Alignment)));
+               for Which in 1 .. Landin.IR.Evidence_Entry_Count
+                 (Of_Unit, Evidence)
+               loop
+                  Emit
+                    (".quad "
+                     & Symbol
+                         (Landin.IR.Evidence_Entry_Target
+                            (Of_Unit, Evidence, Which)));
+               end loop;
+            end;
+         end loop;
+      end if;
 
       --  Data follows every routine rather than interrupting them, and each
       --  section is one run, so each directive is written once however many

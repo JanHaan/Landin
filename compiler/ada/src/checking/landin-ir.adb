@@ -398,6 +398,70 @@ package body Landin.IR is
      is (Signatures_Agree
            (Of_Unit, Left, Right, Signature_Count (Of_Unit) + 1));
 
+   function Evidence_Count (Of_Unit : Unit) return Natural
+     is (Natural (Of_Unit.Evidence.Length));
+
+   function Add_Evidence
+     (Into : in out Unit; Represented : Field_Shape) return Evidence_Id
+   is
+   begin
+      Into.Evidence.Append
+        (Evidence_Record'
+           (Represented => Represented,
+            Entries => (First => Natural (Into.Evidence_Entries.Length),
+                        Count => 0)));
+      return Evidence_Id (Into.Evidence.Last_Index);
+   end Add_Evidence;
+
+   function Evidence_Represented
+     (Of_Unit : Unit; Id : Evidence_Id) return Field_Shape
+     is (Of_Unit.Evidence (Positive (Id)).Represented);
+
+   function Evidence_Entry_Count
+     (Of_Unit : Unit; Id : Evidence_Id) return Natural
+     is (Of_Unit.Evidence (Positive (Id)).Entries.Count);
+
+   procedure Add_Evidence_Entry
+     (Into      : in out Unit;
+      Evidence  : Evidence_Id;
+      Target    : Item_Id;
+      Signature : Signature_Id)
+   is
+      Held : Evidence_Record := Into.Evidence (Positive (Evidence));
+   begin
+      if Kind_Of (Into, Target) /= Routine then
+         raise Landin.Compiler_Defect with
+           "an evidence entry target is not a routine";
+      end if;
+      if Held.Entries.First + Held.Entries.Count
+           /= Natural (Into.Evidence_Entries.Length)
+      then
+         raise Landin.Compiler_Defect with
+           "evidence entries were appended out of table order";
+      end if;
+      Into.Evidence_Entries.Append
+        (Evidence_Entry_Record'(Target => Target, Signature => Signature));
+      Held.Entries.Count := Held.Entries.Count + 1;
+      Into.Evidence (Positive (Evidence)) := Held;
+   end Add_Evidence_Entry;
+
+   function Evidence_Entry_Target
+     (Of_Unit : Unit; Id : Evidence_Id; Which : Positive) return Item_Id
+   is
+      Members : constant Run := Of_Unit.Evidence (Positive (Id)).Entries;
+   begin
+      return Of_Unit.Evidence_Entries (Members.First + Which).Target;
+   end Evidence_Entry_Target;
+
+   function Evidence_Entry_Signature
+     (Of_Unit : Unit; Id : Evidence_Id; Which : Positive)
+      return Signature_Id
+   is
+      Members : constant Run := Of_Unit.Evidence (Positive (Id)).Entries;
+   begin
+      return Of_Unit.Evidence_Entries (Members.First + Which).Signature;
+   end Evidence_Entry_Signature;
+
    function Add_Item
      (Into     : in out Unit;
       Kind     : Item_Kind;
@@ -1559,8 +1623,8 @@ package body Landin.IR is
         Held (Of_Unit, Item, Value);
    begin
       if Instruction_Held.Op
-           in Function_Address | Load | Load_Datum | Load_Field
-              | Load_Element | Load_Variant_Field
+           in Function_Address | Evidence_Function | Load | Load_Datum
+              | Load_Field | Load_Element | Load_Variant_Field
       then
          return Instruction_Held.Signature;
       end if;
@@ -1774,6 +1838,14 @@ package body Landin.IR is
    function Callee_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Item_Id
      is (Held (Of_Unit, Item, Value).Named);
+
+   function Evidence_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Evidence_Id
+     is (Held (Of_Unit, Item, Value).Evidence);
+
+   function Evidence_Entry_Of
+     (Of_Unit : Unit; Item : Item_Id; Value : Value_Id) return Natural
+     is (Held (Of_Unit, Item, Value).Evidence_Entry);
 
    function Target_Of (Of_Unit : Unit; Item : Item_Id; Value : Value_Id)
      return Block_Id
@@ -3081,6 +3153,43 @@ package body Landin.IR is
                          Named => Target,
                          Signature => Signature_Of (Into, Target),
                          others => <>)));
+
+   function Emit_Evidence_Address
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Evidence : Evidence_Id;
+      Site     : Landin.Provenance.Origin) return Value_Id
+     is (Append
+           (Into, Item,
+            Instruction'(Op => Evidence_Address,
+                         Result => Landin.Types.Usize,
+                         Site => Site,
+                         Evidence => Evidence,
+                         others => <>)));
+
+   function Emit_Evidence_Function
+     (Into     : in out Unit;
+      Item     : Item_Id;
+      Table    : Value_Id;
+      Evidence : Evidence_Id;
+      Which    : Positive;
+      Site     : Landin.Provenance.Origin) return Value_Id
+   is
+      Made : Instruction :=
+        Instruction'(Op => Evidence_Function,
+                     Result => Landin.Types.Usize,
+                     Site => Site,
+                     Evidence => Evidence,
+                     Evidence_Entry => Which,
+                     Signature => Evidence_Entry_Signature
+                       (Into, Evidence, Which),
+                     others => <>);
+   begin
+      Made.First_Arg := Natural (Into.Operands.Length);
+      Made.Args := 1;
+      Into.Operands.Append (Table);
+      return Append (Into, Item, Made);
+   end Emit_Evidence_Function;
 
    function Emit_Call
      (Into   : in out Unit;

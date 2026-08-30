@@ -60,6 +60,12 @@ package body Landin.IR.Verifier is
                "a routine's slots disagree with its signature descriptor",
             when Function_Value_Signature_Disagrees =>
                "a function value disagrees with its slot or call signature",
+            when Evidence_Out_Of_Range =>
+               "an evidence operation names no table in this unit",
+            when Evidence_Entry_Out_Of_Range =>
+               "an evidence operation names no direct concept entry",
+            when Evidence_Entry_Signature_Disagrees =>
+               "an evidence entry's signature disagrees with its provider",
             when Atom_Metadata_Disagrees =>
                "an atom carrier disagrees with its structural atom set",
             when Atom_Identity_Not_In_Set =>
@@ -207,8 +213,9 @@ package body Landin.IR.Verifier is
             when Unary_Kind    => 1,
             when Binary_Kind   => 2,
             when Failure_Test  => 1,
-            when Storage_Address | Place_Address | Function_Address | Call
-               | Indirect_Call => 0,
+            when Evidence_Function => 1,
+            when Storage_Address | Place_Address | Function_Address
+               | Evidence_Address | Call | Indirect_Call => 0,
             when Jump          => 0,
             when Branch        => 1,
             when Leave         => 0,
@@ -1741,6 +1748,64 @@ package body Landin.IR.Verifier is
            or else Sources /= Natural (Of_Unit.Return_Sources.Length)
          then
             return (Kind => Signature_Runs_Overlap, others => <>);
+         end if;
+      end;
+
+      --  R2.70 tables partition their direct-entry vector.  The represented
+      --  shape is target-neutral; every code word names a routine carrying
+      --  exactly the retained semantic signature.
+      declare
+         Entries : Natural := 0;
+      begin
+         for Which in 1 .. Evidence_Count (Of_Unit) loop
+            declare
+               Held : constant Evidence_Record := Of_Unit.Evidence (Which);
+            begin
+               if Field_Shape_Is_Malformed
+                 (Held.Represented, Aggregate_Allowed => True)
+               then
+                  return (Kind => Field_Shape_Malformed, others => <>);
+               elsif Held.Entries.Count /= 0
+                 and then Held.Entries.First /= Entries
+               then
+                  return (Kind => Evidence_Entry_Out_Of_Range, others => <>);
+               elsif Held.Entries.First
+                       > Natural (Of_Unit.Evidence_Entries.Length)
+                 or else Held.Entries.Count
+                   > Natural (Of_Unit.Evidence_Entries.Length)
+                       - Held.Entries.First
+               then
+                  return (Kind => Evidence_Entry_Out_Of_Range, others => <>);
+               end if;
+               for Which in 1 .. Held.Entries.Count loop
+                  declare
+                     Provider : constant Evidence_Entry_Record :=
+                       Of_Unit.Evidence_Entries
+                         (Held.Entries.First + Which);
+                  begin
+                     if not Holds (Of_Unit, Provider.Target)
+                       or else Kind_Of (Of_Unit, Provider.Target) /= Routine
+                     then
+                        return (Kind => Callee_Is_Not_A_Routine,
+                                others => <>);
+                     elsif not Holds (Of_Unit, Provider.Signature)
+                       or else Signature_Of (Of_Unit, Provider.Target)
+                         = No_Signature
+                       or else not Signatures_Agree
+                         (Of_Unit, Provider.Signature,
+                          Signature_Of (Of_Unit, Provider.Target))
+                     then
+                        return
+                          (Kind => Evidence_Entry_Signature_Disagrees,
+                           others => <>);
+                     end if;
+                  end;
+               end loop;
+               Entries := Entries + Held.Entries.Count;
+            end;
+         end loop;
+         if Entries /= Natural (Of_Unit.Evidence_Entries.Length) then
+            return (Kind => Evidence_Entry_Out_Of_Range, others => <>);
          end if;
       end;
 
@@ -3938,6 +4003,72 @@ package body Landin.IR.Verifier is
                                  end if;
                               end;
 
+                           when Evidence_Address =>
+                              if not Holds
+                                (Of_Unit, Evidence_Of (Of_Unit, Id, V))
+                              then
+                                 return
+                                   (Kind => Evidence_Out_Of_Range,
+                                    Item => Id, Block => Block, Value => V);
+                              end if;
+
+                           when Evidence_Function =>
+                              declare
+                                 Evidence : constant Evidence_Id :=
+                                   Evidence_Of (Of_Unit, Id, V);
+                                 Which : constant Natural :=
+                                   Evidence_Entry_Of (Of_Unit, Id, V);
+                              begin
+                                 if not Holds (Of_Unit, Evidence) then
+                                    return
+                                      (Kind => Evidence_Out_Of_Range,
+                                       Item => Id, Block => Block, Value => V);
+                                 elsif Which = 0
+                                   or else Which > Evidence_Entry_Count
+                                     (Of_Unit, Evidence)
+                                 then
+                                    return
+                                      (Kind => Evidence_Entry_Out_Of_Range,
+                                       Item => Id, Block => Block, Value => V);
+                                 end if;
+                                 declare
+                                    Target : constant Item_Id :=
+                                      Evidence_Entry_Target
+                                        (Of_Unit, Evidence, Which);
+                                    Signature : constant Signature_Id :=
+                                      Evidence_Entry_Signature
+                                        (Of_Unit, Evidence, Which);
+                                 begin
+                                    if not Holds (Of_Unit, Target)
+                                      or else Kind_Of (Of_Unit, Target)
+                                        /= Routine
+                                    then
+                                       return
+                                         (Kind => Callee_Is_Not_A_Routine,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    elsif not Holds (Of_Unit, Signature)
+                                      or else not Holds
+                                        (Of_Unit,
+                                         Signature_Of (Of_Unit, Id, V))
+                                      or else not Signatures_Agree
+                                        (Of_Unit, Signature,
+                                         Signature_Of (Of_Unit, Id, V))
+                                      or else Signature_Of
+                                        (Of_Unit, Target) = No_Signature
+                                      or else not Signatures_Agree
+                                        (Of_Unit, Signature,
+                                         Signature_Of (Of_Unit, Target))
+                                    then
+                                       return
+                                         (Kind =>
+                                            Evidence_Entry_Signature_Disagrees,
+                                          Item => Id, Block => Block,
+                                          Value => V);
+                                    end if;
+                                 end;
+                              end;
+
                            when Function_Address =>
                               declare
                                  C : constant Item_Id :=
@@ -4955,9 +5086,22 @@ package body Landin.IR.Verifier is
                                     Item => Id, Block => Block, Value => V);
                               end if;
 
-                           when Function_Address =>
+                           when Function_Address | Evidence_Address =>
                               if Result_Of (Of_Unit, Id, V)
                                    /= Landin.Types.Usize
+                              then
+                                 return (Kind => Result_Disagrees,
+                                         Item => Id, Block => Block,
+                                         Value => V);
+                              end if;
+
+                           when Evidence_Function =>
+                              if Result_Of (Of_Unit, Id, V)
+                                   /= Landin.Types.Usize
+                                or else Result_Of
+                                  (Of_Unit, Id,
+                                   Nth_Operand (Of_Unit, Id, V, 1))
+                                    /= Landin.Types.Usize
                               then
                                  return (Kind => Result_Disagrees,
                                          Item => Id, Block => Block,

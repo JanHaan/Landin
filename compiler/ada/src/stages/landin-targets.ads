@@ -90,6 +90,33 @@ package Landin.Targets is
    function Maximum_Object_Size (Facts : Target_Facts) return Byte_Count
      with Pre => Pointer_Width (Facts) <= 64;
 
+   ---------------------------------------------------------------------
+   --  Physical evidence-table representation
+   --
+   --  Landin.Evidence supplies semantic positions.  This package supplies
+   --  their target-derived representation: one pointer-width cell per
+   --  entry, contiguous and aligned as a pointer.  Size and alignment are
+   --  usize values; concept functions are code addresses.
+   ---------------------------------------------------------------------
+
+   function Evidence_Size_Offset (Facts : Target_Facts) return Byte_Count
+     with Post => Evidence_Size_Offset'Result = 0;
+
+   function Evidence_Alignment_Offset
+     (Facts : Target_Facts) return Byte_Count;
+
+   function Evidence_Function_Offset
+     (Facts : Target_Facts;
+      Declaration_Order : Positive) return Byte_Count;
+
+   function Evidence_Table_Size
+     (Facts : Target_Facts;
+      Function_Count : Natural) return Byte_Count;
+
+   function Evidence_Table_Alignment
+     (Facts : Target_Facts) return Byte_Alignment
+     with Post => Evidence_Table_Alignment'Result = Pointer_Alignment (Facts);
+
    --  Layout arithmetic that refuses to guess.  Alignment must be a power
    --  of two, and rounding up must not silently wrap.  Both rules are
    --  enforced in the body, in every build mode: a layout that only holds

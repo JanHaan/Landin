@@ -663,10 +663,11 @@ item 4 ROUTINE taken result i32 signature 2 params 1 slots 5 blocks 1 values 10
     9 LOAD i32 slot 2
     10 LEAVE <- 9
 file positive/concepts-and-conformances/main.ldn
-unit signatures 3 items 3
+unit signatures 4 items 3
 signature 1 (in i32, in i32) -> bool
 signature 2 () -> i32
 signature 3 (in i32) -> i32
+signature 4 (in usize, in i32) -> i32
 item 1 ROUTINE less_i32 result bool signature 1 params 2 slots 4 blocks 1 values 8
   slot 1 left i32 param 1
   slot 2 right i32 param 2
@@ -681,21 +682,23 @@ item 1 ROUTINE less_i32 result bool signature 1 params 2 slots 4 blocks 1 values
     6 STORE slot 3 <- 5
     7 LOAD bool slot 3
     8 LEAVE <- 7
-item 2 ROUTINE main result i32 signature 2 params 0 slots 1 blocks 1 values 5
+item 2 ROUTINE main result i32 signature 2 params 0 slots 1 blocks 1 values 6
   slot 1 code i32 return
-  block 1 scope 15 BLOCK length 5
+  block 1 scope 15 BLOCK length 6
     1 NUMBER i32 42
-    2 CALL i32 callee 3 - signature 3 <- 1
-    3 STORE slot 1 <- 2
-    4 LOAD i32 slot 1
-    5 LEAVE <- 4
-item 3 ROUTINE - result i32 signature 3 params 1 slots 2 blocks 1 values 4
-  slot 1 value i32 param 1
-  slot 2 result i32 return
+    2 EVIDENCE_ADDRESS usize evidence 1
+    3 CALL i32 callee 3 - signature 4 <- 2 1
+    4 STORE slot 1 <- 3
+    5 LOAD i32 slot 1
+    6 LEAVE <- 5
+item 3 ROUTINE - result i32 signature 4 params 2 slots 3 blocks 1 values 4
+  slot 1 - usize param 1
+  slot 2 value i32 param 2
+  slot 3 result i32 return
   block 1 scope 13 BLOCK length 4
-    1 LOAD i32 slot 1
-    2 STORE slot 2 <- 1
-    3 LOAD i32 slot 2
+    1 LOAD i32 slot 2
+    2 STORE slot 3 <- 1
+    3 LOAD i32 slot 3
     4 LEAVE <- 3
 file positive/control-expression-values/program.ldn
 unit signatures 5 items 5
@@ -1083,21 +1086,22 @@ item 1 DATUM choice result i32 params 0 slots 0 blocks 1 values 2
     1 NUMBER i32 42
     2 LEAVE <- 1
 file positive/fixed-conditional-generic-activity/main.ldn
-unit signatures 2 items 2
+unit signatures 3 items 2
 signature 1 () -> i32
 signature 2 (in i32) -> i32
+signature 3 (in i32) -> i32
 item 1 ROUTINE main result i32 signature 1 params 0 slots 2 blocks 1 values 7
   slot 1 code i32 return
   slot 2 value i32
   block 1 scope 4 BLOCK length 7
     1 NUMBER i32 42
-    2 CALL i32 callee 2 - signature 2 <- 1
+    2 CALL i32 callee 2 - signature 3 <- 1
     3 STORE slot 2 <- 2
     4 LOAD i32 slot 2
     5 STORE slot 1 <- 4
     6 LOAD i32 slot 1
     7 LEAVE <- 6
-item 2 ROUTINE - result i32 signature 2 params 1 slots 2 blocks 1 values 4
+item 2 ROUTINE - result i32 signature 3 params 1 slots 2 blocks 1 values 4
   slot 1 value i32 param 1
   slot 2 result i32 return
   block 1 scope 2 SIGNATURE length 4
@@ -1292,12 +1296,13 @@ item 1 ROUTINE main result u8 signature 1 params 0 slots 1 blocks 1 values 4
     3 LOAD u8 slot 1
     4 LEAVE <- 3
 file positive/generic-structural-deduction/program.ldn
-unit signatures 5 items 5
+unit signatures 6 items 5
 signature 1 (in i32) -> i32
 signature 2 () -> none
 signature 3 (in i32) -> i32
 signature 4 (in struct box, in struct phantom, in function signature 3) -> none
-signature 5 (in i32) -> i32
+signature 5 (in struct box, in struct phantom, in function signature 3) -> none
+signature 6 (in i32) -> i32
 item 1 ROUTINE same result i32 signature 1 params 1 slots 2 blocks 1 values 4
   slot 1 value i32 param 1
   slot 2 result i32 return
@@ -1325,22 +1330,24 @@ item 4 ROUTINE use result none signature 2 params 0 slots 2 blocks 1 values 9
     5 FUNCTION_ADDRESS usize target 1 same signature 1
     6 LOAD usize slot 1
     7 LOAD usize slot 2
-    8 CALL none callee 5 - signature 4 <- 6 7 5
+    8 CALL none callee 5 - signature 5 <- 6 7 5
     9 LEAVE
-item 5 ROUTINE - result none signature 4 params 3 slots 3 blocks 1 values 1
+item 5 ROUTINE - result none signature 5 params 3 slots 3 blocks 1 values 1
   slot 1 value aggregate fields [3]i32 param 1
   slot 2 marker aggregate fields bool param 2
-  slot 3 callback usize signature 5 param 3
+  slot 3 callback usize signature 6 param 3
   block 1 scope 6 BLOCK length 1
     1 LEAVE
 file positive/generic-zero-nominal-array-signatures/program.ldn
-unit signatures 6 items 5
+unit signatures 8 items 5
 signature 1 (in [0]struct box) -> [0]struct box
 signature 2 () -> none
 signature 3 (in [0]struct box) -> [0]struct box
 signature 4 (in [0]struct box) -> [0]struct box
-signature 5 (in function signature 4, in [0]struct box) -> [0]struct box
-signature 6 (in [0]struct box) -> [0]struct box
+signature 5 (in [0]struct box) -> [0]struct box
+signature 6 (in function signature 5, in [0]struct box) -> [0]struct box
+signature 7 (in function signature 5, in [0]struct box) -> [0]struct box
+signature 8 (in [0]struct box) -> [0]struct box
 item 1 ROUTINE copy_boxes result array signature 1 params 2 slots 3 blocks 1 values 2
   elements 0 of struct (i32)
   slot 1 copy_boxes usize param 1
@@ -1360,15 +1367,15 @@ item 3 ROUTINE use result none signature 2 params 0 slots 3 blocks 1 values 10
   block 1 scope 11 BLOCK length 10
     1 STORAGE_ADDRESS usize storage datum 2 values
     2 STORAGE_ADDRESS usize storage slot 1
-    3 CALL none callee 4 - signature 3 <- 2 1
+    3 CALL none callee 4 - signature 4 <- 2 1
     4 FUNCTION_ADDRESS usize target 1 copy_boxes signature 1
     5 STORE slot 3 <- 4
     6 STORAGE_ADDRESS usize storage slot 1
     7 LOAD usize slot 3
     8 STORAGE_ADDRESS usize storage slot 2
-    9 CALL none callee 5 - signature 5 <- 8 7 6
+    9 CALL none callee 5 - signature 7 <- 8 7 6
     10 LEAVE
-item 4 ROUTINE - result array signature 3 params 2 slots 3 blocks 1 values 2
+item 4 ROUTINE - result array signature 4 params 2 slots 3 blocks 1 values 2
   elements 0 of struct (i32)
   slot 1 copy usize param 1
   slot 2 value elements 0 of struct (i32) param 2
@@ -1376,20 +1383,20 @@ item 4 ROUTINE - result array signature 3 params 2 slots 3 blocks 1 values 2
   block 1 scope 5 BLOCK length 2
     1 COPY_ARRAY from slot 2 to slot 3
     2 LEAVE
-item 5 ROUTINE - result array signature 5 params 3 slots 5 blocks 1 values 7
+item 5 ROUTINE - result array signature 7 params 3 slots 5 blocks 1 values 7
   elements 0 of struct (i32)
   slot 1 through usize param 1
-  slot 2 action usize signature 6 param 2
+  slot 2 action usize signature 8 param 2
   slot 3 value elements 0 of struct (i32) param 3
   slot 4 result elements 0 of struct (i32) return
-  slot 5 - usize signature 6
+  slot 5 - usize signature 8
   block 1 scope 9 BLOCK length 7
     1 LOAD usize slot 2
     2 STORE slot 5 <- 1
     3 STORAGE_ADDRESS usize storage slot 3
     4 STORAGE_ADDRESS usize storage slot 4
     5 LOAD usize slot 5
-    6 INDIRECT_CALL none signature 6 <- 5 4 3
+    6 INDIRECT_CALL none signature 8 <- 5 4 3
     7 LEAVE
 file positive/identifier-underscore/program.ldn
 unit signatures 0 items 2
@@ -3639,27 +3646,41 @@ unit signatures 0 items 0
 file positive/ordinary-struct-mutual-function-signatures-right-first/program.ldn
 unit signatures 0 items 0
 file positive/parameterized-conformance-lookup/main.ldn
-unit signatures 2 items 2
+unit signatures 5 items 3
 signature 1 () -> i32
-signature 2 (in struct box) -> i32
-item 1 ROUTINE main result i32 signature 1 params 0 slots 2 blocks 1 values 7
+signature 2 (in struct box, in struct box) -> bool
+signature 3 (in struct box, in struct box) -> bool
+signature 4 (in struct box) -> i32
+signature 5 (in usize, in struct box) -> i32
+item 1 ROUTINE main result i32 signature 1 params 0 slots 2 blocks 1 values 8
   slot 1 code i32 return
   slot 2 item aggregate fields i32
-  block 1 scope 14 BLOCK length 7
+  block 1 scope 14 BLOCK length 8
     1 NUMBER i32 1
     2 STORE_FIELD slot 2 field 1 <- 1
     3 STORAGE_ADDRESS usize storage slot 2
-    4 CALL i32 callee 2 - signature 2 <- 3
-    5 STORE slot 1 <- 4
-    6 LOAD i32 slot 1
-    7 LEAVE <- 6
-item 2 ROUTINE - result i32 signature 2 params 1 slots 2 blocks 1 values 4
-  slot 1 value aggregate fields i32 param 1
-  slot 2 code i32 return
+    4 EVIDENCE_ADDRESS usize evidence 2
+    5 CALL i32 callee 3 - signature 5 <- 4 3
+    6 STORE slot 1 <- 5
+    7 LOAD i32 slot 1
+    8 LEAVE <- 7
+item 2 ROUTINE - result bool signature 3 params 2 slots 3 blocks 1 values 4
+  slot 1 left aggregate fields i32 param 1
+  slot 2 right aggregate fields i32 param 2
+  slot 3 yes bool return
+  block 1 scope 5 BLOCK length 4
+    1 TRUTH bool true
+    2 STORE slot 3 <- 1
+    3 LOAD bool slot 3
+    4 LEAVE <- 3
+item 3 ROUTINE - result i32 signature 5 params 2 slots 3 blocks 1 values 4
+  slot 1 - usize param 1
+  slot 2 value aggregate fields i32 param 2
+  slot 3 code i32 return
   block 1 scope 12 BLOCK length 4
     1 NUMBER i32 42
-    2 STORE slot 2 <- 1
-    3 LOAD i32 slot 2
+    2 STORE slot 3 <- 1
+    3 LOAD i32 slot 3
     4 LEAVE <- 3
 file positive/parameterized-struct-basic/program.ldn
 unit signatures 0 items 1

@@ -807,6 +807,12 @@ package Landin.Checking is
    procedure Append_Actual
      (Into : in out Actual_Tuple; Actual : Actual_Key);
 
+   function Actual_Count (Actuals : Actual_Tuple) return Natural;
+
+   function Nth_Actual
+     (Actuals : Actual_Tuple; Position : Positive) return Actual_Key
+     with Pre => Position <= Actual_Count (Actuals);
+
    function Scalar_Type_Actual
      (Scalar : Landin.Types.Scalar_Name) return Actual_Key;
 
@@ -1031,6 +1037,45 @@ package Landin.Checking is
      (Of_Table : Table; Id : Conformance_Id) return Conformance_Origin
      with Pre => Holds (Of_Table, Id);
 
+   --  R2.70 retains direct concept-entry providers in concept declaration
+   --  order.  A selected parameterized provider is a concrete generic
+   --  routine instance; an ordinary provider remains declaration-backed.
+   --  Exactly one side of each entry is present after evidence finalization.
+   function Conformance_Entry_Count
+     (Of_Table : Table; Id : Conformance_Id) return Natural
+     with Pre => Holds (Of_Table, Id);
+
+   procedure Set_Conformance_Entry_Count
+     (Into : in out Table; Id : Conformance_Id; Count : Natural)
+     with Pre  => Holds (Into, Id)
+                  and then Conformance_Entry_Count (Into, Id) = 0,
+          Post => Conformance_Entry_Count (Into, Id) = Count;
+
+   procedure Note_Conformance_Provider
+     (Into       : in out Table;
+      Id         : Conformance_Id;
+      Position   : Positive;
+      Declaration : Declaration_Id;
+      Instance   : Routine_Instance_Id := No_Routine_Instance)
+     with Pre => Holds (Into, Id)
+                 and then Position <= Conformance_Entry_Count (Into, Id)
+                 and then Declaration /= No_Declaration
+                 and then Natural (Declaration) <= Declaration_Limit (Into)
+                 and then (Instance = No_Routine_Instance
+                           or else Holds (Into, Instance));
+
+   function Conformance_Provider_Declaration
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Declaration_Id
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Conformance_Entry_Count (Of_Table, Id);
+
+   function Conformance_Provider_Instance
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Routine_Instance_Id
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Conformance_Entry_Count (Of_Table, Id);
+
    function Intern_Nominal_Instance
      (Into    : in out Table;
       Template : Declaration_Id;
@@ -1086,6 +1131,36 @@ package Landin.Checking is
      with Pre  => Holds (Of_Table, Id)
                   and then Position <= Routine_Actual_Count (Of_Table, Id),
           Post => Holds (Of_Table, Nth_Routine_Actual'Result);
+
+   --  Hidden evidence arguments follow constrained type formals in their
+   --  declaration order.  Static formals themselves remain outside the ABI.
+   function Routine_Evidence_Count
+     (Of_Table : Table; Id : Routine_Instance_Id) return Natural
+     with Pre => Holds (Of_Table, Id);
+
+   procedure Add_Routine_Evidence
+     (Into  : in out Table;
+      Id    : Routine_Instance_Id;
+      Formal : Positive;
+      Evidence : Conformance_Id)
+     with Pre  => Holds (Into, Id) and then Holds (Into, Evidence),
+          Post => Routine_Evidence_Count (Into, Id)
+                    = Routine_Evidence_Count (Into, Id)'Old + 1;
+
+   function Nth_Routine_Evidence
+     (Of_Table : Table;
+      Id       : Routine_Instance_Id;
+      Position : Positive) return Conformance_Id
+     with Pre  => Holds (Of_Table, Id)
+                  and then Position <= Routine_Evidence_Count (Of_Table, Id),
+          Post => Holds (Of_Table, Nth_Routine_Evidence'Result);
+
+   function Nth_Routine_Evidence_Formal
+     (Of_Table : Table;
+      Id       : Routine_Instance_Id;
+      Position : Positive) return Positive
+     with Pre => Holds (Of_Table, Id)
+                 and then Position <= Routine_Evidence_Count (Of_Table, Id);
 
    type Routine_Instance_State is
      (Routine_Unseen, Routine_Building, Routine_Ready, Routine_Invalid);
@@ -1149,6 +1224,42 @@ package Landin.Checking is
                   and then Landin.Syntax.Contains (Of_Tree, Call)
                   and then Holds (Into, Target),
           Post => Routine_Target_Of (Into, Of_Tree, Call) = Target;
+
+   --  A `T.entry` selection in a constrained generic body names one direct
+   --  semantic evidence-table entry.  Its active routine view selects the
+   --  concrete conformance; the one-based entry position is concept source
+   --  order and never a target byte offset.
+   function Evidence_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Conformance_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   function Evidence_Entry_Of
+     (Of_Table : Table;
+      Of_Tree  : Landin.Syntax.Tree;
+      Node     : Landin.Syntax.Node_Id) return Natural
+     with Pre => Is_Prepared (Of_Table)
+                 and then Covers (Of_Table, Of_Tree)
+                 and then Landin.Syntax.Contains (Of_Tree, Node);
+
+   procedure Note_Evidence_Selection
+     (Into      : in out Table;
+      Of_Tree   : Landin.Syntax.Tree;
+      Node      : Landin.Syntax.Node_Id;
+      Evidence  : Conformance_Id;
+      Which     : Positive)
+     with Pre  => Is_Prepared (Into)
+                  and then Covers (Into, Of_Tree)
+                  and then Landin.Syntax.Contains (Of_Tree, Node)
+                  and then Holds (Into, Evidence)
+                  and then Which <= Conformance_Entry_Count
+                    (Into, Evidence),
+          Post => Evidence_Of (Into, Of_Tree, Node) = Evidence
+                  and then Evidence_Entry_Of
+                    (Into, Of_Tree, Node) = Which;
 
    --  Instance construction and target-dependent layout share one state
    --  slot.  Interning alone leaves a new instance Unseen.  Building is the
@@ -1725,6 +1836,7 @@ private
    type Routine_Instance_Record is record
       Template  : Declaration_Id := No_Declaration;
       Actuals   : Run;
+      Evidence  : Run;
       State     : Routine_Instance_State := Routine_Unseen;
       Signature : Signature_Id := No_Signature;
    end record;
@@ -1745,6 +1857,7 @@ private
       Target   : Actual_Key;
       Inputs   : Run;
       Bindings : Run;
+      Providers : Run;
       Source   : Landin.Source.Source_Id := Landin.Source.No_Source;
       Node     : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
       Origin   : Conformance_Origin := Declared_Conformance;
@@ -1752,6 +1865,25 @@ private
 
    package Conformance_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Conformance_Record);
+
+   type Conformance_Provider is record
+      Declaration : Declaration_Id := No_Declaration;
+      Instance    : Routine_Instance_Id := No_Routine_Instance;
+   end record;
+
+   package Conformance_Provider_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Conformance_Provider);
+
+   package Conformance_Id_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Conformance_Id);
+
+   type Routine_Evidence_Record is record
+      Formal      : Positive := 1;
+      Conformance : Conformance_Id := No_Conformance;
+   end record;
+
+   package Routine_Evidence_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Routine_Evidence_Record);
 
    package Atom_Set_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Atom_Set_Id);
@@ -1863,6 +1995,9 @@ private
       Array_Nominal : Nominal_Type_Id := No_Nominal_Type;
       Has_Routine_Target : Boolean := False;
       Routine_Target : Routine_Instance_Id := No_Routine_Instance;
+      Has_Evidence : Boolean := False;
+      Evidence     : Conformance_Id := No_Conformance;
+      Evidence_Entry : Natural := 0;
    end record;
 
    package Node_Overlay_Vectors is new Ada.Containers.Vectors
@@ -1903,6 +2038,8 @@ private
       Node_References : Reference_Id_Vectors.Vector;
       Node_Result_Shapes : Signature_Id_Vectors.Vector;
       Node_Routine_Targets : Routine_Id_Vectors.Vector;
+      Node_Evidence : Conformance_Id_Vectors.Vector;
+      Node_Evidence_Entries : Index_Vectors.Vector;
       --  Which field a selection node names, in the same run.
       Node_Fields  : Index_Vectors.Vector;
       Node_Shapes  : Shape_Vectors.Vector;
@@ -1916,9 +2053,11 @@ private
       Nominal_Actuals : Actual_Key_Vectors.Vector;
       Routine_Instances : Routine_Instance_Vectors.Vector;
       Routine_Actuals : Actual_Key_Vectors.Vector;
+      Routine_Evidence : Routine_Evidence_Vectors.Vector;
       Concepts : Concept_Vectors.Vector;
       Conformances : Conformance_Vectors.Vector;
       Conformance_Actuals : Actual_Key_Vectors.Vector;
+      Conformance_Providers : Conformance_Provider_Vectors.Vector;
       Current_Routine : Routine_Instance_Id := No_Routine_Instance;
       Node_Overlays : Node_Overlay_Vectors.Vector;
       Declaration_Overlays : Declaration_Overlay_Vectors.Vector;

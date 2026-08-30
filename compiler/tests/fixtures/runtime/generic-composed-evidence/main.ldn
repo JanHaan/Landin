@@ -1,0 +1,27 @@
+ordered: type = concept (t: type)
+    less: (left: t, right: t) -> (yes: bool)
+end ordered
+
+sortable: type = concept (t: type) is ordered
+end sortable
+
+less_i32: (left: i32, right: i32) -> (yes: bool) =
+    yes = left < right
+end less_i32
+
+i32 is ordered (less: less_i32)
+i32 is sortable ()
+
+is_less: (t: type is sortable, left: t, right: t) -> (yes: bool) =
+    yes = t.less(left, right)
+end is_less
+
+public main: () -> (code: i32) =
+    a: i32 = 1
+    b: i32 = 2
+    if is_less(a, b) then
+        code = 42
+    else
+        code = 0
+    end if
+end main
