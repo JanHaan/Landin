@@ -1,0 +1,4 @@
+class: positive
+summary: D138 parses every module arm but selects only the Linux x86_64 declaration set
+program: main.ldn
+constructs: 1500
