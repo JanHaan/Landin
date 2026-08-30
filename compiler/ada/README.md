@@ -19,7 +19,7 @@ compiler/ada/
     source/             source snapshots, spans, line maps, provenance
     diagnostics/        diagnostic transport and text rendering
     platform/           host adapters and their native implementations
-    stages/             target facts and the stage/pipeline seams
+    stages/             target facts, fixed-configuration activity and seams
     syntax/             the tokens, the scan, the syntax table and the parse
     resolution/         declarations, scopes and what each name means
     checking/           the language's types, what each node has, and the IR
@@ -71,12 +71,15 @@ replaced.
 | `Landin.Platform` | the host interfaces every effect goes through | perform an effect |
 | `Landin.Platform.Native` | the only filesystem implementation | be reached except through the interface |
 | `Landin.Platform.Native.Tools` | the only process spawning, and the only GNAT-specific dependency | grow a second host concern |
-| `Landin.Targets` | target facts and layout arithmetic | ask the host how wide a pointer is |
+| `Landin.Targets` | target facts, typed architecture identity and layout arithmetic | ask the host how wide a pointer is |
 | `Landin.Targets.Capabilities` | which described targets have a backend and the triplet selected to finish their output | infer capability from width, invoke a tool, or canonicalise a triplet |
+| `Landin.Configuration` | D139's immutable active-declaration view after target selection | mutate syntax, resolve a source name, or expose a general compiler module |
 | `Landin.Stages` | the compilation context, the stage interface, pipelines, and everything a stage builds that outlives it | know which stages exist, or which order they run in |
 | `Landin.Stages.Syntax` | running the scan and the parse over a compilation | keep anything of its own, or decide reporting policy |
-| `Landin.Stages.Resolution` | the order the trees are walked in | own the resolution table, or a code |
-| `Landin.Stages.Checking` | the three type passes, compile-time-only positional substitution, D136's closed target-independent fixed-expression evaluator, scalar/fixed-array normalization of parameterized aliases, symbolic validation of unused nominal and routine templates, canonical `(template, normalized actual tuple)` struct and routine interning, context-free direct-call type-formal deduction, per-instance substituted signatures/bodies and fact views, same-key recursion and finite-expansion refusal, identity-only versus value-layout requirements for generic and ordinary signature recursion, ordinary alias-chain identity lookup, transient symbolic nominal obligations across used-formal wrappers, lazy recursive promotion from interned concrete actual tuples, substituted per-instance layout, bounded repeated-invalid replay, D137/L0313 by-value recursion separation, and checking-stage diagnostic order | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
+| `Landin.Stages.Configuration` | validate and select D139 fixed declaration arms before resolution | execute code, mutate syntax, or add a runtime declaration |
+| `Landin.Stages.Resolution` | the order the trees are walked in through the D139 activity view | own the resolution table, or a code |
+| `Landin.Stages.Checking` | the three type passes, compile-time-only positional substitution, D136's closed target-independent fixed-expression evaluator, scalar/fixed-array normalization of parameterized aliases, symbolic validation of unused nominal and routine templates, canonical `(template, normalized actual tuple)` struct and routine interning, D138 context-free direct-call type-formal deduction, per-instance substituted signatures/bodies and fact views, same-key recursion and finite-expansion refusal, identity-only versus value-layout requirements for generic and ordinary signature recursion, ordinary alias-chain identity lookup, transient symbolic nominal obligations across used-formal wrappers, lazy recursive promotion from interned concrete actual tuples, substituted per-instance layout, bounded repeated-invalid replay, D137/L0313 by-value recursion separation, and checking-stage diagnostic order | own a table, a code, execute user code, synthesize a declaration, or choose a target-dependent operator width |
+
 | `Landin.Stages.Checking.Flow` | definite assignment, explicit fallthrough/return-compatible edge facts, and lexical cleanup execution states | decide a type, believe a condition, or lower a value |
 | `Landin.Stages.Lowering` | the walk that eagerly maps checker nominal identities and ready routine instances into deterministic IR order, activates each routine fact view, then builds and verifies the IR without creating items for templates or static formals; including caller-owned scalar and shaped control joins, checked computed-element address slots, plus reverse-order cleanup calls on selected exits, and refusing to run on a refused program | own the Unit, work out a scope, derive target layout, synthesize a declaration, or raise a diagnostic |
 | `Landin.Driver` | argument and `--emit` classification, pipeline orchestration, output/toolchain selection and the result | implement a language rule |

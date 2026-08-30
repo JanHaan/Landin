@@ -1,0 +1,5 @@
+class: positive
+summary: D139 selected declarations share one module scope across files and are visible before their source file
+program: main.ldn
+with: selected.ldn
+constructs: 0080, 0130, 1500, 1740

@@ -26,7 +26,7 @@ package body Landin.Syntax.Parser is
 
    --  `program ::= declaration*` [1740].
    Declaration_Anchor : constant Tok.Kind_Set :=
-     [Tok.Kw_Public | Tok.Kw_Mut | Tok.Identifier
+     [Tok.Kw_Public | Tok.Kw_Mut | Tok.Kw_Fixed | Tok.Identifier
         | Tok.End_Of_Input => True,
       others => False];
 
@@ -205,6 +205,11 @@ package body Landin.Syntax.Parser is
             Undo_Id : constant Landin.Source.Names.Name_Id :=
               Landin.Source.Names.Intern (Names, "undo");
 
+            --  [1480] takes this bare toolchain root.  D139 recognizes it
+            --  only as the fixed-condition intrinsic, not as a declaration.
+            Compiler_Id : constant Landin.Source.Names.Name_Id :=
+              Landin.Source.Names.Intern (Names, "compiler");
+
             Scalar_Id : constant array (Scalar_Name)
               of Landin.Source.Names.Name_Id :=
                 [for S in Scalar_Name =>
@@ -298,6 +303,7 @@ package body Landin.Syntax.Parser is
               return Slot_List;
             function Parse_Program return Node_Id;
             function Parse_Declaration return Node_Id;
+            function Parse_Fixed_Conditional return Node_Id;
             function Parse_Atom_Declaration
               (Exported  : Boolean;
                Public_At : Landin.Source.Span) return Node_Id;
@@ -867,6 +873,7 @@ package body Landin.Syntax.Parser is
                         Mark_Reported;
                         Advance;
                      elsif Pre.Begins_Declaration (Peek)
+                       or else Peek = Tok.Kw_Fixed
                        or else Peek not in Tok.Kernel_Kind
                        or else Ahead (1) in Tok.Colon | Tok.Colon_Equal
                      then
@@ -919,6 +926,23 @@ package body Landin.Syntax.Parser is
                   Advance;
                end if;
 
+               --  D139 is deliberately module-declaration syntax.  `fixed`
+               --  is reserved for it and type formals; `public fixed` is
+               --  parsed for recovery but is not a valid declaration.
+               if Peek = Tok.Kw_Fixed then
+                  if Exported then
+                     Complain
+                       (Item    => Syn.Token_Expected,
+                        Where   => Public_At,
+                        Message => "`public` cannot modify a fixed"
+                                   & " conditional",
+                        Note    => "D139: a fixed conditional selects module"
+                                   & " declarations; it is not a declaration"
+                                   & " with an export modifier");
+                  end if;
+                  return Parse_Fixed_Conditional;
+               end if;
+
                if Peek = Tok.Identifier then
                   declare
                      Step : Tok.Token_Index := 1;
@@ -956,6 +980,171 @@ package body Landin.Syntax.Parser is
                return Parse_Binding (Exported, Public_At);
             end Parse_Declaration;
 
+            --  D139: a fixed conditional is a declaration-list splice, not
+            --  a block.  Parse every arm so scanner/parser faults survive
+            --  selection; configuration later decides which arm's ordinary
+            --  declarations are visible to semantic stages.
+            function Parse_Fixed_Conditional return Node_Id is
+               At_Fixed : constant Landin.Source.Span := Here;
+               Arms     : Slot_Vectors.Vector;
+               Is_Else  : Boolean := False;
+            begin
+               if Too_Deep (At_Fixed) then
+                  Advance;
+                  Resync_Declaration;
+                  return Add
+                    (Error_Declaration, At_Fixed,
+                     Join (At_Fixed, After_Previous));
+               end if;
+
+               Depth := Depth + 1;
+               Advance;
+               if Peek /= Tok.Kw_If then
+                  declare
+                     Ignored : constant Boolean := Expect
+                       (Wanted  => Tok.Kw_If,
+                        Message => "`fixed` conditional is followed by `if`",
+                        Note    => "D139: fixed if expression then"
+                                   & " declaration* end if",
+                        Related => At_Fixed,
+                        Because => "this `fixed`");
+                  begin
+                     pragma Unreferenced (Ignored);
+                  end;
+               end if;
+
+               loop
+                  declare
+                     At_Arm : constant Landin.Source.Span :=
+                       (if Is_Else then Previous else Here);
+                     Condition : Node_Id := No_Node;
+                     Items : Slot_Vectors.Vector;
+                  begin
+                     if not Is_Else then
+                        --  The first arm arrives at `if`; later ones at
+                        --  `elsif`.  Both words are consumed here.
+                        Advance;
+                        Condition := Parse_Expression;
+                        declare
+                           Kept : constant Boolean := Expect
+                             (Wanted  => Tok.Kw_Then,
+                              Message => "a fixed conditional condition is"
+                                         & " followed by `then`",
+                              Note    => "D139: fixed if expression then"
+                                         & " declaration*",
+                              Related => At_Fixed,
+                              Because => "this fixed conditional arm");
+                        begin
+                           pragma Unreferenced (Kept);
+                        end;
+                     end if;
+
+                     while Peek not in Tok.Kw_Elsif | Tok.Kw_Else | Tok.Kw_End
+                       and then Peek /= Tok.End_Of_Input
+                     loop
+                        declare
+                           Before : constant Tok.Token_Index := Index;
+                        begin
+                           if Pre.Begins_Declaration (Peek)
+                             or else Peek = Tok.Kw_Fixed
+                           then
+                              Items.Append (Parse_Declaration);
+                           else
+                              Complain
+                                (Item    => Syn.Stray_Token,
+                                 Where   => Here,
+                                 Message => "this begins no declaration in a"
+                                            & " fixed conditional arm",
+                                 Note    => "D139: an arm contains only"
+                                            & " module declarations");
+                              Advance;
+                           end if;
+                           if Index = Before then
+                              raise Compiler_Defect
+                                with "the parser did not advance in a fixed"
+                                     & " conditional arm";
+                           end if;
+                        end;
+                     end loop;
+
+                     Arms.Append
+                       (Add
+                          (Of_Kind  => Fixed_Arm,
+                           At_Token => At_Arm,
+                           Extent   => Join (At_Arm, After_Previous),
+                           Children => [Condition] & To_List (Items)));
+                  end;
+
+                  exit when Is_Else or else Peek /= Tok.Kw_Elsif;
+                  Is_Else := False;
+                  --  Leave `elsif` in hand for the arm's common reader.
+                  --  The next loop consumes it as it does the first `if`.
+               end loop;
+
+               if Peek = Tok.Kw_Else then
+                  Advance;
+                  Is_Else := True;
+                  declare
+                     Items : Slot_Vectors.Vector;
+                     At_Else : constant Landin.Source.Span := Previous;
+                  begin
+                     while Peek not in Tok.Kw_End | Tok.End_Of_Input loop
+                        declare
+                           Before : constant Tok.Token_Index := Index;
+                        begin
+                           if Pre.Begins_Declaration (Peek)
+                             or else Peek = Tok.Kw_Fixed
+                           then
+                              Items.Append (Parse_Declaration);
+                           else
+                              Complain
+                                (Item    => Syn.Stray_Token,
+                                 Where   => Here,
+                                 Message => "this begins no declaration in a"
+                                            & " fixed conditional else arm",
+                                 Note    => "D139: an arm contains only"
+                                            & " module declarations");
+                              Advance;
+                           end if;
+                           if Index = Before then
+                              raise Compiler_Defect
+                                with "the parser did not advance in a fixed"
+                                     & " conditional else arm";
+                           end if;
+                        end;
+                     end loop;
+                     Arms.Append
+                       (Add
+                          (Of_Kind  => Fixed_Arm,
+                           At_Token => At_Else,
+                           Extent   => Join (At_Else, After_Previous),
+                           Children => [No_Node] & To_List (Items)));
+                  end;
+               end if;
+
+               Depth := Depth - 1;
+               if Peek = Tok.Kw_End and then Ahead (1) = Tok.Kw_If then
+                  Advance;
+                  Advance;
+               else
+                  Complain
+                    (Item    => Syn.Unclosed_Construct,
+                     Where   => After_Previous,
+                     Message => "this fixed conditional is never closed",
+                     Note    => "D139: a fixed conditional closes with `end`"
+                                & " `if`",
+                     Related => At_Fixed,
+                     Because => "opened here",
+                     Gate    => False);
+               end if;
+
+               return Add
+                 (Of_Kind  => Fixed_Conditional,
+                  At_Token => At_Fixed,
+                  Extent   => Join (At_Fixed, After_Previous),
+                  Children => To_List (Arms));
+            end Parse_Fixed_Conditional;
+
             ------------------------------------------------------------
             --  Names, types, bindings                     [1760] [1790]
             ------------------------------------------------------------
@@ -984,6 +1173,16 @@ package body Landin.Syntax.Parser is
                if Peek = Tok.Identifier then
                   Named := Named_Here;
                   Advance;
+                  if Named = Compiler_Id then
+                     Complain
+                       (Item    => Syn.Name_Expected,
+                        Where   => At_Name,
+                        Message => "`compiler` is reserved for the"
+                                   & " toolchain intrinsic root",
+                        Note    => "[1480]: bare toolchain module names are"
+                                   & " not available to declarations");
+                     Named := Landin.Source.Names.No_Name;
+                  end if;
                   return At_Name;
                end if;
 

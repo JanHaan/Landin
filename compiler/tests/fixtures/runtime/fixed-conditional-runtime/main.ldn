@@ -1,0 +1,18 @@
+fixed if compiler.arch == arm64 then
+    public main: () -> (code: i32) =
+        code = 1
+    end main
+elsif compiler.arch == x86_64 then
+    public main: () -> (code: i32) =
+        code = selected
+    end main
+    fixed if false then
+        ignored: missing = unknown
+    else
+        selected: i32 = 42
+    end if
+else
+    public main: () -> (code: i32) =
+        code = 1
+    end main
+end if

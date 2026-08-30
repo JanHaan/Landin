@@ -1,0 +1,4 @@
+class: positive
+summary: D139 keeps Folded's symmetric minimum times or divided by minus one in its mathematical range
+program: main.ldn
+constructs: 0290, 0300, 0350, 1500, 1740

@@ -94,6 +94,15 @@ package body Landin.Tests.Targets_Suite is
          Widest        => 8,
          Pointer_Bytes => 4);
 
+      --  D139 configuration asks this typed field, never the label above.
+      Landin.Testing.Check
+        (Item, Architecture_Of (Linux_X86_64) = X86_64,
+         "the Linux constructor names x86_64 explicitly");
+      Landin.Testing.Check
+        (Item, Architecture_Of (Synthetic_32)
+                 = Synthetic_32_Architecture,
+         "the synthetic constructor names synthetic_32 explicitly");
+
       Landin.Testing.Check
         (Item, Maximum_Object_Size (Linux_X86_64) = Byte_Count'Last,
          "a 64-bit target admits a 64-bit byte extent");

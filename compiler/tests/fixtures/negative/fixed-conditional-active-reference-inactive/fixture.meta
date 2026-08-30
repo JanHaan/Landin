@@ -1,0 +1,5 @@
+class: negative
+summary: D139 leaves a selected use of an inactive declaration unresolved
+program: program.ldn
+codes: L0201
+constructs: 0080, 0130, 1500, 1740, 1860
