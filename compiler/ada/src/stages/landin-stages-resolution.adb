@@ -1,3 +1,4 @@
+with Landin.Configuration;
 with Landin.Diagnostics.Resolution;
 with Landin.Provenance;
 with Landin.Resolution;
@@ -37,6 +38,8 @@ package body Landin.Stages.Resolution is
         Landin.Stages.Trees (Context);
       Meanings  : constant not null access Landin.Resolution.Table :=
         Landin.Stages.Meanings (Context);
+      Activity : constant not null access Landin.Configuration.Table :=
+        Configurations (Context);
 
       Found : Landin.Diagnostics.Diagnostic_List;
 
@@ -63,6 +66,45 @@ package body Landin.Stages.Resolution is
 
       procedure Resolve_Anonymous
         (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+      generic
+         with procedure Action (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+      procedure For_Each_Active_Declaration (Of_Tree : Syn.Tree);
+
+      procedure For_Each_Active_Declaration (Of_Tree : Syn.Tree)
+      is
+         procedure Visit (Node : Syn.Node_Id);
+
+         procedure Visit (Node : Syn.Node_Id) is
+         begin
+            if not Landin.Configuration.Is_Active
+              (Activity.all, Syn.Source_Of (Of_Tree), Node)
+            then
+               return;
+            end if;
+            if Syn.Kind (Of_Tree, Node) = Syn.Fixed_Conditional then
+               for Arm in 1 .. Syn.Fixed_Arm_Count (Of_Tree, Node) loop
+                  declare
+                     This : constant Syn.Node_Id :=
+                       Syn.Nth_Fixed_Arm (Of_Tree, Node, Arm);
+                  begin
+                     for Which in 1 .. Syn.Fixed_Declaration_Count
+                       (Of_Tree, This)
+                     loop
+                        Visit (Syn.Nth_Fixed_Declaration
+                          (Of_Tree, This, Which));
+                     end loop;
+                  end;
+               end loop;
+            else
+               Action (Of_Tree, Node);
+            end if;
+         end Visit;
+      begin
+         for Position in 1 .. Syn.Declaration_Count (Of_Tree) loop
+            Visit (Syn.Nth_Declaration (Of_Tree, Position));
+         end loop;
+      end For_Each_Active_Declaration;
 
       procedure Walk_Scoped_Block
         (Of_Tree : Syn.Tree;
@@ -423,102 +465,95 @@ package body Landin.Stages.Resolution is
       --  is walked.  [1840]'s module is a set, so this is what lets a name
       --  be used above the line that introduces it -- and across a file
       --  boundary, because there is one module until [1410] arrives.
-      for Index in 1 .. Source_Count (Context) loop
-         declare
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Landin.Syntax.Forest.Tree_Of
-                (Trees.all, Nth_Source (Context, Index));
+      declare
+         procedure Collect (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Collect (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
          begin
-            for Position in
-              1 .. Syn.Declaration_Count (Of_Tree.all)
-            loop
-               declare
-                  Node : constant Syn.Node_Id :=
-                    Syn.Nth_Declaration (Of_Tree.all, Position);
-               begin
-                  if Landin.Resolution.Declares
-                       (Syn.Kind (Of_Tree.all, Node))
-                  then
+            if Landin.Resolution.Declares (Syn.Kind (Of_Tree, Node)) then
+               Declare_One
+                 (Of_Tree, Node, Landin.Resolution.Program_Scope,
+                  Resolve_Declared => False);
+               if Syn.Kind (Of_Tree, Node) = Syn.Atom_Declaration then
+                  for Member in 1 .. Syn.Slot_Count (Of_Tree, Node) loop
                      Declare_One
-                       (Of_Tree.all, Node,
+                       (Of_Tree, Syn.Slot (Of_Tree, Node, Member),
                         Landin.Resolution.Program_Scope,
                         Resolve_Declared => False);
-                     if Syn.Kind (Of_Tree.all, Node)
-                          = Syn.Atom_Declaration
-                     then
-                        for Member in 1 .. Syn.Slot_Count
-                          (Of_Tree.all, Node)
-                        loop
-                           Declare_One
-                             (Of_Tree.all,
-                              Syn.Slot (Of_Tree.all, Node, Member),
-                              Landin.Resolution.Program_Scope,
-                              Resolve_Declared => False);
-                        end loop;
-                     end if;
-                  end if;
+                  end loop;
+               end if;
+            end if;
+         end Collect;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Trees.all, Nth_Source (Context, Index));
+            begin
+               declare
+                  procedure Walk is new For_Each_Active_Declaration (Collect);
+               begin
+                  Walk (Of_Tree.all);
                end;
-            end loop;
-         end;
-      end loop;
+            end;
+         end loop;
+      end;
 
       --  [0690]'s case names are module-visible atoms.  Declare them only
       --  after every ordinary module declaration, so a collision has one
       --  deterministic winner independent of file order and a later case
       --  may be used before the type that contains it is written.
-      for Index in 1 .. Source_Count (Context) loop
-         declare
-            Of_Tree : constant not null access constant Syn.Tree :=
-              Landin.Syntax.Forest.Tree_Of
-                (Trees.all, Nth_Source (Context, Index));
+      declare
+         procedure Collect_Cases (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Collect_Cases
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
          begin
-            for Position in
-              1 .. Syn.Declaration_Count (Of_Tree.all)
-            loop
+            if Syn.Kind (Of_Tree, Node) = Syn.Type_Declaration
+              and then Syn.Kind (Of_Tree, Syn.Declared_Type (Of_Tree, Node))
+                = Syn.Struct_Body
+            then
                declare
-                  Node : constant Syn.Node_Id :=
-                    Syn.Nth_Declaration (Of_Tree.all, Position);
+                  Struct_Node : constant Syn.Node_Id :=
+                    Syn.Declared_Type (Of_Tree, Node);
                begin
-                  if Syn.Kind (Of_Tree.all, Node) = Syn.Type_Declaration
-                    and then Syn.Kind
-                      (Of_Tree.all,
-                       Syn.Declared_Type (Of_Tree.all, Node))
-                        = Syn.Struct_Body
-                  then
+                  for Member in 1 .. Syn.Field_Count (Of_Tree, Struct_Node)
+                  loop
                      declare
-                        Struct_Node : constant Syn.Node_Id :=
-                          Syn.Declared_Type (Of_Tree.all, Node);
+                        Part : constant Syn.Node_Id :=
+                          Syn.Nth_Field (Of_Tree, Struct_Node, Member);
                      begin
-                        for Member in 1 .. Syn.Field_Count
-                          (Of_Tree.all, Struct_Node)
-                        loop
-                           declare
-                              Part : constant Syn.Node_Id :=
-                                Syn.Nth_Field
-                                  (Of_Tree.all, Struct_Node, Member);
-                           begin
-                              if Syn.Kind (Of_Tree.all, Part)
-                                   = Syn.Variant_Part
-                              then
-                                 for Which in 1 .. Syn.Case_Count
-                                   (Of_Tree.all, Part)
-                                 loop
-                                    Declare_One
-                                      (Of_Tree.all,
-                                       Syn.Nth_Case
-                                         (Of_Tree.all, Part, Which),
-                                       Landin.Resolution.Program_Scope,
-                                       Resolve_Declared => False);
-                                 end loop;
-                              end if;
-                           end;
-                        end loop;
+                        if Syn.Kind (Of_Tree, Part) = Syn.Variant_Part then
+                           for Which in 1 .. Syn.Case_Count (Of_Tree, Part)
+                           loop
+                              Declare_One
+                                (Of_Tree, Syn.Nth_Case (Of_Tree, Part, Which),
+                                 Landin.Resolution.Program_Scope,
+                                 Resolve_Declared => False);
+                           end loop;
+                        end if;
                      end;
-                  end if;
+                  end loop;
                end;
-            end loop;
-         end;
-      end loop;
+            end if;
+         end Collect_Cases;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Trees.all, Nth_Source (Context, Index));
+            begin
+               declare
+                  procedure Walk is new For_Each_Active_Declaration
+                    (Collect_Cases);
+               begin
+                  Walk (Of_Tree.all);
+               end;
+            end;
+         end loop;
+      end;
 
       --  Pass two: the bodies, in the same order, so the report is read
       --  top to bottom of the file it is about.
@@ -682,6 +717,90 @@ package body Landin.Stages.Resolution is
             end loop;
          end;
       end loop;
+
+      --  The ordinary pass above retains its source-order body traversal.
+      --  D138 selected declarations are the same declarations spliced into
+      --  that module scope, so read their declaration halves now without
+      --  ever reading a condition or an inactive arm.
+      declare
+         procedure Resolve_Selected
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id);
+
+         procedure Resolve_Selected
+           (Of_Tree : Syn.Tree; Node : Syn.Node_Id) is
+         begin
+            case Syn.Kind (Of_Tree, Node) is
+               when Syn.Type_Declaration =>
+                  Resolve (Of_Tree, Syn.Declared_Type (Of_Tree, Node),
+                           Landin.Resolution.Program_Scope);
+               when Syn.Binding =>
+                  Resolve (Of_Tree, Syn.Declared_Type (Of_Tree, Node),
+                           Landin.Resolution.Program_Scope);
+                  Resolve (Of_Tree, Syn.Value_Of (Of_Tree, Node),
+                           Landin.Resolution.Program_Scope);
+               when others =>
+                  null;
+            end case;
+         end Resolve_Selected;
+      begin
+         for Index in 1 .. Source_Count (Context) loop
+            declare
+               Of_Tree : constant not null access constant Syn.Tree :=
+                 Landin.Syntax.Forest.Tree_Of
+                   (Trees.all, Nth_Source (Context, Index));
+            begin
+               --  Ordinary declarations have already been resolved.  A
+               --  second harmless resolution is avoided by only walking
+               --  the children of top-level fixed conditionals here.
+               for Position in 1 .. Syn.Declaration_Count (Of_Tree.all) loop
+                  declare
+                     Node : constant Syn.Node_Id :=
+                       Syn.Nth_Declaration (Of_Tree.all, Position);
+                  begin
+                     if Syn.Kind (Of_Tree.all, Node) = Syn.Fixed_Conditional
+                     then
+                        for Arm in 1 .. Syn.Fixed_Arm_Count (Of_Tree.all, Node)
+                        loop
+                           declare
+                              This : constant Syn.Node_Id :=
+                                Syn.Nth_Fixed_Arm (Of_Tree.all, Node, Arm);
+                           begin
+                              for Which in 1 .. Syn.Fixed_Declaration_Count
+                                (Of_Tree.all, This)
+                              loop
+                                 declare
+                                    Child : constant Syn.Node_Id :=
+                                      Syn.Nth_Fixed_Declaration
+                                        (Of_Tree.all, This, Which);
+                                 begin
+                                    if Landin.Configuration.Is_Active
+                                      (Activity.all,
+                                       Syn.Source_Of (Of_Tree.all), Child)
+                                    then
+                                       if Syn.Kind (Of_Tree.all, Child)
+                                            = Syn.Fixed_Conditional
+                                       then
+                                          --  The generic walker starts at a
+                                          --  program root; nested selection
+                                          --  is already represented by the
+                                          --  activity table and is handled
+                                          --  by this direct recursion later.
+                                          null;
+                                       else
+                                          Resolve_Selected
+                                            (Of_Tree.all, Child);
+                                       end if;
+                                    end if;
+                                 end;
+                              end loop;
+                           end;
+                        end loop;
+                     end if;
+                  end;
+               end loop;
+            end;
+         end loop;
+      end;
 
       declare
          Ordered : constant Landin.Diagnostics.Diagnostic_List :=

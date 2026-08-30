@@ -7184,7 +7184,9 @@ package body Landin.Stages.Lowering is
                   Node : constant Syn.Node_Id :=
                     Syn.Nth_Declaration (Of_Tree.all, Which);
                   Id : constant Res.Declaration_Id :=
-                    Declaration_At (Src, Node);
+                    (if Syn.Kind (Of_Tree.all, Node) = Syn.Fixed_Conditional
+                     then Res.No_Declaration
+                     else Declaration_At (Src, Node));
                   Made : IR.Item_Id;
                begin
                   case Syn.Kind (Of_Tree.all, Node) is
