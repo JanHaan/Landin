@@ -2056,7 +2056,7 @@ package body Landin.Stages.Lowering is
          pragma Unreferenced (Ignored);
       begin
          case Syn.Kind (Of_Tree, Node) is
-            when Syn.Call =>
+            when Syn.Call | Syn.Labeled_Application =>
                Ignored := Lower_Call
                  (Of_Tree, Node, Scope, Destination => Destination,
                   Destination_Field => Destination_Field,
@@ -2212,8 +2212,12 @@ package body Landin.Stages.Lowering is
          --  block where the call will be emitted.
          for Which in 1 .. Count loop
             declare
-               Argument : constant Syn.Node_Id :=
+               Raw_Argument : constant Syn.Node_Id :=
                  Syn.Nth_Argument (Of_Tree, Node, Which);
+               Argument : constant Syn.Node_Id :=
+                 (if Syn.Kind (Of_Tree, Raw_Argument) = Syn.Call_Argument
+                  then Syn.Expression_Projection (Of_Tree, Raw_Argument)
+                  else Raw_Argument);
             begin
                if Type_At (Of_Tree, Argument)
                     in Ty.Aggregate | Ty.Fixed_Array
@@ -3908,7 +3912,7 @@ package body Landin.Stages.Lowering is
                  (Of_Tree, Syn.Operand_Of (Of_Tree, Node), Scope,
                   Propagate => True);
 
-            when Syn.Call =>
+            when Syn.Call | Syn.Labeled_Application =>
                return Lower_Call (Of_Tree, Node, Scope);
 
             when others =>
