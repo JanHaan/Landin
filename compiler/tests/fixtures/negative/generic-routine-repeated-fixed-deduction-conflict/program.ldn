@@ -1,0 +1,7 @@
+first: (fixed n: u32, t: type, left: [n]t, right: [n]t) -> (result: t) = left[0] end first
+
+public main: () -> (code: i32) =
+    left: [2]i32 = [1, 2]
+    right: [3]i32 = [3, 4, 5]
+    code = first(left, right)
+end main

@@ -2021,7 +2021,9 @@ package body Landin.Stages.Lowering is
             else Landin.Checking.Signature_Of
               (Types.all, Of_Tree, Callee));
          Signature : constant IR.Signature_Id :=
-           Signature_For (Source_Signature);
+           (if Source_Signature = Landin.Checking.No_Signature
+            then IR.No_Signature
+            else Signature_For (Source_Signature));
          Indirect : constant Boolean := not Direct;
          Target : constant IR.Item_Id :=
            (if Indirect then IR.No_Item
@@ -2043,11 +2045,20 @@ package body Landin.Stages.Lowering is
          Callee_Saved : IR.Slot_Id := IR.No_Slot;
          Callee_Value : IR.Value_Id := IR.No_Value;
          Error_Set : constant IR.Atom_Set_Id :=
-           IR.Signature_Errors (Unit.all, Signature);
+           (if Signature = IR.No_Signature
+            then IR.No_Atom_Set
+            else IR.Signature_Errors (Unit.all, Signature));
          Failure_Slot : IR.Slot_Id := IR.No_Slot;
          Success_Slot : IR.Slot_Id := IR.No_Slot;
          Made : IR.Value_Id;
       begin
+         if Source_Signature = Landin.Checking.No_Signature
+           or else Signature = IR.No_Signature
+         then
+            raise Landin.Compiler_Defect with
+              "a call reached lowering without a checked signature";
+         end if;
+
          if Error_Set /= IR.No_Atom_Set then
             Failure_Slot := IR.Add_Slot
               (Unit.all, Filling, Ty.U32, Res.No_Declaration, Site,

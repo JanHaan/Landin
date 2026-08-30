@@ -118,10 +118,12 @@ package body Landin.Stages.Checking is
       end record;
 
       type Formal_Actual is record
-         Formal     : Res.Declaration_Id := Res.No_Declaration;
-         Value      : Type_Descriptor;
-         Fixed      : Ty.Magnitude := 0;
-         Fixed_Known : Boolean := False;
+         Formal       : Res.Declaration_Id := Res.No_Declaration;
+         Value        : Type_Descriptor;
+         Fixed        : Ty.Magnitude := 0;
+         Fixed_Known  : Boolean := False;
+         First_Binding : Landin.Provenance.Origin :=
+           Landin.Provenance.No_Origin;
       end record;
 
       type Formal_Actual_Array is array (Positive range <>) of Formal_Actual;
@@ -4402,6 +4404,7 @@ package body Landin.Stages.Checking is
          Bound : Formal_Actual_Array (1 .. Formal_Count) :=
            [others => (others => <>)];
          Good : Boolean := True;
+         Conflict_Reported : Boolean := False;
 
          function Descriptor_At
            (Of_Tree : Syn.Tree;
@@ -4415,6 +4418,11 @@ package body Landin.Stages.Checking is
            (Node       : Syn.Node_Id;
             Declaration : Res.Declaration_Id;
             Descriptor : Type_Descriptor);
+
+         procedure Report_Deduction_Conflict
+           (Argument : Syn.Node_Id;
+            Position : Positive;
+            What     : String);
 
          function Descriptor_At
            (Of_Tree : Syn.Tree;
@@ -4485,6 +4493,40 @@ package body Landin.Stages.Checking is
                   return False;
             end case;
          end Descriptors_Agree;
+
+         procedure Report_Deduction_Conflict
+           (Argument : Syn.Node_Id;
+            Position : Positive;
+            What     : String)
+         is
+            Formal_Node : constant Syn.Node_Id := Syn.Nth_Generic_Formal
+              (Template_Tree.all, Function_Node, Position);
+            First : constant Landin.Provenance.Origin :=
+              Bound (Position).First_Binding;
+         begin
+            if not Conflict_Reported then
+               Bad.Report
+                 (Item    => Bad.Type_Mismatch,
+                  Source  => Syn.Source_Of (Caller_Tree),
+                  Where   => Syn.Where (Caller_Tree, Argument),
+                  Message => "this argument deduces a different " & What
+                             & " for the repeated formal",
+                  Note    => "D138: repeated exact deductions must agree;"
+                             & " this call has no routine target",
+                  Related =>
+                    (if Landin.Provenance.Is_Known (First)
+                     then First
+                     else Syn.Origin (Template_Tree.all, Formal_Node)),
+                  Because =>
+                    (if Landin.Provenance.Is_Known (First)
+                     then "the first binding of this formal"
+                     else "the repeated formal"),
+                  Into    => Found);
+               Conflict_Reported := True;
+            end if;
+            Good := False;
+            Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
+         end Report_Deduction_Conflict;
 
          procedure Publish_Descriptor
            (Node        : Syn.Node_Id;
@@ -4558,6 +4600,7 @@ package body Landin.Stages.Checking is
                Related => Syn.Origin (Template_Tree.all, Function_Node),
                Because => "the generic routine template",
                Into    => Found);
+            Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
             return Landin.Checking.No_Signature;
          end if;
 
@@ -4622,22 +4665,13 @@ package body Landin.Stages.Checking is
                         Good := False;
                      elsif Bound (Position).Value.Kind = Ty.Ill_Typed then
                         Bound (Position).Value := Actual;
+                        Bound (Position).First_Binding :=
+                          Syn.Origin (Caller_Tree, Argument);
                      elsif not Descriptors_Agree
                        (Bound (Position).Value, Actual)
                      then
-                        Bad.Report
-                          (Item    => Bad.Type_Mismatch,
-                           Source  => Syn.Source_Of (Caller_Tree),
-                           Where   => Syn.Where (Caller_Tree, Argument),
-                           Message => "this argument deduces a different"
-                                      & " type for the repeated formal",
-                           Note    => "D138: every direct occurrence of one"
-                                      & " type formal must agree exactly",
-                           Related => Syn.Origin
-                             (Template_Tree.all, Written),
-                           Because => "the repeated direct type formal",
-                           Into    => Found);
-                        Good := False;
+                        Report_Deduction_Conflict
+                          (Argument, Positive (Position), "type");
                      end if;
                   end;
                elsif Syn.Kind (Template_Tree.all, Written) = Syn.Array_Type
@@ -4689,7 +4723,25 @@ package body Landin.Stages.Checking is
                        and then Type_Formal /= Res.No_Declaration
                      then
                         if Got /= Ty.Fixed_Array then
+                           if Got /= Ty.Ill_Typed then
+                              Bad.Report
+                                (Item    => Bad.Type_Mismatch,
+                                 Source  => Syn.Source_Of (Caller_Tree),
+                                 Where   => Syn.Where
+                                   (Caller_Tree, Argument),
+                                 Message => "this argument is not a fixed"
+                                            & " array and cannot match"
+                                            & " exact `[n]t` deduction",
+                                 Note    => "D138: exact array deduction"
+                                            & " performs no conversion",
+                                 Related => Syn.Origin
+                                   (Template_Tree.all, Written),
+                                 Because => "the exact array parameter",
+                                 Into    => Found);
+                           end if;
                            Good := False;
+                           Landin.Checking.Refuse
+                             (Types.all, Caller_Tree, Call);
                         else
                            declare
                               Actual : constant Type_Descriptor :=
@@ -4718,20 +4770,32 @@ package body Landin.Stages.Checking is
                                    and then Bound (Fixed_Position).Fixed
                                      /= Ty.Magnitude (Actual.Length)
                                  then
-                                    Good := False;
+                                    Report_Deduction_Conflict
+                                      (Argument, Positive (Fixed_Position),
+                                       "fixed value");
                                  else
                                     Bound (Fixed_Position).Fixed :=
                                       Ty.Magnitude (Actual.Length);
                                     Bound (Fixed_Position).Fixed_Known := True;
+                                    if not Landin.Provenance.Is_Known
+                                      (Bound (Fixed_Position).First_Binding)
+                                    then
+                                       Bound (Fixed_Position).First_Binding :=
+                                         Syn.Origin (Caller_Tree, Argument);
+                                    end if;
                                  end if;
                                  if Bound (Type_Position).Value.Kind
                                       = Ty.Ill_Typed
                                  then
                                     Bound (Type_Position).Value := Element;
+                                    Bound (Type_Position).First_Binding :=
+                                      Syn.Origin (Caller_Tree, Argument);
                                  elsif not Descriptors_Agree
                                    (Bound (Type_Position).Value, Element)
                                  then
-                                    Good := False;
+                                    Report_Deduction_Conflict
+                                      (Argument, Positive (Type_Position),
+                                       "type");
                                  end if;
                               end if;
                            end;
@@ -4830,6 +4894,7 @@ package body Landin.Stages.Checking is
          end if;
 
          if not Good then
+            Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
             return Landin.Checking.No_Signature;
          end if;
 
@@ -4853,18 +4918,18 @@ package body Landin.Stages.Checking is
                  Landin.Checking.Intern_Routine_Instance
                    (Types.all, Template, Key);
             begin
-               Landin.Checking.Note_Routine_Target
-                 (Types.all, Caller_Tree, Call, Instance);
-
                if Landin.Checking.Routine_State_Of (Types.all, Instance)
                     in Landin.Checking.Routine_Building
                        | Landin.Checking.Routine_Ready
                then
+                  Landin.Checking.Note_Routine_Target
+                    (Types.all, Caller_Tree, Call, Instance);
                   return Landin.Checking.Routine_Signature_Of
                     (Types.all, Instance);
                elsif Landin.Checking.Routine_State_Of (Types.all, Instance)
                  = Landin.Checking.Routine_Invalid
                then
+                  Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
                   return Landin.Checking.No_Signature;
                end if;
 
@@ -4896,6 +4961,8 @@ package body Landin.Stages.Checking is
                              (Template_Tree.all, Function_Node),
                            Because => "the active generic template",
                            Into    => Found);
+                        Landin.Checking.Refuse
+                          (Types.all, Caller_Tree, Call);
                         return Landin.Checking.No_Signature;
                      end if;
                   end;
@@ -5048,11 +5115,15 @@ package body Landin.Stages.Checking is
                   then
                      Landin.Checking.Invalidate_Routine_Instance
                        (Types.all, Instance);
+                     Landin.Checking.Refuse (Types.all, Caller_Tree, Call);
+                     return Landin.Checking.No_Signature;
                   else
                      Landin.Checking.Finish_Routine_Instance
                        (Types.all, Instance);
+                     Landin.Checking.Note_Routine_Target
+                       (Types.all, Caller_Tree, Call, Instance);
+                     return Signature;
                   end if;
-                  return Signature;
                exception
                   when others =>
                      Landin.Checking.Restore_Routine_View

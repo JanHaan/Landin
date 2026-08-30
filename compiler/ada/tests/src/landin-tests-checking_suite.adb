@@ -95,6 +95,9 @@ package body Landin.Tests.Checking_Suite is
    procedure Routine_Instance_Views_Keep_Source_Facts_Separate
      (Item : in out Landin.Testing.Context);
 
+   procedure Failed_Generic_Deduction_Has_No_Target
+     (Item : in out Landin.Testing.Context);
+
    procedure Declared_Structs_Follow_Target_Layout
      (Item : in out Landin.Testing.Context);
 
@@ -1127,6 +1130,64 @@ package body Landin.Tests.Checking_Suite is
          end;
       end;
    end Routine_Instance_Views_Keep_Source_Facts_Separate;
+
+   procedure Failed_Generic_Deduction_Has_No_Target
+     (Item : in out Landin.Testing.Context)
+   is
+      Text : constant String :=
+        "first: (fixed n: u32, t: type, left: [n]t, right: [n]t)"
+        & " -> (result: t) = left[0] end first" & LF
+        & "use: () -> (result: i32) =" & LF
+        & "    left: [2]i32 = [1, 2]" & LF
+        & "    right: [3]i32 = [3, 4, 5]" & LF
+        & "    result = first(left, right)" & LF
+        & "end use" & LF;
+      Work : Landin.Stages.Compilation :=
+        Landin.Stages.Create (Landin.Targets.Linux_X86_64);
+      Order : Landin.Stages.Pipeline;
+      Ran : Natural;
+      Src : Landin.Source.Source_Id;
+   begin
+      Src := Landin.Stages.Add_Source (Work, "fixed-conflict.ldn", Text);
+      Landin.Stages.Append (Order, Frontend'Access);
+      Landin.Stages.Append (Order, Names'Access);
+      Landin.Stages.Append (Order, Checker'Access);
+      Ran := Landin.Stages.Run (Order, Work);
+
+      Landin.Testing.Check_Equal (Item, Ran, 3, "the checker ran");
+      Landin.Testing.Check_Equal
+        (Item, Landin.Diagnostics.Count (Landin.Stages.Report (Work)), 1,
+         "one repeated deduction conflict is reported for the call");
+
+      declare
+         Of_Tree : constant not null access constant Landin.Syntax.Tree :=
+           Landin.Syntax.Forest.Tree_Of
+             (Landin.Stages.Trees (Work).all, Src);
+         Types : constant not null access Landin.Checking.Table :=
+           Landin.Stages.Types (Work);
+         Call : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
+      begin
+         for Node in Landin.Syntax.Node_Id'(1)
+           .. Landin.Syntax.Last_Node (Of_Tree.all)
+         loop
+            if Landin.Syntax.Kind (Of_Tree.all, Node) = Landin.Syntax.Call then
+               Call := Node;
+               exit;
+            end if;
+         end loop;
+         Landin.Testing.Check
+           (Item, Call /= Landin.Syntax.No_Node, "the call was found");
+         Landin.Testing.Check
+           (Item,
+            Landin.Checking.Type_Of (Types.all, Of_Tree.all, Call)
+              = Landin.Types.Ill_Typed
+              and then Landin.Checking.Routine_Target_Of
+                (Types.all, Of_Tree.all, Call)
+                  = Landin.Checking.No_Routine_Instance
+              and then Landin.Checking.Routine_Instance_Count (Types.all) = 0,
+            "a refused deduction has neither a target nor an instance");
+      end;
+   end Failed_Generic_Deduction_Has_No_Target;
 
    procedure Declared_Structs_Follow_Target_Layout
      (Item : in out Landin.Testing.Context)
@@ -5907,6 +5968,9 @@ package body Landin.Tests.Checking_Suite is
       Landin.Testing.Register
         (Into, "checking", "routine instance views keep source facts",
          Routine_Instance_Views_Keep_Source_Facts_Separate'Access);
+      Landin.Testing.Register
+        (Into, "checking", "failed generic deduction has no target",
+         Failed_Generic_Deduction_Has_No_Target'Access);
       Landin.Testing.Register
         (Into, "checking", "ordinary signatures use nominal identity only",
          Ordinary_Function_Signatures_Use_Identity_Only'Access);
