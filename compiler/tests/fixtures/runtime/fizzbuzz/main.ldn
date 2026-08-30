@@ -1,0 +1,55 @@
+--  The current hosted kernel cannot print the traditional words yet, so this
+--  program computes and checks the same classification for one through 100.
+fizz, buzz, fizz_buzz, number: atom
+fizzbuzz_kind: type = fizz | buzz | fizz_buzz | number
+
+counts: type = struct
+    fizz_only: u32
+    buzz_only: u32
+    both: u32
+    ordinary: u32
+end counts
+
+classify: (n: u32) -> (kind: fizzbuzz_kind) =
+    if n % 15 == 0 then
+        kind = fizz_buzz
+    elsif n % 3 == 0 then
+        kind = fizz
+    elsif n % 5 == 0 then
+        kind = buzz
+    else
+        kind = number
+    end if
+end classify
+
+tally: (inout result: counts, n: u32) -> none =
+    return when n > 100
+
+    match classify(n)
+        fizz: result.fizz_only = result.fizz_only + 1
+        buzz: result.buzz_only = result.buzz_only + 1
+        fizz_buzz: result.both = result.both + 1
+        number: result.ordinary = result.ordinary + 1
+    end match
+    tally(result, n + 1)
+end tally
+
+public main: () -> (code: i32) =
+    mut result: counts = zeroed
+    tally(result, 1)
+
+    if classify(1) == number
+      and classify(3) == fizz
+      and classify(5) == buzz
+      and classify(15) == fizz_buzz
+      and classify(30) == fizz_buzz
+      and result.fizz_only == 27
+      and result.buzz_only == 14
+      and result.both == 6
+      and result.ordinary == 53
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main

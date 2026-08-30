@@ -1,0 +1,60 @@
+--  Binary search narrows a read-only slice to a half-open candidate range.
+--  Its result is explicit: either a found index or the missing case.
+search_result: type = struct
+    kind: variant
+        found: (index: usize) |
+        missing
+    end kind
+end search_result
+
+search_range: (values: []i32, needle: i32,
+               left: usize, right: usize) -> (result: search_result) =
+    if left >= right then
+        result = (kind: missing)
+    else
+        middle: usize = left + (right - left) / 2
+        if values[middle] == needle then
+            result = (kind: found(index: middle))
+        elsif values[middle] < needle then
+            result = search_range(values, needle, middle + 1, right)
+        else
+            result = search_range(values, needle, left, middle)
+        end if
+    end if
+end search_range
+
+search: (values: []i32, needle: i32) -> (result: search_result) =
+    result = search_range(values, needle, 0, lenof values)
+end search
+
+found_at: (candidate: search_result,
+           expected: usize) -> (matches: bool) =
+    match candidate.kind
+        found(index): matches = index == expected
+        missing: matches = false
+    end match
+end found_at
+
+is_missing: (candidate: search_result) -> (missing_result: bool) =
+    match candidate.kind
+        found(index): missing_result = false
+        missing: missing_result = true
+    end match
+end is_missing
+
+public main: () -> (code: i32) =
+    values: [10]i32 = [-20, -5, 0, 3, 8, 11, 18, 21, 34, 55]
+    view: []i32 = values[0..<lenof values]
+    empty: []i32 = []
+
+    if found_at(search(view, -20), 0)
+      and found_at(search(view, 3), 3)
+      and found_at(search(view, 55), 9)
+      and is_missing(search(view, 4))
+      and is_missing(search(empty, 4))
+    then
+        code = 42
+    else
+        code = 1
+    end if
+end main
