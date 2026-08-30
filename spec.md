@@ -263,16 +263,16 @@ A function is a value with a body, and its returns are named.
 expression still takes an end, and the expression fills the named
 return [0880]; every named return must be assigned before the
 function returns [0930]. The parameter conventions [0900], `escaping` [0780]
-and generic parameters [1290] are enabled only on a declared routine. Its
-complete signature scope collects type/fixed formals, runtime parameters and
-named returns before resolving any type; runtime formals alone make the
-runtime signature. Calls retain ordinary `f(runtime_arguments)` spelling and
-deduce every static formal from independently synthesized argument types.
-An enabled signature takes values including function values, hands one or more
-named values (or none) back, and optionally declares [0940]'s payload-free
-atom error set. A function type reuses the nongeneric `signature` production
-but has no body. Its labels are type description only and do not declare
-parameters or named returns.
+and generic parameters [1290] have their parser and resolution foundation on
+a declared routine. Its complete signature scope collects type/fixed formals,
+runtime parameters and named returns before resolving any type; runtime
+formals alone make the runtime signature. A generic template has no standalone
+function value or IR item. Direct-call deduction and concrete routine instances
+remain the next R2.40 increment. An enabled nongeneric signature takes values
+including function values, hands one or more named values (or none) back, and
+optionally declares [0940]'s payload-free atom error set. A function type
+reuses the nongeneric `signature` production but has no body. Its labels are
+type description only and do not declare parameters or named returns.
 
 An anonymous function [1010] writes that same signature and body without a
 module name. It captures no enclosing local, parameter or named return: its
@@ -7410,8 +7410,9 @@ where an argument is a type or an integer for a fixed formal. A fixed formal
 may supply an array bound, so `[n]t` is an alias body. The grammar admits that
 formal list before either an alias type or a struct body. A parameterized atom
 union, constraint and fixed conditional declaration remain outside the enabled
-kernel. D138 separately extends the same compile-time-only binders to declared
-routines and deduces their complete actual tuple from ordinary call arguments.
+kernel. D138 separately extends the same compile-time-only binders to
+routine syntax and resolution; direct-call deduction remains its next
+increment.
 
 One type-declaration scope contains all of the formals. The resolver collects
 the complete formal list into that scope before it resolves any fixed formal's
@@ -7577,9 +7578,8 @@ or expression in the template. An invalid layout state stores no application
 provenance: a repeated use of the same canonical key re-evaluates the bounded
 body walk so it receives its own primary while retaining one identity and
 tuple. Fixed actuals remain integer literals or
-forwarded fixed formals. Parameterized atom unions, constraints and fixed
-conditional declarations remain deferred; D138 owns generic routines and
-exact deduction.
+forwarded fixed formals. Parameterized atom unions, generic routine deduction,
+constraints and fixed conditional declarations remain deferred.
 
 An alias expansion that reaches no type remains L0307. A nominal field,
 nominal array element or variant payload that would require a finite instance
