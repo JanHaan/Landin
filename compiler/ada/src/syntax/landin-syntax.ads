@@ -85,6 +85,10 @@ package Landin.Syntax is
       --  Above: the file [1740] itself, which is not a declaration.
       --  Below: declarations [1740].
       Error_Declaration,
+      --  D138's module-only declaration splice.  Its trailing run is
+      --  Fixed_Arm nodes; an arm has a condition (or No_Node for `else`)
+      --  followed by its declaration run and opens no lexical scope.
+      Fixed_Conditional,
       Function_Declaration,
       --  [0630].  One declaration introduces the atom's value and its
       --  singleton type together; it has no initializer or storage.
@@ -254,6 +258,7 @@ package Landin.Syntax is
       Parameter,
       Named_Return,
       If_Arm,
+      Fixed_Arm,
       Match_Arm,
       Match_Binding,
       --  One named selection in a destructuring binding, carrying the
@@ -555,6 +560,38 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                           in If_Arm | Return_Statement | Fail_Statement;
+
+   --  D138's declaration conditional and its arms.  An arm's first slot is
+   --  its condition, or No_Node for `else`; the remaining slots are ordinary
+   --  declarations that configuration selects without mutating syntax.
+   function Fixed_Arm_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Fixed_Conditional,
+          Post => Fixed_Arm_Count'Result >= 1;
+
+   function Nth_Fixed_Arm
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Fixed_Conditional
+                 and then Index <= Fixed_Arm_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Fixed_Arm'Result)
+                  and then Kind (Of_Tree, Nth_Fixed_Arm'Result) = Fixed_Arm;
+
+   function Fixed_Condition (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Fixed_Arm;
+
+   function Fixed_Declaration_Count (Of_Tree : Tree; Id : Node_Id)
+     return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Fixed_Arm;
+
+   function Nth_Fixed_Declaration
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Fixed_Arm
+                 and then Index <= Fixed_Declaration_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Fixed_Declaration'Result);
 
    --  What a function, branch, match arm or bare block runs.  A Block for a
    --  statement body, and
