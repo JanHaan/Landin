@@ -169,6 +169,7 @@ package body Landin.Resolution is
             --  [1795]: a type declaration names a type, and the kernel
             --  has only the module scope to name one in.
             when Landin.Syntax.Type_Declaration     => Module_Type,
+            when Landin.Syntax.Concept_Declaration  => Module_Concept,
             when Landin.Syntax.Type_Formal           => Type_Parameter,
             when Landin.Syntax.Fixed_Formal          => Fixed_Parameter,
             when Landin.Syntax.Variant_Case         => Case_Name,
@@ -248,6 +249,7 @@ package body Landin.Resolution is
      is (if Landin.Syntax.Kind (Of_Tree, Node)
             not in Landin.Syntax.Name_Reference
                    | Landin.Syntax.Type_Reference
+                   | Landin.Syntax.Concept_Reference
          then Not_A_Reference
          elsif Of_Table.Bound.Element (Slot (Of_Table, Of_Tree, Node))
                = No_Declaration

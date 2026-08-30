@@ -71,6 +71,7 @@ with Landin.Types;
 package Landin.Checking is
 
    use type Landin.Provenance.Declaration_Id;
+   use type Landin.Source.Source_Id;
    use type Landin.Syntax.Node_Id;
    use type Landin.Types.Type_Kind;
 
@@ -132,6 +133,54 @@ package Landin.Checking is
 
    function Holds (Of_Table : Table; Id : Routine_Instance_Id)
      return Boolean;
+
+   --  A concept is either one source declaration or R2.60's sole closed
+   --  compiler concept, `zeroable`.  Keeping an explicit identity rather
+   --  than recognizing arbitrary declarations by spelling prevents a user
+   --  from opening the compiler-supplied set through reflection.
+   package Concept_Identities is
+      type Id is private;
+
+      function None return Id;
+      function Nth (Of_Table : Table; Position : Positive) return Id;
+      function Holds (Of_Table : Table; Of_Id : Id) return Boolean;
+      function Position (Of_Table : Table; Of_Id : Id) return Positive
+        with Pre => Holds (Of_Table, Of_Id);
+   private
+      type Id is range 0 .. Integer'Last;
+      function From_Position (Position : Positive) return Id;
+   end Concept_Identities;
+
+   subtype Concept_Id is Concept_Identities.Id;
+   use type Concept_Id;
+
+   function No_Concept return Concept_Id renames Concept_Identities.None;
+
+   --  R2.60 collects conformances as whole-program semantic identities.
+   --  A source declaration has no name of its own, so its checker identity
+   --  is distinct from Declaration_Id; the key below remains the normalized
+   --  represented type, concept identity and input-type tuple.
+   package Conformance_Identities is
+      type Id is private;
+
+      function None return Id;
+      function Nth (Of_Table : Table; Position : Positive) return Id;
+      function Holds (Of_Table : Table; Of_Id : Id) return Boolean;
+      function Position (Of_Table : Table; Of_Id : Id) return Positive
+        with Pre => Holds (Of_Table, Of_Id);
+   private
+      type Id is range 0 .. Integer'Last;
+      function From_Position (Position : Positive) return Id;
+   end Conformance_Identities;
+
+   subtype Conformance_Id is Conformance_Identities.Id;
+   use type Conformance_Id;
+
+   function No_Conformance return Conformance_Id
+     renames Conformance_Identities.None;
+
+   type Conformance_Origin is
+     (Declared_Conformance, Compiler_Zeroable_Conformance);
 
    --  Selects the fact layer used by every node and declaration query/write.
    --  Activating an instance never mutates the global module/nongeneric facts;
@@ -863,6 +912,125 @@ package Landin.Checking is
      (Key : Actual_Key) return Landin.Types.Magnitude
      with Pre => Actual_Kind_Of (Key) = Fixed_Actual_Kind;
 
+   ------------------------------------------------------------------
+   --  Concept conformance register
+   ------------------------------------------------------------------
+
+   function Concept_Count (Of_Table : Table) return Natural
+     with Pre => Is_Prepared (Of_Table);
+
+   function Holds (Of_Table : Table; Id : Concept_Id) return Boolean;
+
+   function Compiler_Zeroable_Concept (Of_Table : Table) return Concept_Id
+     with Pre  => Is_Prepared (Of_Table),
+          Post => Holds (Of_Table, Compiler_Zeroable_Concept'Result);
+
+   function Intern_Concept
+     (Into : in out Table; Declaration : Declaration_Id) return Concept_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Declaration /= No_Declaration
+                  and then Natural (Declaration) <= Declaration_Limit (Into),
+          Post => Holds (Into, Intern_Concept'Result);
+
+   function Concept_Declaration
+     (Of_Table : Table; Id : Concept_Id) return Declaration_Id
+     with Pre => Holds (Of_Table, Id);
+
+   function Is_Compiler_Concept
+     (Of_Table : Table; Id : Concept_Id) return Boolean
+     with Pre => Holds (Of_Table, Id);
+
+   function Conformance_Count (Of_Table : Table) return Natural
+     with Pre => Is_Prepared (Of_Table);
+
+   function Holds (Of_Table : Table; Id : Conformance_Id) return Boolean;
+
+   --  The exact normalized key lookup.  Parameterized source declarations
+   --  are matched and substituted by the checking stage; each concrete
+   --  result is interned here, so R2.70 receives one selected identity and
+   --  never has to repeat source-pattern search.
+   function Find_Conformance
+     (Of_Table : Table;
+      Concept  : Concept_Id;
+      Target   : Actual_Key;
+      Inputs   : Actual_Tuple) return Conformance_Id
+     with Pre => Is_Prepared (Of_Table)
+                 and then Holds (Of_Table, Concept)
+                 and then Holds (Of_Table, Target)
+                 and then Actual_Kind_Of (Target) = Type_Actual_Kind
+                 and then Holds (Of_Table, Inputs);
+
+   function Add_Conformance
+     (Into       : in out Table;
+      Concept    : Concept_Id;
+      Target     : Actual_Key;
+      Inputs     : Actual_Tuple;
+      Bindings   : Actual_Tuple;
+      Source     : Landin.Source.Source_Id;
+      Node       : Landin.Syntax.Node_Id;
+      Origin     : Conformance_Origin) return Conformance_Id
+     with Pre  => Is_Prepared (Into)
+                  and then Holds (Into, Concept)
+                  and then Holds (Into, Target)
+                  and then Actual_Kind_Of (Target) = Type_Actual_Kind
+                  and then Holds (Into, Inputs)
+                  and then Holds (Into, Bindings)
+                  and then Find_Conformance
+                    (Into, Concept, Target, Inputs) = No_Conformance
+                  and then
+                    (if Origin = Declared_Conformance
+                     then Source /= Landin.Source.No_Source
+                          and then Node /= Landin.Syntax.No_Node
+                     else Source = Landin.Source.No_Source
+                          and then Node = Landin.Syntax.No_Node),
+          Post => Holds (Into, Add_Conformance'Result);
+
+   function Conformance_Concept
+     (Of_Table : Table; Id : Conformance_Id) return Concept_Id
+     with Pre => Holds (Of_Table, Id);
+
+   function Conformance_Target
+     (Of_Table : Table; Id : Conformance_Id) return Actual_Key
+     with Pre  => Holds (Of_Table, Id),
+          Post => Holds (Of_Table, Conformance_Target'Result);
+
+   function Conformance_Input_Count
+     (Of_Table : Table; Id : Conformance_Id) return Natural
+     with Pre => Holds (Of_Table, Id);
+
+   function Nth_Conformance_Input
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Actual_Key
+     with Pre  => Holds (Of_Table, Id)
+                  and then Position <= Conformance_Input_Count (Of_Table, Id),
+          Post => Holds (Of_Table, Nth_Conformance_Input'Result);
+
+   function Conformance_Binding_Count
+     (Of_Table : Table; Id : Conformance_Id) return Natural
+     with Pre => Holds (Of_Table, Id);
+
+   function Nth_Conformance_Binding
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Actual_Key
+     with Pre  => Holds (Of_Table, Id)
+                  and then Position <= Conformance_Binding_Count
+                    (Of_Table, Id),
+          Post => Holds (Of_Table, Nth_Conformance_Binding'Result);
+
+   function Conformance_Source
+     (Of_Table : Table; Id : Conformance_Id)
+      return Landin.Source.Source_Id
+     with Pre => Holds (Of_Table, Id);
+
+   function Conformance_Node
+     (Of_Table : Table; Id : Conformance_Id)
+      return Landin.Syntax.Node_Id
+     with Pre => Holds (Of_Table, Id);
+
+   function Conformance_Origin_Of
+     (Of_Table : Table; Id : Conformance_Id) return Conformance_Origin
+     with Pre => Holds (Of_Table, Id);
+
    function Intern_Nominal_Instance
      (Into    : in out Table;
       Template : Declaration_Id;
@@ -1564,6 +1732,27 @@ private
    package Routine_Instance_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Routine_Instance_Record);
 
+   type Concept_Record is record
+      Declaration : Declaration_Id := No_Declaration;
+      Compiler_Supplied : Boolean := False;
+   end record;
+
+   package Concept_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Concept_Record);
+
+   type Conformance_Record is record
+      Concept  : Concept_Id := No_Concept;
+      Target   : Actual_Key;
+      Inputs   : Run;
+      Bindings : Run;
+      Source   : Landin.Source.Source_Id := Landin.Source.No_Source;
+      Node     : Landin.Syntax.Node_Id := Landin.Syntax.No_Node;
+      Origin   : Conformance_Origin := Declared_Conformance;
+   end record;
+
+   package Conformance_Vectors is new Ada.Containers.Vectors
+     (Index_Type => Positive, Element_Type => Conformance_Record);
+
    package Atom_Set_Id_Vectors is new Ada.Containers.Vectors
      (Index_Type => Positive, Element_Type => Atom_Set_Id);
 
@@ -1727,6 +1916,9 @@ private
       Nominal_Actuals : Actual_Key_Vectors.Vector;
       Routine_Instances : Routine_Instance_Vectors.Vector;
       Routine_Actuals : Actual_Key_Vectors.Vector;
+      Concepts : Concept_Vectors.Vector;
+      Conformances : Conformance_Vectors.Vector;
+      Conformance_Actuals : Actual_Key_Vectors.Vector;
       Current_Routine : Routine_Instance_Id := No_Routine_Instance;
       Node_Overlays : Node_Overlay_Vectors.Vector;
       Declaration_Overlays : Declaration_Overlay_Vectors.Vector;

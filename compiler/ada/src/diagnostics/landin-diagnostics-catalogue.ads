@@ -76,12 +76,12 @@ package Landin.Diagnostics.Catalogue is
       --  declared twice in one scope, and a name used and never declared.
       Duplicate_Declaration,
       Unresolved_Name,
-      --  The checker, assigned at R1.60.  Five rules: a literal no type
-      --  holds, two types that must agree and do not, a name read before
-      --  it is assigned, a place that may not be written, and a name used
-      --  in a way the kernel does not enable.  Impossible_Operand joined
-      --  them at R1.70, where [1950] was written: it is the operand half
-      --  of what Literal_Out_Of_Range is the result half of.
+      --  The checker, assigned at R1.60.  Its rows cover type agreement,
+      --  definite assignment, references, layouts and the other semantic
+      --  rules the kernel can find.  Impossible_Operand joined them at
+      --  R1.70, where [1950] was written: it is the operand half of what
+      --  Literal_Out_Of_Range is the result half of.  R2.60 adds the
+      --  conformance foundation below.
       Literal_Out_Of_Range,
       Type_Mismatch,
       Not_Definitely_Assigned,
@@ -99,6 +99,12 @@ package Landin.Diagnostics.Catalogue is
       Reference_Escapes,
       Borrowed_Place,
       Return_Sources_Disagree,
+      --  R2.60's conformance foundation.  These are checker failures:
+      --  duplicate whole-program keys, a missing formal conformance, and
+      --  an attempt to provide a compiler-owned conformance.
+      Conformance_Collision,
+      Unsatisfied_Constraint,
+      Compiler_Conformance_Reserved,
       --  The backend and its toolchain, assigned from R1.80 onwards.  None
       --  is about a frontend construct: two are the host failing to finish
       --  an accepted program, one is [1970]'s missing entry shape, one is a
@@ -159,6 +165,9 @@ package Landin.Diagnostics.Catalogue is
             when Reference_Escapes         => "L0314",
             when Borrowed_Place            => "L0315",
             when Return_Sources_Disagree   => "L0316",
+            when Conformance_Collision      => "L0317",
+            when Unsatisfied_Constraint     => "L0318",
+            when Compiler_Conformance_Reserved => "L0319",
             when No_Toolchain              => "L0500",
             when Toolchain_Failed          => "L0501",
             when Entry_Point_Missing       => "L0502",
@@ -181,7 +190,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => Error,
             when Unresolved_Name       => Error,
             when Literal_Out_Of_Range
-               .. Return_Sources_Disagree => Error,
+               .. Compiler_Conformance_Reserved => Error,
             when No_Toolchain .. Frame_Not_Addressable => Error);
 
    --  Argument_Not_In_A_Register retired at R2.30: the internal scalar
@@ -207,7 +216,7 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => Live,
             when Unresolved_Name       => Live,
             when Literal_Out_Of_Range
-               .. Return_Sources_Disagree => Live,
+               .. Compiler_Conformance_Reserved => Live,
             when No_Toolchain .. Entry_Point_Missing => Live,
             when Argument_Not_In_A_Register => Retired,
             when Frame_Not_Addressable => Live);
@@ -306,6 +315,13 @@ package Landin.Diagnostics.Catalogue is
             when Return_Sources_Disagree =>
                "[0790]: a returned reference derives from exactly its"
                & " declared source parameters",
+            when Conformance_Collision =>
+               "a whole-program conformance key has two declarations",
+            when Unsatisfied_Constraint =>
+               "a concrete type actual lacks the required concept conformance",
+            when Compiler_Conformance_Reserved =>
+               "a user attempts to declare the compiler-owned concept or one"
+               & " of its supplied conformances",
             when No_Toolchain          =>
                "[1550]: no assembler and linker for the target on this"
                & " host",
@@ -346,11 +362,10 @@ package Landin.Diagnostics.Catalogue is
             when Duplicate_Declaration => True,
             when Unresolved_Name       => True,
             when Literal_Out_Of_Range
-               .. Return_Sources_Disagree => True,
-            --  None of the three is about a place in a file.  Two are
-            --  the host failing to finish an accepted program, and the
-            --  third is a declaration the module never made, which has
-            --  no span by definition.
+               .. Compiler_Conformance_Reserved => True,
+            --  None of the backend codes is about a place in a file: they
+            --  are the host failing to finish an accepted program or a
+            --  verified shape this backend cannot encode.
             when No_Toolchain .. Frame_Not_Addressable => False);
 
    --  Whether the primary span must cover at least one byte. An empty span
@@ -376,7 +391,7 @@ package Landin.Diagnostics.Catalogue is
             when Unresolved_Name       => True,
             --  Every one of these points at something a program wrote.
             when Literal_Out_Of_Range
-               .. Return_Sources_Disagree =>
+               .. Compiler_Conformance_Reserved =>
                True,
             when No_Toolchain .. Frame_Not_Addressable => False);
 
@@ -420,7 +435,9 @@ package Landin.Diagnostics.Catalogue is
             when Variant_Case_Named_Twice => 1,
             when Recursive_Nominal_Value => 1,
             when Reference_Escapes | Borrowed_Place
-               | Return_Sources_Disagree => 1,
+               | Return_Sources_Disagree
+               | Conformance_Collision | Unsatisfied_Constraint => 1,
+            when Compiler_Conformance_Reserved => 0,
             when Literal_Out_Of_Range  => 0,
             when Unsupported_Use       => 0,
             when Not_Known_At_Compile_Time => 0,
@@ -465,7 +482,9 @@ package Landin.Diagnostics.Catalogue is
             when Variant_Case_Not_Matched => 1,
             when Recursive_Nominal_Value => 1,
             when Reference_Escapes | Borrowed_Place
-               | Return_Sources_Disagree => 1,
+               | Return_Sources_Disagree
+               | Conformance_Collision | Unsatisfied_Constraint
+               | Compiler_Conformance_Reserved => 1,
             --  The one diagnostic here a user is stuck on rather than
             --  informed by, so it owes them the way out: which program
             --  was looked for, and how to name another.

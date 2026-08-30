@@ -98,6 +98,12 @@ package Landin.Syntax is
       --  have nothing to say about one.  Its trailing run is D135's
       --  type and fixed formals.
       Type_Declaration,
+      --  [1230]'s requirement bundle and [1240]'s registration are module
+      --  declarations of their own.  Neither is a type alias or a binding:
+      --  later semantic stages collect their source facts without treating
+      --  either as a runtime value.
+      Concept_Declaration,
+      Conformance_Declaration,
       Binding,
       --  [0990]'s by-name local binding of selected fields from one
       --  anonymous result aggregate.  Its fixed slot is the source value;
@@ -275,6 +281,10 @@ package Landin.Syntax is
       --  a value [0750] and keeps the position it was written in,
       --  because that position is the layout.
       Struct_Body,
+      --  A contextual `is` names a concept rather than a type.  Keeping the
+      --  direct source reference distinct lets concept parents, constraints
+      --  and conformances retain that fact before collection exists.
+      Concept_Reference,
       Field,
       --  [0680]'s contextual variant member and one of its cases.  The
       --  part's trailing run is Variant_Case in source order; a case's
@@ -283,10 +293,20 @@ package Landin.Syntax is
       Variant_Part,
       Variant_Case,
       --  The parts that are none of the above.  D135's formals are
-      --  declarations inside a type declaration's own scope; a type formal
-      --  carries no child, while a fixed formal carries its declared type.
+      --  declarations inside a type declaration's own scope.  A type formal
+      --  has one optional direct Concept_Reference child, while a fixed
+      --  formal retains its declared type child.
       Type_Formal,
       Fixed_Formal,
+      --  A concept body retains one ordered run of its formals, parents and
+      --  signature-only entries.
+      Concept_Body,
+      --  A named requirement has a signature but no body.  The first two
+      --  slots are its return list and error set, then parameters follow.
+      Concept_Entry,
+      --  One labelled conformance RHS, retained neutrally until collection
+      --  decides whether it denotes a type actual or a supplying function.
+      Conformance_Entry,
       Parameter,
       Named_Return,
       --  One source named by [0790]'s `from` clause.  It is a signature
@@ -346,8 +366,10 @@ package Landin.Syntax is
    function Has_Name (Of_Kind : Node_Kind) return Boolean
      is (Of_Kind in Function_Declaration | Atom_Declaration | Binding
                     | Parameter | Named_Return | Name_Reference | Type_Name
-                    | Type_Declaration | Type_Reference | Type_Formal
-                    | Fixed_Formal | Field | Variant_Part | Variant_Case
+                    | Type_Declaration | Concept_Declaration
+                    | Type_Reference | Concept_Reference | Type_Formal
+                    | Fixed_Formal | Concept_Entry | Conformance_Entry
+                    | Field | Variant_Part | Variant_Case
                     | Destructured_Field
                     | Destructured_Name | Recovery_Clause | Match_Binding
                     | Return_Source | Member_Selection | Field_Value
@@ -451,14 +473,15 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id) = Integer_Literal;
 
-   --  `public` rides on a declaration and never on a statement [1740].  A
-   --  Binding inside a body is the same kind of node, and this answers
+   --  `public` rides on a named declaration and never on a statement [1740].
+   --  A Binding inside a body is the same kind of node, and this answers
    --  False for it: the parser refused the `public` and said so.
    function Is_Public (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                           in Function_Declaration | Atom_Declaration
-                             | Binding;
+                             | Binding | Concept_Declaration
+                             | Conformance_Declaration;
 
    function Is_Mutable (Of_Tree : Tree; Id : Node_Id) return Boolean
      with Pre => Contains (Of_Tree, Id)
@@ -549,6 +572,62 @@ package Landin.Syntax is
                  and then Kind (Of_Tree, Id)
                           in Binding | Parameter | Named_Return
                              | Type_Declaration | Fixed_Formal | Field;
+
+   --  [1230]'s direct type-formal constraint.  No_Node is the unconstrained
+   --  spelling; a present node is Concept_Reference, not an inferred fact.
+   function Constraint_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Type_Formal;
+
+   --  A concept declaration has its own formal run, distinct from a type
+   --  alias's: the latter is a template identity while the former binds the
+   --  requirement signatures and parent names below.
+   function Concept_Body_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Concept_Declaration,
+          Post => Contains (Of_Tree, Concept_Body_Of'Result)
+                  and then Kind (Of_Tree, Concept_Body_Of'Result)
+                             = Concept_Body;
+
+   function Concept_Formal_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Concept_Declaration;
+
+   function Nth_Concept_Formal
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Concept_Declaration
+                  and then Index <= Concept_Formal_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Concept_Formal'Result)
+                  and then Kind (Of_Tree, Nth_Concept_Formal'Result)
+                             in Type_Formal | Fixed_Formal;
+
+   --  Parent concepts and signature-only entries are ordered source runs.
+   function Concept_Parent_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Concept_Declaration;
+
+   function Nth_Concept_Parent
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Concept_Declaration
+                  and then Index <= Concept_Parent_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Concept_Parent'Result)
+                  and then Kind (Of_Tree, Nth_Concept_Parent'Result)
+                             = Concept_Reference;
+
+   function Concept_Entry_Count (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Concept_Declaration;
+
+   function Nth_Concept_Entry
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Concept_Declaration
+                  and then Index <= Concept_Entry_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Concept_Entry'Result)
+                  and then Kind (Of_Tree, Nth_Concept_Entry'Result)
+                             = Concept_Entry;
 
    --  D135's ordered formals are visible to the declared type or struct body
    --  of a parameterized type declaration.  D138 extends the same two
@@ -682,25 +761,25 @@ package Landin.Syntax is
    --  `returns` [1800].  No_Node is `-> none`; otherwise this is a
    --  Return_List whose trailing run is [0920]'s ordered named returns.  A
    --  written Function_Type carries the same signature positions without a
-   --  body.
+   --  body.  A Concept_Entry has the same written signature positions.
    function Returns_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                             in Function_Declaration | Anonymous_Function
-                               | Function_Type;
+                               | Function_Type | Concept_Entry;
 
    function Return_Count (Of_Tree : Tree; Id : Node_Id) return Natural
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                             in Function_Declaration | Anonymous_Function
-                               | Function_Type;
+                               | Function_Type | Concept_Entry;
 
    function Nth_Return
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id)
                              in Function_Declaration | Anonymous_Function
-                                | Function_Type
+                                | Function_Type | Concept_Entry
                   and then Index <= Return_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Return'Result)
                   and then Kind (Of_Tree, Nth_Return'Result) = Named_Return;
@@ -726,7 +805,7 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                             in Function_Declaration | Anonymous_Function
-                               | Function_Type;
+                               | Function_Type | Concept_Entry;
 
    --  An application's optional [1030] clause; No_Node when none was written.
    function Recovery_Of (Of_Tree : Tree; Id : Node_Id) return Node_Id
@@ -741,14 +820,14 @@ package Landin.Syntax is
      with Pre => Contains (Of_Tree, Id)
                  and then Kind (Of_Tree, Id)
                             in Function_Declaration | Anonymous_Function
-                               | Function_Type;
+                               | Function_Type | Concept_Entry;
 
    function Nth_Parameter
      (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
      with Pre  => Contains (Of_Tree, Id)
                   and then Kind (Of_Tree, Id)
                              in Function_Declaration | Anonymous_Function
-                                | Function_Type
+                                | Function_Type | Concept_Entry
                   and then Index <= Parameter_Count (Of_Tree, Id),
           Post => Contains (Of_Tree, Nth_Parameter'Result)
                   and then Kind (Of_Tree, Nth_Parameter'Result) = Parameter;
@@ -768,6 +847,52 @@ package Landin.Syntax is
           Post => Contains (Of_Tree, Nth_Generic_Formal'Result)
                   and then Kind (Of_Tree, Nth_Generic_Formal'Result)
                              in Type_Formal | Fixed_Formal;
+
+   --  [1240]'s one target type, direct concept name and ordered labelled
+   --  source RHS run.  The binder uses the existing type/fixed formal forms.
+   function Conforming_Type (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Conformance_Declaration;
+
+   function Conforming_Concept (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Conformance_Declaration,
+          Post => Contains (Of_Tree, Conforming_Concept'Result)
+                  and then Kind (Of_Tree, Conforming_Concept'Result)
+                             = Concept_Reference;
+
+   function Conformance_Binder_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Conformance_Declaration;
+
+   function Nth_Conformance_Binder
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Conformance_Declaration
+                  and then Index <= Conformance_Binder_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Conformance_Binder'Result)
+                  and then Kind (Of_Tree, Nth_Conformance_Binder'Result)
+                             in Type_Formal | Fixed_Formal;
+
+   function Conformance_Entry_Count
+     (Of_Tree : Tree; Id : Node_Id) return Natural
+     with Pre => Contains (Of_Tree, Id)
+                 and then Kind (Of_Tree, Id) = Conformance_Declaration;
+
+   function Nth_Conformance_Entry
+     (Of_Tree : Tree; Id : Node_Id; Index : Positive) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Conformance_Declaration
+                  and then Index <= Conformance_Entry_Count (Of_Tree, Id),
+          Post => Contains (Of_Tree, Nth_Conformance_Entry'Result)
+                  and then Kind (Of_Tree, Nth_Conformance_Entry'Result)
+                             = Conformance_Entry;
+
+   function Conformance_RHS (Of_Tree : Tree; Id : Node_Id) return Node_Id
+     with Pre  => Contains (Of_Tree, Id)
+                  and then Kind (Of_Tree, Id) = Conformance_Entry,
+          Post => Contains (Of_Tree, Conformance_RHS'Result);
 
    --  `else` [1810].  No_Node when the branch has none.
    function Else_Body (Of_Tree : Tree; Id : Node_Id) return Node_Id

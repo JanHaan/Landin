@@ -50,6 +50,57 @@ package body Landin.Checking is
      return Boolean
      is (Routine_Identities.Holds (Of_Table, Id));
 
+   package body Concept_Identities is
+      function None return Id is (0);
+
+      function From_Position (Position : Positive) return Id
+        is (Id (Position));
+
+      function Nth (Of_Table : Table; Position : Positive) return Id
+        is (if Position <= Natural (Of_Table.Concepts.Length)
+            then From_Position (Position) else None);
+
+      function Holds (Of_Table : Table; Of_Id : Id) return Boolean
+        is (Of_Table.Ready
+            and then Of_Id /= None
+            and then Natural (Of_Id) <= Natural (Of_Table.Concepts.Length));
+
+      function Position (Of_Table : Table; Of_Id : Id) return Positive is
+         pragma Unreferenced (Of_Table);
+      begin
+         return Positive (Of_Id);
+      end Position;
+   end Concept_Identities;
+
+   function Holds (Of_Table : Table; Id : Concept_Id) return Boolean
+     is (Concept_Identities.Holds (Of_Table, Id));
+
+   package body Conformance_Identities is
+      function None return Id is (0);
+
+      function From_Position (Position : Positive) return Id
+        is (Id (Position));
+
+      function Nth (Of_Table : Table; Position : Positive) return Id
+        is (if Position <= Natural (Of_Table.Conformances.Length)
+            then From_Position (Position) else None);
+
+      function Holds (Of_Table : Table; Of_Id : Id) return Boolean
+        is (Of_Table.Ready
+            and then Of_Id /= None
+            and then Natural (Of_Id)
+                       <= Natural (Of_Table.Conformances.Length));
+
+      function Position (Of_Table : Table; Of_Id : Id) return Positive is
+         pragma Unreferenced (Of_Table);
+      begin
+         return Positive (Of_Id);
+      end Position;
+   end Conformance_Identities;
+
+   function Holds (Of_Table : Table; Id : Conformance_Id) return Boolean
+     is (Conformance_Identities.Holds (Of_Table, Id));
+
    function Current_Routine_View (Of_Table : Table)
      return Routine_Instance_Id
      is (Of_Table.Current_Routine);
@@ -70,7 +121,6 @@ package body Landin.Checking is
       Into.Current_Routine := Previous;
    end Restore_Routine_View;
 
-   use type Landin.Source.Source_Id;
    use type Landin.Source.Names.Name_Id;
    use type Landin.Syntax.Node_Kind;
    use type Landin.Syntax.Parameter_Convention;
@@ -279,6 +329,11 @@ package body Landin.Checking is
    function Actuals_Agree
      (Of_Table : Table; Left, Right : Actual_Key) return Boolean;
 
+   function Run_Agrees
+     (Of_Table : Table;
+      Members  : Run;
+      Actuals  : Actual_Tuple) return Boolean;
+
    function Actuals_Agree
      (Of_Table : Table; Left, Right : Actual_Key) return Boolean is
    begin
@@ -316,6 +371,184 @@ package body Landin.Checking is
               (Of_Table, Left.Reference, Right.Reference);
       end case;
    end Actuals_Agree;
+
+   function Run_Agrees
+     (Of_Table : Table;
+      Members  : Run;
+      Actuals  : Actual_Tuple) return Boolean
+   is
+   begin
+      if Members.Count /= Natural (Actuals.Members.Length) then
+         return False;
+      end if;
+      for Index in 1 .. Members.Count loop
+         if not Actuals_Agree
+           (Of_Table,
+            Of_Table.Conformance_Actuals (Members.First + Index),
+            Actuals.Members (Index))
+         then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Run_Agrees;
+
+   function Concept_Count (Of_Table : Table) return Natural
+     is (Natural (Of_Table.Concepts.Length));
+
+   function Compiler_Zeroable_Concept (Of_Table : Table) return Concept_Id
+     is (Concept_Identities.Nth (Of_Table, 1));
+
+   function Intern_Concept
+     (Into : in out Table; Declaration : Declaration_Id) return Concept_Id
+   is
+   begin
+      for Position in 1 .. Natural (Into.Concepts.Length) loop
+         if Into.Concepts (Position).Declaration = Declaration then
+            return Concept_Identities.Nth (Into, Position);
+         end if;
+      end loop;
+      Into.Concepts.Append
+        (Concept_Record'
+           (Declaration => Declaration, Compiler_Supplied => False));
+      return Concept_Identities.Nth (Into, Into.Concepts.Last_Index);
+   end Intern_Concept;
+
+   function Concept_Declaration
+     (Of_Table : Table; Id : Concept_Id) return Declaration_Id
+     is (Of_Table.Concepts
+           (Concept_Identities.Position (Of_Table, Id)).Declaration);
+
+   function Is_Compiler_Concept
+     (Of_Table : Table; Id : Concept_Id) return Boolean
+     is (Of_Table.Concepts
+           (Concept_Identities.Position (Of_Table, Id)).Compiler_Supplied);
+
+   function Conformance_Count (Of_Table : Table) return Natural
+     is (Natural (Of_Table.Conformances.Length));
+
+   function Find_Conformance
+     (Of_Table : Table;
+      Concept  : Concept_Id;
+      Target   : Actual_Key;
+      Inputs   : Actual_Tuple) return Conformance_Id
+   is
+   begin
+      for Position in 1 .. Natural (Of_Table.Conformances.Length) loop
+         declare
+            Held : constant Conformance_Record :=
+              Of_Table.Conformances (Position);
+         begin
+            if Held.Concept = Concept
+              and then Actuals_Agree (Of_Table, Held.Target, Target)
+              and then Run_Agrees (Of_Table, Held.Inputs, Inputs)
+            then
+               return Conformance_Identities.Nth (Of_Table, Position);
+            end if;
+         end;
+      end loop;
+      return No_Conformance;
+   end Find_Conformance;
+
+   function Add_Conformance
+     (Into       : in out Table;
+      Concept    : Concept_Id;
+      Target     : Actual_Key;
+      Inputs     : Actual_Tuple;
+      Bindings   : Actual_Tuple;
+      Source     : Landin.Source.Source_Id;
+      Node       : Landin.Syntax.Node_Id;
+      Origin     : Conformance_Origin) return Conformance_Id
+   is
+      Made : Conformance_Record :=
+        (Concept  => Concept,
+         Target   => Target,
+         Inputs   => (First => Natural (Into.Conformance_Actuals.Length),
+                      Count => 0),
+         Bindings => <>,
+         Source   => Source,
+         Node     => Node,
+         Origin   => Origin);
+   begin
+      if not Holds (Into, Target)
+        or else not Holds (Into, Inputs)
+        or else not Holds (Into, Bindings)
+      then
+         raise Landin.Compiler_Defect with
+           "conformance actuals belong to another checking table";
+      end if;
+
+      for Actual of Inputs.Members loop
+         Into.Conformance_Actuals.Append (Actual);
+         Made.Inputs.Count := Made.Inputs.Count + 1;
+      end loop;
+      Made.Bindings :=
+        (First => Natural (Into.Conformance_Actuals.Length), Count => 0);
+      for Actual of Bindings.Members loop
+         Into.Conformance_Actuals.Append (Actual);
+         Made.Bindings.Count := Made.Bindings.Count + 1;
+      end loop;
+      Into.Conformances.Append (Made);
+      return Conformance_Identities.Nth
+        (Into, Into.Conformances.Last_Index);
+   end Add_Conformance;
+
+   function Conformance_Concept
+     (Of_Table : Table; Id : Conformance_Id) return Concept_Id
+     is (Of_Table.Conformances
+           (Conformance_Identities.Position (Of_Table, Id)).Concept);
+
+   function Conformance_Target
+     (Of_Table : Table; Id : Conformance_Id) return Actual_Key
+     is (Of_Table.Conformances
+           (Conformance_Identities.Position (Of_Table, Id)).Target);
+
+   function Conformance_Input_Count
+     (Of_Table : Table; Id : Conformance_Id) return Natural
+     is (Of_Table.Conformances
+           (Conformance_Identities.Position (Of_Table, Id)).Inputs.Count);
+
+   function Nth_Conformance_Input
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Actual_Key
+   is
+      Members : constant Run := Of_Table.Conformances
+        (Conformance_Identities.Position (Of_Table, Id)).Inputs;
+   begin
+      return Of_Table.Conformance_Actuals (Members.First + Position);
+   end Nth_Conformance_Input;
+
+   function Conformance_Binding_Count
+     (Of_Table : Table; Id : Conformance_Id) return Natural
+     is (Of_Table.Conformances
+           (Conformance_Identities.Position (Of_Table, Id)).Bindings.Count);
+
+   function Nth_Conformance_Binding
+     (Of_Table : Table; Id : Conformance_Id; Position : Positive)
+      return Actual_Key
+   is
+      Members : constant Run := Of_Table.Conformances
+        (Conformance_Identities.Position (Of_Table, Id)).Bindings;
+   begin
+      return Of_Table.Conformance_Actuals (Members.First + Position);
+   end Nth_Conformance_Binding;
+
+   function Conformance_Source
+     (Of_Table : Table; Id : Conformance_Id)
+      return Landin.Source.Source_Id
+     is (Of_Table.Conformances
+           (Conformance_Identities.Position (Of_Table, Id)).Source);
+
+   function Conformance_Node
+     (Of_Table : Table; Id : Conformance_Id)
+      return Landin.Syntax.Node_Id
+     is (Of_Table.Conformances
+           (Conformance_Identities.Position (Of_Table, Id)).Node);
+
+   function Conformance_Origin_Of
+     (Of_Table : Table; Id : Conformance_Id) return Conformance_Origin
+     is (Of_Table.Conformances
+           (Conformance_Identities.Position (Of_Table, Id)).Origin);
 
    function Intern
      (Into     : in out Table;
@@ -625,6 +858,13 @@ package body Landin.Checking is
             end if;
          end;
       end loop;
+
+      --  R2.60's compiler concept is a closed identity, not a spelling a
+      --  source declaration can impersonate.  It is always position one;
+      --  every source concept follows in deterministic collection order.
+      Into.Concepts.Append
+        (Concept_Record'
+           (Declaration => No_Declaration, Compiler_Supplied => True));
 
       --  Interned once, so a Type_Name node costs eleven integer
       --  comparisons and never a byte comparison.

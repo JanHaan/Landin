@@ -1,0 +1,5 @@
+ordered: type = concept (t: type)
+end ordered
+
+i32 is ordered ()
+i32 is ordered ()

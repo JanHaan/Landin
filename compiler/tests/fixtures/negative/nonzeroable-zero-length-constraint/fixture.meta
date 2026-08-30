@@ -1,0 +1,5 @@
+class: negative
+summary: zero length does not make a nonzeroable element type zeroable
+program: main.ldn
+codes: L0318
+constructs: 0520, 0540, 0550, 1290
