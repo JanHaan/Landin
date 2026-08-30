@@ -1,0 +1,3 @@
+public main: () -> (code: i32) =
+    code = selected
+end main
